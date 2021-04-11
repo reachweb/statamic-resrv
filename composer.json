@@ -1,0 +1,50 @@
+{
+    "name": "reach/statamic-resrv",
+    "description": "A booking engine for Statamic. Supports availability calendar and online reservations.",
+    "keywords": [
+        "Statamic",
+        "Resrv",
+        "Resrv App",
+        "booking",
+        "reservations",
+        "availability"
+    ],
+    "homepage": "https://www.reach.gr",
+    "license": "proprietary",
+    "type": "statamic-addon",
+    "authors": [
+        {
+            "name": "Iosif Chatzimichail",
+            "email": "iosif@reach.gr",
+            "role": "Developer"
+        }
+    ],
+    "support": {
+        "email": "info@reach.gr"
+    },
+    "require": {
+        "php": "^7.4 || ^8.0",
+        "doctrine/dbal": "^2.10",
+        "illuminate/support": "^7.20 || ^8.0",
+        "statamic/cms": "^3.1.5"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^8.5 || ^9.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Reach\\StatamicResrv\\": "src"
+        }
+    },
+    "extra": {
+        "statamic": {
+            "name": "Statamic Resrv",
+            "description": "A reservation engine for Statamic"
+        },
+        "laravel": {
+            "providers": [
+                "Reach\\StatamicResrv\\ServiceProvider"
+            ]
+        }
+    }
+}
