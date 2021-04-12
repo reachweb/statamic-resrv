@@ -29,12 +29,22 @@
         "statamic/cms": "^3.1.5"
     },
     "require-dev": {
-        "phpunit/phpunit": "^8.5 || ^9.3"
+        "phpunit/phpunit": "^8.5 || ^9.3",
+        "orchestra/testbench": "^6.17"
     },
     "autoload": {
         "psr-4": {
             "Reach\\StatamicResrv\\": "src"
         }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Reach\\StatamicResrv\\Tests\\": "tests"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit",
+        "test-coverage": "vendor/bin/phpunit --coverage-html coverage"
     },
     "extra": {
         "statamic": {
@@ -43,7 +53,7 @@
         },
         "laravel": {
             "providers": [
-                "Reach\\StatamicResrv\\ServiceProvider"
+                "Reach\\StatamicResrv\\StatamicResrvServiceProvider"
             ]
         }
     }
