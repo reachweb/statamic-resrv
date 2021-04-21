@@ -1,0 +1,13 @@
+.statamic-resrv-availability {
+    .fc-daygrid-day-top {
+        flex-direction: column !important;
+        flex-wrap: wrap !important;
+    }
+}
+
+.fade-enter-active, .fade-leave-active {
+    transition: opacity .5s;
+}
+.fade-enter, .fade-leave-to {
+    opacity: 0;
+}

@@ -1,0 +1,29 @@
+{
+    "private": true,
+    "scripts": {
+        "development": "mix",
+        "watch": "mix watch",
+        "watch-poll": "mix watch -- --watch-options-poll=1000",
+        "hot": "mix watch --hot",
+        "production": "mix --production"
+    },
+    "devDependencies": {
+        "autoprefixer": "^10.0.2",
+        "cross-env": "^5.2.1",
+        "laravel-mix": "^6.0.0",
+        "postcss-import": "^12.0.1",
+        "postcss-nested": "^4.2.1",
+        "postcss-preset-env": "^6.7.0",
+        "vue": "^2.6.11",
+        "vue-loader": "^15.9.6",
+        "vue-template-compiler": "^2.6.11"
+    },
+    "dependencies": {
+        "@fullcalendar/daygrid": "^5.6.0",
+        "@fullcalendar/interaction": "^5.6.0",
+        "@fullcalendar/vue": "^5.6.0",
+        "axios": "^0.21.1",
+        "dayjs": "^1.10.4",
+        "tailwindcss": "^2.1.1"
+    }
+}

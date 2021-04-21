@@ -13,12 +13,12 @@ class CreateAvailabilityTable extends Migration
      */
     public function up()
     {
-        Schema::create('availability', function (Blueprint $table) {
-            $table->id();
+        Schema::create('availabilities', function (Blueprint $table) {
             $table->string('statamic_id')->index();
             $table->date('date')->index();
             $table->integer('available');
             $table->float('price', 8, 2);
+            $table->unique(['statamic_id', 'date']);
             $table->timestamps();
         });
     }
@@ -30,6 +30,6 @@ class CreateAvailabilityTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('availability');
+        Schema::dropIfExists('availabilities');
     }
 }
