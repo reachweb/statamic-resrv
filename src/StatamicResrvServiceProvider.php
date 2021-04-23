@@ -13,6 +13,7 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
 
     protected $fieldtypes = [
         \Reach\StatamicResrv\Fieldtypes\Availability::class,
+        \Reach\StatamicResrv\Fieldtypes\Extras::class,
     ];
 
     protected $scripts = [

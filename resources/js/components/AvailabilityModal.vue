@@ -14,8 +14,8 @@
                         <div class="w-full">
                             <input class="w-full border border-gray-700 rounded p-1" name="available" type="text" v-model="available">
                         </div>
-                        <div v-if="this.errors.available" class="w-full mt-1 text-sm text-red-400">
-                            {{ this.errors.available[0] }}
+                        <div v-if="errors.available" class="w-full mt-1 text-sm text-red-400">
+                            {{ errors.available[0] }}
                         </div>                    
                     </div>
                     <div class="flex-1">
@@ -25,8 +25,8 @@
                         <div class="w-full">
                             <input class="w-full border border-gray-700 rounded p-1" name="price" type="text" v-model="price">
                         </div>
-                        <div v-if="this.errors.price" class="w-full mt-1 text-sm text-red-400">
-                            {{ this.errors.price[0] }}
+                        <div v-if="errors.price" class="w-full mt-1 text-sm text-red-400">
+                            {{ errors.price[0] }}
                         </div>                     
                     </div>
                 </div>
@@ -46,8 +46,8 @@
 </template>
 
 <script>
+import FormHandler from '../mixins/FormHandler.vue'
 import dayjs from 'dayjs'
-import axios from 'axios'
 
 export default {
 
@@ -66,12 +66,10 @@ export default {
         return {
             available: null,
             price: null,
-            disableSave: false,
-            errors: ''
+            successMessage: 'Availability successfully saved',
+            postUrl: '/cp/resrv/availability',
+            method: 'post'
         }
-    },
-
-    components: {
     },
 
     computed: {
@@ -92,37 +90,7 @@ export default {
         }
     },
 
-    watch: {
-        
-    },
-
-    methods: {
-        save() {
-            this.toggleDisableSave()
-            this.clearErrors()
-            axios.post('/cp/resrv/availability', this.submit)
-            .then(response => {
-                this.handleSuccess(response.data)
-            })
-            .catch(error => {
-                this.handleErrors(error.response)
-            })
-        },
-        handleSuccess(data) {
-            this.toggleDisableSave()
-            this.$toast.success('Availability successfully saved')
-            this.$emit('saved')
-        },
-        handleErrors(error) {
-            this.errors = error.data.errors
-            this.toggleDisableSave()
-        },
-        toggleDisableSave() {
-            this.disableSave = !this.disableSave
-        },
-        clearErrors() {
-            this.errors = ''
-        },
-    }
+    mixins: [ FormHandler ],
+  
 }
 </script>

@@ -1,6 +1,9 @@
 <template>
     <element-container @resized="containerWidth = $event.width">
-    <div class="statamic-resrv-availability relative">
+    <div class="w-full h-full text-center my-4 text-gray-700 text-lg" v-if="newItem">
+        You need to save this entry before you can add availability information.
+    </div>
+    <div class="statamic-resrv-availability relative" v-else>
         <Loader v-if="!availabilityLoaded" />
         <div class="w-full h-full">
             <div ref="calendar"></div>
@@ -56,17 +59,18 @@ export default {
     },
 
     computed: {
-      
+        newItem() {
+            if (this.meta.parent == 'Collection') {
+                return true
+            }
+            return false
+        }
     },
 
     mounted() {
         this.getAvailability()
         this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
         this.calendar.render()
-    },
-
-    watch: {
-
     },
 
     methods: {

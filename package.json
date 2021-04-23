@@ -24,6 +24,8 @@
         "@fullcalendar/vue": "^5.6.0",
         "axios": "^0.21.1",
         "dayjs": "^1.10.4",
-        "tailwindcss": "^2.1.1"
+        "lodash": "^4.17.21",
+        "tailwindcss": "^2.1.1",
+        "vue-select": "^3.11.2"
     }
 }
