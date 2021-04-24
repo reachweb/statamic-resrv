@@ -14,4 +14,5 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/extra/add/{statamic_id}', 'ExtraCpController@associate')->name('extra.add');
         Route::post('/resrv/extra/remove/{statamic_id}', 'ExtraCpController@disassociate')->name('extra.remove');
         Route::patch('/resrv/extra', 'ExtraCpController@update')->name('extra.update');
+        Route::delete('/resrv/extra', 'ExtraCpController@delete')->name('extra.delete');
     });

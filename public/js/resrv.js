@@ -15379,6 +15379,39 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
 
 
 
@@ -15393,6 +15426,7 @@ __webpack_require__.r(__webpack_exports__);
       activeExtras: [],
       extrasLoaded: false,
       allowEntryExtraEdit: true,
+      deleteId: false,
       extra: '',
       emptyExtra: {
         name: '',
@@ -15522,6 +15556,26 @@ __webpack_require__.r(__webpack_exports__);
         _this5.getAllExtras();
       })["catch"](function (error) {
         _this5.$toast.error('Cannot remove extra to entry');
+      });
+    },
+    confirmDelete: function confirmDelete(extra) {
+      this.deleteId = extra.id;
+    },
+    deleteExtra: function deleteExtra() {
+      var _this6 = this;
+
+      axios__WEBPACK_IMPORTED_MODULE_2___default().delete('/cp/resrv/extra', {
+        data: {
+          'id': this.deleteId
+        }
+      }).then(function (response) {
+        _this6.$toast.success('Extra deleted');
+
+        _this6.deleteId = false;
+
+        _this6.getAllExtras();
+      })["catch"](function (error) {
+        _this6.$toast.error('Cannot delete extra');
       });
     }
   }
@@ -34605,14 +34659,208 @@ var render = function() {
                               _c(
                                 "span",
                                 {
-                                  staticClass: "text-sm cursor-pointer",
+                                  staticClass: "cursor-pointer text-red-800",
+                                  on: {
+                                    click: function($event) {
+                                      return _vm.confirmDelete(extra)
+                                    }
+                                  }
+                                },
+                                [
+                                  _c(
+                                    "svg",
+                                    {
+                                      staticClass:
+                                        "stroke-current text-red-800",
+                                      attrs: {
+                                        xmlns: "http://www.w3.org/2000/svg",
+                                        version: "1.1",
+                                        "xmlns:xlink":
+                                          "http://www.w3.org/1999/xlink",
+                                        "xmlns:svgjs": "http://svgjs.com/svgjs",
+                                        viewBox: "0 0 18 18",
+                                        width: "18",
+                                        height: "18"
+                                      }
+                                    },
+                                    [
+                                      _c(
+                                        "g",
+                                        {
+                                          attrs: {
+                                            transform:
+                                              "matrix(0.75,0,0,0.75,0,0)"
+                                          }
+                                        },
+                                        [
+                                          _c("path", {
+                                            attrs: {
+                                              d: "M0.5 6.507L23.5 6.507",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d:
+                                                "M20.5,6.5v15a2,2,0,0,1-2,2H5.5a2,2,0,0,1-2-2V6.5",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d:
+                                                "M2.5,6.5v-1a2,2,0,0,1,2-2h15a2,2,0,0,1,2,2v1",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d: "M9,3.5a3,3,0,0,1,6,0",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d: "M12 10L12 19.5",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d: "M16.5 10L16.5 19.5",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d: "M7.5 10L7.5 19.5",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          })
+                                        ]
+                                      )
+                                    ]
+                                  )
+                                ]
+                              ),
+                              _vm._v(" "),
+                              _c(
+                                "span",
+                                {
+                                  staticClass: "cursor-pointer",
                                   on: {
                                     click: function($event) {
                                       return _vm.editExtra(extra)
                                     }
                                   }
                                 },
-                                [_vm._v("Edit")]
+                                [
+                                  _c(
+                                    "svg",
+                                    {
+                                      staticClass: "stroke-current",
+                                      attrs: {
+                                        xmlns: "http://www.w3.org/2000/svg",
+                                        version: "1.1",
+                                        "xmlns:xlink":
+                                          "http://www.w3.org/1999/xlink",
+                                        "xmlns:svgjs": "http://svgjs.com/svgjs",
+                                        viewBox: "0 0 18 18",
+                                        width: "18",
+                                        height: "18"
+                                      }
+                                    },
+                                    [
+                                      _c(
+                                        "g",
+                                        {
+                                          attrs: {
+                                            transform:
+                                              "matrix(0.75,0,0,0.75,0,0)"
+                                          }
+                                        },
+                                        [
+                                          _c("path", {
+                                            attrs: {
+                                              d:
+                                                "M7 21.5L0.5 23.5 2.5 17 15.33 4.169 19.83 8.669 7 21.5z",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d:
+                                                "M15.33,4.169l3.086-3.086a2.007,2.007,0,0,1,2.828,0l1.672,1.672a2,2,0,0,1,0,2.828L19.83,8.669",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d: "M17.58 6.419L6 18",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d:
+                                                "M2.5 17L3.5 18 6 18 6 20.5 7 21.5",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d: "M1.5 20.5L3.5 22.5",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          }),
+                                          _vm._v(" "),
+                                          _c("path", {
+                                            attrs: {
+                                              d: "M16.83 2.669L21.33 7.169",
+                                              fill: "none",
+                                              "stroke-linecap": "round",
+                                              "stroke-linejoin": "round"
+                                            }
+                                          })
+                                        ]
+                                      )
+                                    ]
+                                  )
+                                ]
                               )
                             ])
                           ]
@@ -34640,6 +34888,27 @@ var render = function() {
                     attrs: { data: _vm.extra },
                     on: { closed: _vm.togglePanel, saved: _vm.extraSaved }
                   })
+                : _vm._e(),
+              _vm._v(" "),
+              _vm.deleteId
+                ? _c(
+                    "confirmation-modal",
+                    {
+                      attrs: { title: "Delete extra", danger: true },
+                      on: {
+                        confirm: _vm.deleteExtra,
+                        cancel: function($event) {
+                          _vm.deleteId = false
+                        }
+                      }
+                    },
+                    [
+                      _vm._v(
+                        "\n        Are you sure you want to delete this extra? "
+                      ),
+                      _c("strong", [_vm._v("This cannot be undone.")])
+                    ]
+                  )
                 : _vm._e()
             ],
             1

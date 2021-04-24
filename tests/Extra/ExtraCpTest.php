@@ -96,6 +96,30 @@ class AvailabilityCpTest extends TestCase
         ]);
     }
 
+    public function test_can_delete_extra()
+    {
+        $extra = Extra::factory()->create();
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'id' => $extra->id
+        ];
+
+        $response = $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('statamicentry_extra', [
+            'statamicentry_id' => $item->id()
+        ]);
+
+        $response = $this->delete(cp_route('resrv.extra.delete', $item->id()), $payload);
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('statamicentry_extra', [
+            'statamicentry_id' => $item->id()
+        ]);$this->assertDatabaseMissing('extras', [
+            'name' => $extra->name
+        ]);
+    }
+
     public function test_can_add_extra_to_statamic_entry()
     {
         $item = $this->makeStatamicItem();

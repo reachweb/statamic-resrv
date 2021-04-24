@@ -223,6 +223,10 @@
     background-color: rgba(167, 243, 208, var(--tw-bg-opacity));
 }
 
+.stroke-current {
+    stroke: currentColor;
+}
+
 .p-1 {
     padding: 0.25rem;
 }
@@ -328,6 +332,21 @@
 .text-gray-500 {
     --tw-text-opacity: 1;
     color: rgba(107, 114, 128, var(--tw-text-opacity));
+}
+
+.text-red-800 {
+    --tw-text-opacity: 1;
+    color: rgba(153, 27, 27, var(--tw-text-opacity));
+}
+
+.text-purple-600 {
+    --tw-text-opacity: 1;
+    color: rgba(124, 58, 237, var(--tw-text-opacity));
+}
+
+.text-red-600 {
+    --tw-text-opacity: 1;
+    color: rgba(220, 38, 38, var(--tw-text-opacity));
 }
 
 .shadow-lg {

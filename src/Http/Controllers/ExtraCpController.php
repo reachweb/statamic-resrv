@@ -81,4 +81,18 @@ class ExtraCpController extends Controller
             ->delete();
         return response(200);
     }
+
+    public function delete(Request $request)
+    {
+        $data = $request->validate([
+            'id' => 'required|integer'
+        ]);
+        $extra = $this->extra->destroy($data['id']);
+
+        DB::table('statamicentry_extra')
+            ->where('extra_id', $data['id'])
+            ->delete();
+        return response(200);
+    }
+
 }
