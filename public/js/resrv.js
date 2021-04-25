@@ -15075,13 +15075,14 @@ __webpack_require__.r(__webpack_exports__);
       this.$emit('closed');
     },
     createSubmit: function createSubmit() {
-      var _this = this;
-
       this.submit = {};
 
       _.forEach(this.data, function (value, name) {
-        _this.submit[name] = value;
+        Vue.set(vm.submit, name, value);
       });
+    },
+    slugify: function slugify() {
+      this.submit.slug = _.kebabCase(this.submit.name);
     }
   }
 });
@@ -34151,12 +34152,15 @@ var render = function() {
                     attrs: { name: "name", type: "text" },
                     domProps: { value: _vm.submit.name },
                     on: {
-                      input: function($event) {
-                        if ($event.target.composing) {
-                          return
-                        }
-                        _vm.$set(_vm.submit, "name", $event.target.value)
-                      }
+                      input: [
+                        function($event) {
+                          if ($event.target.composing) {
+                            return
+                          }
+                          _vm.$set(_vm.submit, "name", $event.target.value)
+                        },
+                        _vm.slugify
+                      ]
                     }
                   })
                 ]),

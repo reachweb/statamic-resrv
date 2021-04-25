@@ -11,7 +11,7 @@
                         <label for="name">Name</label>
                     </div>
                     <div class="w-full">
-                        <input class="w-full border border-gray-700 rounded p-1" name="name" type="text" v-model="submit.name">
+                        <input class="w-full border border-gray-700 rounded p-1" name="name" type="text" v-model="submit.name" @input="slugify">
                     </div>
                     <div v-if="errors.name" class="w-full mt-1 text-sm text-red-400">
                         {{ errors.name[0] }}
@@ -137,8 +137,11 @@ export default {
         createSubmit() {
             this.submit = {}
             _.forEach(this.data, (value, name) => {
-                this.submit[name] = value
+                Vue.set(vm.submit, name, value)
             })
+        },
+        slugify() {
+            this.submit.slug = _.kebabCase(this.submit.name)
         }
     }
 }
