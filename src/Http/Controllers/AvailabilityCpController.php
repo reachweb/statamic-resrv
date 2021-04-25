@@ -31,8 +31,7 @@ class AvailabilityCpController extends Controller
         $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
         
         $dataToAdd = [];
-        foreach ($period as $day) {        
-            
+        foreach ($period as $day) {
             $dataToAdd[] = [
                 'statamic_id' => $data['statamic_id'],
                 'date' => $day->isoFormat('YYYY-MM-DD'),

@@ -14920,6 +14920,7 @@ __webpack_require__.r(__webpack_exports__);
       return dayjs__WEBPACK_IMPORTED_MODULE_1___default()(this.dates.start).format('YYYY-MM-DD');
     },
     date_end: function date_end() {
+      // We need to subtract here because FullCaledar uses day+1 for end date
       return dayjs__WEBPACK_IMPORTED_MODULE_1___default()(this.dates.end).subtract(1, 'day').format('YYYY-MM-DD');
     },
     submit: function submit() {

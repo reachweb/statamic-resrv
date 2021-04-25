@@ -77,6 +77,7 @@ export default {
             return dayjs(this.dates.start).format('YYYY-MM-DD')
         },
         date_end() {
+            // We need to subtract here because FullCaledar uses day+1 for end date
             return dayjs(this.dates.end).subtract(1, 'day').format('YYYY-MM-DD')
         },
         submit() {

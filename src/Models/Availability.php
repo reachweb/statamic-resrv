@@ -22,4 +22,24 @@ class Availability extends Model
     {
         return $query->where('statamic_id', $entry);
     }
+
+    /**
+     * Search for availability entries between the dates and then return the ids
+     * of the items that have at least 1 available for each day.
+     */
+    public function scopeAvailableForDates($query, $date_start, $date_end) {
+        $results = $query->where('date', '>=', $date_start)
+            ->where('date', '<=', $date_end)
+            ->get(['statamic_id', 'date', 'available'])
+            ->sortBy('date');
+
+        $days = [];
+        foreach ($results as $result) {
+            if ($result['available'] > 0) {
+                $days[$result['date']][] = ($result['statamic_id']);
+            }            
+        }
+        
+        return array_intersect(...array_values($days));
+    }
 }
