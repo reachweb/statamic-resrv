@@ -15075,10 +15075,12 @@ __webpack_require__.r(__webpack_exports__);
       this.$emit('closed');
     },
     createSubmit: function createSubmit() {
+      var _this = this;
+
       this.submit = {};
 
       _.forEach(this.data, function (value, name) {
-        Vue.set(vm.submit, name, value);
+        _this.$set(_this.submit, name, value);
       });
     },
     slugify: function slugify() {

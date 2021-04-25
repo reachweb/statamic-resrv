@@ -137,7 +137,7 @@ export default {
         createSubmit() {
             this.submit = {}
             _.forEach(this.data, (value, name) => {
-                Vue.set(vm.submit, name, value)
+                this.$set(this.submit, name, value)
             })
         },
         slugify() {
