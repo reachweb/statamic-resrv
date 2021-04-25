@@ -4,8 +4,13 @@
         You need to save this entry before you can add availability information.
     </div>
     <div class="statamic-resrv-availability relative" v-else>
-        <Loader v-if="!availabilityLoaded" />
-        <div class="w-full h-full">
+        <div class="flex items-center py-1 my-4 border-b border-t">
+            <span class="font-bold mr-4">Enable reservations</span>    
+            <toggle-input v-model="enabled" @input="changeAvailability"></toggle-input>
+        </div>
+        
+        <div class="w-full h-full relative">
+            <Loader v-if="!availabilityLoaded" />
             <div ref="calendar"></div>
         </div>
         <availability-modal
@@ -36,6 +41,7 @@ export default {
 
     data() {
         return {
+            enabled: this.value ?? false,
             containerWidth: null,
             showModal: false,
             selectedDates: false,
@@ -156,6 +162,9 @@ export default {
             .catch(error => {
                 this.$toast.error('Cannot retrieve availability')
             })
+        },
+        changeAvailability() {
+            this.$emit('input', this.enabled)
         }
             
     }

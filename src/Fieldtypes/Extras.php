@@ -8,10 +8,11 @@ use Reach\StatamicResrv\Models\Extra;
 class Extras extends Fieldtype
 {
  
-    // public function augment($value)
-    // {
-        
-    // }
+    public function augment($value)
+    {
+        $extras = Extra::entry($this->field->parent()->id())->get();
+        return $extras->toArray();
+    }
 
     public function preload()
     {

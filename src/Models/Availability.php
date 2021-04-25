@@ -17,4 +17,9 @@ class Availability extends Model
     {
         return AvailabilityFactory::new();
     }
+
+    public function scopeEntry($query, $entry)
+    {
+        return $query->where('statamic_id', $entry);
+    }
 }

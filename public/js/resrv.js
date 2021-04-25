@@ -15167,6 +15167,11 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
+//
+//
+//
+//
 
 
 
@@ -15177,7 +15182,10 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
   mixins: [Fieldtype],
   data: function data() {
+    var _this$value;
+
     return {
+      enabled: (_this$value = this.value) !== null && _this$value !== void 0 ? _this$value : false,
       containerWidth: null,
       showModal: false,
       selectedDates: false,
@@ -15314,6 +15322,9 @@ __webpack_require__.r(__webpack_exports__);
       })["catch"](function (error) {
         _this.$toast.error('Cannot retrieve availability');
       });
+    },
+    changeAvailability: function changeAvailability() {
+      this.$emit('input', this.enabled);
     }
   }
 });
@@ -34528,11 +34539,40 @@ var render = function() {
             "div",
             { staticClass: "statamic-resrv-availability relative" },
             [
-              !_vm.availabilityLoaded ? _c("Loader") : _vm._e(),
+              _c(
+                "div",
+                {
+                  staticClass: "flex items-center py-1 my-4 border-b border-t"
+                },
+                [
+                  _c("span", { staticClass: "font-bold mr-4" }, [
+                    _vm._v("Enable reservations")
+                  ]),
+                  _vm._v(" "),
+                  _c("toggle-input", {
+                    on: { input: _vm.changeAvailability },
+                    model: {
+                      value: _vm.enabled,
+                      callback: function($$v) {
+                        _vm.enabled = $$v
+                      },
+                      expression: "enabled"
+                    }
+                  })
+                ],
+                1
+              ),
               _vm._v(" "),
-              _c("div", { staticClass: "w-full h-full" }, [
-                _c("div", { ref: "calendar" })
-              ]),
+              _c(
+                "div",
+                { staticClass: "w-full h-full relative" },
+                [
+                  !_vm.availabilityLoaded ? _c("Loader") : _vm._e(),
+                  _vm._v(" "),
+                  _c("div", { ref: "calendar" })
+                ],
+                1
+              ),
               _vm._v(" "),
               _vm.showModal
                 ? _c("availability-modal", {
