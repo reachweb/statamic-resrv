@@ -15183,10 +15183,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
   mixins: [Fieldtype],
   data: function data() {
-    var _this$value;
-
     return {
-      enabled: (_this$value = this.value) !== null && _this$value !== void 0 ? _this$value : false,
+      enabled: this.value == true ? this.value : false,
       containerWidth: null,
       showModal: false,
       selectedDates: false,
@@ -15325,7 +15323,7 @@ __webpack_require__.r(__webpack_exports__);
       });
     },
     changeAvailability: function changeAvailability() {
-      this.$emit('input', this.enabled);
+      this.$emit('input', this.enabled ? true : 'disabled');
     }
   }
 });

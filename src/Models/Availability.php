@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Statamic\Facades\Entry;
 
 
 class Availability extends Model
@@ -39,7 +40,20 @@ class Availability extends Model
                 $days[$result['date']][] = ($result['statamic_id']);
             }            
         }
-        
-        return array_intersect(...array_values($days));
+
+        $disabled = $this->getDisabledIds();        
+        $available = array_intersect(...array_values($days));
+
+        return array_diff($available, $disabled);
+    }
+
+    protected function getDisabledIds()
+    {
+        $results = Entry::query()
+        ->where('availability', 'disabled')
+        ->where('published', true)
+        ->get()
+        ->toAugmentedArray('id');
+        return array_flatten($results);
     }
 }

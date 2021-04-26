@@ -41,7 +41,7 @@ export default {
 
     data() {
         return {
-            enabled: this.value ?? false,
+            enabled: (this.value == true ? this.value : false),
             containerWidth: null,
             showModal: false,
             selectedDates: false,
@@ -164,7 +164,7 @@ export default {
             })
         },
         changeAvailability() {
-            this.$emit('input', this.enabled)
+            this.$emit('input', (this.enabled ? true : 'disabled'))
         }
             
     }
