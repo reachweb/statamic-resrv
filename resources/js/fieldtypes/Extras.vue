@@ -17,7 +17,7 @@
                         <span class="font-medium" v-html="extra.name"></span>
                         <span>{{ extra.price }} <span class="text-xs text-gray-500" v-html="priceLabel(extra.price_type)"></span></span>
                     </div>
-                    <div class="space-x-2">                        
+                    <div class="space-x-2">
                         <span 
                             class="text-gray-500 text-sm uppercase cursor-pointer" 
                             v-html="extraEnabled(extra.id) ? 'Enabled' : 'Disabled'"

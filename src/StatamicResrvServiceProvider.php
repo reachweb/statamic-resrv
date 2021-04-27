@@ -15,6 +15,10 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         \Reach\StatamicResrv\Fieldtypes\Availability::class,
         \Reach\StatamicResrv\Fieldtypes\Extras::class,
     ];
+    
+    protected $tags = [
+        \Reach\StatamicResrv\Tags\Resrv::class,
+    ];
 
     protected $scripts = [
         __DIR__.'/../public/js/resrv.js',
@@ -31,7 +35,15 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'statamic-resrv');
 
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+
+        $this->publishes([
+            __DIR__.'/../config/config.php' => config_path('resrv-config.php'),
+        ], 'resrv-config');
         
+        if (app()->environment() == 'testing') {
+            $this->mergeConfigFrom(__DIR__.'/../config/config.php', 'resrv-config');
+        }
 
     }
+
 }

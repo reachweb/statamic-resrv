@@ -4,15 +4,21 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Collection;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Statamic\Facades\Entry;
 
 
 class Availability extends Model
 {
-    use HasFactory;
+    use HasFactory, HandlesAvailabilityDates;
 
     protected $fillable = ['statamic_id', 'date', 'price', 'available'];
+
+    protected $casts = [
+        'price' => 'decimal:2',
+    ];
 
     protected static function newFactory()
     {
@@ -28,17 +34,23 @@ class Availability extends Model
      * Search for availability entries between the dates and then return the ids
      * of the items that have at least 1 available for each day.
      */
-    public function scopeAvailableForDates($query, $date_start, $date_end) {
-        $results = $query->where('date', '>=', $date_start)
-            ->where('date', '<=', $date_end)
-            ->get(['statamic_id', 'date', 'available'])
+    public function scopeAvailableForDates($query, $dates) {
+        $this->initiateAvailability($dates);
+
+        $results = $query->where('date', '>=', $this->date_start)
+            ->where('date', '<=', $this->date_end)
+            ->get(['statamic_id', 'date', 'price', 'available'])
             ->sortBy('date');
 
         $days = [];
-        foreach ($results as $result) {
+        foreach ($results->sortBy('date') as $result) {
             if ($result['available'] > 0) {
                 $days[$result['date']][] = ($result['statamic_id']);
             }            
+        }
+
+        if (count($days) == 0) {
+            return [];
         }
 
         $disabled = $this->getDisabledIds();        
@@ -47,13 +59,52 @@ class Availability extends Model
         return array_diff($available, $disabled);
     }
 
+    /**
+     * Gets the total price of an entry for a period of time
+     */
+    public function scopeGetPriceForDates($query, $dates, $statamic_id) {
+        $this->initiateAvailability($dates);
+
+        $results = $query->where('date', '>=', $this->date_start)
+            ->where('date', '<=', $this->date_end)
+            ->where('statamic_id', $statamic_id)
+            ->get(['price', 'available']);
+
+        return $this->calculatePrice($results);
+    }
+
+    /**
+     * Calls two scopes: one for getting the available items and one to get the total pricing
+     * of each item.
+     */
+    public function scopeAvailableForDatesWithPricing($query, $dates) {
+        $this->initiateAvailability($dates);
+
+        $availableWithPricing = [];
+        $available = $this->AvailableForDates($dates);
+
+        foreach ($available as $id) {
+            $availableWithPricing[$id] = [
+                'price' => $this->GetPriceForDates($dates, $id),
+                'days' => $this->duration
+            ];
+        };
+
+        return $availableWithPricing;
+    }
+
     protected function getDisabledIds()
     {
         $results = Entry::query()
-        ->where('availability', 'disabled')
-        ->where('published', true)
-        ->get()
-        ->toAugmentedArray('id');
+            ->where('availability', 'disabled')
+            ->where('published', true)
+            ->get()
+            ->toAugmentedArray('id');
         return array_flatten($results);
+    }
+
+    protected function calculatePrice(Collection $results)
+    {
+        return $results->sum('price');
     }
 }

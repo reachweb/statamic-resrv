@@ -93,6 +93,8 @@ class TestCase extends OrchestraTestCase
             $app['config']->set("statamic.$config", require(__DIR__."/../vendor/statamic/cms/config/{$config}.php"));
         }
 
+        //$app['config']->set("resrv-config", require(__DIR__."/../config/config.php"));
+
         // Setting the user repository to the default flat file system
         $app['config']->set('statamic.users.repository', 'file');
         $app['config']->set('statamic.stache.watcher', false);

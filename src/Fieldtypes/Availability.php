@@ -7,13 +7,17 @@ use Reach\StatamicResrv\Models\Availability as EntryAvailability;
 
 class Availability extends Fieldtype
 {
-    public function augment($value)
-    {
-        if ($value == true) {
-            return EntryAvailability::entry($this->field->parent()->id())->get()->sortBy('date')->keyBy('date')->toArray();
-        }
-        return false;        
-    }
+    // public function augment($value)
+    // {   
+    //     if ($value == true) {
+    //         return EntryAvailability::entry($this->field->parent()->id())
+    //             ->get()
+    //             ->sortBy('date')
+    //             ->keyBy('date')
+    //             ->toArray();
+    //     }
+    //     return false;
+    // }
 
     public function preload()
     {
@@ -22,4 +26,5 @@ class Availability extends Fieldtype
         }
         return ['parent' => $this->field->parent()->id()];
     }
+
 }

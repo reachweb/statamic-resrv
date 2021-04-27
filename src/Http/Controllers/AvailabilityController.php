@@ -15,8 +15,8 @@ class AvailabilityController extends Controller
             'date_end' => 'required|date'
         ]);
 
-        $ids = Availability::AvailableForDates($data['date_start'], $data['date_end']);
-        
+        $ids = Availability::AvailableForDatesWithPricing($data);
+       
         return response()->json($ids);
 
     }

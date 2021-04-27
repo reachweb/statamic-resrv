@@ -6,6 +6,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 use Reach\StatamicResrv\Models\Availability;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Eloquent\Factories\Sequence;
+use Illuminate\Support\Facades\Config;
 
 class AvailabilityFrontTest extends TestCase
 {
@@ -13,9 +14,10 @@ class AvailabilityFrontTest extends TestCase
 
     public function setUp(): void
     {
-        parent::setUp();
+        parent::setUp();        
     }
 
+    // TODO: Break up this test a little bit
     public function test_availability_can_get_available_for_date_range()
     {
         $this->signInAdmin();
@@ -26,23 +28,23 @@ class AvailabilityFrontTest extends TestCase
         
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-            'date_end' => today()->add(5, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_start' => today()->add(1, 'day')->toIso8601String(),
+            'date_end' => today()->add(5, 'day')->toIso8601String(),
             'price' => 150,
             'available' => 2
         ];
         
         $payload2 = [
             'statamic_id' => $item2->id(),
-            'date_start' => today()->add(2, 'day')->isoFormat('YYYY-MM-DD'),
-            'date_end' => today()->add(4, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_start' => today()->add(2, 'day')->toIso8601String(),
+            'date_end' => today()->add(4, 'day')->toIso8601String(),
             'price' => 200,
             'available' => 1
         ];
         $payload3 = [
             'statamic_id' => $item3->id(),
-            'date_start' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
-            'date_end' => today()->add(5, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_start' => today()->add(3, 'day')->toIso8601String(),
+            'date_end' => today()->add(5, 'day')->toIso8601String(),
             'price' => 100,
             'available' => 5
         ];
@@ -53,15 +55,35 @@ class AvailabilityFrontTest extends TestCase
         $response->assertStatus(200);
 
         $searchPayload = [
-            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-            'date_end' => today()->add(4, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_start' => today()->add(1, 'day')->toIso8601String(),
+            'date_end' => today()->add(4, 'day')->toIso8601String(),
         ];       
-
+        // We should see item 1 but not item 2
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertDontSee($item2->id());
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('600')->assertDontSee($item2->id());
+
+        $searchEmptyPayload = [
+            'date_start' => today()->add(15, 'day')->toIso8601String(),
+            'date_end' => today()->add(20, 'day')->toIso8601String(),
+        ];
+        // Even when nothing is available we are getting a response
+        $response = $this->post(route('resrv.availability.index'), $searchEmptyPayload);
+        $response->assertStatus(200);
+
+        // Add 2 hours to the end date and make sure that it charges an extra day (or not)
+        $searchExtraDayPayload = [
+            'date_start' => today()->add(1, 'day')->toIso8601String(),
+            'date_end' => today()->add(4, 'day')->add(2, 'hours')->toIso8601String(),
+        ];
         
+        Config::set('resrv-config.calculate_days_using_time', false);
+        $response = $this->post(route('resrv.availability.index'), $searchExtraDayPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('600');
+        
+        Config::set('resrv-config.calculate_days_using_time', true);
+        $response = $this->post(route('resrv.availability.index'), $searchExtraDayPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('750');    
+                
     }
-    
-    
-    
+
 }
