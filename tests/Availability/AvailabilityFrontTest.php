@@ -57,7 +57,7 @@ class AvailabilityFrontTest extends TestCase
         $searchPayload = [
             'date_start' => today()->add(1, 'day')->toIso8601String(),
             'date_end' => today()->add(4, 'day')->toIso8601String(),
-        ];       
+        ];
         // We should see item 1 but not item 2
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('600')->assertDontSee($item2->id());
@@ -84,6 +84,62 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchExtraDayPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('750');    
                 
+    }
+
+    public function test_availability_honor_min_days_setting()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->toIso8601String(),
+            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'price' => 150,
+            'available' => 2
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        Config::set('resrv-config.minimum_reservation_period_in_days', 3);
+
+        $searchPayload = [
+            'date_start' => today()->add(1, 'day')->toIso8601String(),
+            'date_end' => today()->add(2, 'day')->toIso8601String(),
+        ];
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee('402')->assertDontSee($item->id);    
+    }
+    
+    public function test_availability_honor_max_days_setting()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->toIso8601String(),
+            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'price' => 150,
+            'available' => 2
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        Config::set('resrv-config.maximum_reservation_period_in_days', 3);
+
+        $searchPayload = [
+            'date_start' => today()->add(1, 'day')->toIso8601String(),
+            'date_end' => today()->add(5, 'day')->toIso8601String(),
+        ];
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee('401')->assertDontSee($item->id);    
     }
 
 }

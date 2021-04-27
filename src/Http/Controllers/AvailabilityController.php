@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Exceptions\AvailabilityDurationException;
 
 class AvailabilityController extends Controller
 {
@@ -15,7 +16,11 @@ class AvailabilityController extends Controller
             'date_end' => 'required|date'
         ]);
 
-        $availabilityData = Availability::GetAvailabilityForDates($data);
+        try {
+            $availabilityData = Availability::GetAvailabilityForDates($data);
+        } catch (AvailabilityDurationException $exception) {
+            return response()->json(['error' => $exception->getMessage()]);
+        }      
        
         return response()->json($availabilityData);
 

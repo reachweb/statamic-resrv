@@ -80,6 +80,10 @@ class Availability extends Model
 
         $this->initiateAvailability($dates);
 
+        if ($this->invalid) {
+            return $this->invalid;
+        }
+
         $availableWithPricing = [];
         $available = $this->availableForDates($dates);
 
@@ -91,7 +95,7 @@ class Availability extends Model
                     'date_end' => $this->date_end
                 ],
                 'data' => [
-                    'price' => $this->getPriceForDates($dates, $id)
+                    'price' => round($this->getPriceForDates($dates, $id), 2)
                 ],
                 'message' => [
                     'success' => count($available)
