@@ -37,7 +37,7 @@ class Availability extends Model
     protected function availableForDates($dates) {
 
         $results = $this->where('date', '>=', $this->date_start)
-            ->where('date', '<=', $this->date_end)
+            ->where('date', '<', $this->date_end)
             ->get(['statamic_id', 'date', 'price', 'available'])
             ->sortBy('date');
 
@@ -64,7 +64,7 @@ class Availability extends Model
     protected function getPriceForDates($dates, $statamic_id) {
 
         $results = $this->where('date', '>=', $this->date_start)
-            ->where('date', '<=', $this->date_end)
+            ->where('date', '<', $this->date_end)
             ->where('statamic_id', $statamic_id)
             ->get(['price', 'available']);
 

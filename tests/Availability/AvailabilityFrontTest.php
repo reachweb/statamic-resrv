@@ -28,24 +28,24 @@ class AvailabilityFrontTest extends TestCase
         
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->add(1, 'day')->toIso8601String(),
-            'date_end' => today()->add(5, 'day')->toIso8601String(),
-            'price' => 150,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(3, 'day')->toIso8601String(),
+            'price' => 50,
             'available' => 2
         ];
         
         $payload2 = [
             'statamic_id' => $item2->id(),
             'date_start' => today()->add(2, 'day')->toIso8601String(),
-            'date_end' => today()->add(4, 'day')->toIso8601String(),
-            'price' => 200,
+            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'price' => 80,
             'available' => 1
         ];
         $payload3 = [
             'statamic_id' => $item3->id(),
-            'date_start' => today()->add(3, 'day')->toIso8601String(),
-            'date_end' => today()->add(5, 'day')->toIso8601String(),
-            'price' => 100,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(7, 'day')->toIso8601String(),
+            'price' => 70,
             'available' => 5
         ];
 
@@ -55,12 +55,12 @@ class AvailabilityFrontTest extends TestCase
         $response->assertStatus(200);
 
         $searchPayload = [
-            'date_start' => today()->add(1, 'day')->toIso8601String(),
-            'date_end' => today()->add(4, 'day')->toIso8601String(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(3, 'day')->toIso8601String(),
         ];
-        // We should see item 1 but not item 2
+        // We should see item 1, 3 but not item 2
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('600')->assertDontSee($item2->id());
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('150')->assertDontSee($item2->id())->assertSee($item3->id())->assertSee('210');
 
         $searchEmptyPayload = [
             'date_start' => today()->add(15, 'day')->toIso8601String(),
@@ -72,17 +72,17 @@ class AvailabilityFrontTest extends TestCase
 
         // Add 2 hours to the end date and make sure that it charges an extra day (or not)
         $searchExtraDayPayload = [
-            'date_start' => today()->add(1, 'day')->toIso8601String(),
-            'date_end' => today()->add(4, 'day')->add(2, 'hours')->toIso8601String(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(3, 'day')->add(2, 'hours')->toIso8601String(),
         ];
         
         Config::set('resrv-config.calculate_days_using_time', false);
         $response = $this->post(route('resrv.availability.index'), $searchExtraDayPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('600');
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('150');
         
         Config::set('resrv-config.calculate_days_using_time', true);
         $response = $this->post(route('resrv.availability.index'), $searchExtraDayPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('750');    
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('200');    
                 
     }
 
