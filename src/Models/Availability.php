@@ -34,10 +34,9 @@ class Availability extends Model
      * Search for availability entries between the dates and then return the ids
      * of the items that have at least 1 available for each day.
      */
-    public function scopeAvailableForDates($query, $dates) {
-        $this->initiateAvailability($dates);
+    protected function availableForDates($dates) {
 
-        $results = $query->where('date', '>=', $this->date_start)
+        $results = $this->where('date', '>=', $this->date_start)
             ->where('date', '<=', $this->date_end)
             ->get(['statamic_id', 'date', 'price', 'available'])
             ->sortBy('date');
@@ -62,31 +61,41 @@ class Availability extends Model
     /**
      * Gets the total price of an entry for a period of time
      */
-    public function scopeGetPriceForDates($query, $dates, $statamic_id) {
-        $this->initiateAvailability($dates);
+    protected function getPriceForDates($dates, $statamic_id) {
 
-        $results = $query->where('date', '>=', $this->date_start)
+        $results = $this->where('date', '>=', $this->date_start)
             ->where('date', '<=', $this->date_end)
             ->where('statamic_id', $statamic_id)
             ->get(['price', 'available']);
 
         return $this->calculatePrice($results);
+
     }
 
     /**
      * Calls two scopes: one for getting the available items and one to get the total pricing
      * of each item.
      */
-    public function scopeAvailableForDatesWithPricing($query, $dates) {
+    public function scopeGetAvailabilityForDates($query, $dates) {
+
         $this->initiateAvailability($dates);
 
         $availableWithPricing = [];
-        $available = $this->AvailableForDates($dates);
+        $available = $this->availableForDates($dates);
 
         foreach ($available as $id) {
             $availableWithPricing[$id] = [
-                'price' => $this->GetPriceForDates($dates, $id),
-                'days' => $this->duration
+                'request' => [
+                    'days' => $this->duration,
+                    'date_start' => $this->date_start,
+                    'date_end' => $this->date_end
+                ],
+                'data' => [
+                    'price' => $this->getPriceForDates($dates, $id)
+                ],
+                'message' => [
+                    'success' => count($available)
+                ]
             ];
         };
 

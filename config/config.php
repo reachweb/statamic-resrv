@@ -23,7 +23,8 @@ return [
      */
 
     'minimum_reservation_period_in_days' => 1,
-    'calculate_days_using_time' => true,    
+    'maximum_reservation_period_in_days' => 30,
+    'calculate_days_using_time' => false,    
 
     /**
      * CURRENCY.
