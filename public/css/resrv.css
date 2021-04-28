@@ -114,6 +114,10 @@
     cursor: pointer;
 }
 
+.cursor-not-allowed {
+    cursor: not-allowed;
+}
+
 .flex-col {
     flex-direction: column;
 }

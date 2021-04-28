@@ -111,7 +111,7 @@ class AvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee('402')->assertDontSee($item->id);    
+        $response->assertStatus(200)->assertSee('402')->assertDontSee($item->id());    
     }
     
     public function test_availability_honor_max_days_setting()
@@ -139,7 +139,37 @@ class AvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee('401')->assertDontSee($item->id);    
+        $response->assertStatus(200)->assertSee('401')->assertDontSee($item->id());    
+    }
+
+    public function test_that_it_respects_stop_sales()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem([
+            'title' => 'Stop sales now!',
+            'availability' => 'disabled'
+        ]);
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->toIso8601String(),
+            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'price' => 150,
+            'available' => 2
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $searchPayload = [
+            'date_start' => today()->add(1, 'day')->toIso8601String(),
+            'date_end' => today()->add(5, 'day')->toIso8601String(),
+        ];
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertDontSee($item->id());
+
     }
 
 }

@@ -140,7 +140,8 @@ class TestCase extends OrchestraTestCase
     {
 
         $entryData = [
-            'title' => $data['title'] ?? 'Test Statamic Item'
+            'title' => $data['title'] ?? 'Test Statamic Item',
+            'availability' => $data['availability'] ?? Str::random('6')
         ];
 
         Collection::make('pages')->save();

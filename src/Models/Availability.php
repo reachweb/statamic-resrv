@@ -52,7 +52,7 @@ class Availability extends Model
             return [];
         }
 
-        $disabled = $this->getDisabledIds();        
+        $disabled = $this->getDisabledIds();
         $available = array_intersect(...array_values($days));
 
         return array_diff($available, $disabled);

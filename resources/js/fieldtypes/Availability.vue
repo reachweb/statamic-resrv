@@ -6,7 +6,7 @@
     <div class="statamic-resrv-availability relative" v-else>
         <div class="flex items-center py-1 my-4 border-b border-t">
             <span class="font-bold mr-4">Enable reservations</span>    
-            <toggle-input v-model="enabled" @input="changeAvailability"></toggle-input>
+            <toggle v-model="enabled" @input="changeAvailability" :parent="this.meta.parent"></toggle>
         </div>
         
         <div class="w-full h-full relative">
@@ -31,6 +31,7 @@ import { Calendar } from '@fullcalendar/core'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import AvailabilityModal from '../components/AvailabilityModal.vue'
+import Toggle from '../components/Toggle.vue'
 import Loader from '../components/Loader.vue'
 import dayjs from 'dayjs'
 import axios from 'axios'
@@ -41,7 +42,7 @@ export default {
 
     data() {
         return {
-            enabled: (this.value == true ? this.value : false),
+            enabled: (this.value ? this.value : false),
             containerWidth: null,
             showModal: false,
             selectedDates: false,
@@ -61,7 +62,8 @@ export default {
 
     components: {
         AvailabilityModal,
-        Loader
+        Loader,
+        Toggle
     },
 
     computed: {
@@ -164,9 +166,13 @@ export default {
             })
         },
         changeAvailability() {
-            this.$emit('input', (this.enabled ? true : 'disabled'))
-        }
-            
+            if (this.enabled == 'disabled') {
+                this.$emit('input', 'disabled')
+                      
+            } else {
+                this.$emit('input', this.meta.parent)
+            }
+        }            
     }
 }
 </script>
