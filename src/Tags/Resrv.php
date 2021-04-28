@@ -11,17 +11,19 @@ class Resrv extends Tags
     public function collection()
     {
         $collection = $this->params->get('from');
-        $entries = $this->getEntries($collection);
+        $order = $this->params->get('order', 'order');
+        $entries = $this->getEntries($collection, $order);
         $entries = $this->addAvailability($entries);
         return json_encode($entries->toAugmentedArray());
     }
 
-    protected function getEntries($collection)
+    protected function getEntries($collection, $order)
     {
         return Collection::find($collection)
             ->queryEntries()
             ->where('published', true)
-            ->get();            
+            ->orderBy($order, 'asc')
+            ->get();
     }
 
     protected function addAvailability($entries)

@@ -40,9 +40,7 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
             __DIR__.'/../config/config.php' => config_path('resrv-config.php'),
         ], 'resrv-config');
         
-        if (app()->environment() == 'testing') {
-            $this->mergeConfigFrom(__DIR__.'/../config/config.php', 'resrv-config');
-        }
+        $this->mergeConfigFrom(__DIR__.'/../config/config.php', 'resrv-config');
 
     }
 

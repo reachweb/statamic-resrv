@@ -4,14 +4,14 @@ return [
 
     /**
      *
-     * GENERAL INFORMATION
+     * General information
      *
-     * Put your shop information here. Those information will be usedby templates for the shop and emails.
+     * Put your business information here. Those information will be used for the emails.
      */
-    'name'     => 'Reserv', // Whats the name of your Shop?
+    'name'     => 'Reserv', 
     'address1' => 'Somestreet 8',
     'zip_city' => '00000 City',
-    'country'  => 'Greece', // Set your countries iso code
+    'country'  => 'Greece', 
     'phone'    => '+30 0000 000000',
     'mail'     => 'resrv@resrv.app',
 
@@ -24,10 +24,10 @@ return [
 
     'minimum_reservation_period_in_days' => 1,
     'maximum_reservation_period_in_days' => 30,
-    'calculate_days_using_time' => false,    
+    'calculate_days_using_time' => false, 
 
     /**
-     * CURRENCY.
+     * Currency
      *
      * Define your currency
      */
@@ -37,7 +37,21 @@ return [
     'currency_delimiter' => ',',
 
     /**
-     * PAYMENT.
+     * Reservation settings.
+     * payment: full charges the whole amount, fixed charges a fixed deposit and percent charges a percentage
+     * fixed_amount: the amout to charge for a reservation
+     * percent_amount: the percentage of the reservation to charge as an amount
+     * include_extras: if the extras value will be added to the calculation of the percent deposit
+     * 
+     */
+
+    'payment' => 'full',
+    'fixed_amount' => 50,
+    'percent_amount' => 20,
+    'include_extras' => false, 
+
+    /**
+     * Payment methods
      *
      * If you want, you can swap our payment gateway with your own integration.
      * 
