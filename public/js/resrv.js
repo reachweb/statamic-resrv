@@ -15288,6 +15288,11 @@ __webpack_require__.r(__webpack_exports__);
       this.calendar.render();
     }
   },
+  updated: function updated() {
+    if (!this.newItem) {
+      this.$emit('input', this.meta.parent);
+    }
+  },
   methods: {
     handleSelect: function handleSelect(date) {
       this.selectedDates = date;

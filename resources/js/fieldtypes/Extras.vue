@@ -129,7 +129,7 @@ export default {
     updated() {
         if (! this.newItem) {
             this.$emit('input', this.meta.parent)
-        }        
+        }
     },
 
     watch: {

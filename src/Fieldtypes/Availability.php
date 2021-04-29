@@ -9,7 +9,7 @@ class Availability extends Fieldtype
 {
     public function augment($value)
     {   
-        if ($value == true) {
+        if ($value != 'disabled') {
             $availability_data = EntryAvailability::entry($value)->get();
             $data = $availability_data->sortBy('date')->keyBy('date')->toArray();
             $cheapest = $availability_data->sortBy('price')->firstWhere('available', '>', '0')->price;
