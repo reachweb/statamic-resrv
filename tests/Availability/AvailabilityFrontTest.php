@@ -86,6 +86,44 @@ class AvailabilityFrontTest extends TestCase
                 
     }
 
+    public function test_availability_when_not_set()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->toIso8601String(),
+            'price' => 50,
+            'available' => 2
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+        
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(2, 'day')->toIso8601String(),
+            'date_end' => today()->add(4, 'day')->toIso8601String(),
+            'price' => 50,
+            'available' => 2
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $searchPayload = [
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(4, 'day')->toIso8601String(),
+        ];
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertDontSee($item->id());
+
+    }
+
     public function test_availability_honor_min_days_setting()
     {
         $this->signInAdmin();
@@ -170,6 +208,60 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertDontSee($item->id());
 
+    }
+
+    public function test_availability_can_get_available_for_date_range_one_id_only()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(3, 'day')->toIso8601String(),
+            'price' => 50,
+            'available' => 2
+        ];
+        
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $searchPayload = [
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(3, 'day')->toIso8601String(),
+        ];
+        
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('150')->assertSee('success');        
+        
+    }
+
+    public function test_availability_can_get_unavailable_for_date_range_one_id_only()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(3, 'day')->toIso8601String(),
+            'price' => 50,
+            'available' => 0
+        ];
+        
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $searchPayload = [
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(3, 'day')->toIso8601String(),
+        ];
+        
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('not_available');        
+        
     }
 
 }

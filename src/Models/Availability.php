@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Statamic\Facades\Entry;
-
+use Carbon\CarbonPeriod;
 
 class Availability extends Model
 {
@@ -31,22 +31,111 @@ class Availability extends Model
     }
 
     /**
+     * Calls two scopes: one for getting the available items and one to get the total pricing
+     * of each item.
+     */
+    public function scopeGetAvailabilityForDates($query, $dates, $statamic_id = null) {
+
+        $this->initiateAvailability($dates);
+
+        if ($this->invalid) {
+            return $this->invalid;
+        }
+
+        if (! $statamic_id) {
+            return $this->getAllAvailableItems();
+        }
+
+        if ($statamic_id) {
+            return $this->getSpecificItem($statamic_id);
+        }
+
+        
+    }
+
+    protected function getAllAvailableItems()
+    {
+        $availableWithPricing = [];
+        $available = $this->availableForDates();
+
+        foreach ($available as $id) {
+            $availableWithPricing[$id] = [
+                'request' => [
+                    'days' => $this->duration,
+                    'date_start' => $this->date_start,
+                    'date_end' => $this->date_end
+                ],
+                'data' => [
+                    'price' => round($this->getPriceForDates($id), 2)
+                ],
+                'message' => [
+                    'success' => count($available)
+                ]
+            ];
+        };
+
+        return $availableWithPricing;
+    }
+
+    protected function getSpecificItem($statamic_id)
+    {
+        $results = $this->where('date', '>=', $this->date_start)
+            ->where('date', '<', $this->date_end)
+            ->where('statamic_id', $statamic_id)
+            ->get(['date', 'price', 'available'])
+            ->sortBy('date');
+
+        if ($results->contains('available', 0) || $results->count() !== count($this->getPeriod())) {
+            return [
+                'message' => [
+                    'error' => 'not_available'
+                ]
+            ];
+        }
+
+        return [
+            'request' => [
+                'days' => $this->duration,
+                'date_start' => $this->date_start,
+                'date_end' => $this->date_end
+            ],
+            'data' => [
+                'price' => round($this->calculatePrice($results), 2)
+            ],
+            'message' => [
+                'success' => 1
+            ]
+        ];        
+    }
+
+    /**
      * Search for availability entries between the dates and then return the ids
      * of the items that have at least 1 available for each day.
      */
-    protected function availableForDates($dates) {
+    protected function availableForDates() {
 
         $results = $this->where('date', '>=', $this->date_start)
             ->where('date', '<', $this->date_end)
-            ->get(['statamic_id', 'date', 'price', 'available'])
-            ->sortBy('date');
+            ->get(['statamic_id', 'date', 'price', 'available']);
+
+        $idsFound = $results->groupBy('statamic_id')->keys();
 
         $days = [];
-        foreach ($results->sortBy('date') as $result) {
-            if ($result['available'] > 0) {
-                $days[$result['date']][] = ($result['statamic_id']);
-            }            
-        }
+        foreach ($idsFound as $id) {
+            $dates = $results->where('statamic_id', $id)->sortBy('date');
+            // If the count of the dates is not the same like the period, it usually 
+            // means that a date has no availability information, so we should just skip
+            if ($dates->count() !== count($this->getPeriod())) {
+                continue;
+            }
+            // Also continue of there us a day with availability 0
+            if ($dates->contains('available', 0)) {
+                continue;
+            }
+            foreach ($dates as $availability) {
+                $days[$availability->date][] = $id;
+            }
+        }            
 
         if (count($days) == 0) {
             return [];
@@ -61,7 +150,7 @@ class Availability extends Model
     /**
      * Gets the total price of an entry for a period of time
      */
-    protected function getPriceForDates($dates, $statamic_id) {
+    protected function getPriceForDates($statamic_id) {
 
         $results = $this->where('date', '>=', $this->date_start)
             ->where('date', '<', $this->date_end)
@@ -70,40 +159,6 @@ class Availability extends Model
 
         return $this->calculatePrice($results);
 
-    }
-
-    /**
-     * Calls two scopes: one for getting the available items and one to get the total pricing
-     * of each item.
-     */
-    public function scopeGetAvailabilityForDates($query, $dates) {
-
-        $this->initiateAvailability($dates);
-
-        if ($this->invalid) {
-            return $this->invalid;
-        }
-
-        $availableWithPricing = [];
-        $available = $this->availableForDates($dates);
-
-        foreach ($available as $id) {
-            $availableWithPricing[$id] = [
-                'request' => [
-                    'days' => $this->duration,
-                    'date_start' => $this->date_start,
-                    'date_end' => $this->date_end
-                ],
-                'data' => [
-                    'price' => round($this->getPriceForDates($dates, $id), 2)
-                ],
-                'message' => [
-                    'success' => count($available)
-                ]
-            ];
-        };
-
-        return $availableWithPricing;
     }
 
     protected function getDisabledIds()
@@ -119,5 +174,10 @@ class Availability extends Model
     protected function calculatePrice(Collection $results)
     {
         return $results->sum('price');
+    }
+
+    protected function getPeriod()
+    {
+        return CarbonPeriod::create($this->date_start, $this->date_end, CarbonPeriod::EXCLUDE_END_DATE);
     }
 }
