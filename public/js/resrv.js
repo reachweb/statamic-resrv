@@ -15282,9 +15282,11 @@ __webpack_require__.r(__webpack_exports__);
     }
   },
   mounted: function mounted() {
-    this.getAvailability();
-    this.calendar = new _fullcalendar_core__WEBPACK_IMPORTED_MODULE_0__.Calendar(this.$refs.calendar, this.calendarOptions);
-    this.calendar.render();
+    if (!this.newItem) {
+      this.getAvailability();
+      this.calendar = new _fullcalendar_core__WEBPACK_IMPORTED_MODULE_0__.Calendar(this.$refs.calendar, this.calendarOptions);
+      this.calendar.render();
+    }
   },
   methods: {
     handleSelect: function handleSelect(date) {
@@ -15536,6 +15538,11 @@ __webpack_require__.r(__webpack_exports__);
   },
   mounted: function mounted() {
     this.getAllExtras();
+  },
+  updated: function updated() {
+    if (!this.newItem) {
+      this.$emit('input', this.meta.parent);
+    }
   },
   watch: {
     extrasLoaded: function extrasLoaded() {

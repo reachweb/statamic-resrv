@@ -123,7 +123,13 @@ export default {
     },
 
     mounted() {
-        this.getAllExtras()
+        this.getAllExtras()        
+    },
+
+    updated() {
+        if (! this.newItem) {
+            this.$emit('input', this.meta.parent)
+        }        
     },
 
     watch: {

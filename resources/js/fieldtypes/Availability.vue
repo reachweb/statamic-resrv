@@ -76,9 +76,11 @@ export default {
     },
 
     mounted() {
-        this.getAvailability()
-        this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
-        this.calendar.render()
+        if (! this.newItem) {
+            this.getAvailability()
+            this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
+            this.calendar.render()
+        }        
     },
 
     methods: {

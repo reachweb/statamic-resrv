@@ -7,17 +7,17 @@ use Reach\StatamicResrv\Models\Availability as EntryAvailability;
 
 class Availability extends Fieldtype
 {
-    // public function augment($value)
-    // {   
-    //     if ($value == true) {
-    //         return EntryAvailability::entry($this->field->parent()->id())
-    //             ->get()
-    //             ->sortBy('date')
-    //             ->keyBy('date')
-    //             ->toArray();
-    //     }
-    //     return false;
-    // }
+    public function augment($value)
+    {   
+        if ($value == true) {
+            $availability_data = EntryAvailability::entry($value)->get();
+            $data = $availability_data->sortBy('date')->keyBy('date')->toArray();
+            $cheapest = $availability_data->sortBy('price')->firstWhere('available', '>', '0')->price;
+
+            return compact('data', 'cheapest');
+        }
+        return false;
+    }
 
     public function preload()
     {
