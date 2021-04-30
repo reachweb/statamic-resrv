@@ -15020,6 +15020,14 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
+//
+//
+//
+//
+//
+//
+//
 
 
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
@@ -15524,6 +15532,7 @@ __webpack_require__.r(__webpack_exports__);
         slug: '',
         price: '',
         price_type: '',
+        allow_multiple: 0,
         published: 1
       }
     };
@@ -34479,6 +34488,48 @@ var render = function() {
                     )
                   : _vm._e()
               ]),
+              _vm._v(" "),
+              _c(
+                "div",
+                { staticClass: "px-3 py-1 flex items-center" },
+                [
+                  _c("toggle-input", {
+                    model: {
+                      value: _vm.submit.allow_multiple,
+                      callback: function($$v) {
+                        _vm.$set(_vm.submit, "allow_multiple", $$v)
+                      },
+                      expression: "submit.allow_multiple"
+                    }
+                  }),
+                  _vm._v(" "),
+                  _c("div", { staticClass: "text-sm ml-3" }, [
+                    _vm._v("Can add more than 1")
+                  ])
+                ],
+                1
+              ),
+              _vm._v(" "),
+              _c(
+                "div",
+                { staticClass: "px-3 py-1 flex items-center" },
+                [
+                  _c("toggle-input", {
+                    model: {
+                      value: _vm.submit.published,
+                      callback: function($$v) {
+                        _vm.$set(_vm.submit, "published", $$v)
+                      },
+                      expression: "submit.published"
+                    }
+                  }),
+                  _vm._v(" "),
+                  _c("div", { staticClass: "text-sm ml-3" }, [
+                    _vm._v("Published")
+                  ])
+                ],
+                1
+              ),
               _vm._v(" "),
               _c("div", { staticClass: "px-3 py-1" }, [
                 _c("div", { staticClass: "w-full" }, [

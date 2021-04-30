@@ -50,6 +50,14 @@
                         {{ errors.price_type[0] }}
                     </div>  
                 </div>
+                <div class="px-3 py-1 flex items-center">
+                    <toggle-input v-model="submit.allow_multiple"></toggle-input> 
+                    <div class="text-sm ml-3">Can add more than 1</div>
+                </div>
+                <div class="px-3 py-1 flex items-center">
+                    <toggle-input v-model="submit.published"></toggle-input> 
+                    <div class="text-sm ml-3">Published</div>
+                </div>
                 <div class="px-3 py-1">
                     <div class="w-full">
                         <button 

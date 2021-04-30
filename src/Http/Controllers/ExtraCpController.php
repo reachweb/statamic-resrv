@@ -35,6 +35,7 @@ class ExtraCpController extends Controller
             'slug' => 'required',
             'price' => 'required|numeric',
             'price_type' => 'required',
+            'allow_multiple' => 'required|boolean',
             'published' => 'required|boolean',
         ]);
         $extra = $this->extra->create($data);
@@ -50,6 +51,7 @@ class ExtraCpController extends Controller
             'slug' => 'required',
             'price' => 'required|numeric',
             'price_type' => 'required',
+            'allow_multiple' => 'required|boolean',
             'published' => 'required|boolean',
         ]);
 

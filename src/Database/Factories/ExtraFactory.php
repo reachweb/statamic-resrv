@@ -27,6 +27,7 @@ class ExtraFactory extends Factory
             'slug' => 'this-is-an-extra',
             'price' => '150',
             'price_type' => 'perday',
+            'allow_multiple' => true,
             'published' => true
         ];
     }

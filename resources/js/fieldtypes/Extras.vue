@@ -103,6 +103,7 @@ export default {
                 slug: '',
                 price: '',
                 price_type: '',
+                allow_multiple : 0,
                 published : 1
             }
         }

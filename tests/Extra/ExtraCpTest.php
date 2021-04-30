@@ -7,7 +7,7 @@ use Reach\StatamicResrv\Models\Extra;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 
-class AvailabilityCpTest extends TestCase
+class ExtraCpTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -51,6 +51,7 @@ class AvailabilityCpTest extends TestCase
             'slug' => 'this-is-an-extra',
             'price' => 150,
             'price_type' => 'perday',
+            'allow_multiple' => 1,
             'published' => 1
         ];
         $response = $this->post(cp_route('resrv.extra.create'), $payload);
@@ -68,6 +69,7 @@ class AvailabilityCpTest extends TestCase
             'slug' => 'this-is-an-extra',
             'price' => 150,
             'price_type' => 'perday',
+            'allow_multiple' => 1,
             'published' => 1
         ];
         $response = $this->post(cp_route('resrv.extra.create'), $payload);
@@ -83,6 +85,7 @@ class AvailabilityCpTest extends TestCase
             'slug' => 'something-else',
             'price' => 200,
             'price_type' => 'fixed',
+            'allow_multiple' => 0,
             'published' => 1
         ];
         $response = $this->patch(cp_route('resrv.extra.update'), $payload2);
