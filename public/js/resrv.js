@@ -15290,7 +15290,7 @@ __webpack_require__.r(__webpack_exports__);
   },
   updated: function updated() {
     if (!this.newItem) {
-      this.$emit('input', this.meta.parent);
+      this.$emit('input', this.enabled);
     }
   },
   methods: {

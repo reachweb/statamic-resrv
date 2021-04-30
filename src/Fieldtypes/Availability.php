@@ -11,9 +11,12 @@ class Availability extends Fieldtype
     {   
         if ($value != 'disabled') {
             $availability_data = EntryAvailability::entry($value)->get();
+
+            if ($availability_data->count() == 0) {
+                return false;
+            }
             $data = $availability_data->sortBy('date')->keyBy('date')->toArray();
             $cheapest = $availability_data->sortBy('price')->firstWhere('available', '>', '0')->price;
-
             return compact('data', 'cheapest');
         }
         return false;
