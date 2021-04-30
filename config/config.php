@@ -18,13 +18,16 @@ return [
     /**
      * Reservation settings.
      * minimum_reservation_period_in_days: the minimum days for a reservation
-     * calculate_days_using_time: if true every reservation will add a day for drop off time after pick up
+     * maximum_reservation_period_in_day: the maximum days for a reservation
+     * calculate_days_using_time: if true every reservation will charge a day for drop off time after pick up
+     * decrease_availabilty_for_extra_time: if true, the extra day charged for usage over 24hr will behave as a normal reservation
      * 
      */
 
     'minimum_reservation_period_in_days' => 1,
     'maximum_reservation_period_in_days' => 30,
     'calculate_days_using_time' => false, 
+    'decrease_availabilty_for_extra_time' => false, 
 
     /**
      * Currency
