@@ -10,7 +10,11 @@ class Extras extends Fieldtype
  
     public function augment($value)
     {
-        return Extra::entry($this->field->parent()->id())->get()->keyBy('slug')->toArray();
+        return Extra::entry($this->field->parent()->id())
+            ->where('published', true)
+            ->get()
+            ->keyBy('slug')
+            ->toArray();
     }
 
     public function preload()
