@@ -69,7 +69,7 @@ class Availability extends Model
                     'price' => round($this->getPriceForDates($id), 2)
                 ],
                 'message' => [
-                    'success' => count($available)
+                    'status' => count($available)
                 ]
             ];
         };
@@ -88,7 +88,7 @@ class Availability extends Model
         if ($results->contains('available', 0) || $results->count() !== count($this->getPeriod())) {
             return [
                 'message' => [
-                    'error' => 'not_available'
+                    'status' => false
                 ]
             ];
         }
@@ -103,7 +103,7 @@ class Availability extends Model
                 'price' => round($this->calculatePrice($results), 2)
             ],
             'message' => [
-                'success' => 1
+                'status' => 1
             ]
         ];        
     }

@@ -233,7 +233,7 @@ class AvailabilityFrontTest extends TestCase
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
-        $response->assertStatus(200)->assertSee('150')->assertSee('success');        
+        $response->assertStatus(200)->assertSee('150')->assertSee('message":{"status":1}}', false);        
         
     }
 
@@ -260,7 +260,7 @@ class AvailabilityFrontTest extends TestCase
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
-        $response->assertStatus(200)->assertSee('not_available');        
+        $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);        
         
     }
 
