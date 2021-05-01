@@ -12,7 +12,12 @@ class Extra extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'slug', 'price', 'price_type', 'allow_multiple', 'description', 'published'];
+    protected $fillable = ['name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'published'];
+
+    protected $casts = [
+        'published' => 'boolean',
+        'allow_multiple' => 'boolean',
+    ];
 
     protected static function newFactory()
     {

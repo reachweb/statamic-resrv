@@ -54,6 +54,17 @@
                     <toggle-input v-model="submit.allow_multiple"></toggle-input> 
                     <div class="text-sm ml-3">Can add more than 1</div>
                 </div>
+                <div class="px-3 py-1" v-if="submit.allow_multiple">
+                    <div class="font-bold mb-1 text-sm">
+                        <label for="name">Maximum number for 1 reservation</label>
+                    </div>
+                    <div class="w-full">
+                        <input class="w-full border border-gray-700 rounded p-1" name="name" type="text" v-model="submit.maximum">
+                    </div>
+                    <div v-if="errors.maximum" class="w-full mt-1 text-sm text-red-400">
+                        {{ errors.maximum[0] }}
+                    </div>  
+                </div>
                 <div class="px-3 py-1 flex items-center">
                     <toggle-input v-model="submit.published"></toggle-input> 
                     <div class="text-sm ml-3">Published</div>

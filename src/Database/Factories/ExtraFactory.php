@@ -28,6 +28,7 @@ class ExtraFactory extends Factory
             'price' => '150',
             'price_type' => 'perday',
             'allow_multiple' => true,
+            'maximum' => 3,
             'published' => true
         ];
     }

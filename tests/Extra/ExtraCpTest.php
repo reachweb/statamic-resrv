@@ -52,6 +52,7 @@ class ExtraCpTest extends TestCase
             'price' => 150,
             'price_type' => 'perday',
             'allow_multiple' => 1,
+            'maximum' => 3,
             'published' => 1
         ];
         $response = $this->post(cp_route('resrv.extra.create'), $payload);
@@ -70,6 +71,7 @@ class ExtraCpTest extends TestCase
             'price' => 150,
             'price_type' => 'perday',
             'allow_multiple' => 1,
+            'maximum' => 3,
             'published' => 1
         ];
         $response = $this->post(cp_route('resrv.extra.create'), $payload);

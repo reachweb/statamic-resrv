@@ -104,6 +104,7 @@ export default {
                 price: '',
                 price_type: '',
                 allow_multiple : 0,
+                maximum: 0,
                 published : 1
             }
         }

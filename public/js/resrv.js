@@ -15028,6 +15028,17 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
 
 
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
@@ -15533,6 +15544,7 @@ __webpack_require__.r(__webpack_exports__);
         price: '',
         price_type: '',
         allow_multiple: 0,
+        maximum: 0,
         published: 1
       }
     };
@@ -34509,6 +34521,55 @@ var render = function() {
                 ],
                 1
               ),
+              _vm._v(" "),
+              _vm.submit.allow_multiple
+                ? _c("div", { staticClass: "px-3 py-1" }, [
+                    _c("div", { staticClass: "font-bold mb-1 text-sm" }, [
+                      _c("label", { attrs: { for: "name" } }, [
+                        _vm._v("Maximum number for 1 reservation")
+                      ])
+                    ]),
+                    _vm._v(" "),
+                    _c("div", { staticClass: "w-full" }, [
+                      _c("input", {
+                        directives: [
+                          {
+                            name: "model",
+                            rawName: "v-model",
+                            value: _vm.submit.maximum,
+                            expression: "submit.maximum"
+                          }
+                        ],
+                        staticClass:
+                          "w-full border border-gray-700 rounded p-1",
+                        attrs: { name: "name", type: "text" },
+                        domProps: { value: _vm.submit.maximum },
+                        on: {
+                          input: function($event) {
+                            if ($event.target.composing) {
+                              return
+                            }
+                            _vm.$set(_vm.submit, "maximum", $event.target.value)
+                          }
+                        }
+                      })
+                    ]),
+                    _vm._v(" "),
+                    _vm.errors.maximum
+                      ? _c(
+                          "div",
+                          { staticClass: "w-full mt-1 text-sm text-red-400" },
+                          [
+                            _vm._v(
+                              "\n                    " +
+                                _vm._s(_vm.errors.maximum[0]) +
+                                "\n                "
+                            )
+                          ]
+                        )
+                      : _vm._e()
+                  ])
+                : _vm._e(),
               _vm._v(" "),
               _c(
                 "div",

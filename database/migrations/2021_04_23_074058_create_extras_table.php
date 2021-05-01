@@ -20,6 +20,7 @@ class CreateExtrasTable extends Migration
             $table->float('price', 8, 2);
             $table->string('price_type');
             $table->boolean('allow_multiple');
+            $table->integer('maximum')->nullable();
             $table->text('description')->nullable();
             $table->boolean('published');
             $table->timestamps();
