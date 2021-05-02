@@ -44,14 +44,12 @@ return [
      * payment: full charges the whole amount, fixed charges a fixed deposit and percent charges a percentage
      * fixed_amount: the amout to charge for a reservation
      * percent_amount: the percentage of the reservation to charge as an amount
-     * include_extras: if the extras value will be added to the calculation of the percent deposit
      * 
      */
 
     'payment' => 'full',
     'fixed_amount' => 50,
     'percent_amount' => 20,
-    'include_extras' => false, 
 
     /**
      * Payment methods

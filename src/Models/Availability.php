@@ -66,7 +66,8 @@ class Availability extends Model
                     'date_end' => $this->date_end
                 ],
                 'data' => [
-                    'price' => round($this->getPriceForDates($id), 2)
+                    'price' => round($this->getPriceForDates($id), 2),
+                    'payment' => round($this->calculatePayment($this->getPriceForDates($id)), 2)
                 ],
                 'message' => [
                     'status' => count($available)
@@ -100,7 +101,8 @@ class Availability extends Model
                 'date_end' => $this->date_end
             ],
             'data' => [
-                'price' => round($this->calculatePrice($results), 2)
+                'price' => round($this->calculatePrice($results), 2),
+                'payment' => round($this->calculatePayment($this->calculatePrice($results)), 2)
             ],
             'message' => [
                 'status' => 1
@@ -179,5 +181,18 @@ class Availability extends Model
     protected function getPeriod()
     {
         return CarbonPeriod::create($this->date_start, $this->date_end, CarbonPeriod::EXCLUDE_END_DATE);
+    }
+
+    protected function calculatePayment($price)
+    {
+        if (config('resrv-config.payment', 'full') == 'full') {
+            return $price;
+        }
+        if (config('resrv-config.payment') == 'fixed') {
+            return config('resrv-config.fixed_amount');
+        }
+        if (config('resrv-config.payment') == 'percent') {
+            return (config('resrv-config.percent_amount') * 0.01) * $price;
+        }
     }
 }
