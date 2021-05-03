@@ -10,7 +10,7 @@ class Resrv extends Tags
 {
     public function locations()
     {
-        return htmlspecialchars(Location::all()->toJson(), ENT_QUOTES, 'UTF-8');
+        return htmlspecialchars(Location::where('published', true)->get()->toJson(), ENT_QUOTES, 'UTF-8');
     }
 
 }
