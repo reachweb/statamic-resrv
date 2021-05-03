@@ -4,12 +4,14 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Reach\StatamicResrv\Database\Factories\LocationFactory;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Database\Factories\LocationFactory;
+use Reach\StatamicResrv\Traits\HandlesOrdering;
+use Reach\StatamicResrv\Scopes\OrderScope;
 
 class Location extends Model
 {
-    use HasFactory;
+    use HasFactory, HandlesOrdering;
 
     protected $table = 'resrv_locations';
 
@@ -22,6 +24,11 @@ class Location extends Model
     protected static function newFactory()
     {
         return LocationFactory::new();
+    }
+
+    protected static function booted()
+    {
+        static::addGlobalScope(new OrderScope);
     }
 
 }

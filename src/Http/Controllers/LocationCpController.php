@@ -60,6 +60,19 @@ class LocationCpController extends Controller
 
         return response()->json(['id' => $data['id']]);
     }
+    
+    public function order(Request $request)
+    {
+        $data = $request->validate([
+            'id' => 'required',            
+            'order' => 'required|integer',
+        ]);
+
+        $location = $this->location->find($data['id'])->changeOrder($data['order']);
+
+        return response(200);
+    }
+
     public function delete(Request $request)
     {
         $data = $request->validate([

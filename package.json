@@ -26,6 +26,7 @@
         "dayjs": "^1.10.4",
         "lodash": "^4.17.21",
         "tailwindcss": "^2.1.1",
-        "vue-select": "^3.11.2"
+        "vue-select": "^3.11.2",
+        "vuedraggable": "^2.24.3"
     }
 }

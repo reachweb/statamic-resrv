@@ -76,4 +76,31 @@ class LocationTest extends TestCase
         ]);
     }
 
+    public function test_can_reorder_location()
+    {
+        $location = Location::factory()->create()->toArray();
+        $location2 = Location::factory()->create(['id' => 2, 'order' => 2]);
+        $location3 = Location::factory()->create(['id' => 3, 'order' => 3]);
+
+        $payload = [
+            'id' => 1,
+            'order' => 3
+        ];
+       
+        $response = $this->patch(cp_route('resrv.location.order'), $payload);
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('resrv_locations', [
+            'id' => $location['id'],
+            'order' => 3
+        ]);
+        $this->assertDatabaseHas('resrv_locations', [
+            'id' => $location2['id'],
+            'order' => 1
+        ]);
+        $this->assertDatabaseHas('resrv_locations', [
+            'id' => $location3['id'],
+            'order' => 2
+        ]);
+    }
+
 }

@@ -1,7 +1,7 @@
 <template>
     <div>
     <div class="w-full h-full" v-if="locationsLoaded">
-        <div class="mt-4 space-y-1">
+        <vue-draggable class="mt-4 space-y-1" v-model="locations" @start="drag=true" @end="drag=false" @change="order">
             <div
                 v-for="location in locations"
                 :key="location.id"
@@ -44,7 +44,7 @@
                     </span>
                 </div>
             </div>
-        </div>
+        </vue-draggable>
     </div>
     <div class="w-full mt-4">
         <button class="px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer" @click="addLocation">
@@ -72,6 +72,7 @@
 <script>
 import axios from 'axios'
 import LocationsPanel from './LocationsPanel.vue'
+import VueDraggable from 'vuedraggable'
 
 export default {
     props: {
@@ -93,6 +94,7 @@ export default {
             allowEntryExtraEdit: true,
             deleteId: false,
             locations: '',
+            drag: false,
             emptyLocation: {
                 name: '',
                 slug: '',
@@ -103,7 +105,8 @@ export default {
     },
 
     components: {
-        LocationsPanel
+        LocationsPanel,
+        VueDraggable
     },
 
 
@@ -153,7 +156,16 @@ export default {
                 .catch(error => {
                     this.$toast.error('Cannot delete location')
                 })
-        }            
+        },
+        order(event){
+            let item = event.moved.element
+            let order = event.moved.newIndex + 1
+            axios.patch('/cp/resrv/location/order', {id: item.id, order: order})
+                .then(() => {
+                    this.$toast.success('Locations order changed')
+                })
+                .catch(() => {this.$toast.error('Locations ordering failed')})
+        }          
     }
 }
 </script>
