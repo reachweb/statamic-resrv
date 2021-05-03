@@ -39728,11 +39728,7 @@ var render = function() {
       _c("div", { staticClass: "w-full mt-4" }, [
         _c(
           "button",
-          {
-            staticClass:
-              "px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer",
-            on: { click: _vm.addLocation }
-          },
+          { staticClass: "btn-primary", on: { click: _vm.addLocation } },
           [_vm._v("\n        Add Location\n    ")]
         )
       ]),

@@ -47,7 +47,7 @@
         </vue-draggable>
     </div>
     <div class="w-full mt-4">
-        <button class="px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer" @click="addLocation">
+        <button class="btn-primary" @click="addLocation">
             Add Location
         </button>
     </div>
