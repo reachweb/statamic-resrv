@@ -6,9 +6,9 @@
                 v-for="extra in extras"
                 :key="extra.id"
                 class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors"
-                :class="extraEnabled(extra.id) ? 'bg-green-200' : 'bg-white'"                    
             >
-                <div class="space-x-2">
+                <div class="flex items-center space-x-2">
+                    <div class="little-dot" :class="extra.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
                     <span class="font-medium" v-html="extra.name"></span>
                     <span>{{ extra.price }} <span class="text-xs text-gray-500" v-html="priceLabel(extra.price_type)"></span></span>
                 </div>
@@ -257,6 +257,7 @@ export default {
             axios.patch('/cp/resrv/extra/order', {id: item.id, order: order})
                 .then(() => {
                     this.$toast.success('Extras order changed')
+                    this.getAllExtras()
                 })
                 .catch(() => {this.$toast.error('Extras ordering failed')})
         }        

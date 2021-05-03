@@ -5,18 +5,14 @@
             <div
                 v-for="location in locations"
                 :key="location.id"
-                class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors"
-                :class="location.published == true ? 'bg-green-200' : 'bg-white'"                    
+                class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors"                  
             >
-                <div class="space-x-2">
+                <div class="flex items-center space-x-2">
+                    <div class="little-dot"  :class="location.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
                     <span class="font-medium" v-html="location.name"></span>
                     <span v-if="location.extra_charge">€ {{ location.extra_charge }}</span>
                 </div>
                 <div class="space-x-2">
-                    <span 
-                        class="text-gray-500 text-sm uppercase cursor-pointer" 
-                        v-html="location.published == true ? 'Enabled' : 'Disabled'"                        
-                    ></span>
                     <span class="cursor-pointer text-red-800" @click="confirmDelete(location)">
                         <svg class="stroke-current text-red-800" xmlns="http://www.w3.org/2000/svg" version="1.1" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:svgjs="http://svgjs.com/svgjs" viewBox="0 0 18 18" width="18" height="18">
                             <g transform="matrix(0.75,0,0,0.75,0,0)">
@@ -163,6 +159,7 @@ export default {
             axios.patch('/cp/resrv/location/order', {id: item.id, order: order})
                 .then(() => {
                     this.$toast.success('Locations order changed')
+                    this.getAllLocations()
                 })
                 .catch(() => {this.$toast.error('Locations ordering failed')})
         }          

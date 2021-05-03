@@ -15226,6 +15226,8 @@ __webpack_require__.r(__webpack_exports__);
         order: order
       }).then(function () {
         _this7.$toast.success('Extras order changed');
+
+        _this7.getAllExtras();
       })["catch"](function () {
         _this7.$toast.error('Extras ordering failed');
       });
@@ -15526,10 +15528,6 @@ function _defineProperty(obj, key, value) { if (key in obj) { Object.definePrope
 //
 //
 //
-//
-//
-//
-//
 
 
 
@@ -15626,6 +15624,8 @@ function _defineProperty(obj, key, value) { if (key in obj) { Object.definePrope
         order: order
       }).then(function () {
         _this3.$toast.success('Locations order changed');
+
+        _this3.getAllLocations();
       })["catch"](function () {
         _this3.$toast.error('Locations ordering failed');
       });
@@ -38685,30 +38685,39 @@ var render = function() {
                     {
                       key: extra.id,
                       staticClass:
-                        "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors",
-                      class: _vm.extraEnabled(extra.id)
-                        ? "bg-green-200"
-                        : "bg-white"
+                        "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors"
                     },
                     [
-                      _c("div", { staticClass: "space-x-2" }, [
-                        _c("span", {
-                          staticClass: "font-medium",
-                          domProps: { innerHTML: _vm._s(extra.name) }
-                        }),
-                        _vm._v(" "),
-                        _c("span", [
-                          _vm._v(_vm._s(extra.price) + " "),
+                      _c(
+                        "div",
+                        { staticClass: "flex items-center space-x-2" },
+                        [
+                          _c("div", {
+                            staticClass: "little-dot",
+                            class:
+                              extra.published == true
+                                ? "bg-green-600"
+                                : "bg-gray-400"
+                          }),
+                          _vm._v(" "),
                           _c("span", {
-                            staticClass: "text-xs text-gray-500",
-                            domProps: {
-                              innerHTML: _vm._s(
-                                _vm.priceLabel(extra.price_type)
-                              )
-                            }
-                          })
-                        ])
-                      ]),
+                            staticClass: "font-medium",
+                            domProps: { innerHTML: _vm._s(extra.name) }
+                          }),
+                          _vm._v(" "),
+                          _c("span", [
+                            _vm._v(_vm._s(extra.price) + " "),
+                            _c("span", {
+                              staticClass: "text-xs text-gray-500",
+                              domProps: {
+                                innerHTML: _vm._s(
+                                  _vm.priceLabel(extra.price_type)
+                                )
+                              }
+                            })
+                          ])
+                        ]
+                      ),
                       _vm._v(" "),
                       _c("div", { staticClass: "space-x-2" }, [
                         _vm.insideEntry
@@ -39523,37 +39532,35 @@ var render = function() {
                     {
                       key: location.id,
                       staticClass:
-                        "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors",
-                      class:
-                        location.published == true ? "bg-green-200" : "bg-white"
+                        "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors"
                     },
                     [
-                      _c("div", { staticClass: "space-x-2" }, [
-                        _c("span", {
-                          staticClass: "font-medium",
-                          domProps: { innerHTML: _vm._s(location.name) }
-                        }),
-                        _vm._v(" "),
-                        location.extra_charge
-                          ? _c("span", [
-                              _vm._v("€ " + _vm._s(location.extra_charge))
-                            ])
-                          : _vm._e()
-                      ]),
+                      _c(
+                        "div",
+                        { staticClass: "flex items-center space-x-2" },
+                        [
+                          _c("div", {
+                            staticClass: "little-dot",
+                            class:
+                              location.published == true
+                                ? "bg-green-600"
+                                : "bg-gray-400"
+                          }),
+                          _vm._v(" "),
+                          _c("span", {
+                            staticClass: "font-medium",
+                            domProps: { innerHTML: _vm._s(location.name) }
+                          }),
+                          _vm._v(" "),
+                          location.extra_charge
+                            ? _c("span", [
+                                _vm._v("€ " + _vm._s(location.extra_charge))
+                              ])
+                            : _vm._e()
+                        ]
+                      ),
                       _vm._v(" "),
                       _c("div", { staticClass: "space-x-2" }, [
-                        _c("span", {
-                          staticClass:
-                            "text-gray-500 text-sm uppercase cursor-pointer",
-                          domProps: {
-                            innerHTML: _vm._s(
-                              location.published == true
-                                ? "Enabled"
-                                : "Disabled"
-                            )
-                          }
-                        }),
-                        _vm._v(" "),
                         _c(
                           "span",
                           {
