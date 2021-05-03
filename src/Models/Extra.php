@@ -12,6 +12,8 @@ class Extra extends Model
 {
     use HasFactory;
 
+    protected $table = 'resrv_extras';
+
     protected $fillable = ['name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'published'];
 
     protected $casts = [
@@ -26,11 +28,11 @@ class Extra extends Model
 
     public function scopeEntry($query, $entry)
     {
-        return DB::table('extras')
-            ->join('statamicentry_extra', function ($join) use ($entry) {
-                $join->on('extras.id', '=', 'statamicentry_extra.extra_id')
-                    ->where('statamicentry_extra.statamicentry_id', '=', $entry);
+        return DB::table('resrv_extras')
+            ->join('resrv_statamicentry_extra', function ($join) use ($entry) {
+                $join->on('resrv_extras.id', '=', 'resrv_statamicentry_extra.extra_id')
+                    ->where('resrv_statamicentry_extra.statamicentry_id', '=', $entry);
             })
-            ->select('extras.*');
+            ->select('resrv_extras.*');
     }
 }

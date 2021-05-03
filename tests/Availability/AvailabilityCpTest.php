@@ -64,7 +64,7 @@ class AvailabilityCpTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id()
         ]);
     }
@@ -82,7 +82,7 @@ class AvailabilityCpTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id()
         ]);
     }
@@ -100,7 +100,7 @@ class AvailabilityCpTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id()
         ]);
     }
@@ -118,7 +118,7 @@ class AvailabilityCpTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 150
         ]);
 
@@ -133,7 +133,7 @@ class AvailabilityCpTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 200
         ]);
     }

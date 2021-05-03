@@ -73,7 +73,7 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'id' => 'required|integer'
         ]);
-        DB::table('statamicentry_extra')
+        DB::table('resrv_statamicentry_extra')
             ->insert(
                 ['extra_id' => $data['id'], 'statamicentry_id' => $statamic_id],
             );
@@ -85,7 +85,7 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'id' => 'required|integer'
         ]);
-        DB::table('statamicentry_extra')
+        DB::table('resrv_statamicentry_extra')
             ->where('extra_id', $data['id'])
             ->where('statamicentry_id', $statamic_id)
             ->delete();
@@ -99,7 +99,7 @@ class ExtraCpController extends Controller
         ]);
         $extra = $this->extra->destroy($data['id']);
 
-        DB::table('statamicentry_extra')
+        DB::table('resrv_statamicentry_extra')
             ->where('extra_id', $data['id'])
             ->delete();
         return response(200);

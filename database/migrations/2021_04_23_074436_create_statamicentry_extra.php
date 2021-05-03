@@ -13,7 +13,7 @@ class CreateStatamicentryExtra extends Migration
      */
     public function up()
     {
-        Schema::create('statamicentry_extra', function (Blueprint $table) {
+        Schema::create('resrv_statamicentry_extra', function (Blueprint $table) {
             $table->string('statamicentry_id')->index();
             $table->integer('extra_id')->index();
         });
@@ -26,6 +26,6 @@ class CreateStatamicentryExtra extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('statamicentry_extra');
+        Schema::dropIfExists('resrv_statamicentry_extra');
     }
 }

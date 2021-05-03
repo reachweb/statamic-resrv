@@ -13,7 +13,7 @@ class CreateAvailabilityTable extends Migration
      */
     public function up()
     {
-        Schema::create('availabilities', function (Blueprint $table) {
+        Schema::create('resrv_availabilities', function (Blueprint $table) {
             $table->string('statamic_id')->index();
             $table->date('date')->index();
             $table->integer('available');
@@ -30,6 +30,6 @@ class CreateAvailabilityTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('availabilities');
+        Schema::dropIfExists('resrv_availabilities');
     }
 }

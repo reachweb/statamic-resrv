@@ -14,6 +14,8 @@ class Availability extends Model
 {
     use HasFactory, HandlesAvailabilityDates;
 
+    protected $table = 'resrv_availabilities';
+
     protected $fillable = ['statamic_id', 'date', 'price', 'available'];
 
     protected $casts = [

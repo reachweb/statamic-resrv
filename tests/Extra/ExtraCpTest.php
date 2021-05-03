@@ -36,7 +36,7 @@ class ExtraCpTest extends TestCase
 
         $response = $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
         $response->assertStatus(200);
-        $this->assertDatabaseHas('statamicentry_extra', [
+        $this->assertDatabaseHas('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
         ]);  
 
@@ -58,7 +58,7 @@ class ExtraCpTest extends TestCase
         $response = $this->post(cp_route('resrv.extra.create'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('extras', [
+        $this->assertDatabaseHas('resrv_extras', [
             'slug' => 'this-is-an-extra'
         ]);
     }
@@ -77,7 +77,7 @@ class ExtraCpTest extends TestCase
         $response = $this->post(cp_route('resrv.extra.create'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('extras', [
+        $this->assertDatabaseHas('resrv_extras', [
             'slug' => 'this-is-an-extra'
         ]);
 
@@ -93,10 +93,10 @@ class ExtraCpTest extends TestCase
         $response = $this->patch(cp_route('resrv.extra.update'), $payload2);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('extras', [
+        $this->assertDatabaseHas('resrv_extras', [
             'slug' => 'something-else'
         ]);
-        $this->assertDatabaseMissing('extras', [
+        $this->assertDatabaseMissing('resrv_extras', [
             'slug' => 'this-is-an-extra'
         ]);
     }
@@ -112,15 +112,15 @@ class ExtraCpTest extends TestCase
 
         $response = $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
         $response->assertStatus(200);
-        $this->assertDatabaseHas('statamicentry_extra', [
+        $this->assertDatabaseHas('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
         ]);
 
         $response = $this->delete(cp_route('resrv.extra.delete', $item->id()), $payload);
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('statamicentry_extra', [
+        $this->assertDatabaseMissing('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
-        ]);$this->assertDatabaseMissing('extras', [
+        ]);$this->assertDatabaseMissing('resrv_extras', [
             'name' => $extra->name
         ]);
     }
@@ -136,7 +136,7 @@ class ExtraCpTest extends TestCase
 
         $response = $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
         $response->assertStatus(200);
-        $this->assertDatabaseHas('statamicentry_extra', [
+        $this->assertDatabaseHas('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
         ]);
     }
@@ -152,13 +152,13 @@ class ExtraCpTest extends TestCase
 
         $response = $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
         $response->assertStatus(200);
-        $this->assertDatabaseHas('statamicentry_extra', [
+        $this->assertDatabaseHas('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
         ]);
 
         $response = $this->post(cp_route('resrv.extra.remove', $item->id()), $payload);
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('statamicentry_extra', [
+        $this->assertDatabaseMissing('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
         ]);
     }
