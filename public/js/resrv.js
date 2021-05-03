@@ -38685,7 +38685,7 @@ var render = function() {
                     {
                       key: extra.id,
                       staticClass:
-                        "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors"
+                        "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors bg-white"
                     },
                     [
                       _c(
@@ -39532,7 +39532,7 @@ var render = function() {
                     {
                       key: location.id,
                       staticClass:
-                        "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors"
+                        "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors bg-white"
                     },
                     [
                       _c(

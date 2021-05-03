@@ -5,7 +5,7 @@
             <div
                 v-for="location in locations"
                 :key="location.id"
-                class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors"                  
+                class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors bg-white"                  
             >
                 <div class="flex items-center space-x-2">
                     <div class="little-dot"  :class="location.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
