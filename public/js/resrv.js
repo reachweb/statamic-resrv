@@ -14938,6 +14938,284 @@ __webpack_require__.r(__webpack_exports__);
 
 /***/ }),
 
+/***/ "./node_modules/babel-loader/lib/index.js??clonedRuleSet-5[0].rules[0].use[0]!./node_modules/vue-loader/lib/index.js??vue-loader-options!./resources/js/components/ExtrasList.vue?vue&type=script&lang=js&":
+/*!*****************************************************************************************************************************************************************************************************************!*\
+  !*** ./node_modules/babel-loader/lib/index.js??clonedRuleSet-5[0].rules[0].use[0]!./node_modules/vue-loader/lib/index.js??vue-loader-options!./resources/js/components/ExtrasList.vue?vue&type=script&lang=js& ***!
+  \*****************************************************************************************************************************************************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! axios */ "./node_modules/axios/index.js");
+/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var _ExtrasPanel_vue__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./ExtrasPanel.vue */ "./resources/js/components/ExtrasPanel.vue");
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
+  props: {
+    insideEntry: {
+      type: Boolean,
+      "default": false
+    },
+    parent: {
+      type: String,
+      required: false
+    }
+  },
+  data: function data() {
+    return {
+      containerWidth: null,
+      showPanel: false,
+      extras: '',
+      entryExtras: '',
+      activeExtras: [],
+      extrasLoaded: false,
+      allowEntryExtraEdit: true,
+      deleteId: false,
+      extra: '',
+      emptyExtra: {
+        name: '',
+        slug: '',
+        price: '',
+        price_type: '',
+        allow_multiple: 0,
+        maximum: 0,
+        published: 1
+      }
+    };
+  },
+  components: {
+    ExtrasPanel: _ExtrasPanel_vue__WEBPACK_IMPORTED_MODULE_1__.default
+  },
+  computed: {
+    newItem: function newItem() {
+      if (this.parent == 'Collection') {
+        return true;
+      }
+
+      return false;
+    }
+  },
+  mounted: function mounted() {
+    this.getAllExtras();
+  },
+  updated: function updated() {
+    if (!this.newItem) {
+      this.$emit('input', this.parent);
+    }
+  },
+  watch: {
+    extrasLoaded: function extrasLoaded() {
+      if (this.insideEntry) {
+        this.createEnabledExtrasArray();
+      }
+    },
+    entryExtras: function entryExtras() {
+      this.createEnabledExtrasArray();
+    }
+  },
+  methods: {
+    togglePanel: function togglePanel() {
+      this.showPanel = !this.showPanel;
+    },
+    associateEntryExtra: function associateEntryExtra(extraId) {
+      this.toggleEntryExtraEditing();
+
+      if (this.extraEnabled(extraId)) {
+        this.disableExtra(extraId);
+      } else {
+        this.enableExtra(extraId);
+      }
+    },
+    toggleEntryExtraEditing: function toggleEntryExtraEditing() {
+      this.allowEntryExtraEdit = !this.allowEntryExtraEdit;
+    },
+    addExtra: function addExtra() {
+      this.extra = this.emptyExtra;
+      this.togglePanel();
+    },
+    editExtra: function editExtra(extra) {
+      this.extra = extra;
+      this.togglePanel();
+    },
+    extraSaved: function extraSaved() {
+      this.togglePanel();
+      this.getAllExtras();
+    },
+    createEnabledExtrasArray: function createEnabledExtrasArray() {
+      var _this = this;
+
+      this.activeExtras = [];
+      this.entryExtras.forEach(function (item) {
+        _this.activeExtras.push(parseInt(item.id));
+      });
+    },
+    extraEnabled: function extraEnabled(extraId) {
+      return this.activeExtras.includes(extraId);
+    },
+    priceLabel: function priceLabel(code) {
+      if (code == 'perday') {
+        return '/ day';
+      } else if (code == 'fixed') {
+        return '/ reservation';
+      }
+    },
+    getAllExtras: function getAllExtras() {
+      var _this2 = this;
+
+      axios__WEBPACK_IMPORTED_MODULE_0___default().get('/cp/resrv/extra').then(function (response) {
+        _this2.extras = response.data;
+
+        if (_this2.insideEntry) {
+          _this2.getEntryExtras();
+        } else {
+          _this2.extrasLoaded = true;
+        }
+      })["catch"](function (error) {
+        _this2.$toast.error('Cannot retrieve extras');
+      });
+    },
+    getEntryExtras: function getEntryExtras() {
+      var _this3 = this;
+
+      axios__WEBPACK_IMPORTED_MODULE_0___default().get('/cp/resrv/extra/' + this.parent).then(function (response) {
+        _this3.entryExtras = response.data;
+        _this3.extrasLoaded = true;
+      })["catch"](function (error) {
+        _this3.$toast.error('Cannot retrieve entry extras');
+      });
+    },
+    enableExtra: function enableExtra(extraId) {
+      var _this4 = this;
+
+      axios__WEBPACK_IMPORTED_MODULE_0___default().post('/cp/resrv/extra/add/' + this.parent, {
+        'id': extraId
+      }).then(function (response) {
+        _this4.$toast.success('Extra added to this entry');
+
+        _this4.toggleEntryExtraEditing();
+
+        _this4.getAllExtras();
+      })["catch"](function (error) {
+        _this4.$toast.error('Cannot add extra to entry');
+      });
+    },
+    disableExtra: function disableExtra(extraId) {
+      var _this5 = this;
+
+      axios__WEBPACK_IMPORTED_MODULE_0___default().post('/cp/resrv/extra/remove/' + this.parent, {
+        'id': extraId
+      }).then(function (response) {
+        _this5.$toast.success('Extra removed from this entry');
+
+        _this5.toggleEntryExtraEditing();
+
+        _this5.getAllExtras();
+      })["catch"](function (error) {
+        _this5.$toast.error('Cannot remove extra to entry');
+      });
+    },
+    confirmDelete: function confirmDelete(extra) {
+      this.deleteId = extra.id;
+    },
+    deleteExtra: function deleteExtra() {
+      var _this6 = this;
+
+      axios__WEBPACK_IMPORTED_MODULE_0___default().delete('/cp/resrv/extra', {
+        data: {
+          'id': this.deleteId
+        }
+      }).then(function (response) {
+        _this6.$toast.success('Extra deleted');
+
+        _this6.deleteId = false;
+
+        _this6.getAllExtras();
+      })["catch"](function (error) {
+        _this6.$toast.error('Cannot delete extra');
+      });
+    }
+  }
+});
+
+/***/ }),
+
 /***/ "./node_modules/babel-loader/lib/index.js??clonedRuleSet-5[0].rules[0].use[0]!./node_modules/vue-loader/lib/index.js??vue-loader-options!./resources/js/components/ExtrasPanel.vue?vue&type=script&lang=js&":
 /*!******************************************************************************************************************************************************************************************************************!*\
   !*** ./node_modules/babel-loader/lib/index.js??clonedRuleSet-5[0].rules[0].use[0]!./node_modules/vue-loader/lib/index.js??vue-loader-options!./resources/js/components/ExtrasPanel.vue?vue&type=script&lang=js& ***!
@@ -15438,10 +15716,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
-/* harmony import */ var _components_ExtrasPanel_vue__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../components/ExtrasPanel.vue */ "./resources/js/components/ExtrasPanel.vue");
-/* harmony import */ var _components_Loader_vue__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../components/Loader.vue */ "./resources/js/components/Loader.vue");
-/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! axios */ "./node_modules/axios/index.js");
-/* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var _components_ExtrasList_vue__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../components/ExtrasList.vue */ "./resources/js/components/ExtrasList.vue");
+/* harmony import */ var _components_ExtrasPanel_vue__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../components/ExtrasPanel.vue */ "./resources/js/components/ExtrasPanel.vue");
 //
 //
 //
@@ -15459,99 +15735,18 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-//
-
 
 
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
   mixins: [Fieldtype],
   data: function data() {
     return {
-      containerWidth: null,
-      showPanel: false,
-      extras: '',
-      entryExtras: '',
-      activeExtras: [],
-      extrasLoaded: false,
-      allowEntryExtraEdit: true,
-      deleteId: false,
-      extra: '',
-      emptyExtra: {
-        name: '',
-        slug: '',
-        price: '',
-        price_type: '',
-        allow_multiple: 0,
-        maximum: 0,
-        published: 1
-      }
+      containerWidth: null
     };
   },
   components: {
-    Loader: _components_Loader_vue__WEBPACK_IMPORTED_MODULE_1__.default,
-    ExtrasPanel: _components_ExtrasPanel_vue__WEBPACK_IMPORTED_MODULE_0__.default
+    ExtrasList: _components_ExtrasList_vue__WEBPACK_IMPORTED_MODULE_0__.default,
+    ExtrasPanel: _components_ExtrasPanel_vue__WEBPACK_IMPORTED_MODULE_1__.default
   },
   computed: {
     newItem: function newItem() {
@@ -15562,138 +15757,9 @@ __webpack_require__.r(__webpack_exports__);
       return false;
     }
   },
-  mounted: function mounted() {
-    this.getAllExtras();
-  },
   updated: function updated() {
     if (!this.newItem) {
       this.$emit('input', this.meta.parent);
-    }
-  },
-  watch: {
-    extrasLoaded: function extrasLoaded() {
-      this.createEnabledExtrasArray();
-    },
-    entryExtras: function entryExtras() {
-      this.createEnabledExtrasArray();
-    }
-  },
-  methods: {
-    togglePanel: function togglePanel() {
-      this.showPanel = !this.showPanel;
-    },
-    associateEntryExtra: function associateEntryExtra(extraId) {
-      this.toggleEntryExtraEditing();
-
-      if (this.extraEnabled(extraId)) {
-        this.disableExtra(extraId);
-      } else {
-        this.enableExtra(extraId);
-      }
-    },
-    toggleEntryExtraEditing: function toggleEntryExtraEditing() {
-      this.allowEntryExtraEdit = !this.allowEntryExtraEdit;
-    },
-    addExtra: function addExtra() {
-      this.extra = this.emptyExtra;
-      this.togglePanel();
-    },
-    editExtra: function editExtra(extra) {
-      this.extra = extra;
-      this.togglePanel();
-    },
-    extraSaved: function extraSaved() {
-      this.togglePanel();
-      this.getAllExtras();
-    },
-    createEnabledExtrasArray: function createEnabledExtrasArray() {
-      var _this = this;
-
-      this.activeExtras = [];
-      this.entryExtras.forEach(function (item) {
-        _this.activeExtras.push(parseInt(item.id));
-      });
-    },
-    extraEnabled: function extraEnabled(extraId) {
-      return this.activeExtras.includes(extraId);
-    },
-    priceLabel: function priceLabel(code) {
-      if (code == 'perday') {
-        return '/ day';
-      } else if (code == 'fixed') {
-        return '/ reservation';
-      }
-    },
-    getAllExtras: function getAllExtras() {
-      var _this2 = this;
-
-      axios__WEBPACK_IMPORTED_MODULE_2___default().get('/cp/resrv/extra').then(function (response) {
-        _this2.extras = response.data;
-
-        _this2.getEntryExtras();
-      })["catch"](function (error) {
-        _this2.$toast.error('Cannot retrieve extras');
-      });
-    },
-    getEntryExtras: function getEntryExtras() {
-      var _this3 = this;
-
-      axios__WEBPACK_IMPORTED_MODULE_2___default().get('/cp/resrv/extra/' + this.meta.parent).then(function (response) {
-        _this3.entryExtras = response.data;
-        _this3.extrasLoaded = true;
-      })["catch"](function (error) {
-        _this3.$toast.error('Cannot retrieve entry extras');
-      });
-    },
-    enableExtra: function enableExtra(extraId) {
-      var _this4 = this;
-
-      axios__WEBPACK_IMPORTED_MODULE_2___default().post('/cp/resrv/extra/add/' + this.meta.parent, {
-        'id': extraId
-      }).then(function (response) {
-        _this4.$toast.success('Extra added to this entry');
-
-        _this4.toggleEntryExtraEditing();
-
-        _this4.getAllExtras();
-      })["catch"](function (error) {
-        _this4.$toast.error('Cannot add extra to entry');
-      });
-    },
-    disableExtra: function disableExtra(extraId) {
-      var _this5 = this;
-
-      axios__WEBPACK_IMPORTED_MODULE_2___default().post('/cp/resrv/extra/remove/' + this.meta.parent, {
-        'id': extraId
-      }).then(function (response) {
-        _this5.$toast.success('Extra removed from this entry');
-
-        _this5.toggleEntryExtraEditing();
-
-        _this5.getAllExtras();
-      })["catch"](function (error) {
-        _this5.$toast.error('Cannot remove extra to entry');
-      });
-    },
-    confirmDelete: function confirmDelete(extra) {
-      this.deleteId = extra.id;
-    },
-    deleteExtra: function deleteExtra() {
-      var _this6 = this;
-
-      axios__WEBPACK_IMPORTED_MODULE_2___default().delete('/cp/resrv/extra', {
-        data: {
-          'id': this.deleteId
-        }
-      }).then(function (response) {
-        _this6.$toast.success('Extra deleted');
-
-        _this6.deleteId = false;
-
-        _this6.getAllExtras();
-      })["catch"](function (error) {
-        _this6.$toast.error('Cannot delete extra');
-      });
     }
   }
 });
@@ -15769,14 +15835,18 @@ __webpack_require__.r(__webpack_exports__);
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _fieldtypes_Availability_vue__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./fieldtypes/Availability.vue */ "./resources/js/fieldtypes/Availability.vue");
 /* harmony import */ var _fieldtypes_Extras_vue__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./fieldtypes/Extras.vue */ "./resources/js/fieldtypes/Extras.vue");
+/* harmony import */ var _components_ExtrasList_vue__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./components/ExtrasList.vue */ "./resources/js/components/ExtrasList.vue");
 var _ = __webpack_require__(/*! lodash */ "./node_modules/lodash/lodash.js");
+
 
 
 
 Statamic.booting(function () {
   // Fieldtypes
   Statamic.$components.register('availability-fieldtype', _fieldtypes_Availability_vue__WEBPACK_IMPORTED_MODULE_0__.default);
-  Statamic.$components.register('extras-fieldtype', _fieldtypes_Extras_vue__WEBPACK_IMPORTED_MODULE_1__.default);
+  Statamic.$components.register('extras-fieldtype', _fieldtypes_Extras_vue__WEBPACK_IMPORTED_MODULE_1__.default); // Lists
+
+  Statamic.$components.register('extras-list', _components_ExtrasList_vue__WEBPACK_IMPORTED_MODULE_2__.default);
 });
 
 /***/ }),
@@ -33675,6 +33745,45 @@ component.options.__file = "resources/js/components/AvailabilityModal.vue"
 
 /***/ }),
 
+/***/ "./resources/js/components/ExtrasList.vue":
+/*!************************************************!*\
+  !*** ./resources/js/components/ExtrasList.vue ***!
+  \************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _ExtrasList_vue_vue_type_template_id_82f5c468___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./ExtrasList.vue?vue&type=template&id=82f5c468& */ "./resources/js/components/ExtrasList.vue?vue&type=template&id=82f5c468&");
+/* harmony import */ var _ExtrasList_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./ExtrasList.vue?vue&type=script&lang=js& */ "./resources/js/components/ExtrasList.vue?vue&type=script&lang=js&");
+/* harmony import */ var _node_modules_vue_loader_lib_runtime_componentNormalizer_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! !../../../node_modules/vue-loader/lib/runtime/componentNormalizer.js */ "./node_modules/vue-loader/lib/runtime/componentNormalizer.js");
+
+
+
+
+
+/* normalize component */
+;
+var component = (0,_node_modules_vue_loader_lib_runtime_componentNormalizer_js__WEBPACK_IMPORTED_MODULE_2__.default)(
+  _ExtrasList_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_1__.default,
+  _ExtrasList_vue_vue_type_template_id_82f5c468___WEBPACK_IMPORTED_MODULE_0__.render,
+  _ExtrasList_vue_vue_type_template_id_82f5c468___WEBPACK_IMPORTED_MODULE_0__.staticRenderFns,
+  false,
+  null,
+  null,
+  null
+  
+)
+
+/* hot reload */
+if (false) { var api; }
+component.options.__file = "resources/js/components/ExtrasList.vue"
+/* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (component.exports);
+
+/***/ }),
+
 /***/ "./resources/js/components/ExtrasPanel.vue":
 /*!*************************************************!*\
   !*** ./resources/js/components/ExtrasPanel.vue ***!
@@ -33924,6 +34033,22 @@ __webpack_require__.r(__webpack_exports__);
 
 /***/ }),
 
+/***/ "./resources/js/components/ExtrasList.vue?vue&type=script&lang=js&":
+/*!*************************************************************************!*\
+  !*** ./resources/js/components/ExtrasList.vue?vue&type=script&lang=js& ***!
+  \*************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
+/* harmony export */ });
+/* harmony import */ var _node_modules_babel_loader_lib_index_js_clonedRuleSet_5_0_rules_0_use_0_node_modules_vue_loader_lib_index_js_vue_loader_options_ExtrasList_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! -!../../../node_modules/babel-loader/lib/index.js??clonedRuleSet-5[0].rules[0].use[0]!../../../node_modules/vue-loader/lib/index.js??vue-loader-options!./ExtrasList.vue?vue&type=script&lang=js& */ "./node_modules/babel-loader/lib/index.js??clonedRuleSet-5[0].rules[0].use[0]!./node_modules/vue-loader/lib/index.js??vue-loader-options!./resources/js/components/ExtrasList.vue?vue&type=script&lang=js&");
+ /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = (_node_modules_babel_loader_lib_index_js_clonedRuleSet_5_0_rules_0_use_0_node_modules_vue_loader_lib_index_js_vue_loader_options_ExtrasList_vue_vue_type_script_lang_js___WEBPACK_IMPORTED_MODULE_0__.default); 
+
+/***/ }),
+
 /***/ "./resources/js/components/ExtrasPanel.vue?vue&type=script&lang=js&":
 /*!**************************************************************************!*\
   !*** ./resources/js/components/ExtrasPanel.vue?vue&type=script&lang=js& ***!
@@ -34033,6 +34158,23 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "staticRenderFns": () => (/* reexport safe */ _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_AvailabilityModal_vue_vue_type_template_id_339e8a37___WEBPACK_IMPORTED_MODULE_0__.staticRenderFns)
 /* harmony export */ });
 /* harmony import */ var _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_AvailabilityModal_vue_vue_type_template_id_339e8a37___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! -!../../../node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!../../../node_modules/vue-loader/lib/index.js??vue-loader-options!./AvailabilityModal.vue?vue&type=template&id=339e8a37& */ "./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/vue-loader/lib/index.js??vue-loader-options!./resources/js/components/AvailabilityModal.vue?vue&type=template&id=339e8a37&");
+
+
+/***/ }),
+
+/***/ "./resources/js/components/ExtrasList.vue?vue&type=template&id=82f5c468&":
+/*!*******************************************************************************!*\
+  !*** ./resources/js/components/ExtrasList.vue?vue&type=template&id=82f5c468& ***!
+  \*******************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "render": () => (/* reexport safe */ _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_ExtrasList_vue_vue_type_template_id_82f5c468___WEBPACK_IMPORTED_MODULE_0__.render),
+/* harmony export */   "staticRenderFns": () => (/* reexport safe */ _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_ExtrasList_vue_vue_type_template_id_82f5c468___WEBPACK_IMPORTED_MODULE_0__.staticRenderFns)
+/* harmony export */ });
+/* harmony import */ var _node_modules_vue_loader_lib_loaders_templateLoader_js_vue_loader_options_node_modules_vue_loader_lib_index_js_vue_loader_options_ExtrasList_vue_vue_type_template_id_82f5c468___WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! -!../../../node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!../../../node_modules/vue-loader/lib/index.js??vue-loader-options!./ExtrasList.vue?vue&type=template&id=82f5c468& */ "./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/vue-loader/lib/index.js??vue-loader-options!./resources/js/components/ExtrasList.vue?vue&type=template&id=82f5c468&");
 
 
 /***/ }),
@@ -34267,6 +34409,336 @@ var render = function() {
       )
     ])
   ])
+}
+var staticRenderFns = []
+render._withStripped = true
+
+
+
+/***/ }),
+
+/***/ "./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/vue-loader/lib/index.js??vue-loader-options!./resources/js/components/ExtrasList.vue?vue&type=template&id=82f5c468&":
+/*!**********************************************************************************************************************************************************************************************************************!*\
+  !*** ./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/vue-loader/lib/index.js??vue-loader-options!./resources/js/components/ExtrasList.vue?vue&type=template&id=82f5c468& ***!
+  \**********************************************************************************************************************************************************************************************************************/
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "render": () => (/* binding */ render),
+/* harmony export */   "staticRenderFns": () => (/* binding */ staticRenderFns)
+/* harmony export */ });
+var render = function() {
+  var _vm = this
+  var _h = _vm.$createElement
+  var _c = _vm._self._c || _h
+  return _c(
+    "div",
+    [
+      _vm.extrasLoaded
+        ? _c("div", { staticClass: "w-full h-full" }, [
+            _c(
+              "div",
+              { staticClass: "mt-4 space-y-1" },
+              _vm._l(_vm.extras, function(extra) {
+                return _c(
+                  "div",
+                  {
+                    key: extra.id,
+                    staticClass:
+                      "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors",
+                    class: _vm.extraEnabled(extra.id)
+                      ? "bg-green-200"
+                      : "bg-white"
+                  },
+                  [
+                    _c("div", { staticClass: "space-x-2" }, [
+                      _c("span", {
+                        staticClass: "font-medium",
+                        domProps: { innerHTML: _vm._s(extra.name) }
+                      }),
+                      _vm._v(" "),
+                      _c("span", [
+                        _vm._v(_vm._s(extra.price) + " "),
+                        _c("span", {
+                          staticClass: "text-xs text-gray-500",
+                          domProps: {
+                            innerHTML: _vm._s(_vm.priceLabel(extra.price_type))
+                          }
+                        })
+                      ])
+                    ]),
+                    _vm._v(" "),
+                    _c("div", { staticClass: "space-x-2" }, [
+                      _vm.insideEntry
+                        ? _c("span", {
+                            staticClass:
+                              "text-gray-500 text-sm uppercase cursor-pointer",
+                            domProps: {
+                              innerHTML: _vm._s(
+                                _vm.extraEnabled(extra.id)
+                                  ? "Enabled"
+                                  : "Disabled"
+                              )
+                            },
+                            on: {
+                              click: function($event) {
+                                return _vm.associateEntryExtra(extra.id)
+                              }
+                            }
+                          })
+                        : _vm._e(),
+                      _vm._v(" "),
+                      _c(
+                        "span",
+                        {
+                          staticClass: "cursor-pointer text-red-800",
+                          on: {
+                            click: function($event) {
+                              return _vm.confirmDelete(extra)
+                            }
+                          }
+                        },
+                        [
+                          _c(
+                            "svg",
+                            {
+                              staticClass: "stroke-current text-red-800",
+                              attrs: {
+                                xmlns: "http://www.w3.org/2000/svg",
+                                version: "1.1",
+                                "xmlns:xlink": "http://www.w3.org/1999/xlink",
+                                "xmlns:svgjs": "http://svgjs.com/svgjs",
+                                viewBox: "0 0 18 18",
+                                width: "18",
+                                height: "18"
+                              }
+                            },
+                            [
+                              _c(
+                                "g",
+                                {
+                                  attrs: {
+                                    transform: "matrix(0.75,0,0,0.75,0,0)"
+                                  }
+                                },
+                                [
+                                  _c("path", {
+                                    attrs: {
+                                      d: "M0.5 6.507L23.5 6.507",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d:
+                                        "M20.5,6.5v15a2,2,0,0,1-2,2H5.5a2,2,0,0,1-2-2V6.5",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d:
+                                        "M2.5,6.5v-1a2,2,0,0,1,2-2h15a2,2,0,0,1,2,2v1",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d: "M9,3.5a3,3,0,0,1,6,0",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d: "M12 10L12 19.5",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d: "M16.5 10L16.5 19.5",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d: "M7.5 10L7.5 19.5",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  })
+                                ]
+                              )
+                            ]
+                          )
+                        ]
+                      ),
+                      _vm._v(" "),
+                      _c(
+                        "span",
+                        {
+                          staticClass: "cursor-pointer",
+                          on: {
+                            click: function($event) {
+                              return _vm.editExtra(extra)
+                            }
+                          }
+                        },
+                        [
+                          _c(
+                            "svg",
+                            {
+                              staticClass: "stroke-current",
+                              attrs: {
+                                xmlns: "http://www.w3.org/2000/svg",
+                                version: "1.1",
+                                "xmlns:xlink": "http://www.w3.org/1999/xlink",
+                                "xmlns:svgjs": "http://svgjs.com/svgjs",
+                                viewBox: "0 0 18 18",
+                                width: "18",
+                                height: "18"
+                              }
+                            },
+                            [
+                              _c(
+                                "g",
+                                {
+                                  attrs: {
+                                    transform: "matrix(0.75,0,0,0.75,0,0)"
+                                  }
+                                },
+                                [
+                                  _c("path", {
+                                    attrs: {
+                                      d:
+                                        "M7 21.5L0.5 23.5 2.5 17 15.33 4.169 19.83 8.669 7 21.5z",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d:
+                                        "M15.33,4.169l3.086-3.086a2.007,2.007,0,0,1,2.828,0l1.672,1.672a2,2,0,0,1,0,2.828L19.83,8.669",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d: "M17.58 6.419L6 18",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d: "M2.5 17L3.5 18 6 18 6 20.5 7 21.5",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d: "M1.5 20.5L3.5 22.5",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  }),
+                                  _vm._v(" "),
+                                  _c("path", {
+                                    attrs: {
+                                      d: "M16.83 2.669L21.33 7.169",
+                                      fill: "none",
+                                      "stroke-linecap": "round",
+                                      "stroke-linejoin": "round"
+                                    }
+                                  })
+                                ]
+                              )
+                            ]
+                          )
+                        ]
+                      )
+                    ])
+                  ]
+                )
+              }),
+              0
+            )
+          ])
+        : _vm._e(),
+      _vm._v(" "),
+      _c("div", { staticClass: "w-full mt-4" }, [
+        _c(
+          "button",
+          {
+            staticClass:
+              "px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer",
+            on: { click: _vm.addExtra }
+          },
+          [_vm._v("\n        Add extra\n    ")]
+        )
+      ]),
+      _vm._v(" "),
+      _vm.showPanel
+        ? _c("extras-panel", {
+            attrs: { data: _vm.extra },
+            on: { closed: _vm.togglePanel, saved: _vm.extraSaved }
+          })
+        : _vm._e(),
+      _vm._v(" "),
+      _vm.deleteId
+        ? _c(
+            "confirmation-modal",
+            {
+              attrs: { title: "Delete extra", danger: true },
+              on: {
+                confirm: _vm.deleteExtra,
+                cancel: function($event) {
+                  _vm.deleteId = false
+                }
+              }
+            },
+            [
+              _vm._v("\n    Are you sure you want to delete this extra? "),
+              _c("strong", [_vm._v("This cannot be undone.")])
+            ]
+          )
+        : _vm._e()
+    ],
+    1
+  )
 }
 var staticRenderFns = []
 render._withStripped = true
@@ -34977,314 +35449,9 @@ var render = function() {
                 )
               ]),
               _vm._v(" "),
-              _vm.extrasLoaded
-                ? _c("div", { staticClass: "w-full h-full" }, [
-                    _c(
-                      "div",
-                      { staticClass: "mt-4 space-y-1" },
-                      _vm._l(_vm.extras, function(extra) {
-                        return _c(
-                          "div",
-                          {
-                            key: extra.id,
-                            staticClass:
-                              "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors",
-                            class: _vm.extraEnabled(extra.id)
-                              ? "bg-green-200"
-                              : "bg-white"
-                          },
-                          [
-                            _c("div", { staticClass: "space-x-2" }, [
-                              _c("span", {
-                                staticClass: "font-medium",
-                                domProps: { innerHTML: _vm._s(extra.name) }
-                              }),
-                              _vm._v(" "),
-                              _c("span", [
-                                _vm._v(_vm._s(extra.price) + " "),
-                                _c("span", {
-                                  staticClass: "text-xs text-gray-500",
-                                  domProps: {
-                                    innerHTML: _vm._s(
-                                      _vm.priceLabel(extra.price_type)
-                                    )
-                                  }
-                                })
-                              ])
-                            ]),
-                            _vm._v(" "),
-                            _c("div", { staticClass: "space-x-2" }, [
-                              _c("span", {
-                                staticClass:
-                                  "text-gray-500 text-sm uppercase cursor-pointer",
-                                domProps: {
-                                  innerHTML: _vm._s(
-                                    _vm.extraEnabled(extra.id)
-                                      ? "Enabled"
-                                      : "Disabled"
-                                  )
-                                },
-                                on: {
-                                  click: function($event) {
-                                    return _vm.associateEntryExtra(extra.id)
-                                  }
-                                }
-                              }),
-                              _vm._v(" "),
-                              _c(
-                                "span",
-                                {
-                                  staticClass: "cursor-pointer text-red-800",
-                                  on: {
-                                    click: function($event) {
-                                      return _vm.confirmDelete(extra)
-                                    }
-                                  }
-                                },
-                                [
-                                  _c(
-                                    "svg",
-                                    {
-                                      staticClass:
-                                        "stroke-current text-red-800",
-                                      attrs: {
-                                        xmlns: "http://www.w3.org/2000/svg",
-                                        version: "1.1",
-                                        "xmlns:xlink":
-                                          "http://www.w3.org/1999/xlink",
-                                        "xmlns:svgjs": "http://svgjs.com/svgjs",
-                                        viewBox: "0 0 18 18",
-                                        width: "18",
-                                        height: "18"
-                                      }
-                                    },
-                                    [
-                                      _c(
-                                        "g",
-                                        {
-                                          attrs: {
-                                            transform:
-                                              "matrix(0.75,0,0,0.75,0,0)"
-                                          }
-                                        },
-                                        [
-                                          _c("path", {
-                                            attrs: {
-                                              d: "M0.5 6.507L23.5 6.507",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d:
-                                                "M20.5,6.5v15a2,2,0,0,1-2,2H5.5a2,2,0,0,1-2-2V6.5",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d:
-                                                "M2.5,6.5v-1a2,2,0,0,1,2-2h15a2,2,0,0,1,2,2v1",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d: "M9,3.5a3,3,0,0,1,6,0",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d: "M12 10L12 19.5",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d: "M16.5 10L16.5 19.5",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d: "M7.5 10L7.5 19.5",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          })
-                                        ]
-                                      )
-                                    ]
-                                  )
-                                ]
-                              ),
-                              _vm._v(" "),
-                              _c(
-                                "span",
-                                {
-                                  staticClass: "cursor-pointer",
-                                  on: {
-                                    click: function($event) {
-                                      return _vm.editExtra(extra)
-                                    }
-                                  }
-                                },
-                                [
-                                  _c(
-                                    "svg",
-                                    {
-                                      staticClass: "stroke-current",
-                                      attrs: {
-                                        xmlns: "http://www.w3.org/2000/svg",
-                                        version: "1.1",
-                                        "xmlns:xlink":
-                                          "http://www.w3.org/1999/xlink",
-                                        "xmlns:svgjs": "http://svgjs.com/svgjs",
-                                        viewBox: "0 0 18 18",
-                                        width: "18",
-                                        height: "18"
-                                      }
-                                    },
-                                    [
-                                      _c(
-                                        "g",
-                                        {
-                                          attrs: {
-                                            transform:
-                                              "matrix(0.75,0,0,0.75,0,0)"
-                                          }
-                                        },
-                                        [
-                                          _c("path", {
-                                            attrs: {
-                                              d:
-                                                "M7 21.5L0.5 23.5 2.5 17 15.33 4.169 19.83 8.669 7 21.5z",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d:
-                                                "M15.33,4.169l3.086-3.086a2.007,2.007,0,0,1,2.828,0l1.672,1.672a2,2,0,0,1,0,2.828L19.83,8.669",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d: "M17.58 6.419L6 18",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d:
-                                                "M2.5 17L3.5 18 6 18 6 20.5 7 21.5",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d: "M1.5 20.5L3.5 22.5",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          }),
-                                          _vm._v(" "),
-                                          _c("path", {
-                                            attrs: {
-                                              d: "M16.83 2.669L21.33 7.169",
-                                              fill: "none",
-                                              "stroke-linecap": "round",
-                                              "stroke-linejoin": "round"
-                                            }
-                                          })
-                                        ]
-                                      )
-                                    ]
-                                  )
-                                ]
-                              )
-                            ])
-                          ]
-                        )
-                      }),
-                      0
-                    )
-                  ])
-                : _vm._e(),
-              _vm._v(" "),
-              _c("div", { staticClass: "w-full mt-4" }, [
-                _c(
-                  "button",
-                  {
-                    staticClass:
-                      "px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer",
-                    on: { click: _vm.addExtra }
-                  },
-                  [_vm._v("\n            Add extra\n        ")]
-                )
-              ]),
-              _vm._v(" "),
-              _vm.showPanel
-                ? _c("extras-panel", {
-                    attrs: { data: _vm.extra },
-                    on: { closed: _vm.togglePanel, saved: _vm.extraSaved }
-                  })
-                : _vm._e(),
-              _vm._v(" "),
-              _vm.deleteId
-                ? _c(
-                    "confirmation-modal",
-                    {
-                      attrs: { title: "Delete extra", danger: true },
-                      on: {
-                        confirm: _vm.deleteExtra,
-                        cancel: function($event) {
-                          _vm.deleteId = false
-                        }
-                      }
-                    },
-                    [
-                      _vm._v(
-                        "\n        Are you sure you want to delete this extra? "
-                      ),
-                      _c("strong", [_vm._v("This cannot be undone.")])
-                    ]
-                  )
-                : _vm._e()
+              _c("extras-list", {
+                attrs: { parent: this.meta.parent, "inside-entry": true }
+              })
             ],
             1
           )

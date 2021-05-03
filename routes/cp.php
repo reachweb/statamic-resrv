@@ -8,6 +8,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/availability/{statamic_id}', 'AvailabilityCpController@index')->name('availability.index');
         Route::post('/resrv/availability', 'AvailabilityCpController@update')->name('availability.update');
 
+        Route::get('/resrv/extras', 'ExtraCpController@indexCp')->name('extras.index');
         Route::get('/resrv/extra', 'ExtraCpController@index')->name('extra.index');
         Route::get('/resrv/extra/{statamic_id}', 'ExtraCpController@entryIndex')->name('extra.entryindex');
         Route::post('/resrv/extra', 'ExtraCpController@create')->name('extra.create');
