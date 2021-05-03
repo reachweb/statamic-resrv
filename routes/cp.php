@@ -16,4 +16,10 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/extra/remove/{statamic_id}', 'ExtraCpController@disassociate')->name('extra.remove');
         Route::patch('/resrv/extra', 'ExtraCpController@update')->name('extra.update');
         Route::delete('/resrv/extra', 'ExtraCpController@delete')->name('extra.delete');
+
+        Route::get('/resrv/locations', 'LocationCpController@indexCp')->name('locations.index');
+        Route::get('/resrv/location', 'LocationCpController@index')->name('location.index');
+        Route::post('/resrv/location', 'LocationCpController@create')->name('location.create');
+        Route::patch('/resrv/location', 'LocationCpController@update')->name('location.update');
+        Route::delete('/resrv/location', 'LocationCpController@delete')->name('location.delete');
     });

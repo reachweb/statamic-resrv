@@ -5,7 +5,6 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
-use Reach\StatamicResrv\Models\StatamicEntry;
 use Illuminate\Support\Facades\DB;
 
 class Extra extends Model

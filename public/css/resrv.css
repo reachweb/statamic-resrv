@@ -373,3 +373,14 @@
     --tw-bg-opacity: 1;
     background-color: rgba(31, 41, 55, var(--tw-bg-opacity));
 }
+
+@media (min-width: 1280px) {
+
+    .xl\:w-40 {
+        width: 10rem;
+    }
+
+    .xl\:w-80 {
+        width: 20rem;
+    }
+}

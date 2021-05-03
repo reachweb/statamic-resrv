@@ -4,6 +4,7 @@ import AvailabilityFieldtype from './fieldtypes/Availability.vue'
 import ExtrasFieldtype from './fieldtypes/Extras.vue'
 
 import ExtrasList from './components/ExtrasList.vue'
+import LocationsList from './components/LocationsList.vue'
 
 Statamic.booting(() => {
     // Fieldtypes
@@ -12,4 +13,5 @@ Statamic.booting(() => {
 
     // Lists
     Statamic.$components.register('extras-list', ExtrasList);
+    Statamic.$components.register('locations-list', LocationsList);
 })
