@@ -45,6 +45,9 @@ class ExtraCpController extends Controller
             'maximum' => 'required_if:allow_multiple,true|integer|nullable',
             'published' => 'required|boolean',
         ]);
+        $order = $this->extra->max('order') + 1;
+        $data['order'] = $order;
+
         $extra = $this->extra->create($data);
 
         return response()->json(['id' => $extra->id]);
@@ -60,6 +63,7 @@ class ExtraCpController extends Controller
             'price_type' => 'required',
             'allow_multiple' => 'required|boolean',
             'maximum' => 'required_if:allow_multiple,true|integer|nullable',
+            'order' => 'required|integer',
             'published' => 'required|boolean',
         ]);
 
@@ -92,6 +96,18 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
+    public function order(Request $request)
+    {
+        $data = $request->validate([
+            'id' => 'required',            
+            'order' => 'required|integer',
+        ]);
+
+        $extra = $this->extra->find($data['id'])->changeOrder($data['order']);
+
+        return response(200);
+    }
+
     public function delete(Request $request)
     {
         $data = $request->validate([
@@ -104,5 +120,7 @@ class ExtraCpController extends Controller
             ->delete();
         return response(200);
     }
+
+
 
 }

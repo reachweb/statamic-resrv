@@ -88,6 +88,7 @@ class ExtraCpTest extends TestCase
             'price' => 200,
             'price_type' => 'fixed',
             'allow_multiple' => 0,
+            'order' => 1,
             'published' => 1
         ];
         $response = $this->patch(cp_route('resrv.extra.update'), $payload2);
@@ -160,6 +161,33 @@ class ExtraCpTest extends TestCase
         $response->assertStatus(200);
         $this->assertDatabaseMissing('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
+        ]);
+    }
+
+    public function test_can_reorder_extras()
+    {
+        $extra = Extra::factory()->create();
+        $extra2 = Extra::factory()->create(['id' => 2, 'order' => 2]);
+        $extra3 = Extra::factory()->create(['id' => 3, 'order' => 3]);
+
+        $payload = [
+            'id' => 1,
+            'order' => 3
+        ];
+       
+        $response = $this->patch(cp_route('resrv.extra.order'), $payload);
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('resrv_extras', [
+            'id' => $extra['id'],
+            'order' => 3
+        ]);
+        $this->assertDatabaseHas('resrv_extras', [
+            'id' => $extra2['id'],
+            'order' => 1
+        ]);
+        $this->assertDatabaseHas('resrv_extras', [
+            'id' => $extra3['id'],
+            'order' => 2
         ]);
     }
 

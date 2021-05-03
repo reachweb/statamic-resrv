@@ -4,16 +4,18 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Reach\StatamicResrv\Database\Factories\ExtraFactory;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Database\Factories\ExtraFactory;
+use Reach\StatamicResrv\Traits\HandlesOrdering;
+use Reach\StatamicResrv\Scopes\OrderScope;
 
 class Extra extends Model
 {
-    use HasFactory;
+    use HasFactory, HandlesOrdering;
 
     protected $table = 'resrv_extras';
 
-    protected $fillable = ['name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'published'];
+    protected $fillable = ['name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'order', 'published'];
 
     protected $casts = [
         'published' => 'boolean',
@@ -23,6 +25,11 @@ class Extra extends Model
     protected static function newFactory()
     {
         return ExtraFactory::new();
+    }
+
+    protected static function booted()
+    {
+        static::addGlobalScope(new OrderScope);
     }
 
     public function scopeEntry($query, $entry)

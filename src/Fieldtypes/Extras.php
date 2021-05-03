@@ -12,7 +12,8 @@ class Extras extends Fieldtype
     {
         return Extra::entry($this->field->parent()->id())
             ->where('published', true)
-            ->get()
+            ->orderBy('order')
+            ->get()            
             ->keyBy('slug')
             ->toArray();
     }

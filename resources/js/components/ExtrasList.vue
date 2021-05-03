@@ -1,7 +1,7 @@
 <template>
     <div>
     <div class="w-full h-full" v-if="extrasLoaded">
-        <div class="mt-4 space-y-1">
+        <vue-draggable class="mt-4 space-y-1" v-model="extras" @start="drag=true" @end="drag=false" @change="order">
             <div
                 v-for="extra in extras"
                 :key="extra.id"
@@ -46,10 +46,10 @@
                     </span>
                 </div>
             </div>
-        </div>
+        </vue-draggable>
     </div>
     <div class="w-full mt-4">
-        <button class="px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer" @click="addExtra">
+        <button class="btn-primary" @click="addExtra">
             Add extra
         </button>
     </div>
@@ -74,6 +74,7 @@
 <script>
 import axios from 'axios'
 import ExtrasPanel from './ExtrasPanel.vue'
+import VueDraggable from 'vuedraggable'
 
 export default {
     props: {
@@ -97,6 +98,7 @@ export default {
             extrasLoaded: false,
             allowEntryExtraEdit: true,
             deleteId: false,
+            drag: false,
             extra: '',
             emptyExtra: {
                 name: '',
@@ -111,7 +113,8 @@ export default {
     },
 
     components: {
-        ExtrasPanel
+        ExtrasPanel,
+        VueDraggable
     },
 
     computed: {
@@ -247,7 +250,16 @@ export default {
                 .catch(error => {
                     this.$toast.error('Cannot delete extra')
                 })
-        }            
+        },
+        order(event){
+            let item = event.moved.element
+            let order = event.moved.newIndex + 1
+            axios.patch('/cp/resrv/extra/order', {id: item.id, order: order})
+                .then(() => {
+                    this.$toast.success('Extras order changed')
+                })
+                .catch(() => {this.$toast.error('Extras ordering failed')})
+        }        
     }
 }
 </script>

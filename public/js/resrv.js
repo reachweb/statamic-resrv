@@ -14952,6 +14952,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! axios */ "./node_modules/axios/index.js");
 /* harmony import */ var axios__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(axios__WEBPACK_IMPORTED_MODULE_0__);
 /* harmony import */ var _ExtrasPanel_vue__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./ExtrasPanel.vue */ "./resources/js/components/ExtrasPanel.vue");
+/* harmony import */ var vuedraggable__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! vuedraggable */ "./node_modules/vuedraggable/dist/vuedraggable.umd.js");
+/* harmony import */ var vuedraggable__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(vuedraggable__WEBPACK_IMPORTED_MODULE_2__);
 //
 //
 //
@@ -15025,6 +15027,7 @@ __webpack_require__.r(__webpack_exports__);
 //
 //
 //
+
 
 
 /* harmony default export */ const __WEBPACK_DEFAULT_EXPORT__ = ({
@@ -15048,6 +15051,7 @@ __webpack_require__.r(__webpack_exports__);
       extrasLoaded: false,
       allowEntryExtraEdit: true,
       deleteId: false,
+      drag: false,
       extra: '',
       emptyExtra: {
         name: '',
@@ -15061,7 +15065,8 @@ __webpack_require__.r(__webpack_exports__);
     };
   },
   components: {
-    ExtrasPanel: _ExtrasPanel_vue__WEBPACK_IMPORTED_MODULE_1__.default
+    ExtrasPanel: _ExtrasPanel_vue__WEBPACK_IMPORTED_MODULE_1__.default,
+    VueDraggable: (vuedraggable__WEBPACK_IMPORTED_MODULE_2___default())
   },
   computed: {
     newItem: function newItem() {
@@ -15209,6 +15214,20 @@ __webpack_require__.r(__webpack_exports__);
         _this6.getAllExtras();
       })["catch"](function (error) {
         _this6.$toast.error('Cannot delete extra');
+      });
+    },
+    order: function order(event) {
+      var _this7 = this;
+
+      var item = event.moved.element;
+      var order = event.moved.newIndex + 1;
+      axios__WEBPACK_IMPORTED_MODULE_0___default().patch('/cp/resrv/extra/order', {
+        id: item.id,
+        order: order
+      }).then(function () {
+        _this7.$toast.success('Extras order changed');
+      })["catch"](function () {
+        _this7.$toast.error('Extras ordering failed');
       });
     }
   }
@@ -38635,276 +38654,297 @@ var render = function() {
     "div",
     [
       _vm.extrasLoaded
-        ? _c("div", { staticClass: "w-full h-full" }, [
-            _c(
-              "div",
-              { staticClass: "mt-4 space-y-1" },
-              _vm._l(_vm.extras, function(extra) {
-                return _c(
-                  "div",
-                  {
-                    key: extra.id,
-                    staticClass:
-                      "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors",
-                    class: _vm.extraEnabled(extra.id)
-                      ? "bg-green-200"
-                      : "bg-white"
+        ? _c(
+            "div",
+            { staticClass: "w-full h-full" },
+            [
+              _c(
+                "vue-draggable",
+                {
+                  staticClass: "mt-4 space-y-1",
+                  on: {
+                    start: function($event) {
+                      _vm.drag = true
+                    },
+                    end: function($event) {
+                      _vm.drag = false
+                    },
+                    change: _vm.order
                   },
-                  [
-                    _c("div", { staticClass: "space-x-2" }, [
-                      _c("span", {
-                        staticClass: "font-medium",
-                        domProps: { innerHTML: _vm._s(extra.name) }
-                      }),
-                      _vm._v(" "),
-                      _c("span", [
-                        _vm._v(_vm._s(extra.price) + " "),
+                  model: {
+                    value: _vm.extras,
+                    callback: function($$v) {
+                      _vm.extras = $$v
+                    },
+                    expression: "extras"
+                  }
+                },
+                _vm._l(_vm.extras, function(extra) {
+                  return _c(
+                    "div",
+                    {
+                      key: extra.id,
+                      staticClass:
+                        "w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors",
+                      class: _vm.extraEnabled(extra.id)
+                        ? "bg-green-200"
+                        : "bg-white"
+                    },
+                    [
+                      _c("div", { staticClass: "space-x-2" }, [
                         _c("span", {
-                          staticClass: "text-xs text-gray-500",
-                          domProps: {
-                            innerHTML: _vm._s(_vm.priceLabel(extra.price_type))
-                          }
-                        })
-                      ])
-                    ]),
-                    _vm._v(" "),
-                    _c("div", { staticClass: "space-x-2" }, [
-                      _vm.insideEntry
-                        ? _c("span", {
-                            staticClass:
-                              "text-gray-500 text-sm uppercase cursor-pointer",
+                          staticClass: "font-medium",
+                          domProps: { innerHTML: _vm._s(extra.name) }
+                        }),
+                        _vm._v(" "),
+                        _c("span", [
+                          _vm._v(_vm._s(extra.price) + " "),
+                          _c("span", {
+                            staticClass: "text-xs text-gray-500",
                             domProps: {
                               innerHTML: _vm._s(
-                                _vm.extraEnabled(extra.id)
-                                  ? "Enabled"
-                                  : "Disabled"
+                                _vm.priceLabel(extra.price_type)
                               )
-                            },
-                            on: {
-                              click: function($event) {
-                                return _vm.associateEntryExtra(extra.id)
-                              }
                             }
                           })
-                        : _vm._e(),
+                        ])
+                      ]),
                       _vm._v(" "),
-                      _c(
-                        "span",
-                        {
-                          staticClass: "cursor-pointer text-red-800",
-                          on: {
-                            click: function($event) {
-                              return _vm.confirmDelete(extra)
-                            }
-                          }
-                        },
-                        [
-                          _c(
-                            "svg",
-                            {
-                              staticClass: "stroke-current text-red-800",
-                              attrs: {
-                                xmlns: "http://www.w3.org/2000/svg",
-                                version: "1.1",
-                                "xmlns:xlink": "http://www.w3.org/1999/xlink",
-                                "xmlns:svgjs": "http://svgjs.com/svgjs",
-                                viewBox: "0 0 18 18",
-                                width: "18",
-                                height: "18"
+                      _c("div", { staticClass: "space-x-2" }, [
+                        _vm.insideEntry
+                          ? _c("span", {
+                              staticClass:
+                                "text-gray-500 text-sm uppercase cursor-pointer",
+                              domProps: {
+                                innerHTML: _vm._s(
+                                  _vm.extraEnabled(extra.id)
+                                    ? "Enabled"
+                                    : "Disabled"
+                                )
+                              },
+                              on: {
+                                click: function($event) {
+                                  return _vm.associateEntryExtra(extra.id)
+                                }
                               }
-                            },
-                            [
-                              _c(
-                                "g",
-                                {
-                                  attrs: {
-                                    transform: "matrix(0.75,0,0,0.75,0,0)"
-                                  }
-                                },
-                                [
-                                  _c("path", {
-                                    attrs: {
-                                      d: "M0.5 6.507L23.5 6.507",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d:
-                                        "M20.5,6.5v15a2,2,0,0,1-2,2H5.5a2,2,0,0,1-2-2V6.5",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d:
-                                        "M2.5,6.5v-1a2,2,0,0,1,2-2h15a2,2,0,0,1,2,2v1",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d: "M9,3.5a3,3,0,0,1,6,0",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d: "M12 10L12 19.5",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d: "M16.5 10L16.5 19.5",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d: "M7.5 10L7.5 19.5",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  })
-                                ]
-                              )
-                            ]
-                          )
-                        ]
-                      ),
-                      _vm._v(" "),
-                      _c(
-                        "span",
-                        {
-                          staticClass: "cursor-pointer",
-                          on: {
-                            click: function($event) {
-                              return _vm.editExtra(extra)
-                            }
-                          }
-                        },
-                        [
-                          _c(
-                            "svg",
-                            {
-                              staticClass: "stroke-current",
-                              attrs: {
-                                xmlns: "http://www.w3.org/2000/svg",
-                                version: "1.1",
-                                "xmlns:xlink": "http://www.w3.org/1999/xlink",
-                                "xmlns:svgjs": "http://svgjs.com/svgjs",
-                                viewBox: "0 0 18 18",
-                                width: "18",
-                                height: "18"
+                            })
+                          : _vm._e(),
+                        _vm._v(" "),
+                        _c(
+                          "span",
+                          {
+                            staticClass: "cursor-pointer text-red-800",
+                            on: {
+                              click: function($event) {
+                                return _vm.confirmDelete(extra)
                               }
-                            },
-                            [
-                              _c(
-                                "g",
-                                {
-                                  attrs: {
-                                    transform: "matrix(0.75,0,0,0.75,0,0)"
-                                  }
-                                },
-                                [
-                                  _c("path", {
+                            }
+                          },
+                          [
+                            _c(
+                              "svg",
+                              {
+                                staticClass: "stroke-current text-red-800",
+                                attrs: {
+                                  xmlns: "http://www.w3.org/2000/svg",
+                                  version: "1.1",
+                                  "xmlns:xlink": "http://www.w3.org/1999/xlink",
+                                  "xmlns:svgjs": "http://svgjs.com/svgjs",
+                                  viewBox: "0 0 18 18",
+                                  width: "18",
+                                  height: "18"
+                                }
+                              },
+                              [
+                                _c(
+                                  "g",
+                                  {
                                     attrs: {
-                                      d:
-                                        "M7 21.5L0.5 23.5 2.5 17 15.33 4.169 19.83 8.669 7 21.5z",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
+                                      transform: "matrix(0.75,0,0,0.75,0,0)"
                                     }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
+                                  },
+                                  [
+                                    _c("path", {
+                                      attrs: {
+                                        d: "M0.5 6.507L23.5 6.507",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d:
+                                          "M20.5,6.5v15a2,2,0,0,1-2,2H5.5a2,2,0,0,1-2-2V6.5",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d:
+                                          "M2.5,6.5v-1a2,2,0,0,1,2-2h15a2,2,0,0,1,2,2v1",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d: "M9,3.5a3,3,0,0,1,6,0",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d: "M12 10L12 19.5",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d: "M16.5 10L16.5 19.5",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d: "M7.5 10L7.5 19.5",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    })
+                                  ]
+                                )
+                              ]
+                            )
+                          ]
+                        ),
+                        _vm._v(" "),
+                        _c(
+                          "span",
+                          {
+                            staticClass: "cursor-pointer",
+                            on: {
+                              click: function($event) {
+                                return _vm.editExtra(extra)
+                              }
+                            }
+                          },
+                          [
+                            _c(
+                              "svg",
+                              {
+                                staticClass: "stroke-current",
+                                attrs: {
+                                  xmlns: "http://www.w3.org/2000/svg",
+                                  version: "1.1",
+                                  "xmlns:xlink": "http://www.w3.org/1999/xlink",
+                                  "xmlns:svgjs": "http://svgjs.com/svgjs",
+                                  viewBox: "0 0 18 18",
+                                  width: "18",
+                                  height: "18"
+                                }
+                              },
+                              [
+                                _c(
+                                  "g",
+                                  {
                                     attrs: {
-                                      d:
-                                        "M15.33,4.169l3.086-3.086a2.007,2.007,0,0,1,2.828,0l1.672,1.672a2,2,0,0,1,0,2.828L19.83,8.669",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
+                                      transform: "matrix(0.75,0,0,0.75,0,0)"
                                     }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d: "M17.58 6.419L6 18",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d: "M2.5 17L3.5 18 6 18 6 20.5 7 21.5",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d: "M1.5 20.5L3.5 22.5",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  }),
-                                  _vm._v(" "),
-                                  _c("path", {
-                                    attrs: {
-                                      d: "M16.83 2.669L21.33 7.169",
-                                      fill: "none",
-                                      "stroke-linecap": "round",
-                                      "stroke-linejoin": "round"
-                                    }
-                                  })
-                                ]
-                              )
-                            ]
-                          )
-                        ]
-                      )
-                    ])
-                  ]
-                )
-              }),
-              0
-            )
-          ])
+                                  },
+                                  [
+                                    _c("path", {
+                                      attrs: {
+                                        d:
+                                          "M7 21.5L0.5 23.5 2.5 17 15.33 4.169 19.83 8.669 7 21.5z",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d:
+                                          "M15.33,4.169l3.086-3.086a2.007,2.007,0,0,1,2.828,0l1.672,1.672a2,2,0,0,1,0,2.828L19.83,8.669",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d: "M17.58 6.419L6 18",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d: "M2.5 17L3.5 18 6 18 6 20.5 7 21.5",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d: "M1.5 20.5L3.5 22.5",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    }),
+                                    _vm._v(" "),
+                                    _c("path", {
+                                      attrs: {
+                                        d: "M16.83 2.669L21.33 7.169",
+                                        fill: "none",
+                                        "stroke-linecap": "round",
+                                        "stroke-linejoin": "round"
+                                      }
+                                    })
+                                  ]
+                                )
+                              ]
+                            )
+                          ]
+                        )
+                      ])
+                    ]
+                  )
+                }),
+                0
+              )
+            ],
+            1
+          )
         : _vm._e(),
       _vm._v(" "),
       _c("div", { staticClass: "w-full mt-4" }, [
         _c(
           "button",
-          {
-            staticClass:
-              "px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer",
-            on: { click: _vm.addExtra }
-          },
+          { staticClass: "btn-primary", on: { click: _vm.addExtra } },
           [_vm._v("\n        Add extra\n    ")]
         )
       ]),

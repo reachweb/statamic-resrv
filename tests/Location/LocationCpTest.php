@@ -78,7 +78,7 @@ class LocationTest extends TestCase
 
     public function test_can_reorder_location()
     {
-        $location = Location::factory()->create()->toArray();
+        $location = Location::factory()->create();
         $location2 = Location::factory()->create(['id' => 2, 'order' => 2]);
         $location3 = Location::factory()->create(['id' => 3, 'order' => 3]);
 

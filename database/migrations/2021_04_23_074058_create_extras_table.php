@@ -22,6 +22,7 @@ class CreateExtrasTable extends Migration
             $table->boolean('allow_multiple');
             $table->integer('maximum')->nullable();
             $table->text('description')->nullable();
+            $table->integer('order');
             $table->boolean('published');
             $table->timestamps();
         });
