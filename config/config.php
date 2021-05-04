@@ -8,7 +8,7 @@ return [
      *
      * Put your business information here. Those information will be used for the emails.
      */
-    'name'     => 'Reserv', 
+    'name'     => 'Resrv', 
     'address1' => 'Somestreet 8',
     'zip_city' => '00000 City',
     'country'  => 'Greece', 
@@ -17,6 +17,7 @@ return [
 
     /**
      * Reservation settings.
+     * enable_locations: checkout expects to receive location info to calculate any extra charges
      * minimum_reservation_period_in_days: the minimum days for a reservation
      * maximum_reservation_period_in_day: the maximum days for a reservation
      * calculate_days_using_time: if true every reservation will charge a day for drop off time after pick up
@@ -24,10 +25,11 @@ return [
      * 
      */
 
-    'minimum_reservation_period_in_days' => 1,
-    'maximum_reservation_period_in_days' => 30,
-    'calculate_days_using_time' => false, 
-    'decrease_availabilty_for_extra_time' => false, 
+    'enable_locations'                     => false,
+    'minimum_reservation_period_in_days'   => 1,
+    'maximum_reservation_period_in_days'   => 30,
+    'calculate_days_using_time'            => false, 
+    'decrease_availability_for_extra_time' => false, 
 
     /**
      * Currency
@@ -47,8 +49,8 @@ return [
      * 
      */
 
-    'payment' => 'full',
-    'fixed_amount' => 50,
+    'payment'        => 'full',
+    'fixed_amount'   => 50,
     'percent_amount' => 20,
 
     /**

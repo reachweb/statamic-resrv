@@ -6,12 +6,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
+use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 use Reach\StatamicResrv\Scopes\OrderScope;
 
 class Extra extends Model
 {
-    use HasFactory, HandlesOrdering;
+    use HasFactory, HandlesOrdering, HandlesAvailabilityDates;
 
     protected $table = 'resrv_extras';
 
@@ -30,6 +31,16 @@ class Extra extends Model
     protected static function booted()
     {
         static::addGlobalScope(new OrderScope);
+    }
+
+    public function calculatePrice($dates, $quantity) {
+        if ($this->price_type == 'perday') {
+            $this->initiateAvailability($dates);
+            return $this->price * $this->duration * $quantity;
+        }
+        if ($this->price_type == 'fixed') {
+            return $this->price * $quantity;
+        }
     }
 
     public function scopeEntry($query, $entry)

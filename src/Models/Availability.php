@@ -36,7 +36,7 @@ class Availability extends Model
      * Calls two scopes: one for getting the available items and one to get the total pricing
      * of each item.
      */
-    public function scopeGetAvailabilityForDates($query, $dates, $statamic_id = null) {
+    public function scopeGetAvailabilityForDates($scope, $dates, $statamic_id = null) {
 
         $this->initiateAvailability($dates);
 
@@ -51,7 +51,28 @@ class Availability extends Model
         if ($statamic_id) {
             return $this->getSpecificItem($statamic_id);
         }
+        
+    }
 
+    public function confirmAvailabilityAndPrice($data, $statamic_id) {
+
+        $this->initiateAvailability($data);
+
+        if ($this->invalid) {
+            return $this->invalid;
+        }
+
+        $availability = $this->getSpecificItem($statamic_id);
+
+        if ($availability['message']['status'] != 1) {
+            return false;
+        }
+
+        if ($availability['data']['price'] != $data['price']) {
+            return false;
+        }
+
+        return true;
         
     }
 

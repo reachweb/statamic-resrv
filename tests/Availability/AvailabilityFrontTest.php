@@ -227,13 +227,13 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
-        $searchPayload = [
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(3, 'day')->toIso8601String(),
-        ];
-        
-        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
-        $response->assertStatus(200)->assertSee('150')->assertSee('message":{"status":1}}', false);        
+    $searchPayload = [
+        'date_start' => today()->toIso8601String(),
+        'date_end' => today()->add(3, 'day')->toIso8601String(),
+    ];
+    
+    $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+    $response->assertStatus(200)->assertSee('150')->assertSee('message":{"status":1}}', false);        
         
     }
 
