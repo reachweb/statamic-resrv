@@ -16,6 +16,7 @@ class CreateReservationExtra extends Migration
         Schema::create('resrv_reservation_extra', function (Blueprint $table) {
             $table->integer('reservation_id');
             $table->integer('extra_id');            
+            $table->integer('quantity');            
         });
     }
 

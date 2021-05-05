@@ -38,6 +38,8 @@ class ReservationController extends Controller
 
         $data = $request->validate($rules);
 
+        ray($data)->blue();
+
         try {
             $attemptReservation = $this->reservation->confirmReservation($data, $statamic_id);
         } catch (ReservationException $exception) {
@@ -56,9 +58,11 @@ class ReservationController extends Controller
             'payment_id' => '',
             'customer' => '',
         ]);
-
         
-
+        foreach ($data['extras'] as $id => $properties) {
+            $this->reservation->find($reservation->id)->extras()->attach($id, ['quantity' => $properties['quantity']]);
+        }
+        
         return response()->json($reservation->id);
 
 

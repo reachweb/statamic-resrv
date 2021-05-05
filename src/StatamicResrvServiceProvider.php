@@ -41,6 +41,14 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         $this->publishes([
             __DIR__.'/../config/config.php' => config_path('resrv-config.php'),
         ], 'resrv-config');
+
+        $this->publishes([
+            __DIR__.'/../resources/blueprints' => resource_path('blueprints'),
+        ], 'resrv-blueprints');
+        
+        $this->publishes([
+            __DIR__.'/../resources/forms' => resource_path('forms'),
+        ], 'resrv-forms');
         
         $this->mergeConfigFrom(__DIR__.'/../config/config.php', 'resrv-config');
 
@@ -53,14 +61,6 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
     private function createNavigation(): void
     {
         Nav::extend(function ($nav) {
-            // Orders
-            // $nav->create(ucfirst(__('butik::cp.order_plural')))
-            //     ->section('Butik')
-            //     ->can(auth()->user()->can('view orders'))
-            //     ->route('butik.orders.index')
-            //     ->icon('drawer-file');
-
-            // Settings
             $nav->create(ucfirst(__('Locations')))
                 ->section('Resrv')
                 ->can(auth()->user()->can('use resrv'))

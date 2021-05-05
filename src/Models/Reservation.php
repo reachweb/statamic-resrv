@@ -62,8 +62,8 @@ class Reservation extends Model
         $reservationCost = $data['price'];
 
         $extrasCost = 0;
-        foreach($data['extras'] as $id => $quantity) {
-            $extrasCost += Extra::find($id)->calculatePrice($data, $quantity);
+        foreach($data['extras'] as $id => $properties) {
+            $extrasCost += Extra::find($id)->calculatePrice($data, $properties['quantity']);
         }
 
         $locationCost = 0;
