@@ -38,8 +38,6 @@ class ReservationController extends Controller
 
         $data = $request->validate($rules);
 
-        ray($data)->blue();
-
         try {
             $attemptReservation = $this->reservation->confirmReservation($data, $statamic_id);
         } catch (ReservationException $exception) {
@@ -49,6 +47,7 @@ class ReservationController extends Controller
         $reservation = $this->reservation->create([
             'status' => 'pending',
             'reference' => $this->reservation->createRandomReference(),
+            'item_id' => $statamic_id,
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
             'location_start' => (isset($data['location_start']) ? $data['location_start'] : ''),
@@ -65,6 +64,10 @@ class ReservationController extends Controller
         
         return response()->json($reservation->id);
 
+    }
 
+    public function showCustomerForm($reservation_id)
+    {
+        
     }
 }

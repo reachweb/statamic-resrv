@@ -16,7 +16,8 @@ class CreateReservationsTable extends Migration
         Schema::create('resrv_reservations', function (Blueprint $table) {
             $table->id();
             $table->string('status')->index();
-            $table->string('reference')->index();            
+            $table->string('reference')->index();
+            $table->string('item_id')->index();
             $table->datetime('date_start');
             $table->datetime('date_end');
             $table->string('location_start')->nullable();
