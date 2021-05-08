@@ -32,6 +32,13 @@ trait HandlesAvailabilityDates
         $date_start = new Carbon($dates['date_start']);
         $date_end = new Carbon($dates['date_end']);
 
+        if ($date_start > $date_end) {
+            throw new AvailabilityDurationException(403);
+        }
+
+        if ($date_start < Carbon::now() || $date_end < Carbon::now()) {
+            throw new AvailabilityDurationException(405);
+        }
 
         // If we charge extra for using over a 24hour day, add an extra day here.
         if ($this->useTime()) {
