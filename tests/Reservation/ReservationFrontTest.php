@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Models\Reservation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Support\Facades\Config;
+use Carbon\Carbon;
 
 class ReservationFrontTest extends TestCase
 {
@@ -51,8 +52,8 @@ class ReservationFrontTest extends TestCase
         ]);
 
         $searchPayload = [
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(2, 'day')->toIso8601String(),
+            'date_start' => Carbon::now()->add(1, 'hour')->toIso8601String(),
+            'date_end' => Carbon::now()->add(2, 'day')->toIso8601String(),
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
@@ -62,8 +63,8 @@ class ReservationFrontTest extends TestCase
         $price = json_decode($response->content())->data->price;
         
         $checkoutRequest = [
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(2, 'day')->toIso8601String(),
+            'date_start' => Carbon::now()->add(1, 'hour')->toIso8601String(),
+            'date_end' => Carbon::now()->add(2, 'day')->toIso8601String(),
             'payment' => $payment,
             'price' => $price,
             'extras' => [$extra->id => ['quantity' => 1]], 
@@ -118,8 +119,8 @@ class ReservationFrontTest extends TestCase
         ]);
 
         $searchPayload = [
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(2, 'day')->toIso8601String(),
+            'date_start' => Carbon::now()->add(1, 'hour')->toIso8601String(),
+            'date_end' => Carbon::now()->add(2, 'day')->toIso8601String(),
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
@@ -129,8 +130,8 @@ class ReservationFrontTest extends TestCase
         $price = json_decode($response->content())->data->price;
         
         $checkoutRequest = [
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(2, 'day')->toIso8601String(),
+            'date_start' => Carbon::now()->add(1, 'hour')->toIso8601String(),
+            'date_end' => Carbon::now()->add(2, 'day')->toIso8601String(),
             'payment' => $payment,
             'price' => $price,
             'extras' => [$extra->id => ['quantity' => 1]], 
