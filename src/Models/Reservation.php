@@ -53,11 +53,11 @@ class Reservation extends Model
         ], $statamic_id);
 
         if ($checkAvailability == false) {
-            throw new ReservationException(403);
+            throw new ReservationException(410);
         }
 
         if ($this->confirmTotal($data) != $data['total']) {
-            throw new ReservationException(405);
+            throw new ReservationException(411);
         }
 
         return true;

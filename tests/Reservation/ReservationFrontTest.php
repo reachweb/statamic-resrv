@@ -148,7 +148,6 @@ class ReservationFrontTest extends TestCase
             'extra_id' => $extra->id,
             'quantity' => 1
         ]);
-
                 
     }
 
