@@ -27,6 +27,15 @@ trait HandlesAvailabilityDates
         }
     }
 
+    protected function checkMinimumDate($date_start)
+    {
+        if (config('resrv-config.minimum_days_before')) {
+            if ($date_start->diffInDays(Carbon::now()->startOfDay()) < config('resrv-config.minimum_days_before')) {
+                throw new AvailabilityDurationException(406);
+            }
+        }
+    }
+
     public function initiateAvailability($dates)
     {
         $date_start = new Carbon($dates['date_start']);
@@ -39,6 +48,8 @@ trait HandlesAvailabilityDates
         if ($date_start < Carbon::now() || $date_end < Carbon::now()) {
             throw new AvailabilityDurationException(405);
         }
+
+        $this->checkMinimumDate($date_start);
 
         // If we charge extra for using over a 24hour day, add an extra day here.
         if ($this->useTime()) {

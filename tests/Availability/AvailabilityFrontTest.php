@@ -7,6 +7,7 @@ use Reach\StatamicResrv\Models\Availability;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Support\Facades\Config;
+use Carbon\Carbon;
 
 class AvailabilityFrontTest extends TestCase
 {
@@ -28,23 +29,23 @@ class AvailabilityFrontTest extends TestCase
         
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(3, 'day')->toIso8601String(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(3, 'day')->toISOString(),
             'price' => 50,
             'available' => 2
         ];
         
         $payload2 = [
             'statamic_id' => $item2->id(),
-            'date_start' => today()->add(2, 'day')->toIso8601String(),
-            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'date_start' => today()->add(2, 'day')->toISOString(),
+            'date_end' => today()->add(5, 'day')->toISOString(),
             'price' => 80,
             'available' => 1
         ];
         $payload3 = [
             'statamic_id' => $item3->id(),
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(7, 'day')->toIso8601String(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(7, 'day')->toISOString(),
             'price' => 70,
             'available' => 5
         ];
@@ -55,16 +56,16 @@ class AvailabilityFrontTest extends TestCase
         $response->assertStatus(200);
 
         $searchPayload = [
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(3, 'day')->toIso8601String(),
+            'date_start' => Carbon::now()->add(1, 'hour')->toISOString(),
+            'date_end' => Carbon::now()->add(3, 'day')->toISOString(),
         ];
         // We should see item 1, 3 but not item 2
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('150')->assertDontSee($item2->id())->assertSee($item3->id())->assertSee('210');
 
         $searchEmptyPayload = [
-            'date_start' => today()->add(15, 'day')->toIso8601String(),
-            'date_end' => today()->add(20, 'day')->toIso8601String(),
+            'date_start' => today()->add(15, 'day')->toISOString(),
+            'date_end' => today()->add(20, 'day')->toISOString(),
         ];
         // Even when nothing is available we are getting a response
         $response = $this->post(route('resrv.availability.index'), $searchEmptyPayload);
@@ -72,8 +73,8 @@ class AvailabilityFrontTest extends TestCase
 
         // Add 2 hours to the end date and make sure that it charges an extra day (or not)
         $searchExtraDayPayload = [
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(3, 'day')->add(2, 'hours')->toIso8601String(),
+            'date_start' => Carbon::now()->add(1, 'hour')->toISOString(),
+            'date_end' => Carbon::now()->add(3, 'day')->add(2, 'hours')->toISOString(),
         ];
         
         Config::set('resrv-config.calculate_days_using_time', false);
@@ -94,8 +95,8 @@ class AvailabilityFrontTest extends TestCase
 
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->toIso8601String(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->toISOString(),
             'price' => 50,
             'available' => 2
         ];
@@ -105,8 +106,8 @@ class AvailabilityFrontTest extends TestCase
         
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->add(2, 'day')->toIso8601String(),
-            'date_end' => today()->add(4, 'day')->toIso8601String(),
+            'date_start' => today()->add(2, 'day')->toISOString(),
+            'date_end' => today()->add(4, 'day')->toISOString(),
             'price' => 50,
             'available' => 2
         ];
@@ -115,8 +116,8 @@ class AvailabilityFrontTest extends TestCase
         $response->assertStatus(200);
 
         $searchPayload = [
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(4, 'day')->toIso8601String(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(4, 'day')->toISOString(),
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
@@ -132,8 +133,8 @@ class AvailabilityFrontTest extends TestCase
 
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->add(1, 'day')->toIso8601String(),
-            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'date_start' => today()->add(1, 'day')->toISOString(),
+            'date_end' => today()->add(5, 'day')->toISOString(),
             'price' => 150,
             'available' => 2
         ];
@@ -144,8 +145,8 @@ class AvailabilityFrontTest extends TestCase
         Config::set('resrv-config.minimum_reservation_period_in_days', 3);
 
         $searchPayload = [
-            'date_start' => today()->add(1, 'day')->toIso8601String(),
-            'date_end' => today()->add(2, 'day')->toIso8601String(),
+            'date_start' => today()->add(1, 'day')->toISOString(),
+            'date_end' => today()->add(2, 'day')->toISOString(),
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
@@ -160,8 +161,8 @@ class AvailabilityFrontTest extends TestCase
 
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->add(1, 'day')->toIso8601String(),
-            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'date_start' => today()->add(1, 'day')->toISOString(),
+            'date_end' => today()->add(5, 'day')->toISOString(),
             'price' => 150,
             'available' => 2
         ];
@@ -172,8 +173,8 @@ class AvailabilityFrontTest extends TestCase
         Config::set('resrv-config.maximum_reservation_period_in_days', 3);
 
         $searchPayload = [
-            'date_start' => today()->add(1, 'day')->toIso8601String(),
-            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'date_start' => today()->add(1, 'day')->toISOString(),
+            'date_end' => today()->add(5, 'day')->toISOString(),
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
@@ -191,8 +192,8 @@ class AvailabilityFrontTest extends TestCase
 
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->add(1, 'day')->toIso8601String(),
-            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'date_start' => today()->add(1, 'day')->toISOString(),
+            'date_end' => today()->add(5, 'day')->toISOString(),
             'price' => 150,
             'available' => 2
         ];
@@ -201,8 +202,8 @@ class AvailabilityFrontTest extends TestCase
         $response->assertStatus(200);
 
         $searchPayload = [
-            'date_start' => today()->add(1, 'day')->toIso8601String(),
-            'date_end' => today()->add(5, 'day')->toIso8601String(),
+            'date_start' => today()->add(1, 'day')->toISOString(),
+            'date_end' => today()->add(5, 'day')->toISOString(),
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
@@ -218,8 +219,8 @@ class AvailabilityFrontTest extends TestCase
 
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(3, 'day')->toIso8601String(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(3, 'day')->toISOString(),
             'price' => 50,
             'available' => 2
         ];
@@ -227,13 +228,13 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
-    $searchPayload = [
-        'date_start' => today()->toIso8601String(),
-        'date_end' => today()->add(3, 'day')->toIso8601String(),
-    ];
-    
-    $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
-    $response->assertStatus(200)->assertSee('150')->assertSee('message":{"status":1}}', false);        
+        $searchPayload = [
+            'date_start' => Carbon::now()->add(1, 'hour')->toISOString(),
+            'date_end' => Carbon::now()->add(3, 'day')->toISOString(),
+        ];
+        
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('150')->assertSee('message":{"status":1}}', false);        
         
     }
 
@@ -245,8 +246,8 @@ class AvailabilityFrontTest extends TestCase
 
         $payload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(3, 'day')->toIso8601String(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(3, 'day')->toISOString(),
             'price' => 50,
             'available' => 0
         ];
@@ -255,12 +256,41 @@ class AvailabilityFrontTest extends TestCase
         $response->assertStatus(200);
 
         $searchPayload = [
-            'date_start' => today()->toIso8601String(),
-            'date_end' => today()->add(3, 'day')->toIso8601String(),
+            'date_start' => Carbon::now()->add(1, 'hour')->toISOString(),
+            'date_end' => Carbon::now()->add(3, 'day')->toISOString(),
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);        
+        
+    }
+
+    public function test_availability_does_not_allow_bookings_closer_than_minimum_allowed()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(3, 'day')->toISOString(),
+            'price' => 50,
+            'available' => 2
+        ];
+        
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        Config::set('resrv-config.minimum_days_before', 2);
+
+        $searchPayload = [
+            'date_start' => Carbon::now()->add(1, 'day')->toISOString(),
+            'date_end' => Carbon::now()->add(3, 'day')->toISOString(),
+        ];
+        
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee(406)->assertDontSee($item->id());        
         
     }
 
