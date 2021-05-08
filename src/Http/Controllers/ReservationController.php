@@ -5,16 +5,20 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 
 class ReservationController extends Controller
 {
 
     protected $reservation;
+    protected $payment;
 
-    public function __construct(Reservation $reservation)
+    public function __construct(Reservation $reservation, PaymentInterface $payment)
     {
         $this->reservation = $reservation;
+        $this->payment = $payment;
     }
 
     public function confirm(Request $request, $statamic_id)
@@ -42,7 +46,7 @@ class ReservationController extends Controller
             $attemptReservation = $this->reservation->confirmReservation($data, $statamic_id);
         } catch (ReservationException $exception) {
             return response()->json(['error' => $exception->getMessage()]);
-        }
+        }        
 
         $reservation = $this->reservation->create([
             'status' => 'pending',
@@ -66,8 +70,43 @@ class ReservationController extends Controller
 
     }
 
-    public function showCustomerForm($reservation_id)
+    public function checkoutForm()
     {
+        $form = $this->reservation->checkoutForm();
+        return response()->json($form);
+    }
+
+    public function checkoutFormSubmit(CheckoutFormRequest $request, $reservation_id)
+    {   
+        // Find the reservation
+        $reservation = $this->reservation->find($reservation_id);
+
+        // Validate customer data
+        $data = $request->validated();
+
+        // Create a payment intent
+        $paymentIntent = $this->payment->paymentIntent($reservation->payment, $reservation_id, $data);
+
+        // Save customer data and payment id        
+        $reservation->customer = $data;
+        $reservation->payment_id = $paymentIntent->id;
+        $reservation->save();     
         
+        // Send back the client secret
+        $client_secret = $paymentIntent->client_secret;
+
+        return response()->json(compact('reservation', 'client_secret'));
+    }
+
+    public function checkoutConfirm($reservation_id)
+    {   
+        // Find the reservation
+        $reservation = $this->reservation->find($reservation_id);
+
+        // Confim the reservation        
+        $reservation->status = 'confirmed';
+        $reservation->save();     
+        
+        return response()->json($reservation_id);
     }
 }

@@ -6,6 +6,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
+use Reach\StatamicResrv\Models\Reservation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Support\Facades\Config;
@@ -16,7 +17,8 @@ class ReservationFrontTest extends TestCase
 
     public function setUp(): void
     {
-        parent::setUp();        
+        parent::setUp();
+        Config::set('resrv-config.stripe_key', 'sk_test_51ImFMAD6a3Agl4C6BCvvOsnR8u5mzk8GUbjg2iInyX8qRqTL2JviqnRUfRw8T5Uq4WIv5IosSFmq22DS8h0JM35200DhjC2wqS');    
     }
 
     public function test_reservation_confirm_method_success()
@@ -147,6 +149,65 @@ class ReservationFrontTest extends TestCase
         ]);
 
                 
+    }
+
+    public function test_reservation_customer_checkout_form_exists()
+    {
+        $item = $this->makeStatamicItem();
+        $location = Location::factory()->create(); 
+
+        $reservation = Reservation::factory()
+            ->create([
+            'item_id' => $item->id(),
+            'location_start' => $location->id,
+            'location_end' => $location->id,
+        ]);
+
+        $response = $this->get(route('resrv.reservation.checkoutForm', $reservation->id));
+        $response->assertStatus(200)->assertSee('input_type');
+    }
+    
+    public function test_reservation_customer_checkout_form_submit()
+    {
+        $reservation = Reservation::factory()->create();
+
+        $customerData = [
+            'first_name' => 'Test',
+            'last_name' => 'Testing',
+            'email' => 'test@test.com',
+            'repeat_email' => 'test@test.com',            
+        ];
+
+        $response = $this->post(route('resrv.reservation.checkoutFormSubmit', $reservation->id), $customerData);
+        $response->assertStatus(200)->assertSee('Test');
+        $this->assertDatabaseHas('resrv_reservations', [
+            'customer->first_name' => 'Test'
+        ]);
+    }
+    
+    public function test_reservation_customer_checkout_form_submit_error()
+    {
+        $this->withExceptionHandling();
+        $reservation = Reservation::factory()->create();
+
+        $customerData = [
+            'first_name' => 'Test',
+            'last_name' => 'Testing',
+            'email' => 'test@test.com',
+            'repeat_email' => 'test@test.co',            
+        ];
+
+        $response = $this->post(route('resrv.reservation.checkoutFormSubmit', $reservation->id), $customerData);
+        $response->assertSessionHasErrors(['repeat_email']);
+    }
+
+    public function test_reservation_confirm_checkout_method()
+    {
+        $this->withExceptionHandling();
+        $reservation = Reservation::factory()->create();
+
+        $response = $this->post(route('resrv.reservation.checkoutConfirm', $reservation->id));
+        $response->assertStatus(200)->assertSee($reservation->id);
     }
 
 

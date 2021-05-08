@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Statamic\Facades\Form;
+use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
@@ -18,6 +20,11 @@ class Reservation extends Model
     protected $table = 'resrv_reservations';
 
     protected $guarded = [];
+
+    protected static function newFactory()
+    {
+        return ReservationFactory::new();
+    }
    
     public function extras()
     {
@@ -82,5 +89,19 @@ class Reservation extends Model
         return Str::upper(Str::random(6));
     }
 
+    public function checkoutForm()
+    {
+        $formHandle = config('resrv-config.form_name', 'checkout');
+        $form = Form::find($formHandle)->fields()->values();
+        // If we have a country field add the names automatically
+        foreach ($form as $index => $field) {
+            if ($field->handle() == 'country') {
+                $config = $field->config();
+                $config['options'] = trans('statamic-resrv::countries');
+                $field->setConfig($config);
+            }
+        }
+        return $form;
+    }
 
 }

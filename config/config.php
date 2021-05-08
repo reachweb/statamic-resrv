@@ -43,12 +43,14 @@ return [
 
     /**
      * Reservation settings.
+     * form_name: handle of the checkout form (needed to work correctly!)
      * payment: full charges the whole amount, fixed charges a fixed deposit and percent charges a percentage
      * fixed_amount: the amout to charge for a reservation
      * percent_amount: the percentage of the reservation to charge as an amount
      * 
      */
 
+    'form_name'      => 'checkout',
     'payment'        => 'full',
     'fixed_amount'   => 50,
     'percent_amount' => 20,
@@ -59,5 +61,6 @@ return [
      * If you want, you can swap our payment gateway with your own integration.
      * 
      */
-    'payment_gateway' => Reach\StatamicResrv\Http\Controllers\PaymentGateways\Stripe::class,
+    'payment_gateway' => Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
+    'stripe_key'      => '',
 ];

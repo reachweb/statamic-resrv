@@ -5,12 +5,17 @@ namespace Reach\StatamicResrv;
 use Statamic\Providers\AddonServiceProvider;
 use Statamic\Facades\Permission;
 use Statamic\Facades\CP\Nav;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 
 class StatamicResrvServiceProvider extends AddonServiceProvider
 {
     protected $routes = [
         'cp'  => __DIR__.'/../routes/cp.php',
         'web' => __DIR__.'/../routes/web.php',
+    ];
+
+    public $singletons = [
+        PaymentGateway::class => PingdomDowntimeNotifier::class,
     ];
 
     protected $fieldtypes = [
@@ -52,9 +57,17 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         
         $this->mergeConfigFrom(__DIR__.'/../config/config.php', 'resrv-config');
 
+        $this->app->bind(PaymentInterface::class, config('resrv-config.payment_gateway'));
+
+        if (app()->environment() == 'testing') {
+            $this->app->bind(PaymentInterface::class, \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class);
+        }
+
         $this->createNavigation();
 
         $this->bootPermissions();
+
+        
 
     }
 
