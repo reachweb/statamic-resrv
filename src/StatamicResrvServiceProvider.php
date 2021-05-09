@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
+use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 
 class StatamicResrvServiceProvider extends AddonServiceProvider
 {
@@ -33,6 +34,7 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
 
     protected $listen = [
         ReservationCreated::class  => [
+            AddReservationIdToSession::class,
             DecreaseAvailability::class,
         ],
         ReservationExpired::class  => [

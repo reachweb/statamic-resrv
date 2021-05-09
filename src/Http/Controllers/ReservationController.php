@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 
 class ReservationController extends Controller
 {
@@ -108,7 +109,9 @@ class ReservationController extends Controller
 
         // Confim the reservation        
         $reservation->status = 'confirmed';
-        $reservation->save();     
+        $reservation->save();
+
+        ReservationConfirmed::dispatch($reservation);
         
         return response()->json($reservation_id);
     }

@@ -79,7 +79,8 @@ class ReservationFrontTest extends TestCase
       
         $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
 
-        $response->assertStatus(200)->assertSee(1);
+        $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
+                ;
         $this->assertDatabaseHas('resrv_reservations', [
             'payment' => $payment
         ]);

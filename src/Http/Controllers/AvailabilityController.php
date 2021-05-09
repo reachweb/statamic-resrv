@@ -32,7 +32,7 @@ class AvailabilityController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date'
         ]);
-        
+      
         try {
             $availabilityData = Availability::GetAvailabilityForDates($data, $statamic_id);
         } catch (AvailabilityDurationException $exception) {

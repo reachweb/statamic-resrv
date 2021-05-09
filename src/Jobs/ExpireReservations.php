@@ -21,7 +21,14 @@ class ExpireReservations implements ShouldQueue
      * @return void
      */
     public function handle()
-    {
+    {   
+        // If a user already started a reservation that he didn't finish, expire it right away
+        if (session()->has('resrv_reservation')) {
+            $reservation = Reservation::find(session('resrv_reservation'));
+            if ($reservation->status == 'pending') {
+                $reservation->expire();
+            }
+        }
         if (config('resrv-config.minutes_to_hold', false) == false) {
             return;
         }        
