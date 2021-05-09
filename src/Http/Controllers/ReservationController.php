@@ -8,6 +8,7 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Events\ReservationCreated;
 
 class ReservationController extends Controller
 {
@@ -61,6 +62,8 @@ class ReservationController extends Controller
             'payment_id' => '',
             'customer' => '',
         ]);
+
+        ReservationCreated::dispatch($reservation);
         
         foreach ($data['extras'] as $id => $properties) {
             $this->reservation->find($reservation->id)->extras()->attach($id, ['quantity' => $properties['quantity']]);

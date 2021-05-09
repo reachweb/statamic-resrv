@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
+use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Statamic\Facades\Entry;
 use Carbon\CarbonPeriod;
 
@@ -32,11 +33,9 @@ class Availability extends Model
         return $query->where('statamic_id', $entry);
     }
 
-    /**
-     * Calls two scopes: one for getting the available items and one to get the total pricing
-     * of each item.
-     */
-    public function scopeGetAvailabilityForDates($scope, $dates, $statamic_id = null) {
+    public function scopeGetAvailabilityForDates($scope, $dates, $statamic_id = null) { 
+        
+        ExpireReservations::dispatchSync();
 
         $this->initiateAvailability($dates);
 
@@ -55,6 +54,8 @@ class Availability extends Model
     }
 
     public function confirmAvailabilityAndPrice($data, $statamic_id) {
+
+        ExpireReservations::dispatchSync();
 
         $this->initiateAvailability($data);
 
@@ -75,6 +76,32 @@ class Availability extends Model
         return true;
         
     }
+
+    public function decrementAvailability($date_start, $date_end, $statamic_id) 
+    {
+        $this->initiateAvailability([
+            'date_start' => $date_start,
+            'date_end' => $date_end,
+        ]); 
+
+        $this->where('date', '>=', $this->date_start)
+            ->where('date', '<', $this->date_end)
+            ->where('statamic_id', $statamic_id)
+            ->decrement('available');
+    }  
+    
+    public function incrementAvailability($date_start, $date_end, $statamic_id) 
+    {
+        $this->initiateAvailability([
+            'date_start' => $date_start,
+            'date_end' => $date_end,
+        ]); 
+
+        $this->where('date', '>=', $this->date_start)
+            ->where('date', '<', $this->date_end)
+            ->where('statamic_id', $statamic_id)
+            ->increment('available');
+    }  
 
     protected function getAllAvailableItems()
     {

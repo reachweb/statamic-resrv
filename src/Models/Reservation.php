@@ -12,6 +12,8 @@ use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Events\ReservationExpired;
+use Carbon\Carbon;
 
 class Reservation extends Model
 {
@@ -102,6 +104,13 @@ class Reservation extends Model
             }
         }
         return $form;
+    }
+
+    public function expire()
+    {
+        $this->status = 'expired';
+        $this->save();
+        ReservationExpired::dispatch($this);
     }
 
 }

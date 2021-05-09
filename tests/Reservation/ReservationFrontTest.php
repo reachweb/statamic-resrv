@@ -50,10 +50,12 @@ class ReservationFrontTest extends TestCase
         $this->assertDatabaseHas('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
         ]);
+        
+        $this->travelTo(today()->setHour(11));
 
         $searchPayload = [
-            'date_start' => Carbon::now()->add(1, 'hour')->toIso8601String(),
-            'date_end' => Carbon::now()->add(2, 'day')->toIso8601String(),
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
@@ -63,8 +65,8 @@ class ReservationFrontTest extends TestCase
         $price = json_decode($response->content())->data->price;
         
         $checkoutRequest = [
-            'date_start' => Carbon::now()->add(1, 'hour')->toIso8601String(),
-            'date_end' => Carbon::now()->add(2, 'day')->toIso8601String(),
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
             'payment' => $payment,
             'price' => $price,
             'extras' => [$extra->id => ['quantity' => 1]], 
@@ -76,6 +78,7 @@ class ReservationFrontTest extends TestCase
         Config::set('resrv-config.enable_locations', true);
       
         $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+
         $response->assertStatus(200)->assertSee(1);
         $this->assertDatabaseHas('resrv_reservations', [
             'payment' => $payment
@@ -86,7 +89,27 @@ class ReservationFrontTest extends TestCase
             'quantity' => 1
         ]);
 
-                
+        Config::set('resrv-config.minutes_to_hold', 10);
+        // Check that availability gets decreased here
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 1,
+        ]);
+        
+        // Check that the reservation expires and availability is back
+        $this->travel(15)->minutes();
+
+        // Call availability to run the jobs
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        
+        $this->assertDatabaseHas('resrv_reservations', [
+            'item_id' => $item->id(),
+            'status' => 'expired',
+        ]);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 2,
+        ]);                
     }    
     
     public function test_reservation_confirm_method_fail()
@@ -112,15 +135,17 @@ class ReservationFrontTest extends TestCase
         $addExtraToEntry = [
             'id' => $extra->id
         ];
-        
+   
         $response = $this->post(cp_route('resrv.extra.add', $item->id()), $addExtraToEntry);
         $this->assertDatabaseHas('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
         ]);
+        
+        $this->travelTo(today()->setHour(11));
 
         $searchPayload = [
-            'date_start' => Carbon::now()->add(1, 'hour')->toIso8601String(),
-            'date_end' => Carbon::now()->add(2, 'day')->toIso8601String(),
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
@@ -130,8 +155,8 @@ class ReservationFrontTest extends TestCase
         $price = json_decode($response->content())->data->price;
         
         $checkoutRequest = [
-            'date_start' => Carbon::now()->add(1, 'hour')->toIso8601String(),
-            'date_end' => Carbon::now()->add(2, 'day')->toIso8601String(),
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
             'payment' => $payment,
             'price' => $price,
             'extras' => [$extra->id => ['quantity' => 1]], 
@@ -139,7 +164,7 @@ class ReservationFrontTest extends TestCase
         ];
         
         $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
-        $response->assertStatus(200)->assertSee('{"error":"405"}', false);
+        $response->assertStatus(200)->assertSee('{"error":"411"}', false);
         $this->assertDatabaseMissing('resrv_reservations', [
             'payment' => $payment
         ]);

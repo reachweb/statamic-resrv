@@ -6,6 +6,10 @@ use Statamic\Providers\AddonServiceProvider;
 use Statamic\Facades\Permission;
 use Statamic\Facades\CP\Nav;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Events\ReservationExpired;
+use Reach\StatamicResrv\Listeners\DecreaseAvailability;
+use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 
 class StatamicResrvServiceProvider extends AddonServiceProvider
 {
@@ -25,6 +29,15 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
     
     protected $tags = [
         \Reach\StatamicResrv\Tags\Resrv::class,
+    ];
+
+    protected $listen = [
+        ReservationCreated::class  => [
+            DecreaseAvailability::class,
+        ],
+        ReservationExpired::class  => [
+            IncreaseAvailability::class,
+        ],
     ];
 
     protected $scripts = [
