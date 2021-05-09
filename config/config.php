@@ -14,6 +14,7 @@ return [
     'country'  => 'Greece', 
     'phone'    => '+30 0000 000000',
     'mail'     => 'resrv@resrv.app',
+    'logo'     => false,
 
     /**
      * Reservation settings.

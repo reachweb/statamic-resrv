@@ -58,7 +58,8 @@ class TestCase extends OrchestraTestCase
     {
         return [
             \Statamic\Providers\StatamicServiceProvider::class,
-            \Reach\StatamicResrv\StatamicResrvServiceProvider::class
+            \Reach\StatamicResrv\StatamicResrvServiceProvider::class,
+            \Spatie\LaravelRay\RayServiceProvider::class,
         ];
     }
 

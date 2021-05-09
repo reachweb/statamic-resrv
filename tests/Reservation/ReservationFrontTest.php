@@ -7,9 +7,11 @@ use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 
 class ReservationFrontTest extends TestCase
@@ -229,11 +231,25 @@ class ReservationFrontTest extends TestCase
 
     public function test_reservation_confirm_checkout_method()
     {
-        $this->withExceptionHandling();
-        $reservation = Reservation::factory()->create();
+        //$this->withExceptionHandling();
+        $item = $this->makeStatamicItem();
+        $location = Location::factory()->create(); 
+        Config::set('resrv-config.enable_locations', true);
+
+        $reservation = Reservation::factory([
+            'customer' => ['email' => 'test@test.com'],
+            'item_id' => $item->id(),
+            'location_start' => $location->id,
+            'location_end' => $location->id,
+        ])->create();
+
+        ray($reservation);
+        
+        //Mail::fake();
 
         $response = $this->post(route('resrv.reservation.checkoutConfirm', $reservation->id));
         $response->assertStatus(200)->assertSee($reservation->id);
+        //Mail::assertSent(ReservationConfirmed::class);
     }
 
 

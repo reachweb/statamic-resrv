@@ -8,19 +8,17 @@ use Statamic\Facades\CP\Nav;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
+use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 
 class StatamicResrvServiceProvider extends AddonServiceProvider
 {
     protected $routes = [
         'cp'  => __DIR__.'/../routes/cp.php',
         'web' => __DIR__.'/../routes/web.php',
-    ];
-
-    public $singletons = [
-        PaymentGateway::class => PingdomDowntimeNotifier::class,
     ];
 
     protected $fieldtypes = [
@@ -40,6 +38,9 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         ReservationExpired::class  => [
             IncreaseAvailability::class,
         ],
+        ReservationConfirmed::class  => [
+            SendNewReservationEmails::class,
+        ],
     ];
 
     protected $scripts = [
@@ -56,6 +57,8 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
 
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'statamic-resrv');
 
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'statamic-resrv');
+
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         $this->publishes([
@@ -69,6 +72,10 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         $this->publishes([
             __DIR__.'/../resources/forms' => resource_path('forms'),
         ], 'resrv-forms');
+
+        $this->publishes([
+            __DIR__.'/../resources/views/email' => resource_path('views/vendor/statamic-resrv/email'),
+        ], 'resrv-views');
         
         $this->mergeConfigFrom(__DIR__.'/../config/config.php', 'resrv-config');
 
@@ -80,9 +87,7 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
 
         $this->createNavigation();
 
-        $this->bootPermissions();
-
-        
+        $this->bootPermissions();        
 
     }
 

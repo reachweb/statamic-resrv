@@ -27,6 +27,10 @@
         <env name="CACHE_DRIVER" value="array"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="QUEUE_DRIVER" value="sync"/>
-        <env name="MAIL_DRIVER" value="array"/>
+        <env name="MAIL_DRIVER" value="smtp"/>
+        <env name="MAIL_HOST" value="smtp.mailtrap.io"/>
+        <env name="MAIL_USERNAME" value="0e08d400c9e1ce"/>
+        <env name="MAIL_PASSWORD" value="d9d25da57f916b"/>
+        <env name="MAIL_ENCRYPTION" value="tls"/>
     </php>
 </phpunit>

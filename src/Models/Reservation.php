@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Statamic\Facades\Form;
+use Statamic\Facades\Entry;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Extra;
@@ -23,24 +25,40 @@ class Reservation extends Model
 
     protected $guarded = [];
 
+    protected $casts = [
+        'customer' => AsCollection::class,
+        'date_start' => 'datetime',
+        'date_end' => 'datetime',
+    ];
+
     protected static function newFactory()
     {
         return ReservationFactory::new();
     }
-   
+
+    public function entry()
+    {
+        return Entry::find($this->item_id);
+    }
+  
     public function extras()
     {
         return $this->belongsToMany(Extra::class, 'resrv_reservation_extra');
     }
 
-    public function location_start()
+    public function location_start_data()
     {
         return $this->hasOne(Location::class, 'id', 'location_start');
     }
     
-    public function location_end()
+    public function location_end_data()
     {
         return $this->hasOne(Location::class, 'id', 'location_end');
+    }
+
+    public function amountRemaining()
+    {
+        return $this->price - $this->payment;
     }
 
     public function confirmReservation($data, $statamic_id)

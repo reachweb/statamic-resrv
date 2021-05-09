@@ -31,4 +31,6 @@ class Location extends Model
         static::addGlobalScope(new OrderScope);
     }
 
+    
+
 }
