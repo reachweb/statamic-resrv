@@ -55,17 +55,19 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload3);
         $response->assertStatus(200);
 
+        $this->travelTo(today()->setHour(11));
+
         $searchPayload = [
-            'date_start' => Carbon::now()->add(1, 'hour')->toISOString(),
-            'date_end' => Carbon::now()->add(3, 'day')->toISOString(),
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(3, 'day')->toISOString(),
         ];
         // We should see item 1, 3 but not item 2
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('150')->assertDontSee($item2->id())->assertSee($item3->id())->assertSee('210');
 
         $searchEmptyPayload = [
-            'date_start' => today()->add(15, 'day')->toISOString(),
-            'date_end' => today()->add(20, 'day')->toISOString(),
+            'date_start' => today()->setHour(12)->add(15, 'day')->toISOString(),
+            'date_end' => today()->setHour(12)->add(20, 'day')->toISOString(),
         ];
         // Even when nothing is available we are getting a response
         $response = $this->post(route('resrv.availability.index'), $searchEmptyPayload);
@@ -73,8 +75,8 @@ class AvailabilityFrontTest extends TestCase
 
         // Add 2 hours to the end date and make sure that it charges an extra day (or not)
         $searchExtraDayPayload = [
-            'date_start' => Carbon::now()->add(1, 'hour')->toISOString(),
-            'date_end' => Carbon::now()->add(3, 'day')->add(2, 'hours')->toISOString(),
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(3, 'day')->add(2, 'hours')->toISOString(),
         ];
         
         Config::set('resrv-config.calculate_days_using_time', false);
@@ -115,9 +117,11 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
+        $this->travelTo(today()->setHour(11));
+
         $searchPayload = [
-            'date_start' => today()->toISOString(),
-            'date_end' => today()->add(4, 'day')->toISOString(),
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
@@ -143,10 +147,12 @@ class AvailabilityFrontTest extends TestCase
         $response->assertStatus(200);
 
         Config::set('resrv-config.minimum_reservation_period_in_days', 3);
+        
+        $this->travelTo(today()->setHour(11));
 
         $searchPayload = [
-            'date_start' => today()->add(1, 'day')->toISOString(),
-            'date_end' => today()->add(2, 'day')->toISOString(),
+            'date_start' => today()->setHour(12)->add(1, 'day')->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
@@ -172,9 +178,11 @@ class AvailabilityFrontTest extends TestCase
 
         Config::set('resrv-config.maximum_reservation_period_in_days', 3);
 
+        $this->travelTo(today()->setHour(11));
+
         $searchPayload = [
-            'date_start' => today()->add(1, 'day')->toISOString(),
-            'date_end' => today()->add(5, 'day')->toISOString(),
+            'date_start' => today()->setHour(12)->add(1, 'day')->toISOString(),
+            'date_end' => today()->setHour(12)->add(5, 'day')->toISOString(),
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
@@ -201,9 +209,11 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
+        $this->travelTo(today()->setHour(11));
+
         $searchPayload = [
-            'date_start' => today()->add(1, 'day')->toISOString(),
-            'date_end' => today()->add(5, 'day')->toISOString(),
+            'date_start' => today()->setHour(12)->add(1, 'day')->toISOString(),
+            'date_end' => today()->setHour(12)->add(5, 'day')->toISOString(),
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
@@ -228,9 +238,11 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
+        $this->travelTo(today()->setHour(11));
+
         $searchPayload = [
-            'date_start' => Carbon::now()->add(1, 'hour')->toISOString(),
-            'date_end' => Carbon::now()->add(3, 'day')->toISOString(),
+            'date_start' => today()->setHour(12)->add(1, 'hour')->toISOString(),
+            'date_end' => today()->setHour(12)->add(3, 'day')->toISOString(),
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
@@ -255,9 +267,11 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
+        $this->travelTo(today()->setHour(11));
+
         $searchPayload = [
-            'date_start' => Carbon::now()->add(1, 'hour')->toISOString(),
-            'date_end' => Carbon::now()->add(3, 'day')->toISOString(),
+            'date_start' => today()->setHour(12)->add(1, 'hour')->toISOString(),
+            'date_end' => today()->setHour(12)->add(3, 'day')->toISOString(),
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
@@ -284,9 +298,11 @@ class AvailabilityFrontTest extends TestCase
 
         Config::set('resrv-config.minimum_days_before', 2);
 
+        $this->travelTo(today()->setHour(11));
+
         $searchPayload = [
-            'date_start' => Carbon::now()->add(1, 'day')->toISOString(),
-            'date_end' => Carbon::now()->add(3, 'day')->toISOString(),
+            'date_start' => today()->setHour(12)->add(1, 'day')->toISOString(),
+            'date_end' => today()->setHour(12)->add(3, 'day')->toISOString(),
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
