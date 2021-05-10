@@ -1,5 +1,7 @@
 @component('mail::message')
 
+{{ __('statamic-resrv::email.thankYou') }}
+
 @component('mail::panel')
 {{ __('statamic-resrv::email.reservationCode') }} **{{ $reservation->id }}**<br>
 {{ __('statamic-resrv::email.date') }}: **{{ $reservation->updated_at->format('D M Y H:m') }}**<br>

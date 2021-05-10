@@ -32,6 +32,5 @@ class SendEmails implements ShouldQueue
     public function handle()
     {         
         $mail = Mail::to($this->reservation->customer->get('email'))->send(new ReservationConfirmed($this->reservation));
-        ray()->mailable(new ReservationConfirmed($this->reservation));  
     }
 }
