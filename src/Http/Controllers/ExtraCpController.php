@@ -18,7 +18,6 @@ class ExtraCpController extends Controller
 
     public function indexCp()
     {
-        $extras = $this->extra->all();
         return view('statamic-resrv::cp.extras.index');
     }
     

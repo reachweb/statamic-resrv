@@ -18,7 +18,6 @@ class LocationCpController extends Controller
 
     public function indexCp()
     {
-        $locations = $this->location->all();
         return view('statamic-resrv::cp.locations.index');
     }
     
