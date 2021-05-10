@@ -197,7 +197,11 @@ class ReservationFrontTest extends TestCase
     
     public function test_reservation_customer_checkout_form_submit()
     {
-        $reservation = Reservation::factory()->create();
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+        ])->create();
 
         $customerData = [
             'first_name' => 'Test',
@@ -242,14 +246,12 @@ class ReservationFrontTest extends TestCase
             'location_start' => $location->id,
             'location_end' => $location->id,
         ])->create();
-
-        ray($reservation);
-        
-        //Mail::fake();
+      
+        Mail::fake();
 
         $response = $this->post(route('resrv.reservation.checkoutConfirm', $reservation->id));
         $response->assertStatus(200)->assertSee($reservation->id);
-        //Mail::assertSent(ReservationConfirmed::class);
+        Mail::assertSent(ReservationConfirmed::class);
     }
 
 

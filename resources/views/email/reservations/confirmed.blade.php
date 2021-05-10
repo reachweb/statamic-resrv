@@ -4,7 +4,7 @@
 
 @component('mail::panel')
 {{ __('statamic-resrv::email.reservationCode') }} **{{ $reservation->id }}**<br>
-{{ __('statamic-resrv::email.date') }}: **{{ $reservation->updated_at->format('D M Y H:m') }}**<br>
+{{ __('statamic-resrv::email.date') }}: **{{ $reservation->updated_at->format('d-m-Y H:i') }}**<br>
 {{ __('statamic-resrv::email.bookingReference') }}: **{{ $reservation->reference }}**<br>
 {{ __('statamic-resrv::email.email') }}: **{{ $reservation->customer->get('email') }}** 
 @endcomponent
@@ -12,8 +12,8 @@
 @component('mail::table')
 |{{ __('statamic-resrv::email.reservationDetails') }}||
 | :------------------------------------------------ |:--------------------------------------------------------------------------| 
-| {{ __('statamic-resrv::email.pickUpDate') }}      | {{ $reservation->date_start->format('D M Y H:m') }} |
-| {{ __('statamic-resrv::email.dropOffDate') }}     | {{ $reservation->date_end->format('D M Y H:m') }} |
+| {{ __('statamic-resrv::email.pickUpDate') }}      | {{ $reservation->date_start->format('d-m-Y H:i') }} |
+| {{ __('statamic-resrv::email.dropOffDate') }}     | {{ $reservation->date_end->format('d-m-Y H:i') }} |
 @if (config('resrv-config.enable_locations'))
 | {{ __('statamic-resrv::email.pickUpLocation') }}  | {{ $reservation->location_start_data->name }} |
 | {{ __('statamic-resrv::email.dropOffLocation') }} | {{ $reservation->location_end_data->name }} |

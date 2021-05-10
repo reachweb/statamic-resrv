@@ -31,6 +31,8 @@ class Reservation extends Model
         'date_end' => 'datetime',
     ];
 
+    protected $appends = ['entry'];
+
     protected static function newFactory()
     {
         return ReservationFactory::new();
@@ -40,10 +42,15 @@ class Reservation extends Model
     {
         return Entry::find($this->item_id);
     }
-  
+
+    public function getEntryAttribute()
+    {
+        return Entry::find($this->item_id)->toShallowAugmentedArray();
+    }
+
     public function extras()
     {
-        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra');
+        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot('quantity');
     }
 
     public function location_start_data()
@@ -111,8 +118,7 @@ class Reservation extends Model
 
     public function checkoutForm()
     {
-        $formHandle = config('resrv-config.form_name', 'checkout');
-        $form = Form::find($formHandle)->fields()->values();
+        $form = $this->getForm();
         // If we have a country field add the names automatically
         foreach ($form as $index => $field) {
             if ($field->handle() == 'country') {
@@ -122,6 +128,22 @@ class Reservation extends Model
             }
         }
         return $form;
+    }
+    
+    public function checkoutFormFieldsArray()
+    {
+        $form = $this->getForm();
+        $fields = [];
+        foreach ($form as $item) {
+            $fields[$item->handle()] = $item->config()['display'];
+        }
+        return $fields;
+    }
+
+    protected function getForm()
+    {
+        $formHandle = config('resrv-config.form_name', 'checkout');
+        return Form::find($formHandle)->fields()->values();
     }
 
     public function expire()

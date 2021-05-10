@@ -24,4 +24,8 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/location', 'LocationCpController@update')->name('location.update');
         Route::patch('/resrv/location/order', 'LocationCpController@order')->name('location.order');
         Route::delete('/resrv/location', 'LocationCpController@delete')->name('location.delete');
+
+        Route::get('/resrv/reservation', 'ReservationCpController@index')->name('reservation.index');
+        Route::get('/resrv/reservations', 'ReservationCpController@indexCp')->name('reservations.index');
+        Route::get('/resrv/reservation/{id}', 'ReservationCpController@show')->name('reservation.show');
     });
