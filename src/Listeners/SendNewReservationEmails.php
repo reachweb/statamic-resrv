@@ -12,6 +12,6 @@ class SendNewReservationEmails
     
     public function handle(ReservationConfirmed $event)
     {
-        SendEmails::dispatchSync($event->reservation);
+        SendEmails::dispatchAfterResponse($event->reservation);
     }
 }
