@@ -9,10 +9,12 @@ use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
+use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 
 class StatamicResrvServiceProvider extends AddonServiceProvider
@@ -45,6 +47,9 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         ],
         ReservationConfirmed::class  => [
             SendNewReservationEmails::class,
+        ],
+        ReservationRefunded::class  => [
+            SendRefundReservationEmails::class,
         ],
     ];
 

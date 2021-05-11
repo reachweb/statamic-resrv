@@ -14,5 +14,8 @@ class FakePaymentGateway implements PaymentInterface
         $data->client_secret = Str::random(56);
         $data->reservation = '';
         return $data;
-    }    
+    }
+    public function refund($payment_id) {
+        return true;
+    }
 }

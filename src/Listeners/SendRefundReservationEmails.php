@@ -2,15 +2,15 @@
 
 namespace Reach\StatamicResrv\Listeners;
 
-use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Events\ReservationRefunded;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Queue\InteractsWithQueue;
-use Reach\StatamicResrv\Jobs\SendNewReservationEmails as SendEmails;
+use Reach\StatamicResrv\Jobs\SendRefundReservationEmails as SendEmails;
 
-class SendNewReservationEmails
+class SendRefundReservationEmails
 {
     
-    public function handle(ReservationConfirmed $event)
+    public function handle(ReservationRefunded $event)
     {
         SendEmails::dispatchAfterResponse($event->reservation);
     }

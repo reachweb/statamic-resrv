@@ -75,6 +75,7 @@
                         <template slot="actions" slot-scope="{ row: reservation }">
                             <dropdown-list>
                                 <dropdown-item :text="__('View')" :redirect="showUrl(reservation)" />                                
+                                <dropdown-item :text="__('Refund')" @click="refundConfirm(reservation)" />                                
                             </dropdown-list>
                         </template>
                     </data-list-table>
@@ -89,11 +90,22 @@
                 />
             </div>
         </data-list>
+        <confirmation-modal
+            v-if="refundId"
+            title="Refund and cancel reservation"
+            :danger="true"
+            @confirm="refund"
+            @cancel="refundId = false"
+        >
+            Are you sure you want to refund this reservation? <strong>This cannot be undone.</strong><br>
+            All charges will be refunded and the customer will be notified.
+        </confirmation-modal>
     </div>
 
 </template>
 
 <script>
+import axios from 'axios'
 
 export default {
     mixins: [Listing],
@@ -101,6 +113,7 @@ export default {
     props: {
         reservationsUrl: '',
         showRoute: '',
+        refundRoute: ''   
     },
 
     data() {
@@ -108,6 +121,7 @@ export default {
             rows: this.initialRows,
             requestUrl: this.reservationsUrl,
             preferencesPrefix: 'resrv.reservations',
+            refundId: false
         }
     },
 
@@ -125,7 +139,21 @@ export default {
             } else {
                 return 'bg-gray-800'
             }
-        }
+        },
+        refundConfirm(reservation) {
+            this.refundId = reservation.id
+        },
+        refund() {
+            axios.patch(this.refundRoute, {id: this.refundId})
+            .then(response => {
+                this.$toast.success('Reservation refunded')
+                this.refundId = false
+                this.request()        
+            })
+            .catch(error => {
+                this.$toast.error(error.response.data.error)
+            })
+        },
     },
 }
 </script>

@@ -7,9 +7,8 @@ use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Resources\ReservationResource;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
-use Reach\StatamicResrv\Exceptions\ReservationException;
-use Reach\StatamicResrv\Events\ReservationCreated;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Events\ReservationRefunded;
 use Statamic\Http\Requests\FilteredRequest;
 use Statamic\Query\Scopes\Filters\Concerns\QueriesFilters;
 use Statamic\Facades\Scope;
@@ -58,6 +57,27 @@ class ReservationCpController extends Controller
         $fields = $reservation->checkoutFormFieldsArray();
 
         return view('statamic-resrv::cp.reservations.show', compact('reservation' , 'entry', 'fields'));
+    }
+
+    public function refund(Request $request)
+    {
+        $data = $request->validate([
+            'id' => 'required|integer',
+        ]);
+        $reservation = $this->reservation->find($data['id']);
+        try {
+            $attemptRefund = $this->payment->refund($reservation->payment_id);
+        } catch (RefundFailedException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 400);
+        }
+
+        $reservation->status = 'refunded';
+        $reservation->save();
+
+        ReservationRefunded::dispatch($reservation);
+
+        return response()->json($reservation->id);
+        
     }
 
     private function getReservations()

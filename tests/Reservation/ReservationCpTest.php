@@ -7,7 +7,7 @@ use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Models\Reservation;
-use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Mail\ReservationRefunded;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Support\Facades\Config;
@@ -56,6 +56,30 @@ class ReservationCpTest extends TestCase
         $response = $this->get(cp_route('resrv.reservation.show', $reservation->id));
 
         $response->assertStatus(200)->assertSee($reservation->id)->assertSee($location->name)->assertSee($item->title);     
+    }
+    
+    public function test_can_refund_reservations()
+    {   
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+        $location = Location::factory()->create(); 
+
+        $reservation = Reservation::factory([
+            'customer' => ['email' => 'test@test.com'],
+            'item_id' => $item->id(),
+            'location_start' => $location->id,
+            'location_end' => $location->id,
+            'payment_id' => 'abcedf'
+        ])->create();
+
+        $payload = [
+            'id' => $reservation->id
+        ];
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', $payload));
+
+        $response->assertStatus(200)->assertSee($reservation->id);
+        Mail::assertSent(ReservationRefunded::class);  
     }
 
 
