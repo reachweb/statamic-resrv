@@ -8,6 +8,7 @@ use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Mail\ReservationMade;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Support\Facades\Config;
@@ -239,6 +240,7 @@ class ReservationFrontTest extends TestCase
         $item = $this->makeStatamicItem();
         $location = Location::factory()->create(); 
         Config::set('resrv-config.enable_locations', true);
+        Config::set('resrv-config.admin_email', 'someone@test.com,someonelse@example.com');
 
         $reservation = Reservation::factory([
             'customer' => ['email' => 'test@test.com'],
@@ -252,6 +254,7 @@ class ReservationFrontTest extends TestCase
         $response = $this->post(route('resrv.reservation.checkoutConfirm', $reservation->id));
         $response->assertStatus(200)->assertSee($reservation->id);
         Mail::assertSent(ReservationConfirmed::class);
+        Mail::assertSent(ReservationMade::class);
     }
 
 

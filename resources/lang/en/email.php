@@ -3,6 +3,7 @@
 return [
 
     'thankYou' => 'Thank you for your reservation with us!',
+    'newReservation' => 'A new reservation has been made!',
     'reservationCode' => 'Reservation code:',
     'bookingReference' => 'Booking reference',
     'date' => 'Date',

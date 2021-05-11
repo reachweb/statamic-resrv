@@ -6,13 +6,6 @@
 @endcomponent
 @endslot
 
-{{ config('resrv-config.name') }}<br>
-{{ config('resrv-config.address1') }}<br>
-{{ config('resrv-config.zip_city') }}<br>
-{{ config('resrv-config.country') }}<br>
-Tel: {{ config('resrv-config.phone') }}<br>
-Email: {{ config('resrv-config.mail') }}
-
 {{-- Body --}}
 {{ $slot }}
 

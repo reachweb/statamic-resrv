@@ -1,13 +1,6 @@
 @component('mail::message')
 
-{{ config('resrv-config.name') }}<br>
-{{ config('resrv-config.address1') }}<br>
-{{ config('resrv-config.zip_city') }}<br>
-{{ config('resrv-config.country') }}<br>
-Tel: {{ config('resrv-config.phone') }}<br>
-Email: {{ config('resrv-config.mail') }}
-
-{{ __('statamic-resrv::email.thankYou') }}
+{{ __('statamic-resrv::email.newReservation') }}
 
 @component('mail::panel')
 {{ __('statamic-resrv::email.reservationCode') }} **{{ $reservation->id }}**<br>
@@ -39,6 +32,4 @@ Email: {{ config('resrv-config.mail') }}
 
 @endcomponent
 
-{{ __('statamic-resrv::email.thanks') }},<br>
-{{ config('app.name') }}
 @endcomponent

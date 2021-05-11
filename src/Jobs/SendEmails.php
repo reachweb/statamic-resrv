@@ -11,6 +11,7 @@ use Illuminate\Queue\SerializesModels;
 use Reach\StatamicResrv\Models\Reservation;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Mail\ReservationMade;
 use Carbon\Carbon;
 
 class SendEmails implements ShouldQueue
@@ -30,7 +31,15 @@ class SendEmails implements ShouldQueue
      * @return void
      */
     public function handle()
-    {         
-        $mail = Mail::to($this->reservation->customer->get('email'))->send(new ReservationConfirmed($this->reservation));
+    {   
+        // Customer email
+        Mail::to($this->reservation->customer->get('email'))->send(new ReservationConfirmed($this->reservation));
+        // Admin emails if set
+        if (config('resrv-config.admin_email') != false) {
+            $admin_emails = explode(',', config('resrv-config.admin_email'));
+            foreach ($admin_emails as $email) {
+                Mail::to($email)->send(new ReservationMade($this->reservation));
+            }            
+        }
     }
 }
