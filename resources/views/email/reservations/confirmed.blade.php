@@ -28,6 +28,16 @@ Email: {{ config('resrv-config.mail') }}
 | {{ __('statamic-resrv::email.itemLabel') }}   | {{ $reservation->entry()->title }} {{ __('statamic-resrv::email.orSimilar') }} |
 @endcomponent
 
+@if ($reservation->extras()->get()->count() > 0)
+@component('mail::table')
+|{{ __('statamic-resrv::email.extras') }}||
+| :------------------------------------------------ |:--------------------------------------------------------------------------| 
+@foreach ($reservation->extras()->get() as $extra)
+| {{ $extra->name }} | x{{ $extra->pivot->quantity }} |
+@endforeach
+@endcomponent
+@endif
+
 @component('mail::table')
 |{{ __('statamic-resrv::email.paymentInformation') }}||
 | :----------------------------- |:----------------| 
