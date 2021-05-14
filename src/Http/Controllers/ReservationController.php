@@ -47,7 +47,7 @@ class ReservationController extends Controller
         try {
             $attemptReservation = $this->reservation->confirmReservation($data, $statamic_id);
         } catch (ReservationException $exception) {
-            return response()->json(['error' => $exception->getMessage()]);
+            return response()->json(['error' => $exception->getMessage()], 412);
         }        
 
         $reservation = $this->reservation->create([

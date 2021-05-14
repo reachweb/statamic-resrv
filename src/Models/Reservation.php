@@ -80,11 +80,11 @@ class Reservation extends Model
         ], $statamic_id);
 
         if ($checkAvailability == false) {
-            throw new ReservationException(410);
+            throw new ReservationException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
 
         if ($this->confirmTotal($data) != $data['total']) {
-            throw new ReservationException(411);
+            throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
 
         return true;

@@ -168,7 +168,7 @@ class ReservationFrontTest extends TestCase
         ];
         
         $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
-        $response->assertStatus(200)->assertSee('{"error":"411"}', false);
+        $response->assertStatus(412);
         $this->assertDatabaseMissing('resrv_reservations', [
             'payment' => $payment
         ]);
