@@ -39,10 +39,6 @@ class Availability extends Model
 
         $this->initiateAvailability($dates);
 
-        if ($this->invalid) {
-            return $this->invalid;
-        }
-
         if (! $statamic_id) {
             return $this->getAllAvailableItems();
         }
@@ -58,10 +54,6 @@ class Availability extends Model
         ExpireReservations::dispatchSync();
 
         $this->initiateAvailability($data);
-
-        if ($this->invalid) {
-            return $this->invalid;
-        }
 
         $availability = $this->getSpecificItem($statamic_id);
 

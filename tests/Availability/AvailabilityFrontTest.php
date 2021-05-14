@@ -156,7 +156,7 @@ class AvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee('402')->assertDontSee($item->id());    
+        $response->assertStatus(412)->assertDontSee($item->id());    
     }
     
     public function test_availability_honor_max_days_setting()
@@ -186,7 +186,7 @@ class AvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee('401')->assertDontSee($item->id());    
+        $response->assertStatus(412)->assertDontSee($item->id());    
     }
 
     public function test_that_it_respects_stop_sales()
@@ -306,7 +306,7 @@ class AvailabilityFrontTest extends TestCase
         ];
         
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
-        $response->assertStatus(200)->assertSee(406)->assertDontSee($item->id());        
+        $response->assertStatus(412)->assertDontSee($item->id());        
         
     }
 

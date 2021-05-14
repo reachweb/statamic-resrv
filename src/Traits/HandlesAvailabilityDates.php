@@ -3,14 +3,13 @@
 namespace Reach\StatamicResrv\Traits;
 
 use Carbon\Carbon;
-use Reach\StatamicResrv\Exceptions\AvailabilityDurationException;
+use Reach\StatamicResrv\Exceptions\AvailabilityException;
 
 trait HandlesAvailabilityDates
 {
     protected $date_start;
     protected $date_end;
     protected $duration;
-    protected $invalid = false;
 
     protected function useTime()
     {   
@@ -20,10 +19,10 @@ trait HandlesAvailabilityDates
     protected function checkDurationValidity()
     {
         if ($this->duration > config('resrv-config.maximum_reservation_period_in_days')) {
-            throw new AvailabilityDurationException(401);
+            throw new AvailabilityException(__('The period you selected exceeds the maximum allowed reservation period.'));
         }
         if ($this->duration < config('resrv-config.minimum_reservation_period_in_days')) {
-            throw new AvailabilityDurationException(402);
+            throw new AvailabilityException(__('The period you selected is smaller than the minimum allowed reservation period.'));
         }
     }
 
@@ -31,7 +30,7 @@ trait HandlesAvailabilityDates
     {
         if (config('resrv-config.minimum_days_before')) {
             if ($date_start->diffInDays(Carbon::now()->startOfDay()) < config('resrv-config.minimum_days_before')) {
-                throw new AvailabilityDurationException(406);
+                throw new AvailabilityException(__('Your pickup date is closer than allowed.'));
             }
         }
     }
@@ -42,11 +41,11 @@ trait HandlesAvailabilityDates
         $date_end = new Carbon($dates['date_end']);
 
         if ($date_start > $date_end) {
-            throw new AvailabilityDurationException(403);
+            throw new AvailabilityException(__('Your pickup date is before the drop-off date.'));
         }
 
         if ($date_start < Carbon::now() || $date_end < Carbon::now()) {
-            throw new AvailabilityDurationException(405);
+            throw new AvailabilityException(__('Your pickup date is before the actual date and time.'));
         }
 
         $this->checkMinimumDate($date_start);
