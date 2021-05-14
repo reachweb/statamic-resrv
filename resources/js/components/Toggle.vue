@@ -31,7 +31,7 @@ export default {
             return 'true';
         },
         state() {
-            if (this.value == 'disabled') {
+            if (this.value == 'disabled' || this.value == false) {
                 return false;
             }
             return true
