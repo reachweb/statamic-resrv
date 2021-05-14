@@ -67,6 +67,7 @@
         </div>
     </div>
     
+    @if ($reservation->customer->count() > 1)
     <div>
         <div class="mb-2 content">
             <h2 class="text-base">Customer data</h2>
@@ -86,6 +87,7 @@
             
         </div>
     </div>
+    @endif
 
     <div>
         <div class="mb-2 content">
