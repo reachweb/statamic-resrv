@@ -19,7 +19,6 @@ class ReservationResource extends ResourceCollection
     public function __construct($resource)
     {
         parent::__construct($resource);
-
         $reservationBlueprint = new ReservationBlueprint();
         $this->blueprint = $reservationBlueprint();
     }
@@ -65,6 +64,11 @@ class ReservationResource extends ResourceCollection
     private function setColumns()
     {
         $columns = $this->blueprint->columns();
+
+        if (config('resrv-config.enable_locations') == false) {
+            unset($columns['location_start']);
+            unset($columns['location_end']);
+        }
 
         if ($key = $this->columnPreferenceKey) {
             $columns->setPreferred($key);
