@@ -13,7 +13,7 @@ class StripePaymentGateway implements PaymentInterface
 {
     public function paymentIntent($amount, $reservation_id, $data)
     {      
-        Stripe::setApiKey(config('resrv-config.stripe_key'));
+        Stripe::setApiKey(config('resrv-config.stripe_secret_key'));
         $paymentIntent = PaymentIntent::create([
             'amount' => $amount * 100,
             'currency' => Str::lower(config('resrv-config.currency_isoCode')),
@@ -24,7 +24,7 @@ class StripePaymentGateway implements PaymentInterface
 
     public function refund($payment_id)
     {
-        Stripe::setApiKey(config('resrv-config.stripe_key'));
+        Stripe::setApiKey(config('resrv-config.stripe_secret_key'));
         try {
             $attemptRefund = Refund::create([
                 'payment_intent' => $payment_id,

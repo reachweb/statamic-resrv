@@ -68,6 +68,7 @@ return [
      * If you want, you can swap our payment gateway with your own integration.
      * 
      */
-    'payment_gateway' => Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
-    'stripe_key'      => '',
+    'payment_gateway'        => Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
+    'stripe_secret_key'      => env('RESRV_STRIPE_SECRET', ''),
+    'stripe_publishable_key' => env('RESRV_STRIPE_PUBLISHABLE', ''),
 ];
