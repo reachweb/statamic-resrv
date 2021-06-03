@@ -24,7 +24,7 @@ return [
     'total' => 'Total',
     'includingTaxes' => 'including taxes',
     'thanks' => 'Thanks for your reservation',
-    'thankYou' => 'Thanks you',
+    'thankYou' => 'Thank you',
     'orSimilar' => 'or similar',
 
 ];
