@@ -30,6 +30,8 @@ class CheckoutFormRequest extends FormRequest
         foreach ($form as $field) {
             if (isset($field->config()['validate'])) {
                 $rules[$field->handle()] = implode('|', $field->config()['validate']);
+            } else {
+                $rules[$field->handle()] = 'nullable';
             }
         }
         return $rules;
