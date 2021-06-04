@@ -26,5 +26,10 @@ return [
     'thanks' => 'Thanks for your reservation',
     'thankYou' => 'Thank you',
     'orSimilar' => 'or similar',
+    'name' => 'Name',
+    'phone' => 'Phone',
+    'country' => 'Country',
+    'flightNumber' => 'Flight number',
+    'notes' => 'Notes',
 
 ];
