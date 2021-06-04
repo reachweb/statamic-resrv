@@ -83,7 +83,7 @@ class Reservation extends Model
             throw new ReservationException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
 
-        if ($this->confirmTotal($data) != $data['total']) {
+        if ($this->confirmTotal($data) !== number_format($data['total'], 2)) {
             throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
 
@@ -107,7 +107,7 @@ class Reservation extends Model
             $locationCost += Location::find($data['location_end'])->extra_charge;
         }
 
-        return $reservationCost + $extrasCost + $locationCost;
+        return number_format($reservationCost + $extrasCost + $locationCost, 2);
 
     }
 
