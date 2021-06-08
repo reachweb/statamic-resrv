@@ -87,6 +87,35 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchExtraDayPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('200');    
                 
+    } 
+    
+    public function test_availability_prices()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+        
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(3, 'day')->toISOString(),
+            'price' => 25.23,
+            'available' => 2
+        ];        
+        
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(3, 'day')->toISOString(),
+        ];
+        // Check that it works
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('75.69');       
+                
     }
 
     public function test_availability_when_not_set()
