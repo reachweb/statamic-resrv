@@ -10,7 +10,7 @@ class Availability extends Fieldtype
     public function augment($value)
     {   
         if ($value != 'disabled') {
-            $availability_data = EntryAvailability::entry($value)->get();
+            $availability_data = EntryAvailability::entry($value)->where('available', '>', '0')->get();
 
             if ($availability_data->count() == 0) {
                 return false;
