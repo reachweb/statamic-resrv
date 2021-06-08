@@ -25,7 +25,7 @@ class LocationFactory extends Factory
             'id' => '1',
             'name'=> 'Location',
             'slug' => 'location',
-            'extra_charge' => '10',
+            'extra_charge' => '5.72',
             'order' => 1,
             'published' => true
         ];

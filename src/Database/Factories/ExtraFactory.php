@@ -25,7 +25,7 @@ class ExtraFactory extends Factory
             'id' => '1',
             'name'=> 'This is an extra',
             'slug' => 'this-is-an-extra',
-            'price' => '150',
+            'price' => '4.65',
             'price_type' => 'perday',
             'allow_multiple' => true,
             'maximum' => 3,

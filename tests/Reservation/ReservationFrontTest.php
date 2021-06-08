@@ -66,6 +66,7 @@ class ReservationFrontTest extends TestCase
 
         $payment = json_decode($response->content())->data->payment;
         $price = json_decode($response->content())->data->price;
+        $total = json_decode($response->content())->data->price + (json_decode($response->content())->request->days * $extra->price) + ($location->extra_charge * 2);
         
         $checkoutRequest = [
             'date_start' => today()->setHour(12)->toISOString(),
@@ -75,7 +76,7 @@ class ReservationFrontTest extends TestCase
             'extras' => [$extra->id => ['quantity' => 1]], 
             'location_start' => 1, 
             'location_end' => 1,
-            'total' => 620
+            'total' => $total
         ];
 
         Config::set('resrv-config.enable_locations', true);
@@ -83,7 +84,7 @@ class ReservationFrontTest extends TestCase
         $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
 
         $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
-                ;
+
         $this->assertDatabaseHas('resrv_reservations', [
             'payment' => $payment
         ]);
