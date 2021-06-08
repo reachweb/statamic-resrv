@@ -257,6 +257,28 @@ class ReservationFrontTest extends TestCase
         Mail::assertSent(ReservationConfirmed::class);
         Mail::assertSent(ReservationMade::class);
     }
+    
+    public function test_reservation_email_render()
+    {
+        //$this->withExceptionHandling();
+        $item = $this->makeStatamicItem();
+        $location = Location::factory()->create(); 
+        Config::set('resrv-config.enable_locations', true);
+        Config::set('resrv-config.admin_email', 'someone@test.com,someonelse@example.com');
+
+        $reservation = Reservation::factory([
+            'customer' => ['email' => 'test@test.com'],
+            'item_id' => $item->id(),
+            'location_start' => $location->id,
+            'location_end' => $location->id,
+        ])->create();
+      
+        $mail = new ReservationConfirmed($reservation);
+        $html = $mail->render();
+
+        $this->assertStringContainsString($location->name, $html);
+
+    }
 
 
 }

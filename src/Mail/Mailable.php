@@ -8,6 +8,7 @@ use Illuminate\Mail\Markdown;
 
 class Mailable extends LaravelMailable
 {
+
    /**
      * Override buildMarkdownView() to define new components path
      *
@@ -21,10 +22,16 @@ class Mailable extends LaravelMailable
         /** @var Markdown $markdown */
         $markdown = Container::getInstance()->make(Markdown::class);
 
-        // use package resources path
-        $markdown->loadComponentsFrom([
-            __DIR__. '/../../resources/views/email/theme'
-        ]);
+        // Use package resources path
+        if (file_exists(resource_path().'/views/vendor/statamic-resrv/email/theme')) {
+            $markdown->loadComponentsFrom([
+                resource_path().'/views/vendor/statamic-resrv/email/theme'
+            ]);
+        } else {
+            $markdown->loadComponentsFrom([
+                __DIR__. '/../../resources/views/email/theme'
+            ]);
+        }        
 
         $data = $this->buildViewData();
 

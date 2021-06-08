@@ -13,9 +13,6 @@ class ReservationMade extends Mailable
 
     public $reservation;
 
-    public $theme = 'statamic-resrv::email.theme.html.themes.resrv';
-    public $paths = ['statamic-resrv::email.theme'];
-
     public function __construct(Reservation $reservation)
     {
         $this->reservation = $reservation;
