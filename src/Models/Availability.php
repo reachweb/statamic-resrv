@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
+use Reach\StatamicResrv\Facades\Price;
 use Statamic\Facades\Entry;
 use Carbon\CarbonPeriod;
 
@@ -217,7 +218,17 @@ class Availability extends Model
 
     protected function calculatePrice(Collection $results)
     {
-        return $results->sum('price');
+        $first = $results->shift();
+        $price = Price::create($first->price);
+        if ($results->count() == 0) {
+            return $price->get();
+        }
+        $prices = array();
+        foreach ($results as $result) {
+            $prices[] = Price::create($result->price);
+        }
+        $result = $price->add(...$prices);
+        return $result->get();
     }
 
     protected function getPeriod()
