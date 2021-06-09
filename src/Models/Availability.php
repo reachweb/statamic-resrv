@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 use Statamic\Facades\Entry;
 use Carbon\CarbonPeriod;
 
@@ -21,7 +22,7 @@ class Availability extends Model
     protected $fillable = ['statamic_id', 'date', 'price', 'available'];
 
     protected $casts = [
-        'price' => 'decimal:2',
+        'price' => PriceClass::class,
     ];
 
     protected static function newFactory()
@@ -34,6 +35,11 @@ class Availability extends Model
         return $query->where('statamic_id', $entry);
     }
 
+    public function getPriceAttribute($value)
+    {
+        return Price::create($value);
+    }
+    
     public function scopeGetAvailabilityForDates($scope, $dates, $statamic_id = null) { 
         
         ExpireReservations::dispatchSync();
@@ -109,8 +115,8 @@ class Availability extends Model
                     'date_end' => $this->date_end
                 ],
                 'data' => [
-                    'price' => round($this->getPriceForDates($id), 2),
-                    'payment' => round($this->calculatePayment($this->getPriceForDates($id)), 2)
+                    'price' => $this->getPriceForDates($id),
+                    'payment' => $this->calculatePayment($this->getPriceForDates($id))
                 ],
                 'message' => [
                     'status' => count($available)
@@ -144,8 +150,8 @@ class Availability extends Model
                 'date_end' => $this->date_end
             ],
             'data' => [
-                'price' => round($this->calculatePrice($results), 2),
-                'payment' => round($this->calculatePayment($this->calculatePrice($results)), 2)
+                'price' => $this->calculatePrice($results),
+                'payment' => $this->calculatePayment($this->calculatePrice($results))
             ],
             'message' => [
                 'status' => 1
@@ -219,16 +225,15 @@ class Availability extends Model
     protected function calculatePrice(Collection $results)
     {
         $first = $results->shift();
-        $price = Price::create($first->price);
         if ($results->count() == 0) {
-            return $price->get();
+            return $first->price->format();
         }
         $prices = array();
         foreach ($results as $result) {
-            $prices[] = Price::create($result->price);
+            $prices[] = $result->price;
         }
-        $result = $price->add(...$prices);
-        return $result->get();
+        $result = $first->price->add(...$prices);
+        return $result->format();
     }
 
     protected function getPeriod()
@@ -242,10 +247,11 @@ class Availability extends Model
             return $price;
         }
         if (config('resrv-config.payment') == 'fixed') {
-            return config('resrv-config.fixed_amount');
+            return Price::create(config('resrv-config.fixed_amount'))->format();
         }
         if (config('resrv-config.payment') == 'percent') {
-            return (config('resrv-config.percent_amount') * 0.01) * $price;
+            $totalPrice = Price::create($price);
+            return $totalPrice->multiply(config('resrv-config.percent_amount') * 0.01)->format();
         }
     }
 }

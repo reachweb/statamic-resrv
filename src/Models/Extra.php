@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 
 class Extra extends Model
 {
@@ -22,11 +23,17 @@ class Extra extends Model
     protected $casts = [
         'published' => 'boolean',
         'allow_multiple' => 'boolean',
+        'price' => PriceClass::class,
     ];
 
     protected static function newFactory()
     {
         return ExtraFactory::new();
+    }
+
+    public function getPriceAttribute($value)
+    {
+        return Price::create($value);
     }
 
     protected static function booted()
@@ -37,12 +44,10 @@ class Extra extends Model
     public function calculatePrice($dates, $quantity) {
         if ($this->price_type == 'perday') {
             $this->initiateAvailability($dates);
-            $price = Price::create($this->price);
-            return $price->multiply($quantity)->multiply($this->duration)->get();
+            return $this->price->multiply($quantity)->multiply($this->duration);
         }
         if ($this->price_type == 'fixed') {
-            $price = Price::create($this->price);
-            return $price->multiply($quantity)->get();
+            return $this->price->multiply($quantity);
         }
     }
 

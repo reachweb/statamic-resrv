@@ -17,7 +17,7 @@ class PriceTest extends TestCase
     public function test_price_format()
     {
         $price = Price::create(22.76);
-        $format = $price->get();
+        $format = $price->format();
         $this->assertSame($format, '22.76');
     }
 
@@ -28,7 +28,7 @@ class PriceTest extends TestCase
         $price3 = Price::create(57.9);
         $result = $price1->add($price2, $price3);
         $this->assertEquals($result, Price::create(282.88));
-        $this->assertEquals($result->get(), '282.88');
+        $this->assertEquals($result->format(), '282.88');
     }
 
     public function test_price_subtraction()
@@ -37,7 +37,7 @@ class PriceTest extends TestCase
         $price2 = Price::create(57.9);
         $result = $price1->subtract($price2);
         $this->assertEquals($result, Price::create(144.32));
-        $this->assertEquals($result->get(), '144.32');
+        $this->assertEquals($result->format(), '144.32');
     }
 
     public function test_price_multiple()

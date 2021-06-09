@@ -6,8 +6,9 @@ use Money\Currency;
 use Money\Money;
 use Money\Currencies\ISOCurrencies;
 use Money\Formatter\DecimalMoneyFormatter;
+use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 
-class Price 
+class Price implements CastsAttributes
 {
     public $money;
 
@@ -16,6 +17,7 @@ class Price
         $this->money = new Money(bcmul($price, 100), new Currency(config('resrv-config.currency_isoCode')));
         return $this;
     }
+
 
     public function add(Price ...$toAdd): Price
     {
@@ -58,10 +60,22 @@ class Price
         return $this->money->lessThan($toCompare->money);
     }
 
-    public function get()
+    public function format()
     {
         $currencies = new ISOCurrencies();
         $moneyFormatter = new DecimalMoneyFormatter($currencies);
         return $moneyFormatter->format($this->money);
+    }
+
+    public function get($model, $key, $value, $attributes)
+    {
+        $this->create($value);
+        return $this->format();
+    }
+
+    public function set($model, $key, $value, $attributes)
+    {
+        $this->create($value);
+        return $this->format();
     }
 }
