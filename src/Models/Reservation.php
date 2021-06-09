@@ -15,6 +15,8 @@ use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Events\ReservationExpired;
+use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 use Carbon\Carbon;
 
 class Reservation extends Model
@@ -29,6 +31,8 @@ class Reservation extends Model
         'customer' => AsCollection::class,
         'date_start' => 'datetime',
         'date_end' => 'datetime',
+        'price' => PriceClass::class,
+        'payment' => PriceClass::class,
     ];
 
     protected $appends = ['entry'];
@@ -41,6 +45,16 @@ class Reservation extends Model
     public function entry()
     {
         return Entry::find($this->item_id);
+    }
+
+    public function getPriceAttribute($value)
+    {
+        return Price::create($value);
+    }
+    
+    public function getPaymentAttribute($value)
+    {
+        return Price::create($value);
     }
 
     public function getEntryAttribute()
@@ -65,7 +79,7 @@ class Reservation extends Model
 
     public function amountRemaining()
     {
-        return $this->price - $this->payment;
+        return $this->price->subtract($this->payment)->format();
     }
 
     public function confirmReservation($data, $statamic_id)
@@ -83,7 +97,10 @@ class Reservation extends Model
             throw new ReservationException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
 
-        if ($this->confirmTotal($data) !== number_format($data['total'], 2)) {
+        $dbTotal = Price::create($this->confirmTotal($data));
+        $frontendTotal = Price::create($data['total']);
+
+        if (! $dbTotal->equals($frontendTotal)) {
             throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
 
@@ -93,21 +110,21 @@ class Reservation extends Model
 
     protected function confirmTotal($data)
     {
-        $reservationCost = $data['price'];
+        $reservationCost = Price::create($data['price']);
 
-        $extrasCost = 0;
+        $extrasCost = Price::create(0);
         foreach($data['extras'] as $id => $properties) {
-            $extrasCost += Extra::find($id)->calculatePrice($data, $properties['quantity']);
+            $extrasCost->add(Extra::find($id)->calculatePrice($data, $properties['quantity']));
         }
 
-        $locationCost = 0;
+        $locationCost = Price::create(0);
 
         if (config('resrv-config.enable_locations') == true) {            
-            $locationCost += Location::find($data['location_start'])->extra_charge;
-            $locationCost += Location::find($data['location_end'])->extra_charge;
+            $locationCost->add(Location::find($data['location_start'])->extra_charge);
+            $locationCost->add(Location::find($data['location_end'])->extra_charge);
         }
 
-        return number_format($reservationCost + $extrasCost + $locationCost, 2);
+        return $reservationCost->add($extrasCost, $locationCost)->format();
 
     }
 

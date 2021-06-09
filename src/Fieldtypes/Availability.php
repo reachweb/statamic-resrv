@@ -16,7 +16,7 @@ class Availability extends Fieldtype
                 return false;
             }
             $data = $availability_data->sortBy('date')->keyBy('date')->toArray();
-            $cheapest = $availability_data->sortBy('price')->firstWhere('available', '>', '0')->price;
+            $cheapest = $availability_data->sortBy('price')->firstWhere('available', '>', '0')->price->format();
             return compact('data', 'cheapest');
         }
         return false;

@@ -8,6 +8,9 @@ use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\LocationFactory;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 use Reach\StatamicResrv\Scopes\OrderScope;
+use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Facades\Price;
+
 
 class Location extends Model
 {
@@ -19,6 +22,7 @@ class Location extends Model
 
     protected $casts = [
         'published' => 'boolean',
+        'extra_charge' => PriceClass::class,
     ];
 
     protected static function newFactory()
@@ -26,11 +30,14 @@ class Location extends Model
         return LocationFactory::new();
     }
 
+    public function getExtraChargeAttribute($value)
+    {
+        return Price::create($value);
+    }
+
     protected static function booted()
     {
         static::addGlobalScope(new OrderScope);
-    }
-
-    
+    }    
 
 }
