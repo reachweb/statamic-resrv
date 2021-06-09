@@ -44,6 +44,12 @@ class Price implements CastsAttributes
         return $this;
     }
 
+    public function percent($percent) {
+        $by = bcmul($percent, 0.01, 4);
+        $this->multiply($by);
+        return $this;
+    }
+
     public function equals(Price $toCompare): bool
     {
         return $this->money->equals($toCompare->money);
@@ -68,6 +74,9 @@ class Price implements CastsAttributes
 
     public function get($model, $key, $value, $attributes)
     {
+        if ($value == 0) {
+            return null;
+        }
         $this->create($value);
         return $this->format();
     }
@@ -76,5 +85,10 @@ class Price implements CastsAttributes
     {
         $this->create($value);
         return $this->format();
+    }
+
+    public function raw()
+    {
+        return $this->money->getAmount();
     }
 }

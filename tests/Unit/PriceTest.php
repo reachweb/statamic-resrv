@@ -66,6 +66,13 @@ class PriceTest extends TestCase
         $this->assertEquals($result, Price::create(44.86));
     }
 
+    public function test_price_percent()
+    {
+        $price1 = Price::create(100);
+        $result = $price1->percent(30);
+        $this->assertEquals($result, Price::create(30));
+    }
+
     public function test_price_equals()
     {
         $price1 = Price::create(44.13);

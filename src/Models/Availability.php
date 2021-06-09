@@ -143,6 +143,8 @@ class Availability extends Model
             ];
         }
 
+        $price = $this->calculatePrice($results);
+
         return [
             'request' => [
                 'days' => $this->duration,
@@ -150,8 +152,8 @@ class Availability extends Model
                 'date_end' => $this->date_end
             ],
             'data' => [
-                'price' => $this->calculatePrice($results),
-                'payment' => $this->calculatePayment($this->calculatePrice($results))
+                'price' => $price,
+                'payment' => $this->calculatePayment($price)
             ],
             'message' => [
                 'status' => 1
@@ -224,12 +226,15 @@ class Availability extends Model
 
     protected function calculatePrice(Collection $results)
     {
-        $first = $results->shift();
+        $first = $results->first();
         if ($results->count() == 0) {
             return $first->price->format();
         }
         $prices = array();
-        foreach ($results as $result) {
+        foreach ($results as $index => $result) {
+            if ($index == 0) {
+                continue;
+            }
             $prices[] = $result->price;
         }
         $result = $first->price->add(...$prices);
@@ -244,14 +249,14 @@ class Availability extends Model
     protected function calculatePayment($price)
     {
         if (config('resrv-config.payment', 'full') == 'full') {
-            return $price;
+            return Price::create($price)->format();
         }
         if (config('resrv-config.payment') == 'fixed') {
             return Price::create(config('resrv-config.fixed_amount'))->format();
         }
         if (config('resrv-config.payment') == 'percent') {
             $totalPrice = Price::create($price);
-            return $totalPrice->multiply(config('resrv-config.percent_amount') * 0.01)->format();
+            return $totalPrice->percent(config('resrv-config.percent_amount'))->format();
         }
     }
 }

@@ -11,11 +11,11 @@ use Illuminate\Support\Str;
 
 class StripePaymentGateway implements PaymentInterface
 {
-    public function paymentIntent($amount, $reservation_id, $data)
+    public function paymentIntent($payment, $reservation_id, $data)
     {      
         Stripe::setApiKey(config('resrv-config.stripe_secret_key'));
         $paymentIntent = PaymentIntent::create([
-            'amount' => $amount * 100,
+            'amount' => $payment->raw(),
             'currency' => Str::lower(config('resrv-config.currency_isoCode')),
             'metadata' => array_merge(['reservation_id' => $reservation_id], $this->filterCustomerData($data))
         ]);
