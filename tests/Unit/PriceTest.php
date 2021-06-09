@@ -45,9 +45,13 @@ class PriceTest extends TestCase
         $price1 = Price::create(202.22);
         $result = $price1->multiply(4);
         $this->assertEquals($result, Price::create(808.88));
-
+        
         $price2 = Price::create(202.22);
-        $result = $price2->multiply(7.66);
+        $result = $price2->multiply(2)->multiply(2);
+        $this->assertEquals($result, Price::create(808.88));
+
+        $price3 = Price::create(202.22);
+        $result = $price3->multiply(7.66);
         $this->assertEquals($result, Price::create(1549.01));
     }
 
