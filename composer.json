@@ -27,7 +27,8 @@
         "doctrine/dbal": "^2.10",
         "illuminate/support": "^7.20 || ^8.0",
         "statamic/cms": "^3.1.0",
-        "stripe/stripe-php": "^7.77"
+        "stripe/stripe-php": "^7.77",
+        "moneyphp/money": "^4.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^8.5 || ^9.3",
