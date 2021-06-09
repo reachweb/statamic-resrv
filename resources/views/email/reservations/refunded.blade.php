@@ -20,9 +20,9 @@ Email: {{ config('resrv-config.mail') }}
 |{{ __('statamic-resrv::email.paymentRefunded') }}||
 | :----------------------------- |:----------------| 
 @if (config('resrv-config.payment') != 'full')
-| {{ __('statamic-resrv::email.refundToCard') }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment }} |
+| {{ __('statamic-resrv::email.refundToCard') }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
 @else
-| {{ __('statamic-resrv::email.refundToCard') }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->price }} |
+| {{ __('statamic-resrv::email.refundToCard') }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->price->format() }} |
 @endif
 @endcomponent
 

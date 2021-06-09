@@ -275,8 +275,12 @@ class ReservationFrontTest extends TestCase
       
         $mail = new ReservationConfirmed($reservation);
         $html = $mail->render();
+        
+        $mailMade = new ReservationMade($reservation);
+        $htmlMade = $mailMade->render();
 
         $this->assertStringContainsString($location->name, $html);
+        $this->assertStringContainsString($location->name, $htmlMade);
 
     }
 

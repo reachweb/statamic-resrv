@@ -35,10 +35,10 @@
 |{{ __('statamic-resrv::email.paymentInformation') }}||
 | :----------------------------- |:----------------| 
 @if (config('resrv-config.payment') != 'full')
-| {{ __('statamic-resrv::email.alreadyPaid') }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment }} |
+| {{ __('statamic-resrv::email.alreadyPaid') }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
 | {{ __('statamic-resrv::email.amountToBePaid') }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
-| **{{ __('statamic-resrv::email.total') }}** ({{ __('statamic-resrv::email.includingTaxes') }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->price }} |
+| **{{ __('statamic-resrv::email.total') }}** ({{ __('statamic-resrv::email.includingTaxes') }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->price->format() }} |
 
 @endcomponent
 
