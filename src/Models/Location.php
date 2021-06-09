@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Database\Factories\LocationFactory;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Facades\Price;
 
 
 class Location extends Model

@@ -18,7 +18,6 @@ class Price implements CastsAttributes
         return $this;
     }
 
-
     public function add(Price ...$toAdd): Price
     {
         foreach ($toAdd as $addition) {            

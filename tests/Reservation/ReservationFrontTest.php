@@ -66,7 +66,7 @@ class ReservationFrontTest extends TestCase
 
         $payment = json_decode($response->content())->data->payment;
         $price = json_decode($response->content())->data->price;
-        $total = json_decode($response->content())->data->price + (json_decode($response->content())->request->days * $extra->price) + ($location->extra_charge * 2);
+        $total = json_decode($response->content())->data->price + (json_decode($response->content())->request->days * $extra->price->format()) + ($location->extra_charge->format() * 2);
         
         $checkoutRequest = [
             'date_start' => today()->setHour(12)->toISOString(),
@@ -204,7 +204,7 @@ class ReservationFrontTest extends TestCase
         $reservation = Reservation::factory([
             'item_id' => $item->id(),
         ])->create();
-
+        
         $customerData = [
             'first_name' => 'Test',
             'last_name' => 'Testing',
