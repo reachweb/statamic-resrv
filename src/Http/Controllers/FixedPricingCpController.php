@@ -21,5 +21,21 @@ class FixedPricingCpController extends Controller
         $fixedPricing = $this->fixedPricing->entry($statamic_id)->get();
         return response()->json($fixedPricing);
     }
+    
+    public function update(Request $request)
+    {
+        $data = $request->validate([
+            'statamic_id' => 'required',
+            'days' => 'required',
+            'price' => 'required|numeric',            
+        ]);
+
+        $fixedPricing = $this->fixedPricing->updateOrCreate(
+            ['statamic_id' => $data['statamic_id'], 'days' => $data['statamic_id']],
+            ['price' => $data['price']]
+        );
+
+        return response()->json(['id' => $fixedPricing->id]);
+    }
 
 }

@@ -31,16 +31,52 @@ class FixedPricingCpTest extends TestCase
         
     }
     
-    // public function test_availability_returns_empty_array_not_found()
-    // {
+    public function test_fixed_pricing_returns_empty_array_not_found()
+    {
+        $item = $this->makeStatamicItem();
         
-        
-    // }
+        FixedPricing::factory()
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
 
-    // public function test_availability_can_add_for_date_range()
-    // {
+        $response = $this->get(cp_route('resrv.fixedpricing.index', 'test'));
+        $response->assertSee('[]');        
         
-    // }
+    }
+
+    public function test_fixed_pricing_update_method()
+    {
+        $item = $this->makeStatamicItem();
+        
+        $payload = [
+            'statamic_id' => $item->id(),
+            'days' => '4',            
+            'price' => 105.25
+        ];
+
+        $response = $this->post(cp_route('resrv.fixedpricing.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_fixed_pricing', [
+            'statamic_id' => $item->id(),
+            'price' => 105.25
+        ]);
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'days' => '4',            
+            'price' => 120.25
+        ];
+
+        $response = $this->post(cp_route('resrv.fixedpricing.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_fixed_pricing', [
+            'statamic_id' => $item->id(),
+            'price' => 120.25
+        ]);
+    }
 
     // public function test_availability_can_add_for_single_day()
     // {
