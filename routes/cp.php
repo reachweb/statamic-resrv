@@ -29,4 +29,6 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/reservations', 'ReservationCpController@indexCp')->name('reservations.index');
         Route::get('/resrv/reservation/{id}', 'ReservationCpController@show')->name('reservation.show');
         Route::patch('/resrv/reservation/refund', 'ReservationCpController@refund')->name('reservation.refund');
+
+        Route::get('/resrv/fixedpricing/{statamic_id}', 'FixedPricingCpController@index')->name('fixedpricing.index');
     });
