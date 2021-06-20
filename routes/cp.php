@@ -32,4 +32,5 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
 
         Route::get('/resrv/fixedpricing/{statamic_id}', 'FixedPricingCpController@index')->name('fixedpricing.index');
         Route::post('/resrv/fixedpricing', 'FixedPricingCpController@update')->name('fixedpricing.update');
+        Route::delete('/resrv/fixedpricing', 'FixedPricingCpController@delete')->name('fixedpricing.delete');
     });

@@ -18,7 +18,7 @@ class FixedPricingCpController extends Controller
     
     public function index($statamic_id)
     {
-        $fixedPricing = $this->fixedPricing->entry($statamic_id)->get();
+        $fixedPricing = $this->fixedPricing->entry($statamic_id)->orderBy('days')->get();
         return response()->json($fixedPricing);
     }
     
@@ -36,6 +36,16 @@ class FixedPricingCpController extends Controller
         );
 
         return response()->json(['id' => $fixedPricing->id]);
+    }
+
+    public function delete(Request $request)
+    {
+        $data = $request->validate([
+            'id' => 'required|integer'
+        ]);
+        $fixedPricing = $this->fixedPricing->destroy($data['id']);
+
+        return response(200);
     }
 
 }

@@ -78,10 +78,21 @@ class FixedPricingCpTest extends TestCase
         ]);
     }
 
-    // public function test_availability_can_add_for_single_day()
-    // {
+    public function test_fixed_pricing_can_delete()
+    {
+        $item = $this->makeStatamicItem();
         
-    // }
+        $fixed_pricing = FixedPricing::factory()
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $response = $this->delete(cp_route('resrv.fixedpricing.delete'), $fixed_pricing->toArray());
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('resrv_fixed_pricing', [
+            'id' => $fixed_pricing->id
+        ]);
+    }
 
        
     // public function test_availability_can_update_for_date_range()
