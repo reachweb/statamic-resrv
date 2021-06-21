@@ -66,8 +66,10 @@ class ReservationController extends Controller
 
         ReservationCreated::dispatch($reservation);
         
-        foreach ($data['extras'] as $id => $properties) {
-            $this->reservation->find($reservation->id)->extras()->attach($id, ['quantity' => $properties['quantity']]);
+        if (array_key_exists('extras', $data) > 0) {
+            foreach ($data['extras'] as $id => $properties) {
+                $this->reservation->find($reservation->id)->extras()->attach($id, ['quantity' => $properties['quantity']]);
+            }
         }
         
         return response()->json($reservation->id);

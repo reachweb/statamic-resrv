@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
+use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
@@ -145,6 +146,10 @@ class Availability extends Model
 
         $price = $this->calculatePrice($results);
 
+        if (FixedPricing::getFixedPricing($statamic_id, $this->duration)) {
+            $price = FixedPricing::getFixedPricing($statamic_id, $this->duration)->format();
+        }
+
         return [
             'request' => [
                 'days' => $this->duration,
@@ -205,6 +210,10 @@ class Availability extends Model
      */
     protected function getPriceForDates($statamic_id) {
 
+        if (FixedPricing::getFixedPricing($statamic_id, $this->duration)) {
+            return FixedPricing::getFixedPricing($statamic_id, $this->duration)->format();
+        }
+
         $results = $this->where('date', '>=', $this->date_start)
             ->where('date', '<', $this->date_end)
             ->where('statamic_id', $statamic_id)
@@ -259,4 +268,5 @@ class Availability extends Model
             return $totalPrice->percent(config('resrv-config.percent_amount'))->format();
         }
     }
+
 }
