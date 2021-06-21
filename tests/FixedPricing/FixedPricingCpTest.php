@@ -1,6 +1,6 @@
 <?php
 
-namespace Reach\StatamicResrv\Tests\Availabilty;
+namespace Reach\StatamicResrv\Tests\FixedPricing;
 
 use Reach\StatamicResrv\Tests\TestCase;
 use Reach\StatamicResrv\Models\FixedPricing;
@@ -93,12 +93,5 @@ class FixedPricingCpTest extends TestCase
             'id' => $fixed_pricing->id
         ]);
     }
-
-       
-    // public function test_availability_can_update_for_date_range()
-    // {
-        
-    // }
-    
-    
+     
 }

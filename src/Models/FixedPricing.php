@@ -38,13 +38,36 @@ class FixedPricing extends Model
         return Price::create($value);
     }    
 
-    /**
-     * Gets the fixed pricing for this date 
-     */
-    protected function getPriceForDays($statamic_id) {
+    public function existsExactly($statamic_id, $days) 
+    {
+        return $this->where('statamic_id', $statamic_id)->where('days', $days)->exists(); 
+    }
 
-        
+    public function existsExtra($statamic_id, $days) {
+        if ($this->where('statamic_id', $statamic_id)->where('days', 0)->exists() && ($this->where('statamic_id', $statamic_id)->max('days') > 0)) {
+            return true;
+        }
+        return false;
+    }
 
+    public function scopeGetFixedPricing($query, $statamic_id, $days) 
+    {        
+        if ($this->existsExactly($statamic_id, $days)) {
+            return $this->where('statamic_id', $statamic_id)->where('days', $days)->first()->price;
+        }
+        if ($this->existsExtra($statamic_id, $days)) {
+            return $this->calculateExtraDaysPricing($statamic_id, $days);
+        }
+        return false;
+    }
+
+    protected function calculateExtraDaysPricing($statamic_id, $days) {
+        $extraDaysPrice = $this->where('statamic_id', $statamic_id)->where('days', 0)->first()->price;
+        $maxDaysSet = $this->where('statamic_id', $statamic_id)->max('days');
+        $maxDaysPrice = $this->where('statamic_id', $statamic_id)->where('days', $maxDaysSet)->first()->price;
+        $daysLeft = $days - $maxDaysSet;
+        $daysLeftPrice = $extraDaysPrice->multiply($daysLeft);
+        return $extraDaysPrice->add($maxDaysPrice);
     }
 
 }
