@@ -18,7 +18,7 @@ class CreateFixedPricingTable extends Migration
             $table->string('statamic_id')->index();
             $table->string('days')->index();
             $table->float('price', 8, 2);
-            $table->unique(['statamic_id', 'date']);
+            $table->unique(['statamic_id', 'days']);
             $table->timestamps();
         });
     }

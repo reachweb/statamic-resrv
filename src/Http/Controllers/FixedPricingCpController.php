@@ -31,7 +31,7 @@ class FixedPricingCpController extends Controller
         ]);
 
         $fixedPricing = $this->fixedPricing->updateOrCreate(
-            ['statamic_id' => $data['statamic_id'], 'days' => $data['statamic_id']],
+            ['statamic_id' => $data['statamic_id'], 'days' => $data['days']],
             ['price' => $data['price']]
         );
 
