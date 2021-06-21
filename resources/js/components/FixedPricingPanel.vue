@@ -6,7 +6,7 @@
                 <button type="button" class="btn-close" @click="close">×</button>
             </div>            
             <div class="form-container">
-                <div class="px-3 py-1" v-if="!extraDay">
+                <div class="px-3 py-1" v-if="!(data.days === '0')">
                     <div class="font-bold mb-1 text-sm">
                         <label for="name">Days</label>
                     </div>
@@ -53,10 +53,6 @@ export default {
         data: {
             type: Object,
             required: true
-        },
-        extraDay: {
-            type: Boolean,
-            default: false
         },
         openPanel: {
             type: Boolean,

@@ -7,9 +7,13 @@
                 :key="pricing.id"
                 class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors bg-white"
             >
-                <div class="flex items-center space-x-2">
+                <div class="flex items-center space-x-2" v-if="pricing.days != 0">
                     <span>{{ __('Days:') }}</span>
                     <span class="font-medium" v-html="pricing.days"></span>
+                    <span>{{ pricing.price }}</span>
+                </div>
+                <div class="flex items-center space-x-2" v-else>
+                    <span class="font-medium">{{ __('Extra day:') }}</span>
                     <span>{{ pricing.price }}</span>
                 </div>
                 <div class="space-x-2">
@@ -42,9 +46,12 @@
             </div>
         </div>
     </div>
-    <div class="w-full mt-4">
+    <div class="w-full mt-4 flex space-x-2">
         <button class="btn-primary" @click="addFixedPricing">
             {{ __('Add fixed pricing') }}
+        </button>
+        <button class="btn" @click="addFixedExtraPricing" v-if="! hasExtraDayPricing()">
+            {{ __('Add extra day price') }}
         </button>
     </div>
     <fixed-pricing-panel            
@@ -90,6 +97,11 @@ export default {
                 days: '',                
                 price: '',
                 statamic_id: this.parent            
+            },
+            extraFixedPricing: {
+                days: '0',                
+                price: '',
+                statamic_id: this.parent            
             }
         }
     },
@@ -125,6 +137,10 @@ export default {
             this.fixedpricing = this.emptyFixedPricing
             this.togglePanel()
         },
+        addFixedExtraPricing() {
+            this.fixedpricing = this.extraFixedPricing
+            this.togglePanel()
+        },
         editFixedPricing(pricing) {
             this.fixedpricing = pricing
             this.togglePanel()
@@ -132,6 +148,9 @@ export default {
         fixedPricingSaved() {
             this.togglePanel()
             this.getFixedPricing()
+        },
+        hasExtraDayPricing() {
+            return _.some(this.fixedPricings, ['days', '0'])
         },
         getFixedPricing() {
             axios.get('/cp/resrv/fixedpricing/'+this.parent)
