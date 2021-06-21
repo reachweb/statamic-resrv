@@ -113,12 +113,13 @@ class Reservation extends Model
         $reservationCost = Price::create($data['price']);
 
         $extrasCost = Price::create(0);
-        foreach($data['extras'] as $id => $properties) {
-            $extrasCost->add(Extra::find($id)->calculatePrice($data, $properties['quantity']));
-        }
+        if (count($data['extras']) > 0) {
+            foreach($data['extras'] as $id => $properties) {
+                $extrasCost->add(Extra::find($id)->calculatePrice($data, $properties['quantity']));
+            }
+        }        
 
         $locationCost = Price::create(0);
-
         if (config('resrv-config.enable_locations') == true) {            
             $locationCost->add(Location::find($data['location_start'])->extra_charge);
             $locationCost->add(Location::find($data['location_end'])->extra_charge);
