@@ -56,15 +56,26 @@ class FixedPricing extends Model
             return $this->where('statamic_id', $statamic_id)->where('days', $days)->first()->price;
         }
         if ($this->existsExtra($statamic_id, $days)) {
-            return $this->calculateExtraDaysPricing($statamic_id, $days);
-        }
+            $price =  $this->calculateExtraDaysPricing($statamic_id, $days);
+            if ($price) {
+                return $price;
+            }
+        }        
         return false;
     }
 
     protected function calculateExtraDaysPricing($statamic_id, $days) {
-        $extraDaysPrice = $this->where('statamic_id', $statamic_id)->where('days', 0)->first()->price;
+        // The max days we have set up
         $maxDaysSet = $this->where('statamic_id', $statamic_id)->max('days');
+        // If the days we are requesting for are less than the max days set, return false to fallback to calendar pricing
+        if ($days < $maxDaysSet) {
+            return false;
+        }
+        // The fixed price of the max days resrvation
         $maxDaysPrice = $this->where('statamic_id', $statamic_id)->where('days', $maxDaysSet)->first()->price;
+        // How much each extra day is charged
+        $extraDaysPrice = $this->where('statamic_id', $statamic_id)->where('days', 0)->first()->price;   
+        // Days left to calculate
         $daysLeft = $days - $maxDaysSet;
         $daysLeftPrice = $extraDaysPrice->multiply($daysLeft);
         return $extraDaysPrice->add($maxDaysPrice);
