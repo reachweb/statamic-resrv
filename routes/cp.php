@@ -31,6 +31,9 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/reservation/refund', 'ReservationCpController@refund')->name('reservation.refund');
 
         Route::get('/resrv/fixedpricing/{statamic_id}', 'FixedPricingCpController@index')->name('fixedpricing.index');
-        Route::post('/resrv/fixedpricing', 'FixedPricingCpController@update')->name('fixedpricing.update');
+        Route::post('/resrv/fixedpricing', 'FixedPricingCpController@update')->name('fixedpricing.update');        
         Route::delete('/resrv/fixedpricing', 'FixedPricingCpController@delete')->name('fixedpricing.delete');
+
+        Route::post('/resrv/dynamicpricing/entries', 'DynamicPricingCpController@createEntries')->name('dynamicpricing.create.entries');
+
     });
