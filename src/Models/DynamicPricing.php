@@ -58,20 +58,6 @@ class DynamicPricing extends Model
             'dynamic_pricing_id', 
             'dynamic_pricing_assignment_id'
         );
-    }
-
-    public function createEntries($data)
-    {
-        $dynamicPricing = $this->create($data);
-        $dynamicPricing->entries()->sync($data['entries']);
-        return $dynamicPricing;        
-    }
-    
-    public function createExtras($data)
-    {
-        $dynamicPricing = $this->create($data);
-        $dynamicPricing->extras()->sync($data['extras']);
-        return $dynamicPricing;        
-    }
+    }   
 
 }

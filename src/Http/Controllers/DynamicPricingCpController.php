@@ -16,19 +16,6 @@ class DynamicPricingCpController extends Controller
         $this->dynamicPricing = $dynamicPricing;
     }
 
-    
-    // public function index()
-    // {
-    //     $extras = $this->extra->all();
-    //     return response()->json($extras);
-    // }
-    
-    // public function entryIndex($statamic_id)
-    // {
-    //     $extras = $this->extra->entry($statamic_id)->get();
-    //     return response()->json($extras);
-    // }
-
     public function createEntries(Request $request)
     {
         $data = $request->validate([
@@ -43,7 +30,8 @@ class DynamicPricingCpController extends Controller
             'amount' => 'required|numeric',
         ]);
 
-        $dynamicPricing = $this->dynamicPricing->createEntries($data);
+        $dynamicPricing = $this->dynamicPricing->create($data);
+        $dynamicPricing->entries()->sync($data['entries']);
 
         return response()->json(['id' => $dynamicPricing['id']]);
     }
@@ -62,7 +50,8 @@ class DynamicPricingCpController extends Controller
             'amount' => 'required|numeric',
         ]);
 
-        $dynamicPricing = $this->dynamicPricing->createExtras($data);
+        $dynamicPricing = $this->dynamicPricing->create($data);
+        $dynamicPricing->extras()->sync($data['extras']);
 
         return response()->json(['id' => $dynamicPricing['id']]);
     }
