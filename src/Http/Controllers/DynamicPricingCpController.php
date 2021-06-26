@@ -16,10 +16,11 @@ class DynamicPricingCpController extends Controller
         $this->dynamicPricing = $dynamicPricing;
     }
 
-    public function createEntries(Request $request)
+    public function create(Request $request)
     {
         $data = $request->validate([
-            'entries' => 'required|array',
+            'entries' => 'required_without:extras|array',
+            'extras' => 'required_without:entries|array',
             'title' => 'required',
             'date_start' => 'nullable|date',
             'date_end' => 'nullable|date',
@@ -31,15 +32,21 @@ class DynamicPricingCpController extends Controller
         ]);
 
         $dynamicPricing = $this->dynamicPricing->create($data);
-        $dynamicPricing->entries()->sync($data['entries']);
+        if (array_key_exists('entries', $data)) {
+            $dynamicPricing->entries()->sync($data['entries']);
+        } else {
+            $dynamicPricing->extras()->sync($data['extras']);
+        }        
 
         return response()->json(['id' => $dynamicPricing['id']]);
-    }
-    
-    public function createExtras(Request $request)
+    }    
+   
+
+    public function update($id, Request $request)
     {
         $data = $request->validate([
-            'extras' => 'required|array',
+            'entries' => 'required_without:extras|array',
+            'extras' => 'required_without:entries|array',
             'title' => 'required',
             'date_start' => 'nullable|date',
             'date_end' => 'nullable|date',
@@ -50,13 +57,15 @@ class DynamicPricingCpController extends Controller
             'amount' => 'required|numeric',
         ]);
 
-        $dynamicPricing = $this->dynamicPricing->create($data);
-        $dynamicPricing->extras()->sync($data['extras']);
+        $dynamicPricing = $this->dynamicPricing->findOrFail($id);
+        $dynamicPricing->update($data);
+        if (array_key_exists('entries', $data)) {
+            $dynamicPricing->entries()->sync($data['entries']);
+        } else {
+            $dynamicPricing->extras()->sync($data['extras']);
+        }
 
         return response()->json(['id' => $dynamicPricing['id']]);
     }
-
-
-
 
 }
