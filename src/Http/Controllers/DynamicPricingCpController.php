@@ -68,4 +68,14 @@ class DynamicPricingCpController extends Controller
         return response()->json(['id' => $dynamicPricing['id']]);
     }
 
+    public function delete($id)
+    {
+        $dynamicPricing = $this->dynamicPricing->findOrFail($id);
+        $dynamicPricing->entries()->detach();
+        $dynamicPricing->extras()->detach();
+        $this->dynamicPricing->destroy($id);
+       
+        return response(200);
+    }
+
 }

@@ -36,5 +36,6 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
 
         Route::post('/resrv/dynamicpricing', 'DynamicPricingCpController@create')->name('dynamicpricing.create');
         Route::patch('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@update')->name('dynamicpricing.update');
+        Route::delete('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@delete')->name('dynamicpricing.delete');
 
     });

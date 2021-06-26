@@ -95,6 +95,32 @@ class DynamicPricingCpTest extends TestCase
             'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
         ]);
     }
+
+    public function test_can_delete_dynamic_pricing()
+    {
+        $item1 = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+        
+        $dynamic = DynamicPricing::factory()->make()->toArray();
+
+        $dynamic['entries'] = [$item1->id(), $item2->id()];
+
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+        
+        $this->delete(cp_route('resrv.dynamicpricing.delete', 1));        
+        
+        $this->assertDatabaseMissing('resrv_dynamic_pricing', [
+            'title' => $dynamic['title'],
+        ]);
+        $this->assertDatabaseMissing('resrv_dynamic_pricing_assignments', [
+            'dynamic_pricing_assignment_id' => $item1->id(),
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+        $this->assertDatabaseMissing('resrv_dynamic_pricing_assignments', [
+            'dynamic_pricing_assignment_id' => $item2->id(),
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+    }
  
      
 }
