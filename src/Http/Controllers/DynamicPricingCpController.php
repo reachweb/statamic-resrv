@@ -47,6 +47,25 @@ class DynamicPricingCpController extends Controller
 
         return response()->json(['id' => $dynamicPricing['id']]);
     }
+    
+    public function createExtras(Request $request)
+    {
+        $data = $request->validate([
+            'extras' => 'required|array',
+            'title' => 'required',
+            'date_start' => 'nullable|date',
+            'date_end' => 'nullable|date',
+            'condition_type' => 'nullable',
+            'condition_comparison' => 'nullable',
+            'condition_value' => 'nullable',
+            'amount_type' => 'required|string',
+            'amount' => 'required|numeric',
+        ]);
+
+        $dynamicPricing = $this->dynamicPricing->createExtras($data);
+
+        return response()->json(['id' => $dynamicPricing['id']]);
+    }
 
 
 

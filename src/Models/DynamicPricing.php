@@ -40,7 +40,13 @@ class DynamicPricing extends Model
 
     public function extras()
     {
-        return $this->morphedByMany(Extra::class, 'resrv_dynamic_pricing_assignment', 'resrv_dynamic_pricing_assignments');
+        return $this->morphedByMany(
+            Extra::class, 
+            'dynamic_pricing_assignment', 
+            'resrv_dynamic_pricing_assignments', 
+            'dynamic_pricing_id', 
+            'dynamic_pricing_assignment_id'
+        );
     }
     
     public function entries()
@@ -58,8 +64,14 @@ class DynamicPricing extends Model
     {
         $dynamicPricing = $this->create($data);
         $dynamicPricing->entries()->sync($data['entries']);
-        return $dynamicPricing;
-        
+        return $dynamicPricing;        
+    }
+    
+    public function createExtras($data)
+    {
+        $dynamicPricing = $this->create($data);
+        $dynamicPricing->extras()->sync($data['extras']);
+        return $dynamicPricing;        
     }
 
 }
