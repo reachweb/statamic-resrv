@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
 use Reach\StatamicResrv\Models\FixedPricing;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
@@ -108,7 +109,12 @@ class Availability extends Model
         $availableWithPricing = [];
         $available = $this->availableForDates();
 
-        foreach ($available as $id) {
+        foreach ($available as $id) {            
+            $price = $this->getPriceForDates($id);
+            $dynamicPricing = $this->getDynamicPricing($id, $price);
+            if ($dynamicPricing) {
+                $price = $dynamicPricing->apply($price);
+            }
             $availableWithPricing[$id] = [
                 'request' => [
                     'days' => $this->duration,
@@ -116,8 +122,8 @@ class Availability extends Model
                     'date_end' => $this->date_end
                 ],
                 'data' => [
-                    'price' => $this->getPriceForDates($id),
-                    'payment' => $this->calculatePayment($this->getPriceForDates($id))
+                    'price' => $price,
+                    'payment' => $this->calculatePayment($price)
                 ],
                 'message' => [
                     'status' => count($available)
@@ -144,10 +150,15 @@ class Availability extends Model
             ];
         }
 
-        $price = $this->calculatePrice($results);
+        $price = $this->calculatePrice($results);        
 
         if (FixedPricing::getFixedPricing($statamic_id, $this->duration)) {
             $price = FixedPricing::getFixedPricing($statamic_id, $this->duration)->format();
+        }
+
+        $dynamicPricing = $this->getDynamicPricing($statamic_id, $price);
+        if ($dynamicPricing) {
+            $price = $dynamicPricing->apply($price);
         }
 
         return [
@@ -225,7 +236,7 @@ class Availability extends Model
 
     protected function getDisabledIds()
     {
-        $results = Entry::query()
+    $results = Entry::query()
             ->where('availability', 'disabled')
             ->where('published', true)
             ->get()
@@ -267,6 +278,12 @@ class Availability extends Model
             $totalPrice = Price::create($price);
             return $totalPrice->percent(config('resrv-config.percent_amount'))->format();
         }
+    }
+
+    protected function getDynamicPricing($id, $price)
+    {
+        return DynamicPricing::searchForAvailability($id, $price, $this->date_start, $this->date_end, $this->duration);
+        
     }
 
 }

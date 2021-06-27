@@ -24,12 +24,17 @@ class DynamicPricingCpController extends Controller
             'title' => 'required',
             'date_start' => 'nullable|date',
             'date_end' => 'nullable|date',
+            'date_include' => 'nullable',
             'condition_type' => 'nullable',
             'condition_comparison' => 'nullable',
             'condition_value' => 'nullable',
+            'amount_operation' => 'required|string',
             'amount_type' => 'required|string',
             'amount' => 'required|numeric',
         ]);
+
+        $order = $this->dynamicPricing->max('order') + 1;
+        $data['order'] = $order;
 
         $dynamicPricing = $this->dynamicPricing->create($data);
         if (array_key_exists('entries', $data)) {
@@ -50,11 +55,14 @@ class DynamicPricingCpController extends Controller
             'title' => 'required',
             'date_start' => 'nullable|date',
             'date_end' => 'nullable|date',
+            'date_include' => 'nullable',
             'condition_type' => 'nullable',
             'condition_comparison' => 'nullable',
             'condition_value' => 'nullable',
+            'amount_operation' => 'required|string',
             'amount_type' => 'required|string',
             'amount' => 'required|numeric',
+            'order' => 'required|integer',
         ]);
 
         $dynamicPricing = $this->dynamicPricing->findOrFail($id);

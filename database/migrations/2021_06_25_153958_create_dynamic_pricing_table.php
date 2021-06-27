@@ -17,12 +17,15 @@ class CreateDynamicPricingTable extends Migration
             $table->id();
             $table->string('title');
             $table->string('amount_type');
+            $table->string('amount_operation');
             $table->float('amount', 8, 2);
             $table->datetime('date_start')->nullable();
             $table->datetime('date_end')->nullable();
-            $table->string('condition_type')->nullable()->index();
-            $table->string('condition_comparison')->nullable()->index();
-            $table->string('condition_value')->nullable()->index();
+            $table->datetime('date_include')->nullable();
+            $table->string('condition_type')->nullable();
+            $table->string('condition_comparison')->nullable();
+            $table->string('condition_value')->nullable();
+            $table->integer('order');
             $table->timestamps();
         });
     }

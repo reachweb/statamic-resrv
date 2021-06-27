@@ -71,12 +71,15 @@ class DynamicPricingCpTest extends TestCase
         $payload = [
             'title' => '10% off for 4 days',
             'amount_type' => 'percent',
+            'amount_operation' => 'subtract',
             'amount' => '10',
             'date_start' => today()->toIso8601String(),
             'date_end' => today()->add(60, 'day')->toIso8601String(),
+            'date_include' => 'all',
             'condition_type' => 'reservation_duration',
             'condition_comparison' => '>=',
             'condition_value' => '4',
+            'order' => 1,
             'entries' => [$item1->id()]
         ];
 
