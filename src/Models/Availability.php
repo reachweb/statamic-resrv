@@ -111,10 +111,14 @@ class Availability extends Model
 
         foreach ($available as $id) {            
             $price = $this->getPriceForDates($id);
+
+            // Apply dynamic pricing here (fixed already applied on getPriceForDates)
             $dynamicPricing = $this->getDynamicPricing($id, $price);
             if ($dynamicPricing) {
+                $originalPrice = $price;
                 $price = $dynamicPricing->apply($price);
             }
+
             $availableWithPricing[$id] = [
                 'request' => [
                     'days' => $this->duration,
@@ -123,7 +127,8 @@ class Availability extends Model
                 ],
                 'data' => [
                     'price' => $price,
-                    'payment' => $this->calculatePayment($price)
+                    'payment' => $this->calculatePayment($price),
+                    'original_price' => (isset($originalPrice) ? $originalPrice : null)
                 ],
                 'message' => [
                     'status' => count($available)
@@ -158,6 +163,7 @@ class Availability extends Model
 
         $dynamicPricing = $this->getDynamicPricing($statamic_id, $price);
         if ($dynamicPricing) {
+            $originalPrice = $price;
             $price = $dynamicPricing->apply($price);
         }
 
@@ -169,7 +175,8 @@ class Availability extends Model
             ],
             'data' => [
                 'price' => $price,
-                'payment' => $this->calculatePayment($price)
+                'payment' => $this->calculatePayment($price),
+                'original_price' => (isset($originalPrice) ? $originalPrice : null)
             ],
             'message' => [
                 'status' => 1
