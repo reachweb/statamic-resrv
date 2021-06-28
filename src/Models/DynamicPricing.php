@@ -125,6 +125,29 @@ class DynamicPricing extends Model
         return $this;
        
     }
+    
+    public function scopeSearchForExtra($query, $extra_id, $price, $date_start, $date_end, $duration)
+    {
+        $itemsForId = DB::table('resrv_dynamic_pricing_assignments')
+                ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Extra')
+                ->where('dynamic_pricing_assignment_id', $extra_id)
+                ->orderBy('order')
+                ->get();
+
+        if ($itemsForId->count() == 0) {
+            return false;
+        }
+        $toApply = $this->checkAllParameters($itemsForId, $price, $date_start, $date_end, $duration);
+
+        if (count($toApply) == 0) {
+            return false;
+        }
+
+        $this->toApply = $toApply;
+
+        return $this;
+       
+    }
 
     protected function checkAllParameters($items, $price, $date_start, $date_end, $duration)
     {

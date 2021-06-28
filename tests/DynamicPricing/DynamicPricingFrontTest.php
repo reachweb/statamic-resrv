@@ -4,6 +4,8 @@ namespace Reach\StatamicResrv\Tests\DynamicPricing;
 
 use Reach\StatamicResrv\Tests\TestCase;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\Availability;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Eloquent\Factories\Sequence;
 use Illuminate\Support\Facades\Config;
@@ -191,6 +193,15 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
 
+        // Let's check without dates
+        $dynamic = DynamicPricing::factory()->noDates()->make()->toArray();
+        $dynamic['entries'] = [$item->id()];
+
+        $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
+        
+        // Should still work original price
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('80.74');
                 
     }
 
@@ -389,6 +400,69 @@ class DynamicPricingFrontTest extends TestCase
         $this->assertDatabaseHas('resrv_reservations', [
             'payment' => $payment
         ]);
+        
+    } 
+    
+    public function test_dynamic_pricing_changes_extra_price()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+        $this->signInAdmin();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->add(1, 'day')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $extra = Extra::factory()->create();
+
+        $addExtraToEntry = [
+            'id' => $extra->id
+        ];
+        
+        $response = $this->post(cp_route('resrv.extra.add', $item->id()), $addExtraToEntry);
+        $this->assertDatabaseHas('resrv_statamicentry_extra', [
+            'statamicentry_id' => $item->id()
+        ]);
+        
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+        ];
+
+        $dynamic = DynamicPricing::factory()->extra()->make()->toArray();
+        $dynamic['extras'] = [$extra->id];
+
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('300')->assertSee('message":{"status":1}}', false);
+
+        $payment = json_decode($response->content())->data->payment;
+        $price = json_decode($response->content())->data->price;
+        // Decrease the price here
+        $total = json_decode($response->content())->data->price + (json_decode($response->content())->request->days * 2.65);
+        
+        $checkoutRequest = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+            'payment' => $payment,
+            'price' => $price,
+            'extras' => [$extra->id => ['quantity' => 1]], 
+            'total' => $total
+        ];
+    
+        $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+        $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
+             
         
     } 
 

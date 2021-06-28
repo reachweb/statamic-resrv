@@ -36,6 +36,28 @@ class DynamicPricingFactory extends Factory
         ];
     }
 
+    public function noDates()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'date_start' => null,
+                'date_end' => null,
+            ];
+        });
+    }
+    
+    public function extra()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'amount_type' => 'fixed',
+                'amount_operation' => 'decrease',
+                'amount' => '2',
+                'condition_value' => '2',
+            ];
+        });
+    }
+
     public function conditionExtraDuration()
     {
         return $this->state(function (array $attributes) {
