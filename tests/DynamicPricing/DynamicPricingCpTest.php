@@ -18,6 +18,22 @@ class DynamicPricingCpTest extends TestCase
         $this->signInAdmin();
     }
 
+    public function test_can_index_dynamic_pricings()
+    {       
+        $dynamic = DynamicPricing::factory()->create();
+
+        $response = $this->get(cp_route('resrv.dynamicpricing.index'));
+        $response->assertStatus(200)->assertSee($dynamic->title);        
+    }
+    
+    public function test_can_show_cp_index_page()
+    {       
+        $dynamic = DynamicPricing::factory()->create();
+
+        $response = $this->get(cp_route('resrv.dynamicpricings.index'));
+        $response->assertStatus(200);        
+    }
+
     public function test_can_add_dynamic_pricing_for_statamic_item()
     {
         $item1 = $this->makeStatamicItem();

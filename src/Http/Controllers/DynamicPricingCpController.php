@@ -16,6 +16,17 @@ class DynamicPricingCpController extends Controller
         $this->dynamicPricing = $dynamicPricing;
     }
 
+    public function indexCp()
+    {
+        return view('statamic-resrv::cp.dynamicpricings.index');
+    }
+    
+    public function index()
+    {
+        $dynamic = $this->dynamicPricing->all();
+        return response()->json($dynamic);
+    }
+
     public function create(Request $request)
     {
         $data = $request->validate([

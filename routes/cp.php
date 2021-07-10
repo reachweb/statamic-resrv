@@ -34,6 +34,8 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/fixedpricing', 'FixedPricingCpController@update')->name('fixedpricing.update');        
         Route::delete('/resrv/fixedpricing', 'FixedPricingCpController@delete')->name('fixedpricing.delete');
 
+        Route::get('/resrv/dynamicpricing', 'DynamicPricingCpController@indexCp')->name('dynamicpricings.index');
+        Route::get('/resrv/dynamicpricing/index', 'DynamicPricingCpController@index')->name('dynamicpricing.index');
         Route::post('/resrv/dynamicpricing', 'DynamicPricingCpController@create')->name('dynamicpricing.create');
         Route::patch('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@update')->name('dynamicpricing.update');
         Route::delete('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@delete')->name('dynamicpricing.delete');
