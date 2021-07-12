@@ -41,9 +41,14 @@ class Extra extends Model
         static::addGlobalScope(new OrderScope);
     }
 
-    public function calculatePrice($dates, $quantity) {
-        if ($this->price_type == 'perday') {
-            $this->initiateAvailability($dates);
+    public function calculatePrice($dates, $quantity) 
+    {
+        $this->initiateAvailability($dates);
+        $dynamicPricing = $this->getDynamicPricing($this->id, $this->price->format());
+        if ($dynamicPricing) {
+            $this->price = $dynamicPricing->apply($this->price->format());
+        }
+        if ($this->price_type == 'perday') {            
             return $this->price->multiply($quantity)->multiply($this->duration);
         }
         if ($this->price_type == 'fixed') {
@@ -59,5 +64,11 @@ class Extra extends Model
                     ->where('resrv_statamicentry_extra.statamicentry_id', '=', $entry);
             })
             ->select('resrv_extras.*');
+    }
+    
+    protected function getDynamicPricing($id, $price)
+    {
+        return DynamicPricing::searchForExtra($id, $price, $this->date_start, $this->date_end, $this->duration);
+        
     }
 }
