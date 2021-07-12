@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Traits\HandlesComparisons;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
+use Reach\StatamicResrv\Scopes\OrderScope;
 use Statamic\Facades\Entry;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -77,6 +78,11 @@ class DynamicPricing extends Model
             return $item->dynamic_pricing_assignment_id;
         });
     }
+
+    protected static function booted()
+    {
+        static::addGlobalScope(new OrderScope);
+    }  
 
     public function apply($price)
     {

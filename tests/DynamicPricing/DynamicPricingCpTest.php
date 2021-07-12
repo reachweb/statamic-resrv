@@ -126,7 +126,7 @@ class DynamicPricingCpTest extends TestCase
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         
-        $this->delete(cp_route('resrv.dynamicpricing.delete', 1));        
+        $response = $this->delete(cp_route('resrv.dynamicpricing.delete', $dynamic));        
         
         $this->assertDatabaseMissing('resrv_dynamic_pricing', [
             'title' => $dynamic['title'],

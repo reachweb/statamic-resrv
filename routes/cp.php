@@ -37,8 +37,9 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/dynamicpricing', 'DynamicPricingCpController@indexCp')->name('dynamicpricings.index');
         Route::get('/resrv/dynamicpricing/index', 'DynamicPricingCpController@index')->name('dynamicpricing.index');
         Route::post('/resrv/dynamicpricing', 'DynamicPricingCpController@create')->name('dynamicpricing.create');
-        Route::patch('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@update')->name('dynamicpricing.update');
-        Route::delete('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@delete')->name('dynamicpricing.delete');
+        Route::patch('/resrv/dynamicpricing/order', 'DynamicPricingCpController@order')->name('dynamicpricing.order');
+        Route::patch('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@update')->name('dynamicpricing.update');        
+        Route::delete('/resrv/dynamicpricing', 'DynamicPricingCpController@delete')->name('dynamicpricing.delete');
 
         Route::get('/resrv/utility/entries', 'ResrvUtilityController@entries')->name('utilities.entries');
 

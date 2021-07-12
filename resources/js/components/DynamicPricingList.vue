@@ -134,25 +134,25 @@ export default {
             this.deleteId = dynamic.id
         },
         deleteDynamic() {
-            axios.delete('/cp/resrv/location', {data: {'id': this.deleteId}})
+            axios.delete('/cp/resrv/dynamicpricing', {data: {'id': this.deleteId}})
                 .then(response => {
-                    this.$toast.success('Location deleted')
+                    this.$toast.success('Dynamic pricing deleted')
                     this.deleteId = false
-                    this.getAllLocations()
+                    this.getAllDynamicPricing()
                 })
                 .catch(error => {
-                    this.$toast.error('Cannot delete location')
+                    this.$toast.error('Cannot delete dynamic pricing')
                 })
         },
         order(event){
             let item = event.moved.element
             let order = event.moved.newIndex + 1
-            axios.patch('/cp/resrv/location/order', {id: item.id, order: order})
+            axios.patch('/cp/resrv/dynamicpricing/order', {id: item.id, order: order})
                 .then(() => {
-                    this.$toast.success('Locations order changed')
-                    this.getAllLocations()
+                    this.$toast.success('Dynamic pricing order changed')
+                    this.getAllDynamicPricing()
                 })
-                .catch(() => {this.$toast.error('Locations ordering failed')})
+                .catch(() => {this.$toast.error('Dynamic pricing ordering failed')})
         }          
     }
 }
