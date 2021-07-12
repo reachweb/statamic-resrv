@@ -41,6 +41,21 @@ class Extra extends Model
         static::addGlobalScope(new OrderScope);
     }
 
+    public function priceForDays($dates)
+    {
+        $this->initiateAvailability($dates);
+        $dynamicPricing = $this->getDynamicPricing($this->id, $this->price->format());
+        if ($dynamicPricing) {
+            $this->price = $dynamicPricing->apply($this->price->format());
+        }
+        if ($this->price_type == 'perday') {            
+            return $this->price->multiply($this->duration);
+        }
+        if ($this->price_type == 'fixed') {
+            return $this->price;
+        }
+    }
+
     public function calculatePrice($dates, $quantity) 
     {
         $this->initiateAvailability($dates);
