@@ -89,7 +89,8 @@ export default {
                 condition_type: '',
                 condition_comparison : '',
                 condition_value : '',
-                entries: ''
+                entries: '',
+                extras: ''
             }
         }
     },

@@ -22,7 +22,8 @@ class ExtraController extends Controller
             ->get();
 
         foreach ($extras as $extra) {            
-            $extra->calculated_price = Extra::find($extra->id)->priceForDays($data)->format();
+            $extra->original_price = $extra->price;
+            $extra->price = Extra::find($extra->id)->priceForDates($data);
         }
        
         return response()->json($extras->keyBy('slug')->toArray());

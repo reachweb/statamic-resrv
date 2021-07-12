@@ -79,6 +79,14 @@ class DynamicPricing extends Model
         });
     }
 
+    public function getExtrasAttribute($value)
+    {
+        $extras = $this->extras()->get();
+        return $extras->map(function ($item) {
+            return $item->id;
+        });
+    }
+
     protected static function booted()
     {
         static::addGlobalScope(new OrderScope);

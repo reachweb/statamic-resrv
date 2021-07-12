@@ -150,7 +150,7 @@
                                 <template #footer="{ deselect }" v-if="entriesLoaded">                    
                                     <div class="vs__selected-options-outside flex flex-wrap">
                                         <span v-for="id in submit.entries" :key="id" class="vs__selected mt-1">
-                                            {{ getTitle(id) }}
+                                            {{ getEntryTitle(id) }}
                                             <button @click="deselect(id)" type="button" :aria-label="__('Deselect option')" class="vs__deselect">
                                                 <span>×</span>
                                             </button>                 
@@ -163,6 +163,40 @@
                             {{ errors.entries[0] }}
                         </div>  
                     </div>
+                    
+                    <div class="form-group field-w-1/2">
+                        <div class="font-bold mb-1 text-sm">
+                            <label for="name">Extras</label>
+                            <div class="text-sm font-light"><p>Select the extras that this dynamic pricing applies to</p></div>
+                        </div>
+                        <div class="w-full">
+                            <v-select 
+                                v-model="submit.extras" 
+                                label="name"
+                                multiple="multiple"
+                                :close-on-select="false"
+                                :options="extras" 
+                                :searchable="true"
+                                :reduce="type => type.id" 
+                            >
+                                <template #selected-option-container><i class="hidden"></i></template>
+                                <template #footer="{ deselect }" v-if="extrasLoaded">                    
+                                    <div class="vs__selected-options-outside flex flex-wrap">
+                                        <span v-for="id in submit.extras" :key="id" class="vs__selected mt-1">
+                                            {{ getExtraTitle(id) }}
+                                            <button @click="deselect(id)" type="button" :aria-label="__('Deselect option')" class="vs__deselect">
+                                                <span>×</span>
+                                            </button>                 
+                                        </span>
+                                    </div>
+                                </template>
+                            </v-select>
+                        </div>
+                        <div v-if="errors.extras" class="w-full mt-1 text-sm text-red-400">
+                            {{ errors.extras[0] }}
+                        </div>  
+                    </div>
+
                     <div class="form-group field-w-full">
                         <div class="w-full">
                             <button 
@@ -285,7 +319,9 @@ export default {
             ],
             date: null,
             entries: '',
-            entriesLoaded: false,            
+            entriesLoaded: false, 
+            extras: '',
+            extrasLoaded: false,            
         }
     },
 
@@ -314,6 +350,7 @@ export default {
 
     created() {
         this.getEntries()
+        this.getExtras()
     },
 
     methods: {
@@ -346,8 +383,21 @@ export default {
                 this.$toast.error('Cannot retrieve the entries')
             })
         },
-        getTitle(id) {
+        getExtras() {
+            axios.get('/cp/resrv/extra')
+            .then(response => {
+                this.extras = response.data
+                this.extrasLoaded = true
+            })
+            .catch(error => {
+                this.$toast.error('Cannot retrieve the extras')
+            })
+        },
+        getEntryTitle(id) {
             return this.entries.find(item => item.id == id).title
+        },
+        getExtraTitle(id) {
+            return this.extras.find(item => item.id == id).name
         },
         removeDate(val) {
             if (val == null) {
