@@ -67,6 +67,17 @@ class DynamicPricing extends Model
         );
     }
 
+    public function getEntriesAttribute($value)
+    {
+        $entries = DB::table('resrv_dynamic_pricing_assignments')
+                ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
+                ->where('dynamic_pricing_id', $this->id)
+                ->get();
+        return $entries->map(function ($item) {
+            return $item->dynamic_pricing_assignment_id;
+        });
+    }
+
     public function apply($price)
     {
         $newPrice = Price::create($price);

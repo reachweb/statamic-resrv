@@ -40,4 +40,6 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@update')->name('dynamicpricing.update');
         Route::delete('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@delete')->name('dynamicpricing.delete');
 
+        Route::get('/resrv/utility/entries', 'ResrvUtilityController@entries')->name('utilities.entries');
+
     });

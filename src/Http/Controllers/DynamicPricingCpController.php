@@ -23,7 +23,10 @@ class DynamicPricingCpController extends Controller
     
     public function index()
     {
-        $dynamic = $this->dynamicPricing->all();
+        $dynamic = $this->dynamicPricing->with('extras')->get();
+        foreach ($dynamic as $pricing) {
+            $pricing['entries'] = $pricing->entries;
+        }
         return response()->json($dynamic);
     }
 
@@ -33,12 +36,12 @@ class DynamicPricingCpController extends Controller
             'entries' => 'required_without:extras|array',
             'extras' => 'required_without:entries|array',
             'title' => 'required',
-            'date_start' => 'nullable|date',
-            'date_end' => 'nullable|date',
-            'date_include' => 'nullable',
-            'condition_type' => 'nullable',
-            'condition_comparison' => 'nullable',
-            'condition_value' => 'nullable',
+            'date_start' => 'nullable|date|required_with:date_include',
+            'date_end' => 'nullable|date|required_with:date_include',
+            'date_include' => 'nullable|required_with:date_start,date_end',
+            'condition_type' => 'nullable|required_with:condition_comparison,condition_value',
+            'condition_comparison' => 'nullable|required_with:condition_type,condition_value',
+            'condition_value' => 'nullable|required_with:condition_comparison,condition_type',
             'amount_operation' => 'required|string',
             'amount_type' => 'required|string',
             'amount' => 'required|numeric',
@@ -64,12 +67,12 @@ class DynamicPricingCpController extends Controller
             'entries' => 'required_without:extras|array',
             'extras' => 'required_without:entries|array',
             'title' => 'required',
-            'date_start' => 'nullable|date',
-            'date_end' => 'nullable|date',
-            'date_include' => 'nullable',
-            'condition_type' => 'nullable',
-            'condition_comparison' => 'nullable',
-            'condition_value' => 'nullable',
+            'date_start' => 'nullable|date|required_with:date_include',
+            'date_end' => 'nullable|date|required_with:date_include',
+            'date_include' => 'nullable|required_with:date_start,date_end',
+            'condition_type' => 'nullable|required_with:condition_comparison,condition_value',
+            'condition_comparison' => 'nullable|required_with:condition_type,condition_value',
+            'condition_value' => 'nullable|required_with:condition_comparison,condition_type',
             'amount_operation' => 'required|string',
             'amount_type' => 'required|string',
             'amount' => 'required|numeric',

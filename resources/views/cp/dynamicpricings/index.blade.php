@@ -9,7 +9,7 @@
     </div>
 
     <div>
-
+        <dynamic-pricing-list></dynamic-pricing-list>
     </div>
 
 @endsection
