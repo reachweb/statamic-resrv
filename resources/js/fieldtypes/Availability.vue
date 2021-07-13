@@ -53,7 +53,8 @@ export default {
                 initialView: 'dayGridMonth',
                 select: this.handleSelect,
                 dayCellContent: this.renderDay,
-                aspectRatio: 1
+                aspectRatio: 0.85,
+                fixedWeekCount: false
             },
             availability: '',
             availabilityLoaded: false

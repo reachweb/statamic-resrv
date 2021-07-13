@@ -1,6 +1,6 @@
 <template>
     <stack name="statamic-resrv-dynamic-pricing" @closed="close">
-        <div slot-scope="{ close }" class="bg-grey-30 h-full flex flex-col">
+        <div slot-scope="{ close }" class="bg-grey-30 h-full flex flex-col overflow-scroll">
             <div class="bg-grey-20 px-4 py-2 border-b border-grey-30 text-lg font-medium flex items-center justify-between">
                 Add dynamic pricing
                 <button type="button" class="btn-close" @click="close">×</button>
@@ -19,7 +19,7 @@
                             {{ errors.title[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Amount</label>
                             <div class="text-sm font-light"><p>Amount or percentage without the % character.</p></div>
@@ -31,7 +31,7 @@
                             {{ errors.amount[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Operation</label>
                             <div class="text-sm font-light"><p>Select if the base price will be decreased or increased.</p></div>
@@ -43,7 +43,7 @@
                             {{ errors.amount_operation[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Type</label>
                             <div class="text-sm font-light"><p>Percentage or fixed price.</p></div>
@@ -56,7 +56,7 @@
                         </div>  
                     </div>
                     
-                    <div class="form-group field-w-1/2">
+                    <div class="form-group w-full xl:w-1/2">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Date condition</label>
                             <div class="text-sm font-light"><p>Add a date condition.</p></div>
@@ -68,7 +68,7 @@
                             {{ errors.date_include[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/2">
+                    <div class="form-group w-full xl:w-1/2">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Date range</label>
                             <div class="text-sm font-light"><p>Select the range of the date condition.</p></div>
@@ -94,7 +94,7 @@
                             {{ errors.date_end[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Reservation condition</label>
                             <div class="text-sm font-light"><p>Apply the dynamic pricing when...</p></div>
@@ -106,7 +106,7 @@
                             {{ errors.condition_type[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Comparison</label>
                             <div class="text-sm font-light"><p>Select the comparion operator</p></div>
@@ -118,7 +118,7 @@
                             {{ errors.condition_comparison[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Value</label>
                             <div class="text-sm font-light"><p>The value to compare to (days or price).</p></div>
@@ -131,7 +131,7 @@
                         </div>  
                     </div>
 
-                    <div class="form-group field-w-1/2">
+                    <div class="form-group w-full 2xl:w-1/2">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Entries</label>
                             <div class="text-sm font-light"><p>Select the entries that this dynamic pricing applies to</p></div>
@@ -164,7 +164,7 @@
                         </div>  
                     </div>
                     
-                    <div class="form-group field-w-1/2">
+                    <div class="form-group w-full 2xl:w-1/2">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Extras</label>
                             <div class="text-sm font-light"><p>Select the extras that this dynamic pricing applies to</p></div>
