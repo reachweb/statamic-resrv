@@ -9,6 +9,9 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/api/availability', 'AvailabilityController@index')->name('availability.index');
         Route::post('/resrv/api/availability/{statamic_id}', 'AvailabilityController@show')->name('availability.show');
 
+        // Extras
+        Route::post('/resrv/api/extra', 'ExtraController@index')->name('extra.index');
+
         // Checkout
         Route::post('/resrv/api/reservation/{statamic_id}', 'ReservationController@confirm')->name('reservation.confirm');
         Route::get('/resrv/api/reservation/checkout', 'ReservationController@checkoutForm')->name('reservation.checkoutForm');

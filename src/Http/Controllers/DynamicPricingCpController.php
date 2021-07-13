@@ -23,9 +23,10 @@ class DynamicPricingCpController extends Controller
     
     public function index()
     {
-        $dynamic = $this->dynamicPricing->with('extras')->get();
+        $dynamic = $this->dynamicPricing->get();
         foreach ($dynamic as $pricing) {
             $pricing['entries'] = $pricing->entries;
+            $pricing['extras'] = $pricing->extras;
         }
         return response()->json($dynamic);
     }
@@ -33,8 +34,8 @@ class DynamicPricingCpController extends Controller
     public function create(Request $request)
     {
         $data = $request->validate([
-            'entries' => 'required_without:extras|array',
-            'extras' => 'required_without:entries|array',
+            'entries' => 'nullable|required_without:extras|array',
+            'extras' => 'nullable|required_without:entries|array',
             'title' => 'required',
             'date_start' => 'nullable|date|required_with:date_include',
             'date_end' => 'nullable|date|required_with:date_include',
@@ -51,11 +52,8 @@ class DynamicPricingCpController extends Controller
         $data['order'] = $order;
 
         $dynamicPricing = $this->dynamicPricing->create($data);
-        if (array_key_exists('entries', $data)) {
-            $dynamicPricing->entries()->sync($data['entries']);
-        } else {
-            $dynamicPricing->extras()->sync($data['extras']);
-        }        
+        $dynamicPricing->entries()->sync($data['entries']);
+        $dynamicPricing->extras()->sync($data['extras']);
 
         return response()->json(['id' => $dynamicPricing['id']]);
     }    
@@ -64,8 +62,8 @@ class DynamicPricingCpController extends Controller
     public function update($id, Request $request)
     {
         $data = $request->validate([
-            'entries' => 'required_without:extras|array',
-            'extras' => 'required_without:entries|array',
+            'entries' => 'nullable|required_without:extras|array',
+            'extras' => 'nullable|required_without:entries|array',
             'title' => 'required',
             'date_start' => 'nullable|date|required_with:date_include',
             'date_end' => 'nullable|date|required_with:date_include',
@@ -81,11 +79,8 @@ class DynamicPricingCpController extends Controller
 
         $dynamicPricing = $this->dynamicPricing->findOrFail($id);
         $dynamicPricing->update($data);
-        if (array_key_exists('entries', $data)) {
-            $dynamicPricing->entries()->sync($data['entries']);
-        } else {
-            $dynamicPricing->extras()->sync($data['extras']);
-        }
+        $dynamicPricing->entries()->sync($data['entries']);
+        $dynamicPricing->extras()->sync($data['extras']);
 
         return response()->json(['id' => $dynamicPricing['id']]);
     }

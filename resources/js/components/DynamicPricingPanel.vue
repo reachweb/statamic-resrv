@@ -1,6 +1,6 @@
 <template>
     <stack name="statamic-resrv-dynamic-pricing" @closed="close">
-        <div slot-scope="{ close }" class="bg-grey-30 h-full flex flex-col">
+        <div slot-scope="{ close }" class="bg-grey-30 h-full flex flex-col overflow-scroll">
             <div class="bg-grey-20 px-4 py-2 border-b border-grey-30 text-lg font-medium flex items-center justify-between">
                 Add dynamic pricing
                 <button type="button" class="btn-close" @click="close">×</button>
@@ -19,7 +19,7 @@
                             {{ errors.title[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Amount</label>
                             <div class="text-sm font-light"><p>Amount or percentage without the % character.</p></div>
@@ -31,7 +31,7 @@
                             {{ errors.amount[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Operation</label>
                             <div class="text-sm font-light"><p>Select if the base price will be decreased or increased.</p></div>
@@ -43,7 +43,7 @@
                             {{ errors.amount_operation[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Type</label>
                             <div class="text-sm font-light"><p>Percentage or fixed price.</p></div>
@@ -56,7 +56,7 @@
                         </div>  
                     </div>
                     
-                    <div class="form-group field-w-1/2">
+                    <div class="form-group w-full xl:w-1/2">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Date condition</label>
                             <div class="text-sm font-light"><p>Add a date condition.</p></div>
@@ -68,7 +68,7 @@
                             {{ errors.date_include[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/2">
+                    <div class="form-group w-full xl:w-1/2">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Date range</label>
                             <div class="text-sm font-light"><p>Select the range of the date condition.</p></div>
@@ -94,7 +94,7 @@
                             {{ errors.date_end[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Reservation condition</label>
                             <div class="text-sm font-light"><p>Apply the dynamic pricing when...</p></div>
@@ -106,7 +106,7 @@
                             {{ errors.condition_type[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Comparison</label>
                             <div class="text-sm font-light"><p>Select the comparion operator</p></div>
@@ -118,7 +118,7 @@
                             {{ errors.condition_comparison[0] }}
                         </div>  
                     </div>
-                    <div class="form-group field-w-1/3">
+                    <div class="form-group w-full xl:w-1/3">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Value</label>
                             <div class="text-sm font-light"><p>The value to compare to (days or price).</p></div>
@@ -131,7 +131,7 @@
                         </div>  
                     </div>
 
-                    <div class="form-group field-w-1/2">
+                    <div class="form-group w-full 2xl:w-1/2">
                         <div class="font-bold mb-1 text-sm">
                             <label for="name">Entries</label>
                             <div class="text-sm font-light"><p>Select the entries that this dynamic pricing applies to</p></div>
@@ -150,7 +150,7 @@
                                 <template #footer="{ deselect }" v-if="entriesLoaded">                    
                                     <div class="vs__selected-options-outside flex flex-wrap">
                                         <span v-for="id in submit.entries" :key="id" class="vs__selected mt-1">
-                                            {{ getTitle(id) }}
+                                            {{ getEntryTitle(id) }}
                                             <button @click="deselect(id)" type="button" :aria-label="__('Deselect option')" class="vs__deselect">
                                                 <span>×</span>
                                             </button>                 
@@ -163,6 +163,40 @@
                             {{ errors.entries[0] }}
                         </div>  
                     </div>
+                    
+                    <div class="form-group w-full 2xl:w-1/2">
+                        <div class="font-bold mb-1 text-sm">
+                            <label for="name">Extras</label>
+                            <div class="text-sm font-light"><p>Select the extras that this dynamic pricing applies to</p></div>
+                        </div>
+                        <div class="w-full">
+                            <v-select 
+                                v-model="submit.extras" 
+                                label="name"
+                                multiple="multiple"
+                                :close-on-select="false"
+                                :options="extras" 
+                                :searchable="true"
+                                :reduce="type => type.id" 
+                            >
+                                <template #selected-option-container><i class="hidden"></i></template>
+                                <template #footer="{ deselect }" v-if="extrasLoaded">                    
+                                    <div class="vs__selected-options-outside flex flex-wrap">
+                                        <span v-for="id in submit.extras" :key="id" class="vs__selected mt-1">
+                                            {{ getExtraTitle(id) }}
+                                            <button @click="deselect(id)" type="button" :aria-label="__('Deselect option')" class="vs__deselect">
+                                                <span>×</span>
+                                            </button>                 
+                                        </span>
+                                    </div>
+                                </template>
+                            </v-select>
+                        </div>
+                        <div v-if="errors.extras" class="w-full mt-1 text-sm text-red-400">
+                            {{ errors.extras[0] }}
+                        </div>  
+                    </div>
+
                     <div class="form-group field-w-full">
                         <div class="w-full">
                             <button 
@@ -285,7 +319,9 @@ export default {
             ],
             date: null,
             entries: '',
-            entriesLoaded: false,            
+            entriesLoaded: false, 
+            extras: '',
+            extrasLoaded: false,            
         }
     },
 
@@ -314,6 +350,7 @@ export default {
 
     created() {
         this.getEntries()
+        this.getExtras()
     },
 
     methods: {
@@ -346,8 +383,21 @@ export default {
                 this.$toast.error('Cannot retrieve the entries')
             })
         },
-        getTitle(id) {
+        getExtras() {
+            axios.get('/cp/resrv/extra')
+            .then(response => {
+                this.extras = response.data
+                this.extrasLoaded = true
+            })
+            .catch(error => {
+                this.$toast.error('Cannot retrieve the extras')
+            })
+        },
+        getEntryTitle(id) {
             return this.entries.find(item => item.id == id).title
+        },
+        getExtraTitle(id) {
+            return this.extras.find(item => item.id == id).name
         },
         removeDate(val) {
             if (val == null) {
