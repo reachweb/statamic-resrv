@@ -16,6 +16,7 @@ class ReservationMade extends Mailable
     public function __construct(Reservation $reservation)
     {
         $this->reservation = $reservation;
+        $this->subject($this->generateSubject($reservation));
     }
 
     /**
@@ -26,5 +27,10 @@ class ReservationMade extends Mailable
     public function build()
     {
         return $this->markdown('statamic-resrv::email.reservations.made');
+    }
+
+    private function generateSubject($reservation)
+    {
+        return 'Reservation #'.$reservation->id.' ['.$reservation->entry['title']->value().'] ['.$reservation->date_start->format('Y-m-d').'] ['.$reservation->customer->get('email').']';
     }
 }
