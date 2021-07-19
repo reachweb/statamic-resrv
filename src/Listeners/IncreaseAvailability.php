@@ -17,7 +17,7 @@ class IncreaseAvailability
     }
 
     
-    public function handle(ReservationExpired $event)
+    public function handle($event)
     {
         $this->availability->incrementAvailability($event->reservation->date_start, $event->reservation->date_end, $event->reservation->item_id);
     }

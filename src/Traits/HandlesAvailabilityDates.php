@@ -35,6 +35,23 @@ trait HandlesAvailabilityDates
         }
     }
 
+    private function setDates($date_start, $date_end)
+    {
+        // If we charge extra for using over a 24hour day, add an extra day here.
+        if ($this->useTime()) {
+            $time_start = ($date_start->hour * 60) + $date_start->minute;
+            $time_end = ($date_end->hour * 60) + $date_end->minute;
+            if ($time_end > $time_start) {
+                $date_end = $date_end->add(1, 'day');
+            }
+        }   
+
+        $this->duration = $date_start->startOfDay()->diffInDays($date_end->startOfDay());
+        $this->date_start = $date_start->isoFormat('YYYY-MM-DD');
+        $this->date_end = $date_end->isoFormat('YYYY-MM-DD');        
+        $this->dates_initiated = true;
+    }
+
     public function initiateAvailability($dates)
     {
         $date_start = new Carbon($dates['date_start']);
@@ -50,19 +67,17 @@ trait HandlesAvailabilityDates
 
         $this->checkMinimumDate($date_start);
 
-        // If we charge extra for using over a 24hour day, add an extra day here.
-        if ($this->useTime()) {
-            $time_start = ($date_start->hour * 60) + $date_start->minute;
-            $time_end = ($date_end->hour * 60) + $date_end->minute;
-            if ($time_end > $time_start) {
-                $date_end = $date_end->add(1, 'day');
-            }
-        }
-
-        $this->duration = $date_start->startOfDay()->diffInDays($date_end->startOfDay());
-        $this->date_start = $date_start->isoFormat('YYYY-MM-DD');
-        $this->date_end = $date_end->isoFormat('YYYY-MM-DD');        
-        $this->dates_initiated = true;
+        $this->setDates($date_start, $date_end);
+ 
         $this->checkDurationValidity();
+    }
+
+    // Quick method to use when extra checks are not required, will merge later
+    public function initiateAvailabilityUnsafe($dates)
+    {
+        $date_start = new Carbon($dates['date_start']);
+        $date_end = new Carbon($dates['date_end']);
+
+        $this->setDates($date_start, $date_end);
     }
 }

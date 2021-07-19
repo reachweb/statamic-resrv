@@ -78,7 +78,7 @@ class Availability extends Model
 
     public function decrementAvailability($date_start, $date_end, $statamic_id) 
     {
-        $this->initiateAvailability([
+        $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
         ]); 
@@ -91,7 +91,7 @@ class Availability extends Model
     
     public function incrementAvailability($date_start, $date_end, $statamic_id) 
     {
-        $this->initiateAvailability([
+        $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
         ]); 

@@ -51,6 +51,7 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         ],
         ReservationRefunded::class  => [
             SendRefundReservationEmails::class,
+            IncreaseAvailability::class,
         ],
     ];
 
