@@ -44,7 +44,7 @@ class Availability extends Model
     
     public function scopeGetAvailabilityForDates($scope, $dates, $statamic_id = null) { 
         
-        ExpireReservations::dispatchSync();
+        ExpireReservations::dispatch();
 
         $this->initiateAvailability($dates);
 
@@ -60,7 +60,7 @@ class Availability extends Model
 
     public function confirmAvailabilityAndPrice($data, $statamic_id) {
 
-        ExpireReservations::dispatchSync();
+        ExpireReservations::dispatch();
 
         $this->initiateAvailability($data);
 
