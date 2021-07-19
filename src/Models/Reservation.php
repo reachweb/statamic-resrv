@@ -165,11 +165,19 @@ class Reservation extends Model
         return Form::find($formHandle)->fields()->values();
     }
 
-    public function expire()
+    public function expire($id)
     {
-        $this->status = 'expired';
-        $this->save();
-        ReservationExpired::dispatch($this);
+        try {
+            DB::transaction(function() use ($id) {
+                $reservation = $this->findOrFail($id);
+                if ($reservation->status == 'pending') {
+                    $reservation->status = 'expired';
+                    $reservation->save();
+                    ReservationExpired::dispatch($reservation);
+                }
+            });
+        } catch (\Exception $e) {
+        };
     }
 
 }

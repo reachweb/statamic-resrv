@@ -24,10 +24,8 @@ class ExpireReservations implements ShouldQueue
     {   
         // If a user already started a reservation that he didn't finish, expire it right away
         if (session()->has('resrv_reservation')) {
-            $reservation = Reservation::find(session('resrv_reservation'));
-            if ($reservation->status == 'pending') {
-                $reservation->expire();
-            }
+            $reservation = new Reservation;
+            $reservation->expire(session('resrv_reservation'));
         }
         if (config('resrv-config.minutes_to_hold', false) == false) {
             return;
@@ -36,7 +34,7 @@ class ExpireReservations implements ShouldQueue
         foreach ($pending as $reservation) {
             $expireAt = Carbon::parse($reservation->created_at)->add(config('resrv-config.minutes_to_hold'), 'minute');            
             if ($expireAt < Carbon::now()) {
-                $reservation->expire();
+                $reservation->expire($reservation->id);
             }
         }
     }
