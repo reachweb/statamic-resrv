@@ -60,8 +60,6 @@ class Availability extends Model
 
     public function confirmAvailabilityAndPrice($data, $statamic_id) {
 
-        ExpireReservations::dispatchSync();
-
         $this->initiateAvailability($data);
 
         $availability = $this->getSpecificItem($statamic_id);
