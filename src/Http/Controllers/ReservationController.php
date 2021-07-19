@@ -87,6 +87,11 @@ class ReservationController extends Controller
         // Find the reservation
         $reservation = $this->reservation->find($reservation_id);
 
+        // Check if the reservation request is expired
+        if ($reservation->status == 'expired') {
+            return response()->json(['error' => __('Your request has expired, please refresh and try again')], 412);
+        }
+
         // Validate customer data
         $data = $request->validated();
 
