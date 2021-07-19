@@ -41,7 +41,7 @@ class ExtraFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.extra.index'), $checkoutRequest);
-        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('9.30');        
+        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('4.65');        
     }    
     
 }

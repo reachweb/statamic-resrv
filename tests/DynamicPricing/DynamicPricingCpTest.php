@@ -42,6 +42,7 @@ class DynamicPricingCpTest extends TestCase
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
         $dynamic['entries'] = [$item1->id(), $item2->id()];
+        $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         $response->assertStatus(200);
@@ -61,6 +62,7 @@ class DynamicPricingCpTest extends TestCase
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
         $dynamic['extras'] = [$extra['id']];
+        $dynamic['entries'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         $response->assertStatus(200);
@@ -81,6 +83,7 @@ class DynamicPricingCpTest extends TestCase
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
         $dynamic['entries'] = [$item1->id(), $item2->id()];
+        $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         
@@ -96,7 +99,8 @@ class DynamicPricingCpTest extends TestCase
             'condition_comparison' => '>=',
             'condition_value' => '4',
             'order' => 1,
-            'entries' => [$item1->id()]
+            'entries' => [$item1->id()],
+            'extras' => []
         ];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $payload);        
@@ -123,6 +127,7 @@ class DynamicPricingCpTest extends TestCase
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
         $dynamic['entries'] = [$item1->id(), $item2->id()];
+        $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         

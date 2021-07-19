@@ -52,6 +52,7 @@ class DynamicPricingFrontTest extends TestCase
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         $response->assertStatus(200);                
@@ -62,6 +63,7 @@ class DynamicPricingFrontTest extends TestCase
         // We should get 121.10 for 20% percent increase
         $dynamic = DynamicPricing::factory()->percentIncrease()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
 
@@ -71,6 +73,7 @@ class DynamicPricingFrontTest extends TestCase
         // We should get 80 for 20.92 fixed decrease
         $dynamic = DynamicPricing::factory()->fixedDecrease()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
 
@@ -80,6 +83,7 @@ class DynamicPricingFrontTest extends TestCase
         // We should get 111.00 for 10.08 fixed increase
         $dynamic = DynamicPricing::factory()->fixedIncrease()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
 
@@ -89,6 +93,7 @@ class DynamicPricingFrontTest extends TestCase
         // Reset the dynamic pricing entry
         $dynamic = DynamicPricing::factory()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
 
@@ -104,6 +109,7 @@ class DynamicPricingFrontTest extends TestCase
         // But it works for "start" date condition
         $dynamic = DynamicPricing::factory()->dateStart()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
         
@@ -113,6 +119,7 @@ class DynamicPricingFrontTest extends TestCase
         // And "most" date condition
         $dynamic = DynamicPricing::factory()->dateMost()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
@@ -127,6 +134,7 @@ class DynamicPricingFrontTest extends TestCase
         // Shouldn't work for "start" date condition
         $dynamic = DynamicPricing::factory()->dateStart()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
         
@@ -136,6 +144,7 @@ class DynamicPricingFrontTest extends TestCase
         // And "most" date condition
         $dynamic = DynamicPricing::factory()->dateMost()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
 
@@ -151,6 +160,7 @@ class DynamicPricingFrontTest extends TestCase
         // Let's check reservation_duration condition
         $dynamic = DynamicPricing::factory()->conditionExtraDuration()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
 
@@ -176,6 +186,7 @@ class DynamicPricingFrontTest extends TestCase
         // Let's check reservation_price condition
         $dynamic = DynamicPricing::factory()->conditionPriceOver()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
         
@@ -186,6 +197,7 @@ class DynamicPricingFrontTest extends TestCase
         // Let's check reservation_price reverse condition
         $dynamic = DynamicPricing::factory()->conditionPriceUnder()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
         
@@ -196,6 +208,7 @@ class DynamicPricingFrontTest extends TestCase
         // Let's check without dates
         $dynamic = DynamicPricing::factory()->noDates()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
         
@@ -233,6 +246,7 @@ class DynamicPricingFrontTest extends TestCase
         // We should get 80.74 for 20% percent decrease
         $dynamic = DynamicPricing::factory()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         
@@ -242,6 +256,7 @@ class DynamicPricingFrontTest extends TestCase
         // Lets add a 10.08 fixed increase
         $dynamic = DynamicPricing::factory()->fixedIncrease()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
 
@@ -251,6 +266,7 @@ class DynamicPricingFrontTest extends TestCase
         // Lets add a 20% increase
         $dynamic = DynamicPricing::factory()->percentIncrease()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
 
@@ -289,6 +305,7 @@ class DynamicPricingFrontTest extends TestCase
         // We should get 80.74 for 20% percent decrease
         $dynamic = DynamicPricing::factory()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         
@@ -337,6 +354,7 @@ class DynamicPricingFrontTest extends TestCase
         // We should get 72 for 20% percent decrease
         $dynamic = DynamicPricing::factory()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         
@@ -375,6 +393,7 @@ class DynamicPricingFrontTest extends TestCase
         // We should get 80.74 for 20% percent decrease
         $dynamic = DynamicPricing::factory()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         
@@ -440,6 +459,7 @@ class DynamicPricingFrontTest extends TestCase
 
         $dynamic = DynamicPricing::factory()->extra()->make()->toArray();
         $dynamic['extras'] = [$extra->id];
+        $dynamic['entries'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
 
