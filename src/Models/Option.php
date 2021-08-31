@@ -16,7 +16,7 @@ class Option extends Model
 
     protected $table = 'resrv_options';
 
-    protected $fillable = ['name', 'slug', 'required', 'description', 'order', 'published'];
+    protected $fillable = ['name', 'slug', 'item_id', 'required', 'description', 'order', 'published'];
 
     protected $casts = [
         'published' => 'boolean',
