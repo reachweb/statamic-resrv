@@ -15,6 +15,7 @@ class CreateOptionsTable extends Migration
     {
         Schema::create('resrv_options', function (Blueprint $table) {
             $table->id();
+            $table->string('item_id')->index();
             $table->string('name');
             $table->string('slug')->index();
             $table->text('description')->nullable();
