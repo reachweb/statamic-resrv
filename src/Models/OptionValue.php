@@ -8,18 +8,17 @@ use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Database\Factories\OptionValueFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
-use Reach\StatamicResrv\Traits\HandlesOrdering;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 
 class OptionValue extends Model
 {
-    use HasFactory, HandlesOrdering, HandlesAvailabilityDates;
+    use HasFactory, HandlesAvailabilityDates;
 
     protected $table = 'resrv_options_values';
 
-    protected $fillable = ['name', 'price', 'price_type', 'description', 'order', 'published'];
+    protected $fillable = ['name', 'option_id', 'price', 'price_type', 'description', 'order', 'published'];
 
     protected $casts = [
         'published' => 'boolean',
@@ -62,6 +61,28 @@ class OptionValue extends Model
             return $this->price->multiply($quantity);
         }
     }  
+
+    public function changeOrder($order)
+    {
+        if ($this->order == $order) {
+            return;
+        }
+
+        $items = $this->where('option_id', $this->option_id)->orderBy('order')->get()->keyBy('id');
+        $movingItem = $items->pull($this->id);
+        $count = ($order == 1 ? 2 : 1);
+
+        foreach ($items as $item) {
+            if ($count == $order) {
+                $count++;
+            }
+            $item->order = $count;
+            $item->saveOrFail();
+            $count++;
+        }
+        $movingItem->order = $order;
+        $movingItem->saveOrFail();
+    }
     
 
 }
