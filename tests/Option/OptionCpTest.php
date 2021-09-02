@@ -38,6 +38,7 @@ class OptionCpTest extends TestCase
         $payload = [
             'name' => 'This is an option',
             'slug' => 'this-is-an-option',
+            'description' => 'This option is so cool it has a description',
             'item_id' => $item->id(),
             'required' => false,
             'published' => true
@@ -88,6 +89,7 @@ class OptionCpTest extends TestCase
             'id' => $option->id,
             'name' => 'This is another option',
             'slug' => 'this-is-another-option',
+            'description' => 'This option is less cool but still has a description',
             'item_id' => $item->id(),
             'required' => false,
             'order' => 1,

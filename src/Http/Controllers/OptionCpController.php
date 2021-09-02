@@ -30,6 +30,7 @@ class OptionCpController extends Controller
         $data = $request->validate([
             'name' => 'required',
             'slug' => 'required',
+            'description' => 'nullable',
             'item_id' => 'required',
             'required' => 'required|boolean',
             'published' => 'required|boolean',
@@ -68,6 +69,7 @@ class OptionCpController extends Controller
             'id' => 'required|integer',
             'name' => 'required',
             'slug' => 'required',
+            'description' => 'nullable',
             'item_id' => 'required',
             'order' => 'required|integer',
             'required' => 'required|boolean',

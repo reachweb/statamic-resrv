@@ -25,6 +25,7 @@ class OptionFactory extends Factory
             'id' => '1',
             'name'=> 'Reservation option',
             'slug' => 'reservation-option',
+            'description' => 'Select this option to improve your experience!',
             'required' => true,
             'order' => 1,
             'item_id' => '',
