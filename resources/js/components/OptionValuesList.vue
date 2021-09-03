@@ -10,7 +10,8 @@
                 <div class="flex items-center space-x-2">
                     <div class="little-dot" :class="value.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
                     <span class="font-medium cursor-pointer" v-html="value.name" @click="edit(value)"></span>
-                    <span>{{ value.price }} <span class="text-xs text-gray-500" v-html="priceLabel(value.price_type)"></span></span>
+                    <span v-if="value.price_type != 'free'">{{ value.price }} <span class="text-xs text-gray-500" v-html="priceLabel(value.price_type)"></span></span>
+                    <span v-else class="text-xs text-gray-500" v-html="__('Free')"></span></span>
                 </div>
                 <div class="flex space-x-2">                    
                     <dropdown-list>
