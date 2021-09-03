@@ -1,6 +1,7 @@
 var _ = require('lodash')
 
 import AvailabilityFieldtype from './fieldtypes/Availability.vue'
+import OptionsFieldtype from './fieldtypes/Options.vue'
 import ExtrasFieldtype from './fieldtypes/Extras.vue'
 import FixedPricing from './fieldtypes/FixedPricing.vue'
 
@@ -12,6 +13,7 @@ import DynamicPricingList from './components/DynamicPricingList.vue'
 Statamic.booting(() => {
     // Fieldtypes
     Statamic.$components.register('availability-fieldtype', AvailabilityFieldtype);
+    Statamic.$components.register('options-fieldtype', OptionsFieldtype);
     Statamic.$components.register('extras-fieldtype', ExtrasFieldtype);
     Statamic.$components.register('fixed_pricing-fieldtype', FixedPricing);
 

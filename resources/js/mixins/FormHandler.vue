@@ -12,6 +12,8 @@ export default {
         }
     },
 
+    emits: ['saved'],
+
     methods: {
         save() {
             this.toggleDisableSave()
