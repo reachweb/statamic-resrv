@@ -12,7 +12,9 @@ class Options extends Fieldtype
     {
         return Option::entry($this->field->parent()->id())            
             ->where('published', true)
+            ->with('values')
             ->get()
+            ->keyBy('slug')
             ->toArray();
     }
 
