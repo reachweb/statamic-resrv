@@ -3,14 +3,14 @@
 namespace Reach\StatamicResrv\Fieldtypes;
 
 use Statamic\Fields\Fieldtype;
-use Reach\StatamicResrv\Models\Options as OptionsModel;
+use Reach\StatamicResrv\Models\Option;
 
 class Options extends Fieldtype
 {
  
     public function augment($value)
     {
-        return OptionsModel::entry($this->field->parent()->id())            
+        return Option::entry($this->field->parent()->id())            
             ->where('published', true)
             ->get()
             ->toArray();
