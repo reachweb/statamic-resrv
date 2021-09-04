@@ -47,12 +47,15 @@ class OptionValue extends Model
 
     public function priceForDates($dates)
     {
-        $this->initiateAvailability($dates);
+        // This is a placeholder for now, in order to add dynamic pricing for options
         return $this->price->format();
     }
 
     public function calculatePrice($dates, $quantity) 
     {
+        if ($this->price_type == 'free') { 
+            return $this->price;
+        }
         $this->initiateAvailability($dates);
         if ($this->price_type == 'perday') {            
             return $this->price->multiply($quantity)->multiply($this->duration);

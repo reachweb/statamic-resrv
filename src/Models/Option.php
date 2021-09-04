@@ -38,6 +38,15 @@ class Option extends Model
         return $this->hasMany(OptionValue::class);
     }
 
+    public function valuesPriceForDates($dates)
+    {
+        foreach ($this->values as $value) {
+            $value->original_price = $value->price;
+            $value->price = $value->priceForDates($dates);
+        }
+        return $this;
+    }
+
     public function scopeEntry($query, $entry)
     {
         return $query->where('item_id', $entry);

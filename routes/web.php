@@ -9,6 +9,9 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/api/availability', 'AvailabilityController@index')->name('availability.index');
         Route::post('/resrv/api/availability/{statamic_id}', 'AvailabilityController@show')->name('availability.show');
 
+        // Options
+        Route::post('/resrv/api/option', 'OptionController@index')->name('option.index');
+
         // Extras
         Route::post('/resrv/api/extra', 'ExtraController@index')->name('extra.index');
 
