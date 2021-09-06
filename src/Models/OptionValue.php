@@ -51,17 +51,14 @@ class OptionValue extends Model
         return $this->price->format();
     }
 
-    public function calculatePrice($dates, $quantity) 
+    public function calculatePrice($dates) 
     {
-        if ($this->price_type == 'free') { 
+        if ($this->price_type == 'free' || $this->price_type == 'fixed') { 
             return $this->price;
         }
         $this->initiateAvailability($dates);
         if ($this->price_type == 'perday') {            
-            return $this->price->multiply($quantity)->multiply($this->duration);
-        }
-        if ($this->price_type == 'fixed') {
-            return $this->price->multiply($quantity);
+            return $this->price->multiply($this->duration);
         }
     }  
 

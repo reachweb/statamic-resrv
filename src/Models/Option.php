@@ -47,6 +47,12 @@ class Option extends Model
         return $this;
     }
 
+    public function calculatePrice($dates, $value)
+    {
+        $value = $this->values->find($value);
+        return $value->calculatePrice($dates);
+    }
+
     public function scopeEntry($query, $entry)
     {
         return $query->where('item_id', $entry);
