@@ -264,7 +264,14 @@ class ReservationFrontTest extends TestCase
     {
         //$this->withExceptionHandling();
         $item = $this->makeStatamicItem();
-        $location = Location::factory()->create(); 
+        $location = Location::factory()->create();
+        $option = Option::factory()
+            ->state([
+                'item_id' => $item->id(),
+            ])
+            ->notRequired()
+            ->has(OptionValue::factory()->count(3), 'values')
+            ->create();  
         Config::set('resrv-config.enable_locations', true);
         Config::set('resrv-config.admin_email', 'someone@test.com,someonelse@example.com');
 
@@ -274,7 +281,9 @@ class ReservationFrontTest extends TestCase
             'location_start' => $location->id,
             'location_end' => $location->id,
         ])->create();
-      
+
+        $reservation->options()->attach($option->id, ['value' => 1]);
+    
         $mail = new ReservationConfirmed($reservation);
         $html = $mail->render();
         

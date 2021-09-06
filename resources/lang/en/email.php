@@ -9,6 +9,7 @@ return [
     'bookingReference' => 'Booking reference',
     'date' => 'Date',
     'email' => 'Email',
+    'options' => 'Options',
     'extras' => 'Extras',
     'reservationDetails' => 'Reservation details',
     'pickUpDate' => 'Pick-up date',
