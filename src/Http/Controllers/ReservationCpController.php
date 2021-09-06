@@ -52,7 +52,7 @@ class ReservationCpController extends Controller
 
     public function show($id)
     {
-        $reservation = $this->reservation->with('location_start_data', 'location_end_data', 'extras')->find($id);
+        $reservation = $this->reservation->with('location_start_data', 'location_end_data', 'extras', 'options')->find($id);
         $entry = $reservation->entry();
         $fields = $reservation->checkoutFormFieldsArray();
 

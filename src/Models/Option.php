@@ -23,6 +23,8 @@ class Option extends Model
         'required' => 'boolean',
     ];
 
+    protected $with = ['values'];
+
     protected static function newFactory()
     {
         return OptionFactory::new();
