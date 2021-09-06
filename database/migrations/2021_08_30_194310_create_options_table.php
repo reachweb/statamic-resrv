@@ -17,7 +17,7 @@ class CreateOptionsTable extends Migration
             $table->id();
             $table->string('item_id')->index();
             $table->string('name');
-            $table->string('slug')->index();
+            $table->string('slug');
             $table->text('description')->nullable();
             $table->integer('order');
             $table->boolean('required');
