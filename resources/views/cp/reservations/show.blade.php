@@ -89,6 +89,36 @@
     </div>
     @endif
 
+    @if ($reservation->options->count() > 0)
+    <div>
+        <div class="mb-2 content">
+            <h2 class="text-base">Options</h2>
+        </div>
+        <div class="card p-2 mb-5">
+        @foreach ($reservation->options as $option)               
+            <div class="mb-1 border-b border-gray flex justify-between w-full p-1">
+                <div>{{ $option->name }}</div>
+                <div>{{ $option->values->find($option->pivot->value)->name }}</div>
+                @if ($option->values->find($option->pivot->value)->price_type != 'free')
+                <div class="font-bold">
+                    {{ $option->values->find($option->pivot->value)->price->format() }}
+                    <span class="font-normal">
+                        @if ($option->values->find($option->pivot->value)->price_type == 'fixed')
+                        / reservation
+                        @endif
+                        @if ($option->values->find($option->pivot->value)->price_type == 'perday')
+                        / day
+                        @endif
+                    </span>
+                </div>
+                @endif
+            </div>  
+        @endforeach             
+        </div>
+    </div>
+    @endif
+
+    @if ($reservation->extras->count() > 0)
     <div>
         <div class="mb-2 content">
             <h2 class="text-base">Extras</h2>
@@ -112,6 +142,7 @@
         @endforeach             
         </div>
     </div>
+    @endif
 
     <div>
         <div class="mb-2 content">

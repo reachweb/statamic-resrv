@@ -86,9 +86,6 @@ class Price implements CastsAttributes
 
     public function get($model, $key, $value, $attributes)
     {
-        if ($value == 0) {
-            return null;
-        }
         $this->create($value);
         return $this->format();
     }
