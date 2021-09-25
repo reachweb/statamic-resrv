@@ -109,6 +109,11 @@ export default {
 
     mounted() {
         this.createSubmit()
+        if (_.has(this.data, 'id')) {
+            if (this.data.price_type != 'free') {
+                this.showPrice = true
+            }            
+        }
     },
 
     data() {
