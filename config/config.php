@@ -19,6 +19,7 @@ return [
     /**
      * Reservation settings.
      * enable_locations: checkout expects to receive location info to calculate any extra charges
+     * enable_time: the reservation will have an explicit pickup and drop-off time
      * minimum_days_before: set this to the number of days allowed between booking date and pickup time (calendar days count not 24 hour difference)
      * minimum_reservation_period_in_days: the minimum days for a reservation
      * maximum_reservation_period_in_day: the maximum days for a reservation
@@ -29,6 +30,7 @@ return [
      */
 
     'enable_locations'                     => false,
+    'enable_time'                          => false,
     'minimum_days_before'                  => false,
     'minimum_reservation_period_in_days'   => 1,
     'maximum_reservation_period_in_days'   => 30,

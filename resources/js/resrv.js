@@ -10,6 +10,8 @@ import LocationsList from './components/LocationsList.vue'
 import ReservationsList from './components/ReservationsList.vue'
 import DynamicPricingList from './components/DynamicPricingList.vue'
 
+import ReservationsCalendar from './components/ReservationsCalendar.vue'
+
 Statamic.booting(() => {
     // Fieldtypes
     Statamic.$components.register('availability-fieldtype', AvailabilityFieldtype);
@@ -22,4 +24,7 @@ Statamic.booting(() => {
     Statamic.$components.register('locations-list', LocationsList);
     Statamic.$components.register('reservations-list', ReservationsList);
     Statamic.$components.register('dynamic-pricing-list', DynamicPricingList);
+
+    // Calendar
+    Statamic.$components.register('reservations-calendar', ReservationsCalendar);
 })
