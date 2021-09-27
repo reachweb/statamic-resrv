@@ -98,7 +98,7 @@ class ReservationCpTest extends TestCase
         $response = $this->get(cp_route('resrv.reservations.calendar.list').'?start="'.now()->toIso8601String().'&end='.now()->addMonth()->toIso8601String());
 
 
-        $response->assertStatus(200)->assertSee($reservation->id)->assertSee($location->name)->assertSee($item->title);     
+        $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title);     
     }
 
     public function test_can_show_reservations_calendar()
