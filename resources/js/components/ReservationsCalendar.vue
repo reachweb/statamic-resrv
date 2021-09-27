@@ -22,6 +22,7 @@ export default {
                 initialView: 'dayGridMonth',
                 navLinks: true,
                 events: this.calendarJsonUrl,
+                timeZone: 'UTC',
                 eventTimeFormat: { 
                     hour: '2-digit',
                     minute: '2-digit',
