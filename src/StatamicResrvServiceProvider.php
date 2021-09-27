@@ -114,6 +114,12 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
                 ->route('resrv.reservations.index')
                 ->icon('<svg viewBox="0 0 24 24" height="24" width="24" xmlns="http://www.w3.org/2000/svg">,,,,<g transform="matrix(1,0,0,1,0,0)"><path d="M18.018,17.562a2,2,0,0,0,.482-1.3V5.5H5.5v15h9.08a2,2,0,0,0,1.519-.7Z" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round"></path><path d="M20.5,2.5H15.052a3.329,3.329,0,0,0-6.1,0H3.5a1,1,0,0,0-1,1v19a1,1,0,0,0,1,1h17a1,1,0,0,0,1-1V3.5A1,1,0,0,0,20.5,2.5Z" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15.5 8.5L8.5 8.5" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round"></path><path d="M15.5 12.5L8.5 12.5" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round"></path><path d="M13 16.5L8.5 16.5" fill="none" stroke="#000" stroke-linecap="round" stroke-linejoin="round"></path></g></svg>');
                 
+            $nav->create(ucfirst(__('Calendar')))
+                ->section('Resrv')
+                ->can(auth()->user()->can('use resrv'))
+                ->route('resrv.reservations.calendar')
+                ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" class="h-4 w-4 text-grey-80 group-hover:text-blue"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" d="M15.5 14.5c0 .6-.4 1-1 1h-13c-.6 0-1-.4-1-1v-11c0-.6.4-1 1-1h13c.6 0 1 .4 1 1v11zm-15-8h15M4.5 4V.5m7 3.5V.5"></path></svg>');
+                
             $nav->create(ucfirst(__('Locations')))
                 ->section('Resrv')
                 ->can(auth()->user()->can('use resrv'))

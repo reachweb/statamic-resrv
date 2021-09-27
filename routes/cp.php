@@ -37,6 +37,8 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
 
         Route::get('/resrv/reservation', 'ReservationCpController@index')->name('reservation.index');
         Route::get('/resrv/reservations', 'ReservationCpController@indexCp')->name('reservations.index');
+        Route::get('/resrv/reservations/calendar/list', 'ReservationCpController@calendar')->name('reservations.calendar.list');
+        Route::get('/resrv/reservations/calendar', 'ReservationCpController@calendarCp')->name('reservations.calendar');
         Route::get('/resrv/reservation/{id}', 'ReservationCpController@show')->name('reservation.show');
         Route::patch('/resrv/reservation/refund', 'ReservationCpController@refund')->name('reservation.refund');
 
