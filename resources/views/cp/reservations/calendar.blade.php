@@ -1,6 +1,6 @@
 @extends('statamic::layout')
 @section('title', 'Resrv Reservations Calendar')
-@section('wrapper_class', 'page-wrapper max-w-xl')
+@section('wrapper_class', 'page-wrapper max-w-full')
 
 @section('content')
 

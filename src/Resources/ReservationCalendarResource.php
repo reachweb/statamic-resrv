@@ -23,7 +23,8 @@ class ReservationCalendarResource extends ResourceCollection
                 'title' => '#'.$reservation->id.' - '.$reservation->entry['title'].' - '.$reservation->location_start_data->name,
                 'start' => $this->formatDate($reservation->date_start),
                 'end' => $this->formatDate($reservation->date_end),
-                'url' => cp_route('resrv.reservation.show', $reservation->id)                               
+                'url' => cp_route('resrv.reservation.show', $reservation->id),
+                'color' => 'hsl('.rand(0,359).','.rand(0,100).'%,'.rand(0,55).'%)'
             ];
         });
     }
@@ -40,4 +41,5 @@ class ReservationCalendarResource extends ResourceCollection
 
         return $date->toIso8601String();
     }
+
 }
