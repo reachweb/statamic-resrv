@@ -53,8 +53,8 @@ class ReservationCpController extends Controller
                         ->where('status', 'confirmed')
                         ->orderBy('date_start')
                         ->get();
-                        
-    return response()->json(new ReservationCalendarResource($reservations));                        
+                       
+        return response()->json(new ReservationCalendarResource($reservations));                        
     }
 
     public function index(FilteredRequest $request)

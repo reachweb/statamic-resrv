@@ -17,8 +17,8 @@ class ReservationCalendarResource extends ResourceCollection
 
     public function toArray($request)
     {
-        return $this->collection->transform(function ($reservation) {            
-            return [
+        return $this->collection->transform(function ($reservation) use ($request) {   
+            $data = [
                 'id' => $reservation->id,
                 'title' => '#'.$reservation->id.' - '.$reservation->entry['title'].(config('resrv-config.enable_locations') ? ' - '.$reservation->location_start_data->name : ''),
                 'start' => $this->formatDate($reservation->date_start),
@@ -26,6 +26,13 @@ class ReservationCalendarResource extends ResourceCollection
                 'url' => cp_route('resrv.reservation.show', $reservation->id),
                 'color' => 'hsl('.rand(0,359).','.rand(0,100).'%,'.rand(0,55).'%)'
             ];
+            // Remove end date if we only want the start date
+            if ($request->has('onlyStart')) {
+                if ($request->query('onlyStart') == 1) {
+                    $data['end'] = null;
+                }
+            }
+            return $data;
         });
     }
 

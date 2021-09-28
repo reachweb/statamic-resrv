@@ -1,5 +1,11 @@
 <template>
     <div class="card p-2">
+        <div class="w-full flex">
+            <div class="pt-1 pb-2 flex items-center">
+                <div class="mr-1">{{ __('Only show start dates') }}</div>
+                <toggle-input v-model="onlyStart"></toggle-input>
+            </div> 
+        </div>
         <FullCalendar ref="fullCalendar" :options="calendarOptions" />
     </div>    
 </template>
@@ -21,7 +27,16 @@ export default {
                 plugins: [ dayGridPlugin, interactionPlugin ],
                 initialView: 'dayGridMonth',
                 navLinks: true,
-                events: this.calendarJsonUrl,
+                events: {
+                    url: this.calendarJsonUrl,
+                    extraParams: () => {
+                        if (this.onlyStart) {
+                            return {
+                                onlyStart: 1
+                            }
+                        }
+                    }
+                },
                 timeZone: 'UTC',
                 eventTimeFormat: { 
                     hour: '2-digit',
@@ -33,7 +48,15 @@ export default {
                     center: 'title',
                     right: 'dayGridMonth,dayGridDay'
                 },
-            }
+            },
+            onlyStart: false
+        }
+    },
+
+    watch: {
+        onlyStart() {
+            let calApi = this.$refs.fullCalendar.getApi()
+            calApi.refetchEvents()
         }
     },
 
