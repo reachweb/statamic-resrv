@@ -5,8 +5,11 @@ namespace Reach\StatamicResrv\Fieldtypes;
 use Statamic\Fields\Fieldtype;
 use Reach\StatamicResrv\Models\Availability as EntryAvailability;
 
-class Availability extends Fieldtype
+class ResrvAvailability extends Fieldtype
 {
+
+    protected $icon = 'calendar';
+
     public function augment($value)
     {   
         if ($value != 'disabled') {

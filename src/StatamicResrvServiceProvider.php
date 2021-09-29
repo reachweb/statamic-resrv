@@ -25,10 +25,10 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
     ];
 
     protected $fieldtypes = [
-        \Reach\StatamicResrv\Fieldtypes\Availability::class,
-        \Reach\StatamicResrv\Fieldtypes\Options::class,
-        \Reach\StatamicResrv\Fieldtypes\Extras::class,
-        \Reach\StatamicResrv\Fieldtypes\FixedPricing::class,
+        \Reach\StatamicResrv\Fieldtypes\ResrvAvailability::class,
+        \Reach\StatamicResrv\Fieldtypes\ResrvOptions::class,
+        \Reach\StatamicResrv\Fieldtypes\ResrvExtras::class,
+        \Reach\StatamicResrv\Fieldtypes\ResrvFixedPricing::class,
     ];
     
     protected $tags = [

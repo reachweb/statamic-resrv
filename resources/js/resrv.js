@@ -14,10 +14,10 @@ import ReservationsCalendar from './components/ReservationsCalendar.vue'
 
 Statamic.booting(() => {
     // Fieldtypes
-    Statamic.$components.register('availability-fieldtype', AvailabilityFieldtype);
-    Statamic.$components.register('options-fieldtype', OptionsFieldtype);
-    Statamic.$components.register('extras-fieldtype', ExtrasFieldtype);
-    Statamic.$components.register('fixed_pricing-fieldtype', FixedPricing);
+    Statamic.$components.register('resrv_availability-fieldtype', AvailabilityFieldtype);
+    Statamic.$components.register('resrv_options-fieldtype', OptionsFieldtype);
+    Statamic.$components.register('resrv_extras-fieldtype', ExtrasFieldtype);
+    Statamic.$components.register('resrv_fixed_pricing-fieldtype', FixedPricing);
 
     // Lists
     Statamic.$components.register('extras-list', ExtrasList);
