@@ -145,7 +145,9 @@ class Availability extends Model
             ->get(['date', 'price', 'available'])
             ->sortBy('date');
 
-        if ($results->contains('available', 0) || $results->count() !== count($this->getPeriod())) {
+        $entryAvailabilityValue = Entry::find($statamic_id)->get('resrv_availability');
+
+        if ($results->contains('available', 0) || $results->count() !== count($this->getPeriod()) || $entryAvailabilityValue == 'disabled') {
             return [
                 'message' => [
                     'status' => false

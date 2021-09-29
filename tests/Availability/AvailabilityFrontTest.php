@@ -248,6 +248,9 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertDontSee($item->id());
 
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);
+
     }
 
     public function test_availability_can_get_available_for_date_range_one_id_only()
