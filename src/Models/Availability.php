@@ -242,7 +242,7 @@ class Availability extends Model
     protected function getDisabledIds()
     {
     $results = Entry::query()
-            ->where('availability', 'disabled')
+            ->where('resrv_availability', 'disabled')
             ->where('published', true)
             ->get()
             ->toAugmentedArray('id');
