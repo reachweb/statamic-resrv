@@ -51,13 +51,13 @@ class Report
             return [
                 'title' => $item->entry['title'],
                 'api_url' => $item->entry['api_url'],
-                'reservations' => $item->occurrences,
-                'total_revenue' => Price::create($this->reservations->where('item_id', $item->item_id)->sum(function ($reservation) {
+                'reservations' => (int)$item->occurrences,
+                'total_revenue' => round($this->reservations->where('item_id', $item->item_id)->sum(function ($reservation) {
                     return $reservation->price->format();
-                }))->format(),
-                'avg_revenue' => Price::create($this->reservations->where('item_id', $item->item_id)->avg(function ($reservation) {
+                }), 2),
+                'avg_revenue' => round($this->reservations->where('item_id', $item->item_id)->avg(function ($reservation) {
                     return $reservation->price->format();
-                }))->format(),
+                }), 2),
                 'percentage' => round($item->occurrences / $this->countConfirmedReservations(), 2)
             ];            
         });
@@ -72,7 +72,7 @@ class Report
             $extra = Extra::find($item->extra_id);
             return [
                 'title' => $extra->name,
-                'reservations' => $item->occurrences,
+                'reservations' => (int)$item->occurrences,
                 'percentage' => round($item->occurrences / $this->countConfirmedReservations(), 2)          
             ];      
         });
@@ -88,7 +88,7 @@ class Report
         $locations->transform(function ($item) {
             return [
                 'title' => $item->location_start_data->name,
-                'reservations' => $item->occurrences,
+                'reservations' => (int)$item->occurrences,
                 'percentage' => round($item->occurrences / $this->countConfirmedReservations(), 2)          
             ];      
         });

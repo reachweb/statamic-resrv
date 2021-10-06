@@ -9,7 +9,11 @@
     </div>
 
     <div>
-
+        <reports-view
+            reports-url="{{ cp_route('resrv.report.index') }}"
+            currency="{{ config('resrv-config.currency_symbol') }}"
+        >
+        </reports-view>
     </div>
 
 @endsection
