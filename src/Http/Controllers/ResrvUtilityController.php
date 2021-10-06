@@ -28,7 +28,7 @@ class ResrvUtilityController extends Controller
         foreach ($allCollections as $collection) {
             foreach ($collection->entryBlueprints() as $blueprint) {
                 foreach ($blueprint->fields()->all() as $field) {
-                    if ($field->config()['type'] == 'availability') {
+                    if ($field->config()['type'] == 'resrv_availability') {
                         $collections[] = $collection->handle();
                     }
                 }

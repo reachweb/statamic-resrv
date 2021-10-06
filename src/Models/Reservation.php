@@ -11,6 +11,7 @@ use Statamic\Facades\Form;
 use Statamic\Facades\Entry;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Exceptions\ReservationException;
@@ -62,6 +63,11 @@ class Reservation extends Model
         return Entry::find($this->item_id)->toShallowAugmentedArray();
     }
 
+    public function options()
+    {
+        return $this->belongsToMany(Option::class, 'resrv_reservation_option')->withPivot('value');
+    }
+    
     public function extras()
     {
         return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot('quantity');
@@ -104,6 +110,10 @@ class Reservation extends Model
             throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
 
+        if (! $this->checkForRequiredOptions($statamic_id, $data)) {
+            throw new ReservationException(__('There are required options you did not select.'));
+        }
+
         return true;
 
     }
@@ -112,6 +122,13 @@ class Reservation extends Model
     {
         $reservationCost = Price::create($data['price']);
 
+        $optionsCost = Price::create(0);
+        if (array_key_exists('options', $data) > 0) {
+            foreach($data['options'] as $id => $properties) {
+                $optionsCost->add(Option::find($id)->calculatePrice($data, $properties['value']));
+            }
+        }    
+        
         $extrasCost = Price::create(0);
         if (array_key_exists('extras', $data) > 0) {
             foreach($data['extras'] as $id => $properties) {
@@ -120,14 +137,42 @@ class Reservation extends Model
         }    
 
         $locationCost = Price::create(0);
-
         if (config('resrv-config.enable_locations') == true) {            
             $locationCost->add(Location::find($data['location_start'])->extra_charge);
             $locationCost->add(Location::find($data['location_end'])->extra_charge);
         }
 
-        return $reservationCost->add($extrasCost, $locationCost)->format();
+        return $reservationCost->add($optionsCost, $extrasCost, $locationCost)->format();
+    }
 
+    protected function checkForRequiredOptions($statamic_id, $data)
+    {        
+        $requiredOptions = Option::entry($statamic_id)            
+            ->where('published', true)
+            ->where('required', true)
+            ->get()
+            ->groupBy('id')
+            ->toArray();
+
+        // If the item doesn't have required options return true
+        if (count($requiredOptions) == 0) {
+            return true;
+        }
+
+        // If the item has required options but the key is not present in the data array return false
+        if (! array_key_exists('options', $data)) {
+            return false;
+        }
+
+        $checkoutOptions = $data['options'];
+
+        // Check if each required option is in the data array otherwise return false 
+        foreach ($requiredOptions as $id => $option) {
+            if (! array_key_exists($id, $checkoutOptions)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public function createRandomReference()

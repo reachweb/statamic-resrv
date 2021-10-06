@@ -18,6 +18,16 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/extra/order', 'ExtraCpController@order')->name('extra.order');
         Route::delete('/resrv/extra', 'ExtraCpController@delete')->name('extra.delete');
 
+        Route::get('/resrv/option/{statamic_id}', 'OptionCpController@entryIndex')->name('option.entryindex');
+        Route::post('/resrv/option', 'OptionCpController@create')->name('option.create');
+        Route::patch('/resrv/option', 'OptionCpController@update')->name('option.update');
+        Route::delete('/resrv/option', 'OptionCpController@delete')->name('option.delete');
+        Route::patch('/resrv/option/order', 'OptionCpController@order')->name('option.order');
+        Route::post('/resrv/option/{id}', 'OptionCpController@createValue')->name('option.value.create');
+        Route::patch('/resrv/option/{id}', 'OptionCpController@updateValue')->name('option.value.update');
+        Route::patch('/resrv/option/value/order', 'OptionCpController@orderValue')->name('option.value.order');
+        Route::delete('/resrv/option/value', 'OptionCpController@deleteValue')->name('option.value.delete');
+
         Route::get('/resrv/locations', 'LocationCpController@indexCp')->name('locations.index');
         Route::get('/resrv/location', 'LocationCpController@index')->name('location.index');
         Route::post('/resrv/location', 'LocationCpController@create')->name('location.create');
@@ -27,6 +37,8 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
 
         Route::get('/resrv/reservation', 'ReservationCpController@index')->name('reservation.index');
         Route::get('/resrv/reservations', 'ReservationCpController@indexCp')->name('reservations.index');
+        Route::get('/resrv/reservations/calendar/list', 'ReservationCpController@calendar')->name('reservations.calendar.list');
+        Route::get('/resrv/reservations/calendar', 'ReservationCpController@calendarCp')->name('reservations.calendar');
         Route::get('/resrv/reservation/{id}', 'ReservationCpController@show')->name('reservation.show');
         Route::patch('/resrv/reservation/refund', 'ReservationCpController@refund')->name('reservation.refund');
 

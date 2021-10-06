@@ -50,6 +50,7 @@ class ReservationResource extends ResourceCollection
                     'date_end' => $this->formatDate($reservation->date_end),
                     'customer' => $reservation->customer,
                     'extras' => $reservation->extras,
+                    'options' => $reservation->options,
                     'created_at' => $this->formatDate($reservation->created_at),
                     'updated_at' => $this->formatDate($reservation->updated_at),
                 ];

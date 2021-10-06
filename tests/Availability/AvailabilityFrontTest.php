@@ -224,7 +224,7 @@ class AvailabilityFrontTest extends TestCase
 
         $item = $this->makeStatamicItem([
             'title' => 'Stop sales now!',
-            'availability' => 'disabled'
+            'resrv_availability' => 'disabled'
         ]);
 
         $payload = [
@@ -247,6 +247,9 @@ class AvailabilityFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertDontSee($item->id());
+
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);
 
     }
 

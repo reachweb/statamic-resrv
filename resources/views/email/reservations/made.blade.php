@@ -31,6 +31,16 @@
 @endcomponent
 @endif
 
+@if ($reservation->options()->get()->count() > 0)
+@component('mail::table')
+|{{ __('statamic-resrv::email.options') }}||
+| :------------------------------------------------ |:--------------------------------------------------------------------------| 
+@foreach ($reservation->options()->get() as $option)
+| {{ $option->name }} | {{ $option->values->find($option->pivot->value)->name }} |
+@endforeach
+@endcomponent
+@endif
+
 @component('mail::table')
 |{{ __('statamic-resrv::email.paymentInformation') }}||
 | :----------------------------- |:----------------| 

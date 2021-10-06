@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Resources\ReservationResource;
+use Reach\StatamicResrv\Resources\ReservationCalendarResource;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
@@ -34,6 +35,28 @@ class ReservationCpController extends Controller
         return view('statamic-resrv::cp.reservations.index', compact('filters'));
     }
 
+    public function calendarCp()
+    {
+        return view('statamic-resrv::cp.reservations.calendar');
+    }
+
+    public function calendar(Request $request)
+    {   
+        // TODO: better validation
+        $data = $request->validate([
+            'start' => 'required',
+            'end' => 'required',
+        ]);
+
+        $reservations = $this->reservation->whereDate('date_start', '>=', $data['start'])
+                        ->whereDate('date_end', '<=', $data['end'])
+                        ->where('status', 'confirmed')
+                        ->orderBy('date_start')
+                        ->get();
+                       
+        return response()->json(new ReservationCalendarResource($reservations));                        
+    }
+
     public function index(FilteredRequest $request)
     {
         $query = $this->getReservations();
@@ -52,7 +75,7 @@ class ReservationCpController extends Controller
 
     public function show($id)
     {
-        $reservation = $this->reservation->with('location_start_data', 'location_end_data', 'extras')->find($id);
+        $reservation = $this->reservation->with('location_start_data', 'location_end_data', 'extras', 'options')->find($id);
         $entry = $reservation->entry();
         $fields = $reservation->checkoutFormFieldsArray();
 

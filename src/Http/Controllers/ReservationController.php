@@ -32,6 +32,7 @@ class ReservationController extends Controller
             'price' => 'required|numeric',
             'total' => 'required|numeric',
             'extras' => 'nullable|array',  
+            'options' => 'nullable|array',  
         ];
 
         if (config('resrv-config.enable_locations') == true) {
@@ -65,6 +66,12 @@ class ReservationController extends Controller
         ]);
 
         ReservationCreated::dispatch($reservation);
+        
+        if (array_key_exists('options', $data) > 0) {
+            foreach ($data['options'] as $id => $properties) {
+                $this->reservation->find($reservation->id)->options()->attach($id, ['value' => $properties['value']]);
+            }
+        }
         
         if (array_key_exists('extras', $data) > 0) {
             foreach ($data['extras'] as $id => $properties) {

@@ -14,6 +14,7 @@
         <testsuite name="Resrv">
             <directory suffix="Test.php">tests/Availability/</directory>
             <directory suffix="Test.php">tests/Extra/</directory>
+            <directory suffix="Test.php">tests/Option/</directory>
             <directory suffix="Test.php">tests/Location/</directory>
             <directory suffix="Test.php">tests/Reservation/</directory>
             <directory suffix="Test.php">tests/FixedPricing/</directory>

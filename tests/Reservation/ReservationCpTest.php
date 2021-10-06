@@ -82,5 +82,31 @@ class ReservationCpTest extends TestCase
         Mail::assertSent(ReservationRefunded::class);  
     }
 
+    public function test_can_query_reservations_calendar_json()
+    {       
+        $item = $this->makeStatamicItem();
+        $location = Location::factory()->create(); 
+
+        $reservation = Reservation::factory([
+            'customer' => ['email' => 'test@test.com'],
+            'item_id' => $item->id(),
+            'location_start' => $location->id,
+            'location_end' => $location->id,
+            'status' => 'confirmed',
+        ])->create();
+
+        $response = $this->get(cp_route('resrv.reservations.calendar.list').'?start="'.now()->toIso8601String().'&end='.now()->addMonth()->toIso8601String());
+
+
+        $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title);     
+    }
+
+    public function test_can_show_reservations_calendar()
+    {      
+        $response = $this->get(cp_route('resrv.reservations.calendar'));
+
+        $response->assertStatus(200)->assertSee('Reservations Calendar');     
+    }
+
 
 }

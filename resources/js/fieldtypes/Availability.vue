@@ -81,7 +81,11 @@ export default {
             this.getAvailability()
             this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
             this.calendar.render()
-        }        
+        }  
+    },
+
+    created() {
+        this.$events.$on('tab-switched', this.renderAgain);
     },
 
     updated() {
@@ -141,6 +145,9 @@ export default {
             }           
 
             return { domNodes: arrayOfDomNodes }
+        },
+        renderAgain() {
+            window.dispatchEvent(new Event('resize'))
         },
         hasAvailable(day) {
             if (day in this.availability) {

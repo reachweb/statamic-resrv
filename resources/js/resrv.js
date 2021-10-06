@@ -1,6 +1,7 @@
 var _ = require('lodash')
 
 import AvailabilityFieldtype from './fieldtypes/Availability.vue'
+import OptionsFieldtype from './fieldtypes/Options.vue'
 import ExtrasFieldtype from './fieldtypes/Extras.vue'
 import FixedPricing from './fieldtypes/FixedPricing.vue'
 
@@ -11,11 +12,14 @@ import DynamicPricingList from './components/DynamicPricingList.vue'
 import ReportsView from './components/ReportsView.vue'
 
 
+import ReservationsCalendar from './components/ReservationsCalendar.vue'
+
 Statamic.booting(() => {
     // Fieldtypes
-    Statamic.$components.register('availability-fieldtype', AvailabilityFieldtype);
-    Statamic.$components.register('extras-fieldtype', ExtrasFieldtype);
-    Statamic.$components.register('fixed_pricing-fieldtype', FixedPricing);
+    Statamic.$components.register('resrv_availability-fieldtype', AvailabilityFieldtype);
+    Statamic.$components.register('resrv_options-fieldtype', OptionsFieldtype);
+    Statamic.$components.register('resrv_extras-fieldtype', ExtrasFieldtype);
+    Statamic.$components.register('resrv_fixed_pricing-fieldtype', FixedPricing);
 
     // Lists
     Statamic.$components.register('extras-list', ExtrasList);
@@ -23,4 +27,7 @@ Statamic.booting(() => {
     Statamic.$components.register('reservations-list', ReservationsList);
     Statamic.$components.register('dynamic-pricing-list', DynamicPricingList);
     Statamic.$components.register('reports-view', ReportsView);
+  
+    // Calendar
+    Statamic.$components.register('reservations-calendar', ReservationsCalendar);
 })
