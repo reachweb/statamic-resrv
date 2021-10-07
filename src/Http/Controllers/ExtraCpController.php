@@ -117,6 +117,12 @@ class ExtraCpController extends Controller
         DB::table('resrv_statamicentry_extra')
             ->where('extra_id', $data['id'])
             ->delete();
+            
+        DB::table('resrv_dynamic_pricing_assignments')
+            ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Extra')
+            ->where('dynamic_pricing_assignment_id', $data['id'])
+            ->delete();
+
         return response(200);
     }
 
