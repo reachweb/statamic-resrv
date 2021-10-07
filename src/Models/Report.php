@@ -69,7 +69,7 @@ class Report
     {
         $extras = $this->getTopExtras();
         $extras->transform(function ($item) {
-            $extra = Extra::find($item->extra_id);
+            $extra = Extra::withTrashed()->find($item->extra_id);
             return [
                 'title' => $extra->name,
                 'reservations' => (int)$item->occurrences,

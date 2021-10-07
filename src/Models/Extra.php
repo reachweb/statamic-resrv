@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
@@ -14,7 +15,7 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 
 class Extra extends Model
 {
-    use HasFactory, HandlesOrdering, HandlesAvailabilityDates;
+    use HasFactory, HandlesOrdering, HandlesAvailabilityDates, SoftDeletes;
 
     protected $table = 'resrv_extras';
 

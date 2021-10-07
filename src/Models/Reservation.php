@@ -70,7 +70,7 @@ class Reservation extends Model
     
     public function extras()
     {
-        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot('quantity');
+        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot('quantity')->withTrashed();
     }
 
     public function location_start_data()
