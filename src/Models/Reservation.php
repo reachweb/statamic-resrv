@@ -75,12 +75,12 @@ class Reservation extends Model
 
     public function location_start_data()
     {
-        return $this->hasOne(Location::class, 'id', 'location_start');
+        return $this->hasOne(Location::class, 'id', 'location_start')->withTrashed();
     }
     
     public function location_end_data()
     {
-        return $this->hasOne(Location::class, 'id', 'location_end');
+        return $this->hasOne(Location::class, 'id', 'location_end')->withTrashed();
     }
 
     public function amountRemaining()

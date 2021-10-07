@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\LocationFactory;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
@@ -14,7 +15,7 @@ use Reach\StatamicResrv\Facades\Price;
 
 class Location extends Model
 {
-    use HasFactory, HandlesOrdering;
+    use HasFactory, HandlesOrdering, SoftDeletes;
 
     protected $table = 'resrv_locations';
 
