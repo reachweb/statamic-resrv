@@ -15,8 +15,6 @@
 
 <script>
 import FixedPricingList from '../components/FixedPricingList.vue'
-import FixedPricingPanel from '../components/FixedPricingPanel.vue'
-
 
 export default {
 
@@ -30,7 +28,6 @@ export default {
 
     components: {
         FixedPricingList,
-        FixedPricingPanel
     },
 
     computed: {

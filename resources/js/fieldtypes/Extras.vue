@@ -17,8 +17,6 @@
 
 <script>
 import ExtrasList from '../components/ExtrasList.vue'
-import ExtrasPanel from '../components/ExtrasPanel.vue'
-
 
 export default {
 
@@ -32,7 +30,6 @@ export default {
 
     components: {
         ExtrasList,
-        ExtrasPanel
     },
 
     computed: {
