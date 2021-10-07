@@ -1,6 +1,6 @@
 <?php
 
-namespace Reach\StatamicResrv\Tests\Extras;
+namespace Reach\StatamicResrv\Tests\Extra;
 
 use Reach\StatamicResrv\Tests\TestCase;
 use Reach\StatamicResrv\Models\Extra;
