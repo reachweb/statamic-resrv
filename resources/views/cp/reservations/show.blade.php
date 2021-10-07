@@ -15,7 +15,7 @@
 
     <header class="mb-3">
         <div class="flex items-center justify-between">
-            <h1>Reservation #{{ $reservation->id }} - {{ $entry->title }}</h1> 
+            <h1>Reservation #{{ $reservation->id }} - {{ $reservation->entry['title'] }}</h1> 
         </div>
     </header>
 

@@ -25,7 +25,7 @@ class Reservation extends Model
     use HasFactory;
 
     protected $table = 'resrv_reservations';
-
+    
     protected $guarded = [];
 
     protected $casts = [
@@ -45,7 +45,7 @@ class Reservation extends Model
 
     public function entry()
     {
-        return Entry::find($this->item_id);
+        return Entry::find($this->item_id) ?? $this->emptyEntry();        
     }
 
     public function getPriceAttribute($value)
@@ -60,7 +60,7 @@ class Reservation extends Model
 
     public function getEntryAttribute()
     {
-        return Entry::find($this->item_id)->toShallowAugmentedArray();
+        return Entry::find($this->item_id) ? Entry::find($this->item_id)->toAugmentedArray() : $this->emptyEntry();
     }
 
     public function options()
@@ -223,6 +223,15 @@ class Reservation extends Model
             });
         } catch (\Exception $e) {
         };
+    }
+
+    public function emptyEntry()
+    {
+        return [
+            'title' => '## Entry deleted ##',
+            'api_url' => '## Entry deleted ##',
+            'permalink' => '#'
+        ];        
     }
 
 }
