@@ -15,6 +15,7 @@ use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
+use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 
 class StatamicResrvServiceProvider extends AddonServiceProvider
@@ -53,6 +54,9 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         ReservationRefunded::class  => [
             SendRefundReservationEmails::class,
             IncreaseAvailability::class,
+        ],
+        \Statamic\Events\EntryDeleted::class => [
+            EntryDeleted::class,
         ],
     ];
 
