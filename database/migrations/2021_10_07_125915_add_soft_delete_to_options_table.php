@@ -26,7 +26,7 @@ class AddSoftDeleteToOptionsTable extends Migration
     public function down()
     {
         Schema::table('resrv_options', function (Blueprint $table) {
-            $table->softDeletes();
+            $table->dropSoftDeletes();
         });
     }
 }
