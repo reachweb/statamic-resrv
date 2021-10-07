@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Database\Factories\OptionValueFactory;
@@ -14,7 +15,7 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 
 class OptionValue extends Model
 {
-    use HasFactory, HandlesAvailabilityDates;
+    use HasFactory, HandlesAvailabilityDates, SoftDeletes;
 
     protected $table = 'resrv_options_values';
 

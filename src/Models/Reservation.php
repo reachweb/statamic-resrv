@@ -65,7 +65,7 @@ class Reservation extends Model
 
     public function options()
     {
-        return $this->belongsToMany(Option::class, 'resrv_reservation_option')->withPivot('value');
+        return $this->belongsToMany(Option::class, 'resrv_reservation_option')->withPivot('value')->withTrashed();
     }
     
     public function extras()

@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Database\Factories\OptionFactory;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
@@ -12,7 +13,7 @@ use Reach\StatamicResrv\Scopes\OrderScope;
 
 class Option extends Model
 {
-    use HasFactory, HandlesOrdering;
+    use HasFactory, HandlesOrdering, SoftDeletes;
 
     protected $table = 'resrv_options';
 
