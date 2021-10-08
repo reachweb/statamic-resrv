@@ -149,10 +149,7 @@ class OptionCpTest extends TestCase
 
         $response = $this->delete(cp_route('resrv.option.value.delete'), $payload);
         $response->assertStatus(200);
-
-        $this->assertDatabaseMissing('resrv_options_values', [
-            'id' => 1,
-        ]);
+        $this->assertSoftDeleted($option->values()->withTrashed()->first());
     }
     
     public function test_can_delete_option()
@@ -172,12 +169,8 @@ class OptionCpTest extends TestCase
         $response = $this->delete(cp_route('resrv.option.delete'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseMissing('resrv_options', [
-            'slug' => 'this-is-an-option'
-        ]);
-        $this->assertDatabaseMissing('resrv_options_values', [
-            'price' => '22.75',
-        ]);
+        $this->assertSoftDeleted($option);
+        $this->assertSoftDeleted($option->values()->withTrashed()->first());
     }
 
     public function test_can_reorder_options()

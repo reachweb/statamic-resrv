@@ -71,9 +71,7 @@ class LocationTest extends TestCase
 
         $response = $this->delete(cp_route('resrv.location.delete'), $location->toArray());
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('resrv_locations', [
-            'name' => $location->name
-        ]);
+        $this->assertSoftDeleted($location);
     }
 
     public function test_can_reorder_location()

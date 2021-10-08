@@ -121,9 +121,8 @@ class ExtraCpTest extends TestCase
         $response->assertStatus(200);
         $this->assertDatabaseMissing('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id()
-        ]);$this->assertDatabaseMissing('resrv_extras', [
-            'name' => $extra->name
         ]);
+        $this->assertSoftDeleted($extra);
     }
 
     public function test_can_add_extra_to_statamic_entry()
