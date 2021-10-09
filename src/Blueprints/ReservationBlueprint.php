@@ -41,6 +41,7 @@ class ReservationBlueprint
                                 'type'     => 'text',
                                 'listable' => true,
                                 'display'  => 'Entry',
+                                'sortable' => false
                             ],
                         ],                                        
                         [
@@ -97,6 +98,7 @@ class ReservationBlueprint
                                 'type'     => 'text',
                                 'listable' => true,
                                 'display'  => 'Customer',
+                                'sortable' => false
                             ],
                         ],        
                         [

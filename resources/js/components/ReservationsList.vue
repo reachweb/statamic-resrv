@@ -60,9 +60,6 @@
                         <template slot="cell-entry" slot-scope="{ row: reservation }">
                             <a :href="reservation.entry.permalink" target="_blank">{{ reservation.entry.title }}</a>
                         </template>
-                        <template slot="cell-entry" slot-scope="{ row: reservation }">
-                            <a :href="reservation.entry.permalink" target="_blank">{{ reservation.entry.title }}</a>
-                        </template>
                         <template slot="cell-location_start" slot-scope="{ row: reservation }">
                             {{ reservation.location_start.name }}
                         </template>
