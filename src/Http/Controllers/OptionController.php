@@ -13,6 +13,7 @@ class OptionController extends Controller
         $data = $request->validate([
             'date_start' => 'required|date',
             'date_end' => 'required|date',
+            'quantity' => 'sometimes|integer',
             'item_id' => 'required'
         ]);
 

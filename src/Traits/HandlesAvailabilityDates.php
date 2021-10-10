@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Traits;
 
 use Carbon\Carbon;
+use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 
 trait HandlesAvailabilityDates
@@ -10,6 +11,7 @@ trait HandlesAvailabilityDates
     protected $date_start;
     protected $date_end;
     protected $duration;
+    protected $quantity;
 
     protected function useTime()
     {   
@@ -35,6 +37,18 @@ trait HandlesAvailabilityDates
         }
     }
 
+    private function setQuantity($data)
+    {
+        if (! Arr::exists($data, 'quantity')) {
+            $this->quantity = 1;
+            return;
+        }
+        if ($data['quantity'] > config('resrv-config.maximum_quantity')) {
+            throw new AvailabilityException(__('You cannot reserve these many in one reservation.'));
+        }
+        $this->quantity = $data['quantity'];
+    }
+
     private function setDates($date_start, $date_end)
     {
         // If we charge extra for using over a 24hour day, add an extra day here.
@@ -52,10 +66,10 @@ trait HandlesAvailabilityDates
         $this->dates_initiated = true;
     }
 
-    public function initiateAvailability($dates)
+    public function initiateAvailability($data)
     {
-        $date_start = new Carbon($dates['date_start']);
-        $date_end = new Carbon($dates['date_end']);
+        $date_start = new Carbon($data['date_start']);
+        $date_end = new Carbon($data['date_end']);
 
         if ($date_start > $date_end) {
             throw new AvailabilityException(__('Your pickup date is before the drop-off date.'));
@@ -68,15 +82,19 @@ trait HandlesAvailabilityDates
         $this->checkMinimumDate($date_start);
 
         $this->setDates($date_start, $date_end);
+
+        $this->setQuantity($data);
  
         $this->checkDurationValidity();
     }
 
     // Quick method to use when extra checks are not required, will merge later
-    public function initiateAvailabilityUnsafe($dates)
+    public function initiateAvailabilityUnsafe($data)
     {
-        $date_start = new Carbon($dates['date_start']);
-        $date_end = new Carbon($dates['date_end']);
+        $date_start = new Carbon($data['date_start']);
+        $date_end = new Carbon($data['date_end']);
+
+        $this->setQuantity($data);
 
         $this->setDates($date_start, $date_end);
     }

@@ -342,4 +342,56 @@ class AvailabilityFrontTest extends TestCase
         
     }
 
+    public function test_that_we_can_look_for_multiple_available_items()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        Availability::factory()
+            ->state([
+                'available' => 3,
+            ])
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->add(1, 'day')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $this->travelTo(today()->setHour(11));
+        
+        
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(1, 'day')->toISOString(),
+            'quantity' => 2
+        ];
+
+        // Index route
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('300');
+        
+        // Show route
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('300')->assertSee('message":{"status":1}}', false);
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(1, 'day')->toISOString(),
+            'quantity' => 4
+        ];
+
+        // Index route
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertDontSee($item->id());
+
+        // Show route
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);        
+        $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);
+        
+    }
+
 }

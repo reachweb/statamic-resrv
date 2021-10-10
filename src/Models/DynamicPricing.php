@@ -94,12 +94,11 @@ class DynamicPricing extends Model
 
     public function apply($price)
     {
-        $newPrice = Price::create($price);
         foreach ($this->toApply as $policy) {
             $method = $policy->amount_type;
-            $newPrice = $this->$method($newPrice, $policy);
+            $price = $this->$method($price, $policy);
         }
-        return $newPrice->format();
+        return $price;
         
     }
 
@@ -199,7 +198,7 @@ class DynamicPricing extends Model
         return $this->condition_type;
     }
 
-    protected function checkCondition($price = null, $duration = null)
+    protected function checkCondition(PriceClass $price = null, $duration = null)
     {   
         if ($this->condition_type == 'reservation_duration') {
             if ($this->compare($duration, $this->condition_comparison, $this->condition_value)) {
@@ -207,7 +206,7 @@ class DynamicPricing extends Model
             }
         }
         if ($this->condition_type == 'reservation_price') {
-            if ($this->compare($price, $this->condition_comparison, $this->condition_value)) {
+            if ($this->compare($price->format(), $this->condition_comparison, $this->condition_value)) {
                 return true;
             }
         }

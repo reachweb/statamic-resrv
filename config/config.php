@@ -23,6 +23,7 @@ return [
      * minimum_days_before: set this to the number of days allowed between booking date and pickup time (calendar days count not 24 hour difference)
      * minimum_reservation_period_in_days: the minimum days for a reservation
      * maximum_reservation_period_in_day: the maximum days for a reservation
+     * maximum_quantity: the maximum items a user can book in one reservation
      * calculate_days_using_time: if true every reservation will charge a day for drop off time after pick up
      * decrease_availabilty_for_extra_time: if true, the extra day charged for usage over 24hr will behave as a normal reservation
      * admin_email: list of emails to be notified after a reservation has been made
@@ -34,6 +35,7 @@ return [
     'minimum_days_before'                  => false,
     'minimum_reservation_period_in_days'   => 1,
     'maximum_reservation_period_in_days'   => 30,
+    'maximum_quantity'                     => 8,
     'calculate_days_using_time'            => false, 
     'decrease_availability_for_extra_time' => false, 
     'admin_email'                          => false, 

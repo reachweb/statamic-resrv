@@ -316,7 +316,7 @@ class ReservationFrontTest extends TestCase
                 'item_id' => $item->id(),
             ])
             ->has(OptionValue::factory()->count(3), 'values')
-            ->create();  
+            ->create();
         
         $this->travelTo(today()->setHour(11));
 
@@ -338,7 +338,7 @@ class ReservationFrontTest extends TestCase
             'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
             'payment' => $payment,
             'price' => $price,
-            'options' => [$option->id => ['value' => 1]], 
+            'options' => [$option->id => ['value' => 1]],
             'total' => $total
         ];
       
@@ -409,7 +409,7 @@ class ReservationFrontTest extends TestCase
             'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
             'payment' => $payment,
             'price' => $price,
-            'options' => [$option->id => ['value' => 1]], 
+            'options' => [$option->id => ['value' => 1]],
             'total' => $total
         ];
       
@@ -438,6 +438,111 @@ class ReservationFrontTest extends TestCase
             'value' => $option2->values[2]->id
         ]);
                      
+    }    
+
+    public function test_reservation_with_quantity_more_than_one()
+    {
+        //$this->withExceptionHandling();
+        $item = $this->makeStatamicItem();
+        $this->signInAdmin();
+        Config::set('resrv-config.enable_locations', true);
+
+        Availability::factory()
+            ->state([
+                'available' => 5,
+            ])
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->add(1, 'day')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $option = Option::factory()
+            ->state([
+                'item_id' => $item->id(),
+            ])
+            ->has(OptionValue::factory()->count(3), 'values')
+            ->create();
+
+        $location = Location::factory()->create(); 
+
+        $extra = Extra::factory()->create();
+
+        $addExtraToEntry = [
+            'id' => $extra->id
+        ];
+   
+        $response = $this->post(cp_route('resrv.extra.add', $item->id()), $addExtraToEntry);
+        $this->assertDatabaseHas('resrv_statamicentry_extra', [
+            'statamicentry_id' => $item->id()
+        ]);
+        
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+            'quantity' => 2,
+        ];
+        
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);        
+        $response->assertStatus(200)->assertSee('600')->assertSee('message":{"status":1}}', false);
+
+        $days = json_decode($response->content())->request->days;
+        $payment = json_decode($response->content())->data->payment;
+        $price = json_decode($response->content())->data->price;
+        $total = $price +
+                (2 * ($days * $option->values[0]->price->format())) +
+                (2 * ($location->extra_charge->format() * 2)) +
+                (2 * ($days * $extra->price->format()));
+
+        $checkoutRequest = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+            'quantity' => 2,
+            'payment' => $payment,
+            'price' => $price,
+            'options' => [$option->id => ['value' => 1]],
+            'extras' => [$extra->id => ['quantity' => 1]],
+            'location_start' => $location->id,
+            'location_end' => $location->id,
+            'total' => $total
+        ];
+      
+    
+        $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+
+        $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'payment' => $payment,
+            'quantity' => 2
+        ]);
+        
+        Config::set('resrv-config.minutes_to_hold', 10);
+        // Check that availability gets decreased here
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 3,
+        ]);
+        
+        // Check that the reservation expires and availability is back
+        $this->travel(15)->minutes();
+
+        // Call availability to run the jobs
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        
+        $this->assertDatabaseHas('resrv_reservations', [
+            'item_id' => $item->id(),
+            'status' => 'expired',
+        ]);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 5,
+        ]);                
     }    
 
 }

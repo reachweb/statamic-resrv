@@ -19,6 +19,6 @@ class DecreaseAvailability
     
     public function handle(ReservationCreated $event)
     {
-        $this->availability->decrementAvailability($event->reservation->date_start, $event->reservation->date_end, $event->reservation->item_id);
+        $this->availability->decrementAvailability($event->reservation->date_start, $event->reservation->date_end, $event->reservation->quantity, $event->reservation->item_id);
     }
 }

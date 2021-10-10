@@ -42,28 +42,28 @@ class Extra extends Model
         static::addGlobalScope(new OrderScope);
     }
 
-    public function priceForDates($dates)
+    public function priceForDates($data)
     {
-        $this->initiateAvailability($dates);
-        $dynamicPricing = $this->getDynamicPricing($this->id, $this->price->format());
+        $this->initiateAvailability($data);
+        $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
         if ($dynamicPricing) {
-            $this->price = $dynamicPricing->apply($this->price->format());
+            $this->price = $dynamicPricing->apply($this->price)->format();
         }
-        return $this->price->format();
+        return $this->price->multiply($this->quantity)->format();
     }
 
-    public function calculatePrice($dates, $quantity) 
+    public function calculatePrice($data, $quantity) 
     {
-        $this->initiateAvailability($dates);
-        $dynamicPricing = $this->getDynamicPricing($this->id, $this->price->format());
+        $this->initiateAvailability($data);
+        $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
         if ($dynamicPricing) {
-            $this->price = $dynamicPricing->apply($this->price->format());
+            $this->price = $dynamicPricing->apply($this->price)->format();
         }
         if ($this->price_type == 'perday') {            
-            return $this->price->multiply($quantity)->multiply($this->duration);
+            return $this->price->multiply($quantity)->multiply($this->duration)->multiply($this->quantity);
         }
         if ($this->price_type == 'fixed') {
-            return $this->price->multiply($quantity);
+            return $this->price->multiply($quantity)->multiply($this->quantity);
         }
     }
 

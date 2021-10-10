@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -28,6 +29,7 @@ class ReservationController extends Controller
         $rules = [
             'date_start' => 'required|date',
             'date_end' => 'required|date',
+            'quantity' => 'sometimes|integer',
             'payment' => 'required|numeric',
             'price' => 'required|numeric',
             'total' => 'required|numeric',
@@ -45,6 +47,11 @@ class ReservationController extends Controller
 
         $data = $request->validate($rules);
 
+        // Set the quantity for backwards compatibility
+        if (! Arr::exists($data, 'quantity')) {
+            $data['quantity'] = 1;
+        }
+
         try {
             $attemptReservation = $this->reservation->confirmReservation($data, $statamic_id);
         } catch (ReservationException $exception) {
@@ -57,8 +64,9 @@ class ReservationController extends Controller
             'item_id' => $statamic_id,
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
-            'location_start' => (isset($data['location_start']) ? $data['location_start'] : ''),
-            'location_end' => (isset($data['location_end']) ? $data['location_end'] : ''),
+            'quantity' => $data['quantity'],
+            'location_start' => (Arr::exists($data, 'location_start') ? $data['location_start'] : ''),
+            'location_end' => (Arr::exists($data, 'location_end') ? $data['location_end'] : ''),
             'price' => $data['total'],
             'payment' => $data['payment'],
             'payment_id' => '',

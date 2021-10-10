@@ -27,6 +27,7 @@ class ReservationFactory extends Factory
             'item_id' => '',
             'date_start' => today()->toIso8601String(),
             'date_end' => today()->add(2, 'day')->toIso8601String(),
+            'quantity' => 1,
             'location_start' => '',
             'location_end' => '',
             'price' => 200,

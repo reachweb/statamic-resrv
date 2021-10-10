@@ -95,6 +95,7 @@ class Reservation extends Model
         $checkAvailability = $availability->confirmAvailabilityAndPrice([
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
+            'quantity' => $data['quantity'],
             'payment' => $data['payment'],
             'price' => $data['price'],
         ], $statamic_id);
@@ -140,8 +141,11 @@ class Reservation extends Model
         if (config('resrv-config.enable_locations') == true) {            
             $locationCost->add(Location::find($data['location_start'])->extra_charge);
             $locationCost->add(Location::find($data['location_end'])->extra_charge);
+            if (array_key_exists('quantity', $data) > 0) {
+                $locationCost->multiply($data['quantity']);
+            }
         }
-
+        
         return $reservationCost->add($optionsCost, $extrasCost, $locationCost)->format();
     }
 

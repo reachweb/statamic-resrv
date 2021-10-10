@@ -41,19 +41,19 @@ class Option extends Model
         return $this->hasMany(OptionValue::class);
     }
 
-    public function valuesPriceForDates($dates)
+    public function valuesPriceForDates($data)
     {
         foreach ($this->values as $value) {
             $value->original_price = $value->price;
-            $value->price = $value->priceForDates($dates);
+            $value->price = $value->priceForDates($data);
         }
         return $this;
     }
 
-    public function calculatePrice($dates, $value)
+    public function calculatePrice($data, $value)
     {
         $value = $this->values->find($value);
-        return $value->calculatePrice($dates);
+        return $value->calculatePrice($data);
     }
 
     public function scopeEntry($query, $entry)
