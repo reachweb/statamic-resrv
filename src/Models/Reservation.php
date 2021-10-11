@@ -115,6 +115,10 @@ class Reservation extends Model
             throw new ReservationException(__('There are required options you did not select.'));
         }
 
+        if ($data['quantity'] > config('resrv-config.maximum_quantity')) {
+            throw new ReservationException(__('You cannot reserve these many in one reservation.'));
+        }
+
         return true;
 
     }
@@ -145,7 +149,7 @@ class Reservation extends Model
                 $locationCost->multiply($data['quantity']);
             }
         }
-        
+
         return $reservationCost->add($optionsCost, $extrasCost, $locationCost)->format();
     }
 
