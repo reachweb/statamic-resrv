@@ -131,7 +131,6 @@ class DynamicPricing extends Model
        $itemsForId = DB::table('resrv_dynamic_pricing_assignments')
                 ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
                 ->where('dynamic_pricing_assignment_id', $statamic_id)
-                ->orderBy('order')
                 ->get();
 
         if ($itemsForId->count() == 0) {
@@ -155,7 +154,6 @@ class DynamicPricing extends Model
         $itemsForId = DB::table('resrv_dynamic_pricing_assignments')
                 ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Extra')
                 ->where('dynamic_pricing_assignment_id', $extra_id)
-                ->orderBy('order')
                 ->get();
 
         if ($itemsForId->count() == 0) {

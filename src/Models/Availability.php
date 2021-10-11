@@ -300,8 +300,7 @@ class Availability extends Model
 
     protected function getDynamicPricing($id, $price)
     {
-        return DynamicPricing::searchForAvailability($id, $price, $this->date_start, $this->date_end, $this->duration);
-        
+        return DynamicPricing::searchForAvailability($id, $price, $this->date_start, $this->date_end, $this->duration);        
     }
 
 }
