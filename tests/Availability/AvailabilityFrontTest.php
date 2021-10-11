@@ -115,6 +115,8 @@ class AvailabilityFrontTest extends TestCase
         ];        
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
 
+        $this->travelTo(today()->setHour(11));
+
         $searchPayload = [
             'date_start' => today()->setHour(12)->toISOString(),
             'date_end' => today()->setHour(12)->add(3, 'day')->toISOString(),
