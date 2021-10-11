@@ -20,7 +20,10 @@ class ReservationCalendarResource extends ResourceCollection
         return $this->collection->transform(function ($reservation) use ($request) {   
             $data = [
                 'id' => $reservation->id,
-                'title' => '#'.$reservation->id.' - '.$reservation->entry['title'].(config('resrv-config.enable_locations') ? ' - '.$reservation->location_start_data->name : ''),
+                'title' => '#'.$reservation->id.
+                            ' - '.$reservation->entry['title'].
+                            (config('resrv-config.maximum_quantity') > 1 ? ' x '.$reservation->quantity : '').
+                            (config('resrv-config.enable_locations') ? ' - '.$reservation->location_start_data->name : ''),
                 'start' => $this->formatDate($reservation->date_start),
                 'end' => $this->formatDate($reservation->date_end),
                 'url' => cp_route('resrv.reservation.show', $reservation->id),
