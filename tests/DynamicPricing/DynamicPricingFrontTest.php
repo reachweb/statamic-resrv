@@ -486,4 +486,41 @@ class DynamicPricingFrontTest extends TestCase
         
     } 
 
+    public function test_dynamic_pricing_works_with_multiple_items()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+        
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(20, 'day')->toISOString(),
+            'price' => 25.23,
+            'available' => 3
+        ];        
+        
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
+            'quantity' => 3,
+        ];
+
+        $dynamic = DynamicPricing::factory()->make()->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+        
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('242.22');
+
+        
+    }
+
 }
