@@ -156,7 +156,7 @@ class Availability extends Model
 
         $entryAvailabilityValue = Entry::find($statamic_id)->get('resrv_availability');
 
-        if ($results->contains('available', 0) || $results->count() !== count($this->getPeriod()) || $entryAvailabilityValue == 'disabled') {
+        if ($results->count() !== count($this->getPeriod()) || $entryAvailabilityValue == 'disabled') {
             return [
                 'message' => [
                     'status' => false
@@ -217,10 +217,6 @@ class Availability extends Model
             // If the count of the dates is not the same like the period, it usually 
             // means that a date has no availability information, so we should just skip
             if ($dates->count() !== count($this->getPeriod())) {
-                continue;
-            }
-            // Also continue if there us a day with availability 0
-            if ($dates->contains('available', 0)) {
                 continue;
             }
             foreach ($dates as $availability) {
