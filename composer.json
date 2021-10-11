@@ -1,5 +1,5 @@
 {
-    "name": "reach/statamic-resrv",
+    "name": "reachweb/statamic-resrv",
     "description": "A booking engine for Statamic. Supports availability calendar and online reservations.",
     "keywords": [
         "Statamic",
