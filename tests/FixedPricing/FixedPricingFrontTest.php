@@ -30,7 +30,7 @@ class FixedPricingFrontTest extends TestCase
             'date_start' => today()->toISOString(),
             'date_end' => today()->add(6, 'day')->toISOString(),
             'price' => 25.23,
-            'available' => 2
+            'available' => 3
         ];        
         
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
@@ -90,6 +90,11 @@ class FixedPricingFrontTest extends TestCase
         ];
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('130');
+
+        // Check it works for multiple items
+        $searchPayload['quantity'] = 3;
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('390');
                 
     } 
 
@@ -104,7 +109,7 @@ class FixedPricingFrontTest extends TestCase
             'date_start' => today()->toISOString(),
             'date_end' => today()->add(6, 'day')->toISOString(),
             'price' => 25.23,
-            'available' => 2
+            'available' => 3
         ];        
         
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
@@ -189,6 +194,66 @@ class FixedPricingFrontTest extends TestCase
         $this->assertDatabaseHas('resrv_reservations', [
             'payment' => $payment
         ]);                
-    } 
+    }
+
+    public function test_fixed_pricing_changes_reservation_prices_for_multiple_items()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+        
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(6, 'day')->toISOString(),
+            'price' => 25.23,
+            'available' => 3
+        ];        
+        
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $fixedPricingPayload = [
+            'statamic_id' => $item->id(),
+            'days' => '4',            
+            'price' => 90
+        ];
+
+        $response = $this->post(cp_route('resrv.fixedpricing.update'), $fixedPricingPayload);
+        $response->assertStatus(200);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
+            'quantity' => 3,
+        ];
+
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('270');
+
+        $payment = json_decode($response->content())->data->payment;
+        $price = json_decode($response->content())->data->price;
+
+        // Confirm that booking works for 4 days
+        $checkoutRequest = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
+            'quantity' => 3,
+            'payment' => $payment,
+            'price' => $price,
+            'total' => $price
+        ];
+        
+        $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+
+        $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'payment' => $payment,
+            'quantity' => 3,
+        ]);
+    }
 
 }
