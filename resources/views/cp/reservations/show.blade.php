@@ -52,8 +52,9 @@
                     <div>{{ $reservation->created_at->format('d-m-Y H:i') }}</div>
                 </div>                
             </div>
-            @if (config('resrv-config.enable_locations'))
+            
             <div class="grid grid-cols-3">
+                @if (config('resrv-config.enable_locations'))
                 <div>
                     <div class="font-bold mb-1">Pick-up location</div>
                     <div>{{ $reservation->location_start_data->name }}</div>
@@ -61,9 +62,16 @@
                 <div>
                     <div class="font-bold mb-1">Drop-off location</div>
                     <div>{{ $reservation->location_end_data->name }}</div>
-                </div>                           
+                </div>
+                @endif
+                @if (config('resrv-config.maximum_quantity') > 1)
+                <div>
+                    <div class="font-bold mb-1">Quantity</div>
+                    <div>x {{ $reservation->quantity }}</div>
+                </div>
+                @endif                    
             </div>
-            @endif
+            
         </div>
     </div>
     
