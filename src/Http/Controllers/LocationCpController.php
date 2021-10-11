@@ -32,7 +32,7 @@ class LocationCpController extends Controller
         $data = $request->validate([
             'name' => 'required',
             'slug' => 'required',
-            'extra_charge' => 'nullable|numeric',
+            'extra_charge' => 'required|numeric',
             'published' => 'required|boolean',
         ]);
 
