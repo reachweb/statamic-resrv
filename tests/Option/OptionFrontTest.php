@@ -37,7 +37,12 @@ class OptionFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.option.index'), $checkoutRequest);
-        $response->assertStatus(200)->assertSee($option->slug)->assertSee('22.75');        
+        $response->assertStatus(200)->assertSee($option->slug)->assertSee('22.75');
+        
+        // Check for multiple items
+        $checkoutRequest['quantity'] = 3;
+        $response = $this->post(route('resrv.option.index'), $checkoutRequest);
+        $response->assertStatus(200)->assertSee($option->slug)->assertSee('68.25');
     }    
     
 }

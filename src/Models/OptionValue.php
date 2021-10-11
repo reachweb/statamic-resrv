@@ -48,8 +48,8 @@ class OptionValue extends Model
 
     public function priceForDates($data)
     {
-        // This is a placeholder for now, in order to add dynamic pricing for options
-        return $this->price->format();
+        $this->initiateAvailability($data);
+        return $this->price->multiply($this->quantity)->format();
     }
 
     public function calculatePrice($data) 
