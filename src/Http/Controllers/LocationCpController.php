@@ -50,7 +50,7 @@ class LocationCpController extends Controller
             'id' => 'required',
             'name' => 'required',
             'slug' => 'required',
-            'extra_charge' => 'nullable|numeric',
+            'extra_charge' => 'required|numeric',
             'published' => 'required|boolean',
             'order' => 'required|integer',
         ]);
