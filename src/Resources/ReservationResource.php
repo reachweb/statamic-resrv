@@ -42,6 +42,7 @@ class ReservationResource extends ResourceCollection
                     'reference' => $reservation->reference,
                     'status' => $reservation->status,
                     'entry' => $reservation->entry,
+                    'quantity' => $reservation->quantity,
                     'payment' => config('resrv-config.currency_symbol').' '.$reservation->payment->format(),
                     'price' => config('resrv-config.currency_symbol').' '.$reservation->price->format(),
                     'location_start' => $reservation->location_start_data,
@@ -69,6 +70,10 @@ class ReservationResource extends ResourceCollection
         if (config('resrv-config.enable_locations') == false) {
             unset($columns['location_start']);
             unset($columns['location_end']);
+        }
+        
+        if (config('resrv-config.maximum_quantity') == 1) {
+            unset($columns['quantity']);
         }
 
         if ($key = $this->columnPreferenceKey) {

@@ -7,6 +7,7 @@ return [
     'newReservation' => 'A new reservation has been made!',
     'reservationCode' => 'Reservation code:',
     'bookingReference' => 'Booking reference',
+    'quantity' => 'Quantity',
     'date' => 'Date',
     'email' => 'Email',
     'options' => 'Options',

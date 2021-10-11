@@ -95,6 +95,7 @@ class Reservation extends Model
         $checkAvailability = $availability->confirmAvailabilityAndPrice([
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
+            'quantity' => $data['quantity'],
             'payment' => $data['payment'],
             'price' => $data['price'],
         ], $statamic_id);
@@ -112,6 +113,10 @@ class Reservation extends Model
 
         if (! $this->checkForRequiredOptions($statamic_id, $data)) {
             throw new ReservationException(__('There are required options you did not select.'));
+        }
+
+        if ($data['quantity'] > config('resrv-config.maximum_quantity')) {
+            throw new ReservationException(__('You cannot reserve these many in one reservation.'));
         }
 
         return true;
@@ -140,6 +145,9 @@ class Reservation extends Model
         if (config('resrv-config.enable_locations') == true) {            
             $locationCost->add(Location::find($data['location_start'])->extra_charge);
             $locationCost->add(Location::find($data['location_end'])->extra_charge);
+            if (array_key_exists('quantity', $data) > 0) {
+                $locationCost->multiply($data['quantity']);
+            }
         }
 
         return $reservationCost->add($optionsCost, $extrasCost, $locationCost)->format();

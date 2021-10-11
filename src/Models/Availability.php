@@ -42,11 +42,11 @@ class Availability extends Model
         return Price::create($value);
     }
     
-    public function scopeGetAvailabilityForDates($scope, $dates, $statamic_id = null) { 
+    public function scopeGetAvailabilityForDates($scope, $data, $statamic_id = null) { 
         
         ExpireReservations::dispatchSync();
 
-        $this->initiateAvailability($dates);
+        $this->initiateAvailability($data);
 
         if (! $statamic_id) {
             return $this->getAllAvailableItems();
@@ -76,30 +76,32 @@ class Availability extends Model
         
     }
 
-    public function decrementAvailability($date_start, $date_end, $statamic_id) 
+    public function decrementAvailability($date_start, $date_end, $quantity, $statamic_id) 
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
+            'quantity' => $quantity,
         ]); 
 
         $this->where('date', '>=', $this->date_start)
             ->where('date', '<', $this->date_end)
             ->where('statamic_id', $statamic_id)
-            ->decrement('available');
+            ->decrement('available', $this->quantity);
     }  
     
-    public function incrementAvailability($date_start, $date_end, $statamic_id) 
+    public function incrementAvailability($date_start, $date_end, $quantity, $statamic_id) 
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
+            'quantity' => $quantity,
         ]); 
 
         $this->where('date', '>=', $this->date_start)
             ->where('date', '<', $this->date_end)
             ->where('statamic_id', $statamic_id)
-            ->increment('available');
+            ->increment('available', $this->quantity);
     }  
 
     protected function getAllAvailableItems()
@@ -117,16 +119,22 @@ class Availability extends Model
                 $price = $dynamicPricing->apply($price);
             }
 
+            // Multiply for quantity here
+            if ($this->quantity > 1) {
+                $price->multiply($this->quantity);
+            }
+
             $availableWithPricing[$id] = [
                 'request' => [
                     'days' => $this->duration,
                     'date_start' => $this->date_start,
-                    'date_end' => $this->date_end
+                    'date_end' => $this->date_end,
+                    'quantity' => $this->quantity
                 ],
                 'data' => [
-                    'price' => $price,
-                    'payment' => $this->calculatePayment($price),
-                    'original_price' => (isset($originalPrice) ? $originalPrice : null)
+                    'price' => $price->format(),
+                    'payment' => $this->calculatePayment($price)->format(),
+                    'original_price' => (isset($originalPrice) ? $originalPrice->format() : null)
                 ],
                 'message' => [
                     'status' => count($available)
@@ -142,12 +150,13 @@ class Availability extends Model
         $results = $this->where('date', '>=', $this->date_start)
             ->where('date', '<', $this->date_end)
             ->where('statamic_id', $statamic_id)
+            ->where('available', '>=', $this->quantity)
             ->get(['date', 'price', 'available'])
             ->sortBy('date');
 
         $entryAvailabilityValue = Entry::find($statamic_id)->get('resrv_availability');
 
-        if ($results->contains('available', 0) || $results->count() !== count($this->getPeriod()) || $entryAvailabilityValue == 'disabled') {
+        if ($results->count() !== count($this->getPeriod()) || $entryAvailabilityValue == 'disabled') {
             return [
                 'message' => [
                     'status' => false
@@ -158,7 +167,7 @@ class Availability extends Model
         $price = $this->calculatePrice($results);        
 
         if (FixedPricing::getFixedPricing($statamic_id, $this->duration)) {
-            $price = FixedPricing::getFixedPricing($statamic_id, $this->duration)->format();
+            $price = FixedPricing::getFixedPricing($statamic_id, $this->duration);
         }
 
         $dynamicPricing = $this->getDynamicPricing($statamic_id, $price);
@@ -167,16 +176,22 @@ class Availability extends Model
             $price = $dynamicPricing->apply($price);
         }
 
+        // Multiply for quantity here
+        if ($this->quantity > 1) {
+            $price->multiply($this->quantity);
+        }
+
         return [
             'request' => [
                 'days' => $this->duration,
                 'date_start' => $this->date_start,
-                'date_end' => $this->date_end
+                'date_end' => $this->date_end,
+                'quantity' => $this->quantity
             ],
             'data' => [
-                'price' => $price,
-                'payment' => $this->calculatePayment($price),
-                'original_price' => (isset($originalPrice) ? $originalPrice : null)
+                'price' => $price->format(),
+                'payment' => $this->calculatePayment($price)->format(),
+                'original_price' => (isset($originalPrice) ? $originalPrice->format() : null)
             ],
             'message' => [
                 'status' => 1
@@ -189,9 +204,9 @@ class Availability extends Model
      * of the items that have at least 1 available for each day.
      */
     protected function availableForDates() {
-
         $results = $this->where('date', '>=', $this->date_start)
             ->where('date', '<', $this->date_end)
+            ->where('available', '>=', $this->quantity)
             ->get(['statamic_id', 'date', 'price', 'available']);
 
         $idsFound = $results->groupBy('statamic_id')->keys();
@@ -202,10 +217,6 @@ class Availability extends Model
             // If the count of the dates is not the same like the period, it usually 
             // means that a date has no availability information, so we should just skip
             if ($dates->count() !== count($this->getPeriod())) {
-                continue;
-            }
-            // Also continue of there us a day with availability 0
-            if ($dates->contains('available', 0)) {
                 continue;
             }
             foreach ($dates as $availability) {
@@ -229,7 +240,7 @@ class Availability extends Model
     protected function getPriceForDates($statamic_id) {
 
         if (FixedPricing::getFixedPricing($statamic_id, $this->duration)) {
-            return FixedPricing::getFixedPricing($statamic_id, $this->duration)->format();
+            return FixedPricing::getFixedPricing($statamic_id, $this->duration);
         }
 
         $results = $this->where('date', '>=', $this->date_start)
@@ -251,11 +262,11 @@ class Availability extends Model
         return array_flatten($results);
     }
 
-    protected function calculatePrice(Collection $results)
+    protected function calculatePrice(Collection $results): PriceClass
     {
         $first = $results->first();
         if ($results->count() == 0) {
-            return $first->price->format();
+            return $first->price;
         }
         $prices = array();
         foreach ($results as $index => $result) {
@@ -265,7 +276,8 @@ class Availability extends Model
             $prices[] = $result->price;
         }
         $result = $first->price->add(...$prices);
-        return $result->format();
+
+        return $result;
     }
 
     protected function getPeriod()
@@ -273,17 +285,16 @@ class Availability extends Model
         return CarbonPeriod::create($this->date_start, $this->date_end, CarbonPeriod::EXCLUDE_END_DATE);
     }
 
-    protected function calculatePayment($price)
+    protected function calculatePayment($price): PriceClass
     {
         if (config('resrv-config.payment', 'full') == 'full') {
-            return Price::create($price)->format();
+            return $price;
         }
         if (config('resrv-config.payment') == 'fixed') {
-            return Price::create(config('resrv-config.fixed_amount'))->format();
+            return Price::create(config('resrv-config.fixed_amount'));
         }
         if (config('resrv-config.payment') == 'percent') {
-            $totalPrice = Price::create($price);
-            return $totalPrice->percent(config('resrv-config.percent_amount'))->format();
+            return $price->percent(config('resrv-config.percent_amount'));
         }
     }
 
