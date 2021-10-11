@@ -25,7 +25,10 @@ Email: {{ config('resrv-config.mail') }}
 | {{ __('statamic-resrv::email.pickUpLocation') }}  | {{ $reservation->location_start_data->name }} |
 | {{ __('statamic-resrv::email.dropOffLocation') }} | {{ $reservation->location_end_data->name }} |
 @endif
-| {{ __('statamic-resrv::email.itemLabel') }}   | {{ $reservation->entry()->title }} {{ __('statamic-resrv::email.orSimilar') }} |
+| {{ __('statamic-resrv::email.itemLabel') }}   | {{ $reservation->entry()->title }} |
+@if (config('resrv-config.maximum_quantity') > 1)
+| {{ __('statamic-resrv::email.quantity') }}  | x {{ $reservation->quantity }} |
+@endif
 @endcomponent
 
 @if ($reservation->extras()->get()->count() > 0)
