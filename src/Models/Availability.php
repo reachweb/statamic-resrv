@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
+use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -17,7 +18,7 @@ use Carbon\CarbonPeriod;
 
 class Availability extends Model
 {
-    use HasFactory, HandlesAvailabilityDates;
+    use HasFactory, HandlesAvailabilityDates, HandlesMultisiteIds;
 
     protected $table = 'resrv_availabilities';
 
@@ -109,7 +110,7 @@ class Availability extends Model
         $availableWithPricing = [];
         $available = $this->availableForDates();
 
-        foreach ($available as $id) {            
+        foreach ($available as $id) {
             $price = $this->getPriceForDates($id);
 
             // Apply dynamic pricing here (fixed already applied on getPriceForDates)
@@ -125,6 +126,7 @@ class Availability extends Model
             }
 
             $availableWithPricing[$id] = [
+                'id' => $id,    
                 'request' => [
                     'days' => $this->duration,
                     'date_start' => $this->date_start,
@@ -140,21 +142,28 @@ class Availability extends Model
                     'status' => count($available)
                 ]
             ];
-        };
 
+            $multisiteIds = $this->getMultisiteIds($id);
+            if (count($multisiteIds) > 0) {
+                $availableWithPricing[$id]['multisite_ids'] = $multisiteIds;
+            }
+        };
+        
         return $availableWithPricing;
     }
 
     protected function getSpecificItem($statamic_id)
     {
+        $entry = $this->getDefaultSiteEntry($statamic_id);
+        
         $results = $this->where('date', '>=', $this->date_start)
             ->where('date', '<', $this->date_end)
-            ->where('statamic_id', $statamic_id)
+            ->where('statamic_id', $entry->id())
             ->where('available', '>=', $this->quantity)
             ->get(['date', 'price', 'available'])
             ->sortBy('date');
 
-        $entryAvailabilityValue = Entry::find($statamic_id)->get('resrv_availability');
+        $entryAvailabilityValue = $entry->get('resrv_availability');
 
         if ($results->count() !== count($this->getPeriod()) || $entryAvailabilityValue == 'disabled') {
             return [
@@ -166,11 +175,11 @@ class Availability extends Model
 
         $price = $this->calculatePrice($results);        
 
-        if (FixedPricing::getFixedPricing($statamic_id, $this->duration)) {
-            $price = FixedPricing::getFixedPricing($statamic_id, $this->duration);
+        if (FixedPricing::getFixedPricing($entry->id(), $this->duration)) {
+            $price = FixedPricing::getFixedPricing($entry->id(), $this->duration);
         }
 
-        $dynamicPricing = $this->getDynamicPricing($statamic_id, $price);
+        $dynamicPricing = $this->getDynamicPricing($entry->id(), $price);
         if ($dynamicPricing) {
             $originalPrice = $price;
             $price = $dynamicPricing->apply($price);

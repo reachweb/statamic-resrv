@@ -9,13 +9,14 @@ use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
+use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 
 class Extra extends Model
 {
-    use HasFactory, HandlesOrdering, HandlesAvailabilityDates, SoftDeletes;
+    use HasFactory, HandlesOrdering, HandlesAvailabilityDates, HandlesMultisiteIds, SoftDeletes;
 
     protected $table = 'resrv_extras';
 
@@ -69,10 +70,11 @@ class Extra extends Model
 
     public function scopeEntry($query, $entry)
     {
+        $entry = $this->getDefaultSiteEntry($entry);
         return DB::table('resrv_extras')
             ->join('resrv_statamicentry_extra', function ($join) use ($entry) {
                 $join->on('resrv_extras.id', '=', 'resrv_statamicentry_extra.extra_id')
-                    ->where('resrv_statamicentry_extra.statamicentry_id', '=', $entry);
+                    ->where('resrv_statamicentry_extra.statamicentry_id', '=', $entry->id());
             })
             ->select('resrv_extras.*');
     }

@@ -22,6 +22,9 @@ class ResrvFixedPricing extends Fieldtype
         if (class_basename($this->field->parent()) == 'Collection') {
             return ['parent' => 'Collection'];
         }
+        if ($this->field->parent()->hasOrigin()) {
+            return ['parent' => $this->field->parent()->origin()->id()];
+        }
         return ['parent' => $this->field->parent()->id()];
     }
 }
