@@ -29,7 +29,7 @@ class TestCase extends OrchestraTestCase
         
         Blueprint::setDirectory(__DIR__.'/../resources/blueprints');
 
-        Version::shouldReceive('get')->andReturn('3.1.5');
+        Version::shouldReceive('get')->andReturn('3.2.35');
         $this->addToAssertionCount(-1); // Dont want to assert this
 
         $this->withoutExceptionHandling();
@@ -73,7 +73,7 @@ class TestCase extends OrchestraTestCase
         $app->make(Manifest::class)->manifest = [
             'reach/resrv' => [
                 'id' => 'reach/resrv',
-                'namespace' => 'Reach\\StatamicResrv\\',
+                'namespace' => 'Reach\\StatamicResrv',
             ],
         ];
 

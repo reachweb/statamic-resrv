@@ -12,7 +12,6 @@ class ReservationResource extends ResourceCollection
 {
     use HasRequestedColumns;
 
-    public $collects = Reservation::class;
     protected $blueprint;
     protected $columns;
 

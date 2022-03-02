@@ -8,8 +8,6 @@ use Carbon\Carbon;
 
 class ReservationCalendarResource extends ResourceCollection
 {
-    public $collects = Reservation::class;
-
     public function __construct($resource)
     {
         parent::__construct($resource);
