@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
+use Reach\StatamicResrv\Repositories\AvailabilityRepository;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
@@ -43,24 +44,26 @@ class Availability extends Model
         return Price::create($value);
     }
     
-    public function scopeGetAvailabilityForDates($scope, $data, $statamic_id = null) { 
-        
+    public function getAvailableItems($data) 
+    {
         ExpireReservations::dispatchSync();
 
         $this->initiateAvailability($data);
 
-        if (! $statamic_id) {
-            return $this->getAllAvailableItems();
-        }
-
-        if ($statamic_id) {
-            return $this->getSpecificItem($statamic_id);
-        }
-        
+        return $this->getAllAvailableItems();
     }
+    
+    public function getAvailabilityForItem($data, $statamic_id) 
+    {
+        ExpireReservations::dispatchSync();
 
-    public function confirmAvailabilityAndPrice($data, $statamic_id) {
+        $this->initiateAvailability($data);
 
+        return $this->getSpecificItem($statamic_id);
+    }
+    
+    public function confirmAvailabilityAndPrice($data, $statamic_id) 
+    {
         $this->initiateAvailability($data);
 
         $availability = $this->getSpecificItem($statamic_id);

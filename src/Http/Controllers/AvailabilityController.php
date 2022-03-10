@@ -9,6 +9,14 @@ use Reach\StatamicResrv\Exceptions\AvailabilityException;
 
 class AvailabilityController extends Controller
 {
+
+    public $availability;
+
+    public function __construct(Availability $availability)
+    {
+        $this->availability = $availability;
+    }
+
     public function index(Request $request)
     {
         $data = $request->validate([
@@ -18,7 +26,7 @@ class AvailabilityController extends Controller
         ]);
 
         try {
-            $availabilityData = Availability::GetAvailabilityForDates($data);
+            $availabilityData = $this->availability->getAvailableItems($data);
         } catch (AvailabilityException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }      
@@ -36,7 +44,7 @@ class AvailabilityController extends Controller
         ]);
       
         try {
-            $availabilityData = Availability::GetAvailabilityForDates($data, $statamic_id);
+            $availabilityData = $this->availability->getAvailabilityForItem($data, $statamic_id);
         } catch (AvailabilityException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }      
