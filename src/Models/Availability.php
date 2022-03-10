@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
+use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
@@ -43,24 +44,26 @@ class Availability extends Model
         return Price::create($value);
     }
     
-    public function scopeGetAvailabilityForDates($scope, $data, $statamic_id = null) { 
-        
+    public function getAvailableItems($data) 
+    {
         ExpireReservations::dispatchSync();
 
         $this->initiateAvailability($data);
 
-        if (! $statamic_id) {
-            return $this->getAllAvailableItems();
-        }
-
-        if ($statamic_id) {
-            return $this->getSpecificItem($statamic_id);
-        }
-        
+        return $this->getAllAvailableItems();
     }
+    
+    public function getAvailabilityForItem($data, $statamic_id) 
+    {
+        ExpireReservations::dispatchSync();
 
-    public function confirmAvailabilityAndPrice($data, $statamic_id) {
+        $this->initiateAvailability($data);
 
+        return $this->getSpecificItem($statamic_id);
+    }
+    
+    public function confirmAvailabilityAndPrice($data, $statamic_id) 
+    {
         $this->initiateAvailability($data);
 
         $availability = $this->getSpecificItem($statamic_id);
@@ -83,12 +86,9 @@ class Availability extends Model
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
-        ]); 
+        ]);
 
-        $this->where('date', '>=', $this->date_start)
-            ->where('date', '<', $this->date_end)
-            ->where('statamic_id', $statamic_id)
-            ->decrement('available', $this->quantity);
+        AvailabilityRepository::decrement($this->date_start, $this->date_end, $this->quantity, $statamic_id);
     }  
     
     public function incrementAvailability($date_start, $date_end, $quantity, $statamic_id) 
@@ -99,10 +99,7 @@ class Availability extends Model
             'quantity' => $quantity,
         ]); 
 
-        $this->where('date', '>=', $this->date_start)
-            ->where('date', '<', $this->date_end)
-            ->where('statamic_id', $statamic_id)
-            ->increment('available', $this->quantity);
+        AvailabilityRepository::increment($this->date_start, $this->date_end, $this->quantity, $statamic_id);
     }  
 
     protected function getAllAvailableItems()
@@ -156,10 +153,7 @@ class Availability extends Model
     {
         $entry = $this->getDefaultSiteEntry($statamic_id);
         
-        $results = $this->where('date', '>=', $this->date_start)
-            ->where('date', '<', $this->date_end)
-            ->where('statamic_id', $entry->id())
-            ->where('available', '>=', $this->quantity)
+        $results = AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->quantity, $entry->id())
             ->get(['date', 'price', 'available'])
             ->sortBy('date');
 
@@ -213,10 +207,9 @@ class Availability extends Model
      * of the items that have at least 1 available for each day.
      */
     protected function availableForDates() {
-        $results = $this->where('date', '>=', $this->date_start)
-            ->where('date', '<', $this->date_end)
-            ->where('available', '>=', $this->quantity)
-            ->get(['statamic_id', 'date', 'price', 'available']);
+
+        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity)
+                ->get(['statamic_id', 'date', 'price', 'available']);
 
         $idsFound = $results->groupBy('statamic_id')->keys();
 
@@ -252,9 +245,7 @@ class Availability extends Model
             return FixedPricing::getFixedPricing($statamic_id, $this->duration);
         }
 
-        $results = $this->where('date', '>=', $this->date_start)
-            ->where('date', '<', $this->date_end)
-            ->where('statamic_id', $statamic_id)
+        $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $statamic_id)
             ->get(['price', 'available']);
 
         return $this->calculatePrice($results);
@@ -263,7 +254,7 @@ class Availability extends Model
 
     protected function getDisabledIds()
     {
-    $results = Entry::query()
+        $results = Entry::query()
             ->where('resrv_availability', 'disabled')
             ->where('published', true)
             ->get()
