@@ -18,7 +18,6 @@ use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
-use Carbon\Carbon;
 
 class Reservation extends Model
 {
@@ -96,6 +95,7 @@ class Reservation extends Model
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
             'quantity' => $data['quantity'],
+            'advanced' => $data['advanced'],
             'payment' => $data['payment'],
             'price' => $data['price'],
         ], $statamic_id);

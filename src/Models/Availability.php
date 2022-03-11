@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
+use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\DynamicPricing;
@@ -17,7 +18,7 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 use Statamic\Facades\Entry;
 use Carbon\CarbonPeriod;
 
-class Availability extends Model
+class Availability extends Model implements AvailabilityContract
 {
     use HasFactory, HandlesAvailabilityDates, HandlesMultisiteIds;
 
@@ -72,7 +73,7 @@ class Availability extends Model
             return false;
         }
 
-        if ($availability['data']['price'] != $data['price']) {
+        if ($availability['data']['price'] != $data['price']) {            
             return false;
         }
 
@@ -88,7 +89,7 @@ class Availability extends Model
             'quantity' => $quantity,
         ]);
 
-        AvailabilityRepository::decrement($this->date_start, $this->date_end, $this->quantity, $statamic_id);
+        AvailabilityRepository::decrement($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
     }  
     
     public function incrementAvailability($date_start, $date_end, $quantity, $statamic_id) 
@@ -99,7 +100,7 @@ class Availability extends Model
             'quantity' => $quantity,
         ]); 
 
-        AvailabilityRepository::increment($this->date_start, $this->date_end, $this->quantity, $statamic_id);
+        AvailabilityRepository::increment($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
     }  
 
     protected function getAllAvailableItems()
@@ -153,7 +154,7 @@ class Availability extends Model
     {
         $entry = $this->getDefaultSiteEntry($statamic_id);
         
-        $results = AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->quantity, $entry->id())
+        $results = AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced, $entry->id())
             ->get(['date', 'price', 'available'])
             ->sortBy('date');
 
@@ -174,6 +175,7 @@ class Availability extends Model
         }
 
         $dynamicPricing = $this->getDynamicPricing($entry->id(), $price);
+        $originalPrice = null;
         if ($dynamicPricing) {
             $originalPrice = $price;
             $price = $dynamicPricing->apply($price);
@@ -184,6 +186,11 @@ class Availability extends Model
             $price->multiply($this->quantity);
         }
 
+        return $this->buildSpecificItemArray($price, $originalPrice);   
+    }
+
+    protected function buildSpecificItemArray($price, $originalPrice)
+    {
         return [
             'request' => [
                 'days' => $this->duration,
@@ -199,7 +206,7 @@ class Availability extends Model
             'message' => [
                 'status' => 1
             ]
-        ];        
+        ];     
     }
 
     /**
@@ -208,7 +215,7 @@ class Availability extends Model
      */
     protected function availableForDates() {
 
-        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity)
+        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)
                 ->get(['statamic_id', 'date', 'price', 'available']);
 
         $idsFound = $results->groupBy('statamic_id')->keys();
@@ -245,7 +252,7 @@ class Availability extends Model
             return FixedPricing::getFixedPricing($statamic_id, $this->duration);
         }
 
-        $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $statamic_id)
+        $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)
             ->get(['price', 'available']);
 
         return $this->calculatePrice($results);

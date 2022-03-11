@@ -7,7 +7,7 @@ use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 
-class AvailabilityController extends Controller
+class AdvancedAvailabilityController extends Controller
 {
 
     public $availability;
@@ -23,6 +23,7 @@ class AvailabilityController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
+            'advanced' => 'required|string'
         ]);
 
         try {
@@ -41,6 +42,7 @@ class AvailabilityController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
+            'advanced' => 'required|string'
         ]);
       
         try {
