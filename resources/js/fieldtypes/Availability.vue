@@ -1,11 +1,11 @@
 <template>
     <element-container @resized="containerWidth = $event.width">
     <div class="w-full h-full text-center my-4 text-gray-700 text-lg" v-if="newItem">
-        You need to save this entry before you can add availability information.
+        {{ __('You need to save this entry before you can add availability information.') }}
     </div>
     <div class="statamic-resrv-availability relative" v-else>
         <div class="flex items-center py-1 my-4 border-b border-t">
-            <span class="font-bold mr-4">Enable reservations</span>    
+            <span class="font-bold mr-4">{{ __('Enable reservations') }}</span>    
             <toggle v-model="enabled" @input="changeAvailability" :parent="this.meta.parent"></toggle>
         </div>
         <template v-if="isAdvanced">
@@ -15,17 +15,30 @@
         </template>
         <div class="w-full h-full relative">
             <Loader v-if="!availabilityLoaded && !isAdvanced" />
+            <div class="w-full my-3" v-if="!isAdvanced || property">
+                <div class="w-full flex justify-end">
+                    <button class="btn-flat text-sm" @click="showModal = 'massavailability'">{{ __('Bulk edit') }}</button>
+                </div>
+            </div>
             <div ref="calendar"></div>
         </div>
         <availability-modal
-            v-if="showModal"
+            v-if="showModal == 'availability'"
             :dates="selectedDates"
             :parent-id="this.meta.parent"
             :property="this.property"
             @cancel="toggleModal"
             @saved="availabilitySaved"
         >
-        </availability-modal>
+        </availability-modal> 
+        <mass-availability-modal
+            v-if="showModal == 'massavailability'"
+            :parent-id="this.meta.parent"
+            :property="this.property"
+            @cancel="toggleModal"
+            @saved="availabilitySaved"
+        >
+        </mass-availability-modal>
     </div>
     </element-container>
 
@@ -36,6 +49,7 @@ import { Calendar } from '@fullcalendar/core'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import AvailabilityModal from '../components/AvailabilityModal.vue'
+import MassAvailabilityModal from '../components/MassAvailabilityModal.vue'
 import Toggle from '../components/Toggle.vue'
 import Loader from '../components/Loader.vue'
 import dayjs from 'dayjs'
@@ -63,12 +77,13 @@ export default {
             },
             availability: '',
             availabilityLoaded: false,
-            property: ''
+            property: null
         }
     },
 
     components: {
         AvailabilityModal,
+        MassAvailabilityModal,
         Loader,
         Toggle
     },
@@ -128,10 +143,14 @@ export default {
     methods: {
         handleSelect(date) {
             this.selectedDates = date
-            this.toggleModal()
+            this.toggleModal('availability')
         },
-        toggleModal() {
-            this.showModal = !this.showModal
+        toggleModal(modal) {
+            if (! this.showModal) {
+                this.showModal = modal
+            } else {
+                this.showModal = false
+            }            
         },
         toggleAvailability() {
             this.availabilityLoaded = !this.availabilityLoaded
@@ -199,7 +218,7 @@ export default {
         availabilitySaved() {
             this.toggleAvailability()
             this.toggleModal()            
-            if (this.property != null) {
+            if (this.property !== null) {
                 this.getAdvancedAvailability()
             } else {
                 this.getAvailability()
@@ -221,9 +240,7 @@ export default {
             axios.get('/cp/resrv/advancedavailability/'+this.meta.parent+'/'+this.property.code)
             .then(response => {
                 this.availability = response.data
-                console.log(1)
                 this.calendar.render()
-                console.log(2)
                 this.toggleAvailability()
             })
             .catch(error => {
