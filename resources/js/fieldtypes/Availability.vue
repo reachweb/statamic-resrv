@@ -8,15 +8,20 @@
             <span class="font-bold mr-4">Enable reservations</span>    
             <toggle v-model="enabled" @input="changeAvailability" :parent="this.meta.parent"></toggle>
         </div>
-        
+        <template v-if="isAdvanced">
+        <div class="w-full h-full relative mb-3">
+            <v-select :placeholder="__('Select property')" v-model="property" :options="propertiesOptions" />
+        </div>
+        </template>
         <div class="w-full h-full relative">
-            <Loader v-if="!availabilityLoaded" />
+            <Loader v-if="!availabilityLoaded && !isAdvanced" />
             <div ref="calendar"></div>
         </div>
         <availability-modal
             v-if="showModal"
             :dates="selectedDates"
             :parent-id="this.meta.parent"
+            :property="this.property"
             @cancel="toggleModal"
             @saved="availabilitySaved"
         >
@@ -57,7 +62,8 @@ export default {
                 fixedWeekCount: false
             },
             availability: '',
-            availabilityLoaded: false
+            availabilityLoaded: false,
+            property: ''
         }
     },
 
@@ -73,15 +79,28 @@ export default {
                 return true
             }
             return false
+        },
+        isAdvanced() {
+            if (_.isObject(this.meta.options)) {
+                return true
+            }
+            return false
+        },
+        propertiesOptions() {
+            let options = [];
+            if (_.isObject(this.meta.options)) {
+                _.forEach(this.meta.options, (label, slug) => options.push({label: label, code: slug}))
+            }
+            return options;
         }
     },
 
     mounted() {
-        if (! this.newItem) {
-            this.getAvailability()
-            this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
+        this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
+        if (! this.newItem && ! this.isAdvanced) {
+            this.getAvailability()            
             this.calendar.render()
-        }  
+        }
     },
 
     created() {
@@ -91,6 +110,18 @@ export default {
     updated() {
         if (! this.newItem) {
             this.$emit('input', this.enabled)
+        }
+    },
+
+    watch: {
+        property() {
+            if (this.property !== null) {
+                this.getAdvancedAvailability()
+            } else {
+                this.clearAvailability()
+                this.calendar.destroy()
+            }
+            this.renderAgain()
         }
     },
 
@@ -167,8 +198,13 @@ export default {
         },
         availabilitySaved() {
             this.toggleAvailability()
-            this.toggleModal()
-            this.getAvailability()
+            this.toggleModal()            
+            if (this.property != null) {
+                this.getAdvancedAvailability()
+            } else {
+                this.getAvailability()
+            }
+            this.renderAgain()
         },
         getAvailability() {
             axios.get('/cp/resrv/availability/'+this.meta.parent)
@@ -180,6 +216,24 @@ export default {
             .catch(error => {
                 this.$toast.error('Cannot retrieve availability')
             })
+        },
+        getAdvancedAvailability() {
+            axios.get('/cp/resrv/advancedavailability/'+this.meta.parent+'/'+this.property.code)
+            .then(response => {
+                this.availability = response.data
+                console.log(1)
+                this.calendar.render()
+                console.log(2)
+                this.toggleAvailability()
+            })
+            .catch(error => {
+                this.$toast.error('Cannot retrieve advanced availability')
+            })
+        },
+        clearAvailability() {
+            this.availability = ''
+            this.calendar.render()
+            this.toggleAvailability()
         },
         changeAvailability() {
             if (this.enabled == 'disabled') {

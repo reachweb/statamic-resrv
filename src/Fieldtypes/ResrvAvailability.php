@@ -25,15 +25,31 @@ class ResrvAvailability extends Fieldtype
         return false;
     }
 
-    public function preload()
+    public function preload(): array
     {
         if (class_basename($this->field->parent()) == 'Collection') {
-            return ['parent' => 'Collection'];
+            return ['parent' => 'Collection', 'options' => $this->field->get('options')];
         }
+        
+        $parent = $this->field->parent()->id();
         if ($this->field->parent()->hasOrigin()) {
-            return ['parent' => $this->field->parent()->origin()->id()];
+            $parent = $this->field->parent()->origin()->id();
         }
-        return ['parent' => $this->field->parent()->id()];
+        return ['parent' => $parent, 'options' => $this->field->get('options')];
+    }
+
+    protected function configFieldItems(): array
+    {
+        return [
+            'options' => [
+                'display' => __('Advanced availability'),
+                'instructions' => __('Add properties to create advanced availability rules'),
+                'type' => 'array',
+                'key_header' => __('Slug'),
+                'value_header' => __('Label'),
+                'add_button' => __('Add property'),
+            ],
+        ];
     }
 
 }

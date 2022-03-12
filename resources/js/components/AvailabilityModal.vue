@@ -3,6 +3,7 @@
         <div class="availability-modal flex flex-col h-full">
             <div class="text-lg font-medium p-2 pb-0">
                 {{ __('Change availability') }}
+                <span class="block mt-1 text-md" v-if="property"><span class="font-light">For:</span> {{ property.label }}</span>
                 <span class="block mt-1 font-light text-sm">From {{ date_start }} to {{ date_end }}</span>
             </div>
             <div class="flex-1 px-2 py-3 text-grey">
@@ -59,6 +60,10 @@ export default {
         parentId: {
             type: String,
             required: true
+        },
+        property: {
+            type: Object,
+            required: false
         }
     },
 
@@ -67,7 +72,7 @@ export default {
             available: null,
             price: null,
             successMessage: 'Availability successfully saved',
-            postUrl: '/cp/resrv/availability',
+            postUrl: (this.property ? '/cp/resrv/advancedavailability' :'/cp/resrv/availability'),
             method: 'post'
         }
     },
@@ -87,6 +92,9 @@ export default {
             fields.statamic_id = this.parentId
             fields.price = this.price
             fields.available = this.available
+            if (this.property) {
+                fields.advanced = this.property.code
+            }
             return fields
         }
     },
