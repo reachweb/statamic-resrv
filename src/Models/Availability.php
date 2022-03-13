@@ -215,8 +215,7 @@ class Availability extends Model implements AvailabilityContract
      */
     protected function availableForDates() {
 
-        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)
-                ->get(['statamic_id', 'date', 'price', 'available']);
+        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
 
         $idsFound = $results->groupBy('statamic_id')->keys();
 
@@ -254,7 +253,6 @@ class Availability extends Model implements AvailabilityContract
 
         $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)
             ->get(['price', 'available']);
-
         return $this->calculatePrice($results);
 
     }

@@ -14,7 +14,9 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
             ->when($advanced, function ($query, $advanced) {
-                $query->where('property', $advanced);
+                if ($advanced !== 'any') {
+                    $query->where('property', $advanced);
+                }                
             });
     }    
     
@@ -26,7 +28,9 @@ class AvailabilityRepository
             ->where('statamic_id', $statamic_id)
             ->where('available', '>=', $quantity)
             ->when($advanced, function ($query, $advanced) {
-                $query->where('property', $advanced);
+                if ($advanced !== 'any') {
+                    $query->where('property', $advanced);
+                }
             });
     }
 
@@ -37,7 +41,9 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($advanced, function ($query, $advanced) {
-                $query->where('property', $advanced);
+                if ($advanced !== 'any') {
+                    $query->where('property', $advanced);
+                }
             });
     }
 

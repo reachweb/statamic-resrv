@@ -43,7 +43,7 @@ class ResrvAvailability extends Fieldtype
         return [
             'options' => [
                 'display' => __('Advanced availability'),
-                'instructions' => __('Add properties to create advanced availability rules'),
+                'instructions' => __('Add properties to create advanced availability rules. <em>(please avoid using reserved slug "any")</em>'),
                 'type' => 'array',
                 'key_header' => __('Slug'),
                 'value_header' => __('Label'),
