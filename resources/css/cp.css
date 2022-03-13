@@ -22,3 +22,9 @@
 .date-container > span {
     @apply w-full;
 }
+
+.availability-modal {
+    .vs__dropdown-toggle {
+        height: auto;
+    }
+}

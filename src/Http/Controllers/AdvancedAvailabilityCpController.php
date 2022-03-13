@@ -2,7 +2,7 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
-use Illuminate\Http\Request;
+use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityRequest;
 use Illuminate\Routing\Controller;
 use Carbon\CarbonPeriod;
 use Reach\StatamicResrv\Models\AdvancedAvailability;
@@ -19,31 +19,25 @@ class AdvancedAvailabilityCpController extends Controller
         return response()->json($results);
     }
 
-    public function update(Request $request)
+    public function update(AdvancedAvailabilityRequest $request)
     {
-        $data = $request->validate([
-            'statamic_id' => 'required',
-            'date_start' => 'required|date',
-            'date_end' => 'required|date',
-            'price' => 'required|numeric',
-            'available' => 'required|numeric',
-            'advanced' => 'required|string'
-        ]);
+        $data = $request->validated();
 
-        $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
-        
-        $dataToAdd = [];
-        foreach ($period as $day) {
-            $dataToAdd[] = [
-                'statamic_id' => $data['statamic_id'],
-                'date' => $day->isoFormat('YYYY-MM-DD'),
-                'price' => $data['price'],
-                'available' => $data['available'],
-                'property' => $data['advanced']
-            ];
+        foreach($data['advanced'] as $property) {
+            $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
+            $dataToAdd = [];
+            
+            foreach ($period as $day) {
+                $dataToAdd[] = [
+                    'statamic_id' => $data['statamic_id'],
+                    'date' => $day->isoFormat('YYYY-MM-DD'),
+                    'price' => $data['price'],
+                    'available' => $data['available'],
+                    'property' => $property['code']
+                ];
+            }
+            AdvancedAvailability::upsert($dataToAdd, ['statamic_id', 'date', 'property'], ['price', 'available']);
         }
-
-        AdvancedAvailability::upsert($dataToAdd, ['statamic_id', 'date', 'property'], ['price', 'available']);
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }

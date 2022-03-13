@@ -3,7 +3,12 @@
         <div class="availability-modal flex flex-col h-full">
             <div class="text-lg font-medium p-2 pb-0">
                 {{ __('Change availability') }}
-                <span class="block mt-1 text-md" v-if="property"><span class="font-light">For:</span> {{ property.label }}</span>
+            </div>
+            <div v-if="property" class="px-2 mt-2">
+                <v-select multiple :placeholder="__('Select property')" v-model="selectedProperty" :options="propertiesOptions" />
+                <div class="flex w-full justify-end pt-1">
+                    <button class="text-grey hover:text-grey-90" @click="selectedProperty = propertiesOptions">{{ __('Select all') }}</button>
+                </div>
             </div>
             <div class="px-2 mt-2 mb-1">
                 <span class="block mb-2 text-md">{{ __('Select dates') }}</span>
@@ -82,6 +87,10 @@ export default {
         property: {
             type: Object,
             required: false
+        },
+        propertiesOptions: {
+            type: Object,
+            required: false
         }
     },
 
@@ -95,7 +104,8 @@ export default {
             price: null,
             successMessage: 'Availability successfully saved',
             postUrl: (this.property ? '/cp/resrv/advancedavailability' :'/cp/resrv/availability'),
-            method: 'post'
+            method: 'post',
+            selectedProperty: (this.property ? this.property : null)
         }
     },
 
@@ -108,7 +118,7 @@ export default {
             fields.price = this.price
             fields.available = this.available
             if (this.property) {
-                fields.advanced = this.property.code
+                fields.advanced = _.isArray(this.selectedProperty) ? this.selectedProperty : [_.find(this.propertiesOptions, ['code', this.selectedProperty.code])]
             }
             return fields
         }

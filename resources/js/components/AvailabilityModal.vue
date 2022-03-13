@@ -93,7 +93,7 @@ export default {
             fields.price = this.price
             fields.available = this.available
             if (this.property) {
-                fields.advanced = this.property.code
+                fields.advanced = [this.property]
             }
             return fields
         }

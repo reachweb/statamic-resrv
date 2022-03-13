@@ -35,6 +35,7 @@
             v-if="showModal == 'massavailability'"
             :parent-id="this.meta.parent"
             :property="this.property"
+            :propertiesOptions="this.propertiesOptions"
             @cancel="toggleModal"
             @saved="availabilitySaved"
         >

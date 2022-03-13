@@ -45,7 +45,7 @@ class AdvancedAvailabilityCpTest extends TestCase
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(5, 'day')->isoFormat('YYYY-MM-DD'),
-            'advanced' => 'something',
+            'advanced' => [['code' => 'something']],
             'price' => 150,
             'available' => 2
         ];
@@ -58,74 +58,29 @@ class AdvancedAvailabilityCpTest extends TestCase
         ]);
     }
 
-    public function test_availability_can_add_for_single_day()
+    public function test_advanced_availability_can_add_mass_update_for_date_range()
     {
         $item = $this->makeStatamicItem();
+        
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-            'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(5, 'day')->isoFormat('YYYY-MM-DD'),
+            'advanced' => [['code' => 'something'], ['code' => 'something-else']],
             'price' => 150,
             'available' => 2
         ];
-        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response = $this->post(cp_route('resrv.advancedavailability.update'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('resrv_availabilities', [
-            'statamic_id' => $item->id()
+        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+            'statamic_id' => $item->id(),
+            'property' => 'something'
+        ]);
+        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+            'statamic_id' => $item->id(),
+            'property' => 'something-else'
         ]);
     }
-
-    // public function test_availability_can_stop_sales()
-    // {
-    //     $item = $this->makeStatamicItem();
-    //     $payload = [
-    //         'statamic_id' => $item->id(),
-    //         'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-    //         'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-    //         'price' => 150,
-    //         'available' => 0
-    //     ];
-    //     $response = $this->post(cp_route('resrv.availability.update'), $payload);
-    //     $response->assertStatus(200);
-
-    //     $this->assertDatabaseHas('resrv_availabilities', [
-    //         'statamic_id' => $item->id()
-    //     ]);
-    // }
-    
-    // public function test_availability_can_update_for_date_range()
-    // {
-    //     $item = $this->makeStatamicItem();
-    //     $payload = [
-    //         'statamic_id' => $item->id(),
-    //         'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-    //         'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
-    //         'price' => 150,
-    //         'available' => 6
-    //     ];
-    //     $response = $this->post(cp_route('resrv.availability.update'), $payload);
-    //     $response->assertStatus(200);
-
-    //     $this->assertDatabaseHas('resrv_availabilities', [
-    //         'price' => 150
-    //     ]);
-
-    //     $newPayload = [
-    //         'statamic_id' => $item->id(),
-    //         'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-    //         'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
-    //         'price' => 200,
-    //         'available' => 2
-    //     ];
-
-    //     $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
-    //     $response->assertStatus(200);
-
-    //     $this->assertDatabaseHas('resrv_availabilities', [
-    //         'price' => 200
-    //     ]);
-    // }
-    
     
 }
