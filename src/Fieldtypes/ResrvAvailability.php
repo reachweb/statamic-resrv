@@ -34,14 +34,14 @@ class ResrvAvailability extends Fieldtype
     public function preload(): array
     {
         if (class_basename($this->field->parent()) == 'Collection') {
-            return ['parent' => 'Collection', 'options' => $this->field->get('options')];
+            return ['parent' => 'Collection', 'advanced_availability' => $this->field->get('advanced_availability')];
         }
         
         $parent = $this->field->parent()->id();
         if ($this->field->parent()->hasOrigin()) {
             $parent = $this->field->parent()->origin()->id();
         }
-        return ['parent' => $parent, 'options' => $this->field->get('options')];
+        return ['parent' => $parent, 'advanced_availability' => $this->field->get('advanced_availability')];
     }
 
     protected function configFieldItems(): array
@@ -50,7 +50,7 @@ class ResrvAvailability extends Fieldtype
             return [];
         }
         return [
-            'options' => [
+            'advanced_availability' => [
                 'display' => __('Advanced availability'),
                 'instructions' => __('Add properties to create advanced availability rules. <em>(please avoid using reserved slug "any")</em>'),
                 'type' => 'array',

@@ -97,15 +97,15 @@ export default {
             return false
         },
         isAdvanced() {
-            if (_.isObject(this.meta.options)) {
+            if (_.isObject(this.meta.advanced_availability)) {
                 return true
             }
             return false
         },
         propertiesOptions() {
             let options = [];
-            if (_.isObject(this.meta.options)) {
-                _.forEach(this.meta.options, (label, slug) => options.push({label: label, code: slug}))
+            if (_.isObject(this.meta.advanced_availability)) {
+                _.forEach(this.meta.advanced_availability, (label, slug) => options.push({label: label, code: slug}))
             }
             return options;
         }
