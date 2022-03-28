@@ -16,7 +16,7 @@ class ResrvAvailability extends Fieldtype
             $availability_data = Availability::entry($value)->where('available', '>', '0')->get();
 
             // Retry for advanced availability
-            if ($availability_data->count() == 0) {
+            if ($availability_data->count() == 0 && config('resrv-config.enable_advanced_availability')) {
                 $availability_data = AdvancedAvailability::entry($value)->where('available', '>', '0')->get();
             }
             
@@ -46,6 +46,9 @@ class ResrvAvailability extends Fieldtype
 
     protected function configFieldItems(): array
     {
+        if (config('resrv-config.enable_advanced_availability') == false) {
+            return [];
+        }
         return [
             'options' => [
                 'display' => __('Advanced availability'),

@@ -75,4 +75,11 @@ return [
     'payment_gateway'        => Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
     'stripe_secret_key'      => env('RESRV_STRIPE_SECRET', ''),
     'stripe_publishable_key' => env('RESRV_STRIPE_PUBLISHABLE', ''),
+
+    /**
+     * Advanced features
+     * enable_advanced_availability: set different availability and price for an item depending on the property
+     * 
+     */
+    'enable_advanced_availability'  => false
 ];
