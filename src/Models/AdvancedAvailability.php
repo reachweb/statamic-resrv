@@ -8,7 +8,7 @@ use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Money\Price as PriceClass;
-
+use Statamic\Facades\Blueprint;
 
 class AdvancedAvailability extends Availability
 {
@@ -25,6 +25,18 @@ class AdvancedAvailability extends Availability
     protected static function newFactory()
     {
         return AdvancedAvailabilityFactory::new();
+    }
+
+    public function getPropertyLabel($handle, $collection, $slug) {
+        $blueprint = Blueprint::find('collections.'.$collection.'.'.$handle);
+        if (! $blueprint->hasField('resrv_availability')) {
+            return false;
+        }
+        $properties = $blueprint->field('resrv_availability')->get('advanced_availability');
+        if (array_key_exists($slug, $properties)) {
+            return $properties[$slug];
+        }
+        return $slug;
     }
 
     protected function availableForDates() {

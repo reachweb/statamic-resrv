@@ -11,6 +11,7 @@ use Statamic\Facades\Form;
 use Statamic\Facades\Entry;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
@@ -55,6 +56,12 @@ class Reservation extends Model
     public function getPaymentAttribute($value)
     {
         return Price::create($value);
+    }
+
+    public function getPropertyAttribute($value)
+    {
+        $availability = new AdvancedAvailability;
+        return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $value);
     }
 
     public function getEntryAttribute()

@@ -29,6 +29,9 @@ Email: {{ config('resrv-config.mail') }}
 @if (config('resrv-config.maximum_quantity') > 1)
 | {{ __('statamic-resrv::email.quantity') }}  | x {{ $reservation->quantity }} |
 @endif
+@if (config('resrv-config.enable_advanced_availability'))
+| {{ __('statamic-resrv::email.property') }} | {{ $reservation->property }} |
+@endif
 @endcomponent
 
 @if ($reservation->extras()->get()->count() > 0)

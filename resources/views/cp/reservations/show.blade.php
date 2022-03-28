@@ -69,7 +69,13 @@
                     <div class="font-bold mb-1">Quantity</div>
                     <div>x {{ $reservation->quantity }}</div>
                 </div>
-                @endif                    
+                @endif
+                @if (config('resrv-config.enable_advanced_availability'))
+                <div>
+                    <div class="font-bold mb-1">Property</div>
+                    <div>{{ $reservation->property }}</div>
+                </div>
+                @endif
             </div>
             
         </div>
