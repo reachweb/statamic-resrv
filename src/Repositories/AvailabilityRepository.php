@@ -3,56 +3,80 @@
 namespace Reach\StatamicResrv\Repositories;
 
 use Reach\StatamicResrv\Models\Availability; 
+use Reach\StatamicResrv\Models\AdvancedAvailability; 
 
 class AvailabilityRepository
 {
-    public $query;
-
-    public function availableBetween($date_start, $date_end, $quantity)
+    public function availableBetween($date_start, $date_end, $quantity, $advanced)
     {
-        return $this->query()
+        return $this->query($advanced)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
-            ->where('available', '>=', $quantity);
+            ->where('available', '>=', $quantity)
+            ->when($advanced, function ($query, $advanced) {
+                if ($advanced !== 'any') {
+                    $query->where('property', $advanced);
+                }                
+            });
     }    
     
-    public function itemAvailableBetween($date_start, $date_end, $quantity, $statamic_id)
+    public function itemAvailableBetween($date_start, $date_end, $quantity, $advanced, $statamic_id)
     {
-        return $this->query()
+        return $this->query($advanced)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
-            ->where('available', '>=', $quantity);
+            ->where('available', '>=', $quantity)
+            ->when($advanced, function ($query, $advanced) {
+                if ($advanced !== 'any') {
+                    $query->where('property', $advanced);
+                }
+            });
     }
 
-    public function priceForDates($date_start, $date_end, $statamic_id)
+    public function priceForDates($date_start, $date_end, $advanced, $statamic_id)
     {
-        return $this->query()
-            ->where('date', '>=', $date_start)
-            ->where('date', '<', $date_end)
-            ->where('statamic_id', $statamic_id);
-    }
-
-    public function decrement($date_start, $date_end, $quantity, $statamic_id)
-    {
-        return $this->query()
+        return $this->query($advanced)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
+            ->when($advanced, function ($query, $advanced) {
+                if ($advanced !== 'any') {
+                    $query->where('property', $advanced);
+                }
+            });
+    }
+
+    public function decrement($date_start, $date_end, $quantity, $advanced, $statamic_id)
+    {
+        return $this->query($advanced)
+            ->where('date', '>=', $date_start)
+            ->where('date', '<', $date_end)
+            ->where('statamic_id', $statamic_id)
+            ->when($advanced, function ($query, $advanced) {
+                $query->where('property', $advanced);
+            })
             ->decrement('available', $quantity);
     }
         
-    public function increment($date_start, $date_end, $quantity, $statamic_id)
+    public function increment($date_start, $date_end, $quantity, $advanced, $statamic_id)
     {
-        return $this->query()
+        return $this->query($advanced)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
+            ->when($advanced, function ($query, $advanced) {
+                $query->where('property', $advanced);
+            })
             ->increment('available', $quantity);
     }
     
-    public function query()
+    public function query($advanced)
     {
-        return app(Availability::class);
+        if (! $advanced) {
+            return app(Availability::class);
+        }
+        return app(AdvancedAvailability::class);
+        
     }
 }

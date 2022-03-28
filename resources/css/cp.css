@@ -18,3 +18,13 @@
         font-size: 1.75rem !important;
     }
 }
+
+.date-container > span {
+    @apply w-full;
+}
+
+.availability-modal {
+    .vs__dropdown-toggle {
+        height: auto;
+    }
+}

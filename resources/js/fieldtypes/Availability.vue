@@ -1,26 +1,45 @@
 <template>
     <element-container @resized="containerWidth = $event.width">
     <div class="w-full h-full text-center my-4 text-gray-700 text-lg" v-if="newItem">
-        You need to save this entry before you can add availability information.
+        {{ __('You need to save this entry before you can add availability information.') }}
     </div>
     <div class="statamic-resrv-availability relative" v-else>
         <div class="flex items-center py-1 my-4 border-b border-t">
-            <span class="font-bold mr-4">Enable reservations</span>    
+            <span class="font-bold mr-4">{{ __('Enable reservations') }}</span>    
             <toggle v-model="enabled" @input="changeAvailability" :parent="this.meta.parent"></toggle>
         </div>
-        
+        <template v-if="isAdvanced">
+        <div class="w-full h-full relative mb-3">
+            <v-select :placeholder="__('Select property')" v-model="property" :options="propertiesOptions" />
+        </div>
+        </template>
         <div class="w-full h-full relative">
-            <Loader v-if="!availabilityLoaded" />
+            <Loader v-if="!availabilityLoaded && !isAdvanced" />
+            <div class="w-full my-3" v-if="!isAdvanced || property">
+                <div class="w-full flex justify-end">
+                    <button class="btn-flat text-sm" @click="showModal = 'massavailability'">{{ __('Bulk edit') }}</button>
+                </div>
+            </div>
             <div ref="calendar"></div>
         </div>
         <availability-modal
-            v-if="showModal"
+            v-if="showModal == 'availability'"
             :dates="selectedDates"
             :parent-id="this.meta.parent"
+            :property="this.property"
             @cancel="toggleModal"
             @saved="availabilitySaved"
         >
-        </availability-modal>
+        </availability-modal> 
+        <mass-availability-modal
+            v-if="showModal == 'massavailability'"
+            :parent-id="this.meta.parent"
+            :property="this.property"
+            :propertiesOptions="this.propertiesOptions"
+            @cancel="toggleModal"
+            @saved="availabilitySaved"
+        >
+        </mass-availability-modal>
     </div>
     </element-container>
 
@@ -31,6 +50,7 @@ import { Calendar } from '@fullcalendar/core'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import AvailabilityModal from '../components/AvailabilityModal.vue'
+import MassAvailabilityModal from '../components/MassAvailabilityModal.vue'
 import Toggle from '../components/Toggle.vue'
 import Loader from '../components/Loader.vue'
 import dayjs from 'dayjs'
@@ -57,12 +77,14 @@ export default {
                 fixedWeekCount: false
             },
             availability: '',
-            availabilityLoaded: false
+            availabilityLoaded: false,
+            property: null
         }
     },
 
     components: {
         AvailabilityModal,
+        MassAvailabilityModal,
         Loader,
         Toggle
     },
@@ -73,15 +95,28 @@ export default {
                 return true
             }
             return false
+        },
+        isAdvanced() {
+            if (_.isObject(this.meta.advanced_availability)) {
+                return true
+            }
+            return false
+        },
+        propertiesOptions() {
+            let options = [];
+            if (_.isObject(this.meta.advanced_availability)) {
+                _.forEach(this.meta.advanced_availability, (label, slug) => options.push({label: label, code: slug}))
+            }
+            return options;
         }
     },
 
     mounted() {
-        if (! this.newItem) {
-            this.getAvailability()
-            this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
+        this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
+        if (! this.newItem && ! this.isAdvanced) {
+            this.getAvailability()            
             this.calendar.render()
-        }  
+        }
     },
 
     created() {
@@ -94,13 +129,29 @@ export default {
         }
     },
 
+    watch: {
+        property() {
+            if (this.property !== null) {
+                this.getAdvancedAvailability()
+            } else {
+                this.clearAvailability()
+                this.calendar.destroy()
+            }
+            this.renderAgain()
+        }
+    },
+
     methods: {
         handleSelect(date) {
             this.selectedDates = date
-            this.toggleModal()
+            this.toggleModal('availability')
         },
-        toggleModal() {
-            this.showModal = !this.showModal
+        toggleModal(modal) {
+            if (! this.showModal) {
+                this.showModal = modal
+            } else {
+                this.showModal = false
+            }            
         },
         toggleAvailability() {
             this.availabilityLoaded = !this.availabilityLoaded
@@ -167,8 +218,13 @@ export default {
         },
         availabilitySaved() {
             this.toggleAvailability()
-            this.toggleModal()
-            this.getAvailability()
+            this.toggleModal()            
+            if (this.property !== null) {
+                this.getAdvancedAvailability()
+            } else {
+                this.getAvailability()
+            }
+            this.renderAgain()
         },
         getAvailability() {
             axios.get('/cp/resrv/availability/'+this.meta.parent)
@@ -180,6 +236,22 @@ export default {
             .catch(error => {
                 this.$toast.error('Cannot retrieve availability')
             })
+        },
+        getAdvancedAvailability() {
+            axios.get('/cp/resrv/advancedavailability/'+this.meta.parent+'/'+this.property.code)
+            .then(response => {
+                this.availability = response.data
+                this.calendar.render()
+                this.toggleAvailability()
+            })
+            .catch(error => {
+                this.$toast.error('Cannot retrieve advanced availability')
+            })
+        },
+        clearAvailability() {
+            this.availability = ''
+            this.calendar.render()
+            this.toggleAvailability()
         },
         changeAvailability() {
             if (this.enabled == 'disabled') {

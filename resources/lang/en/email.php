@@ -33,5 +33,6 @@ return [
     'country' => 'Country',
     'flightNumber' => 'Flight number',
     'notes' => 'Notes',
+    'property' => 'Property',
 
 ];

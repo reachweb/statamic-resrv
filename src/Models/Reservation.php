@@ -11,6 +11,7 @@ use Statamic\Facades\Form;
 use Statamic\Facades\Entry;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Location;
@@ -18,7 +19,6 @@ use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
-use Carbon\Carbon;
 
 class Reservation extends Model
 {
@@ -56,6 +56,12 @@ class Reservation extends Model
     public function getPaymentAttribute($value)
     {
         return Price::create($value);
+    }
+
+    public function getPropertyAttribute($value)
+    {
+        $availability = new AdvancedAvailability;
+        return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $value);
     }
 
     public function getEntryAttribute()
@@ -96,6 +102,7 @@ class Reservation extends Model
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
             'quantity' => $data['quantity'],
+            'advanced' => $data['advanced'],
             'payment' => $data['payment'],
             'price' => $data['price'],
         ], $statamic_id);

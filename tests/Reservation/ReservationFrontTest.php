@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Reach\StatamicResrv\Tests\TestCase;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Extra;
@@ -543,6 +544,66 @@ class ReservationFrontTest extends TestCase
             'statamic_id' => $item->id(),
             'available' => 5,
         ]);                
+    }
+
+    public function test_reservation_confirm_method_success_with_advanced_availability()
+    {
+        $this->withExceptionHandling();
+        $item = $this->makeStatamicItem();
+        $this->signInAdmin();
+
+        AdvancedAvailability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->add(1, 'day')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+        
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+            'advanced' => 'something'
+        ];
+        
+        $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('300')->assertSee('message":{"status":1}}', false);
+
+
+        $payment = json_decode($response->content())->data->payment;
+        $price = json_decode($response->content())->data->price;
+        $total = json_decode($response->content())->data->price;
+       
+        $checkoutRequest = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+            'advanced' => 'something',
+            'payment' => $payment,
+            'price' => $price,
+            'total' => $total
+        ];
+      
+        $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+
+        $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'payment' => $payment,
+            'property' => 'something'
+        ]);
+
+        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 2,
+            'property' => 'something'
+        ]);
+
+                     
     }    
+
 
 }

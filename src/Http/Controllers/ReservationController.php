@@ -30,6 +30,7 @@ class ReservationController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
+            'advanced' => 'nullable|string',
             'payment' => 'required|numeric',
             'price' => 'required|numeric',
             'total' => 'required|numeric',
@@ -47,13 +48,16 @@ class ReservationController extends Controller
 
         $data = $request->validate($rules);
 
-        // Set the quantity for backwards compatibility
+        // Set the quantity and advanced for backwards compatibility
         if (! Arr::exists($data, 'quantity')) {
             $data['quantity'] = 1;
         }
+        if (! Arr::exists($data, 'advanced')) {
+            $data['advanced'] = null;
+        }
 
         try {
-            $attemptReservation = $this->reservation->confirmReservation($data, $statamic_id);
+            $this->reservation->confirmReservation($data, $statamic_id);
         } catch (ReservationException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }        
@@ -65,6 +69,7 @@ class ReservationController extends Controller
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
             'quantity' => $data['quantity'],
+            'property' => $data['advanced'],
             'location_start' => (Arr::exists($data, 'location_start') ? $data['location_start'] : ''),
             'location_end' => (Arr::exists($data, 'location_end') ? $data['location_end'] : ''),
             'price' => $data['total'],

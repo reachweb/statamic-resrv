@@ -12,6 +12,7 @@ trait HandlesAvailabilityDates
     protected $date_end;
     protected $duration;
     protected $quantity;
+    protected $advanced;
 
     protected function useTime()
     {   
@@ -47,6 +48,15 @@ trait HandlesAvailabilityDates
             throw new AvailabilityException(__('You cannot reserve these many in one reservation.'));
         }
         $this->quantity = $data['quantity'];
+    }
+    
+    private function setAdvanced($data)
+    {
+        if (! Arr::exists($data, 'advanced')) {
+            $this->advanced = null;
+            return;
+        }
+        $this->advanced = $data['advanced'];
     }
 
     private function setDates($date_start, $date_end)
@@ -84,6 +94,8 @@ trait HandlesAvailabilityDates
         $this->setDates($date_start, $date_end);
 
         $this->setQuantity($data);
+
+        $this->setAdvanced($data);
  
         $this->checkDurationValidity();
     }
@@ -95,6 +107,8 @@ trait HandlesAvailabilityDates
         $date_end = new Carbon($data['date_end']);
 
         $this->setQuantity($data);
+
+        $this->setAdvanced($data);
 
         $this->setDates($date_start, $date_end);
     }

@@ -17,6 +17,11 @@ use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Filters\ReservationStatus;
+use Reach\StatamicResrv\Http\Controllers\AvailabilityController;
+use Reach\StatamicResrv\Http\Controllers\AdvancedAvailabilityController;
+use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
+use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\AdvancedAvailability;
 
 class StatamicResrvServiceProvider extends AddonServiceProvider
 {
@@ -68,6 +73,17 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         __DIR__.'/../public/css/resrv.css',
     ];
 
+    public function register()
+    {
+        $this->app->when(AvailabilityController::class)
+          ->needs(AvailabilityContract::class)
+          ->give(Availability::class);
+          
+          $this->app->when(AdvancedAvailabilityController::class)
+          ->needs(AvailabilityContract::class)
+          ->give(AdvancedAvailability::class);
+    }
+
     public function boot(): void
     {
         parent::boot();
@@ -99,7 +115,7 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         $this->app->bind(PaymentInterface::class, config('resrv-config.payment_gateway'));
 
         if (app()->environment() == 'testing') {
-            $this->app->bind(PaymentInterface::class, \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class);
+            $this->app->bind(PaymentInterface::class, \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class); 
         }
 
         $this->createNavigation();

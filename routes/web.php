@@ -7,7 +7,11 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
     ->group(function () {
         // Availability
         Route::post('/resrv/api/availability', 'AvailabilityController@index')->name('availability.index');
-        Route::post('/resrv/api/availability/{statamic_id}', 'AvailabilityController@show')->name('availability.show');
+        Route::post('/resrv/api/availability/{statamic_id}', 'AvailabilityController@show')->name('availability.show'); // Availability
+        
+         // Advanced availability
+        Route::post('/resrv/api/advancedavailability', 'AdvancedAvailabilityController@index')->name('advancedavailability.index');
+        Route::post('/resrv/api/advancedavailability/{statamic_id}', 'AdvancedAvailabilityController@show')->name('advancedavailability.show');
 
         // Options
         Route::post('/resrv/api/option', 'OptionController@index')->name('option.index');

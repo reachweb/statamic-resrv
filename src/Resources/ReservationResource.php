@@ -51,6 +51,7 @@ class ReservationResource extends ResourceCollection
                     'customer' => $reservation->customer,
                     'extras' => $reservation->extras,
                     'options' => $reservation->options,
+                    'property' => $reservation->property,
                     'created_at' => $this->formatDate($reservation->created_at),
                     'updated_at' => $this->formatDate($reservation->updated_at),
                 ];
@@ -73,6 +74,10 @@ class ReservationResource extends ResourceCollection
         
         if (config('resrv-config.maximum_quantity') == 1) {
             unset($columns['quantity']);
+        }
+
+        if (config('resrv-config.enable_advanced_availability') == false) {
+            unset($columns['property']);
         }
 
         if ($key = $this->columnPreferenceKey) {

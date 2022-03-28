@@ -52,6 +52,15 @@ class ReservationBlueprint
                                 'display'  => 'Quantity',
                                 'sortable' => false
                             ],
+                        ],            
+                        [
+                            'handle' => 'property',
+                            'field'  => [
+                                'type'     => 'integer',
+                                'listable' => true,
+                                'display'  => 'Property',
+                                'sortable' => true
+                            ],
                         ],                                        
                         [
                             'handle' => 'date_start',
