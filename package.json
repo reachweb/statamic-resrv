@@ -9,13 +9,13 @@
     },
     "devDependencies": {
         "autoprefixer": "^10.0.2",
-        "cross-env": "^5.2.1",
+        "cross-env": "^7.0.3",
         "laravel-mix": "^6.0.0",
-        "postcss-import": "^12.0.1",
-        "postcss-nested": "^4.2.1",
-        "postcss-preset-env": "^6.7.0",
-        "vue": "^2.6.11",
-        "vue-loader": "^15.9.6",
+        "postcss-import": "^14.1.0",
+        "postcss-nested": "^5.0.6",
+        "postcss-preset-env": "^7.4.3",
+        "vue": "^2.6.14",
+        "vue-loader": "^15.9.8",
         "vue-template-compiler": "^2.6.11"
     },
     "dependencies": {
@@ -23,10 +23,10 @@
         "@fullcalendar/daygrid": "^5.9.0",
         "@fullcalendar/interaction": "^5.9.0",
         "@fullcalendar/vue": "^5.9.0",
-        "axios": "^0.21.1",
+        "axios": "^0.26.1",
         "dayjs": "^1.10.4",
         "lodash": "^4.17.21",
-        "tailwindcss": "^2.1.1",
+        "tailwindcss": "^2.2.19",
         "vue-select": "^3.11.2",
         "vuedraggable": "^2.24.3"
     }
