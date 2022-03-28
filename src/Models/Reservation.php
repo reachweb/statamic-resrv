@@ -60,6 +60,9 @@ class Reservation extends Model
 
     public function getPropertyAttribute($value)
     {
+        if ($value == null) {
+            return '';
+        }
         $availability = new AdvancedAvailability;
         return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $value);
     }
