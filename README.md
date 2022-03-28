@@ -1,5 +1,5 @@
 # Statamic Resrv - a Statamic reservation engine
- ![Statamic 3.0+](https://img.shields.io/badge/Statamic-3.0+-FF269E?style=for-the-badge&link=https://statamic.com)
+ ![Statamic 3.2+](https://img.shields.io/badge/Statamic-3.2+-FF269E?style=for-the-badge&link=https://statamic.com)
 
 **Statamic Resrv** is a fully featured reservations engine build using Laravel and "living" inside a Statamic CMS installation. Resrv is build with simplicity in mind and tries to cover as many features as possible while keeping the codebase relatively simple and easy to maintain.
 It works pretty well for small to medium companies that need to manage availability and reservations and escape the monthly fees most services offer. It should work pretty well in many scenarios, including but not limited to businesses like: rent a car, hotels, tours. You can use the full power of Statamic in order to create your resrv-able entries and then attach the fields you need to use using the blueprint.
