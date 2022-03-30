@@ -17,15 +17,7 @@ class ExtraController extends Controller
             'item_id' => 'required'
         ]);
 
-        $extras = Extra::entry($data['item_id'])
-            ->where('published', true)
-            ->orderBy('order')
-            ->get();
-
-        foreach ($extras as $extra) {            
-            $extra->original_price = $extra->price;
-            $extra->price = Extra::find($extra->id)->priceForDates($data);
-        }
+        $extras = Extra::getPriceForDates($data);
        
         return response()->json($extras->keyBy('slug')->toArray());
 

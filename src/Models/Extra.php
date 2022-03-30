@@ -78,6 +78,22 @@ class Extra extends Model
             })
             ->select('resrv_extras.*');
     }
+
+    public function scopeGetPriceForDates($query, $data)
+    {
+        $extras = $this->scopeEntry($query, $data['item_id'])
+            ->where('published', true)
+            ->orderBy('order')
+            ->get();
+
+        $extras->transform(function ($extra) use ($data) {
+            $extra->original_price = $extra->price;
+            $extra->price = $this->find($extra->id)->priceForDates($data);
+            return $extra;
+        });
+
+        return $extras;
+    }
     
     protected function getDynamicPricing($id, $price)
     {
