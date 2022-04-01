@@ -139,6 +139,10 @@ export default {
                 {
                     code: "fixed",
                     label: "Fixed"
+                },
+                {
+                    code: "percent",
+                    label: "Percentage of reservation price"
                 }
             ]
         }

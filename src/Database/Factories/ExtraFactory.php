@@ -33,4 +33,14 @@ class ExtraFactory extends Factory
             'published' => true
         ];
     }
+
+    public function relative()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'price' => '0.5',
+                'price_type' => 'relative',
+            ];
+        });
+    }
 }

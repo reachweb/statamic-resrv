@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
@@ -50,6 +51,9 @@ class Extra extends Model
         if ($dynamicPricing) {
             $this->price = $dynamicPricing->apply($this->price)->format();
         }
+        if ($this->price_type == 'relative') {
+            return $this->price->multiply($this->getRelativePrice($data));
+        }
         return $this->price->multiply($this->quantity)->format();
     }
 
@@ -65,6 +69,9 @@ class Extra extends Model
         }
         if ($this->price_type == 'fixed') {
             return $this->price->multiply($quantity)->multiply($this->quantity);
+        }
+        if ($this->price_type == 'relative') {
+            return $this->price->multiply($this->getRelativePrice($data))->multiply($quantity)->multiply($this->quantity);
         }
     }
 
@@ -93,6 +100,10 @@ class Extra extends Model
         });
 
         return $extras;
+    }
+
+    protected function getRelativePrice($data) {
+        return (new Availability())->getPriceForItem($data, $data['item_id'])->format();
     }
     
     protected function getDynamicPricing($id, $price)

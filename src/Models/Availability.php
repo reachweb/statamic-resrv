@@ -89,7 +89,9 @@ class Availability extends Model implements AvailabilityContract
             ->get(['date', 'price', 'available'])
             ->sortBy('date');
 
-        return $this->calculatePrice($results, $entry->id());
+        $this->calculatePrice($results, $entry->id());
+
+        return $this->reservation_price;
 
     }
 

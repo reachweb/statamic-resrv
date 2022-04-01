@@ -603,6 +603,70 @@ class ReservationFrontTest extends TestCase
         ]);
 
                      
+    }
+    
+    public function test_reservation_confirm_method_with_modifier_extras()
+    {
+        //$this->withExceptionHandling();
+        $item = $this->makeStatamicItem();
+        $this->signInAdmin();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->add(1, 'day')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $extra = Extra::factory()->relative()->create();
+
+        $addExtraToEntry = [
+            'id' => $extra->id
+        ];
+        
+        $this->post(cp_route('resrv.extra.add', $item->id()), $addExtraToEntry);
+        
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+        ];
+        
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('300')->assertSee('message":{"status":1}}', false);
+
+        $payment = json_decode($response->content())->data->payment;
+        $price = json_decode($response->content())->data->price;
+        $extra_price = ($extra->price->multiply($price)->format()) * 2;
+        $total = json_decode($response->content())->data->price + $extra_price;
+        
+        $checkoutRequest = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+            'payment' => $payment,
+            'price' => $price,
+            'extras' => [$extra->id => ['quantity' => 2]],
+            'total' => $total
+        ];
+      
+        $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+
+        $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'payment' => $payment,
+            'price' => $total
+        ]);
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => 1,
+            'extra_id' => $extra->id,
+            'quantity' => 2
+        ]);
+               
     }    
 
 

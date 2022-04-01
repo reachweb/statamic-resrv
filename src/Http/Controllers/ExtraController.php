@@ -14,6 +14,7 @@ class ExtraController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
+            'advanced' => 'sometimes|string',
             'item_id' => 'required'
         ]);
 
