@@ -4,14 +4,12 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Collection;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
-use Reach\StatamicResrv\Models\FixedPricing;
-use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
+use Reach\StatamicResrv\Traits\HandlesPricing;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -20,7 +18,7 @@ use Carbon\CarbonPeriod;
 
 class Availability extends Model implements AvailabilityContract
 {
-    use HasFactory, HandlesAvailabilityDates, HandlesMultisiteIds;
+    use HasFactory, HandlesAvailabilityDates, HandlesPricing, HandlesMultisiteIds;
 
     protected $table = 'resrv_availabilities';
 
@@ -81,6 +79,22 @@ class Availability extends Model implements AvailabilityContract
         
     }
 
+    public function getPriceForItem($data, $statamic_id)
+    {
+        $this->initiateAvailability($data);
+
+        $entry = $this->getDefaultSiteEntry($statamic_id);
+
+        $results = AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced, $entry->id())
+            ->get(['date', 'price', 'available'])
+            ->sortBy('date');
+
+        $this->calculatePrice($results, $entry->id());
+
+        return $this->reservation_price;
+
+    }
+
     public function decrementAvailability($date_start, $date_end, $quantity, $statamic_id) 
     {
         $this->initiateAvailabilityUnsafe([
@@ -111,18 +125,6 @@ class Availability extends Model implements AvailabilityContract
         foreach ($available as $id) {
             $price = $this->getPriceForDates($id);
 
-            // Apply dynamic pricing here (fixed already applied on getPriceForDates)
-            $dynamicPricing = $this->getDynamicPricing($id, $price);
-            if ($dynamicPricing) {
-                $originalPrice = $price;
-                $price = $dynamicPricing->apply($price);
-            }
-
-            // Multiply for quantity here
-            if ($this->quantity > 1) {
-                $price->multiply($this->quantity);
-            }
-
             $availableWithPricing[$id] = [
                 'id' => $id,    
                 'request' => [
@@ -134,7 +136,7 @@ class Availability extends Model implements AvailabilityContract
                 'data' => [
                     'price' => $price->format(),
                     'payment' => $this->calculatePayment($price)->format(),
-                    'original_price' => (isset($originalPrice) ? $originalPrice->format() : null)
+                    'original_price' => (isset($this->original_price) ? $this->original_price->format() : null)
                 ],
                 'message' => [
                     'status' => count($available)
@@ -168,28 +170,12 @@ class Availability extends Model implements AvailabilityContract
             ];
         }
 
-        $price = $this->calculatePrice($results);        
+        $this->calculatePrice($results, $entry->id());        
 
-        if (FixedPricing::getFixedPricing($entry->id(), $this->duration)) {
-            $price = FixedPricing::getFixedPricing($entry->id(), $this->duration);
-        }
-
-        $dynamicPricing = $this->getDynamicPricing($entry->id(), $price);
-        $originalPrice = null;
-        if ($dynamicPricing) {
-            $originalPrice = $price;
-            $price = $dynamicPricing->apply($price);
-        }
-
-        // Multiply for quantity here
-        if ($this->quantity > 1) {
-            $price->multiply($this->quantity);
-        }
-
-        return $this->buildSpecificItemArray($price, $originalPrice);   
+        return $this->buildSpecificItemArray();   
     }
 
-    protected function buildSpecificItemArray($price, $originalPrice)
+    protected function buildSpecificItemArray()
     {
         return [
             'request' => [
@@ -199,9 +185,9 @@ class Availability extends Model implements AvailabilityContract
                 'quantity' => $this->quantity
             ],
             'data' => [
-                'price' => $price->format(),
-                'payment' => $this->calculatePayment($price)->format(),
-                'original_price' => (isset($originalPrice) ? $originalPrice->format() : null)
+                'price' => $this->reservation_price->format(),
+                'payment' => $this->calculatePayment($this->reservation_price)->format(),
+                'original_price' => (isset($this->original_price) ? $this->original_price->format() : null)
             ],
             'message' => [
                 'status' => 1
@@ -245,16 +231,15 @@ class Availability extends Model implements AvailabilityContract
     /**
      * Gets the total price of an entry for a period of time
      */
-    protected function getPriceForDates($statamic_id) {
+    public function getPriceForDates($statamic_id) {
 
-        if (FixedPricing::getFixedPricing($statamic_id, $this->duration)) {
-            return FixedPricing::getFixedPricing($statamic_id, $this->duration);
-        }
+        $entry = $this->getDefaultSiteEntry($statamic_id);
 
         $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)
             ->get(['price', 'available']);
-        return $this->calculatePrice($results);
-
+        
+        $this->calculatePrice($results, $entry->id());
+        return $this->reservation_price;
     }
 
     protected function getDisabledIds()
@@ -265,24 +250,6 @@ class Availability extends Model implements AvailabilityContract
             ->get()
             ->toAugmentedArray('id');
         return array_flatten($results);
-    }
-
-    protected function calculatePrice(Collection $results): PriceClass
-    {
-        $first = $results->first();
-        if ($results->count() == 0) {
-            return $first->price;
-        }
-        $prices = array();
-        foreach ($results as $index => $result) {
-            if ($index == 0) {
-                continue;
-            }
-            $prices[] = $result->price;
-        }
-        $result = $first->price->add(...$prices);
-
-        return $result;
     }
 
     protected function getPeriod()
@@ -301,11 +268,6 @@ class Availability extends Model implements AvailabilityContract
         if (config('resrv-config.payment') == 'percent') {
             return $price->percent(config('resrv-config.percent_amount'));
         }
-    }
-
-    protected function getDynamicPricing($id, $price)
-    {
-        return DynamicPricing::searchForAvailability($id, $price, $this->date_start, $this->date_end, $this->duration);        
     }
 
 }

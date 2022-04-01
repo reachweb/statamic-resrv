@@ -70,11 +70,9 @@ class AdvancedAvailability extends Availability
         return array_diff($available, $disabled);
     }
 
-    protected function getPriceForDates($statamic_id) {
+    public function getPriceForDates($statamic_id) {
 
-        if (FixedPricing::getFixedPricing($statamic_id, $this->duration)) {
-            return FixedPricing::getFixedPricing($statamic_id, $this->duration);
-        }
+        $entry = $this->getDefaultSiteEntry($statamic_id);
 
         $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)
             ->get(['price', 'available', 'property'])->groupBy('property');
@@ -86,7 +84,8 @@ class AdvancedAvailability extends Availability
             });    
         }
         
-        return $this->calculatePrice($results->first());
+        $this->calculatePrice($results->first(), $entry->id());
+        return $this->reservation_price;
     }
 
 

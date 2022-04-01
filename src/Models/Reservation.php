@@ -114,7 +114,7 @@ class Reservation extends Model
             throw new ReservationException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
 
-        $dbTotal = Price::create($this->confirmTotal($data));
+        $dbTotal = Price::create($this->confirmTotal($statamic_id, $data));
         $frontendTotal = Price::create($data['total']);
 
         if (! $dbTotal->equals($frontendTotal)) {
@@ -133,7 +133,7 @@ class Reservation extends Model
 
     }
 
-    protected function confirmTotal($data)
+    protected function confirmTotal($statamic_id, $data)
     {
         $reservationCost = Price::create($data['price']);
 
@@ -146,6 +146,7 @@ class Reservation extends Model
         
         $extrasCost = Price::create(0);
         if (array_key_exists('extras', $data) > 0) {
+            $data['item_id'] = $statamic_id;
             foreach($data['extras'] as $id => $properties) {
                 $extrasCost->add(Extra::find($id)->calculatePrice($data, $properties['quantity']));
             }
