@@ -141,8 +141,8 @@ export default {
                     label: "Fixed"
                 },
                 {
-                    code: "percent",
-                    label: "Percentage of reservation price"
+                    code: "relative",
+                    label: "Relative to the reservation price"
                 }
             ]
         }
