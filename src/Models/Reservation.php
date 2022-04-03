@@ -58,13 +58,13 @@ class Reservation extends Model
         return Price::create($value);
     }
 
-    public function getPropertyAttribute($value)
+    public function getPropertyAttributeLabel()
     {
-        if ($value == null) {
+        if ($this->property == null) {
             return '';
         }
         $availability = new AdvancedAvailability;
-        return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $value);
+        return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $this->property);
     }
 
     public function getEntryAttribute()

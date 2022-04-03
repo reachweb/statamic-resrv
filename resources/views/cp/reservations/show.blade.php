@@ -73,7 +73,7 @@
                 @if (config('resrv-config.enable_advanced_availability'))
                 <div>
                     <div class="font-bold mb-1">Property</div>
-                    <div>{{ $reservation->property }}</div>
+                    <div>{{ $reservation->getPropertyAttributeLabel() }}</div>
                 </div>
                 @endif
             </div>
@@ -142,7 +142,7 @@
             <div class="mb-1 border-b border-gray flex justify-between w-full p-1">
                 <div>{{ $extra->name }} x{{ $extra->pivot->quantity }}</div>
                 <div class="font-bold">
-                    {{ $extra->price->format() }}
+                    {{ $extra->priceForReservation($reservation) }}
                     <span class="font-normal">
                         @if ($extra->price_type == 'fixed')
                         / reservation
