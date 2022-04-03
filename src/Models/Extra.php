@@ -46,7 +46,6 @@ class Extra extends Model
 
     public function priceForDates($data)
     {
-        ray($data);
         $this->initiateAvailability($data);
         $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
         if ($dynamicPricing) {
@@ -60,7 +59,6 @@ class Extra extends Model
 
     public function priceForReservation($reservation)
     {
-        ray($reservation);
         $data = array();
         $data['date_start'] = $reservation->date_start;
         $data['date_end'] = $reservation->date_end;
