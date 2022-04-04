@@ -66,9 +66,10 @@ trait HandlesAvailabilityDates
     {
         if (! Arr::exists($data, 'round_trip')) {
             $this->round_trip = null;
+
             return;
         }
-        $this->round_trip = (boolean) $data['round_trip'];
+        $this->round_trip = (bool) $data['round_trip'];
     }
 
     private function setDates($date_start, $date_end)
