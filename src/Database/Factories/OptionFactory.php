@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Database\Factories;
 
-use Reach\StatamicResrv\Models\Option;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\Option;
 
 class OptionFactory extends Factory
 {
@@ -28,7 +28,7 @@ class OptionFactory extends Factory
             'required' => true,
             'order' => 1,
             'item_id' => '',
-            'published' => true
+            'published' => true,
         ];
     }
 

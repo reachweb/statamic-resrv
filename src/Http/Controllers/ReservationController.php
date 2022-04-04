@@ -5,16 +5,15 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
-use Reach\StatamicResrv\Models\Reservation;
-use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
-use Reach\StatamicResrv\Http\Payment\PaymentInterface;
-use Reach\StatamicResrv\Exceptions\ReservationException;
-use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
+use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationController extends Controller
 {
-
     protected $reservation;
     protected $payment;
 
@@ -34,14 +33,14 @@ class ReservationController extends Controller
             'payment' => 'required|numeric',
             'price' => 'required|numeric',
             'total' => 'required|numeric',
-            'extras' => 'nullable|array',  
-            'options' => 'nullable|array',  
+            'extras' => 'nullable|array',
+            'options' => 'nullable|array',
         ];
 
         if (config('resrv-config.enable_locations') == true) {
             $additional_rules = [
                 'location_start' => 'required|integer',
-                'location_end' => 'required|integer'
+                'location_end' => 'required|integer',
             ];
             $rules = array_merge($rules, $additional_rules);
         }
@@ -60,7 +59,7 @@ class ReservationController extends Controller
             $this->reservation->confirmReservation($data, $statamic_id);
         } catch (ReservationException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
-        }        
+        }
 
         $reservation = $this->reservation->create([
             'status' => 'pending',
@@ -79,31 +78,31 @@ class ReservationController extends Controller
         ]);
 
         ReservationCreated::dispatch($reservation);
-        
+
         if (array_key_exists('options', $data) > 0) {
             foreach ($data['options'] as $id => $properties) {
                 $this->reservation->find($reservation->id)->options()->attach($id, ['value' => $properties['value']]);
             }
         }
-        
+
         if (array_key_exists('extras', $data) > 0) {
             foreach ($data['extras'] as $id => $properties) {
                 $this->reservation->find($reservation->id)->extras()->attach($id, ['quantity' => $properties['quantity']]);
             }
         }
-        
-        return response()->json($reservation->id);
 
+        return response()->json($reservation->id);
     }
 
     public function checkoutForm()
     {
         $form = $this->reservation->checkoutForm();
+
         return response()->json($form);
     }
 
     public function checkoutFormSubmit(CheckoutFormRequest $request, $reservation_id)
-    {   
+    {
         // Find the reservation
         $reservation = $this->reservation->find($reservation_id);
 
@@ -118,11 +117,11 @@ class ReservationController extends Controller
         // Create a payment intent
         $paymentIntent = $this->payment->paymentIntent($reservation->payment, $reservation_id, $data);
 
-        // Save customer data and payment id        
+        // Save customer data and payment id
         $reservation->customer = $data;
         $reservation->payment_id = $paymentIntent->id;
-        $reservation->save();     
-        
+        $reservation->save();
+
         // Send back the client secret
         $client_secret = $paymentIntent->client_secret;
 
@@ -130,17 +129,16 @@ class ReservationController extends Controller
     }
 
     public function checkoutConfirm($reservation_id)
-    {   
+    {
         // Find the reservation
         $reservation = $this->reservation->find($reservation_id);
 
-        // Confim the reservation        
+        // Confim the reservation
         $reservation->status = 'confirmed';
         $reservation->save();
 
         ReservationConfirmed::dispatch($reservation);
-        
+
         return response()->json($reservation_id);
     }
-   
 }

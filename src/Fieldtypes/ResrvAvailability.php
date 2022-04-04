@@ -2,16 +2,16 @@
 
 namespace Reach\StatamicResrv\Fieldtypes;
 
-use Statamic\Fields\Fieldtype;
-use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\AdvancedAvailability;
+use Reach\StatamicResrv\Models\Availability;
+use Statamic\Fields\Fieldtype;
 
 class ResrvAvailability extends Fieldtype
 {
     protected $icon = 'calendar';
 
     public function augment($value)
-    {   
+    {
         if ($value != 'disabled') {
             $availability_data = Availability::entry($value)->where('available', '>', '0')->get();
 
@@ -19,15 +19,17 @@ class ResrvAvailability extends Fieldtype
             if ($availability_data->count() == 0 && config('resrv-config.enable_advanced_availability')) {
                 $availability_data = AdvancedAvailability::entry($value)->where('available', '>', '0')->get();
             }
-            
+
             if ($availability_data->count() == 0) {
                 return false;
             }
 
             $data = $availability_data->sortBy('date')->keyBy('date')->toArray();
             $cheapest = $availability_data->sortBy('price')->firstWhere('available', '>', '0')->price->format();
+
             return compact('data', 'cheapest');
         }
+
         return false;
     }
 
@@ -36,11 +38,12 @@ class ResrvAvailability extends Fieldtype
         if (class_basename($this->field->parent()) == 'Collection') {
             return ['parent' => 'Collection', 'advanced_availability' => $this->field->get('advanced_availability')];
         }
-        
+
         $parent = $this->field->parent()->id();
         if ($this->field->parent()->hasOrigin()) {
             $parent = $this->field->parent()->origin()->id();
         }
+
         return ['parent' => $parent, 'advanced_availability' => $this->field->get('advanced_availability')];
     }
 
@@ -49,6 +52,7 @@ class ResrvAvailability extends Fieldtype
         if (config('resrv-config.enable_advanced_availability') == false) {
             return [];
         }
+
         return [
             'advanced_availability' => [
                 'display' => __('Advanced availability'),
@@ -60,5 +64,4 @@ class ResrvAvailability extends Fieldtype
             ],
         ];
     }
-
 }

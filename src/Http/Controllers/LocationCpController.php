@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Location;
 
 class LocationCpController extends Controller
@@ -20,10 +19,11 @@ class LocationCpController extends Controller
     {
         return view('statamic-resrv::cp.locations.index');
     }
-    
+
     public function index()
     {
         $locations = $this->location->all();
+
         return response()->json($locations);
     }
 
@@ -38,12 +38,12 @@ class LocationCpController extends Controller
 
         $order = $this->location->max('order') + 1;
         $data['order'] = $order;
-        
+
         $location = $this->location->create($data);
 
         return response()->json(['id' => $location->id]);
     }
-    
+
     public function update(Request $request)
     {
         $data = $request->validate([
@@ -59,11 +59,11 @@ class LocationCpController extends Controller
 
         return response()->json(['id' => $data['id']]);
     }
-    
+
     public function order(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required',            
+            'id' => 'required',
             'order' => 'required|integer',
         ]);
 
@@ -75,11 +75,10 @@ class LocationCpController extends Controller
     public function delete(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required|integer'
+            'id' => 'required|integer',
         ]);
         $location = $this->location->destroy($data['id']);
 
         return response(200);
     }
-
 }

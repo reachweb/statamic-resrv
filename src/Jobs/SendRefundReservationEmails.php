@@ -3,15 +3,13 @@
 namespace Reach\StatamicResrv\Jobs;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Reach\StatamicResrv\Models\Reservation;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
-use Carbon\Carbon;
+use Reach\StatamicResrv\Models\Reservation;
 
 class SendRefundReservationEmails implements ShouldQueue
 {
@@ -30,7 +28,7 @@ class SendRefundReservationEmails implements ShouldQueue
      * @return void
      */
     public function handle()
-    {   
+    {
         // Customer email
         Mail::to($this->reservation->customer->get('email'))->send(new ReservationRefunded($this->reservation));
         // Admin emails if set
@@ -38,7 +36,7 @@ class SendRefundReservationEmails implements ShouldQueue
             $admin_emails = explode(',', config('resrv-config.admin_email'));
             foreach ($admin_emails as $email) {
                 Mail::to($email)->send(new ReservationRefunded($this->reservation));
-            }            
-        }    
+            }
+        }
     }
 }

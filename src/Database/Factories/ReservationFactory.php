@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Database\Factories;
 
-use Reach\StatamicResrv\Models\Reservation;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationFactory extends Factory
 {

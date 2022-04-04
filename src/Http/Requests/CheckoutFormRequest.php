@@ -13,6 +13,7 @@ class CheckoutFormRequest extends FormRequest
     {
         $this->reservation = $reservation;
     }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -34,6 +35,7 @@ class CheckoutFormRequest extends FormRequest
                 $rules[$field->handle()] = 'nullable';
             }
         }
+
         return $rules;
     }
 }

@@ -2,11 +2,10 @@
 
 namespace Reach\StatamicResrv\Tests\Option;
 
-use Reach\StatamicResrv\Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Database\Eloquent\Factories\Sequence;
+use Reach\StatamicResrv\Tests\TestCase;
 
 class OptionCpTest extends TestCase
 {
@@ -19,7 +18,7 @@ class OptionCpTest extends TestCase
     }
 
     public function test_can_index_options_for_an_item()
-    {       
+    {
         $item = $this->makeStatamicItem();
         $option = Option::factory()
                     ->state([
@@ -29,54 +28,54 @@ class OptionCpTest extends TestCase
                     ->create();
 
         $response = $this->get(cp_route('resrv.option.entryindex', $item->id()));
-        $response->assertStatus(200)->assertSee($option->slug)->assertSee('22.75');        
+        $response->assertStatus(200)->assertSee($option->slug)->assertSee('22.75');
     }
 
     public function test_can_add_option()
-    {   
-        $item = $this->makeStatamicItem();        
+    {
+        $item = $this->makeStatamicItem();
         $payload = [
             'name' => 'This is an option',
             'slug' => 'this-is-an-option',
             'description' => 'This option is so cool it has a description',
             'item_id' => $item->id(),
             'required' => false,
-            'published' => true
+            'published' => true,
         ];
         $response = $this->post(cp_route('resrv.option.create'), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_options', [
-            'slug' => 'this-is-an-option'
+            'slug' => 'this-is-an-option',
         ]);
     }
 
     public function test_can_add_value_to_option()
-    {   
-        $item = $this->makeStatamicItem();        
+    {
+        $item = $this->makeStatamicItem();
         $option = Option::factory()
                     ->state([
                         'item_id' => $item->id(),
                     ])
-                    ->create();      
-        
+                    ->create();
+
         $payload = [
             'name' => 'This is an option value',
             'price' => '22.75',
             'price_type' => 'perday',
-            'published' => true
+            'published' => true,
         ];
 
         $response = $this->post(cp_route('resrv.option.value.create', $option->id), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_options_values', [
-            'name' => 'This is an option value'
+            'name' => 'This is an option value',
         ]);
     }
-    
+
     public function test_can_update_option()
-    {   
+    {
         $item = $this->makeStatamicItem();
         $option = Option::factory()
                     ->state([
@@ -93,22 +92,22 @@ class OptionCpTest extends TestCase
             'item_id' => $item->id(),
             'required' => false,
             'order' => 1,
-            'published' => true
+            'published' => true,
         ];
         $response = $this->patch(cp_route('resrv.option.update'), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_options', [
-            'slug' => 'this-is-another-option'
+            'slug' => 'this-is-another-option',
         ]);
         $this->assertDatabaseMissing('resrv_options', [
-            'slug' => 'reservation-option'
+            'slug' => 'reservation-option',
         ]);
     }
 
     public function test_can_update_option_value()
     {
-        $item = $this->makeStatamicItem();        
+        $item = $this->makeStatamicItem();
         $option = Option::factory()
                     ->state([
                         'item_id' => $item->id(),
@@ -122,14 +121,14 @@ class OptionCpTest extends TestCase
             'price' => '22.75',
             'price_type' => 'perday',
             'order' => 1,
-            'published' => true
+            'published' => true,
         ];
 
         $response = $this->patch(cp_route('resrv.option.value.update', $option->id), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_options_values', [
-            'name' => 'This is another option value'
+            'name' => 'This is another option value',
         ]);
     }
 
@@ -144,14 +143,14 @@ class OptionCpTest extends TestCase
                     ->create();
 
         $payload = [
-            'id' => 1
+            'id' => 1,
         ];
 
         $response = $this->delete(cp_route('resrv.option.value.delete'), $payload);
         $response->assertStatus(200);
         $this->assertSoftDeleted($option->values()->withTrashed()->first());
     }
-    
+
     public function test_can_delete_option()
     {
         $item = $this->makeStatamicItem();
@@ -163,7 +162,7 @@ class OptionCpTest extends TestCase
                     ->create();
 
         $payload = [
-            'id' => $option->id
+            'id' => $option->id,
         ];
 
         $response = $this->delete(cp_route('resrv.option.delete'), $payload);
@@ -181,25 +180,25 @@ class OptionCpTest extends TestCase
 
         $payload = [
             'id' => 1,
-            'order' => 3
+            'order' => 3,
         ];
-       
+
         $response = $this->patch(cp_route('resrv.option.order'), $payload);
         $response->assertStatus(200);
         $this->assertDatabaseHas('resrv_options', [
             'id' => $option['id'],
-            'order' => 3
+            'order' => 3,
         ]);
         $this->assertDatabaseHas('resrv_options', [
             'id' => $option2['id'],
-            'order' => 1
+            'order' => 1,
         ]);
         $this->assertDatabaseHas('resrv_options', [
             'id' => $option3['id'],
-            'order' => 2
+            'order' => 2,
         ]);
-    }  
-    
+    }
+
     public function test_can_reorder_option_values()
     {
         $item = $this->makeStatamicItem();
@@ -212,23 +211,22 @@ class OptionCpTest extends TestCase
 
         $payload = [
             'id' => 1,
-            'order' => 3
+            'order' => 3,
         ];
-       
+
         $response = $this->patch(cp_route('resrv.option.value.order'), $payload);
         $response->assertStatus(200);
         $this->assertDatabaseHas('resrv_options_values', [
             'id' => 1,
-            'order' => 3
+            'order' => 3,
         ]);
         $this->assertDatabaseHas('resrv_options_values', [
             'id' => 2,
-            'order' => 1
+            'order' => 1,
         ]);
         $this->assertDatabaseHas('resrv_options_values', [
             'id' => 3,
-            'order' => 2
+            'order' => 2,
         ]);
-    }    
-
+    }
 }

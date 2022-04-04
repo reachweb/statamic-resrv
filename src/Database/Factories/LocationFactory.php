@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Database\Factories;
 
-use Reach\StatamicResrv\Models\Location;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\Location;
 
 class LocationFactory extends Factory
 {
@@ -27,7 +27,7 @@ class LocationFactory extends Factory
             'slug' => 'location',
             'extra_charge' => '5.72',
             'order' => 1,
-            'published' => true
+            'published' => true,
         ];
     }
 }

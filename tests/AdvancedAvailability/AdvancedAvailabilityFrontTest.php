@@ -2,9 +2,9 @@
 
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
-use Reach\StatamicResrv\Tests\TestCase;
-use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Reach\StatamicResrv\Models\AdvancedAvailability;
+use Reach\StatamicResrv\Tests\TestCase;
 
 class AdvancedAvailabilityFrontTest extends TestCase
 {
@@ -12,7 +12,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
 
     public function setUp(): void
     {
-        parent::setUp();        
+        parent::setUp();
     }
 
     public function test_that_we_can_query_advanced_availability()
@@ -36,7 +36,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
         $searchPayload = [
             'date_start' => today()->setHour(12)->toISOString(),
             'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
-            'advanced' => 'something'
+            'advanced' => 'something',
         ];
 
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
@@ -45,12 +45,11 @@ class AdvancedAvailabilityFrontTest extends TestCase
         $searchPayload = [
             'date_start' => today()->setHour(12)->toISOString(),
             'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
-            'advanced' => 'something-else'
+            'advanced' => 'something-else',
         ];
 
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
         $response->assertStatus(200)->assertDontSee($item->id());
-
     }
 
     public function test_that_we_can_query_all_advanced_availability_items()
@@ -77,9 +76,9 @@ class AdvancedAvailabilityFrontTest extends TestCase
             )
             ->create(
                 [
-                'statamic_id' => $item->id(),
-                'property' => 'something-else',
-                'price' => '100'
+                    'statamic_id' => $item->id(),
+                    'property' => 'something-else',
+                    'price' => '100',
                 ]
             );
 
@@ -88,12 +87,10 @@ class AdvancedAvailabilityFrontTest extends TestCase
         $searchPayload = [
             'date_start' => today()->setHour(12)->toISOString(),
             'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
-            'advanced' => 'any'
+            'advanced' => 'any',
         ];
 
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('200');
-
     }
-    
 }

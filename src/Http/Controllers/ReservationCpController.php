@@ -4,17 +4,15 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Reach\StatamicResrv\Resources\ReservationResource;
-use Reach\StatamicResrv\Resources\ReservationCalendarResource;
-use Reach\StatamicResrv\Models\Reservation;
-use Reach\StatamicResrv\Http\Payment\PaymentInterface;
-use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Events\ReservationRefunded;
+use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Resources\ReservationCalendarResource;
+use Reach\StatamicResrv\Resources\ReservationResource;
+use Statamic\Facades\Scope;
 use Statamic\Http\Requests\FilteredRequest;
 use Statamic\Query\Scopes\Filters\Concerns\QueriesFilters;
-use Statamic\Facades\Scope;
-use Statamic\Facades\Blueprint;
-
 
 class ReservationCpController extends Controller
 {
@@ -30,8 +28,9 @@ class ReservationCpController extends Controller
     }
 
     public function indexCp()
-    {   
+    {
         $filters = Scope::filters('resrv', []);
+
         return view('statamic-resrv::cp.reservations.index', compact('filters'));
     }
 
@@ -41,7 +40,7 @@ class ReservationCpController extends Controller
     }
 
     public function calendar(Request $request)
-    {   
+    {
         // TODO: better validation
         $data = $request->validate([
             'start' => 'required',
@@ -53,8 +52,8 @@ class ReservationCpController extends Controller
                         ->where('status', 'confirmed')
                         ->orderBy('date_start')
                         ->get();
-                       
-        return response()->json(new ReservationCalendarResource($reservations));                        
+
+        return response()->json(new ReservationCalendarResource($reservations));
     }
 
     public function index(FilteredRequest $request)
@@ -79,7 +78,7 @@ class ReservationCpController extends Controller
         $entry = $reservation->entry;
         $fields = $reservation->checkoutFormFieldsArray();
 
-        return view('statamic-resrv::cp.reservations.show', compact('reservation' , 'entry', 'fields'));
+        return view('statamic-resrv::cp.reservations.show', compact('reservation', 'entry', 'fields'));
     }
 
     public function refund(Request $request)
@@ -100,7 +99,6 @@ class ReservationCpController extends Controller
         ReservationRefunded::dispatch($reservation);
 
         return response()->json($reservation->id);
-        
     }
 
     private function getReservations()
@@ -119,6 +117,7 @@ class ReservationCpController extends Controller
     {
         $search = request('search');
         $searchTerm = "%{$search}%";
+
         return $this->reservation->where(function ($query) use ($searchTerm) {
             $query->where('customer', 'like', $searchTerm)
             ->orWhere('id', 'like', $searchTerm)
@@ -129,5 +128,4 @@ class ReservationCpController extends Controller
             ->orWhere('date_end', 'like', $searchTerm);
         });
     }
-
 }

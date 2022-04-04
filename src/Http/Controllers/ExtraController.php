@@ -15,13 +15,11 @@ class ExtraController extends Controller
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
             'advanced' => 'sometimes|string',
-            'item_id' => 'required'
+            'item_id' => 'required',
         ]);
 
         $extras = Extra::getPriceForDates($data);
-       
+
         return response()->json($extras->keyBy('slug')->toArray());
-
     }
-
 }

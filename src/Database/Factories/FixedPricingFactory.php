@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Database\Factories;
 
-use Reach\StatamicResrv\Models\FixedPricing;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\FixedPricing;
 
 class FixedPricingFactory extends Factory
 {
@@ -24,7 +24,7 @@ class FixedPricingFactory extends Factory
         return [
             'statamic_id' => '',
             'days'=> 3,
-            'price' => '77.35'
+            'price' => '77.35',
         ];
     }
 }

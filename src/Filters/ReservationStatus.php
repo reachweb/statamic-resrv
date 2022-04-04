@@ -19,7 +19,7 @@ class ReservationStatus extends Filter
                     'pending' => 'Pending',
                     'expired' => 'Expired',
                 ],
-            ]
+            ],
         ];
     }
 

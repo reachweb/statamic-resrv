@@ -2,9 +2,9 @@
 
 namespace Reach\StatamicResrv\Listeners;
 
-use Statamic\Events\EntryDeleted as StatamicEntryDeleted;
-use Reach\StatamicResrv\Models\Availability;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Models\Availability;
+use Statamic\Events\EntryDeleted as StatamicEntryDeleted;
 
 class EntryDeleted
 {
@@ -13,8 +13,8 @@ class EntryDeleted
         if ($event->entry->get('resrv_availability') == null) {
             return;
         }
-        
-        $id = $event->entry->id();        
+
+        $id = $event->entry->id();
         // Delete availability
         Availability::entry($id)->delete();
 
@@ -24,5 +24,4 @@ class EntryDeleted
             ->where('dynamic_pricing_assignment_id', $id)
             ->delete();
     }
-    
 }

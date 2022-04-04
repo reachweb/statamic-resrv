@@ -4,12 +4,10 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Database\Factories\OptionFactory;
-use Reach\StatamicResrv\Traits\HandlesOrdering;
 use Reach\StatamicResrv\Scopes\OrderScope;
+use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Option extends Model
 {
@@ -47,12 +45,14 @@ class Option extends Model
             $value->original_price = $value->price;
             $value->price = $value->priceForDates($data);
         }
+
         return $this;
     }
 
     public function calculatePrice($data, $value)
     {
         $value = $this->values->find($value);
+
         return $value->calculatePrice($data);
     }
 
@@ -60,5 +60,4 @@ class Option extends Model
     {
         return $query->where('item_id', $entry);
     }
-   
 }
