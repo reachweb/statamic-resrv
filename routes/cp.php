@@ -1,7 +1,5 @@
 <?php
 
-use App\Http\Middleware\VerifyCsrfToken;
-
 Route::namespace('\Reach\StatamicResrv\Http\Controllers')
     ->name('resrv.')
     ->group(function () {
@@ -46,19 +44,18 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/reservation/refund', 'ReservationCpController@refund')->name('reservation.refund');
 
         Route::get('/resrv/fixedpricing/{statamic_id}', 'FixedPricingCpController@index')->name('fixedpricing.index');
-        Route::post('/resrv/fixedpricing', 'FixedPricingCpController@update')->name('fixedpricing.update');        
+        Route::post('/resrv/fixedpricing', 'FixedPricingCpController@update')->name('fixedpricing.update');
         Route::delete('/resrv/fixedpricing', 'FixedPricingCpController@delete')->name('fixedpricing.delete');
 
         Route::get('/resrv/dynamicpricing', 'DynamicPricingCpController@indexCp')->name('dynamicpricings.index');
         Route::get('/resrv/dynamicpricing/index', 'DynamicPricingCpController@index')->name('dynamicpricing.index');
         Route::post('/resrv/dynamicpricing', 'DynamicPricingCpController@create')->name('dynamicpricing.create');
         Route::patch('/resrv/dynamicpricing/order', 'DynamicPricingCpController@order')->name('dynamicpricing.order');
-        Route::patch('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@update')->name('dynamicpricing.update');        
+        Route::patch('/resrv/dynamicpricing/{id}', 'DynamicPricingCpController@update')->name('dynamicpricing.update');
         Route::delete('/resrv/dynamicpricing', 'DynamicPricingCpController@delete')->name('dynamicpricing.delete');
 
         Route::get('/resrv/reports', 'ReportsCpController@indexCp')->name('reports.index');
         Route::get('/resrv/reports/index', 'ReportsCpController@index')->name('report.index');
 
         Route::get('/resrv/utility/entries', 'ResrvUtilityController@entries')->name('utilities.entries');
-
     });

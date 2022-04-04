@@ -2,19 +2,19 @@
 
 namespace Reach\StatamicResrv\Models;
 
+use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
-use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
+use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Jobs\ExpireReservations;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
-use Reach\StatamicResrv\Jobs\ExpireReservations;
-use Reach\StatamicResrv\Facades\Price;
-use Reach\StatamicResrv\Money\Price as PriceClass;
 use Statamic\Facades\Entry;
-use Carbon\CarbonPeriod;
 
 class Availability extends Model implements AvailabilityContract
 {
@@ -42,8 +42,8 @@ class Availability extends Model implements AvailabilityContract
     {
         return Price::create($value);
     }
-    
-    public function getAvailableItems($data) 
+
+    public function getAvailableItems($data)
     {
         ExpireReservations::dispatchSync();
 
@@ -51,8 +51,8 @@ class Availability extends Model implements AvailabilityContract
 
         return $this->getAllAvailableItems();
     }
-    
-    public function getAvailabilityForItem($data, $statamic_id) 
+
+    public function getAvailabilityForItem($data, $statamic_id)
     {
         ExpireReservations::dispatchSync();
 
@@ -60,8 +60,8 @@ class Availability extends Model implements AvailabilityContract
 
         return $this->getSpecificItem($statamic_id);
     }
-    
-    public function confirmAvailabilityAndPrice($data, $statamic_id) 
+
+    public function confirmAvailabilityAndPrice($data, $statamic_id)
     {
         $this->initiateAvailability($data);
 
@@ -71,12 +71,11 @@ class Availability extends Model implements AvailabilityContract
             return false;
         }
 
-        if ($availability['data']['price'] != $data['price']) {            
+        if ($availability['data']['price'] != $data['price']) {
             return false;
         }
 
         return true;
-        
     }
 
     public function getPriceForItem($data, $statamic_id)
@@ -90,7 +89,6 @@ class Availability extends Model implements AvailabilityContract
         $this->calculatePrice($results, $entry->id());
 
         return $this->reservation_price;
-
     }
 
     protected function getResultsForItem($entry)
@@ -114,18 +112,18 @@ class Availability extends Model implements AvailabilityContract
         ]);
 
         AvailabilityRepository::decrement($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
-    }  
-    
-    public function incrementAvailability($date_start, $date_end, $quantity, $statamic_id) 
+    }
+
+    public function incrementAvailability($date_start, $date_end, $quantity, $statamic_id)
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
-        ]); 
+        ]);
 
         AvailabilityRepository::increment($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
-    }  
+    }
 
     protected function getAllAvailableItems()
     {
@@ -136,29 +134,29 @@ class Availability extends Model implements AvailabilityContract
             $price = $this->getPriceForDates($id);
 
             $availableWithPricing[$id] = [
-                'id' => $id,    
+                'id' => $id,
                 'request' => [
                     'days' => $this->round_trip ? '2' : $this->duration,
                     'date_start' => $this->date_start,
                     'date_end' => $this->date_end,
-                    'quantity' => $this->quantity
+                    'quantity' => $this->quantity,
                 ],
                 'data' => [
                     'price' => $price->format(),
                     'payment' => $this->calculatePayment($price)->format(),
-                    'original_price' => (isset($this->original_price) ? $this->original_price->format() : null)
+                    'original_price' => (isset($this->original_price) ? $this->original_price->format() : null),
                 ],
                 'message' => [
-                    'status' => count($available)
-                ]
+                    'status' => count($available),
+                ],
             ];
 
             $multisiteIds = $this->getMultisiteIds($id);
             if (count($multisiteIds) > 0) {
                 $availableWithPricing[$id]['multisite_ids'] = $multisiteIds;
             }
-        };
-        
+        }
+
         return $availableWithPricing;
     }
 
@@ -173,14 +171,14 @@ class Availability extends Model implements AvailabilityContract
         if (($results->count() !== count($this->getPeriod()) && ! $this->round_trip) || $entryAvailabilityValue == 'disabled') {
             return [
                 'message' => [
-                    'status' => false
-                ]
+                    'status' => false,
+                ],
             ];
         }
 
-        $this->calculatePrice($results, $entry->id());        
+        $this->calculatePrice($results, $entry->id());
 
-        return $this->buildSpecificItemArray();   
+        return $this->buildSpecificItemArray();
     }
 
     protected function buildSpecificItemArray()
@@ -190,17 +188,17 @@ class Availability extends Model implements AvailabilityContract
                 'days' => $this->round_trip ? '2' : $this->duration,
                 'date_start' => $this->date_start,
                 'date_end' => $this->date_end,
-                'quantity' => $this->quantity
+                'quantity' => $this->quantity,
             ],
             'data' => [
                 'price' => $this->reservation_price->format(),
                 'payment' => $this->calculatePayment($this->reservation_price)->format(),
-                'original_price' => (isset($this->original_price) ? $this->original_price->format() : null)
+                'original_price' => (isset($this->original_price) ? $this->original_price->format() : null),
             ],
             'message' => [
-                'status' => 1
-            ]
-        ];     
+                'status' => 1,
+            ],
+        ];
     }
 
     /**
@@ -218,7 +216,7 @@ class Availability extends Model implements AvailabilityContract
         $days = [];
         foreach ($idsFound as $id) {
             $dates = $results->where('statamic_id', $id)->sortBy('date');
-            // If the count of the dates is not the same like the period, it usually 
+            // If the count of the dates is not the same like the period, it usually
             // means that a date has no availability information, so we should just skip
             if (!$this->round_trip && ($dates->count() !== count($this->getPeriod()))) {
                 continue;
@@ -226,7 +224,7 @@ class Availability extends Model implements AvailabilityContract
             foreach ($dates as $availability) {
                 $days[$availability->date][] = $id;
             }
-        }            
+        }
 
         if (count($days) == 0) {
             return [];
@@ -239,10 +237,10 @@ class Availability extends Model implements AvailabilityContract
     }
 
     /**
-     * Gets the total price of an entry for a period of time
+     * Gets the total price of an entry for a period of time.
      */
-    public function getPriceForDates($statamic_id) {
-
+    public function getPriceForDates($statamic_id)
+    {
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
         $results = $this->round_trip 
@@ -250,6 +248,7 @@ class Availability extends Model implements AvailabilityContract
             : AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)->get(['price', 'available']);
         
         $this->calculatePrice($results, $entry->id());
+
         return $this->reservation_price;
     }
 
@@ -260,6 +259,7 @@ class Availability extends Model implements AvailabilityContract
             ->where('published', true)
             ->get()
             ->toAugmentedArray('id');
+
         return array_flatten($results);
     }
 
@@ -280,5 +280,4 @@ class Availability extends Model implements AvailabilityContract
             return $price->percent(config('resrv-config.percent_amount'));
         }
     }
-
 }

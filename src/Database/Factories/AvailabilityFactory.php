@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Database\Factories;
 
-use Reach\StatamicResrv\Models\Availability;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\Availability;
 
 class AvailabilityFactory extends Factory
 {
@@ -25,7 +25,7 @@ class AvailabilityFactory extends Factory
             'statamic_id' => '',
             'date'=> today(),
             'available' => 2,
-            'price' => '150'
+            'price' => '150',
         ];
     }
 }

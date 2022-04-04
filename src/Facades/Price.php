@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Facades;
 
-use Reach\StatamicResrv\Money\Price as PriceClass;
 use Illuminate\Support\Facades\Facade;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 
 class Price extends Facade
 {

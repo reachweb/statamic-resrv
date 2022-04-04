@@ -2,18 +2,18 @@
 
 namespace Reach\StatamicResrv\Tests;
 
+use Facades\Statamic\Version;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\WithFaker;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
-use Statamic\Statamic;
 use Statamic\Extend\Manifest;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
-use Statamic\Support\Str;
 use Statamic\Facades\User;
-use Facades\Statamic\Version;
 use Statamic\Stache\Stores\UsersStore;
+use Statamic\Statamic;
+use Statamic\Support\Str;
 
 class TestCase extends OrchestraTestCase
 {
@@ -22,11 +22,11 @@ class TestCase extends OrchestraTestCase
     use PreventSavingStacheItemsToDisk;
 
     protected function setUp(): void
-    {       
+    {
         parent::setUp();
 
         $this->preventSavingStacheItemsToDisk();
-        
+
         Blueprint::setDirectory(__DIR__.'/../resources/blueprints');
 
         Version::shouldReceive('get')->andReturn('3.2.35');
@@ -38,7 +38,7 @@ class TestCase extends OrchestraTestCase
     public function tearDown(): void
     {
         $this->deleteFakeStacheDirectory();
-        
+
         parent::tearDown();
     }
 
@@ -63,7 +63,7 @@ class TestCase extends OrchestraTestCase
 
     protected function getPackageAliases($app)
     {
-        return ['Statamic' => Statamic::class,];
+        return ['Statamic' => Statamic::class];
     }
 
     protected function getEnvironmentSetUp($app)
@@ -76,7 +76,6 @@ class TestCase extends OrchestraTestCase
                 'namespace' => 'Reach\\StatamicResrv',
             ],
         ];
-
     }
 
     protected function resolveApplicationConfiguration($app)
@@ -123,7 +122,6 @@ class TestCase extends OrchestraTestCase
         Statamic::pushWebRoutes(function () {
             return require_once realpath(__DIR__.'/../routes/web.php');
         });
-      
     }
 
     protected function signInAdmin()
@@ -137,10 +135,9 @@ class TestCase extends OrchestraTestCase
 
     public function makeStatamicItem(array $data = null)
     {
-
         $entryData = [
             'title' => $data['title'] ?? 'Test Statamic Item',
-            'resrv_availability' => $data['resrv_availability'] ?? Str::random('6')
+            'resrv_availability' => $data['resrv_availability'] ?? Str::random('6'),
         ];
 
         Collection::make('pages')->save();
@@ -152,7 +149,5 @@ class TestCase extends OrchestraTestCase
             ->save();
 
         return Entry::findBySlug($slug, 'pages');
-
     }
-
 }

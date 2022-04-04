@@ -20,16 +20,18 @@ class ExtraCpController extends Controller
     {
         return view('statamic-resrv::cp.extras.index');
     }
-    
+
     public function index()
     {
         $extras = $this->extra->all();
+
         return response()->json($extras);
     }
-    
+
     public function entryIndex($statamic_id)
     {
         $extras = $this->extra->entry($statamic_id)->get();
+
         return response()->json($extras);
     }
 
@@ -74,31 +76,33 @@ class ExtraCpController extends Controller
     public function associate(Request $request, $statamic_id)
     {
         $data = $request->validate([
-            'id' => 'required|integer'
+            'id' => 'required|integer',
         ]);
         DB::table('resrv_statamicentry_extra')
             ->insert(
                 ['extra_id' => $data['id'], 'statamicentry_id' => $statamic_id],
             );
+
         return response(200);
     }
 
     public function disassociate(Request $request, $statamic_id)
     {
         $data = $request->validate([
-            'id' => 'required|integer'
+            'id' => 'required|integer',
         ]);
         DB::table('resrv_statamicentry_extra')
             ->where('extra_id', $data['id'])
             ->where('statamicentry_id', $statamic_id)
             ->delete();
+
         return response(200);
     }
 
     public function order(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required',            
+            'id' => 'required',
             'order' => 'required|integer',
         ]);
 
@@ -110,14 +114,14 @@ class ExtraCpController extends Controller
     public function delete(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required|integer'
+            'id' => 'required|integer',
         ]);
         $extra = $this->extra->destroy($data['id']);
 
         DB::table('resrv_statamicentry_extra')
             ->where('extra_id', $data['id'])
             ->delete();
-            
+
         DB::table('resrv_dynamic_pricing_assignments')
             ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Extra')
             ->where('dynamic_pricing_assignment_id', $data['id'])
@@ -125,7 +129,4 @@ class ExtraCpController extends Controller
 
         return response(200);
     }
-
-
-
 }

@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Database\Factories;
 
-use Reach\StatamicResrv\Models\Extra;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\Extra;
 
 class ExtraFactory extends Factory
 {
@@ -30,7 +30,7 @@ class ExtraFactory extends Factory
             'allow_multiple' => true,
             'maximum' => 3,
             'order' => 1,
-            'published' => true
+            'published' => true,
         ];
     }
 

@@ -2,11 +2,9 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
-use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
-
 
 class ResrvUtilityController extends Controller
 {
@@ -18,6 +16,7 @@ class ResrvUtilityController extends Controller
         ->orderBy('title', 'asc')
         ->get(['id', 'title'])
         ->toAugmentedArray();
+
         return response()->json($entries);
     }
 
@@ -34,7 +33,7 @@ class ResrvUtilityController extends Controller
                 }
             }
         }
+
         return $collections;
     }
-
 }

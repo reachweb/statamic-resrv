@@ -41,27 +41,27 @@ class ReservationBlueprint
                                 'type'     => 'text',
                                 'listable' => true,
                                 'display'  => 'Entry',
-                                'sortable' => false
+                                'sortable' => false,
                             ],
-                        ],  
+                        ],
                         [
                             'handle' => 'quantity',
                             'field'  => [
                                 'type'     => 'integer',
                                 'listable' => true,
                                 'display'  => 'Quantity',
-                                'sortable' => false
+                                'sortable' => false,
                             ],
-                        ],            
+                        ],
                         [
                             'handle' => 'property',
                             'field'  => [
                                 'type'     => 'integer',
                                 'listable' => true,
                                 'display'  => 'Property',
-                                'sortable' => true
+                                'sortable' => true,
                             ],
-                        ],                                        
+                        ],
                         [
                             'handle' => 'date_start',
                             'field'  => [
@@ -109,16 +109,16 @@ class ReservationBlueprint
                                 'listable' => true,
                                 'display'  => 'End location',
                             ],
-                        ], 
+                        ],
                         [
                             'handle' => 'customer',
                             'field'  => [
                                 'type'     => 'text',
                                 'listable' => true,
                                 'display'  => 'Customer',
-                                'sortable' => false
+                                'sortable' => false,
                             ],
-                        ],        
+                        ],
                         [
                             'handle' => 'created_at',
                             'field'  => [

@@ -2,12 +2,8 @@
 
 namespace Reach\StatamicResrv\Tests\FixedPricing;
 
-use Reach\StatamicResrv\Tests\TestCase;
-use Reach\StatamicResrv\Models\FixedPricing;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Database\Eloquent\Factories\Sequence;
-use Illuminate\Support\Facades\Config;
-use Carbon\Carbon;
+use Reach\StatamicResrv\Tests\TestCase;
 
 class FixedPricingFrontTest extends TestCase
 {
@@ -15,24 +11,23 @@ class FixedPricingFrontTest extends TestCase
 
     public function setUp(): void
     {
-        parent::setUp();        
+        parent::setUp();
     }
 
-    
     public function test_fixed_pricing_changes_availability_prices()
     {
         $this->signInAdmin();
 
         $item = $this->makeStatamicItem();
-        
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->toISOString(),
             'date_end' => today()->add(6, 'day')->toISOString(),
             'price' => 25.23,
-            'available' => 3
-        ];        
-        
+            'available' => 3,
+        ];
+
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
@@ -47,11 +42,11 @@ class FixedPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
 
-        // Add fixed pricing        
+        // Add fixed pricing
         $fixedPricingPayload = [
             'statamic_id' => $item->id(),
-            'days' => '4',            
-            'price' => 90
+            'days' => '4',
+            'price' => 90,
         ];
 
         $response = $this->post(cp_route('resrv.fixedpricing.update'), $fixedPricingPayload);
@@ -77,8 +72,8 @@ class FixedPricingFrontTest extends TestCase
         // Add extra days fixed pricing
         $fixedPricingPayloadExtra = [
             'statamic_id' => $item->id(),
-            'days' => '0',            
-            'price' => 20
+            'days' => '0',
+            'price' => 20,
         ];
         $response = $this->post(cp_route('resrv.fixedpricing.update'), $fixedPricingPayloadExtra);
         $response->assertStatus(200);
@@ -95,23 +90,22 @@ class FixedPricingFrontTest extends TestCase
         $searchPayload['quantity'] = 3;
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('390');
-                
-    } 
+    }
 
     public function test_fixed_pricing_changes_reservation_prices()
     {
         $this->signInAdmin();
 
         $item = $this->makeStatamicItem();
-        
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->toISOString(),
             'date_end' => today()->add(6, 'day')->toISOString(),
             'price' => 25.23,
-            'available' => 3
-        ];        
-        
+            'available' => 3,
+        ];
+
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
@@ -124,11 +118,11 @@ class FixedPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
-        
+
         $fixedPricingPayload = [
             'statamic_id' => $item->id(),
-            'days' => '4',            
-            'price' => 90
+            'days' => '4',
+            'price' => 90,
         ];
 
         $response = $this->post(cp_route('resrv.fixedpricing.update'), $fixedPricingPayload);
@@ -146,15 +140,15 @@ class FixedPricingFrontTest extends TestCase
             'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
             'payment' => $payment,
             'price' => $price,
-            'total' => $price
+            'total' => $price,
         ];
-        
+
         $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
 
         $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
 
         $this->assertDatabaseHas('resrv_reservations', [
-            'payment' => $payment
+            'payment' => $payment,
         ]);
 
         // Confirm that it works for extra days fixed pricing
@@ -162,8 +156,8 @@ class FixedPricingFrontTest extends TestCase
         // Add extra days
         $fixedPricingPayloadExtra = [
             'statamic_id' => $item->id(),
-            'days' => '0',            
-            'price' => 20
+            'days' => '0',
+            'price' => 20,
         ];
         $response = $this->post(cp_route('resrv.fixedpricing.update'), $fixedPricingPayloadExtra);
         $response->assertStatus(200);
@@ -184,16 +178,16 @@ class FixedPricingFrontTest extends TestCase
             'date_end' => today()->setHour(12)->add(6, 'day')->toISOString(),
             'payment' => $payment,
             'price' => $price,
-            'total' => $price
+            'total' => $price,
         ];
-        
+
         $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
 
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_reservations', [
-            'payment' => $payment
-        ]);                
+            'payment' => $payment,
+        ]);
     }
 
     public function test_fixed_pricing_changes_reservation_prices_for_multiple_items()
@@ -201,22 +195,22 @@ class FixedPricingFrontTest extends TestCase
         $this->signInAdmin();
 
         $item = $this->makeStatamicItem();
-        
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->toISOString(),
             'date_end' => today()->add(6, 'day')->toISOString(),
             'price' => 25.23,
-            'available' => 3
-        ];        
-        
+            'available' => 3,
+        ];
+
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
         $fixedPricingPayload = [
             'statamic_id' => $item->id(),
-            'days' => '4',            
-            'price' => 90
+            'days' => '4',
+            'price' => 90,
         ];
 
         $response = $this->post(cp_route('resrv.fixedpricing.update'), $fixedPricingPayload);
@@ -243,9 +237,9 @@ class FixedPricingFrontTest extends TestCase
             'quantity' => 3,
             'payment' => $payment,
             'price' => $price,
-            'total' => $price
+            'total' => $price,
         ];
-        
+
         $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
 
         $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
@@ -255,5 +249,4 @@ class FixedPricingFrontTest extends TestCase
             'quantity' => 3,
         ]);
     }
-
 }

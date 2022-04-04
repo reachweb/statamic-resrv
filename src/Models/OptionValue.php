@@ -5,13 +5,11 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\DB;
-use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Database\Factories\OptionValueFactory;
-use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
-use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Scopes\OrderScope;
+use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 
 class OptionValue extends Model
 {
@@ -49,19 +47,20 @@ class OptionValue extends Model
     public function priceForDates($data)
     {
         $this->initiateAvailability($data);
+
         return $this->price->multiply($this->quantity)->format();
     }
 
-    public function calculatePrice($data) 
+    public function calculatePrice($data)
     {
-        if ($this->price_type == 'free' || $this->price_type == 'fixed') { 
+        if ($this->price_type == 'free' || $this->price_type == 'fixed') {
             return $this->price;
         }
         $this->initiateAvailability($data);
-        if ($this->price_type == 'perday') {            
+        if ($this->price_type == 'perday') {
             return $this->price->multiply($this->duration)->multiply($this->quantity);
         }
-    }  
+    }
 
     public function changeOrder($order)
     {
@@ -84,6 +83,4 @@ class OptionValue extends Model
         $movingItem->order = $order;
         $movingItem->saveOrFail();
     }
-    
-
 }

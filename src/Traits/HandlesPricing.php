@@ -2,13 +2,13 @@
 
 namespace Reach\StatamicResrv\Traits;
 
-use Reach\StatamicResrv\Models\DynamicPricing;
 use Illuminate\Database\Eloquent\Collection;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\FixedPricing;
 
-trait HandlesPricing {
-
+trait HandlesPricing
+{
     protected $original_price;
     protected $reservation_price;
 
@@ -17,7 +17,7 @@ trait HandlesPricing {
         $start = Price::create(0);
 
         // Add prices
-        $prices = array();
+        $prices = [];
         $results->each(function ($result) use (&$prices) {
             $prices[] = $result->price;
         });
@@ -38,7 +38,7 @@ trait HandlesPricing {
 
     protected function getDynamicPricing($id)
     {
-        return DynamicPricing::searchForAvailability($id, $this->reservation_price, $this->date_start, $this->date_end, $this->duration);        
+        return DynamicPricing::searchForAvailability($id, $this->reservation_price, $this->date_start, $this->date_end, $this->duration);
     }
 
     protected function applyDynamicPricing($id)
@@ -49,5 +49,4 @@ trait HandlesPricing {
             $this->reservation_price = $dynamicPricing->apply($this->reservation_price);
         }
     }
-
 }

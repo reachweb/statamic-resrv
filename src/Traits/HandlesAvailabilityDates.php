@@ -16,7 +16,7 @@ trait HandlesAvailabilityDates
     protected $round_trip;
 
     protected function useTime()
-    {   
+    {
         return config('resrv-config.calculate_days_using_time');
     }
 
@@ -43,6 +43,7 @@ trait HandlesAvailabilityDates
     {
         if (! Arr::exists($data, 'quantity')) {
             $this->quantity = 1;
+
             return;
         }
         if ($data['quantity'] > config('resrv-config.maximum_quantity')) {
@@ -50,11 +51,12 @@ trait HandlesAvailabilityDates
         }
         $this->quantity = $data['quantity'];
     }
-    
+
     private function setAdvanced($data)
     {
         if (! Arr::exists($data, 'advanced')) {
             $this->advanced = null;
+
             return;
         }
         $this->advanced = $data['advanced'];
@@ -78,11 +80,11 @@ trait HandlesAvailabilityDates
             if ($time_end > $time_start) {
                 $date_end = $date_end->add(1, 'day');
             }
-        }   
+        }
 
         $this->duration = $date_start->startOfDay()->diffInDays($date_end->startOfDay());
         $this->date_start = $date_start->isoFormat('YYYY-MM-DD');
-        $this->date_end = $date_end->isoFormat('YYYY-MM-DD');        
+        $this->date_end = $date_end->isoFormat('YYYY-MM-DD');
         $this->dates_initiated = true;
     }
 
@@ -108,7 +110,7 @@ trait HandlesAvailabilityDates
         $this->setQuantity($data);
 
         $this->setAdvanced($data);
- 
+
         $this->checkDurationValidity();
     }
 

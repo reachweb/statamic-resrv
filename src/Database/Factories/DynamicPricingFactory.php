@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Database\Factories;
 
-use Reach\StatamicResrv\Models\DynamicPricing;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\DynamicPricing;
 
 class DynamicPricingFactory extends Factory
 {
@@ -33,7 +33,7 @@ class DynamicPricingFactory extends Factory
             'condition_type' => 'reservation_duration',
             'condition_comparison' => '>=',
             'condition_value' => '3',
-            'order' => '1'
+            'order' => '1',
         ];
     }
 
@@ -47,7 +47,7 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
-    
+
     public function extra()
     {
         return $this->state(function (array $attributes) {
@@ -68,7 +68,7 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
-    
+
     public function conditionPriceOver()
     {
         return $this->state(function (array $attributes) {
@@ -79,7 +79,7 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
-    
+
     public function conditionPriceUnder()
     {
         return $this->state(function (array $attributes) {
@@ -90,7 +90,6 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
-    
 
     public function dateMost()
     {
@@ -100,7 +99,7 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
-    
+
     public function dateStart()
     {
         return $this->state(function (array $attributes) {
@@ -109,7 +108,7 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
-    
+
     public function percentIncrease()
     {
         return $this->state(function (array $attributes) {
@@ -119,7 +118,7 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
-    
+
     public function fixedDecrease()
     {
         return $this->state(function (array $attributes) {
@@ -130,7 +129,7 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
-    
+
     public function fixedIncrease()
     {
         return $this->state(function (array $attributes) {

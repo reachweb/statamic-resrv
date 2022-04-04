@@ -1,15 +1,13 @@
 <?php
 
-use App\Http\Middleware\VerifyCsrfToken;
-
 Route::namespace('\Reach\StatamicResrv\Http\Controllers')
     ->name('resrv.')
     ->group(function () {
         // Availability
         Route::post('/resrv/api/availability', 'AvailabilityController@index')->name('availability.index');
         Route::post('/resrv/api/availability/{statamic_id}', 'AvailabilityController@show')->name('availability.show'); // Availability
-        
-         // Advanced availability
+
+        // Advanced availability
         Route::post('/resrv/api/advancedavailability', 'AdvancedAvailabilityController@index')->name('advancedavailability.index');
         Route::post('/resrv/api/advancedavailability/{statamic_id}', 'AdvancedAvailabilityController@show')->name('advancedavailability.show');
 
@@ -25,5 +23,3 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/api/reservation/checkout/{reservation_id}', 'ReservationController@checkoutFormSubmit')->name('reservation.checkoutFormSubmit');
         Route::post('/resrv/api/reservation/checkout/{reservation_id}/confirm', 'ReservationController@checkoutConfirm')->name('reservation.checkoutConfirm');
     });
-
-    

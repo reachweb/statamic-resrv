@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Database\Factories;
 
-use Reach\StatamicResrv\Models\OptionValue;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\OptionValue;
 
 class OptionValueFactory extends Factory
 {
@@ -27,7 +27,7 @@ class OptionValueFactory extends Factory
             'price' => '22.75',
             'price_type' => 'perday',
             'order' => 1,
-            'published' => true
+            'published' => true,
         ];
     }
 }

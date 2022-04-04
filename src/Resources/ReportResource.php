@@ -3,15 +3,14 @@
 namespace Reach\StatamicResrv\Resources;
 
 use Illuminate\Http\Resources\Json\ResourceCollection;
-use Reach\StatamicResrv\Models\Report;
 use Reach\StatamicResrv\Facades\Price;
-use Carbon\Carbon;
+use Reach\StatamicResrv\Models\Report;
 
 class ReportResource extends ResourceCollection
 {
     public function __construct(Report $report)
     {
-       $this->report = $report;
+        $this->report = $report;
     }
 
     public function toArray($request)
@@ -27,7 +26,4 @@ class ReportResource extends ResourceCollection
 
         return $data;
     }
-
-
-
 }

@@ -2,17 +2,10 @@
 
 namespace Reach\StatamicResrv\Tests\Reports;
 
-use Reach\StatamicResrv\Tests\TestCase;
-use Reach\StatamicResrv\Models\Availability;
-use Reach\StatamicResrv\Models\Extra;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Models\Reservation;
-use Reach\StatamicResrv\Mail\ReservationRefunded;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Database\Eloquent\Factories\Sequence;
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Mail;
-use Carbon\Carbon;
+use Reach\StatamicResrv\Tests\TestCase;
 
 class ReportsCpTest extends TestCase
 {
@@ -25,9 +18,9 @@ class ReportsCpTest extends TestCase
     }
 
     public function test_can_show_reports_page()
-    {       
+    {
         $response = $this->get(cp_route('resrv.reports.index'));
-        $response->assertStatus(200)->assertSee('Reports');     
+        $response->assertStatus(200)->assertSee('Reports');
     }
 
     public function test_can_get_report_data()
@@ -43,7 +36,7 @@ class ReportsCpTest extends TestCase
             'location_end' => $location->id,
             'status' => 'confirmed',
         ])->count(4)->create();
-        
+
         $reservation2 = Reservation::factory([
             'customer' => ['email' => 'test@test.com'],
             'item_id' => $item2->id(),
@@ -60,7 +53,5 @@ class ReportsCpTest extends TestCase
                     'avg_revenue' => '200.00',
                 ])
                 ->assertSee('Test Statamic Item');
-
     }
-
 }

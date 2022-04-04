@@ -3,8 +3,8 @@
 namespace Reach\StatamicResrv\Traits;
 
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
-use Statamic\Facades\Site;
 use Statamic\Facades\Entry;
+use Statamic\Facades\Site;
 
 trait HandlesMultisiteIds
 {
@@ -24,13 +24,14 @@ trait HandlesMultisiteIds
     }
 
     public function getMultisiteIds($statamic_id)
-    {        
+    {
         $multisiteEntries = Entry::query()->where('origin', $statamic_id)->get();
         $ids = $multisiteEntries->map(function ($item) {
             return [
-                 $item->locale() => $item->id()
+                $item->locale() => $item->id(),
             ];
         });
+
         return $ids->values()->all();
     }
 }

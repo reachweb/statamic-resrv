@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\FixedPricing;
 
 class FixedPricingCpController extends Controller
@@ -15,19 +14,20 @@ class FixedPricingCpController extends Controller
     {
         $this->fixedPricing = $fixedPricing;
     }
-    
+
     public function index($statamic_id)
     {
         $fixedPricing = $this->fixedPricing->entry($statamic_id)->orderBy('days')->get();
+
         return response()->json($fixedPricing);
     }
-    
+
     public function update(Request $request)
     {
         $data = $request->validate([
             'statamic_id' => 'required',
             'days' => 'required',
-            'price' => 'required|numeric',            
+            'price' => 'required|numeric',
         ]);
 
         $fixedPricing = $this->fixedPricing->updateOrCreate(
@@ -41,11 +41,10 @@ class FixedPricingCpController extends Controller
     public function delete(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required|integer'
+            'id' => 'required|integer',
         ]);
         $fixedPricing = $this->fixedPricing->destroy($data['id']);
 
         return response(200);
     }
-
 }

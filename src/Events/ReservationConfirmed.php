@@ -17,5 +17,4 @@ class ReservationConfirmed
     {
         $this->reservation = $reservation;
     }
-
 }

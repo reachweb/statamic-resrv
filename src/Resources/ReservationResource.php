@@ -2,10 +2,9 @@
 
 namespace Reach\StatamicResrv\Resources;
 
-use Illuminate\Http\Resources\Json\ResourceCollection;
 use Carbon\Carbon;
+use Illuminate\Http\Resources\Json\ResourceCollection;
 use Reach\StatamicResrv\Blueprints\ReservationBlueprint;
-use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Http\Resources\CP\Concerns\HasRequestedColumns;
 
 class ReservationResource extends ResourceCollection
@@ -34,8 +33,7 @@ class ReservationResource extends ResourceCollection
         $this->setColumns();
 
         return [
-            'data' => $this->collection->transform(function ($reservation) {                
-
+            'data' => $this->collection->transform(function ($reservation) {
                 return [
                     'id' => $reservation->id,
                     'reference' => $reservation->reference,
@@ -71,7 +69,7 @@ class ReservationResource extends ResourceCollection
             unset($columns['location_start']);
             unset($columns['location_end']);
         }
-        
+
         if (config('resrv-config.maximum_quantity') == 1) {
             unset($columns['quantity']);
         }
@@ -97,5 +95,4 @@ class ReservationResource extends ResourceCollection
 
         return $date->format($format);
     }
- 
 }

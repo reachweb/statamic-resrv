@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Repositories;
 
-use Reach\StatamicResrv\Models\Availability; 
-use Reach\StatamicResrv\Models\AdvancedAvailability; 
+use Reach\StatamicResrv\Models\AdvancedAvailability;
+use Reach\StatamicResrv\Models\Availability;
 
 class AvailabilityRepository
 {
@@ -16,7 +16,7 @@ class AvailabilityRepository
             ->when($advanced, function ($query, $advanced) {
                 if ($advanced !== 'any') {
                     $query->where('property', $advanced);
-                }                
+                }
             });
     }
 
@@ -35,6 +35,7 @@ class AvailabilityRepository
             });
     } 
     
+
     public function itemAvailableBetween($date_start, $date_end, $quantity, $advanced, $statamic_id)
     {
         return $this->query($advanced)
@@ -104,7 +105,7 @@ class AvailabilityRepository
             })
             ->decrement('available', $quantity);
     }
-        
+
     public function increment($date_start, $date_end, $quantity, $advanced, $statamic_id)
     {
         return $this->query($advanced)
@@ -116,13 +117,13 @@ class AvailabilityRepository
             })
             ->increment('available', $quantity);
     }
-    
+
     public function query($advanced)
     {
         if (! $advanced) {
             return app(Availability::class);
         }
+
         return app(AdvancedAvailability::class);
-        
     }
 }
