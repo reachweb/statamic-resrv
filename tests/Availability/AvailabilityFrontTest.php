@@ -16,7 +16,6 @@ class AvailabilityFrontTest extends TestCase
         parent::setUp();
     }
 
-    // TODO: Break up this test a little bit
     public function test_availability_can_get_available_for_date_range()
     {
         $this->signInAdmin();
@@ -40,6 +39,7 @@ class AvailabilityFrontTest extends TestCase
             'price' => 80,
             'available' => 1,
         ];
+
         $payload3 = [
             'statamic_id' => $item3->id(),
             'date_start' => today()->toISOString(),
@@ -451,4 +451,50 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);
     }
+
+    public function test_availability_return_trip()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+        
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(8, 'day')->toISOString(),
+            'price' => 50,
+            'available' => 2
+        ];
+        
+        // Add a second item to test for wrong results when using orWhere
+        $payload2 = [
+            'statamic_id' => $item2->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(5, 'day')->toISOString(),
+            'price' => 80,
+            'available' => 1
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response = $this->post(cp_route('resrv.availability.update'), $payload2);
+        $response->assertStatus(200);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(6, 'day')->toISOString(),
+            'round_trip' => true
+        ];
+        
+        // We should see if that it's available and the total price
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('100');
+
+        // Test the show method as well
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('100')->assertSee('message":{"status":1}}', false);
+                
+    } 
 }

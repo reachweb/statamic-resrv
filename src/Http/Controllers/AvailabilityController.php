@@ -22,6 +22,7 @@ class AvailabilityController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
+            'round_trip' => 'sometimes|boolean',
         ]);
 
         try {
@@ -39,6 +40,7 @@ class AvailabilityController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
+            'round_trip' => 'sometimes|boolean',
         ]);
 
         try {

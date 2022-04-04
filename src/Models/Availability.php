@@ -83,17 +83,27 @@ class Availability extends Model implements AvailabilityContract
         $this->initiateAvailability($data);
 
         $entry = $this->getDefaultSiteEntry($statamic_id);
-
-        $results = AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced, $entry->id())
-            ->get(['date', 'price', 'available'])
-            ->sortBy('date');
+        
+        $results = $this->getResultsForItem($entry);
 
         $this->calculatePrice($results, $entry->id());
 
         return $this->reservation_price;
     }
 
-    public function decrementAvailability($date_start, $date_end, $quantity, $statamic_id)
+    protected function getResultsForItem($entry)
+    {
+        if ($this->round_trip) {
+            return AvailabilityRepository::itemAvailableAt($this->date_start, $this->date_end, $this->quantity, $this->advanced, $entry->id())
+                ->get(['date', 'price', 'available'])
+                ->sortBy('date');
+        }
+        return AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced, $entry->id())
+            ->get(['date', 'price', 'available'])
+            ->sortBy('date');
+    }
+
+    public function decrementAvailability($date_start, $date_end, $quantity, $statamic_id) 
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
@@ -126,7 +136,7 @@ class Availability extends Model implements AvailabilityContract
             $availableWithPricing[$id] = [
                 'id' => $id,
                 'request' => [
-                    'days' => $this->duration,
+                    'days' => $this->round_trip ? '2' : $this->duration,
                     'date_start' => $this->date_start,
                     'date_end' => $this->date_end,
                     'quantity' => $this->quantity,
@@ -153,14 +163,12 @@ class Availability extends Model implements AvailabilityContract
     protected function getSpecificItem($statamic_id)
     {
         $entry = $this->getDefaultSiteEntry($statamic_id);
-
-        $results = AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced, $entry->id())
-            ->get(['date', 'price', 'available'])
-            ->sortBy('date');
+        
+        $results = $this->getResultsForItem($entry);
 
         $entryAvailabilityValue = $entry->get('resrv_availability');
 
-        if ($results->count() !== count($this->getPeriod()) || $entryAvailabilityValue == 'disabled') {
+        if (($results->count() !== count($this->getPeriod()) && ! $this->round_trip) || $entryAvailabilityValue == 'disabled') {
             return [
                 'message' => [
                     'status' => false,
@@ -177,7 +185,7 @@ class Availability extends Model implements AvailabilityContract
     {
         return [
             'request' => [
-                'days' => $this->duration,
+                'days' => $this->round_trip ? '2' : $this->duration,
                 'date_start' => $this->date_start,
                 'date_end' => $this->date_end,
                 'quantity' => $this->quantity,
@@ -197,9 +205,11 @@ class Availability extends Model implements AvailabilityContract
      * Search for availability entries between the dates and then return the ids
      * of the items that have at least 1 available for each day.
      */
-    protected function availableForDates()
-    {
-        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
+    protected function availableForDates() {
+
+        $results = $this->round_trip 
+                ? AvailabilityRepository::availableAt($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get()
+                : AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
 
         $idsFound = $results->groupBy('statamic_id')->keys();
 
@@ -208,7 +218,7 @@ class Availability extends Model implements AvailabilityContract
             $dates = $results->where('statamic_id', $id)->sortBy('date');
             // If the count of the dates is not the same like the period, it usually
             // means that a date has no availability information, so we should just skip
-            if ($dates->count() !== count($this->getPeriod())) {
+            if (!$this->round_trip && ($dates->count() !== count($this->getPeriod()))) {
                 continue;
             }
             foreach ($dates as $availability) {
@@ -233,9 +243,10 @@ class Availability extends Model implements AvailabilityContract
     {
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
-        $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)
-            ->get(['price', 'available']);
-
+        $results = $this->round_trip 
+            ? AvailabilityRepository::priceAtDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)->get(['price', 'available'])
+            : AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)->get(['price', 'available']);
+        
         $this->calculatePrice($results, $entry->id());
 
         return $this->reservation_price;

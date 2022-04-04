@@ -22,6 +22,7 @@ class AdvancedAvailabilityController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
+            'round_trip' => 'sometimes|boolean',
             'advanced' => 'required|string',
         ]);
 
@@ -40,7 +41,8 @@ class AdvancedAvailabilityController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
-            'advanced' => 'required|string',
+            'round_trip' => 'sometimes|boolean',
+            'advanced' => 'required|string'
         ]);
 
         try {
