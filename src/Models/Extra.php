@@ -7,13 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
-use Reach\StatamicResrv\Models\Availability;
-use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
-use Reach\StatamicResrv\Traits\HandlesOrdering;
-use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
-use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Scopes\OrderScope;
+use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
+use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
+use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Extra extends Model
 {
@@ -54,12 +53,13 @@ class Extra extends Model
         if ($this->price_type == 'relative') {
             return $this->price->multiply($this->getRelativePrice($data))->format();
         }
+
         return $this->price->multiply($this->quantity)->format();
     }
 
     public function priceForReservation($reservation)
     {
-        $data = array();
+        $data = [];
         $data['date_start'] = $reservation->date_start;
         $data['date_end'] = $reservation->date_end;
         $data['quantity'] = $reservation->quantity;
@@ -67,17 +67,18 @@ class Extra extends Model
         if (isset($reservation->property)) {
             $data['advanced'] = $reservation->property;
         }
+
         return $this->priceForDates($data);
     }
 
-    public function calculatePrice($data, $quantity) 
+    public function calculatePrice($data, $quantity)
     {
         $this->initiateAvailability($data);
         $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
         if ($dynamicPricing) {
             $this->price = $dynamicPricing->apply($this->price)->format();
         }
-        if ($this->price_type == 'perday') {            
+        if ($this->price_type == 'perday') {
             return $this->price->multiply($quantity)->multiply($this->duration)->multiply($this->quantity);
         }
         if ($this->price_type == 'fixed') {
@@ -91,6 +92,7 @@ class Extra extends Model
     public function scopeEntry($query, $entry)
     {
         $entry = $this->getDefaultSiteEntry($entry);
+
         return DB::table('resrv_extras')
             ->join('resrv_statamicentry_extra', function ($join) use ($entry) {
                 $join->on('resrv_extras.id', '=', 'resrv_statamicentry_extra.extra_id')
@@ -109,19 +111,20 @@ class Extra extends Model
         $extras->transform(function ($extra) use ($data) {
             $extra->original_price = $extra->price;
             $extra->price = $this->find($extra->id)->priceForDates($data);
+
             return $extra;
         });
 
         return $extras;
     }
 
-    protected function getRelativePrice($data) {
+    protected function getRelativePrice($data)
+    {
         return (new Availability())->getPriceForItem($data, $data['item_id'])->format();
     }
-    
+
     protected function getDynamicPricing($id, $price)
     {
         return DynamicPricing::searchForExtra($id, $price, $this->date_start, $this->date_end, $this->duration);
-        
     }
 }

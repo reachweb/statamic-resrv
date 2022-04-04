@@ -16,7 +16,7 @@ class CreateDynamicPricingAssignments extends Migration
         Schema::create('resrv_dynamic_pricing_assignments', function (Blueprint $table) {
             $table->integer('dynamic_pricing_id');
             $table->integer('dynamic_pricing_assignment_id');
-            $table->integer('dynamic_pricing_assignment_type');            
+            $table->integer('dynamic_pricing_assignment_type');
         });
     }
 

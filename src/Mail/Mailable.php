@@ -2,15 +2,14 @@
 
 namespace Reach\StatamicResrv\Mail;
 
-use Illuminate\Mail\Mailable as LaravelMailable;
 use Illuminate\Container\Container;
+use Illuminate\Mail\Mailable as LaravelMailable;
 use Illuminate\Mail\Markdown;
 
 class Mailable extends LaravelMailable
 {
-
-   /**
-     * Override buildMarkdownView() to define new components path
+    /**
+     * Override buildMarkdownView() to define new components path.
      *
      * @return array
      *
@@ -25,13 +24,13 @@ class Mailable extends LaravelMailable
         // Use package resources path
         if (file_exists(resource_path().'/views/vendor/statamic-resrv/email/theme')) {
             $markdown->loadComponentsFrom([
-                resource_path().'/views/vendor/statamic-resrv/email/theme'
+                resource_path().'/views/vendor/statamic-resrv/email/theme',
             ]);
         } else {
             $markdown->loadComponentsFrom([
-                __DIR__. '/../../resources/views/email/theme'
+                __DIR__.'/../../resources/views/email/theme',
             ]);
-        }        
+        }
 
         $data = $this->buildViewData();
 

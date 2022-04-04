@@ -1,4 +1,4 @@
-<?php 
+<?php
 
 return [
 
@@ -251,5 +251,5 @@ return [
     'YE' => 'Yemen',
     'ZM' => 'Zambia',
     'ZW' => 'Zimbabwe',
-    
+
 ];

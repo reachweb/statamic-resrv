@@ -2,30 +2,25 @@
 
 namespace Reach\StatamicResrv\Models;
 
+use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Illuminate\Database\Eloquent\Casts\AsCollection;
-use Statamic\Facades\Form;
-use Statamic\Facades\Entry;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
-use Reach\StatamicResrv\Models\Availability;
-use Reach\StatamicResrv\Models\AdvancedAvailability;
-use Reach\StatamicResrv\Models\Option;
-use Reach\StatamicResrv\Models\Extra;
-use Reach\StatamicResrv\Models\Location;
-use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Events\ReservationExpired;
+use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Statamic\Facades\Entry;
+use Statamic\Facades\Form;
 
 class Reservation extends Model
 {
     use HasFactory;
 
     protected $table = 'resrv_reservations';
-    
+
     protected $guarded = [];
 
     protected $casts = [
@@ -45,14 +40,14 @@ class Reservation extends Model
 
     public function entry()
     {
-        return Entry::find($this->item_id) ?? $this->emptyEntry();        
+        return Entry::find($this->item_id) ?? $this->emptyEntry();
     }
 
     public function getPriceAttribute($value)
     {
         return Price::create($value);
     }
-    
+
     public function getPaymentAttribute($value)
     {
         return Price::create($value);
@@ -64,6 +59,7 @@ class Reservation extends Model
             return '';
         }
         $availability = new AdvancedAvailability;
+
         return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $this->property);
     }
 
@@ -76,7 +72,7 @@ class Reservation extends Model
     {
         return $this->belongsToMany(Option::class, 'resrv_reservation_option')->withPivot('value')->withTrashed();
     }
-    
+
     public function extras()
     {
         return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot('quantity')->withTrashed();
@@ -86,7 +82,7 @@ class Reservation extends Model
     {
         return $this->hasOne(Location::class, 'id', 'location_start')->withTrashed();
     }
-    
+
     public function location_end_data()
     {
         return $this->hasOne(Location::class, 'id', 'location_end')->withTrashed();
@@ -130,7 +126,6 @@ class Reservation extends Model
         }
 
         return true;
-
     }
 
     protected function confirmTotal($statamic_id, $data)
@@ -139,21 +134,21 @@ class Reservation extends Model
 
         $optionsCost = Price::create(0);
         if (array_key_exists('options', $data) > 0) {
-            foreach($data['options'] as $id => $properties) {
+            foreach ($data['options'] as $id => $properties) {
                 $optionsCost->add(Option::find($id)->calculatePrice($data, $properties['value']));
             }
-        }    
-        
+        }
+
         $extrasCost = Price::create(0);
         if (array_key_exists('extras', $data) > 0) {
             $data['item_id'] = $statamic_id;
-            foreach($data['extras'] as $id => $properties) {
+            foreach ($data['extras'] as $id => $properties) {
                 $extrasCost->add(Extra::find($id)->calculatePrice($data, $properties['quantity']));
             }
-        }    
+        }
 
         $locationCost = Price::create(0);
-        if (config('resrv-config.enable_locations') == true) {            
+        if (config('resrv-config.enable_locations') == true) {
             $locationCost->add(Location::find($data['location_start'])->extra_charge);
             $locationCost->add(Location::find($data['location_end'])->extra_charge);
             if (array_key_exists('quantity', $data) > 0) {
@@ -165,8 +160,8 @@ class Reservation extends Model
     }
 
     protected function checkForRequiredOptions($statamic_id, $data)
-    {        
-        $requiredOptions = Option::entry($statamic_id)            
+    {
+        $requiredOptions = Option::entry($statamic_id)
             ->where('published', true)
             ->where('required', true)
             ->get()
@@ -185,12 +180,13 @@ class Reservation extends Model
 
         $checkoutOptions = $data['options'];
 
-        // Check if each required option is in the data array otherwise return false 
+        // Check if each required option is in the data array otherwise return false
         foreach ($requiredOptions as $id => $option) {
             if (! array_key_exists($id, $checkoutOptions)) {
                 return false;
             }
         }
+
         return true;
     }
 
@@ -210,9 +206,10 @@ class Reservation extends Model
                 $field->setConfig($config);
             }
         }
+
         return $form;
     }
-    
+
     public function checkoutFormFieldsArray()
     {
         $form = $this->getForm();
@@ -220,19 +217,21 @@ class Reservation extends Model
         foreach ($form as $item) {
             $fields[$item->handle()] = $item->config()['display'];
         }
+
         return $fields;
     }
 
     protected function getForm()
     {
         $formHandle = config('resrv-config.form_name', 'checkout');
+
         return Form::find($formHandle)->fields()->values();
     }
 
     public function expire($id)
     {
         try {
-            DB::transaction(function() use ($id) {
+            DB::transaction(function () use ($id) {
                 $reservation = $this->findOrFail($id);
                 if ($reservation->status == 'pending') {
                     $reservation->status = 'expired';
@@ -241,7 +240,7 @@ class Reservation extends Model
                 }
             });
         } catch (\Exception $e) {
-        };
+        }
     }
 
     public function emptyEntry()
@@ -249,8 +248,7 @@ class Reservation extends Model
         return [
             'title' => '## Entry deleted ##',
             'api_url' => '## Entry deleted ##',
-            'permalink' => '#'
-        ];        
+            'permalink' => '#',
+        ];
     }
-
 }

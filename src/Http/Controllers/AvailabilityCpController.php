@@ -2,9 +2,9 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Carbon\CarbonPeriod;
 use Reach\StatamicResrv\Models\Availability;
 
 class AvailabilityCpController extends Controller
@@ -15,6 +15,7 @@ class AvailabilityCpController extends Controller
             ->get(['statamic_id', 'date', 'price', 'available'])
             ->sortBy('date')
             ->keyBy('date');
+
         return response()->json($results);
     }
 
@@ -29,14 +30,14 @@ class AvailabilityCpController extends Controller
         ]);
 
         $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
-        
+
         $dataToAdd = [];
         foreach ($period as $day) {
             $dataToAdd[] = [
                 'statamic_id' => $data['statamic_id'],
                 'date' => $day->isoFormat('YYYY-MM-DD'),
                 'price' => $data['price'],
-                'available' => $data['available']
+                'available' => $data['available'],
             ];
         }
 

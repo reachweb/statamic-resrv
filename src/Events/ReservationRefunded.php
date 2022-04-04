@@ -17,5 +17,4 @@ class ReservationRefunded
     {
         $this->reservation = $reservation;
     }
-
 }

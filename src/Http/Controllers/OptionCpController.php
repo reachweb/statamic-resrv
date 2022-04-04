@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 
@@ -18,10 +17,11 @@ class OptionCpController extends Controller
         $this->option = $option;
         $this->value = $value;
     }
-    
+
     public function entryIndex($statamic_id)
     {
         $options = $this->option->entry($statamic_id)->with('values')->get();
+
         return response()->json($options);
     }
 
@@ -42,10 +42,10 @@ class OptionCpController extends Controller
 
         return response()->json(['id' => $option->id]);
     }
-    
+
     public function createValue(Request $request, $id)
     {
-        $option = $this->option->findOrFail($id);       
+        $option = $this->option->findOrFail($id);
 
         $data = $request->validate([
             'name' => 'required',
@@ -62,7 +62,7 @@ class OptionCpController extends Controller
 
         return response()->json(['id' => $value->id]);
     }
-    
+
     public function update(Request $request)
     {
         $data = $request->validate([
@@ -82,7 +82,7 @@ class OptionCpController extends Controller
 
     public function updateValue(Request $request, $id)
     {
-        $option = $this->option->findOrFail($id);       
+        $option = $this->option->findOrFail($id);
 
         $data = $request->validate([
             'id' => 'required|integer',
@@ -103,7 +103,7 @@ class OptionCpController extends Controller
     public function delete(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required|integer'
+            'id' => 'required|integer',
         ]);
         $option = $this->option->destroy($data['id']);
 
@@ -111,11 +111,11 @@ class OptionCpController extends Controller
 
         return response(200);
     }
-    
+
     public function deleteValue(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required|integer'
+            'id' => 'required|integer',
         ]);
         $value = $this->value->destroy($data['id']);
 
@@ -125,7 +125,7 @@ class OptionCpController extends Controller
     public function order(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required',            
+            'id' => 'required',
             'order' => 'required|integer',
         ]);
 
@@ -133,17 +133,16 @@ class OptionCpController extends Controller
 
         return response(200);
     }
-    
+
     public function orderValue(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required',            
+            'id' => 'required',
             'order' => 'required|integer',
         ]);
 
         $this->value->find($data['id'])->changeOrder($data['order']);
 
         return response(200);
-    }   
-
+    }
 }

@@ -5,9 +5,9 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Reach\StatamicResrv\Database\Factories\AdvancedAvailabilityFactory;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
-use Reach\StatamicResrv\Money\Price as PriceClass;
 use Statamic\Facades\Blueprint;
 
 class AdvancedAvailability extends Availability
@@ -27,7 +27,8 @@ class AdvancedAvailability extends Availability
         return AdvancedAvailabilityFactory::new();
     }
 
-    public function getPropertyLabel($handle, $collection, $slug) {
+    public function getPropertyLabel($handle, $collection, $slug)
+    {
         $blueprint = Blueprint::find('collections.'.$collection.'.'.$handle);
         if (! $blueprint->hasField('resrv_availability')) {
             return false;
@@ -36,11 +37,12 @@ class AdvancedAvailability extends Availability
         if (array_key_exists($slug, $properties)) {
             return $properties[$slug];
         }
+
         return $slug;
     }
 
-    protected function availableForDates() {
-
+    protected function availableForDates()
+    {
         $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
 
         $idsFound = $results->groupBy('statamic_id')->keys();
@@ -70,23 +72,22 @@ class AdvancedAvailability extends Availability
         return array_diff($available, $disabled);
     }
 
-    public function getPriceForDates($statamic_id) {
-
+    public function getPriceForDates($statamic_id)
+    {
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
         $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)
             ->get(['price', 'available', 'property'])->groupBy('property');
-    
+
         // If we have more than one properties, return the cheapest
         if ($results->count() > 1) {
-            $results = $results->sortBy(function($property) {
+            $results = $results->sortBy(function ($property) {
                 return $property->sortBy('price')->first()->price;
-            });    
+            });
         }
-        
+
         $this->calculatePrice($results->first(), $entry->id());
+
         return $this->reservation_price;
     }
-
-
 }

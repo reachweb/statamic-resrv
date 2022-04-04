@@ -5,13 +5,11 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\LocationFactory;
-use Reach\StatamicResrv\Traits\HandlesOrdering;
-use Reach\StatamicResrv\Scopes\OrderScope;
-use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Facades\Price;
-
+use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Scopes\OrderScope;
+use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Location extends Model
 {
@@ -39,6 +37,5 @@ class Location extends Model
     protected static function booted()
     {
         static::addGlobalScope(new OrderScope);
-    }    
-
+    }
 }

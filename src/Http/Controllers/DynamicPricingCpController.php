@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\DynamicPricing;
 
 class DynamicPricingCpController extends Controller
@@ -20,7 +19,7 @@ class DynamicPricingCpController extends Controller
     {
         return view('statamic-resrv::cp.dynamicpricings.index');
     }
-    
+
     public function index()
     {
         $dynamic = $this->dynamicPricing->get();
@@ -28,6 +27,7 @@ class DynamicPricingCpController extends Controller
             $pricing['entries'] = $pricing->entries;
             $pricing['extras'] = $pricing->extras;
         }
+
         return response()->json($dynamic);
     }
 
@@ -56,8 +56,7 @@ class DynamicPricingCpController extends Controller
         $dynamicPricing->extras()->sync($data['extras']);
 
         return response()->json(['id' => $dynamicPricing['id']]);
-    }    
-   
+    }
 
     public function update($id, Request $request)
     {
@@ -88,7 +87,7 @@ class DynamicPricingCpController extends Controller
     public function order(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required',            
+            'id' => 'required',
             'order' => 'required|integer',
         ]);
 
@@ -100,15 +99,14 @@ class DynamicPricingCpController extends Controller
     public function delete(Request $request)
     {
         $data = $request->validate([
-            'id' => 'required|integer'
+            'id' => 'required|integer',
         ]);
         $id = $data['id'];
         $dynamicPricing = $this->dynamicPricing->findOrFail($id);
         $dynamicPricing->entries()->detach();
         $dynamicPricing->extras()->detach();
         $this->dynamicPricing->destroy($id);
-       
+
         return response(200);
     }
-
 }

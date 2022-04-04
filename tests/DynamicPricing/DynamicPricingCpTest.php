@@ -2,11 +2,10 @@
 
 namespace Reach\StatamicResrv\Tests\DynamicPricing;
 
-use Reach\StatamicResrv\Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Database\Eloquent\Factories\Sequence;
+use Reach\StatamicResrv\Tests\TestCase;
 
 class DynamicPricingCpTest extends TestCase
 {
@@ -19,26 +18,26 @@ class DynamicPricingCpTest extends TestCase
     }
 
     public function test_can_index_dynamic_pricings()
-    {       
+    {
         $dynamic = DynamicPricing::factory()->create();
 
         $response = $this->get(cp_route('resrv.dynamicpricing.index'));
-        $response->assertStatus(200)->assertSee($dynamic->title);        
+        $response->assertStatus(200)->assertSee($dynamic->title);
     }
-    
+
     public function test_can_show_cp_index_page()
-    {       
+    {
         $dynamic = DynamicPricing::factory()->create();
 
         $response = $this->get(cp_route('resrv.dynamicpricings.index'));
-        $response->assertStatus(200);        
+        $response->assertStatus(200);
     }
 
     public function test_can_add_dynamic_pricing_for_statamic_item()
     {
         $item1 = $this->makeStatamicItem();
         $item2 = $this->makeStatamicItem();
-        
+
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
         $dynamic['entries'] = [$item1->id(), $item2->id()];
@@ -47,18 +46,18 @@ class DynamicPricingCpTest extends TestCase
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         $response->assertStatus(200);
         $this->assertDatabaseHas('resrv_dynamic_pricing', [
-            'title' => $dynamic['title']
+            'title' => $dynamic['title'],
         ]);
         $this->assertDatabaseHas('resrv_dynamic_pricing_assignments', [
             'dynamic_pricing_assignment_id' => $item1->id(),
             'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
-        ]);        
+        ]);
     }
 
     public function test_can_add_dynamic_pricing_for_extra()
     {
         $extra = Extra::factory()->make()->toArray();
-        
+
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
         $dynamic['extras'] = [$extra['id']];
@@ -67,26 +66,26 @@ class DynamicPricingCpTest extends TestCase
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
         $response->assertStatus(200);
         $this->assertDatabaseHas('resrv_dynamic_pricing', [
-            'title' => $dynamic['title']
+            'title' => $dynamic['title'],
         ]);
         $this->assertDatabaseHas('resrv_dynamic_pricing_assignments', [
             'dynamic_pricing_assignment_id' => $extra['id'],
             'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Extra',
-        ]);        
+        ]);
     }
 
     public function test_can_edit_dynamic_pricing_for_statamic_item()
     {
         $item1 = $this->makeStatamicItem();
         $item2 = $this->makeStatamicItem();
-        
+
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
         $dynamic['entries'] = [$item1->id(), $item2->id()];
         $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
-        
+
         $payload = [
             'title' => '10% off for 4 days',
             'amount_type' => 'percent',
@@ -100,14 +99,14 @@ class DynamicPricingCpTest extends TestCase
             'condition_value' => '4',
             'order' => 1,
             'entries' => [$item1->id()],
-            'extras' => []
+            'extras' => [],
         ];
 
-        $this->patch(cp_route('resrv.dynamicpricing.update', 1), $payload);        
-        
+        $this->patch(cp_route('resrv.dynamicpricing.update', 1), $payload);
+
         $this->assertDatabaseHas('resrv_dynamic_pricing', [
             'title' => $payload['title'],
-            'amount' => $payload['amount']
+            'amount' => $payload['amount'],
         ]);
         $this->assertDatabaseHas('resrv_dynamic_pricing_assignments', [
             'dynamic_pricing_assignment_id' => $item1->id(),
@@ -123,16 +122,16 @@ class DynamicPricingCpTest extends TestCase
     {
         $item1 = $this->makeStatamicItem();
         $item2 = $this->makeStatamicItem();
-        
+
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
         $dynamic['entries'] = [$item1->id(), $item2->id()];
         $dynamic['extras'] = [];
 
         $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
-        
-        $response = $this->delete(cp_route('resrv.dynamicpricing.delete', $dynamic));        
-        
+
+        $response = $this->delete(cp_route('resrv.dynamicpricing.delete', $dynamic));
+
         $this->assertDatabaseMissing('resrv_dynamic_pricing', [
             'title' => $dynamic['title'],
         ]);
@@ -145,6 +144,4 @@ class DynamicPricingCpTest extends TestCase
             'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
         ]);
     }
- 
-     
 }

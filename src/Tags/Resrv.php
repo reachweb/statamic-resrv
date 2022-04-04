@@ -2,9 +2,8 @@
 
 namespace Reach\StatamicResrv\Tags;
 
-use Statamic\Tags\Tags;
-use Statamic\Facades\Collection;
 use Reach\StatamicResrv\Models\Location;
+use Statamic\Tags\Tags;
 
 class Resrv extends Tags
 {
@@ -12,5 +11,4 @@ class Resrv extends Tags
     {
         return htmlspecialchars(Location::where('published', true)->get()->toJson(), ENT_QUOTES, 'UTF-8');
     }
-
 }

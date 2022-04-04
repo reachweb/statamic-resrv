@@ -25,5 +25,4 @@ trait HandlesOrdering
         $movingItem->order = $order;
         $movingItem->saveOrFail();
     }
-
 }

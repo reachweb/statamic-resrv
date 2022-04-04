@@ -17,5 +17,4 @@ class ReservationExpired
     {
         $this->reservation = $reservation;
     }
-
 }

@@ -2,9 +2,9 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
-use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityRequest;
-use Illuminate\Routing\Controller;
 use Carbon\CarbonPeriod;
+use Illuminate\Routing\Controller;
+use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityRequest;
 use Reach\StatamicResrv\Models\AdvancedAvailability;
 
 class AdvancedAvailabilityCpController extends Controller
@@ -16,6 +16,7 @@ class AdvancedAvailabilityCpController extends Controller
             ->get(['statamic_id', 'date', 'price', 'available'])
             ->sortBy('date')
             ->keyBy('date');
+
         return response()->json($results);
     }
 
@@ -23,17 +24,17 @@ class AdvancedAvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
-        foreach($data['advanced'] as $property) {
+        foreach ($data['advanced'] as $property) {
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $dataToAdd = [];
-            
+
             foreach ($period as $day) {
                 $dataToAdd[] = [
                     'statamic_id' => $data['statamic_id'],
                     'date' => $day->isoFormat('YYYY-MM-DD'),
                     'price' => $data['price'],
                     'available' => $data['available'],
-                    'property' => $property['code']
+                    'property' => $property['code'],
                 ];
             }
             AdvancedAvailability::upsert($dataToAdd, ['statamic_id', 'date', 'property'], ['price', 'available']);

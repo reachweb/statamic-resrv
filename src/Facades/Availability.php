@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Facades;
 
-use Reach\StatamicResrv\Repositories\AvailabilityRepository;
 use Illuminate\Support\Facades\Facade;
+use Reach\StatamicResrv\Repositories\AvailabilityRepository;
 
 class Availability extends Facade
 {

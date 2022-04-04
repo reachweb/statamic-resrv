@@ -2,9 +2,8 @@
 
 namespace Reach\StatamicResrv\Resources;
 
-use Illuminate\Http\Resources\Json\ResourceCollection;
-use Reach\StatamicResrv\Models\Reservation;
 use Carbon\Carbon;
+use Illuminate\Http\Resources\Json\ResourceCollection;
 
 class ReservationCalendarResource extends ResourceCollection
 {
@@ -15,18 +14,18 @@ class ReservationCalendarResource extends ResourceCollection
 
     public function toArray($request)
     {
-        return $this->collection->transform(function ($reservation) use ($request) {   
+        return $this->collection->transform(function ($reservation) use ($request) {
             $data = [
                 'id' => $reservation->id,
                 'title' => '#'.$reservation->id.
-                            ' - '.$reservation->entry['title'].                            
+                            ' - '.$reservation->entry['title'].
                             (config('resrv-config.enable_advanced_availability') ? ' - '.$reservation->property : '').
                             (config('resrv-config.enable_locations') ? ' - '.$reservation->location_start_data->name : '').
                             (config('resrv-config.maximum_quantity') > 1 ? ' x '.$reservation->quantity : ''),
                 'start' => $this->formatDate($reservation->date_start),
                 'end' => $this->formatDate($reservation->date_end),
                 'url' => cp_route('resrv.reservation.show', $reservation->id),
-                'color' => 'hsl('.rand(0,359).','.rand(0,100).'%,'.rand(0,55).'%)'
+                'color' => 'hsl('.rand(0, 359).','.rand(0, 100).'%,'.rand(0, 55).'%)',
             ];
             // Remove end date if we only want the start date
             if ($request->has('onlyStart')) {
@@ -34,6 +33,7 @@ class ReservationCalendarResource extends ResourceCollection
                     $data['end'] = null;
                 }
             }
+
             return $data;
         });
     }
@@ -50,5 +50,4 @@ class ReservationCalendarResource extends ResourceCollection
 
         return $date->toIso8601String();
     }
-
 }

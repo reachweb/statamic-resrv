@@ -2,9 +2,9 @@
 
 namespace Tests\Unit;
 
-use Reach\StatamicResrv\Tests\TestCase;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Tests\TestCase;
 
 class PriceTest extends TestCase
 {
@@ -45,7 +45,7 @@ class PriceTest extends TestCase
         $price1 = Price::create(202.22);
         $result = $price1->multiply(4);
         $this->assertEquals($result, Price::create(808.88));
-        
+
         $price2 = Price::create(202.22);
         $result = $price2->multiply(2)->multiply(2);
         $this->assertEquals($result, Price::create(808.88));
@@ -81,7 +81,7 @@ class PriceTest extends TestCase
 
         $price1 = Price::create(212.41);
         $price2 = Price::create(44.13);
-        $this->assertFalse($price2->equals($price1));        
+        $this->assertFalse($price2->equals($price1));
     }
 
     public function test_price_greaterThan()
@@ -89,14 +89,14 @@ class PriceTest extends TestCase
         $price1 = Price::create(82.73);
         $price2 = Price::create(44.13);
         $this->assertTrue($price1->greaterThan($price2));
-        $this->assertFalse($price2->greaterThan($price1)); 
+        $this->assertFalse($price2->greaterThan($price1));
     }
-    
+
     public function test_price_lessThan()
     {
         $price1 = Price::create(82.73);
         $price2 = Price::create(44.13);
         $this->assertFalse($price1->lessThan($price2));
-        $this->assertTrue($price2->lessThan($price1)); 
+        $this->assertTrue($price2->lessThan($price1));
     }
 }

@@ -15,7 +15,7 @@ class ChangeDynamicPricingAssignmentsTable extends Migration
     {
         Schema::table('resrv_dynamic_pricing_assignments', function (Blueprint $table) {
             $table->string('dynamic_pricing_assignment_id')->change();
-            $table->string('dynamic_pricing_assignment_type')->change();            
+            $table->string('dynamic_pricing_assignment_type')->change();
         });
     }
 }

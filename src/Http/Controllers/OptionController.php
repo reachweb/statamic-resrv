@@ -14,7 +14,7 @@ class OptionController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
-            'item_id' => 'required'
+            'item_id' => 'required',
         ]);
 
         $options = Option::entry($data['item_id'])
@@ -23,11 +23,9 @@ class OptionController extends Controller
             ->get();
 
         foreach ($options as $index => $option) {
-            $options[$index] = Option::find($option->id)->valuesPriceForDates($data);            
+            $options[$index] = Option::find($option->id)->valuesPriceForDates($data);
         }
-               
+
         return response()->json($options->keyBy('slug')->toArray());
-
     }
-
 }

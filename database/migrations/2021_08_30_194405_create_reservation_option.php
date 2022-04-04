@@ -15,7 +15,7 @@ class CreateReservationOption extends Migration
     {
         Schema::create('resrv_reservation_option', function (Blueprint $table) {
             $table->integer('reservation_id')->index();
-            $table->integer('option_id')->index();            
+            $table->integer('option_id')->index();
             $table->integer('value');
         });
     }
