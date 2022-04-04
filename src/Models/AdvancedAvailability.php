@@ -41,7 +41,9 @@ class AdvancedAvailability extends Availability
 
     protected function availableForDates() {
 
-        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
+        $results = $this->round_trip 
+                ? AvailabilityRepository::availableAt($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get()
+                : AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
 
         $idsFound = $results->groupBy('statamic_id')->keys();
 
@@ -51,7 +53,7 @@ class AdvancedAvailability extends Availability
             // In case there are more than one properties for that period, check them by property or this might fail
             foreach ($properties as $property) {
                 $dates = $results->where('property', $property)->where('statamic_id', $id)->sortBy('date');
-                if ($dates->count() !== count($this->getPeriod())) {
+                if (!$this->round_trip && ($dates->count() !== count($this->getPeriod()))) {
                     continue;
                 }
             }
@@ -74,8 +76,9 @@ class AdvancedAvailability extends Availability
 
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
-        $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)
-            ->get(['price', 'available', 'property'])->groupBy('property');
+        $results = $this->round_trip 
+            ? AvailabilityRepository::priceAtDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)->get(['price', 'available', 'property'])->groupBy('property')
+            : AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)->get(['price', 'available', 'property'])->groupBy('property');
     
         // If we have more than one properties, return the cheapest
         if ($results->count() > 1) {
@@ -87,6 +90,5 @@ class AdvancedAvailability extends Availability
         $this->calculatePrice($results->first(), $entry->id());
         return $this->reservation_price;
     }
-
 
 }
