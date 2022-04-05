@@ -43,7 +43,7 @@ class AdvancedAvailability extends Availability
 
     protected function availableForDates()
     {
-        $results =  AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
+        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
 
         $idsFound = $results->groupBy('statamic_id')->keys();
 

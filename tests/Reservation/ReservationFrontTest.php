@@ -654,5 +654,4 @@ class ReservationFrontTest extends TestCase
             'quantity' => 2,
         ]);
     }
-
 }
