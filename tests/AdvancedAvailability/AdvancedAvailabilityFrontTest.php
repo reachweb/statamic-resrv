@@ -131,7 +131,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
                     'date_end' => today()->setHour(12)->add(7, 'day')->toISOString(),
                     'advanced' => 'something',
                 ],
-            ]
+            ],
         ];
 
         // We should see if that it's available and the total price
@@ -141,6 +141,5 @@ class AdvancedAvailabilityFrontTest extends TestCase
         // Test the show method as well
         $response = $this->post(route('resrv.advancedavailability.multiShow', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('200')->assertSee('message":{"status":1}}', false);
-
     }
 }

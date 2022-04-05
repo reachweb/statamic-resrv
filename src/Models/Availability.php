@@ -66,8 +66,8 @@ class Availability extends Model implements AvailabilityContract
         $this->initiateAvailability($data);
 
         return $this->getSpecificItem($statamic_id);
-    }    
-    
+    }
+
     public function getMultipleAvailabilityForItem($data, $statamic_id)
     {
         ExpireReservations::dispatchSync();
@@ -155,7 +155,7 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getMultiple($data)
     {
-        $available = array();
+        $available = [];
         foreach ($data['dates'] as $dates) {
             $this->initiateAvailability($dates);
             $available[] = $this->availableForDates();

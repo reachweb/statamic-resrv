@@ -451,7 +451,7 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);
     }
- 
+
     public function test_multi_dates_availability()
     {
         $this->signInAdmin();
@@ -486,17 +486,17 @@ class AvailabilityFrontTest extends TestCase
             'dates' => [
                 [
                     'date_start' => today()->setHour(12)->toISOString(),
-                    'date_end' => today()->setHour(12)->add(1, 'day')->toISOString()
+                    'date_end' => today()->setHour(12)->add(1, 'day')->toISOString(),
                 ],
                 [
                     'date_start' => today()->setHour(12)->add(3, 'day')->toISOString(),
-                    'date_end' => today()->setHour(12)->add(4, 'day')->toISOString()
+                    'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
                 ],
                 [
                     'date_start' => today()->setHour(12)->add(5, 'day')->toISOString(),
-                    'date_end' => today()->setHour(12)->add(7, 'day')->toISOString()
+                    'date_end' => today()->setHour(12)->add(7, 'day')->toISOString(),
                 ],
-            ]
+            ],
         ];
 
         // We should see if that it's available and the total price
@@ -512,13 +512,13 @@ class AvailabilityFrontTest extends TestCase
             'dates' => [
                 [
                     'date_start' => today()->setHour(12)->toISOString(),
-                    'date_end' => today()->setHour(12)->add(1, 'day')->toISOString()
+                    'date_end' => today()->setHour(12)->add(1, 'day')->toISOString(),
                 ],
                 [
                     'date_start' => today()->setHour(12)->add(5, 'day')->toISOString(),
-                    'date_end' => today()->setHour(12)->add(6, 'day')->toISOString()
-                ]
-            ]
+                    'date_end' => today()->setHour(12)->add(6, 'day')->toISOString(),
+                ],
+            ],
         ];
 
         $response = $this->post(route('resrv.availability.multiIndex'), $searchPayload);
