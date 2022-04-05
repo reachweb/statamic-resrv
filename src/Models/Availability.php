@@ -207,8 +207,10 @@ class Availability extends Model implements AvailabilityContract
         $entryAvailabilityValue = $entry->get('resrv_availability');
 
         $results = collect();
+        $days = collect();
         foreach ($data['dates'] as $dates) {
             $this->initiateAvailability($dates);
+            $days = $days->push($this->duration);
             $resultsForDates = $this->getResultsForItem($entry);
             if ($resultsForDates->count() !== count($this->getPeriod()) || $entryAvailabilityValue == 'disabled') {
                 return [
@@ -222,7 +224,7 @@ class Availability extends Model implements AvailabilityContract
 
         $this->calculatePrice($results, $entry->id());
 
-        return $this->buildMultiSpecificItemArray();
+        return $this->buildMultiSpecificItemArray($days);
     }
 
     protected function buildSpecificItemArray()
@@ -266,9 +268,12 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
-    protected function buildMultiSpecificItemArray()
+    protected function buildMultiSpecificItemArray($days)
     {
         return [
+            'request' => [
+                'days' => $days->sum(),
+            ],
             'data' => [
                 'price' => $this->reservation_price->format(),
                 'payment' => $this->calculatePayment($this->reservation_price)->format(),
