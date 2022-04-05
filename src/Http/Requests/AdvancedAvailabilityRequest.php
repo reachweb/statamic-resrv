@@ -22,6 +22,7 @@ class AdvancedAvailabilityRequest extends FormRequest
                 'dates.*.advanced' => 'required|string',
             ];
         }
+
         return [
             'date_start' => 'required|date',
             'date_end' => 'required|date',

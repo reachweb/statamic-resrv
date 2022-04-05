@@ -2,11 +2,10 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
-use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
-use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityRequest;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
+use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityRequest;
 
 class AdvancedAvailabilityController extends Controller
 {

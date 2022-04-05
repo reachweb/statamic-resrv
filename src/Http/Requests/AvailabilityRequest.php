@@ -21,6 +21,7 @@ class AvailabilityRequest extends FormRequest
                 'dates.*.quantity' => 'sometimes|integer',
             ];
         }
+
         return [
             'date_start' => 'required|date',
             'date_end' => 'required|date',

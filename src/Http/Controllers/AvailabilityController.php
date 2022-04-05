@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
-use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
@@ -42,5 +41,4 @@ class AvailabilityController extends Controller
 
         return response()->json($availabilityData);
     }
-
 }
