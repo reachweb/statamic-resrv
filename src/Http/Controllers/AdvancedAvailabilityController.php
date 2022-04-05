@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
+use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityRequest;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 
 class AdvancedAvailabilityController extends Controller
@@ -16,17 +17,12 @@ class AdvancedAvailabilityController extends Controller
         $this->availability = $availability;
     }
 
-    public function index(Request $request)
+    public function index(AdvancedAvailabilityRequest $request)
     {
-        $data = $request->validate([
-            'date_start' => 'required|date',
-            'date_end' => 'required|date',
-            'quantity' => 'sometimes|integer',
-            'advanced' => 'required|string',
-        ]);
-
         try {
-            $availabilityData = $this->availability->getAvailableItems($data);
+            $availabilityData = $request->missing('dates')
+                ? $this->availability->getAvailableItems($request->validated())
+                : $this->availability->getMultipleAvailableItems($request->validated());
         } catch (AvailabilityException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }
@@ -34,55 +30,12 @@ class AdvancedAvailabilityController extends Controller
         return response()->json($availabilityData);
     }
 
-    public function show(Request $request, $statamic_id)
+    public function show(AdvancedAvailabilityRequest $request, $statamic_id)
     {
-        $data = $request->validate([
-            'date_start' => 'required|date',
-            'date_end' => 'required|date',
-            'quantity' => 'sometimes|integer',
-            'advanced' => 'required|string',
-        ]);
-
         try {
-            $availabilityData = $this->availability->getAvailabilityForItem($data, $statamic_id);
-        } catch (AvailabilityException $exception) {
-            return response()->json(['error' => $exception->getMessage()], 412);
-        }
-
-        return response()->json($availabilityData);
-    }
-
-    public function multiIndex(Request $request)
-    {
-        $data = $request->validate([
-            'dates' => 'required|array',
-            'dates.*.date_start' => 'required|date',
-            'dates.*.date_end' => 'required|date',
-            'dates.*.quantity' => 'sometimes|integer',
-            'dates.*.advanced' => 'required|string',
-        ]);
-
-        try {
-            $availabilityData = $this->availability->getMultipleAvailableItems($data);
-        } catch (AvailabilityException $exception) {
-            return response()->json(['error' => $exception->getMessage()], 412);
-        }
-
-        return response()->json($availabilityData);
-    }
-
-    public function multiShow(Request $request, $statamic_id)
-    {
-        $data = $request->validate([
-            'dates' => 'required|array',
-            'dates.*.date_start' => 'required|date',
-            'dates.*.date_end' => 'required|date',
-            'dates.*.quantity' => 'sometimes|integer',
-            'dates.*.advanced' => 'required|string',
-        ]);
-
-        try {
-            $availabilityData = $this->availability->getMultipleAvailabilityForItem($data, $statamic_id);
+            $availabilityData = $request->missing('dates')
+                ? $this->availability->getAvailabilityForItem($request->validated(), $statamic_id)
+                : $this->availability->getMultipleAvailabilityForItem($request->validated(), $statamic_id);
         } catch (AvailabilityException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }

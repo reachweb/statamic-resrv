@@ -4,7 +4,7 @@ namespace Reach\StatamicResrv\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class AdvancedAvailabilityRequest extends FormRequest
+class AvailabilityRequest extends FormRequest
 {
     /**
      * Get the validation rules that apply to the request.
@@ -19,14 +19,12 @@ class AdvancedAvailabilityRequest extends FormRequest
                 'dates.*.date_start' => 'required|date',
                 'dates.*.date_end' => 'required|date',
                 'dates.*.quantity' => 'sometimes|integer',
-                'dates.*.advanced' => 'required|string',
             ];
         }
         return [
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
-            'advanced' => 'required|string',
         ];
     }
 }

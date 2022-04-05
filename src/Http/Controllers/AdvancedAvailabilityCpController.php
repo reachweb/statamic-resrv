@@ -4,7 +4,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Carbon\CarbonPeriod;
 use Illuminate\Routing\Controller;
-use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityRequest;
+use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityCpRequest;
 use Reach\StatamicResrv\Models\AdvancedAvailability;
 
 class AdvancedAvailabilityCpController extends Controller
@@ -20,7 +20,7 @@ class AdvancedAvailabilityCpController extends Controller
         return response()->json($results);
     }
 
-    public function update(AdvancedAvailabilityRequest $request)
+    public function update(AdvancedAvailabilityCpRequest $request)
     {
         $data = $request->validated();
 

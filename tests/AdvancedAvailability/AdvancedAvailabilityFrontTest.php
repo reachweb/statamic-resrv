@@ -135,11 +135,11 @@ class AdvancedAvailabilityFrontTest extends TestCase
         ];
 
         // We should see if that it's available and the total price
-        $response = $this->post(route('resrv.advancedavailability.multiIndex'), $searchPayload);
+        $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('200');
 
         // Test the show method as well
-        $response = $this->post(route('resrv.advancedavailability.multiShow', $item->id()), $searchPayload);
+        $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('200')->assertSee('message":{"status":1}}', false);
     }
 }

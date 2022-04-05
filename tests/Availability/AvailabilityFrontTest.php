@@ -500,11 +500,11 @@ class AvailabilityFrontTest extends TestCase
         ];
 
         // We should see if that it's available and the total price
-        $response = $this->post(route('resrv.availability.multiIndex'), $searchPayload);
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('200');
 
         // Test the show method as well
-        $response = $this->post(route('resrv.availability.multiShow', $item->id()), $searchPayload);
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('200')->assertSee('message":{"status":1}}', false);
 
         // Search for item 2
@@ -521,10 +521,10 @@ class AvailabilityFrontTest extends TestCase
             ],
         ];
 
-        $response = $this->post(route('resrv.availability.multiIndex'), $searchPayload);
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100')->assertDontSee($item2->id());
 
-        $response = $this->post(route('resrv.availability.multiShow', $item2->id()), $searchPayload);
+        $response = $this->post(route('resrv.availability.show', $item2->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);
     }
 }
