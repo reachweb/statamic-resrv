@@ -62,16 +62,6 @@ trait HandlesAvailabilityDates
         $this->advanced = $data['advanced'];
     }
 
-    private function setRoundTrip($data)
-    {
-        if (! Arr::exists($data, 'round_trip')) {
-            $this->round_trip = null;
-
-            return;
-        }
-        $this->round_trip = (bool) $data['round_trip'];
-    }
-
     private function setDates($date_start, $date_end)
     {
         // If we charge extra for using over a 24hour day, add an extra day here.
@@ -104,8 +94,6 @@ trait HandlesAvailabilityDates
 
         $this->checkMinimumDate($date_start);
 
-        $this->setRoundTrip($data);
-
         $this->setDates($date_start, $date_end);
 
         $this->setQuantity($data);
@@ -124,8 +112,6 @@ trait HandlesAvailabilityDates
         $this->setQuantity($data);
 
         $this->setAdvanced($data);
-
-        $this->setRoundTrip($data);
 
         $this->setDates($date_start, $date_end);
     }

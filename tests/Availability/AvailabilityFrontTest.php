@@ -451,8 +451,8 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);
     }
-
-    public function test_availability_return_trip()
+ 
+    public function test_multi_dates_availability()
     {
         $this->signInAdmin();
 
@@ -471,7 +471,7 @@ class AvailabilityFrontTest extends TestCase
         $payload2 = [
             'statamic_id' => $item2->id(),
             'date_start' => today()->toISOString(),
-            'date_end' => today()->add(5, 'day')->toISOString(),
+            'date_end' => today()->add(3, 'day')->toISOString(),
             'price' => 80,
             'available' => 1,
         ];
@@ -483,17 +483,48 @@ class AvailabilityFrontTest extends TestCase
         $this->travelTo(today()->setHour(11));
 
         $searchPayload = [
-            'date_start' => today()->setHour(12)->toISOString(),
-            'date_end' => today()->setHour(12)->add(6, 'day')->toISOString(),
-            'round_trip' => true,
+            'dates' => [
+                [
+                    'date_start' => today()->setHour(12)->toISOString(),
+                    'date_end' => today()->setHour(12)->add(1, 'day')->toISOString()
+                ],
+                [
+                    'date_start' => today()->setHour(12)->add(3, 'day')->toISOString(),
+                    'date_end' => today()->setHour(12)->add(4, 'day')->toISOString()
+                ],
+                [
+                    'date_start' => today()->setHour(12)->add(5, 'day')->toISOString(),
+                    'date_end' => today()->setHour(12)->add(7, 'day')->toISOString()
+                ],
+            ]
         ];
 
         // We should see if that it's available and the total price
-        $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('100');
+        $response = $this->post(route('resrv.availability.multiIndex'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('200');
 
         // Test the show method as well
-        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
-        $response->assertStatus(200)->assertSee('100')->assertSee('message":{"status":1}}', false);
+        $response = $this->post(route('resrv.availability.multiShow', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('200')->assertSee('message":{"status":1}}', false);
+
+        // Search for item 2
+        $searchPayload = [
+            'dates' => [
+                [
+                    'date_start' => today()->setHour(12)->toISOString(),
+                    'date_end' => today()->setHour(12)->add(1, 'day')->toISOString()
+                ],
+                [
+                    'date_start' => today()->setHour(12)->add(5, 'day')->toISOString(),
+                    'date_end' => today()->setHour(12)->add(6, 'day')->toISOString()
+                ]
+            ]
+        ];
+
+        $response = $this->post(route('resrv.availability.multiIndex'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('100')->assertDontSee($item2->id());
+
+        $response = $this->post(route('resrv.availability.multiShow', $item2->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);
     }
 }

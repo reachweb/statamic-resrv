@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Traits;
 
-use Illuminate\Database\Eloquent\Collection;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\FixedPricing;
@@ -12,7 +11,7 @@ trait HandlesPricing
     protected $original_price;
     protected $reservation_price;
 
-    protected function calculatePrice(Collection $results, $id)
+    protected function calculatePrice($results, $id)
     {
         $start = Price::create(0);
 

@@ -22,7 +22,6 @@ class AvailabilityController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
-            'round_trip' => 'sometimes|boolean',
         ]);
 
         try {
@@ -40,11 +39,46 @@ class AvailabilityController extends Controller
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
-            'round_trip' => 'sometimes|boolean',
         ]);
 
         try {
             $availabilityData = $this->availability->getAvailabilityForItem($data, $statamic_id);
+        } catch (AvailabilityException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 412);
+        }
+
+        return response()->json($availabilityData);
+    }
+
+    public function multiIndex(Request $request)
+    {
+        $data = $request->validate([
+            'dates' => 'required|array',
+            'dates.*.date_start' => 'required|date',
+            'dates.*.date_end' => 'required|date',
+            'dates.*.quantity' => 'sometimes|integer',
+        ]);
+
+        try {
+            $availabilityData = $this->availability->getMultipleAvailableItems($data);
+        } catch (AvailabilityException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 412);
+        }
+
+        return response()->json($availabilityData);
+    }
+
+    public function multiShow(Request $request, $statamic_id)
+    {
+        $data = $request->validate([
+            'dates' => 'required|array',
+            'dates.*.date_start' => 'required|date',
+            'dates.*.date_end' => 'required|date',
+            'dates.*.quantity' => 'sometimes|integer',
+        ]);
+
+        try {
+            $availabilityData = $this->availability->getMultipleAvailabilityForItem($data, $statamic_id);
         } catch (AvailabilityException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }
