@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\ReservationException;
@@ -41,6 +42,11 @@ class Reservation extends Model
     public function entry()
     {
         return Entry::find($this->item_id) ?? $this->emptyEntry();
+    }
+
+    public function childs()
+    {
+        return $this->hasMany(ChildReservation::class);
     }
 
     public function getPriceAttribute($value)
@@ -88,12 +94,81 @@ class Reservation extends Model
         return $this->hasOne(Location::class, 'id', 'location_end')->withTrashed();
     }
 
+    public function isParent()
+    {
+        ray($this->type);
+        if ($this->type == 'parent') {
+            return true;
+        }
+        return false;
+    }
+
     public function amountRemaining()
     {
         return $this->price->subtract($this->payment)->format();
     }
 
     public function confirmReservation($data, $statamic_id)
+    {      
+        $this->checkAvailability($data, $statamic_id);
+
+        $this->confirmTotal($data, $statamic_id);
+
+        $this->checkMaxQuantity($data['quantity']);
+
+        if (! $this->checkForRequiredOptions($statamic_id, $data)) {
+            throw new ReservationException(__('There are required options you did not select.'));
+        }
+
+        return true;
+    }
+
+    public function confirmMultipleReservation($data, $statamic_id)
+    {
+        $dates = collect($data['dates']);
+        $extraCharges = Price::create(0);
+        foreach ($dates as $reservation) {
+            $dateData = [
+                'date_start' => $reservation['date_start'],
+                'date_end' => $reservation['date_end'],
+                'quantity' => $reservation['quantity'] ?? 1,
+            ];
+            if (isset($reservation['advanced'])) {
+                $dateData['advanced'] = $reservation['advanced'];
+            }
+            $availability = new Availability;
+            $checkAvailability = $availability->confirmAvailability($dateData, $statamic_id);
+            if ($checkAvailability == false) {
+                throw new ReservationException(__('This item is not available anymore. Please refresh and try searching again!'));
+            }
+            $dateData = array_replace($data, $dateData);
+            $extraCharges->add($this->getExtraCharges($dateData, $statamic_id));
+            $this->checkMaxQuantity($reservation['quantity'] ?? 1);
+        }
+
+        $reservationCost = Price::create($data['price']);
+        $dbTotal = $reservationCost->add($extraCharges);
+        $frontendTotal = Price::create($data['total']);
+
+        if (! $dbTotal->equals($frontendTotal)) {
+            throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
+        }
+
+        if (! $this->checkForRequiredOptions($statamic_id, $data)) {
+            throw new ReservationException(__('There are required options you did not select.'));
+        }
+
+        return true;
+    }
+
+    protected function checkMaxQuantity($quantity)
+    {
+        if ($quantity > config('resrv-config.maximum_quantity')) {
+            throw new ReservationException(__('You cannot reserve these many in one reservation.'));
+        }
+    }
+
+    protected function checkAvailability($data, $statamic_id)
     {
         $availability = new Availability;
 
@@ -109,28 +184,22 @@ class Reservation extends Model
         if ($checkAvailability == false) {
             throw new ReservationException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
+    }
 
-        $dbTotal = Price::create($this->confirmTotal($statamic_id, $data));
+    protected function confirmTotal($data, $statamic_id)
+    {
+        $reservationCost = Price::create($data['price']);
+        
+        $dbTotal = $reservationCost->add($this->getExtraCharges($data, $statamic_id));
         $frontendTotal = Price::create($data['total']);
-
         if (! $dbTotal->equals($frontendTotal)) {
             throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
-
-        if (! $this->checkForRequiredOptions($statamic_id, $data)) {
-            throw new ReservationException(__('There are required options you did not select.'));
-        }
-
-        if ($data['quantity'] > config('resrv-config.maximum_quantity')) {
-            throw new ReservationException(__('You cannot reserve these many in one reservation.'));
-        }
-
-        return true;
     }
 
-    protected function confirmTotal($statamic_id, $data)
+    protected function getExtraCharges($data, $statamic_id)
     {
-        $reservationCost = Price::create($data['price']);
+        $extraCharges = Price::create(0);
 
         $optionsCost = Price::create(0);
         if (array_key_exists('options', $data) > 0) {
@@ -156,7 +225,7 @@ class Reservation extends Model
             }
         }
 
-        return $reservationCost->add($optionsCost, $extrasCost, $locationCost)->format();
+        return $extraCharges->add($optionsCost, $extrasCost, $locationCost);
     }
 
     protected function checkForRequiredOptions($statamic_id, $data)

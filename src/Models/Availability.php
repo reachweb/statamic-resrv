@@ -75,6 +75,19 @@ class Availability extends Model implements AvailabilityContract
         return $this->getMultiSpecificItem($data, $statamic_id);
     }
 
+    public function confirmAvailability($data, $statamic_id)
+    {
+        $this->initiateAvailability($data);
+
+        $availability = $this->getSpecificItem($statamic_id);
+
+        if ($availability['message']['status'] != 1) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function confirmAvailabilityAndPrice($data, $statamic_id)
     {
         $this->initiateAvailability($data);

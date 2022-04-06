@@ -654,4 +654,116 @@ class ReservationFrontTest extends TestCase
             'quantity' => 2,
         ]);
     }
+
+    public function test_multi_dates_reservation()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(20, 'day')->toISOString(),
+            'price' => 50,
+            'available' => 2,
+        ];
+
+        $this->post(cp_route('resrv.availability.update'), $payload);
+
+        $extra = Extra::factory()->create();
+
+        $addExtraToEntry = [
+            'id' => $extra->id,
+        ];
+
+        $this->post(cp_route('resrv.extra.add', $item->id()), $addExtraToEntry);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'dates' => [
+                [
+                    'date_start' => today()->setHour(12)->toISOString(),
+                    'date_end' => today()->setHour(12)->add(1, 'day')->toISOString(),
+                ],
+                [
+                    'date_start' => today()->setHour(12)->add(3, 'day')->toISOString(),
+                    'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
+                ],
+                [
+                    'date_start' => today()->setHour(12)->add(5, 'day')->toISOString(),
+                    'date_end' => today()->setHour(12)->add(7, 'day')->toISOString(),
+                ],
+            ],
+        ];
+
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+
+        $payment = json_decode($response->content())->data->payment;
+        $price = json_decode($response->content())->data->price;
+        $total = $price + (json_decode($response->content())->request->days * $extra->price->format());
+
+        $checkoutRequest = [
+            'dates' => [
+                [
+                    'date_start' => today()->setHour(12)->toISOString(),
+                    'date_end' => today()->setHour(12)->add(1, 'day')->toISOString(),
+                ],
+                [
+                    'date_start' => today()->setHour(12)->add(3, 'day')->toISOString(),
+                    'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
+                ],
+                [
+                    'date_start' => today()->setHour(12)->add(5, 'day')->toISOString(),
+                    'date_end' => today()->setHour(12)->add(7, 'day')->toISOString(),
+                ],
+            ],
+            'payment' => $payment,
+            'price' => $price,
+            'extras' => [$extra->id => ['quantity' => 1]],
+            'total' => $total,
+        ];
+
+        $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+        $response->assertStatus(200)->assertSee(1);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'type' => 'parent',
+        ]);
+        $this->assertDatabaseHas('resrv_child_reservations', [
+            'reservation_id' => 1,
+        ]);
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => 1,
+            'extra_id' => $extra->id,
+            'quantity' => 1,
+        ]);
+        // Check that only the needed availabities are decreased
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'date' => today()->setHour(12)->isoFormat('YYYY-MM-DD'),
+            'available' => 1,
+        ]);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'date' => today()->setHour(12)->add(2, 'day')->isoFormat('YYYY-MM-DD'),
+            'available' => 2,
+        ]);
+
+        // Check that the reservation expires and availability is back
+        $this->travel(15)->minutes();
+        $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'date' => today()->setHour(12)->isoFormat('YYYY-MM-DD'),
+            'available' => 2,
+        ]);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'type' => 'parent',
+            'status' => 'expired'
+        ]);
+
+    }
 }

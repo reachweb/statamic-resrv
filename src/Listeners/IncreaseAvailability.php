@@ -15,6 +15,18 @@ class IncreaseAvailability
 
     public function handle($event)
     {
-        $this->availability->incrementAvailability($event->reservation->date_start, $event->reservation->date_end, $event->reservation->quantity, $event->reservation->item_id);
+        if ($event->reservation->type === 'parent') {
+            $this->incrementMultiple($event);
+        } else {
+            $this->availability->incrementAvailability($event->reservation->date_start, $event->reservation->date_end, $event->reservation->quantity, $event->reservation->item_id);
+        }
+    }
+
+    protected function incrementMultiple($event)
+    {
+        $childs = $event->reservation->childs()->get();
+        $childs->each(function($child) use ($event) {
+            $this->availability->incrementAvailability($child->date_start, $child->date_end, $child->quantity, $event->reservation->item_id);
+        });
     }
 }

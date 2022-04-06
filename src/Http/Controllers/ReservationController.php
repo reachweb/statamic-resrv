@@ -8,6 +8,7 @@ use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Http\Requests\ReservationRequest;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
 use Reach\StatamicResrv\Models\Reservation;
@@ -23,29 +24,9 @@ class ReservationController extends Controller
         $this->payment = $payment;
     }
 
-    public function confirm(Request $request, $statamic_id)
+    public function confirm(ReservationRequest $request, $statamic_id)
     {
-        $rules = [
-            'date_start' => 'required|date',
-            'date_end' => 'required|date',
-            'quantity' => 'sometimes|integer',
-            'advanced' => 'nullable|string',
-            'payment' => 'required|numeric',
-            'price' => 'required|numeric',
-            'total' => 'required|numeric',
-            'extras' => 'nullable|array',
-            'options' => 'nullable|array',
-        ];
-
-        if (config('resrv-config.enable_locations') == true) {
-            $additional_rules = [
-                'location_start' => 'required|integer',
-                'location_end' => 'required|integer',
-            ];
-            $rules = array_merge($rules, $additional_rules);
-        }
-
-        $data = $request->validate($rules);
+        $data = $request->validated();
 
         // Set the quantity and advanced for backwards compatibility
         if (! Arr::exists($data, 'quantity')) {
@@ -56,26 +37,16 @@ class ReservationController extends Controller
         }
 
         try {
-            $this->reservation->confirmReservation($data, $statamic_id);
+            $request->missing('dates') 
+            ? $this->reservation->confirmReservation($data, $statamic_id)
+            : $this->reservation->confirmMultipleReservation($data, $statamic_id);
         } catch (ReservationException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }
 
-        $reservation = $this->reservation->create([
-            'status' => 'pending',
-            'reference' => $this->reservation->createRandomReference(),
-            'item_id' => $statamic_id,
-            'date_start' => $data['date_start'],
-            'date_end' => $data['date_end'],
-            'quantity' => $data['quantity'],
-            'property' => $data['advanced'],
-            'location_start' => (Arr::exists($data, 'location_start') ? $data['location_start'] : ''),
-            'location_end' => (Arr::exists($data, 'location_end') ? $data['location_end'] : ''),
-            'price' => $data['total'],
-            'payment' => $data['payment'],
-            'payment_id' => '',
-            'customer' => '',
-        ]);
+        $request->missing('dates') 
+            ? $reservation = $this->createNormal($data, $statamic_id)
+            : $reservation = $this->createMultiple($data, $statamic_id);
 
         ReservationCreated::dispatch($reservation);
 
@@ -92,6 +63,58 @@ class ReservationController extends Controller
         }
 
         return response()->json($reservation->id);
+    }
+
+    protected function createNormal($data, $statamic_id)
+    {
+        return $this->reservation->create([
+            'status' => 'pending',
+            'type' => 'normal',
+            'reference' => $this->reservation->createRandomReference(),
+            'item_id' => $statamic_id,
+            'date_start' => $data['date_start'],
+            'date_end' => $data['date_end'],
+            'quantity' => $data['quantity'],
+            'property' => $data['advanced'],
+            'location_start' => $data['location_start'] ?? '',
+            'location_end' => $data['location_end'] ?? '',
+            'price' => $data['total'],
+            'payment' => $data['payment'],
+            'payment_id' => '',
+            'customer' => '',
+        ]);
+    }
+
+    protected function createMultiple($data, $statamic_id)
+    {
+        $dates = collect($data['dates']);
+        $justDates = $dates->flatten()->filter(fn($item) => strtotime($item));
+        $parent = $this->reservation->create([
+            'status' => 'pending',
+            'type' => 'parent',
+            'reference' => $this->reservation->createRandomReference(),
+            'item_id' => $statamic_id,
+            'date_start' => $justDates->min(),
+            'date_end' => $justDates->max(),
+            'quantity' => 1,
+            'location_start' => $data['location_start'] ?? '',
+            'location_end' => $data['location_end'] ?? '',
+            'price' => $data['total'],
+            'payment' => $data['payment'],
+            'payment_id' => '',
+            'customer' => '',
+        ]);
+        $dates->transform(function($child) use ($parent) {
+            return [
+                'reservation_id' => $parent->id,
+                'date_start' => $child['date_start'],
+                'date_end' => $child['date_end'],
+                'quantity' => $child['quantity'] ?? 1,
+                'property' => $child['advanced'] ?? null,
+            ];
+        });
+        $parent->childs()->createMany($dates);
+        return $parent;
     }
 
     public function checkoutForm()
