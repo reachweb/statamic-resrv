@@ -5,8 +5,8 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -64,6 +64,7 @@ class Reservation extends Model
         if ($this->type === 'parent') {
             return $this->childs()->get()->unique(fn ($item) => $item->property);
         }
+
         return $value;
     }
 
@@ -79,6 +80,7 @@ class Reservation extends Model
                 return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $item->property);
             })->implode(',');
         }
+
         return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $this->property);
     }
 

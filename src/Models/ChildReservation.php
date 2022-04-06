@@ -35,6 +35,7 @@ class ChildReservation extends Model
             return '';
         }
         $availability = new AdvancedAvailability;
+
         return $availability->getPropertyLabel($this->parent->entry()->blueprint, $this->parent->entry()->collection()->handle(), $this->property);
     }
 }
