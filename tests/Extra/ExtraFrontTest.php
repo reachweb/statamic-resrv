@@ -30,7 +30,7 @@ class ExtraFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.extra.add', $item->id()), $addExtraToEntry);
         $this->assertDatabaseHas('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id(),
-            'extra_id' => $extra->id
+            'extra_id' => $extra->id,
         ]);
 
         $addExtra2ToEntry = [
@@ -40,7 +40,7 @@ class ExtraFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.extra.add', $item->id()), $addExtra2ToEntry);
         $this->assertDatabaseHas('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id(),
-            'extra_id' => $extra2->id
+            'extra_id' => $extra2->id,
         ]);
 
         $this->travelTo(today()->setHour(11));

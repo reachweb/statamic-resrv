@@ -12,8 +12,8 @@ use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
 use Reach\StatamicResrv\Http\Requests\ReservationRequest;
-use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationController extends Controller
 {
@@ -132,6 +132,7 @@ class ReservationController extends Controller
         $reservation->childs()->each(function ($child) use ($id, &$total) {
             $total = $total->add(Price::create(Extra::find($id)->priceForReservation($child)));
         });
+
         return $total->format();
     }
 

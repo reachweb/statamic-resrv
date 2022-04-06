@@ -56,6 +56,7 @@ class Extra extends Model
         if ($this->price_type == 'relative') {
             return $this->price->multiply($this->getRelativePrice($data))->format();
         }
+
         return $this->price->format();
     }
 
