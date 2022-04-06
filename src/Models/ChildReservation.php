@@ -5,7 +5,6 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Reach\StatamicResrv\Database\Factories\ChildReservationFactory;
-use Reach\StatamicResrv\Models\Reservation;
 
 class ChildReservation extends Model
 {
@@ -29,5 +28,4 @@ class ChildReservation extends Model
     {
         return $this->hasOne(Reservation::class);
     }
-   
 }
