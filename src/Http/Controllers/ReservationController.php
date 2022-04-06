@@ -8,9 +8,9 @@ use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\ReservationException;
-use Reach\StatamicResrv\Http\Requests\ReservationRequest;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
+use Reach\StatamicResrv\Http\Requests\ReservationRequest;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationController extends Controller
@@ -37,14 +37,14 @@ class ReservationController extends Controller
         }
 
         try {
-            $request->missing('dates') 
+            $request->missing('dates')
             ? $this->reservation->confirmReservation($data, $statamic_id)
             : $this->reservation->confirmMultipleReservation($data, $statamic_id);
         } catch (ReservationException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }
 
-        $request->missing('dates') 
+        $request->missing('dates')
             ? $reservation = $this->createNormal($data, $statamic_id)
             : $reservation = $this->createMultiple($data, $statamic_id);
 
@@ -88,7 +88,7 @@ class ReservationController extends Controller
     protected function createMultiple($data, $statamic_id)
     {
         $dates = collect($data['dates']);
-        $justDates = $dates->flatten()->filter(fn($item) => strtotime($item));
+        $justDates = $dates->flatten()->filter(fn ($item) => strtotime($item));
         $parent = $this->reservation->create([
             'status' => 'pending',
             'type' => 'parent',
@@ -104,7 +104,7 @@ class ReservationController extends Controller
             'payment_id' => '',
             'customer' => '',
         ]);
-        $dates->transform(function($child) use ($parent) {
+        $dates->transform(function ($child) use ($parent) {
             return [
                 'reservation_id' => $parent->id,
                 'date_start' => $child['date_start'],
@@ -114,6 +114,7 @@ class ReservationController extends Controller
             ];
         });
         $parent->childs()->createMany($dates);
+
         return $parent;
     }
 

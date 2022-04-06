@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\ReservationException;
@@ -100,6 +99,7 @@ class Reservation extends Model
         if ($this->type == 'parent') {
             return true;
         }
+
         return false;
     }
 
@@ -109,7 +109,7 @@ class Reservation extends Model
     }
 
     public function confirmReservation($data, $statamic_id)
-    {      
+    {
         $this->checkAvailability($data, $statamic_id);
 
         $this->confirmTotal($data, $statamic_id);
@@ -189,7 +189,7 @@ class Reservation extends Model
     protected function confirmTotal($data, $statamic_id)
     {
         $reservationCost = Price::create($data['price']);
-        
+
         $dbTotal = $reservationCost->add($this->getExtraCharges($data, $statamic_id));
         $frontendTotal = Price::create($data['total']);
         if (! $dbTotal->equals($frontendTotal)) {

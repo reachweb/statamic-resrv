@@ -762,8 +762,7 @@ class ReservationFrontTest extends TestCase
         ]);
         $this->assertDatabaseHas('resrv_reservations', [
             'type' => 'parent',
-            'status' => 'expired'
+            'status' => 'expired',
         ]);
-
     }
 }
