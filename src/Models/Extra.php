@@ -50,11 +50,13 @@ class Extra extends Model
         if ($dynamicPricing) {
             $this->price = $dynamicPricing->apply($this->price)->format();
         }
+        if ($this->price_type == 'perday') {
+            return $this->price->multiply($this->duration)->format();
+        }
         if ($this->price_type == 'relative') {
             return $this->price->multiply($this->getRelativePrice($data))->format();
         }
-
-        return $this->price->multiply($this->quantity)->format();
+        return $this->price->format();
     }
 
     public function priceForReservation($reservation)
@@ -106,7 +108,7 @@ class Extra extends Model
         $extras = $this->scopeEntry($query, $data['item_id'])
             ->where('published', true)
             ->orderBy('order')
-            ->get();
+            ->get(['id', 'name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'order']);
 
         $extras->transform(function ($extra) use ($data) {
             $extra->original_price = $extra->price;

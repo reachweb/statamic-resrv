@@ -20,6 +20,7 @@ class ExtraFrontTest extends TestCase
     {
         $this->signInAdmin();
         $extra = Extra::factory()->create();
+        $extra2 = Extra::factory(['id' => 2])->fixed()->create();
         $item = $this->makeStatamicItem();
 
         $addExtraToEntry = [
@@ -29,6 +30,17 @@ class ExtraFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.extra.add', $item->id()), $addExtraToEntry);
         $this->assertDatabaseHas('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id(),
+            'extra_id' => $extra->id
+        ]);
+
+        $addExtra2ToEntry = [
+            'id' => $extra2->id,
+        ];
+
+        $response = $this->post(cp_route('resrv.extra.add', $item->id()), $addExtra2ToEntry);
+        $this->assertDatabaseHas('resrv_statamicentry_extra', [
+            'statamicentry_id' => $item->id(),
+            'extra_id' => $extra2->id
         ]);
 
         $this->travelTo(today()->setHour(11));
@@ -40,12 +52,12 @@ class ExtraFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.extra.index'), $checkoutRequest);
-        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('4.65');
+        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('9.30')->assertSee($extra2->slug)->assertSee('25');
 
         // Check for multiple items
         $checkoutRequest['quantity'] = 3;
         $response = $this->post(route('resrv.extra.index'), $checkoutRequest);
-        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('13.95');
+        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('9.30')->assertSee($extra2->slug)->assertSee('25');
     }
 
     public function test_can_index_extras_with_relative_price()
