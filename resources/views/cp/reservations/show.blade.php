@@ -89,7 +89,7 @@
         </div>
         @foreach ($reservation->childs as $child)
         <div class="card p-2 mb-5 divide-y">            
-            <div class="grid grid-cols-2 my-2 pt-2">
+            <div class="grid grid-cols-2 my-2">
                 <div>
                     <div class="font-bold mb-1">Start date</div>
                     <div>{{ $child->date_start->format('d-m-Y H:i') }}</div>
@@ -124,7 +124,7 @@
             <h2 class="text-base">Customer data</h2>
         </div>
         <div class="card p-2 mb-5">
-            <div class="grid grid-cols-2 xl:grid-cols-3 ">
+            <div class="grid grid-cols-2 xl:grid-cols-3 mt-2">
             @foreach ($reservation->customer as $field => $value)
                 @if (is_array($value) || $value == null)
                     @continue
