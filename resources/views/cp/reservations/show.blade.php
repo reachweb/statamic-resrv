@@ -179,15 +179,7 @@
             <div class="mb-1 border-b border-gray flex justify-between w-full p-1">
                 <div>{{ $extra->name }} x{{ $extra->pivot->quantity }}</div>
                 <div class="font-bold">
-                    {{ $extra->priceForReservation($reservation) }}
-                    <span class="font-normal">
-                        @if ($extra->price_type == 'fixed')
-                        / reservation
-                        @endif
-                        @if ($extra->price_type == 'perday')
-                        / day
-                        @endif
-                    </span>
+                    {{ $extra->pivot->price }}
                 </div>
             </div>  
         @endforeach             

@@ -8,10 +8,12 @@ use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
 use Reach\StatamicResrv\Http\Requests\ReservationRequest;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Models\Extra;
 
 class ReservationController extends Controller
 {
@@ -58,7 +60,10 @@ class ReservationController extends Controller
 
         if (array_key_exists('extras', $data) > 0) {
             foreach ($data['extras'] as $id => $properties) {
-                $this->reservation->find($reservation->id)->extras()->attach($id, ['quantity' => $properties['quantity']]);
+                $this->reservation->find($reservation->id)->extras()->attach($id, [
+                    'quantity' => $properties['quantity'],
+                    'price' => $this->getExtraPrice($id, $reservation),
+                ]);
             }
         }
 
@@ -116,6 +121,18 @@ class ReservationController extends Controller
         $parent->childs()->createMany($dates);
 
         return $parent;
+    }
+
+    protected function getExtraPrice($id, $reservation)
+    {
+        if ($reservation->type !== 'parent') {
+            return Extra::find($id)->priceForReservation($reservation);
+        }
+        $total = Price::create(0);
+        $reservation->childs()->each(function ($child) use ($id, &$total) {
+            $total = $total->add(Price::create(Extra::find($id)->priceForReservation($child)));
+        });
+        return $total->format();
     }
 
     public function checkoutForm()

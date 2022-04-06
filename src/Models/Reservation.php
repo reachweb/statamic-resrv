@@ -96,7 +96,7 @@ class Reservation extends Model
 
     public function extras()
     {
-        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot('quantity')->withTrashed();
+        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot(['quantity', 'price'])->withTrashed();
     }
 
     public function location_start_data()
