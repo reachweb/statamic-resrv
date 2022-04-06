@@ -26,6 +26,15 @@ class ChildReservation extends Model
 
     public function parent()
     {
-        return $this->hasOne(Reservation::class);
+        return $this->belongsTo(Reservation::class, 'reservation_id');
+    }
+
+    public function getPropertyAttributeLabel()
+    {
+        if ($this->property == null) {
+            return '';
+        }
+        $availability = new AdvancedAvailability;
+        return $availability->getPropertyLabel($this->parent->entry()->blueprint, $this->parent->entry()->collection()->handle(), $this->property);
     }
 }

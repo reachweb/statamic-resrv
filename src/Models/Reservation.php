@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -58,6 +59,14 @@ class Reservation extends Model
         return Price::create($value);
     }
 
+    public function getPropertyAttribute($value)
+    {
+        if ($this->type === 'parent') {
+            return $this->childs()->get()->unique(fn ($item) => $item->property);
+        }
+        return $value;
+    }
+
     public function getPropertyAttributeLabel()
     {
         if ($this->property == null) {
@@ -65,6 +74,11 @@ class Reservation extends Model
         }
         $availability = new AdvancedAvailability;
 
+        if ($this->property instanceof Collection) {
+            return $this->property->map(function ($item) use ($availability) {
+                return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $item->property);
+            })->implode(',');
+        }
         return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $this->property);
     }
 

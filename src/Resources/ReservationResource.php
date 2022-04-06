@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Resources;
 
 use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\ResourceCollection;
+use Illuminate\Support\Str;
 use Reach\StatamicResrv\Blueprints\ReservationBlueprint;
 use Statamic\Http\Resources\CP\Concerns\HasRequestedColumns;
 
@@ -37,6 +38,7 @@ class ReservationResource extends ResourceCollection
                 return [
                     'id' => $reservation->id,
                     'reference' => $reservation->reference,
+                    'type' => Str::ucfirst($reservation->type),
                     'status' => $reservation->status,
                     'entry' => $reservation->entry,
                     'quantity' => $reservation->quantity,
@@ -49,7 +51,7 @@ class ReservationResource extends ResourceCollection
                     'customer' => $reservation->customer,
                     'extras' => $reservation->extras,
                     'options' => $reservation->options,
-                    'property' => $reservation->property,
+                    'property' => $reservation->getPropertyAttributeLabel(),
                     'created_at' => $this->formatDate($reservation->created_at),
                     'updated_at' => $this->formatDate($reservation->updated_at),
                 ];

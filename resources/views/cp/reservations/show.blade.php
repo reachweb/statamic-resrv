@@ -13,18 +13,19 @@
         </a>
     </div>
 
-    <header class="mb-3">
-        <div class="flex items-center justify-between">
-            <h1>Reservation #{{ $reservation->id }} - {{ $reservation->entry['title'] }}</h1> 
+    <header class="mt-1 mb-3">
+        <div class="flex flex-col md:flex-row md:items-center justify-between">
+            <h1>Reservation #{{ $reservation->id }} - {{ $reservation->entry['title'] }}</h1>
+            <div class="mt-1 md:mt-0 font-bold">{{ $reservation->created_at->format('d-m-Y H:i') }}</div>
         </div>
     </header>
 
     <div>
-    <div class="mb-2 content">
+        <div class="mb-2 content flex">
             <h2 class="text-base">Reservation Details</h2>
         </div>
-        <div class="card p-2 mb-5">
-            <div class="grid grid-cols-3 mb-3">
+        <div class="card p-2 mb-5 divide-y">
+            <div class="grid grid-cols-3 my-2">
                 <div>
                     <div class="font-bold mb-1">Reservation ID</div>
                     <div># {{ $reservation->id }}</div>
@@ -38,7 +39,8 @@
                     <div>{{ Str::upper($reservation->status) }}</div>
                 </div>                
             </div>
-            <div class="grid grid-cols-3 mb-3">
+            @if ($reservation->type !== 'parent')
+            <div class="grid grid-cols-2 my-2 pt-2">
                 <div>
                     <div class="font-bold mb-1">Start date</div>
                     <div>{{ $reservation->date_start->format('d-m-Y H:i') }}</div>
@@ -46,15 +48,11 @@
                 <div>
                     <div class="font-bold mb-1">End date</div>
                     <div>{{ $reservation->date_end->format('d-m-Y H:i') }}</div>
-                </div>
-                <div>
-                    <div class="font-bold mb-1">Reservation date</div>
-                    <div>{{ $reservation->created_at->format('d-m-Y H:i') }}</div>
-                </div>                
+                </div>      
             </div>
-            
-            <div class="grid grid-cols-3">
-                @if (config('resrv-config.enable_locations'))
+            @endif
+            @if (config('resrv-config.enable_locations'))
+            <div class="grid grid-cols-2 my-2 pt-2">
                 <div>
                     <div class="font-bold mb-1">Pick-up location</div>
                     <div>{{ $reservation->location_start_data->name }}</div>
@@ -63,7 +61,10 @@
                     <div class="font-bold mb-1">Drop-off location</div>
                     <div>{{ $reservation->location_end_data->name }}</div>
                 </div>
-                @endif
+            </div>
+            @endif
+            @if ($reservation->type !== 'parent')
+            <div class="grid grid-cols-2 my-2 pt-2">
                 @if (config('resrv-config.maximum_quantity') > 1)
                 <div>
                     <div class="font-bold mb-1">Quantity</div>
@@ -77,9 +78,45 @@
                 </div>
                 @endif
             </div>
-            
+            @endif      
         </div>
     </div>
+
+    @if ($reservation->type === 'parent')
+    <div>
+        <div class="mb-2 content flex">
+            <h2 class="text-base">Related reservations</h2>
+        </div>
+        @foreach ($reservation->childs as $child)
+        <div class="card p-2 mb-5 divide-y">            
+            <div class="grid grid-cols-2 my-2 pt-2">
+                <div>
+                    <div class="font-bold mb-1">Start date</div>
+                    <div>{{ $child->date_start->format('d-m-Y H:i') }}</div>
+                </div>
+                <div>
+                    <div class="font-bold mb-1">End date</div>
+                    <div>{{ $child->date_end->format('d-m-Y H:i') }}</div>
+                </div>      
+            </div>
+            <div class="grid grid-cols-2 my-2 pt-2">
+                @if (config('resrv-config.maximum_quantity') > 1)
+                <div>
+                    <div class="font-bold mb-1">Quantity</div>
+                    <div>x {{ $child->quantity }}</div>
+                </div>
+                @endif
+                @if (config('resrv-config.enable_advanced_availability'))
+                <div>
+                    <div class="font-bold mb-1">Property</div>
+                    <div>{{ $child->getPropertyAttributeLabel() }}</div>
+                </div>
+                @endif
+            </div>          
+        </div>
+        @endforeach
+    </div>
+    @endif
     
     @if ($reservation->customer->count() > 1)
     <div>
@@ -87,9 +124,9 @@
             <h2 class="text-base">Customer data</h2>
         </div>
         <div class="card p-2 mb-5">
-            <div class="grid grid-cols-2">
+            <div class="grid grid-cols-2 xl:grid-cols-3 ">
             @foreach ($reservation->customer as $field => $value)
-                @if (is_array($value))
+                @if (is_array($value) || $value == null)
                     @continue
                 @endif
                 <div class="mb-2">

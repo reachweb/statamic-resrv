@@ -23,6 +23,7 @@ class ReservationFactory extends Factory
     {
         return [
             'status' => 'pending',
+            'type' => 'normal',
             'reference' => 'ABCDEF',
             'item_id' => '',
             'date_start' => today()->toIso8601String(),

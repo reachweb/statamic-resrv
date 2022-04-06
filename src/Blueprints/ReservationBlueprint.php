@@ -29,6 +29,14 @@ class ReservationBlueprint
                             ],
                         ],
                         [
+                            'handle' => 'type',
+                            'field'  => [
+                                'type'     => 'text',
+                                'listable' => true,
+                                'display'  => 'Type',
+                            ],
+                        ],
+                        [
                             'handle' => 'reference',
                             'field'  => [
                                 'type'     => 'text',

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationCpTest extends TestCase
@@ -51,6 +52,25 @@ class ReservationCpTest extends TestCase
         $response = $this->get(cp_route('resrv.reservation.show', $reservation->id));
 
         $response->assertStatus(200)->assertSee($reservation->id)->assertSee($location->name)->assertSee($item->title);
+    }
+
+    public function test_can_show_child_reservations()
+    {
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'type' => 'parent',
+            'customer' => ['email' => 'test@test.com'],
+            'item_id' => $item->id(),
+        ])->create();
+
+        $child = ChildReservation::factory([
+            'reservation_id' => $reservation->id
+        ])->create();
+
+        $response = $this->get(cp_route('resrv.reservation.show', $reservation->id));
+
+        $response->assertStatus(200)->assertSee($child->date_end->format('d-m-Y H:i'))->assertSee('Related reservations')->assertSee($item->title);
     }
 
     public function test_can_refund_reservations()
