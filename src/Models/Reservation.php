@@ -279,9 +279,9 @@ class Reservation extends Model
         return Str::upper(Str::random(6));
     }
 
-    public function checkoutForm()
+    public function checkoutForm($entry = null)
     {
-        $form = $this->getForm();
+        $form = $this->getForm($entry);
         // If we have a country field add the names automatically
         foreach ($form as $index => $field) {
             if ($field->handle() == 'country') {
@@ -313,7 +313,7 @@ class Reservation extends Model
             if ($entry->get('resrv_override_form')) {
                 $formHandle = $entry->get('resrv_override_form');
             }
-        }        
+        }
 
         return Form::find($formHandle)->fields()->values();
     }

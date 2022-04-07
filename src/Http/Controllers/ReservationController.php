@@ -10,7 +10,6 @@ use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
-use Reach\StatamicResrv\Http\Requests\CheckoutFormRequest;
 use Reach\StatamicResrv\Http\Requests\ReservationRequest;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Reservation;
@@ -143,7 +142,7 @@ class ReservationController extends Controller
         return response()->json($form);
     }
 
-    public function checkoutFormSubmit(CheckoutFormRequest $request, $reservation_id)
+    public function checkoutFormSubmit(Request $request, $reservation_id)
     {
         // Find the reservation
         $reservation = $this->reservation->find($reservation_id);
@@ -154,7 +153,7 @@ class ReservationController extends Controller
         }
 
         // Validate customer data
-        $data = $request->validated();
+        $data = $request->validate($this->validationRules($reservation));
 
         // Create a payment intent
         $paymentIntent = $this->payment->paymentIntent($reservation->payment, $reservation_id, $data);
@@ -182,5 +181,20 @@ class ReservationController extends Controller
         ReservationConfirmed::dispatch($reservation);
 
         return response()->json($reservation_id);
+    }
+
+    protected function validationRules($reservation)
+    {
+        $rules = [];
+        $form = $reservation->checkoutForm($reservation->item_id);
+        foreach ($form as $field) {
+            if (isset($field->config()['validate'])) {
+                $rules[$field->handle()] = implode('|', $field->config()['validate']);
+            } else {
+                $rules[$field->handle()] = 'nullable';
+            }
+        }
+
+        return $rules;
     }
 }
