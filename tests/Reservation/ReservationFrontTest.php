@@ -185,7 +185,7 @@ class ReservationFrontTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $location = Location::factory()->create();
-        
+
         $reservation = Reservation::factory()
             ->create([
                 'item_id' => $item->id(),
