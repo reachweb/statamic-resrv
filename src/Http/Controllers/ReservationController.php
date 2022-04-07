@@ -136,9 +136,9 @@ class ReservationController extends Controller
         return $total->format();
     }
 
-    public function checkoutForm()
+    public function checkoutForm($entry = null)
     {
-        $form = $this->reservation->checkoutForm();
+        $form = $this->reservation->checkoutForm($entry);
 
         return response()->json($form);
     }

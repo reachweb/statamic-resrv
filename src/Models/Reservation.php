@@ -111,7 +111,6 @@ class Reservation extends Model
 
     public function isParent()
     {
-        ray($this->type);
         if ($this->type == 'parent') {
             return true;
         }
@@ -295,9 +294,9 @@ class Reservation extends Model
         return $form;
     }
 
-    public function checkoutFormFieldsArray()
+    public function checkoutFormFieldsArray($entry = null)
     {
-        $form = $this->getForm();
+        $form = $this->getForm($entry);
         $fields = [];
         foreach ($form as $item) {
             $fields[$item->handle()] = $item->config()['display'];
@@ -306,9 +305,15 @@ class Reservation extends Model
         return $fields;
     }
 
-    protected function getForm()
+    protected function getForm($entry = null)
     {
         $formHandle = config('resrv-config.form_name', 'checkout');
+        if ($entry) {
+            $entry = Entry::find($entry);
+            if ($entry->get('resrv_override_form')) {
+                $formHandle = $entry->get('resrv_override_form');
+            }
+        }        
 
         return Form::find($formHandle)->fields()->values();
     }

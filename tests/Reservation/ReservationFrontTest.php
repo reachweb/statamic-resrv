@@ -185,15 +185,16 @@ class ReservationFrontTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $location = Location::factory()->create();
-
+        
         $reservation = Reservation::factory()
             ->create([
                 'item_id' => $item->id(),
                 'location_start' => $location->id,
                 'location_end' => $location->id,
-            ]);
+            ]
+        );
 
-        $response = $this->get(route('resrv.reservation.checkoutForm', $reservation->id));
+        $response = $this->get(route('resrv.reservation.checkoutForm', $reservation->item_id));
         $response->assertStatus(200)->assertSee('input_type');
     }
 
