@@ -130,7 +130,7 @@
                     @continue
                 @endif
                 <div class="mb-2">
-                    <div class="font-bold mb-1">{{ $fields[$field] }}</div>
+                    <div class="font-bold mb-1">{{ $fields[$field] ?? $field }}</div>
                     <div>{{ $value }}</div>
                 </div>  
             @endforeach 
