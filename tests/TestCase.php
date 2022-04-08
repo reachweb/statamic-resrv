@@ -29,7 +29,7 @@ class TestCase extends OrchestraTestCase
 
         Blueprint::setDirectory(__DIR__.'/../resources/blueprints');
 
-        Version::shouldReceive('get')->andReturn('3.2.35');
+        Version::shouldReceive('get')->andReturn('3.3.5');
         $this->addToAssertionCount(-1); // Dont want to assert this
 
         $this->withoutExceptionHandling();

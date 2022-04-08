@@ -6,6 +6,7 @@ It works pretty well for small to medium companies that need to manage availabil
 
 Basic features:
 * Availability and price management: set available items per day
+* Advanced availabity: set different price / availability for a single item on an unlimited number of properties
 * Online reservation and payment (using Stripe) plus email notifications to the admins and user. 
 * Can charge the whole amount, a downpayment or nothing at all. Build in way to offer a refund for cancelled reservations.
 * Reservation options: max or min days of a reservation, min days before, charge an extra day based on drop off time.
@@ -16,8 +17,9 @@ Basic features:
 * Fixed pricing: set a fixed pricing schedule
 * Dynamic pricing: increase or decrease prices based a set of rules
 * Easily adjustable checkout forms using Statamic form editor
+* Multi reservations: Create reservations for return trips or multiple different periods in one checkout
 * Report page: see a quick summary of how your business is booming thank to Resrv!
-* Highly tested codebase: 80+ tests, 350+ assertions
+* Highly tested codebase: 100+ tests, 450+ assertions
 * Starter kits available soon!
 
 ## Documentation

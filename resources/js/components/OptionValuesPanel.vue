@@ -155,7 +155,7 @@ export default {
             })
         },
         slugify() {
-            this.submit.slug = _.kebabCase(this.submit.name)
+            this.submit.slug = this.$slugify(this.submit.name)
         },
         togglePrice() {
             if (this.submit.price_type == 'free') {

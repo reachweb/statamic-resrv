@@ -74,18 +74,47 @@
                             <div class="text-sm font-light"><p>Select the range of the date condition.</p></div>
                         </div>
                         <div class="w-full">
-                            <v-date-picker
-                                v-model="date"
-                                :model-config="modelConfig"
-                                :popover="{ visibility: 'click' }"
-                                :masks="{ input: 'YYYY-MM-DD' }"
-                                :mode="'range'">
-                                    <input
-                                        slot-scope="{ inputProps, inputEvents }"
-                                        class="w-full border border-gray-700 rounded p-1"
-                                        v-bind="inputProps"
-                                        v-on="inputEvents" />
-                            </v-date-picker>
+                            <div class="date-container input-group w-full">
+                                <v-date-picker
+                                    v-model="date"
+                                    :model-config="modelConfig"
+                                    :popover="{ visibility: 'click' }"
+                                    :masks="{ input: 'YYYY-MM-DD' }"
+                                    :mode="'date'"
+                                    :columns="$screens({ default: 1, lg: 2 })"
+                                    is-range
+                                    >
+                                    <template v-slot="{ inputValue, inputEvents }">
+                                        <div class="w-full flex items-center">
+                                        <div class="input-group">
+                                            <div class="input-group-prepend flex items-center">
+                                                <svg-icon name="calendar" class="w-4 h-4" />
+                                            </div>
+                                            <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
+                                                <input
+                                                    class="input-text-minimal p-0 bg-transparent leading-none"
+                                                    :value="inputValue.start"
+                                                    v-on="inputEvents.start"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div class="icon icon-arrow-right my-sm mx-1 text-grey-60" />
+                                        <div class="input-group">
+                                            <div class="input-group-prepend flex items-center">
+                                                <svg-icon name="calendar" class="w-4 h-4" />
+                                            </div>
+                                            <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
+                                                <input
+                                                    class="input-text-minimal p-0 bg-transparent leading-none"
+                                                    :value="inputValue.end"
+                                                    v-on="inputEvents.end"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    </template>
+                                </v-date-picker>
+                            </div>
                         </div>
                         <div v-if="errors.date_start" class="w-full mt-1 text-sm text-red-400">
                             {{ errors.date_start[0] }}

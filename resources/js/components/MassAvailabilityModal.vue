@@ -5,31 +5,58 @@
                 {{ __('Change availability') }}
             </div>
             <div v-if="property" class="px-2 mt-2">
-                <v-select multiple :placeholder="__('Select property')" v-model="selectedProperty" :options="propertiesOptions" />
+                <v-select 
+                    multiple
+                    :close-on-select="false"
+                    :placeholder="__('Select property')" 
+                    v-model="selectedProperty" 
+                    :options="propertiesOptions" 
+                />
                 <div class="flex w-full justify-end pt-1">
                     <button class="text-grey hover:text-grey-90" @click="selectedProperty = propertiesOptions">{{ __('Select all') }}</button>
                 </div>
             </div>
-            <div class="px-2 mt-2 mb-1">
+            <div class="px-2 mt-2 mb-3">
                 <span class="block mb-2 text-md">{{ __('Select dates') }}</span>
                 <div class="date-container input-group w-full">
-                    <div class="input-group-prepend flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-4 h-4"><rect width="22" height="20" x=".5" y="3.501" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" rx="1" ry="1"></rect><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M3.5 1.501v3m4-3v3m4-3v3m4-3v3m4-3v3m-7 3.999h3v4h0-4 0v-3a1 1 0 0 1 1-1zm3 0h3a1 1 0 0 1 1 1v3h0-4 0v-4h0zm-4 4.001h4v4h-4zm4 0h4v4h-4zm-4 4h4v4h-4z"></path><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M15.5 16.5h4v3a1 1 0 0 1-1 1h-3 0v-4h0zm-11-4h3v4h0-4 0v-3a1 1 0 0 1 1-1zm3 .001h4v4h-4zm-4 3.999h4v4h0-3a1 1 0 0 1-1-1v-3h0zm4 .001h4v4h-4z"></path></svg>
-                    </div>
                     <v-date-picker
                         v-model="dates"
                         :model-config="modelConfig"
                         :popover="{ visibility: 'click' }"
                         :masks="{ input: 'YYYY-MM-DD' }"
-                        :mode="'range'"
+                        :mode="'date'"
                         :columns="$screens({ default: 1, lg: 2 })"
+                        is-range
                         >
-                            <input
-                                slot-scope="{ inputProps, inputEvents }"
-                                class="input-text border border-grey-50 border-l-0"
-                                style="min-width: 100%"
-                                v-bind="inputProps"
-                                v-on="inputEvents" />
+                        <template v-slot="{ inputValue, inputEvents }">
+                            <div class="w-full flex items-center">
+                            <div class="input-group">
+                                <div class="input-group-prepend flex items-center">
+                                    <svg-icon name="calendar" class="w-4 h-4" />
+                                </div>
+                                <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
+                                    <input
+                                        class="input-text-minimal p-0 bg-transparent leading-none"
+                                        :value="inputValue.start"
+                                        v-on="inputEvents.start"
+                                    />
+                                </div>
+                            </div>
+                            <div class="icon icon-arrow-right my-sm mx-1 text-grey-60" />
+                            <div class="input-group">
+                                <div class="input-group-prepend flex items-center">
+                                    <svg-icon name="calendar" class="w-4 h-4" />
+                                </div>
+                                <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
+                                    <input
+                                        class="input-text-minimal p-0 bg-transparent leading-none"
+                                        :value="inputValue.end"
+                                        v-on="inputEvents.end"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        </template>
                     </v-date-picker>
                 </div>
                 <div v-if="errors.date_start || errors.date_end" class="w-full mt-1 text-sm text-red-400">
@@ -121,7 +148,7 @@ export default {
             fields.price = this.price
             fields.available = this.available
             if (this.property) {
-                fields.advanced = _.isArray(this.selectedProperty) ? this.selectedProperty : [_.find(this.propertiesOptions, ['code', this.selectedProperty.code])]
+                fields.advanced = _.isArray(this.selectedProperty) ? this.selectedProperty : [_.findWhere(this.propertiesOptions, {'code': this.selectedProperty.code})]
             }
             return fields
         }

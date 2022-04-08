@@ -1,5 +1,3 @@
-var _ = require('lodash')
-
 import AvailabilityFieldtype from './fieldtypes/Availability.vue'
 import OptionsFieldtype from './fieldtypes/Options.vue'
 import ExtrasFieldtype from './fieldtypes/Extras.vue'
@@ -10,7 +8,6 @@ import LocationsList from './components/LocationsList.vue'
 import ReservationsList from './components/ReservationsList.vue'
 import DynamicPricingList from './components/DynamicPricingList.vue'
 import ReportsView from './components/ReportsView.vue'
-
 
 import ReservationsCalendar from './components/ReservationsCalendar.vue'
 
