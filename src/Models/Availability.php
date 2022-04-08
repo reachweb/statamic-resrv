@@ -125,23 +125,25 @@ class Availability extends Model implements AvailabilityContract
             ->sortBy('date');
     }
 
-    public function decrementAvailability($date_start, $date_end, $quantity, $statamic_id)
+    public function decrementAvailability($date_start, $date_end, $quantity, $advanced, $statamic_id)
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
+            'advanced' => $advanced
         ]);
 
         AvailabilityRepository::decrement($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
     }
 
-    public function incrementAvailability($date_start, $date_end, $quantity, $statamic_id)
+    public function incrementAvailability($date_start, $date_end, $quantity, $advanced, $statamic_id)
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
+            'advanced' => $advanced
         ]);
 
         AvailabilityRepository::increment($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);

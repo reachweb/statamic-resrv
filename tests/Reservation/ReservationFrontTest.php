@@ -588,7 +588,7 @@ class ReservationFrontTest extends TestCase
 
         $this->assertDatabaseHas('resrv_advanced_availabilities', [
             'statamic_id' => $item->id(),
-            'available' => 2,
+            'available' => 1,
             'property' => 'something',
         ]);
     }

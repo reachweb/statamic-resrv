@@ -14,7 +14,7 @@ interface AvailabilityContract
 
     public function confirmAvailabilityAndPrice($data, $statamic_id);
 
-    public function decrementAvailability($date_start, $date_end, $quantity, $statamic_id);
+    public function decrementAvailability($date_start, $date_end, $quantity, $advanced, $statamic_id);
 
-    public function incrementAvailability($date_start, $date_end, $quantity, $statamic_id);
+    public function incrementAvailability($date_start, $date_end, $quantity, $advanced, $statamic_id);
 }
