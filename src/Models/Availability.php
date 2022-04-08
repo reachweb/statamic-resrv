@@ -131,7 +131,7 @@ class Availability extends Model implements AvailabilityContract
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
-            'advanced' => $advanced
+            'advanced' => $advanced,
         ]);
 
         AvailabilityRepository::decrement($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
@@ -143,7 +143,7 @@ class Availability extends Model implements AvailabilityContract
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
-            'advanced' => $advanced
+            'advanced' => $advanced,
         ]);
 
         AvailabilityRepository::increment($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
