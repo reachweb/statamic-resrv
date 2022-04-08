@@ -9,44 +9,44 @@
             <div class="h-6 rotate-180 svg-icon using-svg">
                 <svg width="24" height="24" class="align-middle"><path d="M10.414 7.05l4.95 4.95-4.95 4.95L9 15.534 12.536 12 9 8.464z" fill="currentColor" fill-rule="evenodd"></path></svg>
             </div> 
-            <span>Back</span>
+            <span>{{ __("Back") }}</span>
         </a>
     </div>
 
     <header class="mt-1 mb-3">
         <div class="flex flex-col md:flex-row md:items-center justify-between">
-            <h1>Reservation #{{ $reservation->id }} - {{ $reservation->entry['title'] }}</h1>
+            <h1>{{ __("Reservation") }} #{{ $reservation->id }} - {{ $reservation->entry['title'] }}</h1>
             <div class="mt-1 md:mt-0 font-bold">{{ $reservation->created_at->format('d-m-Y H:i') }}</div>
         </div>
     </header>
 
     <div>
         <div class="mb-2 content flex">
-            <h2 class="text-base">Reservation Details</h2>
+            <h2 class="text-base">{{ __("Reservation Details") }}</h2>
         </div>
         <div class="card p-2 mb-5 divide-y">
             <div class="grid grid-cols-3 my-2">
                 <div>
-                    <div class="font-bold mb-1">Reservation ID</div>
+                    <div class="font-bold mb-1">{{ __("Reservation ID") }}</div>
                     <div># {{ $reservation->id }}</div>
                 </div>
                 <div>
-                    <div class="font-bold mb-1">Reference</div>
+                    <div class="font-bold mb-1">{{ __("Reference") }}</div>
                     <div>{{ $reservation->reference }}</div>
                 </div>
                 <div>
-                    <div class="font-bold mb-1">Status</div>
+                    <div class="font-bold mb-1">{{ __("Status") }}</div>
                     <div>{{ Str::upper($reservation->status) }}</div>
                 </div>                
             </div>
             @if ($reservation->type !== 'parent')
             <div class="grid grid-cols-2 my-2 pt-2">
                 <div>
-                    <div class="font-bold mb-1">Start date</div>
+                    <div class="font-bold mb-1">{{ __("Start date") }}</div>
                     <div>{{ $reservation->date_start->format('d-m-Y H:i') }}</div>
                 </div>
                 <div>
-                    <div class="font-bold mb-1">End date</div>
+                    <div class="font-bold mb-1">{{ __("End date") }}</div>
                     <div>{{ $reservation->date_end->format('d-m-Y H:i') }}</div>
                 </div>      
             </div>
@@ -54,11 +54,11 @@
             @if (config('resrv-config.enable_locations'))
             <div class="grid grid-cols-2 my-2 pt-2">
                 <div>
-                    <div class="font-bold mb-1">Pick-up location</div>
+                    <div class="font-bold mb-1">{{ __("Pick-up location") }}</div>
                     <div>{{ $reservation->location_start_data->name }}</div>
                 </div>
                 <div>
-                    <div class="font-bold mb-1">Drop-off location</div>
+                    <div class="font-bold mb-1">{{ __("Drop-off location") }}</div>
                     <div>{{ $reservation->location_end_data->name }}</div>
                 </div>
             </div>
@@ -67,13 +67,13 @@
             <div class="grid grid-cols-2 my-2 pt-2">
                 @if (config('resrv-config.maximum_quantity') > 1)
                 <div>
-                    <div class="font-bold mb-1">Quantity</div>
+                    <div class="font-bold mb-1">{{ __("Quantity") }}</div>
                     <div>x {{ $reservation->quantity }}</div>
                 </div>
                 @endif
                 @if (config('resrv-config.enable_advanced_availability'))
                 <div>
-                    <div class="font-bold mb-1">Property</div>
+                    <div class="font-bold mb-1">{{ __("Property") }}</div>
                     <div>{{ $reservation->getPropertyAttributeLabel() }}</div>
                 </div>
                 @endif
@@ -85,30 +85,30 @@
     @if ($reservation->type === 'parent')
     <div>
         <div class="mb-2 content flex">
-            <h2 class="text-base">Related reservations</h2>
+            <h2 class="text-base">{{ __("Related reservations") }}</h2>
         </div>
         @foreach ($reservation->childs as $child)
         <div class="card p-2 mb-5 divide-y">            
             <div class="grid grid-cols-2 my-2">
                 <div>
-                    <div class="font-bold mb-1">Start date</div>
+                    <div class="font-bold mb-1">{{ __("Start date") }}</div>
                     <div>{{ $child->date_start->format('d-m-Y H:i') }}</div>
                 </div>
                 <div>
-                    <div class="font-bold mb-1">End date</div>
+                    <div class="font-bold mb-1">{{ __("End date") }}</div>
                     <div>{{ $child->date_end->format('d-m-Y H:i') }}</div>
                 </div>      
             </div>
             <div class="grid grid-cols-2 my-2 pt-2">
                 @if (config('resrv-config.maximum_quantity') > 1)
                 <div>
-                    <div class="font-bold mb-1">Quantity</div>
+                    <div class="font-bold mb-1">{{ __("Quantity") }}</div>
                     <div>x {{ $child->quantity }}</div>
                 </div>
                 @endif
                 @if (config('resrv-config.enable_advanced_availability'))
                 <div>
-                    <div class="font-bold mb-1">Property</div>
+                    <div class="font-bold mb-1">{{ __("Property") }}</div>
                     <div>{{ $child->getPropertyAttributeLabel() }}</div>
                 </div>
                 @endif
@@ -121,7 +121,7 @@
     @if ($reservation->customer->count() > 1)
     <div>
         <div class="mb-2 content">
-            <h2 class="text-base">Customer data</h2>
+            <h2 class="text-base">{{ __("Checkout data") }}</h2>
         </div>
         <div class="card p-2 mb-5">
             <div class="grid grid-cols-2 xl:grid-cols-3 mt-2">
@@ -143,7 +143,7 @@
     @if ($reservation->options->count() > 0)
     <div>
         <div class="mb-2 content">
-            <h2 class="text-base">Options</h2>
+            <h2 class="text-base">{{ __("Options") }}</h2>
         </div>
         <div class="card p-2 mb-5">
         @foreach ($reservation->options as $option)               
@@ -155,10 +155,10 @@
                     {{ $option->values->find($option->pivot->value)->price->format() }}
                     <span class="font-normal">
                         @if ($option->values->find($option->pivot->value)->price_type == 'fixed')
-                        / reservation
+                        / {{ __("reservation") }}
                         @endif
                         @if ($option->values->find($option->pivot->value)->price_type == 'perday')
-                        / day
+                        / {{ __("day") }}
                         @endif
                     </span>
                 </div>
@@ -172,7 +172,7 @@
     @if ($reservation->extras->count() > 0)
     <div>
         <div class="mb-2 content">
-            <h2 class="text-base">Extras</h2>
+            <h2 class="text-base">{{ __("Extras") }}</h2>
         </div>
         <div class="card p-2 mb-5">
         @foreach ($reservation->extras as $extra)               
@@ -189,17 +189,17 @@
 
     <div>
         <div class="mb-2 content">
-            <h2 class="text-base">Payment information</h2>
+            <h2 class="text-base">{{ __("Payment information") }}</h2>
         </div>
         <div class="card p-2 mb-5">
             <div class="mb-1 border-b border-gray flex justify-between w-full p-1">
-                <div>Deposit</div>
+                <div>{{ __("Deposit") }}</div>
                 <div class="font-bold">
                     {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }}
                 </div>
             </div>  
             <div class="mb-1 border-b border-gray flex justify-between w-full p-1">
-                <div class="font-bold text-xl">Total price</div>
+                <div class="font-bold text-xl">{{ __("Total price") }}</div>
                 <div class="font-bold text-xl">
                     {{ config('resrv-config.currency_symbol') }} {{ $reservation->price->format() }}
                 </div>
