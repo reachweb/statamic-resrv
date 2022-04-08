@@ -32,6 +32,9 @@
                                 v-on="inputEvents" />
                     </v-date-picker>
                 </div>
+                <div v-if="errors.date_start || errors.date_end" class="w-full mt-1 text-sm text-red-400">
+                    {{ __('Date range is required') }}
+                </div>  
             </div>
             <div class="flex-1 px-2 mb-3 text-grey">
                 <div class="flex flex-wrap items-center space-x-4">
@@ -112,8 +115,8 @@ export default {
     computed: {
         submit() {
             let fields = {}
-            fields.date_start = dayjs(this.dates.start).format('YYYY-MM-DD')
-            fields.date_end = dayjs(this.dates.end).format('YYYY-MM-DD')
+            fields.date_start = this.dates ? dayjs(this.dates.start).format('YYYY-MM-DD') : ''
+            fields.date_end = this.dates ? dayjs(this.dates.end).format('YYYY-MM-DD') : ''
             fields.statamic_id = this.parentId
             fields.price = this.price
             fields.available = this.available
