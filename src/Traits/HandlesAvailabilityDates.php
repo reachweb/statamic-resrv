@@ -56,6 +56,7 @@ trait HandlesAvailabilityDates
     {
         if (! Arr::exists($data, 'advanced')) {
             $this->advanced = [];
+
             return;
         }
         $this->advanced = $data['advanced'] ? explode('|', $data['advanced']) : [];
