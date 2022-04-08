@@ -57,6 +57,8 @@ class AdvancedAvailabilityFrontTest extends TestCase
         $this->signInAdmin();
 
         $item = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+        $item3 = $this->makeStatamicItem();
 
         AdvancedAvailability::factory()
             ->count(2)
@@ -76,9 +78,23 @@ class AdvancedAvailabilityFrontTest extends TestCase
             )
             ->create(
                 [
-                    'statamic_id' => $item->id(),
+                    'statamic_id' => $item2->id(),
                     'property' => 'something-else',
                     'price' => '100',
+                ]
+            );
+
+        AdvancedAvailability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->add(1, 'day')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item3->id(),
+                    'property' => 'third-one',
+                    'price' => '220',
                 ]
             );
 
@@ -91,7 +107,16 @@ class AdvancedAvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('200');
+        $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertSee($item3->id());
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+            'advanced' => 'something|something-else',
+        ];
+
+        $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertDontSee($item3->id());
     }
 
     public function test_advanced_availability_multi_dates_availability()

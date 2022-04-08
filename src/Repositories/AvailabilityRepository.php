@@ -14,23 +14,8 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
             ->when($advanced, function ($query, $advanced) {
-                if ($advanced !== 'any') {
-                    $query->where('property', $advanced);
-                }
-            });
-    }
-
-    public function availableAt($date_start, $date_end, $quantity, $advanced)
-    {
-        return $this->query($advanced)
-            ->where(function ($query) use ($date_start, $date_end) {
-                $query->where('date', $date_start)
-                ->orWhere('date', $date_end);
-            })
-            ->where('available', '>=', $quantity)
-            ->when($advanced, function ($query, $advanced) {
-                if ($advanced !== 'any') {
-                    $query->where('property', $advanced);
+                if (! in_array('any', $advanced)) {
+                    $query->whereIn('property', $advanced);
                 }
             });
     }
@@ -43,24 +28,8 @@ class AvailabilityRepository
             ->where('statamic_id', $statamic_id)
             ->where('available', '>=', $quantity)
             ->when($advanced, function ($query, $advanced) {
-                if ($advanced !== 'any') {
-                    $query->where('property', $advanced);
-                }
-            });
-    }
-
-    public function itemAvailableAt($date_start, $date_end, $quantity, $advanced, $statamic_id)
-    {
-        return $this->query($advanced)
-            ->where(function ($query) use ($date_start, $date_end) {
-                $query->where('date', $date_start)
-                ->orWhere('date', $date_end);
-            })
-            ->where('statamic_id', $statamic_id)
-            ->where('available', '>=', $quantity)
-            ->when($advanced, function ($query, $advanced) {
-                if ($advanced !== 'any') {
-                    $query->where('property', $advanced);
+                if (! in_array('any', $advanced)) {
+                    $query->whereIn('property', $advanced);
                 }
             });
     }
@@ -72,23 +41,8 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($advanced, function ($query, $advanced) {
-                if ($advanced !== 'any') {
-                    $query->where('property', $advanced);
-                }
-            });
-    }
-
-    public function priceAtDates($date_start, $date_end, $advanced, $statamic_id)
-    {
-        return $this->query($advanced)
-            ->where(function ($query) use ($date_start, $date_end) {
-                $query->where('date', $date_start)
-                ->orWhere('date', $date_end);
-            })
-            ->where('statamic_id', $statamic_id)
-            ->when($advanced, function ($query, $advanced) {
-                if ($advanced !== 'any') {
-                    $query->where('property', $advanced);
+                if (! in_array('any', $advanced)) {
+                    $query->whereIn('property', $advanced);
                 }
             });
     }
@@ -100,7 +54,7 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($advanced, function ($query, $advanced) {
-                $query->where('property', $advanced);
+                $query->whereIn('property', $advanced);
             })
             ->decrement('available', $quantity);
     }
@@ -112,7 +66,7 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($advanced, function ($query, $advanced) {
-                $query->where('property', $advanced);
+                $query->whereIn('property', $advanced);
             })
             ->increment('available', $quantity);
     }

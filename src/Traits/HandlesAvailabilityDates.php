@@ -55,11 +55,10 @@ trait HandlesAvailabilityDates
     private function setAdvanced($data)
     {
         if (! Arr::exists($data, 'advanced')) {
-            $this->advanced = null;
-
+            $this->advanced = [];
             return;
         }
-        $this->advanced = $data['advanced'];
+        $this->advanced = $data['advanced'] ? explode('|', $data['advanced']) : [];
     }
 
     private function setDates($date_start, $date_end)
