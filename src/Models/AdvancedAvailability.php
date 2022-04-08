@@ -46,16 +46,16 @@ class AdvancedAvailability extends Availability
         $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
 
         $idsFound = $results->groupBy('statamic_id')->keys();
-
         $days = [];
         foreach ($idsFound as $id) {
-            $properties = $results->groupBy('property')->keys();
-            // In case there are more than one properties for that period, check them by property or this might fail
-            foreach ($properties as $property) {
-                $dates = $results->where('property', $property)->where('statamic_id', $id)->sortBy('date');
-                if ($dates->count() !== count($this->getPeriod())) {
-                    continue;
-                }
+            $dates = $results->where('statamic_id', $id)->sortBy('date');
+            $property = $dates->first()->property;
+            // Remove any dates that have a different property (in case we were searching for any or multiple properties)
+            $dates = $dates->reject(fn ($item) => $item->property != $property);
+            // If the count of the dates is not the same like the period, it usually
+            // means that a date has no availability information, so we should just skip
+            if ($dates->count() !== count($this->getPeriod())) {
+                continue;
             }
             foreach ($dates as $availability) {
                 $days[$availability->date][] = $id;
