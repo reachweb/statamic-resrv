@@ -13,11 +13,12 @@ class ReservationCalendarResource extends ResourceCollection
     }
 
     public function toArray($request)
-    {   
+    {
         $childs = collect();
         $reservations = $this->collection->transform(function ($reservation) use ($request, &$childs) {
             if ($reservation->type === 'parent') {
                 $childs->push($this->buildChildReservationArray($reservation, $request)->toArray());
+
                 return false;
             }
             $data = [
@@ -42,7 +43,7 @@ class ReservationCalendarResource extends ResourceCollection
             return $data;
         })->reject(fn ($item) => $item === false);
         $childs = $childs->flatten(1);
-        
+
         return $reservations->concat($childs);
     }
 
@@ -80,7 +81,8 @@ class ReservationCalendarResource extends ResourceCollection
                     $data['end'] = null;
                 }
             }
+
             return $data;
-        });        
+        });
     }
 }
