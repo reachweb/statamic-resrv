@@ -118,6 +118,16 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
+    
+    public function percentDecrease()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'amount_operation' => 'decrease',
+                'amount' => '20',
+            ];
+        });
+    }
 
     public function fixedDecrease()
     {

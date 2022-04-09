@@ -132,6 +132,7 @@ class DynamicPricing extends Model
                 ->where('dynamic_pricing_assignment_id', $statamic_id)
                 ->get();
 
+
         if ($itemsForId->count() == 0) {
             return false;
         }
@@ -170,7 +171,7 @@ class DynamicPricing extends Model
 
     protected function checkAllParameters($items, $price, $date_start, $date_end, $duration)
     {
-        $dynamicPricingThatApplies = [];
+        $dynamicPricingThatApplies = collect();
         foreach ($items as $item) {
             $pricing = $this->find($item->dynamic_pricing_id);
             if ($pricing->hasCondition()) {
@@ -183,10 +184,10 @@ class DynamicPricing extends Model
                     continue;
                 }
             }
-            $dynamicPricingThatApplies[] = $pricing;
+            $dynamicPricingThatApplies->push($pricing);
         }
 
-        return $dynamicPricingThatApplies;
+        return $dynamicPricingThatApplies->sortBy('order');
     }
 
     protected function hasCondition()

@@ -270,6 +270,63 @@ class DynamicPricingFrontTest extends TestCase
         $response->assertStatus(200)->assertSee($item->id())->assertSee('108.98');
     }
 
+    public function test_dynamic_pricing_applies_by_ordering()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(10, 'day')->toISOString(),
+            'price' => 50,
+            'available' => 2,
+        ];
+
+        $this->post(cp_route('resrv.availability.update'), $payload);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
+        ];
+
+        // Lets add a 50% decrease
+        $dynamic = DynamicPricing::factory()->percentDecrease()->make([
+            'title' => 'Take 50% off',
+            'amount' => '50',
+        ])->toArray();        
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        // Lets add 50
+        $dynamic = DynamicPricing::factory()->fixedIncrease()->make([
+            'title' => 'Add 50',
+            'amount' => '50',
+        ])->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        // Reorder them
+        $this->patch(cp_route('resrv.dynamicpricing.order'), [
+            'id' => 1,
+            'order' => 2,
+        ]);
+        $this->patch(cp_route('resrv.dynamicpricing.order'), [
+            'id' => 2,
+            'order' => 1,
+        ]);        
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('125');
+    }
+
     public function test_dynamic_pricing_changes_single_item_availability_prices()
     {
         $this->signInAdmin();
