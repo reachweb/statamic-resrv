@@ -833,7 +833,7 @@ class ReservationFrontTest extends TestCase
                 ],
             ],
             'payment' => $payment,
-            'price' => $price,            
+            'price' => $price,
             'total' => $total,
         ];
 
