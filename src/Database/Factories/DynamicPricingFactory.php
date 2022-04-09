@@ -118,7 +118,7 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
-    
+
     public function percentDecrease()
     {
         return $this->state(function (array $attributes) {

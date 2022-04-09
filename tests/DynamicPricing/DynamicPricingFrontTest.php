@@ -297,7 +297,7 @@ class DynamicPricingFrontTest extends TestCase
         $dynamic = DynamicPricing::factory()->percentDecrease()->make([
             'title' => 'Take 50% off',
             'amount' => '50',
-        ])->toArray();        
+        ])->toArray();
         $dynamic['entries'] = [$item->id()];
         $dynamic['extras'] = [];
 
@@ -321,7 +321,7 @@ class DynamicPricingFrontTest extends TestCase
         $this->patch(cp_route('resrv.dynamicpricing.order'), [
             'id' => 2,
             'order' => 1,
-        ]);        
+        ]);
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('125');

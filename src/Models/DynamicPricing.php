@@ -132,7 +132,6 @@ class DynamicPricing extends Model
                 ->where('dynamic_pricing_assignment_id', $statamic_id)
                 ->get();
 
-
         if ($itemsForId->count() == 0) {
             return false;
         }
