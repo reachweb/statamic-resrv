@@ -50,9 +50,6 @@ class Extra extends Model
         if ($dynamicPricing) {
             $this->price = $dynamicPricing->apply($this->price)->format();
         }
-        if ($this->price_type == 'perday') {
-            return $this->price->multiply($this->duration)->format();
-        }
         if ($this->price_type == 'relative') {
             return $this->price->multiply($this->getRelativePrice($data))->format();
         }

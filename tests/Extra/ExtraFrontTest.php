@@ -52,12 +52,12 @@ class ExtraFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.extra.index'), $checkoutRequest);
-        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('9.30')->assertSee($extra2->slug)->assertSee('25');
+        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('4.65')->assertSee($extra2->slug)->assertSee('25');
 
         // Check for multiple items
         $checkoutRequest['quantity'] = 3;
         $response = $this->post(route('resrv.extra.index'), $checkoutRequest);
-        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('9.30')->assertSee($extra2->slug)->assertSee('25');
+        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('4.65')->assertSee($extra2->slug)->assertSee('25');
     }
 
     public function test_can_index_extras_with_relative_price()
