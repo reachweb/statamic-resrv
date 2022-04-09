@@ -4,35 +4,69 @@
 {{ config('resrv-config.address1') }}<br>
 {{ config('resrv-config.zip_city') }}<br>
 {{ config('resrv-config.country') }}<br>
-Tel: {{ config('resrv-config.phone') }}<br>
-Email: {{ config('resrv-config.mail') }}
+{{ __("Tel:") }} {{ config('resrv-config.phone') }}<br>
+{{ __("Email:") }} {{ config('resrv-config.mail') }}
 
-{{ __('statamic-resrv::email.thankYou') }}
+{{ __("Thank you for your reservation!") }}
 
 @component('mail::panel')
-{{ __('statamic-resrv::email.reservationCode') }} **{{ $reservation->id }}**<br>
-{{ __('statamic-resrv::email.date') }}: **{{ $reservation->updated_at->format('d-m-Y H:i') }}**<br>
-{{ __('statamic-resrv::email.bookingReference') }}: **{{ $reservation->reference }}**<br>
-{{ __('statamic-resrv::email.email') }}: **{{ $reservation->customer->get('email') }}** 
+{{ __("Reservation code") }} **{{ $reservation->id }}**<br>
+{{ __("Date") }}: **{{ $reservation->updated_at->format('d-m-Y H:i') }}**<br>
+{{ __("Booking reference") }}: **{{ $reservation->reference }}**<br>
+{{ __("Email") }}: **{{ $reservation->customer->get('email') }}** 
 @endcomponent
 
 @component('mail::table')
-|{{ __('statamic-resrv::email.reservationDetails') }}||
-| :------------------------------------------------ |:--------------------------------------------------------------------------| 
-| {{ __('statamic-resrv::email.pickUpDate') }}      | {{ $reservation->date_start->format('d-m-Y H:i') }} |
-| {{ __('statamic-resrv::email.dropOffDate') }}     | {{ $reservation->date_end->format('d-m-Y H:i') }} |
-@if (config('resrv-config.enable_locations'))
-| {{ __('statamic-resrv::email.pickUpLocation') }}  | {{ $reservation->location_start_data->name }} |
-| {{ __('statamic-resrv::email.dropOffLocation') }} | {{ $reservation->location_end_data->name }} |
+|{{ __("Reservation details") }}||
+| :------------------------------------------------ |:--------------------------------------------------------------------------|
+@if ($reservation->type !== 'parent')
+| {{ __("Pick-up date") }}      | {{ $reservation->date_start->format('d-m-Y H:i') }} |
+| {{ __("Drop-off date") }}     | {{ $reservation->date_end->format('d-m-Y H:i') }} |
 @endif
-| {{ __('statamic-resrv::email.itemLabel') }}   | {{ $reservation->entry()->title }} |
+@if (config('resrv-config.enable_locations'))
+| {{ __("Pick-up location") }}  | {{ $reservation->location_start_data->name }} |
+| {{ __("Drop-off location") }} | {{ $reservation->location_end_data->name }} |
+@endif
+| {{ __("Vehicle") }}   | {{ $reservation->entry()->title }} |
+@if ($reservation->type !== 'parent')
 @if (config('resrv-config.maximum_quantity') > 1)
-| {{ __('statamic-resrv::email.quantity') }}  | x {{ $reservation->quantity }} |
+| {{ __("Quantity") }}  | x {{ $reservation->quantity }} |
 @endif
 @if (config('resrv-config.enable_advanced_availability'))
-| {{ __('statamic-resrv::email.property') }} | {{ $reservation->property }} |
+| {{ __("Property") }} | {{ $reservation->getPropertyAttributeLabel() }} |
+@endif
 @endif
 @endcomponent
+
+@if ($reservation->type === 'parent')
+@foreach ($reservation->childs as $child)
+@component('mail::table')
+|{{ __("Reservation") }} # {{ $loop->iteration }}||
+| :---------------------------------------- |:------------------------------------------|
+| {{ __("Pick-up date") }}      | {{ $child->date_start->format('d-m-Y H:i') }} |
+| {{ __("Drop-off date") }}     | {{ $child->date_end->format('d-m-Y H:i') }} |
+@if (config('resrv-config.maximum_quantity') > 1)
+| {{ __("Quantity") }}  | x {{ $child->quantity }} |
+@endif
+@if (config('resrv-config.enable_advanced_availability'))
+| {{ __("Property") }} | {{ $child->getPropertyAttributeLabel() }} |
+@endif
+@endcomponent
+@endforeach
+@endif
+
+@if ($reservation->customer->count() > 1)
+@component('mail::table')
+|{{ __("Checkout data") }} ||
+| :---------------------------------------- |:------------------------------------------|
+@foreach ($reservation->customer as $field => $value)
+@if (is_array($value) || $value == null)
+    @continue
+@endif
+| {{ $reservation->checkoutFormFieldsArray($reservation->entry()->id)[$field] ?? $field }}      | {{ $value }} |
+@endforeach
+@endcomponent
+@endif
 
 @if ($reservation->extras()->get()->count() > 0)
 @component('mail::table')
@@ -46,7 +80,7 @@ Email: {{ config('resrv-config.mail') }}
 
 @if ($reservation->options()->get()->count() > 0)
 @component('mail::table')
-|{{ __('statamic-resrv::email.options') }}||
+|{{ __("Options") }}||
 | :------------------------------------------------ |:--------------------------------------------------------------------------| 
 @foreach ($reservation->options()->get() as $option)
 | {{ $option->name }} | {{ $option->values->find($option->pivot->value)->name }} |
@@ -55,16 +89,16 @@ Email: {{ config('resrv-config.mail') }}
 @endif
 
 @component('mail::table')
-|{{ __('statamic-resrv::email.paymentInformation') }}||
+|{{ __("Payment information") }}||
 | :----------------------------- |:----------------| 
 @if (config('resrv-config.payment') != 'full')
-| {{ __('statamic-resrv::email.alreadyPaid') }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
-| {{ __('statamic-resrv::email.amountToBePaid') }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
+| {{ __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
+| {{ __("Remaing amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
-| **{{ __('statamic-resrv::email.total') }}** ({{ __('statamic-resrv::email.includingTaxes') }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->price->format() }} |
+| **{{ __("Total") }}** ({{ __("including taxes") }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->price->format() }} |
 
 @endcomponent
 
-{{ __('statamic-resrv::email.thanks') }},<br>
+{{ __("Thank you") }},<br>
 {{ config('app.name') }}
 @endcomponent
