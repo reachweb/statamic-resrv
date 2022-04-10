@@ -877,7 +877,7 @@ class ReservationFrontTest extends TestCase
     {
         Config::set('resrv-config.stripe_secret_key', [
             'pages' =>'sk_test_some-key',
-            'other-collection' => 'sk_test_some-other-key',    
+            'other-collection' => 'sk_test_some-other-key',
         ]);
 
         $item = $this->makeStatamicItem();

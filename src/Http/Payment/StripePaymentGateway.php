@@ -56,7 +56,6 @@ class StripePaymentGateway implements PaymentInterface
         $handle = $reservation->entry()->collection->handle();
         if (array_key_exists($handle, $key)) {
             return $key[$handle];
-        }        
+        }
     }
-
 }

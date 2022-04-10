@@ -21,7 +21,7 @@ class FakePaymentGateway implements PaymentInterface
     {
         if ($this->getStripeKey($reservation)) {
             return true;
-        }        
+        }
     }
 
     public function getStripeKey($reservation)
@@ -33,6 +33,6 @@ class FakePaymentGateway implements PaymentInterface
         $handle = $reservation->entry()->collection->handle();
         if (in_array($handle, $key)) {
             return $key[$handle];
-        }        
+        }
     }
 }
