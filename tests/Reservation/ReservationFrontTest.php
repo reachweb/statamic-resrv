@@ -23,7 +23,7 @@ class ReservationFrontTest extends TestCase
     public function setUp(): void
     {
         parent::setUp();
-        Config::set('resrv-config.stripe_key', 'sk_test_51ImFMAD6a3Agl4C6BCvvOsnR8u5mzk8GUbjg2iInyX8qRqTL2JviqnRUfRw8T5Uq4WIv5IosSFmq22DS8h0JM35200DhjC2wqS');
+        Config::set('resrv-config.stripe_secret_key', 'sk_test_some_key');
     }
 
     public function test_reservation_confirm_method_success()
@@ -870,6 +870,32 @@ class ReservationFrontTest extends TestCase
         $this->assertDatabaseHas('resrv_reservations', [
             'type' => 'parent',
             'status' => 'expired',
+        ]);
+    }
+
+    public function test_array_of_stripe_keys()
+    {
+        Config::set('resrv-config.stripe_secret_key', [
+            'pages' =>'sk_test_some-key',
+            'other-collection' => 'sk_test_some-other-key',    
+        ]);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+        ])->create();
+
+        $customerData = [
+            'first_name' => 'Test',
+            'last_name' => 'Testing',
+            'email' => 'test@test.com',
+            'repeat_email' => 'test@test.com',
+        ];
+
+        $response = $this->post(route('resrv.reservation.checkoutFormSubmit', $reservation->id), $customerData);
+        $response->assertStatus(200)->assertSee('Test');
+        $this->assertDatabaseHas('resrv_reservations', [
+            'customer->first_name' => 'Test',
         ]);
     }
 }

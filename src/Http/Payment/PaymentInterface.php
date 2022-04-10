@@ -2,9 +2,13 @@
 
 namespace Reach\StatamicResrv\Http\Payment;
 
+use Reach\StatamicResrv\Models\Reservation;
+
 interface PaymentInterface
 {
-    public function paymentIntent($amount, $reservation_id, $data);
+    public function paymentIntent($amount, Reservation $reservation, $data);
 
-    public function refund($payment_id);
+    public function refund(Reservation $reservation);
+
+    public function getStripeKey(Reservation $reservation);
 }

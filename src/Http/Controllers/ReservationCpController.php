@@ -87,7 +87,7 @@ class ReservationCpController extends Controller
         ]);
         $reservation = $this->reservation->find($data['id']);
         try {
-            $attemptRefund = $this->payment->refund($reservation->payment_id);
+            $this->payment->refund($reservation);
         } catch (RefundFailedException $exception) {
             return response()->json(['error' => $exception->getMessage()], 400);
         }
