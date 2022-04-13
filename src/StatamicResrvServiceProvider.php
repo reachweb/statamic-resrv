@@ -108,7 +108,7 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
 
         $this->publishes([
             __DIR__.'/../resources/views/email' => resource_path('views/vendor/statamic-resrv/email'),
-        ], 'resrv-views');
+        ], 'resrv-emails');
 
         $this->mergeConfigFrom(__DIR__.'/../config/config.php', 'resrv-config');
 
