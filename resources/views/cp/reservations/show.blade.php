@@ -71,7 +71,7 @@
                     <div>x {{ $reservation->quantity }}</div>
                 </div>
                 @endif
-                @if (config('resrv-config.enable_advanced_availability'))
+                @if (config('resrv-config.enable_advanced_availability') && $reservation->property)
                 <div>
                     <div class="font-bold mb-1">{{ __("Property") }}</div>
                     <div>{{ $reservation->getPropertyAttributeLabel() }}</div>
