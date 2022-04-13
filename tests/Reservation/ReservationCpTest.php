@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Location;
@@ -41,6 +42,8 @@ class ReservationCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $location = Location::factory()->create();
+
+        Config::set('resrv-config.enable_locations', true);
 
         $reservation = Reservation::factory([
             'customer' => ['email' => 'test@test.com'],
