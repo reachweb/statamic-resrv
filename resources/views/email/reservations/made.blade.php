@@ -63,7 +63,7 @@
 
 @if ($reservation->extras()->get()->count() > 0)
 @component('mail::table')
-|{{ __('statamic-resrv::email.extras') }}||
+|{{ __("Extras") }}||
 | :------------------------------------------------ |:--------------------------------------------------------------------------| 
 @foreach ($reservation->extras()->get() as $extra)
 | {{ $extra->name }} | x{{ $extra->pivot->quantity }} |
