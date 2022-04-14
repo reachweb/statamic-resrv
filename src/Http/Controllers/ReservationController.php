@@ -156,7 +156,7 @@ class ReservationController extends Controller
         $data = $request->validate($this->validationRules($reservation));
 
         // Create a payment intent
-        $paymentIntent = $this->payment->paymentIntent($reservation->payment, $reservation_id, $data);
+        $paymentIntent = $this->payment->paymentIntent($reservation->payment, $reservation, $data);
 
         // Save customer data and payment id
         $reservation->customer = $data;
