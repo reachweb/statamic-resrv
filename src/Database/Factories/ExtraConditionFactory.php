@@ -22,7 +22,7 @@ class ExtraConditionFactory extends Factory
     public function definition()
     {
         return [
-            'extra_id' => ''
+            'extra_id' => '',
         ];
     }
 
@@ -35,7 +35,7 @@ class ExtraConditionFactory extends Factory
                     'show_condition' => 'extra_selected',
                     'show_comparison' => '==',
                     'show_value' => '2',
-                ]],                
+                ]],
             ];
         });
     }
@@ -90,6 +90,4 @@ class ExtraConditionFactory extends Factory
             ];
         });
     }
-
-
 }

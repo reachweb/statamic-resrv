@@ -237,7 +237,7 @@ class ExtraCpTest extends TestCase
                     'required_condition' => 'pickup_time',
                     'time_start' => '21:00',
                     'time_end' => '08:00',
-                ]
+                ],
             ]),
         ]);
         $response->assertStatus(200);
@@ -292,10 +292,10 @@ class ExtraCpTest extends TestCase
             'title' => 'Required for pickup time',
             'conditions' => [
                 [
-                'show_type' => 'hide',
-                'show_condition' => 'extra_selected',
-                'show_comparison' => '!=',
-                'show_value' => '2',
+                    'show_type' => 'hide',
+                    'show_condition' => 'extra_selected',
+                    'show_comparison' => '!=',
+                    'show_value' => '2',
                 ],
             ],
         ];
@@ -377,7 +377,7 @@ class ExtraCpTest extends TestCase
         ]);
 
         $payload = [
-            'conditions' => []
+            'conditions' => [],
         ];
 
         $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
@@ -404,5 +404,4 @@ class ExtraCpTest extends TestCase
             'extra_id' => $extra->id,
         ]);
     }
-
 }

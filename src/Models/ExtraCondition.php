@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Casts\AsCollection;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Reach\StatamicResrv\Database\Factories\ExtraConditionFactory;
 
@@ -28,6 +28,4 @@ class ExtraCondition extends Model
     {
         return $this->belongsTo(Extra::class, 'extra_id');
     }
-
-   
 }
