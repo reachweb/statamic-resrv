@@ -32,6 +32,11 @@ class ExtraCpController extends Controller
     {
         $extras = $this->extra->entry($statamic_id)->get();
 
+        $extras->transform(function ($extra) {
+            $extra->conditions = $this->extra->find($extra->id)->conditions()->get();
+            return $extra;
+        });
+
         return response()->json($extras);
     }
 
@@ -99,6 +104,24 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
+    public function conditions(Request $request, $extra_id)
+    {
+        $data = $request->validate([
+            'conditions' => 'sometimes|array',
+            'conditions.*' => 'array:show_type,show_condition,show_comparison,show_value,required_condition,required_comparison,required_value,date_start,date_end,time_start,time_end',
+        ]);
+        if ($data['conditions']) {
+            $this->extra->find($extra_id)
+                ->conditions()
+                ->updateOrCreate($data);
+        } else {
+            $this->extra->find($extra_id)
+                ->conditions()
+                ->delete();
+        }
+        return response(200);
+    }
+
     public function order(Request $request)
     {
         $data = $request->validate([
@@ -119,6 +142,10 @@ class ExtraCpController extends Controller
         $extra = $this->extra->destroy($data['id']);
 
         DB::table('resrv_statamicentry_extra')
+            ->where('extra_id', $data['id'])
+            ->delete();
+
+        DB::table('resrv_extra_conditions')
             ->where('extra_id', $data['id'])
             ->delete();
 

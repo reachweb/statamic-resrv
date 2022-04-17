@@ -28,9 +28,16 @@ class Extra extends Model
         'price' => PriceClass::class,
     ];
 
+    protected $with = ['conditions'];
+
     protected static function newFactory()
     {
         return ExtraFactory::new();
+    }
+
+    public function conditions()
+    {
+        return $this->hasMany(ExtraCondition::class);
     }
 
     public function getPriceAttribute($value)
