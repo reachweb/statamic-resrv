@@ -324,6 +324,7 @@ class Reservation extends Model
         if ($this->entry()->get('resrv_override_form')) {
             $formHandle = $this->entry()->get('resrv_override_form');
         }
+
         return Form::find($formHandle);
     }
 

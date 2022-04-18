@@ -34,6 +34,7 @@ class ReservationMade extends Mailable
         if ($this->getOption('html', 1)) {
             return $this->markdown($this->getOption('html', 1));
         }
+
         return $this->markdown('statamic-resrv::email.reservations.made');
     }
 

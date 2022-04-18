@@ -33,8 +33,7 @@ class ReservationConfirmed extends Mailable
         if ($this->getOption('html')) {
             return $this->markdown($this->getOption('html'));
         }
+
         return $this->markdown('statamic-resrv::email.reservations.confirmed');
     }
-
-    
 }
