@@ -318,6 +318,15 @@ class Reservation extends Model
         return Form::find($formHandle)->fields()->values();
     }
 
+    public function getFormOptions()
+    {
+        $formHandle = config('resrv-config.form_name', 'checkout');
+        if ($this->entry()->get('resrv_override_form')) {
+            $formHandle = $this->entry()->get('resrv_override_form');
+        }
+        return Form::find($formHandle);
+    }
+
     public function expire($id)
     {
         try {

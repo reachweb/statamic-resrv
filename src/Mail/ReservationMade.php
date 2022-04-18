@@ -15,6 +15,12 @@ class ReservationMade extends Mailable
     public function __construct(Reservation $reservation)
     {
         $this->reservation = $reservation;
+        if ($this->getOption('from', 1)) {
+            $this->from($this->getOption('from', 1), env('APP_NAME', ''));
+        }
+        if ($this->getOption('to', 1)) {
+            $this->to(explode(',', $this->getOption('to', 1)), env('APP_NAME', ''));
+        }
         $this->subject($this->generateSubject($reservation));
     }
 
@@ -25,6 +31,9 @@ class ReservationMade extends Mailable
      */
     public function build()
     {
+        if ($this->getOption('html', 1)) {
+            return $this->markdown($this->getOption('html', 1));
+        }
         return $this->markdown('statamic-resrv::email.reservations.made');
     }
 

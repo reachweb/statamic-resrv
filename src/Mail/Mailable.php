@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Mail;
 
 use Illuminate\Container\Container;
+use Illuminate\Support\Arr;
 use Illuminate\Mail\Mailable as LaravelMailable;
 use Illuminate\Mail\Markdown;
 
@@ -38,5 +39,14 @@ class Mailable extends LaravelMailable
             'html' => $markdown->render($this->markdown, $data),
             'text' => $this->buildMarkdownText($markdown, $data),
         ];
+    }
+
+    protected function getOption($option, $offset = 0)
+    {
+        $form = $this->reservation->getFormOptions();
+        if ($form->email() && Arr::exists($form->email()[$offset], $option)) {
+            return $form->email()[$offset][$option];
+        }
+        return false;
     }
 }

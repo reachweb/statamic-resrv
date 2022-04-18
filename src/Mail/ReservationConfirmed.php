@@ -15,6 +15,12 @@ class ReservationConfirmed extends Mailable
     public function __construct(Reservation $reservation)
     {
         $this->reservation = $reservation;
+        if ($this->getOption('from')) {
+            $this->from(explode(',', $this->getOption('from')), env('APP_NAME', ''));
+        }
+        if ($this->getOption('subject')) {
+            $this->subject($this->getOption('subject'));
+        }
     }
 
     /**
@@ -24,6 +30,11 @@ class ReservationConfirmed extends Mailable
      */
     public function build()
     {
+        if ($this->getOption('html')) {
+            return $this->markdown($this->getOption('html'));
+        }
         return $this->markdown('statamic-resrv::email.reservations.confirmed');
     }
+
+    
 }
