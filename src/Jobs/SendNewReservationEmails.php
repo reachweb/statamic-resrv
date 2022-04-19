@@ -32,9 +32,8 @@ class SendNewReservationEmails implements ShouldQueue
     {
         // Customer email
         Mail::to($this->reservation->customer->get('email'))->send(new ReservationConfirmed($this->reservation));
-       
+
         // Admin emails
         Mail::send(new ReservationMade($this->reservation));
-
     }
 }
