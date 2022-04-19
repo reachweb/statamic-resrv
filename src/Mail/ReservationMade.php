@@ -18,9 +18,13 @@ class ReservationMade extends Mailable
         if ($this->getOption('from', 1)) {
             $this->from($this->getOption('from', 1), env('APP_NAME', ''));
         }
+        
         if ($this->getOption('to', 1)) {
-            $this->to(explode(',', $this->getOption('to', 1)), env('APP_NAME', ''));
+            $this->to(explode(',', $this->getOption('to', 1)));
+        } elseif (config('resrv-config.admin_email') != false) {
+            $this->to(explode(',', config('resrv-config.admin_email')));
         }
+        
         $this->subject($this->generateSubject($reservation));
     }
 

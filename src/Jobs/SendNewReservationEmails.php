@@ -32,12 +32,9 @@ class SendNewReservationEmails implements ShouldQueue
     {
         // Customer email
         Mail::to($this->reservation->customer->get('email'))->send(new ReservationConfirmed($this->reservation));
-        // Admin emails if set
-        if (config('resrv-config.admin_email') != false) {
-            $admin_emails = explode(',', config('resrv-config.admin_email'));
-            foreach ($admin_emails as $email) {
-                Mail::to($email)->send(new ReservationMade($this->reservation));
-            }
-        }
+       
+        // Admin emails
+        Mail::send(new ReservationMade($this->reservation));
+
     }
 }
