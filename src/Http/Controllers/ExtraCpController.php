@@ -109,12 +109,16 @@ class ExtraCpController extends Controller
     {
         $data = $request->validate([
             'conditions' => 'sometimes|array',
-            'conditions.*' => 'array:show_type,show_condition,show_comparison,show_value,required_condition,required_comparison,required_value,date_start,date_end,time_start,time_end',
+            'conditions.*' => 'array:operation,type,comparison,value,date_start,date_end,time_start,time_end',
         ]);
+        
         if ($data['conditions']) {
             $this->extra->find($extra_id)
                 ->conditions()
-                ->updateOrCreate($data);
+                ->updateOrCreate(
+                    ['extra_id' => $extra_id],
+                    $data
+                );
         } else {
             $this->extra->find($extra_id)
                 ->conditions()

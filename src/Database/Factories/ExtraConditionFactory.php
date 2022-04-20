@@ -31,10 +31,10 @@ class ExtraConditionFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'conditions' => [[
-                    'show_type' => 'show',
-                    'show_condition' => 'extra_selected',
-                    'show_comparison' => '==',
-                    'show_value' => '2',
+                    'operation' => 'show',
+                    'condition' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
                 ]],
             ];
         });
@@ -45,10 +45,10 @@ class ExtraConditionFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'conditions' => [[
-                    'show_type' => 'hide',
-                    'show_condition' => 'extra_selected',
-                    'show_comparison' => '==',
-                    'show_value' => '1',
+                    'operation' => 'hide',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '1',
                 ]],
             ];
         });
@@ -59,7 +59,8 @@ class ExtraConditionFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'conditions' => [[
-                    'required_condition' => 'pickup_time',
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
                     'time_start' => '21:00',
                     'time_end' => '08:00',
                 ]],
@@ -72,7 +73,8 @@ class ExtraConditionFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'conditions' => [[
-                    'required_condition' => 'reservation_dates',
+                    'operation' => 'required',
+                    'type' => 'reservation_dates',
                     'date_start' => today()->toIso8601String(),
                     'date_end' => today()->add(10, 'day')->toIso8601String(),
                 ]],
@@ -85,7 +87,8 @@ class ExtraConditionFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'conditions' => [[
-                    'required_condition' => 'always',
+                    'operation' => 'required',
+                    'type' => 'always',
                 ]],
             ];
         });

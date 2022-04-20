@@ -222,7 +222,8 @@ class ExtraCpTest extends TestCase
         $payload = [
             'conditions' => [
                 [
-                    'required_condition' => 'pickup_time',
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
                     'time_start' => '21:00',
                     'time_end' => '08:00',
                 ],
@@ -234,7 +235,8 @@ class ExtraCpTest extends TestCase
             'extra_id' => $extra->id,
             'conditions' => json_encode([
                 [
-                    'required_condition' => 'pickup_time',
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
                     'time_start' => '21:00',
                     'time_end' => '08:00',
                 ],
@@ -250,14 +252,16 @@ class ExtraCpTest extends TestCase
         $payload = [
             'conditions' => [
                 [
-                    'required_condition' => 'pickup_time',
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
                     'time_start' => '21:00',
                     'time_end' => '08:00',
                 ],
                 [
-                    'show_condition' => 'extra_selected',
-                    'show_comparison' => '==',
-                    'show_value' => '2',
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
                 ],
             ],
         ];
@@ -267,14 +271,16 @@ class ExtraCpTest extends TestCase
             'extra_id' => $extra->id,
             'conditions' => json_encode([
                 [
-                    'required_condition' => 'pickup_time',
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
                     'time_start' => '21:00',
                     'time_end' => '08:00',
                 ],
                 [
-                    'show_condition' => 'extra_selected',
-                    'show_comparison' => '==',
-                    'show_value' => '2',
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
                 ],
             ]),
         ]);
@@ -289,13 +295,12 @@ class ExtraCpTest extends TestCase
         ]);
 
         $payload = [
-            'title' => 'Required for pickup time',
             'conditions' => [
                 [
-                    'show_type' => 'hide',
-                    'show_condition' => 'extra_selected',
-                    'show_comparison' => '!=',
-                    'show_value' => '2',
+                    'operation' => 'hide',
+                    'type' => 'extra_selected',
+                    'comparison' => '!=',
+                    'value' => '4',
                 ],
             ],
         ];
@@ -305,10 +310,21 @@ class ExtraCpTest extends TestCase
             'extra_id' => $extra->id,
             'conditions' => json_encode([
                 [
-                    'show_type' => 'hide',
-                    'show_condition' => 'extra_selected',
-                    'show_comparison' => '!=',
-                    'show_value' => '2',
+                    'operation' => 'hide',
+                    'type' => 'extra_selected',
+                    'comparison' => '!=',
+                    'value' => '4',
+                ],
+            ]),
+        ]);
+        $this->assertDatabaseMissing('resrv_extra_conditions', [
+            'extra_id' => $extra->id,
+            'conditions' => json_encode([
+                [
+                    'operation' => 'show',
+                    'condition' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
                 ],
             ]),
         ]);
@@ -322,14 +338,16 @@ class ExtraCpTest extends TestCase
         $payload = [
             'conditions' => [
                 [
-                    'required_condition' => 'pickup_time',
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
                     'time_start' => '21:00',
                     'time_end' => '08:00',
                 ],
                 [
-                    'show_condition' => 'extra_selected',
-                    'show_comparison' => '==',
-                    'show_value' => '2',
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
                 ],
             ],
         ];
@@ -339,14 +357,16 @@ class ExtraCpTest extends TestCase
         $payload = [
             'conditions' => [
                 [
-                    'required_condition' => 'reservation_dates',
+                    'operation' => 'require',
+                    'type' => 'reservation_dates',
                     'date_start' => today()->toIso8601String(),
                     'date_end' => today()->add(10, 'day')->toIso8601String(),
                 ],
                 [
-                    'show_condition' => 'extra_selected',
-                    'show_comparison' => '==',
-                    'show_value' => '2',
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
                 ],
             ],
         ];
@@ -355,14 +375,16 @@ class ExtraCpTest extends TestCase
             'extra_id' => $extra->id,
             'conditions' => json_encode([
                 [
-                    'required_condition' => 'reservation_dates',
+                    'operation' => 'require',
+                    'type' => 'reservation_dates',
                     'date_start' => today()->toIso8601String(),
                     'date_end' => today()->add(10, 'day')->toIso8601String(),
                 ],
                 [
-                    'show_condition' => 'extra_selected',
-                    'show_comparison' => '==',
-                    'show_value' => '2',
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
                 ],
             ]),
         ]);

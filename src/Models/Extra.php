@@ -37,7 +37,7 @@ class Extra extends Model
 
     public function conditions()
     {
-        return $this->hasMany(ExtraCondition::class);
+        return $this->hasOne(ExtraCondition::class);
     }
 
     public function getPriceAttribute($value)
