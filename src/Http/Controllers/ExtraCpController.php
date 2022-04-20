@@ -111,7 +111,7 @@ class ExtraCpController extends Controller
             'conditions' => 'sometimes|array',
             'conditions.*' => 'array:operation,type,comparison,value,date_start,date_end,time_start,time_end',
         ]);
-        
+
         if ($data['conditions']) {
             $this->extra->find($extra_id)
                 ->conditions()
