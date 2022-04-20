@@ -8,12 +8,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Database\Factories\ExtraConditionFactory;
-use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesComparisons;
 
 class ExtraCondition extends Model
 {
-    use HasFactory, HandlesAvailabilityDates, HandlesComparisons;
+    use HasFactory, HandlesComparisons;
 
     protected $table = 'resrv_extra_conditions';
 
