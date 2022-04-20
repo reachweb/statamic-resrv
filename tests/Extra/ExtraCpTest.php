@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Extra;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ExtraCpTest extends TestCase
@@ -110,13 +111,9 @@ class ExtraCpTest extends TestCase
             'id' => $extra->id,
         ];
 
-        $response = $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
-        $response->assertStatus(200);
-        $this->assertDatabaseHas('resrv_statamicentry_extra', [
-            'statamicentry_id' => $item->id(),
-        ]);
+        $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
 
-        $response = $this->delete(cp_route('resrv.extra.delete', $item->id()), $payload);
+        $response = $this->delete(cp_route('resrv.extra.delete'), $payload);
         $response->assertStatus(200);
         $this->assertDatabaseMissing('resrv_statamicentry_extra', [
             'statamicentry_id' => $item->id(),
@@ -186,6 +183,247 @@ class ExtraCpTest extends TestCase
         $this->assertDatabaseHas('resrv_extras', [
             'id' => $extra3['id'],
             'order' => 2,
+        ]);
+    }
+
+    public function test_can_index_extras_and_conditions()
+    {
+        $extra = Extra::factory()->create();
+        $condition = ExtraCondition::factory()->showExtraSelected()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        $response = $this->get(cp_route('resrv.extra.index'));
+        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('extra_selected');
+    }
+
+    public function test_can_index_a_statamic_entry_extras_and_conditions()
+    {
+        $item = $this->makeStatamicItem();
+        $extra = Extra::factory()->create();
+        $condition = ExtraCondition::factory()->showExtraSelected()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        $payload = [
+            'id' => $extra->id,
+        ];
+
+        $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
+
+        $response = $this->get(cp_route('resrv.extra.entryindex', $item->id()));
+        $response->assertStatus(200)->assertSee($extra->slug)->assertSee('extra_selected');
+    }
+
+    public function test_can_create_a_condition()
+    {
+        $extra = Extra::factory()->create();
+
+        $payload = [
+            'conditions' => [
+                [
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
+                    'time_start' => '21:00',
+                    'time_end' => '08:00',
+                ],
+            ],
+        ];
+
+        $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
+        $this->assertDatabaseHas('resrv_extra_conditions', [
+            'extra_id' => $extra->id,
+            'conditions' => json_encode([
+                [
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
+                    'time_start' => '21:00',
+                    'time_end' => '08:00',
+                ],
+            ]),
+        ]);
+        $response->assertStatus(200);
+    }
+
+    public function test_can_create_multiple_conditions()
+    {
+        $extra = Extra::factory()->create();
+
+        $payload = [
+            'conditions' => [
+                [
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
+                    'time_start' => '21:00',
+                    'time_end' => '08:00',
+                ],
+                [
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
+                ],
+            ],
+        ];
+
+        $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
+        $this->assertDatabaseHas('resrv_extra_conditions', [
+            'extra_id' => $extra->id,
+            'conditions' => json_encode([
+                [
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
+                    'time_start' => '21:00',
+                    'time_end' => '08:00',
+                ],
+                [
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
+                ],
+            ]),
+        ]);
+        $response->assertStatus(200);
+    }
+
+    public function test_can_edit_a_condition()
+    {
+        $extra = Extra::factory()->create();
+        ExtraCondition::factory()->showExtraSelected()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        $payload = [
+            'conditions' => [
+                [
+                    'operation' => 'hide',
+                    'type' => 'extra_selected',
+                    'comparison' => '!=',
+                    'value' => '4',
+                ],
+            ],
+        ];
+
+        $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
+        $this->assertDatabaseHas('resrv_extra_conditions', [
+            'extra_id' => $extra->id,
+            'conditions' => json_encode([
+                [
+                    'operation' => 'hide',
+                    'type' => 'extra_selected',
+                    'comparison' => '!=',
+                    'value' => '4',
+                ],
+            ]),
+        ]);
+        $this->assertDatabaseMissing('resrv_extra_conditions', [
+            'extra_id' => $extra->id,
+            'conditions' => json_encode([
+                [
+                    'operation' => 'show',
+                    'condition' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
+                ],
+            ]),
+        ]);
+        $response->assertStatus(200);
+    }
+
+    public function test_can_edit_multiple_conditions()
+    {
+        $extra = Extra::factory()->create();
+
+        $payload = [
+            'conditions' => [
+                [
+                    'operation' => 'required',
+                    'type' => 'pickup_time',
+                    'time_start' => '21:00',
+                    'time_end' => '08:00',
+                ],
+                [
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
+                ],
+            ],
+        ];
+
+        $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
+
+        $payload = [
+            'conditions' => [
+                [
+                    'operation' => 'require',
+                    'type' => 'reservation_dates',
+                    'date_start' => today()->toIso8601String(),
+                    'date_end' => today()->add(10, 'day')->toIso8601String(),
+                ],
+                [
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
+                ],
+            ],
+        ];
+        $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
+        $this->assertDatabaseHas('resrv_extra_conditions', [
+            'extra_id' => $extra->id,
+            'conditions' => json_encode([
+                [
+                    'operation' => 'require',
+                    'type' => 'reservation_dates',
+                    'date_start' => today()->toIso8601String(),
+                    'date_end' => today()->add(10, 'day')->toIso8601String(),
+                ],
+                [
+                    'operation' => 'show',
+                    'type' => 'extra_selected',
+                    'comparison' => '==',
+                    'value' => '2',
+                ],
+            ]),
+        ]);
+        $response->assertStatus(200);
+    }
+
+    public function test_can_remove_conditions_if_empty()
+    {
+        $extra = Extra::factory()->create();
+        $condition = ExtraCondition::factory()->showExtraSelected()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        $payload = [
+            'conditions' => [],
+        ];
+
+        $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
+        $this->assertDatabaseMissing('resrv_extra_conditions', [
+            'extra_id' => $extra->id,
+        ]);
+        $response->assertStatus(200);
+    }
+
+    public function test_deleting_extra_removes_conditions()
+    {
+        $extra = Extra::factory()->create();
+        $condition = ExtraCondition::factory()->showExtraSelected()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        $payload = [
+            'id' => $extra->id,
+        ];
+
+        $response = $this->delete(cp_route('resrv.extra.delete'), $payload);
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('resrv_extra_conditions', [
+            'extra_id' => $extra->id,
         ]);
     }
 }

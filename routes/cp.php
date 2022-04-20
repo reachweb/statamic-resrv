@@ -18,6 +18,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/extra', 'ExtraCpController@update')->name('extra.update');
         Route::patch('/resrv/extra/order', 'ExtraCpController@order')->name('extra.order');
         Route::delete('/resrv/extra', 'ExtraCpController@delete')->name('extra.delete');
+        Route::post('/resrv/extra/conditions/{extra_id}', 'ExtraCpController@conditions')->name('extra.conditions');
 
         Route::get('/resrv/option/{statamic_id}', 'OptionCpController@entryIndex')->name('option.entryindex');
         Route::post('/resrv/option', 'OptionCpController@create')->name('option.create');

@@ -21,6 +21,7 @@
                     ></span>
                     <dropdown-list>
                         <dropdown-item :text="__('Edit')" @click="editExtra(extra)" />
+                        <dropdown-item :text="__('Conditions')" @click="editConditions(extra)" />
                         <dropdown-item :text="__('Delete')" @click="confirmDelete(extra)" />         
                     </dropdown-list>
                 </div>
@@ -39,6 +40,14 @@
         @saved="extraSaved"
     >
     </extras-panel>
+    <extra-conditions-panel            
+        v-if="showConditionsPanel"
+        :data="extra"
+        :extras="extras"
+        @closed="toggleConditionsPanel"
+        @saved="extraConditionsSaved"
+    >
+    </extra-conditions-panel>
     <confirmation-modal
         v-if="deleteId"
         title="Delete extra"
@@ -53,6 +62,7 @@
 <script>
 import axios from 'axios'
 import ExtrasPanel from './ExtrasPanel.vue'
+import ExtraConditionsPanel from './ExtraConditionsPanel.vue'
 import VueDraggable from 'vuedraggable'
 
 export default {
@@ -71,6 +81,7 @@ export default {
         return {
             containerWidth: null,
             showPanel: false,
+            showConditionsPanel: false,
             extras: '',
             entryExtras: '',
             activeExtras: [],
@@ -93,6 +104,7 @@ export default {
 
     components: {
         ExtrasPanel,
+        ExtraConditionsPanel,
         VueDraggable
     },
 
@@ -130,6 +142,9 @@ export default {
         togglePanel() {
             this.showPanel = !this.showPanel
         },
+        toggleConditionsPanel() {
+            this.showConditionsPanel = !this.showConditionsPanel
+        },
         associateEntryExtra(extraId) {
             this.toggleEntryExtraEditing()
             if (this.extraEnabled(extraId)) {
@@ -149,8 +164,16 @@ export default {
             this.extra = extra
             this.togglePanel()
         },
+        editConditions(extra) {
+            this.extra = extra
+            this.toggleConditionsPanel()
+        },
         extraSaved() {
             this.togglePanel()
+            this.getAllExtras()
+        },
+        extraConditionsSaved() {
+            this.toggleConditionsPanel()
             this.getAllExtras()
         },
         createEnabledExtrasArray() {

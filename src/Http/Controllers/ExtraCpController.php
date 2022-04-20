@@ -32,6 +32,12 @@ class ExtraCpController extends Controller
     {
         $extras = $this->extra->entry($statamic_id)->get();
 
+        $extras->transform(function ($extra) {
+            $extra->conditions = $this->extra->find($extra->id)->conditions()->get();
+
+            return $extra;
+        });
+
         return response()->json($extras);
     }
 
@@ -60,6 +66,7 @@ class ExtraCpController extends Controller
             'id' => 'required|integer',
             'name' => 'required',
             'slug' => 'required',
+            'description' => 'sometimes',
             'price' => 'required|numeric',
             'price_type' => 'required',
             'allow_multiple' => 'required|boolean',
@@ -99,6 +106,37 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
+    public function conditions(Request $request, $extra_id)
+    {
+        $data = $request->validate([
+            'conditions' => 'sometimes|array',
+            'conditions.*' => 'array:operation,type,comparison,value,date_start,date_end,time_start,time_end',
+            'conditions.*.operation' => 'required_with:conditions|string',
+            'conditions.*.type' => 'required_with:conditions|string',
+            'conditions.*.date_start' => 'required_if:conditions.*.type,reservation_dates',
+            'conditions.*.date_end' => 'required_if:conditions.*.type,reservation_dates',
+            'conditions.*.time_start' => 'required_if:conditions.*.type,pickup_time|required_if:conditions.*.type,dropoff_time',
+            'conditions.*.time_end' => 'required_if:conditions.*.type,pickup_time|required_if:conditions.*.type,dropoff_time',
+            'conditions.*.value' => 'required_if:conditions.*.type,extra_selected|required_if:conditions.*.type,reservation_duration',
+            'conditions.*.comparison' => 'required_if:conditions.*.type,reservation_duration',
+        ]);
+
+        if ($data['conditions']) {
+            $this->extra->find($extra_id)
+                ->conditions()
+                ->updateOrCreate(
+                    ['extra_id' => $extra_id],
+                    $data
+                );
+        } else {
+            $this->extra->find($extra_id)
+                ->conditions()
+                ->delete();
+        }
+
+        return response(200);
+    }
+
     public function order(Request $request)
     {
         $data = $request->validate([
@@ -119,6 +157,10 @@ class ExtraCpController extends Controller
         $extra = $this->extra->destroy($data['id']);
 
         DB::table('resrv_statamicentry_extra')
+            ->where('extra_id', $data['id'])
+            ->delete();
+
+        DB::table('resrv_extra_conditions')
             ->where('extra_id', $data['id'])
             ->delete();
 

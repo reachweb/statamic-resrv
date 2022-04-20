@@ -28,9 +28,16 @@ class Extra extends Model
         'price' => PriceClass::class,
     ];
 
+    protected $with = ['conditions'];
+
     protected static function newFactory()
     {
         return ExtraFactory::new();
+    }
+
+    public function conditions()
+    {
+        return $this->hasOne(ExtraCondition::class);
     }
 
     public function getPriceAttribute($value)
@@ -99,6 +106,21 @@ class Extra extends Model
                     ->where('resrv_statamicentry_extra.statamicentry_id', '=', $entry->id());
             })
             ->select('resrv_extras.*');
+    }
+
+    public function scopeEntriesWithConditions($query, $entry)
+    {
+        $entry = $this->getDefaultSiteEntry($entry);
+
+        return DB::table('resrv_extras')
+            ->join('resrv_statamicentry_extra', function ($join) use ($entry) {
+                $join->on('resrv_extras.id', '=', 'resrv_statamicentry_extra.extra_id')
+                    ->where('resrv_statamicentry_extra.statamicentry_id', '=', $entry->id());
+            })
+            ->join('resrv_extra_conditions', function ($join) {
+                $join->on('resrv_extras.id', '=', 'resrv_extra_conditions.extra_id');
+            })
+            ->select('resrv_extras.*', 'resrv_extra_conditions.*');
     }
 
     public function scopeGetPriceForDates($query, $data)

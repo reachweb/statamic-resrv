@@ -65,6 +65,17 @@
                         {{ errors.maximum[0] }}
                     </div>  
                 </div>
+                <div class="px-3 py-1">
+                    <div class="font-bold mb-1 text-sm">
+                        <label for="slug">Description</label>
+                    </div>
+                    <div class="w-full">
+                        <textarea class="w-full border border-gray-700 rounded p-1" name="description" type="text" v-model="submit.description"></textarea>
+                    </div>
+                    <div v-if="errors.description" class="w-full mt-1 text-sm text-red-400">
+                        {{ errors.description[0] }}
+                    </div>  
+                </div>
                 <div class="px-3 py-1 flex items-center">
                     <toggle-input v-model="submit.published"></toggle-input> 
                     <div class="text-sm ml-3">Published</div>
