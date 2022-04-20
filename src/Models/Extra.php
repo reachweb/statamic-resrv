@@ -108,6 +108,21 @@ class Extra extends Model
             ->select('resrv_extras.*');
     }
 
+    public function scopeEntriesWithConditions($query, $entry)
+    {
+        $entry = $this->getDefaultSiteEntry($entry);
+
+        return DB::table('resrv_extras')
+            ->join('resrv_statamicentry_extra', function ($join) use ($entry) {
+                $join->on('resrv_extras.id', '=', 'resrv_statamicentry_extra.extra_id')
+                    ->where('resrv_statamicentry_extra.statamicentry_id', '=', $entry->id());
+            })
+            ->join('resrv_extra_conditions', function ($join) {
+                $join->on('resrv_extras.id', '=', 'resrv_extra_conditions.extra_id');
+            })
+            ->select('resrv_extras.*', 'resrv_extra_conditions.*');
+    }
+
     public function scopeGetPriceForDates($query, $data)
     {
         $extras = $this->scopeEntry($query, $data['item_id'])

@@ -34,7 +34,6 @@ class ExtraCpController extends Controller
 
         $extras->transform(function ($extra) {
             $extra->conditions = $this->extra->find($extra->id)->conditions()->get();
-
             return $extra;
         });
 

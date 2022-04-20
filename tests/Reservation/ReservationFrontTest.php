@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
@@ -431,6 +432,105 @@ class ReservationFrontTest extends TestCase
             'option_id' => $option2->id,
             'value' => $option2->values[2]->id,
         ]);
+    }
+
+    public function test_reservation_confirm_method_with_required_extras()
+    {
+        $this->withExceptionHandling();
+        $item = $this->makeStatamicItem();
+        $this->signInAdmin();
+
+        Availability::factory()
+            ->count(4)
+            ->sequence(
+                ['date' => today()->add(20, 'day')],
+                ['date' => today()->add(21, 'day')],
+                ['date' => today()->add(22, 'day')],
+                ['date' => today()->add(23, 'day')],
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+        
+        $extra = Extra::factory()->create();
+        $extra2 = Extra::factory()->fixed()->create();
+        $extra3 = Extra::factory()->fixed()->create([
+            'id' => 3,
+            'slug' => 'this-is-another-slug',
+        ]);
+
+        $addExtraToEntry = [
+            'id' => $extra->id,
+        ];
+
+        $this->post(cp_route('resrv.extra.add', $item->id()), $addExtraToEntry);
+
+        $addExtra2ToEntry = [
+            'id' => $extra2->id,
+        ];
+
+        $this->post(cp_route('resrv.extra.add', $item->id()), $addExtra2ToEntry);
+
+        $addExtra3ToEntry = [
+            'id' => $extra3->id,
+        ];
+
+        $this->post(cp_route('resrv.extra.add', $item->id()), $addExtra3ToEntry);
+        
+        ExtraCondition::factory()->requiredReservationTimeAndShow()->create([
+            'extra_id' => $extra->id,
+        ]);        
+
+        ExtraCondition::factory()->requiredAlways()->create([
+            'extra_id' => $extra2->id,
+        ]);
+
+        ExtraCondition::factory()->requiredExtraSelected()->create([
+            'extra_id' => $extra3->id,
+        ]);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->add(20, 'day')->setHour(22)->toISOString(),
+            'date_end' => today()->add(22, 'day')->setHour(12)->toISOString(),
+        ];
+
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('300')->assertSee('message":{"status":1}}', false);
+
+        $days = json_decode($response->content())->request->days;
+        $payment = json_decode($response->content())->data->payment;
+        $price = json_decode($response->content())->data->price;
+        $total = json_decode($response->content())->data->price;
+
+        $checkoutRequest = [
+            'date_start' => today()->add(20, 'day')->setHour(22)->toISOString(),
+            'date_end' => today()->add(22, 'day')->setHour(12)->toISOString(),
+            'payment' => $payment,
+            'price' => $price,
+            'total' => $total,
+        ];
+
+        $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+        $response->assertStatus(412);
+
+        $checkoutRequest['extras'] = [$extra->id => ['quantity' => 1], $extra2->id => ['quantity' => 1]];
+        $checkoutRequest['total'] = $total + ($days * $extra->price->format()) + $extra2->price->format();
+
+        $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+        $response->assertStatus(412);
+
+        $checkoutRequest['extras'] = [$extra->id => ['quantity' => 1], $extra2->id => ['quantity' => 1], $extra3->id => ['quantity' => 1]];
+        $checkoutRequest['total'] = $total + ($days * $extra->price->format()) + $extra2->price->format() + $extra3->price->format();
+
+        $response = $this->post(route('resrv.reservation.confirm', $item->id()), $checkoutRequest);
+        $response->assertStatus(200)->assertSee(1)->assertSessionHas('resrv_reservation', 1);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'payment' => $total,
+        ]);
+
     }
 
     public function test_reservation_with_quantity_more_than_one()

@@ -33,8 +33,7 @@ class ExtraConditionFactory extends Factory
                 'conditions' => [[
                     'operation' => 'show',
                     'condition' => 'extra_selected',
-                    'comparison' => '==',
-                    'value' => '2',
+                    'value' => 2,
                 ]],
             ];
         });
@@ -47,8 +46,20 @@ class ExtraConditionFactory extends Factory
                 'conditions' => [[
                     'operation' => 'hide',
                     'type' => 'extra_selected',
-                    'comparison' => '==',
-                    'value' => '1',
+                    'value' => 2,
+                ]],
+            ];
+        });
+    }
+
+    public function requiredExtraSelected()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'conditions' => [[
+                    'operation' => 'required',
+                    'type' => 'extra_selected',
+                    'value' => 2,
                 ]],
             ];
         });
@@ -64,6 +75,28 @@ class ExtraConditionFactory extends Factory
                     'time_start' => '21:00',
                     'time_end' => '08:00',
                 ]],
+            ];
+        });
+    }
+
+    public function requiredReservationTimeAndShow()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'conditions' => [
+                    [
+                        'operation' => 'required',
+                        'type' => 'pickup_time',
+                        'time_start' => '21:00',
+                        'time_end' => '08:00',
+                    ],
+                    [
+                        'operation' => 'show',
+                        'type' => 'pickup_time',
+                        'time_start' => '21:00',
+                        'time_end' => '08:00',
+                    ]
+                ],
             ];
         });
     }

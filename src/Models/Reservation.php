@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Models\ExtraCondition;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Form;
 
@@ -134,6 +135,11 @@ class Reservation extends Model
         if (! $this->checkForRequiredOptions($statamic_id, $data)) {
             throw new ReservationException(__('There are required options you did not select.'));
         }
+       
+        $requiredExtras = $this->checkForRequiredExtras($statamic_id, $data);
+        if ($requiredExtras) {
+            throw new ReservationException($requiredExtras);
+        }
 
         return true;
     }
@@ -241,6 +247,17 @@ class Reservation extends Model
         }
 
         return $extraCharges->add($optionsCost, $extrasCost, $locationCost);
+    }
+
+    protected function checkForRequiredExtras($statamic_id, $data)
+    {
+        $required = (new ExtraCondition)->hasRequiredExtrasSelected($statamic_id, $data);
+        if ($required !== true) {
+            return $required->transform(function ($messages, $extra_id) {
+                return 'ID '.$extra_id.' '.$messages->implode(' ');
+            })->implode(', ');
+        }
+        return false;
     }
 
     protected function checkForRequiredOptions($statamic_id, $data)
