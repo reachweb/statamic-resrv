@@ -119,7 +119,7 @@ class ExtraCpController extends Controller
             'conditions.*.value' => 'required_if:conditions.*.type,extra_selected|required_if:conditions.*.type,reservation_duration',
             'conditions.*.comparison' => 'required_if:conditions.*.type,extra_selected|required_if:conditions.*.type,reservation_duration',
         ]);
-        
+
         if ($data['conditions']) {
             $this->extra->find($extra_id)
                 ->conditions()

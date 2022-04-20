@@ -12,7 +12,7 @@ class ExtraCondition extends Model
     use HasFactory;
 
     protected $table = 'resrv_extra_conditions';
-    
+
     protected $primaryKey = 'extra_id';
 
     protected $guarded = [];
