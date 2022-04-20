@@ -66,6 +66,7 @@ class ExtraCpController extends Controller
             'id' => 'required|integer',
             'name' => 'required',
             'slug' => 'required',
+            'description' => 'sometimes',
             'price' => 'required|numeric',
             'price_type' => 'required',
             'allow_multiple' => 'required|boolean',
