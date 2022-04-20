@@ -2,16 +2,14 @@
 
 namespace Reach\StatamicResrv\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Database\Factories\ExtraConditionFactory;
-use Reach\StatamicResrv\Traits\HandlesComparisons;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
-use Reach\StatamicResrv\Models\Extra;
-use Carbon\Carbon;
-use PDO;
+use Reach\StatamicResrv\Traits\HandlesComparisons;
 
 class ExtraCondition extends Model
 {
@@ -41,8 +39,9 @@ class ExtraCondition extends Model
     {
         $extras = Extra::entriesWithConditions($statamic_id)
                     ->get()
-                    ->transform(function($extra) {
+                    ->transform(function ($extra) {
                         $extra->conditions = collect(json_decode($extra->conditions));
+
                         return $extra;
                     });
 
@@ -50,10 +49,11 @@ class ExtraCondition extends Model
             return false;
         }
 
-        $requiredConditions = $extras->mapWithKeys(function($extra) {
-            $required = $extra->conditions->filter(function($condition) {
+        $requiredConditions = $extras->mapWithKeys(function ($extra) {
+            $required = $extra->conditions->filter(function ($condition) {
                 return $condition->operation == 'required';
             });
+
             return [$extra->id => $required];
         });
 
@@ -64,7 +64,7 @@ class ExtraCondition extends Model
         return $requiredConditions;
     }
 
-    public function hasRequiredExtrasSelected($statamic_id, $data) 
+    public function hasRequiredExtrasSelected($statamic_id, $data)
     {
         $required = $this->requiredExtrasThatApply($statamic_id, $data);
 
@@ -89,7 +89,7 @@ class ExtraCondition extends Model
         return $check;
     }
 
-    public function requiredExtrasThatApply($statamic_id, $data) 
+    public function requiredExtrasThatApply($statamic_id, $data)
     {
         $required = $this->requiredExtrasForEntry($statamic_id);
 
@@ -105,13 +105,14 @@ class ExtraCondition extends Model
                     $neededExtras->push($checkedParameters);
                 }
             }
-            return [$extra_id => $neededExtras];
-        })->filter(fn($item) => $item->count() !== 0);
 
-        return $extrasThatApply;        
+            return [$extra_id => $neededExtras];
+        })->filter(fn ($item) => $item->count() !== 0);
+
+        return $extrasThatApply;
     }
 
-    protected function checkAllParameters($condition, $extra_id, $data) 
+    protected function checkAllParameters($condition, $extra_id, $data)
     {
         switch ($condition->type) {
             case 'always':
@@ -150,6 +151,7 @@ class ExtraCondition extends Model
         $time_start = Carbon::createFromTimeString($condition->time_start);
         $time_end = Carbon::createFromTimeString($condition->time_end)->addDay();
         $payload = new Carbon($date);
+
         return $payload->setDateFrom(today())->between($time_start, $time_end);
     }
 
@@ -162,6 +164,7 @@ class ExtraCondition extends Model
         if ($condition_start->lessThanOrEqualTo($date_start) && $condition_end->greaterThanOrEqualTo($date_end)) {
             return true;
         }
+
         return false;
     }
 
@@ -170,6 +173,7 @@ class ExtraCondition extends Model
         $date_start = new Carbon($data['date_start']);
         $date_end = new Carbon($data['date_end']);
         $duration = $date_start->startOfDay()->diffInDays($date_end->startOfDay());
+
         return $this->compare($duration, $condition->comparison, $condition->value);
     }
 
@@ -181,8 +185,7 @@ class ExtraCondition extends Model
         if (array_key_exists($condition->value, $data['extras'])) {
             return true;
         }
-        return false;        
+
+        return false;
     }
-
-
 }

@@ -22,6 +22,7 @@ class ExtraController extends Controller
 
         $extras->transform(function ($extra) {
             $extra->conditions = (new Extra)->find($extra->id)->conditions()->get();
+
             return $extra;
         });
 

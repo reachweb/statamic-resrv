@@ -95,7 +95,7 @@ class ExtraConditionFactory extends Factory
                         'type' => 'pickup_time',
                         'time_start' => '21:00',
                         'time_end' => '08:00',
-                    ]
+                    ],
                 ],
             ];
         });

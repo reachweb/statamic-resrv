@@ -451,7 +451,7 @@ class ReservationFrontTest extends TestCase
             ->create(
                 ['statamic_id' => $item->id()]
             );
-        
+
         $extra = Extra::factory()->create();
         $extra2 = Extra::factory()->fixed()->create();
         $extra3 = Extra::factory()->fixed()->create([
@@ -476,10 +476,10 @@ class ReservationFrontTest extends TestCase
         ];
 
         $this->post(cp_route('resrv.extra.add', $item->id()), $addExtra3ToEntry);
-        
+
         ExtraCondition::factory()->requiredReservationTimeAndShow()->create([
             'extra_id' => $extra->id,
-        ]);        
+        ]);
 
         ExtraCondition::factory()->requiredAlways()->create([
             'extra_id' => $extra2->id,
@@ -530,7 +530,6 @@ class ReservationFrontTest extends TestCase
         $this->assertDatabaseHas('resrv_reservations', [
             'payment' => $total,
         ]);
-
     }
 
     public function test_reservation_with_quantity_more_than_one()
