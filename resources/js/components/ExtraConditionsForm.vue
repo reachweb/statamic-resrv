@@ -147,6 +147,21 @@
                         </div>
                     </div>
                 </div>
+                <div class="ml-2" v-if="typeIsExtra(index)">
+                    <div class="flex items-center">
+                        <div class="ml-2 min-w-lg">
+                            <div class="mb-1 text-sm">
+                                {{ __('Extra') }}
+                            </div>
+                            <div class="w-full">
+                                <v-select v-model="conditionsForm[index].value" :options="extrasWithoutCurrent" :reduce="type => type.value" />
+                            </div>
+                            <div v-if="errors['conditions.'+index+'.value']" class="w-full mt-1 text-sm text-red-400">
+                                {{ errors['conditions.'+index+'.value'][0] }}
+                            </div>  
+                        </div>                        
+                    </div>
+                </div>
                 <div class="ml-2 mt-4">
                     <button class="btn-close group" @click="remove(index)">
                         <svg viewBox="0 0 16 16" class="w-4 h-4 group-hover:text-red"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1 3h14M9.5 1h-3a1 1 0 0 0-1 1v1h5V2a1 1 0 0 0-1-1zm-3 10.5v-5m3 5v-5m3.077 7.583a1 1 0 0 1-.997.917H4.42a1 1 0 0 1-.996-.917L2.5 3h11l-.923 11.083z"></path></svg>
@@ -174,6 +189,10 @@ export default {
             type: Array,
             required: true,
         },
+        extras: {
+            type: Object,
+            required: true,
+        },
         errors: {
             type: Object,
             required: false
@@ -195,7 +214,7 @@ export default {
                 dropoff_time: __('Drop off time between'),
                 reservation_duration: __('Reservation duration'),
                 reservation_dates: __('Reservation dates included'),
-                extra_selected: __('Extra with slug'),
+                extra_selected: __('Extra is selected'),
             });
         },
         comparison() {
@@ -207,6 +226,15 @@ export default {
                 '>=': __('Greater or equal to'),
                 '<=': __('Less or equal to'),
             });
+        },
+        extrasWithoutCurrent() {
+            let extras = _.reject(this.extras, (extra) => extra.id == this.data.id)
+            return _.map(extras, (extra) => {
+                return {
+                    'value': extra.id, 
+                    'label': extra.name
+                }
+            })
         }
     },
 
@@ -275,7 +303,13 @@ export default {
             return false
         },
         typeIsValue(index) {
-            if (this.conditionsForm[index].type == 'extra_selected' || this.conditionsForm[index].type == 'reservation_duration') {
+            if (this.conditionsForm[index].type == 'reservation_duration') {
+                return true
+            }
+            return false
+        },
+        typeIsExtra(index) {
+            if (this.conditionsForm[index].type == 'extra_selected') {
                 return true
             }
             return false

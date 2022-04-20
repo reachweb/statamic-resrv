@@ -9,6 +9,7 @@
                 <div class="card rounded-tl-none">
                     <extra-conditions-form 
                         :data="conditionsSafe()"
+                        :extras="extras"
                         :errors="errors"
                         @updated="createSubmit"                  
                     />
@@ -35,6 +36,10 @@ export default {
 
     props: {
         data: {
+            type: Object,
+            required: true
+        },
+        extras: {
             type: Object,
             required: true
         },
