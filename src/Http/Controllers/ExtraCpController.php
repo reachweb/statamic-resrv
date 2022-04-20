@@ -110,6 +110,14 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'conditions' => 'sometimes|array',
             'conditions.*' => 'array:operation,type,comparison,value,date_start,date_end,time_start,time_end',
+            'conditions.*.operation' => 'required_with:conditions|string',
+            'conditions.*.type' => 'required_with:conditions|string',
+            'conditions.*.date_start' => 'required_if:conditions.*.type,reservation_dates',
+            'conditions.*.date_end' => 'required_if:conditions.*.type,reservation_dates',
+            'conditions.*.time_start' => 'required_if:conditions.*.type,pickup_time|required_if:conditions.*.type,dropoff_time',
+            'conditions.*.time_end' => 'required_if:conditions.*.type,pickup_time|required_if:conditions.*.type,dropoff_time',
+            'conditions.*.value' => 'required_if:conditions.*.type,extra_selected|required_if:conditions.*.type,reservation_duration',
+            'conditions.*.comparison' => 'required_if:conditions.*.type,extra_selected|required_if:conditions.*.type,reservation_duration',
         ]);
         
         if ($data['conditions']) {

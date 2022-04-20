@@ -1,24 +1,33 @@
 <template>
     <div>
+        <div class="mb-2 text-sm">
+            {{ __('Select when to show, hide or make this extra required. When adding multiple conditions for an operation, all of them have to apply.') }}
+        </div>
         <div v-for="(condition, index) in conditionsForm" :key="index">
             <div class="flex items-center py-2 my-2 border-b">
-                <div class="w-full xl:w-1/4">
+                <div class="min-w-xl">
                     <div class="mb-1 text-sm">
                         {{ __('Operation') }}
                     </div>
                     <div class="w-full">
                         <v-select v-model="conditionsForm[index].operation" :options="operation" :reduce="operation => operation.value" />
                     </div>
+                    <div v-if="errors['conditions.'+index+'.operation']" class="w-full mt-1 text-sm text-red-400">
+                        {{ errors['conditions.'+index+'.operation'][0] }}
+                    </div>  
                 </div>
-                <div class="w-full xl:w-1/4 ml-2">
+                <div class="min-w-xl ml-2">
                     <div class="mb-1 text-sm">
                         {{ __('Type') }}
                     </div>
                     <div class="w-full">
                         <v-select v-model="conditionsForm[index].type" :options="type" :reduce="type => type.value" @input="typeSelected(index)" />
                     </div>
+                    <div v-if="errors['conditions.'+index+'.type']" class="w-full mt-1 text-sm text-red-400">
+                        {{ errors['conditions.'+index+'.type'][0] }}
+                    </div>  
                 </div>
-                <div class="w-full xl:w-1/2 ml-2 mr-6" v-if="typeIsDate(index)">
+                <div class="ml-2" v-if="typeIsDate(index)">
                     <div class="flex items-center">
                         <div class="ml-2">
                             <div class="mb-1 text-sm">
@@ -48,6 +57,9 @@
                                     </template>                 
                                 </v-date-picker>
                             </div>
+                            <div v-if="errors['conditions.'+index+'.date_start']" class="w-full mt-1 text-sm text-red-400">
+                                {{ errors['conditions.'+index+'.date_start'][0] }}
+                            </div>  
                         </div>
                         <div class="ml-2">
                             <div class="mb-1 text-sm">
@@ -77,10 +89,13 @@
                                     </template>
                                 </v-date-picker>
                             </div>
+                            <div v-if="errors['conditions.'+index+'.date_end']" class="w-full mt-1 text-sm text-red-400">
+                                {{ errors['conditions.'+index+'.date_end'][0] }}
+                            </div>  
                         </div>                    
                     </div>
                 </div>
-                <div class="w-full xl:w-1/2 ml-2 mr-6" v-if="typeIsTime(index)">
+                <div class="ml-2 mr-6" v-if="typeIsTime(index)">
                     <div class="flex items-center">
                         <div class="ml-2">
                             <div class="mb-1 text-sm">
@@ -89,6 +104,9 @@
                             <div class="time-fieldtype">
                                 <time-fieldtype v-model="conditionsForm[index].time_start"></time-fieldtype>
                             </div>
+                            <div v-if="errors['conditions.'+index+'.time_start']" class="w-full mt-1 text-sm text-red-400">
+                                {{ errors['conditions.'+index+'.time_start'][0] }}
+                            </div>  
                         </div>
                         <div class="ml-4">
                             <div class="mb-1 text-sm">
@@ -97,10 +115,13 @@
                             <div class="time-fieldtype">
                                 <time-fieldtype v-model="conditionsForm[index].time_end"></time-fieldtype>
                             </div>
+                            <div v-if="errors['conditions.'+index+'.time_end']" class="w-full mt-1 text-sm text-red-400">
+                                {{ errors['conditions.'+index+'.time_end'][0] }}
+                            </div>  
                         </div>
                     </div>                    
                 </div>
-                <div class="w-full xl:w-1/2 ml-2 mr-6" v-if="typeIsValue(index)">
+                <div class="ml-2" v-if="typeIsValue(index)">
                     <div class="flex items-center">
                         <div class="ml-2 min-w-lg">
                             <div class="mb-1 text-sm">
@@ -109,6 +130,9 @@
                             <div class="w-full">
                                 <v-select v-model="conditionsForm[index].comparison" :options="comparison" :reduce="type => type.value" />
                             </div>
+                            <div v-if="errors['conditions.'+index+'.comparison']" class="w-full mt-1 text-sm text-red-400">
+                                {{ errors['conditions.'+index+'.comparison'][0] }}
+                            </div>  
                         </div>
                         <div class="ml-4">
                             <div class="mb-1 text-sm">
@@ -117,8 +141,16 @@
                             <div class="w-full">
                                 <input class="w-full border border-gray-700 rounded p-1" type="text" v-model="conditionsForm[index].value">
                             </div>
+                            <div v-if="errors['conditions.'+index+'.value']" class="w-full mt-1 text-sm text-red-400">
+                                {{ errors['conditions.'+index+'.value'][0] }}
+                            </div>  
                         </div>
                     </div>
+                </div>
+                <div class="ml-2 mt-4">
+                    <button class="btn-close group" @click="remove(index)">
+                        <svg viewBox="0 0 16 16" class="w-4 h-4 group-hover:text-red"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1 3h14M9.5 1h-3a1 1 0 0 0-1 1v1h5V2a1 1 0 0 0-1-1zm-3 10.5v-5m3 5v-5m3.077 7.583a1 1 0 0 1-.997.917H4.42a1 1 0 0 1-.996-.917L2.5 3h11l-.923 11.083z"></path></svg>
+                    </button>
                 </div>
             </div>                
         </div>
@@ -126,7 +158,7 @@
             class="px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer"
             @click="add"
         >
-            {{ __('Add') }}
+            {{ __('Add condition') }}
         </button>
     </div>
 </template>
@@ -180,7 +212,7 @@ export default {
 
     data() {
         return {
-            conditionsForm: this.data ? this.data : [],
+            conditionsForm: [],
             dates: []
         }
     },
@@ -195,6 +227,12 @@ export default {
                 let readyConditions = this.handleDates(conditions)
                 this.$emit('updated', readyConditions)
             }
+        }
+    },
+
+    mounted() {
+        if (this.data) {
+            this.conditionsForm = this.data
         }
     },
 
@@ -217,6 +255,9 @@ export default {
                 time_start: '',
                 time_end: ''
             })
+        },
+        remove(index) {
+            this.conditionsForm.splice(index, 1);
         },
         typeSelected(index) {
             this.clearValues(index)

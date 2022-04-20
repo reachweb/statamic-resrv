@@ -9,6 +9,7 @@
                 <div class="card rounded-tl-none">
                     <extra-conditions-form 
                         :data="conditionsSafe()"
+                        :errors="errors"
                         @updated="createSubmit"                  
                     />
                     <div class="w-full mt-4">
