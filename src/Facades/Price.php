@@ -9,6 +9,6 @@ class Price extends Facade
 {
     protected static function getFacadeAccessor()
     {
-        return new PriceClass();
+        return PriceClass::class;
     }
 }

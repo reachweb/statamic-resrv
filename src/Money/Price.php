@@ -14,9 +14,10 @@ class Price implements CastsAttributes
 
     public function create($price): Price
     {
-        $this->money = new Money(bcmul($price, 100), new Currency(config('resrv-config.currency_isoCode')));
+        $class = new self;
+        $class->money = new Money(bcmul($price, 100), new Currency(config('resrv-config.currency_isoCode')));
 
-        return $this;
+        return $class;
     }
 
     public function add(Price ...$toAdd): Price
@@ -100,16 +101,16 @@ class Price implements CastsAttributes
 
     public function get($model, $key, $value, $attributes)
     {
-        $this->create($value);
+        $price = $this->create($value);
 
-        return $this->format();
+        return $price->format();
     }
 
     public function set($model, $key, $value, $attributes)
     {
-        $this->create($value);
+        $price = $this->create($value);
 
-        return $this->format();
+        return $price->format();
     }
 
     public function raw()

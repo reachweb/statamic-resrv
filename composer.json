@@ -23,16 +23,17 @@
         "email": "info@reach.gr"
     },
     "require": {
-        "php": "^7.4 || ^8.0",
+        "php": "^7.4 || ^8.0 || ^8.1",
         "doctrine/dbal": "^2.10",
-        "illuminate/support": "^7.20 || ^8.0",
+        "laravel/framework": "^7.0 | ^8.0 | ^9.0",
+        "illuminate/support": "^8.0 || ^9.0",
         "statamic/cms": "3.3.*",
         "stripe/stripe-php": "^7.77",
         "moneyphp/money": "^4.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^8.5 || ^9.3",
-        "orchestra/testbench": "^6.17"
+        "orchestra/testbench": "^5.0 || ^6.0 || ^7.0"
     },
     "autoload": {
         "psr-4": {

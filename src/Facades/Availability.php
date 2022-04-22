@@ -9,6 +9,6 @@ class Availability extends Facade
 {
     protected static function getFacadeAccessor()
     {
-        return new AvailabilityRepository();
+        return AvailabilityRepository::class;
     }
 }
