@@ -17,16 +17,13 @@ jobs:
       matrix:
         php: [8.0, 8.1]
         laravel: [8.*, 9.*]
-        stability: [prefer-stable, prefer-lowest]
+        stability: [prefer-stable]
         os: [ubuntu-latest]
         include:
           - laravel: 8.*
             framework: ^8.48.0
           - laravel: 9.*
             framework: ^9.0
-        exclude:
-          - laravel: 9.*
-            php: 7.4
 
     name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
 
