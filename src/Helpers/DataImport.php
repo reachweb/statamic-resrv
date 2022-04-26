@@ -47,17 +47,19 @@ class DataImport
 
         if ($sample) {
             $reader = SimpleExcelReader::create($this->path)
-                ->useDelimiter($this->delimiter)->take(1);
+                ->useDelimiter($this->delimiter)->take(3);
         }
 
         $import = $reader
             ->getRows()
             ->mapWithKeys(function ($row) {
                 $id = $this->getId($row[$this->identifier]);
+                if ($id == false) {
+                    $id = 'not-found';
+                }
                 $data = collect();
                 $index = 0;
                 foreach ($row as $header => $value) {
-                    ray($row);
                     if (strpos($header, 'price') !== false) {
                         $arrayToPush = [];
                         $dates = $this->getDatesFromHeader($header);
@@ -74,7 +76,7 @@ class DataImport
                 }
 
                 return [$id => $data];
-            });
+            })->reject(fn($item, $id) => $id == 'not-found');
 
         return $import;
     }
@@ -109,7 +111,11 @@ class DataImport
             return $value;
         }
 
-        return $this->collection->queryEntries()->where($this->identifier, $value)->first()->id();
+        $entry = $this->collection->queryEntries()->where($this->identifier, $value)->first();
+        if ($entry) {
+            return $entry->id();
+        }
+        return false;
     }
 
     private function headersHaveCorrectFormat()
