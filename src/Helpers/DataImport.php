@@ -2,9 +2,9 @@
 
 namespace Reach\StatamicResrv\Helpers;
 
+use Carbon\Carbon;
 use Spatie\SimpleExcel\SimpleExcelReader;
 use Statamic\Facades\Collection;
-use Carbon\Carbon;
 
 class DataImport
 {
@@ -77,7 +77,7 @@ class DataImport
                 }
 
                 return [$id => $data];
-            })->reject(fn($item, $id) => $id == 'not-found');
+            })->reject(fn ($item, $id) => $id == 'not-found');
 
         return $import;
     }
@@ -116,6 +116,7 @@ class DataImport
         if ($entry) {
             return $entry->id();
         }
+
         return false;
     }
 
