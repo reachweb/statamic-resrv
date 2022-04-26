@@ -1,12 +1,12 @@
 <?php
 
 namespace Reach\StatamicResrv\Helpers;
-use Statamic\Facades\Collection;
+
 use Spatie\SimpleExcel\SimpleExcelReader;
+use Statamic\Facades\Collection;
 
 class DataImport
 {
-
     private $path;
 
     private $collection;
@@ -15,7 +15,8 @@ class DataImport
 
     private $identifier;
 
-    public function __construct($path, $delimiter, $collection, $identifier) {
+    public function __construct($path, $delimiter, $collection, $identifier)
+    {
         $this->path = $path;
         $this->collection = Collection::findByHandle($collection);
         $this->delimiter = $delimiter;
@@ -37,14 +38,13 @@ class DataImport
         }
 
         return $errors;
-
     }
 
     public function prepare($sample = false)
     {
         $reader = SimpleExcelReader::create($this->path)
             ->useDelimiter($this->delimiter);
-        
+
         if ($sample) {
             $reader = SimpleExcelReader::create($this->path)
                 ->useDelimiter($this->delimiter)->take(1);
@@ -52,36 +52,37 @@ class DataImport
 
         $import = $reader
             ->getRows()
-            ->mapWithKeys(function($row) {
+            ->mapWithKeys(function ($row) {
                 $id = $this->getId($row[$this->identifier]);
                 $data = collect();
                 $index = 0;
                 foreach ($row as $header => $value) {
                     ray($row);
-                    if (strpos ($header, 'price') !== false) {
-                        $arrayToPush = array();
+                    if (strpos($header, 'price') !== false) {
+                        $arrayToPush = [];
                         $dates = $this->getDatesFromHeader($header);
-                        $arrayToPush['date_start'] = $dates['date_start'];                   
-                        $arrayToPush['date_end'] = $dates['date_end'];                   
+                        $arrayToPush['date_start'] = $dates['date_start'];
+                        $arrayToPush['date_end'] = $dates['date_end'];
                         $arrayToPush['available'] = $row[array_keys($row)[$index + 1]];
                         $arrayToPush['price'] = $value;
                         if (array_key_exists('advanced', $row)) {
                             $arrayToPush['advanced'] = $row['advanced'];
                         }
-                        $data->push($arrayToPush);                    
+                        $data->push($arrayToPush);
                     }
                     $index++;
                 }
+
                 return [$id => $data];
-        });
+            });
 
         return $import;
-
     }
 
     private function getDatesFromHeader($header)
     {
         $dates = explode('|', explode(':', $header)[1]);
+
         return [
             'date_start' => $dates[0],
             'date_end' => $dates[1],
@@ -98,6 +99,7 @@ class DataImport
                 return false;
             }
         }
+
         return 'The identifier "'.$this->identifier.'" cannot be found in the collection you selected.';
     }
 
@@ -106,7 +108,8 @@ class DataImport
         if ($this->identifier == 'id') {
             return $value;
         }
-        return $this->collection->queryEntries()->where($this->identifier, $value)->first()->id();        
+
+        return $this->collection->queryEntries()->where($this->identifier, $value)->first()->id();
     }
 
     private function headersHaveCorrectFormat()
@@ -115,16 +118,17 @@ class DataImport
         $priceHeaderFound = false;
         $availabilityHeaderFound = false;
         foreach ($headers as $header) {
-            if (strpos ($header, 'price') !== false ) {
+            if (strpos($header, 'price') !== false) {
                 $priceHeaderFound = true;
             }
-            if (strpos ($header, 'availability') !== false ) {
+            if (strpos($header, 'availability') !== false) {
                 $availabilityHeaderFound = true;
             }
         }
         if ($availabilityHeaderFound && $priceHeaderFound) {
             return false;
         }
+
         return 'The headers are not properly formatted';
     }
 }

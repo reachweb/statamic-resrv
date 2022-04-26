@@ -2,17 +2,15 @@
 
 namespace Reach\StatamicResrv\Jobs;
 
-use Carbon\Carbon;
 use Carbon\CarbonPeriod;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Reach\StatamicResrv\Models\Availability;
+use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Models\AdvancedAvailability;
-
+use Reach\StatamicResrv\Models\Availability;
 
 class ProcessDataImport implements ShouldQueue
 {
@@ -24,13 +22,13 @@ class ProcessDataImport implements ShouldQueue
      * @return void
      */
     public function handle()
-    {        
+    {
         $dataImport = Cache::get('resrv-data-import');
 
-        $dataImport->prepare()->each(function($item, $id) {
-            $item->each(function($data) use ($id) {
+        $dataImport->prepare()->each(function ($item, $id) {
+            $item->each(function ($data) use ($id) {
                 $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
-                $advanced = array_key_exists('advanced', $data) ? $data['advanced'] : false;               
+                $advanced = array_key_exists('advanced', $data) ? $data['advanced'] : false;
                 $dataToAdd = [];
                 foreach ($period as $day) {
                     $dayData = [
@@ -43,7 +41,7 @@ class ProcessDataImport implements ShouldQueue
                         $dayData['property'] = $data['advanced'];
                     }
                     $dataToAdd[] = $dayData;
-                }                
+                }
                 if ($advanced) {
                     ray($dataToAdd);
                     AdvancedAvailability::upsert($dataToAdd, ['statamic_id', 'date', 'property'], ['price', 'available']);

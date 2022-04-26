@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class DataImportCpTest extends TestCase
@@ -21,5 +20,4 @@ class DataImportCpTest extends TestCase
         $response = $this->get(cp_route('resrv.dataimport.index'));
         $response->assertStatus(200)->assertSee('Import');
     }
-
 }
