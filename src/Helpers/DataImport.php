@@ -78,8 +78,11 @@ class DataImport
                 }
 
                 return [$id => $data];
-            })->reject(fn ($item, $id) => $id == 'not-found')
-                ->take(1);
+            })->reject(fn ($item, $id) => $id == 'not-found');
+
+        if ($sample) {
+            return $import->take(1);
+        }               
 
         return $import;
     }
