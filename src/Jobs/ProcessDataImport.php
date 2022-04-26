@@ -43,7 +43,6 @@ class ProcessDataImport implements ShouldQueue
                     $dataToAdd[] = $dayData;
                 }
                 if ($advanced) {
-                    ray($dataToAdd);
                     AdvancedAvailability::upsert($dataToAdd, ['statamic_id', 'date', 'property'], ['price', 'available']);
                 } else {
                     Availability::upsert($dataToAdd, ['statamic_id', 'date'], ['price', 'available']);
