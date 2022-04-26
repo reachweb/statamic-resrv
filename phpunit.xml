@@ -21,6 +21,7 @@
             <directory suffix="Test.php">tests/FixedPricing/</directory>
             <directory suffix="Test.php">tests/DynamicPricing/</directory>
             <directory suffix="Test.php">tests/Reports/</directory>
+            <directory suffix="Test.php">tests/DataImport/</directory>
             <directory suffix="Test.php">tests/Unit/</directory>
         </testsuite>
     </testsuites>
