@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Helpers;
 
 use Spatie\SimpleExcel\SimpleExcelReader;
 use Statamic\Facades\Collection;
+use Carbon\Carbon;
 
 class DataImport
 {
@@ -86,8 +87,8 @@ class DataImport
         $dates = explode('|', explode(':', $header)[1]);
 
         return [
-            'date_start' => $dates[0],
-            'date_end' => $dates[1],
+            'date_start' => Carbon::create($dates[0]),
+            'date_end' => Carbon::create($dates[1]),
         ];
     }
 
