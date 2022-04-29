@@ -199,7 +199,7 @@ class ExtraCpController extends Controller
                     ->entries()
                     ->get()
                     ->map(fn ($item) => $item->statamicentry_id);
-        
+
         $entries = Entry::query()
                     ->whereIn('id', $entryIds->toArray())
                     ->get(['id', 'title']);
