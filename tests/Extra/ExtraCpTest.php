@@ -137,6 +137,47 @@ class ExtraCpTest extends TestCase
         ]);
     }
 
+    public function test_can_add_and_remove_extra_to_multiple_extras()
+    {
+        $item = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+        $item3 = $this->makeStatamicItem();
+        $extra = Extra::factory()->create();
+
+        $payload = [
+            'entries' => [
+                $item->id(),
+                $item2->id(),
+                $item3->id(),
+            ]
+        ];
+
+        $response = $this->post(cp_route('resrv.extra.massadd', $extra->id), $payload);
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('resrv_statamicentry_extra', [
+            'statamicentry_id' => $item->id(),
+            'statamicentry_id' => $item2->id(),
+            'statamicentry_id' => $item3->id(),
+        ]);
+
+        $payload = [
+            'entries' => [
+                $item2->id(),
+                $item3->id(),
+            ]
+        ];
+
+        $response = $this->post(cp_route('resrv.extra.massadd', $extra->id), $payload);
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('resrv_statamicentry_extra', [
+            'statamicentry_id' => $item2->id(),
+            'statamicentry_id' => $item3->id(),
+        ]);
+        $this->assertDatabaseMissing('resrv_statamicentry_extra', [
+            'statamicentry_id' => $item->id(),
+        ]);
+    }
+
     public function test_can_remove_extra_from_statamic_entry()
     {
         $item = $this->makeStatamicItem();
