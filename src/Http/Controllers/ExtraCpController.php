@@ -112,10 +112,10 @@ class ExtraCpController extends Controller
             'entries' => 'required|array',
         ]);
 
-        $toAdd = collect($data['entries'])->transform(function($entry) use ($extra_id) {
+        $toAdd = collect($data['entries'])->transform(function ($entry) use ($extra_id) {
             return ['extra_id' => $extra_id, 'statamicentry_id' => $entry];
         })->toArray();
-        
+
         DB::table('resrv_statamicentry_extra')
             ->where('extra_id', $extra_id)
             ->delete();

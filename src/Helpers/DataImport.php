@@ -82,7 +82,7 @@ class DataImport
 
         if ($sample) {
             return $import->take(1);
-        }               
+        }
 
         return $import;
     }

@@ -149,7 +149,7 @@ class ExtraCpTest extends TestCase
                 $item->id(),
                 $item2->id(),
                 $item3->id(),
-            ]
+            ],
         ];
 
         $response = $this->post(cp_route('resrv.extra.massadd', $extra->id), $payload);
@@ -164,7 +164,7 @@ class ExtraCpTest extends TestCase
             'entries' => [
                 $item2->id(),
                 $item3->id(),
-            ]
+            ],
         ];
 
         $response = $this->post(cp_route('resrv.extra.massadd', $extra->id), $payload);
