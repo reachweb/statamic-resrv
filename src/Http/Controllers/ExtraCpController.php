@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Extra;
+use Statamic\Facades\Entry;
 
 class ExtraCpController extends Controller
 {
@@ -190,5 +191,19 @@ class ExtraCpController extends Controller
             ->delete();
 
         return response(200);
+    }
+
+    public function entries($extra_id)
+    {
+        $entryIds = $this->extra->find($extra_id)
+                    ->entries()
+                    ->get()
+                    ->map(fn ($item) => $item->statamicentry_id);
+        
+        $entries = Entry::query()
+                    ->whereIn('id', $entryIds->toArray())
+                    ->get(['id', 'title']);
+
+        return response()->json($entries);
     }
 }

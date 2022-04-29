@@ -15,6 +15,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/extra', 'ExtraCpController@create')->name('extra.create');
         Route::post('/resrv/extra/add/{statamic_id}', 'ExtraCpController@associate')->name('extra.add');
         Route::post('/resrv/extra/remove/{statamic_id}', 'ExtraCpController@disassociate')->name('extra.remove');
+        Route::get('/resrv/extra/entries/{extra}', 'ExtraCpController@entries')->name('extra.entries');
         Route::post('/resrv/extra/massadd/{extra}', 'ExtraCpController@massAssociate')->name('extra.massadd');
         Route::patch('/resrv/extra', 'ExtraCpController@update')->name('extra.update');
         Route::patch('/resrv/extra/order', 'ExtraCpController@order')->name('extra.order');

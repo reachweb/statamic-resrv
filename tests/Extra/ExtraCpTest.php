@@ -178,6 +178,25 @@ class ExtraCpTest extends TestCase
         ]);
     }
 
+    public function test_can_get_all_entries_for_extra()
+    {
+        $item = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+        $extra = Extra::factory()->create();
+
+        $payload = [
+            'entries' => [
+                $item->id(),
+                $item2->id(),
+            ]
+        ];
+
+        $this->post(cp_route('resrv.extra.massadd', $extra->id), $payload);
+
+        $response = $this->get(cp_route('resrv.extra.entries', $extra->id));
+        $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertSee($item->title);        
+    }
+
     public function test_can_remove_extra_from_statamic_entry()
     {
         $item = $this->makeStatamicItem();
