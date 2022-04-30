@@ -161,9 +161,16 @@
                     </div>
 
                     <div class="form-group w-full 2xl:w-1/2">
-                        <div class="font-bold mb-1 text-sm">
-                            <label for="name">Entries</label>
-                            <div class="text-sm font-light"><p>Select the entries that this dynamic pricing applies to</p></div>
+                        <div class="flex items-center justify-between mb-1">
+                            <div class="mr-2">
+                                 <label for="name">Entries</label>
+                                <div class="text-sm font-light"><p>Select the entries that this dynamic pricing applies to</p></div>
+                            </div>
+                           <div class="flex justify-end cursor-pointer mt-2">
+                                <span class="text-xs text-gray-700" @click="selectAllEntries()">Select all</span>
+                                <span class="text-xs text-gray-700 mx-1">|</span>
+                                <span class="text-xs text-gray-700" @click="clearAllEntries()">Clear</span>
+                            </div>
                         </div>
                         <div class="w-full">
                             <v-select 
@@ -176,7 +183,7 @@
                                 :reduce="type => type.id" 
                             >
                                 <template #selected-option-container><i class="hidden"></i></template>
-                                <template #footer="{ deselect }" v-if="entriesLoaded">                    
+                                <template #footer="{ deselect }" v-if="entriesLoaded">
                                     <div class="vs__selected-options-outside flex flex-wrap">
                                         <span v-for="id in submit.entries" :key="id" class="vs__selected mt-1">
                                             {{ getEntryTitle(id) }}
@@ -184,7 +191,7 @@
                                                 <span>×</span>
                                             </button>                 
                                         </span>
-                                    </div>
+                                    </div>                                        
                                 </template>
                             </v-select>
                         </div>
@@ -194,9 +201,16 @@
                     </div>
                     
                     <div class="form-group w-full 2xl:w-1/2">
-                        <div class="font-bold mb-1 text-sm">
-                            <label for="name">Extras</label>
-                            <div class="text-sm font-light"><p>Select the extras that this dynamic pricing applies to</p></div>
+                        <div class="flex items-center justify-between mb-1">
+                            <div class="mr-2">
+                                <label for="name">Extras</label>
+                                <div class="text-sm font-light"><p>Select the extras that this dynamic pricing applies to</p></div>
+                            </div>
+                            <div class="flex justify-end cursor-pointer mt-2">
+                                <span class="text-xs text-gray-700" @click="selectAllExtras()">Select all</span>
+                                <span class="text-xs text-gray-700 mx-1">|</span>
+                                <span class="text-xs text-gray-700" @click="clearAllExtras()">Clear</span>
+                            </div>
                         </div>
                         <div class="w-full">
                             <v-select 
@@ -209,7 +223,7 @@
                                 :reduce="type => type.id" 
                             >
                                 <template #selected-option-container><i class="hidden"></i></template>
-                                <template #footer="{ deselect }" v-if="extrasLoaded">                    
+                                <template #footer="{ deselect }" v-if="extrasLoaded">
                                     <div class="vs__selected-options-outside flex flex-wrap">
                                         <span v-for="id in submit.extras" :key="id" class="vs__selected mt-1">
                                             {{ getExtraTitle(id) }}
@@ -346,7 +360,10 @@ export default {
                     label: "Most of the reservation dates must be inside this date range"
                 }
             ],
-            date: null,
+            date: {
+                start: '',
+                end: ''
+            },
             entries: '',
             entriesLoaded: false, 
             extras: '',
@@ -392,10 +409,12 @@ export default {
             _.forEach(this.data, (value, name) => {
                 this.$set(this.submit, name, value)
             })
-            this.date = {
-                start: Vue.moment(this.data.date_start).toDate(),
-                end: Vue.moment(this.data.date_end).toDate()
-            }
+            if (this.data.date_start && this.data.date_end) {
+                this.date = {
+                    start: Vue.moment(this.data.date_start).toDate(),
+                    end: Vue.moment(this.data.date_end).toDate()
+                }
+            }            
             if (_.has(this.data, 'id')) {
                 this.postUrl = '/cp/resrv/dynamicpricing/'+this.data.id
             } else {
@@ -421,6 +440,18 @@ export default {
             .catch(error => {
                 this.$toast.error('Cannot retrieve the extras')
             })
+        },
+        selectAllExtras() {
+            this.submit.extras = _.map(this.extras, (item) => item.id)
+        },
+        selectAllEntries() {
+            this.submit.entries = _.map(this.entries, (item) => item.id)
+        },
+        clearAllExtras() {
+            this.submit.extras = []
+        },
+        clearAllEntries() {
+            this.submit.entries = []
         },
         getEntryTitle(id) {
             return this.entries.find(item => item.id == id).title
