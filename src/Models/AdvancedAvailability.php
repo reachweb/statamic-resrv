@@ -67,7 +67,7 @@ class AdvancedAvailability extends Availability
         }
 
         $disabled = $this->getDisabledIds();
-        $available = array_intersect(...array_values($days));
+        $available = call_user_func_array('array_intersect', array_values($days));
 
         return array_diff($available, $disabled);
     }
