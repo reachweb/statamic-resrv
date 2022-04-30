@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Routing\Controller;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
+use Statamic\Facades\Site;
 
 class ResrvUtilityController extends Controller
 {
@@ -13,6 +14,7 @@ class ResrvUtilityController extends Controller
         $collections = $this->collectionsWithAvailabityField();
         $entries = Entry::query()
         ->whereIn('collection', $collections)
+        ->where('site', Site::default())
         ->orderBy('title', 'asc')
         ->get(['id', 'title'])
         ->toAugmentedArray();
