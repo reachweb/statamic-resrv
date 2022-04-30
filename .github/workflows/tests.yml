@@ -24,6 +24,9 @@ jobs:
             framework: ^8.48.0
           - laravel: 9.*
             framework: ^9.0
+        exclude:
+          - laravel: 9.*
+            php: 7.4
 
     name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
 
