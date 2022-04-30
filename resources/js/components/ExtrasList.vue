@@ -8,7 +8,7 @@
                 class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors bg-white"
             >
                 <div class="flex items-center space-x-2">
-                    <div class="little-dot" :class="extra.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
+                    <div class="little-dot" :class="greenDot(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
                     <span class="font-medium cursor-pointer" v-html="extra.name" @click="editExtra(extra)"></span>
                     <span>{{ extra.price }} <span class="text-xs text-gray-500" v-html="priceLabel(extra.price_type)"></span></span>
                 </div>
@@ -21,6 +21,7 @@
                     ></span>
                     <dropdown-list>
                         <dropdown-item :text="__('Edit')" @click="editExtra(extra)" />
+                        <dropdown-item :text="__('Mass assign')" @click="massAssign(extra)" />
                         <dropdown-item :text="__('Conditions')" @click="editConditions(extra)" />
                         <dropdown-item :text="__('Delete')" @click="confirmDelete(extra)" />         
                     </dropdown-list>
@@ -48,6 +49,13 @@
         @saved="extraConditionsSaved"
     >
     </extra-conditions-panel>
+    <extra-mass-assign-panel            
+        v-if="showMassAssignPanel"
+        :data="extra"
+        @closed="toggleMassAssignPanel"
+        @saved="toggleMassAssignPanel"
+    >
+    </extra-mass-assign-panel>
     <confirmation-modal
         v-if="deleteId"
         title="Delete extra"
@@ -63,6 +71,7 @@
 import axios from 'axios'
 import ExtrasPanel from './ExtrasPanel.vue'
 import ExtraConditionsPanel from './ExtraConditionsPanel.vue'
+import ExtraMassAssignPanel from './ExtraMassAssignPanel.vue'
 import VueDraggable from 'vuedraggable'
 
 export default {
@@ -82,6 +91,7 @@ export default {
             containerWidth: null,
             showPanel: false,
             showConditionsPanel: false,
+            showMassAssignPanel: false,
             extras: '',
             entryExtras: '',
             activeExtras: [],
@@ -105,6 +115,7 @@ export default {
     components: {
         ExtrasPanel,
         ExtraConditionsPanel,
+        ExtraMassAssignPanel,
         VueDraggable
     },
 
@@ -145,6 +156,9 @@ export default {
         toggleConditionsPanel() {
             this.showConditionsPanel = !this.showConditionsPanel
         },
+        toggleMassAssignPanel() {
+            this.showMassAssignPanel = !this.showMassAssignPanel
+        },
         associateEntryExtra(extraId) {
             this.toggleEntryExtraEditing()
             if (this.extraEnabled(extraId)) {
@@ -168,6 +182,10 @@ export default {
             this.extra = extra
             this.toggleConditionsPanel()
         },
+        massAssign(extra) {
+            this.extra = extra
+            this.toggleMassAssignPanel()
+        },
         extraSaved() {
             this.togglePanel()
             this.getAllExtras()
@@ -184,6 +202,18 @@ export default {
         },
         extraEnabled(extraId) {
             return this.activeExtras.includes(extraId)
+        },
+        greenDot(extra) {
+            if (this.insideEntry) {
+                if (this.extraEnabled(extra.id)) {
+                    return true;
+                }
+            } else {
+                if (extra.published == true) {
+                    return true;
+                }
+            }
+            return false
         },
         priceLabel(code) {
             if (code == 'perday') {

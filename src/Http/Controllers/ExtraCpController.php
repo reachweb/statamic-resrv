@@ -110,7 +110,7 @@ class ExtraCpController extends Controller
     public function massAssociate(Request $request, $extra_id)
     {
         $data = $request->validate([
-            'entries' => 'required|array',
+            'entries' => 'sometimes|array',
         ]);
 
         $toAdd = collect($data['entries'])->transform(function ($entry) use ($extra_id) {
@@ -120,6 +120,7 @@ class ExtraCpController extends Controller
         DB::table('resrv_statamicentry_extra')
             ->where('extra_id', $extra_id)
             ->delete();
+
 
         DB::table('resrv_statamicentry_extra')
             ->insert($toAdd);
