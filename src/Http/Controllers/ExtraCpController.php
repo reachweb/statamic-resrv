@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Extra;
+use Statamic\Facades\Entry;
 
 class ExtraCpController extends Controller
 {
@@ -106,6 +107,26 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
+    public function massAssociate(Request $request, $extra_id)
+    {
+        $data = $request->validate([
+            'entries' => 'sometimes|array',
+        ]);
+
+        $toAdd = collect($data['entries'])->transform(function ($entry) use ($extra_id) {
+            return ['extra_id' => $extra_id, 'statamicentry_id' => $entry];
+        })->toArray();
+
+        DB::table('resrv_statamicentry_extra')
+            ->where('extra_id', $extra_id)
+            ->delete();
+
+        DB::table('resrv_statamicentry_extra')
+            ->insert($toAdd);
+
+        return response(200);
+    }
+
     public function conditions(Request $request, $extra_id)
     {
         $data = $request->validate([
@@ -170,5 +191,19 @@ class ExtraCpController extends Controller
             ->delete();
 
         return response(200);
+    }
+
+    public function entries($extra_id)
+    {
+        $entryIds = $this->extra->find($extra_id)
+                    ->entries()
+                    ->get()
+                    ->map(fn ($item) => $item->statamicentry_id);
+
+        $entries = Entry::query()
+                    ->whereIn('id', $entryIds->toArray())
+                    ->get(['id', 'title']);
+
+        return response()->json($entries);
     }
 }

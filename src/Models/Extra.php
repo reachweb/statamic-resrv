@@ -108,6 +108,12 @@ class Extra extends Model
             ->select('resrv_extras.*');
     }
 
+    public function scopeEntries($query)
+    {
+        return DB::table('resrv_statamicentry_extra')
+                ->where('extra_id', $this->id);
+    }
+
     public function scopeEntriesWithConditions($query, $entry)
     {
         $entry = $this->getDefaultSiteEntry($entry);
