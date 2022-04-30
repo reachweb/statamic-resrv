@@ -121,7 +121,6 @@ class ExtraCpController extends Controller
             ->where('extra_id', $extra_id)
             ->delete();
 
-
         DB::table('resrv_statamicentry_extra')
             ->insert($toAdd);
 
