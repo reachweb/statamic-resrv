@@ -177,7 +177,7 @@ class DynamicPricing extends Model
     {
         $dynamicPricingThatApplies = collect();
 
-        $data = Cache::get('dynamic_pricing_table', function () {
+        $data = Cache::remember('dynamic_pricing_table', 5, function () {
             return DB::table('resrv_dynamic_pricing')->get();
         }, 120);
 
