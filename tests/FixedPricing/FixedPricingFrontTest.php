@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\FixedPricing;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class FixedPricingFrontTest extends TestCase
@@ -42,6 +43,8 @@ class FixedPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
 
+        Cache::flush();
+
         // Add fixed pricing
         $fixedPricingPayload = [
             'statamic_id' => $item->id(),
@@ -56,9 +59,13 @@ class FixedPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('90');
 
+        Cache::flush();
+
         // Check individual pricing search
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('90')->assertSee('message":{"status":1}}', false);
+
+        Cache::flush();
 
         // Check for extra days
         $searchPayload = [
@@ -68,6 +75,8 @@ class FixedPricingFrontTest extends TestCase
         // Make sure we get the original price
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('151.38');
+
+        Cache::flush();
 
         // Add extra days fixed pricing
         $fixedPricingPayloadExtra = [
@@ -86,10 +95,14 @@ class FixedPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('130');
 
+        Cache::flush();
+
         // Check it works for multiple items
         $searchPayload['quantity'] = 3;
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('390');
+
+        Cache::flush();
     }
 
     public function test_fixed_pricing_changes_reservation_prices()
@@ -119,6 +132,8 @@ class FixedPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
 
+        Cache::flush();
+
         $fixedPricingPayload = [
             'statamic_id' => $item->id(),
             'days' => '4',
@@ -130,6 +145,8 @@ class FixedPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('90');
+
+        Cache::flush();
 
         $payment = json_decode($response->content())->data->payment;
         $price = json_decode($response->content())->data->price;
@@ -167,8 +184,12 @@ class FixedPricingFrontTest extends TestCase
             'date_end' => today()->setHour(12)->add(6, 'day')->toISOString(),
         ];
 
+        Cache::flush();
+
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('130');
+
+        Cache::flush();
 
         $payment = json_decode($response->content())->data->payment;
         $price = json_decode($response->content())->data->price;
@@ -226,6 +247,8 @@ class FixedPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('270');
+
+        Cache::flush();
 
         $payment = json_decode($response->content())->data->payment;
         $price = json_decode($response->content())->data->price;
