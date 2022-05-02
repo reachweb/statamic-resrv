@@ -156,8 +156,7 @@ class Availability extends Model implements AvailabilityContract
 
         foreach ($available as $id) {
             $price = $this->getPriceForDates($id);
-
-            $availableWithPricing[$id] = $this->buildItemsArray($id, $price, count($available));
+            $availableWithPricing[$id] = $this->buildItemsArray($id, $price);
 
             $multisiteIds = $this->getMultisiteIds($id);
             if (count($multisiteIds) > 0) {
@@ -262,7 +261,7 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
-    protected function buildItemsArray($id, $price, $available)
+    protected function buildItemsArray($id, $price)
     {
         return [
             'id' => $id,
@@ -278,7 +277,7 @@ class Availability extends Model implements AvailabilityContract
                 'original_price' => ($price['original_price'] ?? null),
             ],
             'message' => [
-                'status' => $available,
+                'status' => 1,
             ],
         ];
     }
