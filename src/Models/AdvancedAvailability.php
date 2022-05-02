@@ -72,13 +72,11 @@ class AdvancedAvailability extends Availability
         return array_diff($available, $disabled);
     }
 
-    public function getPriceForDates($statamic_id)
+    public function getPriceForDates($results, $statamic_id)
     {
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
-        $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)
-            ->get(['price', 'available', 'property'])
-            ->groupBy('property');
+        $results = $results->where('statamic_id', $statamic_id)->groupBy('property');
 
         // If we have more than one properties, return the cheapest
         if ($results->count() > 1) {
@@ -88,8 +86,7 @@ class AdvancedAvailability extends Availability
         }
 
         $this->calculatePrice($results->first(), $entry->id());
-
-        return [
+        return [   
             'reservation_price' => $this->reservation_price,
             'original_price' => $this->original_price ?? null,
         ];

@@ -153,9 +153,10 @@ class Availability extends Model implements AvailabilityContract
     {
         $availableWithPricing = [];
         $available = $this->availableForDates();
+        $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced)->get();
 
         foreach ($available as $id) {
-            $price = $this->getPriceForDates($id);
+            $price = $this->getPriceForDates($results, $id);
             $availableWithPricing[$id] = $this->buildItemsArray($id, $price);
 
             $multisiteIds = $this->getMultisiteIds($id);
@@ -182,7 +183,8 @@ class Availability extends Model implements AvailabilityContract
             $price = Price::create(0);
             foreach ($data['dates'] as $dates) {
                 $this->initiateAvailability($dates);
-                $price->add($this->getPriceForDates($id)['reservation_price']);
+                $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced)->get();
+                $price->add($this->getPriceForDates($results, $id)['reservation_price']);
             }
             $availableWithPricing[$id] = $this->buildMultiItemsArray($id, $price);
             $multisiteIds = $this->getMultisiteIds($id);
@@ -350,11 +352,11 @@ class Availability extends Model implements AvailabilityContract
     /**
      * Gets the total price of an entry for a period of time.
      */
-    public function getPriceForDates($statamic_id)
+    public function getPriceForDates($results, $statamic_id)
     {
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
-        $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced, $statamic_id)->get(['price', 'available']);
+        $results = $results->where('statamic_id', $statamic_id);
 
         $this->calculatePrice($results, $entry->id());
 

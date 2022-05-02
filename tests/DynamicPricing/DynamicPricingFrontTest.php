@@ -7,6 +7,7 @@ use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Tests\TestCase;
+use Illuminate\Support\Facades\Cache;
 
 class DynamicPricingFrontTest extends TestCase
 {
@@ -44,6 +45,8 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
+        
+        Cache::flush();
 
         // We should get 80.74 for 20% percent decrease
         $dynamic = DynamicPricing::factory()->make()->toArray();
@@ -57,6 +60,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('80.74')->assertSee('100.92');
 
+        Cache::flush();
+
         // We should get 121.10 for 20% percent increase
         $dynamic = DynamicPricing::factory()->percentIncrease()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -66,6 +71,8 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('121.10')->assertSee('100.92');
+
+        Cache::flush();
 
         // We should get 80 for 20.92 fixed decrease
         $dynamic = DynamicPricing::factory()->fixedDecrease()->make()->toArray();
@@ -77,6 +84,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('80.00')->assertSee('100.92');
 
+        Cache::flush();
+
         // We should get 111.00 for 10.08 fixed increase
         $dynamic = DynamicPricing::factory()->fixedIncrease()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -86,6 +95,8 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('111.00')->assertSee('100.92');
+
+        Cache::flush();
 
         // Reset the dynamic pricing entry
         $dynamic = DynamicPricing::factory()->make()->toArray();
@@ -103,6 +114,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
 
+        Cache::flush();
+
         // But it works for "start" date condition
         $dynamic = DynamicPricing::factory()->dateStart()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -113,6 +126,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('80.74')->assertSee('100.92');
 
+        Cache::flush();
+
         // And "most" date condition
         $dynamic = DynamicPricing::factory()->dateMost()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -121,6 +136,8 @@ class DynamicPricingFrontTest extends TestCase
         $this->patch(cp_route('resrv.dynamicpricing.update', 1), $dynamic);
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('80.74')->assertSee('100.92');
+
+        Cache::flush();
 
         // Even further
         $searchPayload = [
@@ -148,6 +165,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
 
+        Cache::flush();
+
         // Reset the search again
         $searchPayload = [
             'date_start' => today()->setHour(12)->toISOString(),
@@ -174,6 +193,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('161.47');
 
+        Cache::flush();
+
         // Reset the search again
         $searchPayload = [
             'date_start' => today()->setHour(12)->toISOString(),
@@ -191,6 +212,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('80.74');
 
+        Cache::flush();
+
         // Let's check reservation_price reverse condition
         $dynamic = DynamicPricing::factory()->conditionPriceUnder()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -202,6 +225,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
 
+        Cache::flush();
+
         // Let's check without dates
         $dynamic = DynamicPricing::factory()->noDates()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -212,6 +237,8 @@ class DynamicPricingFrontTest extends TestCase
         // Should still work original price
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('80.74');
+
+        Cache::flush();
     }
 
     public function test_dynamic_pricing_changes_availability_prices_in_show_route()
@@ -242,6 +269,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('100.92');
 
+        Cache::flush();
+
         // We should get 80.74 for 20% percent decrease
         $dynamic = DynamicPricing::factory()->make()->toArray();
 
@@ -252,6 +281,8 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('80.74')->assertSee('100.92');
+
+        Cache::flush();
     }
 
     public function test_multiple_dynamic_pricing_on_availability_prices()
@@ -289,6 +320,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('80.74');
 
+        Cache::flush();
+
         // Lets add a 10.08 fixed increase
         $dynamic = DynamicPricing::factory()->fixedIncrease()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -299,6 +332,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('90.82');
 
+        Cache::flush();
+
         // Lets add a 20% increase
         $dynamic = DynamicPricing::factory()->percentIncrease()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -308,6 +343,8 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('108.98');
+
+        Cache::flush();
     }
 
     public function test_dynamic_pricing_applies_by_ordering()
@@ -365,6 +402,8 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('125');
+
+        Cache::flush();
     }
 
     public function test_dynamic_pricing_changes_single_item_availability_prices()
@@ -395,6 +434,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('100.92');
 
+        Cache::flush();
+
         // We should get 80.74 for 20% percent decrease
         $dynamic = DynamicPricing::factory()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -404,6 +445,8 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('80.74');
+
+        Cache::flush();
     }
 
     public function test_dynamic_pricing_applies_to_fixed_pricing()
@@ -443,6 +486,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('90');
 
+        Cache::flush();
+
         // We should get 72 for 20% percent decrease
         $dynamic = DynamicPricing::factory()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -452,6 +497,8 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('72');
+
+        Cache::flush();
     }
 
     public function test_dynamic_pricing_changes_reservation_prices()
@@ -481,6 +528,8 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
 
+        Cache::flush();
+
         // We should get 80.74 for 20% percent decrease
         $dynamic = DynamicPricing::factory()->make()->toArray();
         $dynamic['entries'] = [$item->id()];
@@ -490,6 +539,8 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('80.74');
+
+        Cache::flush();
 
         $payment = json_decode($response->content())->data->payment;
         $price = json_decode($response->content())->data->price;

@@ -34,12 +34,11 @@ class AvailabilityRepository
             });
     }
 
-    public function priceForDates($date_start, $date_end, $advanced, $statamic_id)
+    public function priceForDates($date_start, $date_end, $advanced)
     {
         return $this->query($advanced)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
-            ->where('statamic_id', $statamic_id)
             ->when($advanced, function ($query, $advanced) {
                 if (! in_array('any', $advanced)) {
                     $query->whereIn('property', $advanced);

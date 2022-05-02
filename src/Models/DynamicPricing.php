@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesComparisons;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
+use Illuminate\Support\Facades\Cache;
 
 class DynamicPricing extends Model
 {
@@ -101,7 +102,7 @@ class DynamicPricing extends Model
         return $price;
     }
 
-    public function percent(PriceClass $price, DynamicPricing $policy)
+    public function percent(PriceClass $price, $policy)
     {
         if ($policy->amount_operation == 'decrease') {
             return $price->decreasePercent($policy->amount);
@@ -113,7 +114,7 @@ class DynamicPricing extends Model
         return $price;
     }
 
-    public function fixed(PriceClass $price, DynamicPricing $policy)
+    public function fixed(PriceClass $price, $policy)
     {
         if ($policy->amount_operation == 'decrease') {
             return $price->subtract(Price::create($policy->amount));
@@ -127,10 +128,12 @@ class DynamicPricing extends Model
 
     public function scopeSearchForAvailability($query, $statamic_id, $price, $date_start, $date_end, $duration)
     {
-        $itemsForId = DB::table('resrv_dynamic_pricing_assignments')
-                ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
-                ->where('dynamic_pricing_assignment_id', $statamic_id)
-                ->get();
+        $data = Cache::remember('dynamic_pricing_assignments_table', 5, function () {
+            return DB::table('resrv_dynamic_pricing_assignments')->get();
+        });
+
+        $itemsForId = $data->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
+                ->where('dynamic_pricing_assignment_id', $statamic_id);
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -149,10 +152,13 @@ class DynamicPricing extends Model
 
     public function scopeSearchForExtra($query, $extra_id, $price, $date_start, $date_end, $duration)
     {
-        $itemsForId = DB::table('resrv_dynamic_pricing_assignments')
-                ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Extra')
-                ->where('dynamic_pricing_assignment_id', $extra_id)
-                ->get();
+
+        $data = Cache::remember('dynamic_pricing_assignments_table', 5, function () {
+            return DB::table('resrv_dynamic_pricing_assignments')->get();
+        });
+
+        $itemsForId = $data->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Extra')
+                ->where('dynamic_pricing_assignment_id', $extra_id);
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -171,15 +177,20 @@ class DynamicPricing extends Model
     protected function checkAllParameters($items, $price, $date_start, $date_end, $duration)
     {
         $dynamicPricingThatApplies = collect();
+
+        $data = Cache::get('dynamic_pricing_table', function () {
+            return DB::table('resrv_dynamic_pricing')->get();
+        }, 120);
+
         foreach ($items as $item) {
-            $pricing = $this->find($item->dynamic_pricing_id);
-            if ($pricing->hasCondition()) {
-                if (! $pricing->checkCondition($price, $duration)) {
+            $pricing = $data->firstWhere('id', $item->dynamic_pricing_id);
+            if ($this->hasCondition($pricing)) {
+                if (! $this->checkCondition($pricing, $price, $duration)) {
                     continue;
                 }
             }
-            if ($pricing->hasDates()) {
-                if (! $pricing->datesInRange($date_start, $date_end)) {
+            if ($this->hasDates($pricing)) {
+                if (! $this->datesInRange($pricing, $date_start, $date_end)) {
                     continue;
                 }
             }
@@ -189,20 +200,20 @@ class DynamicPricing extends Model
         return $dynamicPricingThatApplies->sortBy('order');
     }
 
-    protected function hasCondition()
+    protected function hasCondition($pricing)
     {
-        return $this->condition_type;
+        return $pricing->condition_type;
     }
 
-    protected function checkCondition(PriceClass $price = null, $duration = null)
+    protected function checkCondition($pricing, PriceClass $price = null, $duration = null)
     {
-        if ($this->condition_type == 'reservation_duration') {
-            if ($this->compare($duration, $this->condition_comparison, $this->condition_value)) {
+        if ($pricing->condition_type == 'reservation_duration') {
+            if ($this->compare($duration, $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }
         }
-        if ($this->condition_type == 'reservation_price') {
-            if ($this->compare($price->format(), $this->condition_comparison, $this->condition_value)) {
+        if ($pricing->condition_type == 'reservation_price') {
+            if ($this->compare($price->format(), $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }
         }
@@ -210,36 +221,36 @@ class DynamicPricing extends Model
         return false;
     }
 
-    protected function hasDates()
+    protected function hasDates($pricing)
     {
-        if ($this->date_start && $this->date_end) {
+        if ($pricing->date_start && $pricing->date_end) {
             return true;
         }
 
         return false;
     }
 
-    protected function datesInRange($date_start, $date_end)
+    protected function datesInRange($pricing, $date_start, $date_end)
     {
         $date_start = new Carbon($date_start);
         $date_end = new Carbon($date_end);
 
-        if ($this->date_include == 'all') {
-            if ($this->date_start->lessThanOrEqualTo($date_start) && $this->date_end->greaterThanOrEqualTo($date_end)) {
+        if ($pricing->date_include == 'all') {
+            if (Carbon::parse($pricing->date_start)->lessThanOrEqualTo($date_start) && Carbon::parse($pricing->date_end)->greaterThanOrEqualTo($date_end)) {
                 return true;
             }
         }
 
-        if ($this->date_include == 'start') {
-            if ($this->date_start->lessThanOrEqualTo($date_start) && $this->date_end->greaterThanOrEqualTo($date_start)) {
+        if ($pricing->date_include == 'start') {
+            if (Carbon::parse($pricing->date_start)->lessThanOrEqualTo($date_start) && Carbon::parse($pricing->date_end)->greaterThanOrEqualTo($date_start)) {
                 return true;
             }
         }
 
-        if ($this->date_include == 'most') {
+        if ($pricing->date_include == 'most') {
             $duration = $date_start->startOfDay()->diffInDays($date_end->startOfDay());
             $reservationPeriod = CarbonPeriod::create($date_start, $date_end, CarbonPeriod::EXCLUDE_END_DATE);
-            $dynamicPricingPeriod = CarbonPeriod::create($this->date_start, $this->date_end);
+            $dynamicPricingPeriod = CarbonPeriod::create($pricing->date_start, $pricing->date_end);
             $daysIncluded = 0;
             foreach ($reservationPeriod as $date) {
                 if ($dynamicPricingPeriod->contains($date)) {
