@@ -252,7 +252,6 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('80.74')->assertSee('100.92');
-
     }
 
     public function test_multiple_dynamic_pricing_on_availability_prices()
