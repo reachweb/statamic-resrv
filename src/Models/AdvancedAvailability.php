@@ -86,7 +86,8 @@ class AdvancedAvailability extends Availability
         }
 
         $this->calculatePrice($results->first(), $entry->id());
-        return [   
+
+        return [
             'reservation_price' => $this->reservation_price,
             'original_price' => $this->original_price ?? null,
         ];

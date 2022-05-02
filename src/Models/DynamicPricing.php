@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\DynamicPricingFactory;
 use Reach\StatamicResrv\Facades\Price;
@@ -13,7 +14,6 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesComparisons;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
-use Illuminate\Support\Facades\Cache;
 
 class DynamicPricing extends Model
 {
@@ -152,7 +152,6 @@ class DynamicPricing extends Model
 
     public function scopeSearchForExtra($query, $extra_id, $price, $date_start, $date_end, $duration)
     {
-
         $data = Cache::remember('dynamic_pricing_assignments_table', 5, function () {
             return DB::table('resrv_dynamic_pricing_assignments')->get();
         });

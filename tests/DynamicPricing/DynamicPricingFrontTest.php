@@ -3,11 +3,11 @@
 namespace Reach\StatamicResrv\Tests\DynamicPricing;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Tests\TestCase;
-use Illuminate\Support\Facades\Cache;
 
 class DynamicPricingFrontTest extends TestCase
 {
@@ -45,7 +45,7 @@ class DynamicPricingFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
-        
+
         Cache::flush();
 
         // We should get 80.74 for 20% percent decrease
