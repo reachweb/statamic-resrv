@@ -183,7 +183,7 @@ class Availability extends Model implements AvailabilityContract
             $price = Price::create(0);
             foreach ($data['dates'] as $dates) {
                 $this->initiateAvailability($dates);
-                $price->add($this->getPriceForDates($id));
+                $price->add($this->getPriceForDates($id)['reservation_price']);
             }
             $availableWithPricing[$id] = $this->buildMultiItemsArray($id, $price);
             $multisiteIds = $this->getMultisiteIds($id);
@@ -254,7 +254,7 @@ class Availability extends Model implements AvailabilityContract
             'data' => [
                 'price' => $this->reservation_price->format(),
                 'payment' => $this->calculatePayment($this->reservation_price)->format(),
-                'original_price' => (isset($this->original_price) ? $this->original_price->format() : null),
+                'original_price' => (isset($this->original_price) ? $this->original_price : null),
             ],
             'message' => [
                 'status' => 1,
@@ -273,9 +273,9 @@ class Availability extends Model implements AvailabilityContract
                 'quantity' => $this->quantity,
             ],
             'data' => [
-                'price' => $price->format(),
+                'price' => $price['reservation_price']->format(),
                 'payment' => $this->calculatePayment($price)->format(),
-                'original_price' => (isset($this->original_price) ? $this->original_price->format() : null),
+                'original_price' => ($price['original_price'] ?? null),
             ],
             'message' => [
                 'status' => $available,
@@ -292,7 +292,7 @@ class Availability extends Model implements AvailabilityContract
             'data' => [
                 'price' => $this->reservation_price->format(),
                 'payment' => $this->calculatePayment($this->reservation_price)->format(),
-                'original_price' => (isset($this->original_price) ? $this->original_price->format() : null),
+                'original_price' => (isset($this->original_price) ? $this->original_price : null),
             ],
             'message' => [
                 'status' => 1,
@@ -307,7 +307,7 @@ class Availability extends Model implements AvailabilityContract
             'data' => [
                 'price' => $price->format(),
                 'payment' => $this->calculatePayment($price)->format(),
-                'original_price' => (isset($this->original_price) ? $this->original_price->format() : null),
+                'original_price' => (isset($this->original_price) ? $this->original_price : null),
             ],
             'message' => [
                 'status' => 1,
@@ -359,7 +359,10 @@ class Availability extends Model implements AvailabilityContract
 
         $this->calculatePrice($results, $entry->id());
 
-        return $this->reservation_price;
+        return [
+            'reservation_price' => $this->reservation_price,
+            'original_price' => $this->original_price ?? null,
+        ];
     }
 
     protected function getDisabledIds()
@@ -380,6 +383,9 @@ class Availability extends Model implements AvailabilityContract
 
     protected function calculatePayment($price): PriceClass
     {
+        if (is_array($price)) {
+            $price = $price['reservation_price'];
+        }
         if (config('resrv-config.payment', 'full') == 'full') {
             return $price;
         }

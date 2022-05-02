@@ -14,6 +14,7 @@ trait HandlesPricing
     protected function calculatePrice($results, $id)
     {
         $start = Price::create(0);
+        $this->original_price = null;
 
         // Add prices
         $prices = [];
@@ -44,7 +45,7 @@ trait HandlesPricing
     {
         $dynamicPricing = $this->getDynamicPricing($id);
         if ($dynamicPricing) {
-            $this->original_price = $this->reservation_price;
+            $this->original_price = $this->reservation_price->format();
             $this->reservation_price = $dynamicPricing->apply($this->reservation_price);
         }
     }
