@@ -61,7 +61,16 @@ class AvailabilityFrontTest extends TestCase
         ];
         // We should see item 1, 3 but not item 2
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('150')->assertDontSee($item2->id())->assertSee($item3->id())->assertSee('210');
+        $response->assertStatus(200)
+                    ->assertSee($item->id()
+                    )->assertSee('150')
+                    ->assertDontSee($item2->id())
+                    ->assertSee($item3->id())
+                    ->assertSee('210')
+                    ->assertSessionHas('resrv_search');
+
+        $response = $this->post(route('resrv.utility.refreshSession'));
+        $response->assertStatus(200)->assertSessionMissing('resrv_search');
 
         $searchEmptyPayload = [
             'date_start' => today()->setHour(12)->add(15, 'day')->toISOString(),

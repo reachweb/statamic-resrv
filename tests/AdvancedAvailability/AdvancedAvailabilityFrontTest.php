@@ -40,7 +40,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('something');
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('something')->assertSessionHas('resrv_search');
 
         // Test show route
         $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);

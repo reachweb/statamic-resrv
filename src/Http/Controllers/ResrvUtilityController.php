@@ -22,6 +22,11 @@ class ResrvUtilityController extends Controller
         return response()->json($entries);
     }
 
+    public function refreshSession()
+    {
+        session()->flush();
+    }
+
     protected function collectionsWithAvailabityField()
     {
         $collections = [];

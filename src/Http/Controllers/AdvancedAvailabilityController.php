@@ -6,6 +6,7 @@ use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityRequest;
+use Reach\StatamicResrv\Jobs\SaveSearchToSession;
 
 class AdvancedAvailabilityController extends Controller
 {
@@ -26,6 +27,8 @@ class AdvancedAvailabilityController extends Controller
             return response()->json(['error' => $exception->getMessage()], 412);
         }
 
+        SaveSearchToSession::dispatchSync($request->validated());
+
         return response()->json($availabilityData);
     }
 
@@ -38,6 +41,8 @@ class AdvancedAvailabilityController extends Controller
         } catch (AvailabilityException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }
+
+        SaveSearchToSession::dispatchSync($request->validated());
 
         return response()->json($availabilityData);
     }
