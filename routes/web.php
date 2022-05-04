@@ -24,5 +24,5 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/api/reservation/checkout/{reservation_id}/confirm', 'ReservationController@checkoutConfirm')->name('reservation.checkoutConfirm');
 
         // Utility
-        Route::post('/resrv/api/session/refresh', 'ResrvUtilityController@refreshSession')->name('utility.refreshSession');
+        Route::post('/resrv/api/session/refresh-search', 'ResrvUtilityController@refreshSearchSession')->name('utility.refreshSearchSession');
     });

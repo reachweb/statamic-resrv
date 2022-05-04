@@ -22,9 +22,9 @@ class ResrvUtilityController extends Controller
         return response()->json($entries);
     }
 
-    public function refreshSession()
+    public function refreshSearchSession()
     {
-        session()->flush();
+        session()->forget('resrv_search');
     }
 
     protected function collectionsWithAvailabityField()

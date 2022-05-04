@@ -69,7 +69,7 @@ class AvailabilityFrontTest extends TestCase
                     ->assertSee('210')
                     ->assertSessionHas('resrv_search');
 
-        $response = $this->post(route('resrv.utility.refreshSession'));
+        $response = $this->post(route('resrv.utility.refreshSearchSession'));
         $response->assertStatus(200)->assertSessionMissing('resrv_search');
 
         $searchEmptyPayload = [
