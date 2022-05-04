@@ -9,7 +9,6 @@ use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
-use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
@@ -219,7 +218,7 @@ class Availability extends Model implements AvailabilityContract
 
         $this->calculatePrice($results, $entry->id());
         $property = $this->getProperty($results, $entry->id(), true);
-        
+
         return $this->buildSpecificItemArray($property);
     }
 
@@ -360,7 +359,6 @@ class Availability extends Model implements AvailabilityContract
         return array_diff($available, $disabled);
     }
 
-
     public function getPriceForDates($results, $statamic_id)
     {
         $results = $results->where('statamic_id', $statamic_id);
@@ -382,9 +380,10 @@ class Availability extends Model implements AvailabilityContract
             return false;
         }
         $property = $results->first()->property;
-        if (! $results->every(fn ($item) => $item->property == $property )) {
+        if (! $results->every(fn ($item) => $item->property == $property)) {
             return false;
         }
+
         return $property;
     }
 

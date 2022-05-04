@@ -121,7 +121,6 @@ class AdvancedAvailabilityFrontTest extends TestCase
 
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertDontSee($item3->id())->assertSee('something')->assertSee('something-else');
-        
     }
 
     public function test_advanced_availability_multi_dates_availability()
