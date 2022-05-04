@@ -40,7 +40,11 @@ class AdvancedAvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id());
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('something');
+
+        // Test show route
+        $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('something');
 
         $searchPayload = [
             'date_start' => today()->setHour(12)->toISOString(),
@@ -107,7 +111,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertSee($item3->id());
+        $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertSee($item3->id())->assertSee('something');
 
         $searchPayload = [
             'date_start' => today()->setHour(12)->toISOString(),
@@ -116,7 +120,8 @@ class AdvancedAvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertDontSee($item3->id());
+        $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertDontSee($item3->id())->assertSee('something')->assertSee('something-else');
+        
     }
 
     public function test_advanced_availability_multi_dates_availability()
@@ -161,7 +166,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
 
         // We should see if that it's available and the total price
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('200');
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('200')->assertSee('something');
 
         // Test the show method as well
         $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);
