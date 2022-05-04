@@ -17,6 +17,7 @@ class Resrv extends Tags
         if (session()->missing('resrv_search')) {
             return json_encode([]);
         }
+
         return json_encode(session()->get('resrv_search'));
     }
 }
