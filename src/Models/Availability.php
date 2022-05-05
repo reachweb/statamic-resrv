@@ -160,11 +160,6 @@ class Availability extends Model implements AvailabilityContract
             $price = $this->getPriceForDates($results, $id);
             $property = $this->getProperty($results, $id);
             $availableWithPricing[$id] = $this->buildItemsArray($id, $price, $property);
-
-            $multisiteIds = $this->getMultisiteIds($id);
-            if (count($multisiteIds) > 0) {
-                $availableWithPricing[$id]['multisite_ids'] = $multisiteIds;
-            }
         }
 
         return $availableWithPricing;
@@ -191,10 +186,6 @@ class Availability extends Model implements AvailabilityContract
                 $property = $this->getProperty($results, $id);
             }
             $availableWithPricing[$id] = $this->buildMultiItemsArray($id, $price, $property);
-            $multisiteIds = $this->getMultisiteIds($id);
-            if (count($multisiteIds) > 0) {
-                $availableWithPricing[$id]['multisite_ids'] = $multisiteIds;
-            }
         }
 
         return $availableWithPricing;

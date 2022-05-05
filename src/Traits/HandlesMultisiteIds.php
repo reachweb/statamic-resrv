@@ -22,16 +22,4 @@ trait HandlesMultisiteIds
 
         return $entry->origin();
     }
-
-    public function getMultisiteIds($statamic_id)
-    {
-        $multisiteEntries = Entry::query()->where('origin', $statamic_id)->get();
-        $ids = $multisiteEntries->map(function ($item) {
-            return [
-                $item->locale() => $item->id(),
-            ];
-        });
-
-        return $ids->values()->all();
-    }
 }
