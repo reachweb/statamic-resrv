@@ -53,7 +53,7 @@ class FixedPricing extends Model
 
     public function scopeGetFixedPricing($query, $statamic_id, $days)
     {
-        $data = Cache::remember('fixed_pricing_table', 5, function () {
+        $data = Cache::remember('fixed_pricing_table', 60, function () {
             return DB::table('resrv_fixed_pricing')->get();
         });
         $items = $data->where('statamic_id', $statamic_id);

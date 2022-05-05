@@ -128,7 +128,7 @@ class DynamicPricing extends Model
 
     public function scopeSearchForAvailability($query, $statamic_id, $price, $date_start, $date_end, $duration)
     {
-        $data = Cache::remember('dynamic_pricing_assignments_table', 5, function () {
+        $data = Cache::remember('dynamic_pricing_assignments_table', 60, function () {
             return DB::table('resrv_dynamic_pricing_assignments')->get();
         });
 
@@ -152,7 +152,7 @@ class DynamicPricing extends Model
 
     public function scopeSearchForExtra($query, $extra_id, $price, $date_start, $date_end, $duration)
     {
-        $data = Cache::remember('dynamic_pricing_assignments_table', 5, function () {
+        $data = Cache::remember('dynamic_pricing_assignments_table', 60, function () {
             return DB::table('resrv_dynamic_pricing_assignments')->get();
         });
 
@@ -177,7 +177,7 @@ class DynamicPricing extends Model
     {
         $dynamicPricingThatApplies = collect();
 
-        $data = Cache::remember('dynamic_pricing_table', 5, function () {
+        $data = Cache::remember('dynamic_pricing_table', 60, function () {
             return DB::table('resrv_dynamic_pricing')->get();
         }, 120);
 
