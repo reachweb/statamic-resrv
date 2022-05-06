@@ -118,7 +118,8 @@ class Price implements CastsAttributes
         return $this->money->getAmount();
     }
 
-    public function isZero() {
+    public function isZero()
+    {
         return $this->money->isZero();
     }
 }

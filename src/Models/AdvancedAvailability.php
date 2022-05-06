@@ -4,9 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Reach\StatamicResrv\Database\Factories\AdvancedAvailabilityFactory;
-use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Money\Price as PriceClass;
-use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Facades\Blueprint;
@@ -41,5 +39,4 @@ class AdvancedAvailability extends Availability
 
         return $slug;
     }
-
 }

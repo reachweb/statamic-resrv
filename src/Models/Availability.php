@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
@@ -15,7 +16,6 @@ use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
 use Statamic\Facades\Entry;
-use Illuminate\Support\Arr;
 
 class Availability extends Model implements AvailabilityContract
 {
@@ -178,7 +178,6 @@ class Availability extends Model implements AvailabilityContract
         });
         $availableAtAllDates = array_intersect(...array_values($availableAtAllDates->toArray()));
 
-
         $availableWithPricing = [];
         foreach ($availableAtAllDates as $id) {
             $data = $available->map(function ($item) use ($id) {
@@ -187,7 +186,7 @@ class Availability extends Model implements AvailabilityContract
             $id = $this->getDefaultSiteEntry($id)->id();
             $price = Price::create(0);
             $property = $data->first()->property;
-            $data->each(function($item) use ($id, &$price) {
+            $data->each(function ($item) use ($id, &$price) {
                 $price->add($this->getPriceForDates($item, $id)['reservation_price']);
             });
             $availableWithPricing[$id] = $this->buildMultiItemsArray($id, $price, $property);
@@ -204,7 +203,7 @@ class Availability extends Model implements AvailabilityContract
 
         $results = $this->getResultsForItem($entry)->first();
 
-        if (!$results || $entryAvailabilityValue == 'disabled') {
+        if (! $results || $entryAvailabilityValue == 'disabled') {
             return [
                 'message' => [
                     'status' => false,
@@ -232,7 +231,7 @@ class Availability extends Model implements AvailabilityContract
             if ($results->count() == 0) {
                 continue;
             }
-            $results->transform(function($item) use ($entry) {
+            $results->transform(function ($item) use ($entry) {
                 return [
                     ...$item->toArray(),
                     ...$this->getPriceForDates($item, $entry->id()),
@@ -251,14 +250,14 @@ class Availability extends Model implements AvailabilityContract
 
         $totalPrice = Price::create(0);
         $totalOriginalPrice = Price::create(0);
-        $property =  Arr::get($available->first(), 'property', null); 
+        $property = Arr::get($available->first(), 'property', null);
 
         foreach ($available->flatten(1) as $item) {
             $totalPrice = $totalPrice->add($item['reservation_price']);
             if ($item['original_price'] != null) {
                 $totalOriginalPrice = $totalOriginalPrice->add($item['original_price']);
             }
-        }        
+        }
 
         return $this->buildMultiSpecificItemArray($days, $totalPrice, $totalOriginalPrice, $property);
     }
@@ -306,7 +305,7 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
-    protected function buildMultiSpecificItemArray($days, $totalPrice, $totalOriginalPrice,  $property)
+    protected function buildMultiSpecificItemArray($days, $totalPrice, $totalOriginalPrice, $property)
     {
         return [
             'request' => [
@@ -343,17 +342,18 @@ class Availability extends Model implements AvailabilityContract
     protected function availableForDates()
     {
         $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->duration, $this->quantity, $this->advanced)->get();
-       
+
         if ($results->count() == 0) {
             return [];
         }
 
         $disabled = $this->getDisabledIds();
-        
+
         $results = $results->reject(function ($item) use ($disabled) {
-            return in_array($item->statamic_id, $disabled);             
+            return in_array($item->statamic_id, $disabled);
         });
-        return $results; 
+
+        return $results;
     }
 
     public function getPriceForDates($item, $id)
@@ -401,7 +401,7 @@ class Availability extends Model implements AvailabilityContract
 
     protected function createPricesCollection($prices)
     {
-        return collect(explode(',',$prices))->transform(fn ($price) => Price::create($price));
+        return collect(explode(',', $prices))->transform(fn ($price) => Price::create($price));
     }
 
     protected function calculatePayment($price): PriceClass
