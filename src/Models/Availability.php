@@ -232,10 +232,7 @@ class Availability extends Model implements AvailabilityContract
                 continue;
             }
             $results->transform(function ($item) use ($entry) {
-                return [
-                    ...$item->toArray(),
-                    ...$this->getPriceForDates($item, $entry->id()),
-                ];
+                return array_merge($item->toArray(), $this->getPriceForDates($item, $entry->id()));
             });
             $available->push($results);
         }
