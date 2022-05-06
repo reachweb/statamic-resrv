@@ -11,7 +11,7 @@ class AvailabilityRepository
     {
         if ($advanced) {
             return $this->query($advanced)
-                ->selectRaw('count(statamic_id) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, available, property')
+                ->selectRaw('count(statamic_id) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, max(available) as available, property')
                 ->where('date', '>=', $date_start)
                 ->where('date', '<', $date_end)
                 ->where('available', '>=', $quantity)
@@ -24,7 +24,7 @@ class AvailabilityRepository
                 ->having('days', '=', $duration);
         } else {
             return $this->query($advanced)
-                ->selectRaw('count(statamic_id) as days, group_concat(price) as prices, date, statamic_id, available')
+                ->selectRaw('count(statamic_id) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, max(available) as available')
                 ->where('date', '>=', $date_start)
                 ->where('date', '<', $date_end)
                 ->where('available', '>=', $quantity)
@@ -37,7 +37,7 @@ class AvailabilityRepository
     {
         if ($advanced) {
             return $this->query($advanced)
-                ->selectRaw('count(date) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, available, property')
+                ->selectRaw('count(date) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, max(available) as available, max(property) as property')
                 ->where('statamic_id', $statamic_id)
                 ->where('date', '>=', $date_start)
                 ->where('date', '<', $date_end)
@@ -51,7 +51,7 @@ class AvailabilityRepository
                 ->having('days', '=', $duration);
         } else {
             return $this->query($advanced)
-                ->selectRaw('count(date) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, available')
+                ->selectRaw('count(date) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, max(available) as available')
                 ->where('statamic_id', $statamic_id)
                 ->where('date', '>=', $date_start)
                 ->where('date', '<', $date_end)
