@@ -15,6 +15,7 @@ use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
 use Statamic\Facades\Entry;
+use Illuminate\Support\Arr;
 
 class Availability extends Model implements AvailabilityContract
 {
@@ -111,18 +112,17 @@ class Availability extends Model implements AvailabilityContract
 
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
-        $results = $this->getResultsForItem($entry);
+        $results = $this->getResultsForItem($entry)->first();
 
-        $this->calculatePrice($results, $entry->id());
+        $this->calculatePrice($this->createPricesCollection($results->prices), $entry->id());
 
         return $this->reservation_price;
     }
 
     protected function getResultsForItem($entry)
     {
-        return AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced, $entry->id())
-            ->get(['date', 'price', 'available', 'property'])
-            ->sortBy('date');
+        return AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->duration, $this->quantity, $this->advanced, $entry->id())
+            ->get();
     }
 
     public function decrementAvailability($date_start, $date_end, $quantity, $advanced, $statamic_id)
@@ -153,13 +153,11 @@ class Availability extends Model implements AvailabilityContract
     {
         $availableWithPricing = [];
         $available = $this->availableForDates();
-        $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced)->get();
 
-        foreach ($available as $id) {
-            $id = $this->getDefaultSiteEntry($id)->id();
-            $price = $this->getPriceForDates($results, $id);
-            $property = $this->getProperty($results, $id);
-            $availableWithPricing[$id] = $this->buildItemsArray($id, $price, $property);
+        foreach ($available as $item) {
+            $id = $this->getDefaultSiteEntry($item->statamic_id)->id();
+            $price = $this->getPriceForDates($item, $id);
+            $availableWithPricing[$id] = $this->buildItemsArray($id, $price, $item->property);
         }
 
         return $availableWithPricing;
@@ -167,24 +165,31 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getMultiple($data)
     {
-        $available = [];
+        $available = collect();
+        // Get all available items for these date ranges
         foreach ($data['dates'] as $dates) {
             $this->initiateAvailability($dates);
-            $available[] = $this->availableForDates();
+            $available->push($this->availableForDates()->keyBy('statamic_id'));
         }
-        $available = array_intersect(...array_values($available));
+
+        // Get an array of their IDs and keep only the values that are in ever range
+        $availableAtAllDates = $available->map(function ($date) {
+            return $date->keys()->toArray();
+        });
+        $availableAtAllDates = array_intersect(...array_values($availableAtAllDates->toArray()));
+
 
         $availableWithPricing = [];
-
-        foreach ($available as $id) {
-            $price = Price::create(0);
+        foreach ($availableAtAllDates as $id) {
+            $data = $available->map(function ($item) use ($id) {
+                return $item->get($id);
+            });
             $id = $this->getDefaultSiteEntry($id)->id();
-            foreach ($data['dates'] as $dates) {
-                $this->initiateAvailability($dates);
-                $results = AvailabilityRepository::priceForDates($this->date_start, $this->date_end, $this->advanced)->get();
-                $price->add($this->getPriceForDates($results, $id)['reservation_price']);
-                $property = $this->getProperty($results, $id);
-            }
+            $price = Price::create(0);
+            $property = $data->first()->property;
+            $data->each(function($item) use ($id, &$price) {
+                $price->add($this->getPriceForDates($item, $id)['reservation_price']);
+            });
             $availableWithPricing[$id] = $this->buildMultiItemsArray($id, $price, $property);
         }
 
@@ -195,11 +200,11 @@ class Availability extends Model implements AvailabilityContract
     {
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
-        $results = $this->getResultsForItem($entry);
-
         $entryAvailabilityValue = $entry->get('resrv_availability');
 
-        if (($results->count() !== count($this->getPeriod())) || $entryAvailabilityValue == 'disabled') {
+        $results = $this->getResultsForItem($entry)->first();
+
+        if (!$results || $entryAvailabilityValue == 'disabled') {
             return [
                 'message' => [
                     'status' => false,
@@ -207,10 +212,9 @@ class Availability extends Model implements AvailabilityContract
             ];
         }
 
-        $this->calculatePrice($results, $entry->id());
-        $property = $this->getProperty($results, $entry->id(), true);
+        $this->calculatePrice($this->createPricesCollection($results->prices), $entry->id());
 
-        return $this->buildSpecificItemArray($property);
+        return $this->buildSpecificItemArray($results->property);
     }
 
     protected function getMultiSpecificItem($data, $statamic_id)
@@ -218,26 +222,45 @@ class Availability extends Model implements AvailabilityContract
         $entry = $this->getDefaultSiteEntry($statamic_id);
         $entryAvailabilityValue = $entry->get('resrv_availability');
 
-        $results = collect();
         $days = collect();
+        $available = collect();
+
         foreach ($data['dates'] as $dates) {
             $this->initiateAvailability($dates);
             $days = $days->push($this->duration);
-            $resultsForDates = $this->getResultsForItem($entry);
-            if ($resultsForDates->count() !== count($this->getPeriod()) || $entryAvailabilityValue == 'disabled') {
-                return [
-                    'message' => [
-                        'status' => false,
-                    ],
-                ];
+            $results = $this->getResultsForItem($entry);
+            if ($results->count() == 0) {
+                continue;
             }
-            $results = $results->merge($this->getResultsForItem($entry));
+            $results->transform(function($item) use ($entry) {
+                return [
+                    ...$item->toArray(),
+                    ...$this->getPriceForDates($item, $entry->id()),
+                ];
+            });
+            $available->push($results);
         }
 
-        $this->calculatePrice($results, $entry->id());
-        $property = $this->getProperty($results, $entry->id(), true);
+        if ($available->count() !== count($data['dates']) || $entryAvailabilityValue == 'disabled') {
+            return [
+                'message' => [
+                    'status' => false,
+                ],
+            ];
+        }
 
-        return $this->buildMultiSpecificItemArray($days, $property);
+        $totalPrice = Price::create(0);
+        $totalOriginalPrice = Price::create(0);
+        $property =  Arr::get($available->first(), 'property', null); 
+
+        foreach ($available->flatten(1) as $item) {
+            $totalPrice = $totalPrice->add($item['reservation_price']);
+            if ($item['original_price'] != null) {
+                $totalOriginalPrice = $totalOriginalPrice->add($item['original_price']);
+            }
+        }        
+
+        return $this->buildMultiSpecificItemArray($days, $totalPrice, $totalOriginalPrice, $property);
     }
 
     protected function buildSpecificItemArray($property)
@@ -283,16 +306,16 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
-    protected function buildMultiSpecificItemArray($days, $property)
+    protected function buildMultiSpecificItemArray($days, $totalPrice, $totalOriginalPrice,  $property)
     {
         return [
             'request' => [
                 'days' => $days->sum(),
             ],
             'data' => [
-                'price' => $this->reservation_price->format(),
-                'payment' => $this->calculatePayment($this->reservation_price)->format(),
-                'original_price' => (isset($this->original_price) ? $this->original_price : null),
+                'price' => $totalPrice->format(),
+                'payment' => $this->calculatePayment($totalPrice)->format(),
+                'original_price' => $totalOriginalPrice->isZero() ? null : $totalOriginalPrice,
                 'property' => $property ?? null,
             ],
             'message' => [
@@ -317,44 +340,26 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
-    /**
-     * Search for availability entries between the dates and then return the ids
-     * of the items that have at least 1 available for each day.
-     */
     protected function availableForDates()
     {
-        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->quantity, $this->advanced)->get();
-
-        $idsFound = $results->groupBy('statamic_id')->keys();
-
-        $days = [];
-        foreach ($idsFound as $id) {
-            $dates = $results->where('statamic_id', $id)->sortBy('date');
-            // If the count of the dates is not the same like the period, it usually
-            // means that a date has no availability information, so we should just skip
-            if ($dates->count() !== count($this->getPeriod())) {
-                continue;
-            }
-            foreach ($dates as $availability) {
-                $days[$availability->date][] = $id;
-            }
-        }
-
-        if (count($days) == 0) {
+        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->duration, $this->quantity, $this->advanced)->get();
+       
+        if ($results->count() == 0) {
             return [];
         }
 
         $disabled = $this->getDisabledIds();
-        $available = array_intersect(...array_values($days));
-
-        return array_diff($available, $disabled);
+        
+        $results = $results->reject(function ($item) use ($disabled) {
+            return in_array($item->statamic_id, $disabled);             
+        });
+        return $results; 
     }
 
-    public function getPriceForDates($results, $statamic_id)
+    public function getPriceForDates($item, $id)
     {
-        $results = $results->where('statamic_id', $statamic_id);
-
-        $this->calculatePrice($results, $statamic_id);
+        $prices = $this->createPricesCollection($item->prices);
+        $this->calculatePrice($prices, $id);
 
         return [
             'reservation_price' => $this->reservation_price,
@@ -383,8 +388,8 @@ class Availability extends Model implements AvailabilityContract
         $results = Entry::query()
             ->where('resrv_availability', 'disabled')
             ->where('published', true)
-            ->get()
-            ->toAugmentedArray('id');
+            ->get('id')
+            ->toArray();
 
         return array_flatten($results);
     }
@@ -392,6 +397,11 @@ class Availability extends Model implements AvailabilityContract
     protected function getPeriod()
     {
         return CarbonPeriod::create($this->date_start, $this->date_end, CarbonPeriod::EXCLUDE_END_DATE);
+    }
+
+    protected function createPricesCollection($prices)
+    {
+        return collect(explode(',',$prices))->transform(fn ($price) => Price::create($price));
     }
 
     protected function calculatePayment($price): PriceClass

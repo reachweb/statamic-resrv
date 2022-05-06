@@ -128,6 +128,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
         $this->signInAdmin();
 
         $item = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -138,8 +139,18 @@ class AdvancedAvailabilityFrontTest extends TestCase
             'advanced' => [['code' => 'something']],
         ];
 
-        $response = $this->post(cp_route('resrv.advancedavailability.update'), $payload);
-        $response->assertStatus(200);
+        $this->post(cp_route('resrv.advancedavailability.update'), $payload);
+
+        $payload = [
+            'statamic_id' => $item2->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(4, 'day')->toISOString(),
+            'price' => 50,
+            'available' => 2,
+            'advanced' => [['code' => 'something']],
+        ];
+
+        $this->post(cp_route('resrv.advancedavailability.update'), $payload);
 
         $this->travelTo(today()->setHour(11));
 
@@ -165,7 +176,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
 
         // We should see if that it's available and the total price
         $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('200')->assertSee('something');
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('200')->assertSee('something')->assertDontSee($item2->id());
 
         // Test the show method as well
         $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);

@@ -7,43 +7,58 @@ use Reach\StatamicResrv\Models\Availability;
 
 class AvailabilityRepository
 {
-    public function availableBetween($date_start, $date_end, $quantity, $advanced)
+    public function availableBetween($date_start, $date_end, $duration, $quantity, $advanced)
     {
-        return $this->query($advanced)
-            ->where('date', '>=', $date_start)
-            ->where('date', '<', $date_end)
-            ->where('available', '>=', $quantity)
-            ->when($advanced, function ($query, $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
-                }
-            });
+        if ($advanced) {
+            return $this->query($advanced)
+                ->selectRaw('count(statamic_id) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, available, property')
+                ->where('date', '>=', $date_start)
+                ->where('date', '<', $date_end)
+                ->where('available', '>=', $quantity)
+                ->when($advanced, function ($query, $advanced) {
+                    if (! in_array('any', $advanced)) {
+                        $query->whereIn('property', $advanced);
+                    }
+                })
+                ->groupBy('statamic_id', 'property')
+                ->having('days', '=', $duration);
+        } else {
+            return $this->query($advanced)
+                ->selectRaw('count(statamic_id) as days, group_concat(price) as prices, date, statamic_id, available')
+                ->where('date', '>=', $date_start)
+                ->where('date', '<', $date_end)
+                ->where('available', '>=', $quantity)
+                ->groupBy('statamic_id')
+                ->having('days', '=', $duration);
+        }
     }
 
-    public function itemAvailableBetween($date_start, $date_end, $quantity, $advanced, $statamic_id)
+    public function itemAvailableBetween($date_start, $date_end, $duration, $quantity, $advanced, $statamic_id)
     {
-        return $this->query($advanced)
-            ->where('date', '>=', $date_start)
-            ->where('date', '<', $date_end)
-            ->where('statamic_id', $statamic_id)
-            ->where('available', '>=', $quantity)
-            ->when($advanced, function ($query, $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
-                }
-            });
-    }
-
-    public function priceForDates($date_start, $date_end, $advanced)
-    {
-        return $this->query($advanced)
-            ->where('date', '>=', $date_start)
-            ->where('date', '<', $date_end)
-            ->when($advanced, function ($query, $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
-                }
-            });
+        if ($advanced) {
+            return $this->query($advanced)
+                ->selectRaw('count(date) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, available, property')
+                ->where('statamic_id', $statamic_id)
+                ->where('date', '>=', $date_start)
+                ->where('date', '<', $date_end)
+                ->where('available', '>=', $quantity)
+                ->when($advanced, function ($query, $advanced) {
+                    if (! in_array('any', $advanced)) {
+                        $query->whereIn('property', $advanced);
+                    }
+                })
+                ->groupBy('statamic_id')
+                ->having('days', '=', $duration);
+        } else {
+            return $this->query($advanced)
+                ->selectRaw('count(date) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, available')
+                ->where('statamic_id', $statamic_id)
+                ->where('date', '>=', $date_start)
+                ->where('date', '<', $date_end)
+                ->where('available', '>=', $quantity)
+                ->groupBy('statamic_id')
+                ->having('days', '=', $duration);
+        }
     }
 
     public function decrement($date_start, $date_end, $quantity, $advanced, $statamic_id)

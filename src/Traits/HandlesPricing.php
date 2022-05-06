@@ -11,23 +11,17 @@ trait HandlesPricing
     protected $original_price;
     protected $reservation_price;
 
-    protected function calculatePrice($results, $id)
+    protected function calculatePrice($prices, $id)
     {
         $start = Price::create(0);
         $this->original_price = null;
 
-        // Add prices
-        $prices = [];
-        $results->each(function ($result) use (&$prices) {
-            $prices[] = $result->price;
-        });
-        $this->reservation_price = $start->add(...$prices);
+        $this->reservation_price = $start->add(...$prices->toArray());
 
         // If FixedPricing exists, replace the price
         if (FixedPricing::getFixedPricing($id, $this->duration)) {
             $this->reservation_price = FixedPricing::getFixedPricing($id, $this->duration);
         }
-
         // Apply dynamic pricing
         $this->applyDynamicPricing($id);
 
