@@ -61,6 +61,30 @@ class AvailabilityRepository
         }
     }
 
+    public function itemPricesBetween($date_start, $date_end, $advanced, $statamic_id)
+    {
+        if ($advanced) {
+            return $this->query($advanced)
+                ->selectRaw('group_concat(price) as prices, statamic_id')
+                ->where('statamic_id', $statamic_id)
+                ->where('date', '>=', $date_start)
+                ->where('date', '<', $date_end)
+                ->when($advanced, function ($query, $advanced) {
+                    if (! in_array('any', $advanced)) {
+                        $query->whereIn('property', $advanced);
+                    }
+                })
+                ->groupBy('statamic_id');
+        } else {
+            return $this->query($advanced)
+                ->selectRaw('group_concat(price) as prices, statamic_id')
+                ->where('statamic_id', $statamic_id)
+                ->where('date', '>=', $date_start)
+                ->where('date', '<', $date_end)
+                ->groupBy('statamic_id');
+        }
+    }
+
     public function decrement($date_start, $date_end, $quantity, $advanced, $statamic_id)
     {
         return $this->query($advanced)

@@ -106,6 +106,23 @@ class Availability extends Model implements AvailabilityContract
         return true;
     }
 
+    public function getPricing($data, $statamic_id)
+    {
+        $this->initiateAvailabilityUnsafe($data);
+        $entry = $this->getDefaultSiteEntry($statamic_id);
+
+        $results = AvailabilityRepository::itemPricesBetween($this->date_start, $this->date_end, $this->advanced, $entry->id())
+        ->first();
+
+        $this->calculatePrice($this->createPricesCollection($results->prices), $entry->id());
+
+        return [
+            'price' => $this->reservation_price->format(),
+            'original_price' => $this->original_price ?? null,
+            'payment' => $this->calculatePayment($this->reservation_price)->format(),
+        ];
+    }
+
     public function getPriceForItem($data, $statamic_id)
     {
         $this->initiateAvailability($data);
@@ -271,7 +288,7 @@ class Availability extends Model implements AvailabilityContract
             'data' => [
                 'price' => $this->reservation_price->format(),
                 'payment' => $this->calculatePayment($this->reservation_price)->format(),
-                'original_price' => (isset($this->original_price) ? $this->original_price : null),
+                'original_price' => $this->original_price ?? null,
                 'property' => $property ?? null,
             ],
             'message' => [
@@ -416,4 +433,5 @@ class Availability extends Model implements AvailabilityContract
             return $price->percent(config('resrv-config.percent_amount'));
         }
     }
+
 }
