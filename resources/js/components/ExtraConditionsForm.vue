@@ -204,7 +204,7 @@ export default {
             return this.normalizeInputOptions({
                 required: __('Required'),
                 show: __('Show when'),
-                hiden: __('Hide when'),
+                hidden: __('Hide when'),
             });
         },
         type() {
