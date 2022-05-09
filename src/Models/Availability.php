@@ -433,5 +433,4 @@ class Availability extends Model implements AvailabilityContract
             return $price->percent(config('resrv-config.percent_amount'));
         }
     }
-
 }
