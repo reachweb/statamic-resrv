@@ -25,6 +25,7 @@ class ReservationRequest extends FormRequest
                 'total' => 'required|numeric',
                 'extras' => 'nullable|array',
                 'options' => 'nullable|array',
+                'statamic_id' => 'nullable|string',
             ];
         } else {
             $rules = [
@@ -37,6 +38,7 @@ class ReservationRequest extends FormRequest
                 'total' => 'required|numeric',
                 'extras' => 'nullable|array',
                 'options' => 'nullable|array',
+                'statamic_id' => 'nullable|string',
             ];
         }
 

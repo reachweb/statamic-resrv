@@ -119,6 +119,59 @@ class ReservationFrontTest extends TestCase
         ]);
     }
 
+    public function test_reservation_start_method_without_json()
+    {
+        $this->withStandardFakeViews();
+        $item = $this->makeStatamicItem();
+        $this->signInAdmin();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->add(1, 'day')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+        ];
+
+        $this->travelTo(today()->setHour(11));
+
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('300')->assertSee('message":{"status":1}}', false);
+
+        $payment = json_decode($response->content())->data->payment;
+        $price = json_decode($response->content())->data->price;
+
+
+        $checkoutRequest = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+            'payment' => $payment,
+            'price' => $price,
+            'total' => $price,
+            'statamic_id' => $item->id(),
+        ];        
+
+        $this->viewShouldReturnRendered('statamic-resrv::checkout.checkout_start', 'Test');
+        $response = $this->post(route('resrv.reservation.start'), $checkoutRequest);
+        
+        
+        $response->assertStatus(200)
+            ->assertSessionHas('resrv_reservation', 1)
+            ->assertSee('Test');
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'payment' => $payment,
+        ]);
+       
+    }
+
     public function test_reservation_confirm_method_fail()
     {
         //$this->withExceptionHandling();
@@ -138,6 +191,13 @@ class ReservationFrontTest extends TestCase
         $location = Location::factory()->create();
 
         $extra = Extra::factory()->create();
+
+        $option = Option::factory()
+            ->state([
+                'item_id' => $item->id(),
+            ])
+            ->has(OptionValue::factory()->count(3), 'values')
+            ->create();
 
         $addExtraToEntry = [
             'id' => $extra->id,
@@ -271,6 +331,7 @@ class ReservationFrontTest extends TestCase
             ->notRequired()
             ->has(OptionValue::factory()->count(3), 'values')
             ->create();
+
         Config::set('resrv-config.enable_locations', true);
         Config::set('resrv-config.admin_email', 'someone@test.com,someonelse@example.com');
 

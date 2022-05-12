@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
@@ -12,7 +13,11 @@ use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Http\Requests\ReservationRequest;
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Reservation;
+use Statamic\View\View;
+use Statamic\Facades\Entry;
+use Statamic\Facades\Site;
 
 class ReservationController extends Controller
 {
@@ -69,6 +74,42 @@ class ReservationController extends Controller
         return response()->json($reservation->id);
     }
 
+    public function start(ReservationRequest $request)
+    {
+        $data = $request->validated();
+        $statamic_id = $data['statamic_id'];
+
+        // Set the quantity and advanced for backwards compatibility
+        if (! Arr::exists($data, 'quantity')) {
+            $data['quantity'] = 1;
+        }
+        if (! Arr::exists($data, 'advanced')) {
+            $data['advanced'] = null;
+        }
+
+        $reloadedReservation = $this->handleReload($request);
+        if ($reloadedReservation) {
+            return $this->checkoutStartView($reloadedReservation);
+        }
+
+        try {
+            $request->missing('dates')
+            ? $this->reservation->confirmReservation($data, $statamic_id, false, false)
+            : $this->reservation->confirmMultipleReservation($data, $statamic_id, false);
+        } catch (ReservationException $exception) {
+            return back()->with(['errors' => $exception->getMessage()]);
+        }
+
+        $request->missing('dates')
+            ? $reservation = $this->createNormal($data, $statamic_id)
+            : $reservation = $this->createMultiple($data, $statamic_id);
+
+        ReservationCreated::dispatch($reservation);
+
+        return $this->checkoutStartView($reservation);
+
+    }
+
     protected function createNormal($data, $statamic_id)
     {
         return $this->reservation->create([
@@ -82,8 +123,8 @@ class ReservationController extends Controller
             'property' => $data['advanced'],
             'location_start' => $data['location_start'] ?? '',
             'location_end' => $data['location_end'] ?? '',
-            'price' => $data['total'],
-            'payment' => $data['payment'],
+            'price' => $data['total'] ?? '',
+            'payment' => $data['payment'] ?? '',
             'payment_id' => '',
             'customer' => '',
         ]);
@@ -103,8 +144,8 @@ class ReservationController extends Controller
             'quantity' => 1,
             'location_start' => $data['location_start'] ?? '',
             'location_end' => $data['location_end'] ?? '',
-            'price' => $data['total'],
-            'payment' => $data['payment'],
+            'price' => $data['total'] ?? '',
+            'payment' => $data['payment'] ?? '',
             'payment_id' => '',
             'customer' => '',
         ]);
@@ -196,5 +237,64 @@ class ReservationController extends Controller
         }
 
         return $rules;
+    }
+
+    protected function handleReload()
+    {
+        if (session()->has('resrv_reservation')) {
+            $reservation = $this->reservation->find(session('resrv_reservation'));
+            if ($reservation->status == 'expired') {
+                return false;
+            }
+            $expireAt = Carbon::parse($reservation->created_at)->add(config('resrv-config.minutes_to_hold'), 'minute');
+            if ($expireAt < Carbon::now()) {
+                return false;
+            }
+            return $reservation;
+        }
+        return false;
+    }
+
+    protected function checkoutStartView($reservation)
+    {
+        $data = [
+            'date_start' => $reservation->date_start->toDateString(),
+            'date_end' => $reservation->date_end->toDateString(),
+            'quantity' => $reservation->quantity,
+            'advanced' => $reservation->property,
+            'item_id' => $reservation->item_id,
+        ];
+
+        $extras = Extra::getPriceForDates($data);
+        $extras->transform(function ($extra) {
+            $extra->conditions = (new Extra)->find($extra->id)->conditions()->get();
+
+            return $extra;
+        });
+
+        $options = Option::entry($data['item_id'])
+            ->where('published', true)
+            ->with('values')
+            ->get();
+        foreach ($options as $index => $option) {
+            $options[$index] = Option::find($option->id)->valuesPriceForDates($data);
+        }
+
+        if (config('resrv-config.checkout_uri')) {
+            $checkoutEntry = Entry::findByUri(config('resrv-config.checkout_uri'), Site::current());
+            $layout = Arr::get($checkoutEntry->toAugmentedArray(), 'collection')->value()->layout();
+        }
+
+        return (new View())
+           ->template('statamic-resrv::checkout.checkout_start')
+           ->layout($layout ?? 'layout')
+           ->with([
+               'reservation' => $reservation,
+               'duration' => $reservation->duration(),
+               'prices' => $reservation->getPrices(),
+               'extras' => $extras->keyBy('slug'),
+               'options' => $options->keyBy('slug'),
+               'entry' => $reservation->entry(),
+           ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout']));
     }
 }

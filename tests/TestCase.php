@@ -20,6 +20,7 @@ class TestCase extends OrchestraTestCase
     use DatabaseMigrations;
     use WithFaker;
     use PreventSavingStacheItemsToDisk;
+    use FakesViews;
 
     protected function setUp(): void
     {

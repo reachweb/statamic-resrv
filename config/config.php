@@ -36,6 +36,7 @@ return [
     'calculate_days_using_time'            => false,
     'decrease_availability_for_extra_time' => false,
     'admin_email'                          => false,
+    'checkout_uri'                         => false,
 
     /**
      * Currency.

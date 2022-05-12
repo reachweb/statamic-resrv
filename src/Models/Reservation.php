@@ -123,7 +123,24 @@ class Reservation extends Model
         return $this->price->subtract($this->payment)->format();
     }
 
-    public function confirmReservation($data, $statamic_id)
+    public function duration()
+    {
+        return $this->date_start->startOfDay()->diffInDays($this->date_end->startOfDay());
+    }
+
+    public function getPrices()
+    {
+        $data = [
+            'date_start' => $this->date_start,
+            'date_end' => $this->date_end,
+            'advanced' => $this->property,
+            'quantity' => $this->quantity,
+        ];
+
+        return (new Availability)->getPricing($data, $this->item_id);
+    }
+
+    public function confirmReservation($data, $statamic_id, $checkExtras = true, $checkOptions = true)
     {
         $this->checkAvailability($data, $statamic_id);
 
@@ -131,19 +148,21 @@ class Reservation extends Model
 
         $this->checkMaxQuantity($data['quantity']);
 
-        if (! $this->checkForRequiredOptions($statamic_id, $data)) {
+        if ($checkOptions && ! $this->checkForRequiredOptions($statamic_id, $data)) {
             throw new ReservationException(__('There are required options you did not select.'));
         }
 
-        $requiredExtras = $this->checkForRequiredExtras($statamic_id, $data);
-        if ($requiredExtras) {
-            throw new ReservationException($requiredExtras);
+        if ($checkExtras) {
+            $requiredExtras = $this->checkForRequiredExtras($statamic_id, $data);
+            if ($requiredExtras) {
+                throw new ReservationException($requiredExtras);
+            }
         }
 
         return true;
     }
 
-    public function confirmMultipleReservation($data, $statamic_id)
+    public function confirmMultipleReservation($data, $statamic_id, $checkOptions = true)
     {
         $dates = collect($data['dates']);
         $extraCharges = Price::create(0);
@@ -174,7 +193,7 @@ class Reservation extends Model
             throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
 
-        if (! $this->checkForRequiredOptions($statamic_id, $data)) {
+        if ($checkOptions && ! $this->checkForRequiredOptions($statamic_id, $data)) {
             throw new ReservationException(__('There are required options you did not select.'));
         }
 

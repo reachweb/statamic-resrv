@@ -99,6 +99,10 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         ], 'resrv-config');
 
         $this->publishes([
+            __DIR__.'/../resources/views/checkout' => resource_path('views/vendor/statamic-resrv/checkout'),
+        ], 'resrv-checkout-views');
+
+        $this->publishes([
             __DIR__.'/../resources/blueprints' => resource_path('blueprints'),
         ], 'resrv-blueprints');
 
