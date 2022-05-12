@@ -148,7 +148,6 @@ class ReservationFrontTest extends TestCase
         $payment = json_decode($response->content())->data->payment;
         $price = json_decode($response->content())->data->price;
 
-
         $checkoutRequest = [
             'date_start' => today()->setHour(12)->toISOString(),
             'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
@@ -156,12 +155,11 @@ class ReservationFrontTest extends TestCase
             'price' => $price,
             'total' => $price,
             'statamic_id' => $item->id(),
-        ];        
+        ];
 
         $this->viewShouldReturnRendered('statamic-resrv::checkout.checkout_start', 'Test');
         $response = $this->post(route('resrv.reservation.start'), $checkoutRequest);
-        
-        
+
         $response->assertStatus(200)
             ->assertSessionHas('resrv_reservation', 1)
             ->assertSee('Test');
@@ -169,7 +167,6 @@ class ReservationFrontTest extends TestCase
         $this->assertDatabaseHas('resrv_reservations', [
             'payment' => $payment,
         ]);
-       
     }
 
     public function test_reservation_confirm_method_fail()

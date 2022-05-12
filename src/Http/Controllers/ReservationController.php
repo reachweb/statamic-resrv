@@ -15,9 +15,9 @@ use Reach\StatamicResrv\Http\Requests\ReservationRequest;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Reservation;
-use Statamic\View\View;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
+use Statamic\View\View;
 
 class ReservationController extends Controller
 {
@@ -107,7 +107,6 @@ class ReservationController extends Controller
         ReservationCreated::dispatch($reservation);
 
         return $this->checkoutStartView($reservation);
-
     }
 
     protected function createNormal($data, $statamic_id)
@@ -250,8 +249,10 @@ class ReservationController extends Controller
             if ($expireAt < Carbon::now()) {
                 return false;
             }
+
             return $reservation;
         }
+
         return false;
     }
 
