@@ -92,7 +92,7 @@ class ReservationCpTest extends TestCase
 
         $payload = [
             'id' => $reservation->id,
-        ]; 
+        ];
 
         $response = $this->patch(cp_route('resrv.reservation.refund', $payload));
 

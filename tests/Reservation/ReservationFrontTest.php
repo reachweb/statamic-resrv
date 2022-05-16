@@ -200,7 +200,6 @@ class ReservationFrontTest extends TestCase
             ->has(OptionValue::factory()->count(3), 'values')
             ->create();
 
-
         $searchPayload = [
             'date_start' => today()->setHour(12)->toISOString(),
             'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
@@ -253,8 +252,6 @@ class ReservationFrontTest extends TestCase
             'option_id' => $option->id,
             'value' => $option->values[0]->id,
         ]);
-        
-
     }
 
     public function test_reservation_confirm_method_fail()

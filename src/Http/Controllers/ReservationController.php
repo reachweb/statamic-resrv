@@ -61,7 +61,6 @@ class ReservationController extends Controller
 
         $this->assignExtras($reservation, $data);
 
-
         return response()->json($reservation->id);
     }
 
@@ -119,11 +118,10 @@ class ReservationController extends Controller
             'payment' => $data['payment'],
             'price' => $data['total'],
         ]);
-        
+
         $this->assignOptions($reservation, $data);
 
         $this->assignExtras($reservation, $data);
-
 
         return response()->json($reservation->id);
     }
@@ -268,7 +266,7 @@ class ReservationController extends Controller
             }
         }
     }
-    
+
     protected function assignOptions($reservation, $data)
     {
         if (array_key_exists('options', $data) > 0) {
