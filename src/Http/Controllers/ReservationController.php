@@ -11,7 +11,8 @@ use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
-use Reach\StatamicResrv\Http\Requests\ReservationRequest;
+use Reach\StatamicResrv\Http\Requests\ReservationCreateRequest;
+use Reach\StatamicResrv\Http\Requests\ReservationUpdateRequest;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Reservation;
@@ -30,7 +31,7 @@ class ReservationController extends Controller
         $this->payment = $payment;
     }
 
-    public function confirm(ReservationRequest $request, $statamic_id)
+    public function confirm(ReservationCreateRequest $request, $statamic_id)
     {
         $data = $request->validated();
 
@@ -56,25 +57,15 @@ class ReservationController extends Controller
 
         ReservationCreated::dispatch($reservation);
 
-        if (array_key_exists('options', $data) > 0) {
-            foreach ($data['options'] as $id => $properties) {
-                $this->reservation->find($reservation->id)->options()->attach($id, ['value' => $properties['value']]);
-            }
-        }
+        $this->assignOptions($reservation, $data);
 
-        if (array_key_exists('extras', $data) > 0) {
-            foreach ($data['extras'] as $id => $properties) {
-                $this->reservation->find($reservation->id)->extras()->attach($id, [
-                    'quantity' => $properties['quantity'],
-                    'price' => $this->getExtraPrice($id, $reservation),
-                ]);
-            }
-        }
+        $this->assignExtras($reservation, $data);
+
 
         return response()->json($reservation->id);
     }
 
-    public function start(ReservationRequest $request)
+    public function start(ReservationCreateRequest $request)
     {
         $data = $request->validated();
         $statamic_id = $data['statamic_id'];
@@ -107,6 +98,34 @@ class ReservationController extends Controller
         ReservationCreated::dispatch($reservation);
 
         return $this->checkoutStartView($reservation);
+    }
+
+    public function update(ReservationUpdateRequest $request, Reservation $reservation)
+    {
+        $data = $request->validated();
+
+        $dataWithDates = array_merge(
+            $data,
+            ...$reservation->get(['date_start', 'date_end', 'quantity', 'property', 'location_start', 'location_end'])->toArray(),
+        );
+
+        try {
+            $this->reservation->confirmTotal($dataWithDates, $reservation->item_id);
+        } catch (ReservationException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 412);
+        }
+
+        $reservation->update([
+            'payment' => $data['payment'],
+            'price' => $data['total'],
+        ]);
+        
+        $this->assignOptions($reservation, $data);
+
+        $this->assignExtras($reservation, $data);
+
+
+        return response()->json($reservation->id);
     }
 
     protected function createNormal($data, $statamic_id)
@@ -238,6 +257,27 @@ class ReservationController extends Controller
         return $rules;
     }
 
+    protected function assignExtras($reservation, $data)
+    {
+        if (array_key_exists('extras', $data) > 0) {
+            foreach ($data['extras'] as $id => $properties) {
+                $this->reservation->find($reservation->id)->extras()->attach($id, [
+                    'quantity' => $properties['quantity'],
+                    'price' => $this->getExtraPrice($id, $reservation),
+                ]);
+            }
+        }
+    }
+    
+    protected function assignOptions($reservation, $data)
+    {
+        if (array_key_exists('options', $data) > 0) {
+            foreach ($data['options'] as $id => $properties) {
+                $this->reservation->find($reservation->id)->options()->attach($id, ['value' => $properties['value']]);
+            }
+        }
+    }
+
     protected function handleReload()
     {
         if (session()->has('resrv_reservation')) {
@@ -259,8 +299,8 @@ class ReservationController extends Controller
     protected function checkoutStartView($reservation)
     {
         $data = [
-            'date_start' => $reservation->date_start->toDateString(),
-            'date_end' => $reservation->date_end->toDateString(),
+            'date_start' => $reservation->date_start,
+            'date_end' => $reservation->date_end,
             'quantity' => $reservation->quantity,
             'advanced' => $reservation->property,
             'item_id' => $reservation->item_id,
@@ -296,6 +336,7 @@ class ReservationController extends Controller
                'extras' => $extras->keyBy('slug'),
                'options' => $options->keyBy('slug'),
                'entry' => $reservation->entry(),
+               'form' => $this->reservation->checkoutForm($reservation->item_id),
            ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout']));
     }
 }

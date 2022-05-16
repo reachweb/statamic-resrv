@@ -225,7 +225,7 @@ class Reservation extends Model
         }
     }
 
-    protected function confirmTotal($data, $statamic_id)
+    public function confirmTotal($data, $statamic_id)
     {
         $reservationCost = Price::create($data['price']);
 
@@ -234,6 +234,8 @@ class Reservation extends Model
         if (! $dbTotal->equals($frontendTotal)) {
             throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
+
+        return true;
     }
 
     protected function getExtraCharges($data, $statamic_id)

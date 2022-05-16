@@ -169,6 +169,94 @@ class ReservationFrontTest extends TestCase
         ]);
     }
 
+    public function test_update_reservation_update_method()
+    {
+        $this->withStandardFakeViews();
+        $item = $this->makeStatamicItem();
+        $this->signInAdmin();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->add(1, 'day')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $extra = Extra::factory()->create();
+
+        $addExtraToEntry = [
+            'id' => $extra->id,
+        ];
+
+        $this->post(cp_route('resrv.extra.add', $item->id()), $addExtraToEntry);
+
+        $option = Option::factory()
+            ->state([
+                'item_id' => $item->id(),
+            ])
+            ->has(OptionValue::factory()->count(3), 'values')
+            ->create();
+
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+        ];
+
+        $this->travelTo(today()->setHour(10));
+
+        $availabilityResponse = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $availabilityResponse->assertStatus(200)->assertSee('300')->assertSee('message":{"status":1}}', false);
+
+        $payment = json_decode($availabilityResponse->content())->data->payment;
+        $price = json_decode($availabilityResponse->content())->data->price;
+
+        $checkoutRequest = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(2, 'day')->toISOString(),
+            'payment' => $payment,
+            'price' => $price,
+            'total' => $price,
+            'statamic_id' => $item->id(),
+        ];
+
+        $this->viewShouldReturnRendered('statamic-resrv::checkout.checkout_start', 'Test');
+        $response = $this->post(route('resrv.reservation.start'), $checkoutRequest);
+
+        $days = json_decode($availabilityResponse->content())->request->days;
+        $total = $price + ($days * $extra->price->format()) + ($days * $option->values[0]->price->format());
+
+        $checkoutRequest = [
+            'payment' => $payment,
+            'price' => $price,
+            'total' => $total,
+            'options' => [$option->id => ['value' => 1]],
+            'extras' => [$extra->id => ['quantity' => 1]],
+        ];
+
+        $response = $this->patch(route('resrv.reservation.update', 1), $checkoutRequest);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'price' => $total,
+        ]);
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => 1,
+            'extra_id' => $extra->id,
+            'quantity' => 1,
+        ]);
+        $this->assertDatabaseHas('resrv_reservation_option', [
+            'reservation_id' => 1,
+            'option_id' => $option->id,
+            'value' => $option->values[0]->id,
+        ]);
+        
+
+    }
+
     public function test_reservation_confirm_method_fail()
     {
         //$this->withExceptionHandling();

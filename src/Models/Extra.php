@@ -52,7 +52,7 @@ class Extra extends Model
 
     public function priceForDates($data)
     {
-        $this->initiateAvailability($data);
+        $this->initiateAvailabilityUnsafe($data);
         $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
         if ($dynamicPricing) {
             $this->price = $dynamicPricing->apply($this->price)->format();
@@ -80,7 +80,7 @@ class Extra extends Model
 
     public function calculatePrice($data, $quantity)
     {
-        $this->initiateAvailability($data);
+        $this->initiateAvailabilityUnsafe($data);
         $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
         if ($dynamicPricing) {
             $this->price = $dynamicPricing->apply($this->price)->format();

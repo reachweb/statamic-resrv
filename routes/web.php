@@ -19,6 +19,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
 
         // Checkout - Ajax routes
         Route::post('/resrv/api/reservation/{statamic_id}', 'ReservationController@confirm')->name('reservation.confirm');
+        Route::patch('/resrv/api/reservation/{reservation}', 'ReservationController@update')->name('reservation.update');
         Route::get('/resrv/api/reservation/checkout/{entry_id?}', 'ReservationController@checkoutForm')->name('reservation.checkoutForm');
         Route::post('/resrv/api/reservation/checkout/{reservation_id}', 'ReservationController@checkoutFormSubmit')->name('reservation.checkoutFormSubmit');
         Route::post('/resrv/api/reservation/checkout/{reservation_id}/confirm', 'ReservationController@checkoutConfirm')->name('reservation.checkoutConfirm');
