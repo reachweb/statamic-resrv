@@ -392,7 +392,7 @@ class ReservationFrontTest extends TestCase
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $reservation->id,
             'status' => 'confirmed',
-        ]);        
+        ]);
     }
 
     public function test_reservation_failed_method()
@@ -425,7 +425,7 @@ class ReservationFrontTest extends TestCase
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $reservation->id,
             'status' => 'confirmed',
-        ]);        
+        ]);
     }
 
     public function test_reservation_customer_checkout_form_submit_error()

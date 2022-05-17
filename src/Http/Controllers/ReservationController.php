@@ -336,7 +336,7 @@ class ReservationController extends Controller
     protected function assignOptions($reservation, $data)
     {
         if (array_key_exists('options', $data) > 0) {
-            $optionsToSync = collect($data['options'])->mapWithKeys(function ($option, $id) use ($reservation) {
+            $optionsToSync = collect($data['options'])->mapWithKeys(function ($option, $id) {
                 return [
                     $id => ['value' => $option['value']],
                 ];

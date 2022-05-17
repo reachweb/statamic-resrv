@@ -89,7 +89,6 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
     {
         parent::boot();
 
-
         Route::group([
             'middleware' => [
                 \Illuminate\Cookie\Middleware\EncryptCookies::class,
@@ -97,9 +96,9 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
                 \Illuminate\Session\Middleware\StartSession::class,
                 \Illuminate\View\Middleware\ShareErrorsFromSession::class,
                 \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            ]
+            ],
         ], function () {
-            require  __DIR__.'/../routes/payments.php';
+            require __DIR__.'/../routes/payments.php';
         });
 
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'statamic-resrv');
