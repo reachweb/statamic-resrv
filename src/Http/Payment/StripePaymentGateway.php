@@ -13,7 +13,7 @@ class StripePaymentGateway implements PaymentInterface
 {
     public function paymentIntent($payment, Reservation $reservation, $data)
     {
-        Stripe::setApiKey($this->getStripeKey($reservation));
+        Stripe::setApiKey($this->getPublicKey($reservation));
         $paymentIntent = PaymentIntent::create([
             'amount' => $payment->raw(),
             'currency' => Str::lower(config('resrv-config.currency_isoCode')),
@@ -25,7 +25,7 @@ class StripePaymentGateway implements PaymentInterface
 
     public function refund($reservation)
     {
-        Stripe::setApiKey($this->getStripeKey($reservation));
+        Stripe::setApiKey($this->getPublicKey($reservation));
         try {
             $attemptRefund = Refund::create([
                 'payment_intent' => $reservation->payment_id,
@@ -47,7 +47,7 @@ class StripePaymentGateway implements PaymentInterface
         return $filteredData->toArray();
     }
 
-    public function getStripeKey($reservation)
+    public function getPublicKey($reservation)
     {
         $key = config('resrv-config.stripe_secret_key');
         if (! is_array($key)) {

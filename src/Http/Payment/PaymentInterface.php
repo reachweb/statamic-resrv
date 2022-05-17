@@ -10,5 +10,5 @@ interface PaymentInterface
 
     public function refund(Reservation $reservation);
 
-    public function getStripeKey(Reservation $reservation);
+    public function getPublicKey(Reservation $reservation);
 }
