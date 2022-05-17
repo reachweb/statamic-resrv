@@ -240,6 +240,69 @@ class ReservationController extends Controller
         return response()->json($reservation_id);
     }
 
+    public function checkoutCompleted(Request $request)
+    {
+        $confirm_id = $this->payment->confirm_id ?? 'id';
+
+        $data = $request->validate([
+            $confirm_id => 'required',
+            $this->payment->confirmed_status ?? 'status' => 'sometimes|string',
+            $this->payment->amount ?? 'amount' => 'sometimes',
+        ]);
+
+        // Find the reservation
+        $reservation = $this->reservation->find($data[$confirm_id]);
+
+        // Confim the reservation
+        $reservation->status = 'confirmed';
+        $reservation->payment_id = $data;
+        $reservation->save();
+
+        ReservationConfirmed::dispatch($reservation);
+
+        if (config('resrv-config.checkout_completed_uri')) {
+            $checkoutEntry = Entry::findByUri(config('resrv-config.checkout_completed_uri'), Site::current());
+            $layout = Arr::get($checkoutEntry->toAugmentedArray(), 'collection')->value()->layout();
+        }
+
+        return (new View())
+           ->template('statamic-resrv::checkout.checkout_completed')
+           ->layout($layout ?? 'layout')
+           ->with([
+               'reservation' => $reservation,
+               'entry' => $reservation->entry(),
+           ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout completed']));
+    }
+
+    public function checkoutFailed(Request $request)
+    {
+        $confirm_id = $this->payment->confirm_id ?? 'id';
+
+        $data = $request->validate([
+            $confirm_id => 'required',
+        ]);
+
+        // Find the reservation
+        $reservation = $this->reservation->find($data[$confirm_id]);
+
+        // Confim the reservation
+        $reservation->status = 'expired';
+        $reservation->save();
+
+        if (config('resrv-config.checkout_failed_uri')) {
+            $checkoutEntry = Entry::findByUri(config('resrv-config.checkout_failed_uri'), Site::current());
+            $layout = Arr::get($checkoutEntry->toAugmentedArray(), 'collection')->value()->layout();
+        }
+
+        return (new View())
+           ->template('statamic-resrv::checkout.checkout_failed')
+           ->layout($layout ?? 'layout')
+           ->with([
+               'reservation' => $reservation,
+               'entry' => $reservation->entry(),
+           ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout failed']));
+    }
+
     protected function validationRules($reservation)
     {
         $rules = [];
@@ -258,21 +321,27 @@ class ReservationController extends Controller
     protected function assignExtras($reservation, $data)
     {
         if (array_key_exists('extras', $data) > 0) {
-            foreach ($data['extras'] as $id => $properties) {
-                $this->reservation->find($reservation->id)->extras()->attach($id, [
-                    'quantity' => $properties['quantity'],
-                    'price' => $this->getExtraPrice($id, $reservation),
-                ]);
-            }
+            $extrasToSync = collect($data['extras'])->mapWithKeys(function ($extra, $id) use ($reservation) {
+                return [
+                    $id => [
+                        'quantity' => $extra['quantity'],
+                        'price' => $this->getExtraPrice($id, $reservation),
+                    ],
+                ];
+            });
+            $this->reservation->find($reservation->id)->extras()->sync($extrasToSync);
         }
     }
 
     protected function assignOptions($reservation, $data)
     {
         if (array_key_exists('options', $data) > 0) {
-            foreach ($data['options'] as $id => $properties) {
-                $this->reservation->find($reservation->id)->options()->attach($id, ['value' => $properties['value']]);
-            }
+            $optionsToSync = collect($data['options'])->mapWithKeys(function ($option, $id) use ($reservation) {
+                return [
+                    $id => ['value' => $option['value']],
+                ];
+            });
+            $this->reservation->find($reservation->id)->options()->sync($optionsToSync);
         }
     }
 
@@ -280,7 +349,7 @@ class ReservationController extends Controller
     {
         if (session()->has('resrv_reservation')) {
             $reservation = $this->reservation->find(session('resrv_reservation'));
-            if ($reservation->status == 'expired') {
+            if ($reservation->status !== 'pending') {
                 return false;
             }
             $expireAt = Carbon::parse($reservation->created_at)->add(config('resrv-config.minutes_to_hold'), 'minute');

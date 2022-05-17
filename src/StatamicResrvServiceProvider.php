@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv;
 
+use Illuminate\Support\Facades\Route;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
@@ -87,6 +88,19 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
     public function boot(): void
     {
         parent::boot();
+
+
+        Route::group([
+            'middleware' => [
+                \Illuminate\Cookie\Middleware\EncryptCookies::class,
+                \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+                \Illuminate\Session\Middleware\StartSession::class,
+                \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+                \Illuminate\Routing\Middleware\SubstituteBindings::class,
+            ]
+        ], function () {
+            require  __DIR__.'/../routes/payments.php';
+        });
 
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'statamic-resrv');
 

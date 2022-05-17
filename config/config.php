@@ -37,6 +37,9 @@ return [
     'decrease_availability_for_extra_time' => false,
     'admin_email'                          => false,
     'checkout_uri'                         => false,
+    'checkout_completed_uri'               => false,
+    'checkout_failed_uri'                  => false,
+    'checkout_post_id'                     => false,
 
     /**
      * Currency.

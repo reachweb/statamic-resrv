@@ -362,6 +362,72 @@ class ReservationFrontTest extends TestCase
         ]);
     }
 
+    public function test_reservation_completed_method()
+    {
+        $this->withStandardFakeViews();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'customer' => [
+                'first_name' => 'Test',
+                'last_name' => 'Testing',
+                'email' => 'test@test.com',
+                'repeat_email' => 'test@test.com',
+            ],
+        ])->create();
+
+        $responseData = [
+            'id' => $reservation->id,
+        ];
+
+        $this->viewShouldReturnRendered('statamic-resrv::checkout.checkout_completed', 'Test');
+
+        Mail::fake();
+
+        $response = $this->post(route('resrv.reservation.checkoutCompleted'), $responseData);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);        
+    }
+
+    public function test_reservation_failed_method()
+    {
+        $this->withStandardFakeViews();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'customer' => [
+                'first_name' => 'Test',
+                'last_name' => 'Testing',
+                'email' => 'test@test.com',
+                'repeat_email' => 'test@test.com',
+            ],
+        ])->create();
+
+        $responseData = [
+            'id' => $reservation->id,
+        ];
+
+        $this->viewShouldReturnRendered('statamic-resrv::checkout.checkout_completed', 'Test');
+
+        Mail::fake();
+
+        $response = $this->post(route('resrv.reservation.checkoutCompleted'), $responseData);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);        
+    }
+
     public function test_reservation_customer_checkout_form_submit_error()
     {
         $this->withExceptionHandling();
