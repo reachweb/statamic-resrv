@@ -17,5 +17,4 @@ return new class extends Migration
             $table->text('payment_id')->change();
         });
     }
-
 };
