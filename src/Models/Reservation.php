@@ -158,7 +158,7 @@ class Reservation extends Model
         if (config('resrv-config.enable_locations') == true) {
             if ($this->location_start) {
                 $locationCost->add($this->location_start_data()->extra_charge);
-            }            
+            }
             if ($this->location_end) {
                 $locationCost->add($this->location_end_data()->extra_charge);
             }
@@ -237,7 +237,7 @@ class Reservation extends Model
 
     protected function buildDataArray()
     {
-       return [
+        return [
             'date_start' => $this->date_start,
             'date_end' => $this->date_end,
             'advanced' => $this->property,
