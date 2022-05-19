@@ -123,21 +123,56 @@ class Reservation extends Model
         return $this->price->subtract($this->payment)->format();
     }
 
+    public function amountRemainingWithoutExtras()
+    {
+        return $this->price->subtract($this->payment)->subtract($this->extraCharges())->format();
+    }
+
     public function duration()
     {
         return $this->date_start->startOfDay()->diffInDays($this->date_end->startOfDay());
     }
 
+    public function extraCharges()
+    {
+        $extraCharges = Price::create(0);
+
+        $data = $this->buildDataArray();
+        $data['item_id'] = $this->item_id;
+
+        $optionsCost = Price::create(0);
+        if ($this->options()->count() > 0) {
+            foreach ($this->options()->get() as $id => $option) {
+                $optionsCost->add($option->calculatePrice($data, $option->pivot->value));
+            }
+        }
+
+        $extrasCost = Price::create(0);
+        if ($this->extras()->count() > 0) {
+            foreach ($this->extras()->get() as $id => $extra) {
+                $extrasCost->add($extra->calculatePrice($data, $extra->pivot->quantity));
+            }
+        }
+
+        $locationCost = Price::create(0);
+        if (config('resrv-config.enable_locations') == true) {
+            if ($this->location_start) {
+                $locationCost->add($this->location_start_data()->extra_charge);
+            }            
+            if ($this->location_end) {
+                $locationCost->add($this->location_end_data()->extra_charge);
+            }
+            if (array_key_exists('quantity', $data) > 0) {
+                $locationCost->multiply($data['quantity']);
+            }
+        }
+
+        return $extraCharges->add($optionsCost, $extrasCost, $locationCost);
+    }
+
     public function getPrices()
     {
-        $data = [
-            'date_start' => $this->date_start,
-            'date_end' => $this->date_end,
-            'advanced' => $this->property,
-            'quantity' => $this->quantity,
-        ];
-
-        return (new Availability)->getPricing($data, $this->item_id);
+        return (new Availability)->getPricing($this->buildDataArray(), $this->item_id);
     }
 
     public function confirmReservation($data, $statamic_id, $checkExtras = true, $checkOptions = true)
@@ -198,6 +233,16 @@ class Reservation extends Model
         }
 
         return true;
+    }
+
+    protected function buildDataArray()
+    {
+       return [
+            'date_start' => $this->date_start,
+            'date_end' => $this->date_end,
+            'advanced' => $this->property,
+            'quantity' => $this->quantity,
+        ];
     }
 
     protected function checkMaxQuantity($quantity)
