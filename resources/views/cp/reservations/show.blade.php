@@ -179,7 +179,11 @@
             <div class="mb-1 border-b border-gray flex justify-between w-full p-1">
                 <div>{{ $extra->name }} x{{ $extra->pivot->quantity }}</div>
                 <div class="font-bold">
-                    {{ $extra->pivot->price }}
+                    @if ($extra->price_type == 'perday')
+                    {{ config('resrv-config.currency_symbol') }} {{ $extra->pivot->price * $reservation->duration() }}
+                    @else
+                    {{ config('resrv-config.currency_symbol') }} {{ $extra->pivot->price }}
+                    @endif
                 </div>
             </div>  
         @endforeach             
