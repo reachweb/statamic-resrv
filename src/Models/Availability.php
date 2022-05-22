@@ -114,6 +114,10 @@ class Availability extends Model implements AvailabilityContract
         $results = AvailabilityRepository::itemPricesBetween($this->date_start, $this->date_end, $this->advanced, $entry->id())
         ->first();
 
+        if (! $results) {
+            return false;
+        }
+
         $this->calculatePrice($this->createPricesCollection($results->prices), $entry->id());
 
         return [
