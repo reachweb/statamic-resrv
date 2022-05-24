@@ -285,9 +285,8 @@ class ReservationController extends Controller
         // Find the reservation
         $reservation = $this->reservation->find($data[$confirm_id]);
 
-        // Confim the reservation
-        $reservation->status = 'expired';
-        $reservation->save();
+        // Expire the reservation
+        $reservation->expire($reservation->id);
 
         if (config('resrv-config.checkout_failed_uri')) {
             $checkoutEntry = Entry::findByUri(config('resrv-config.checkout_failed_uri'), Site::current());
