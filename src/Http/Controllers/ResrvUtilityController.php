@@ -29,17 +29,16 @@ class ResrvUtilityController extends Controller
 
     public function token()
     {
-        if (config('app.env') !== 'local' && config('app.env') !== 'testing')
-        {
+        if (config('app.env') !== 'local' && config('app.env') !== 'testing') {
             $referer = request()->headers->get('referer');
             $contains = str_contains($referer, request()->getHttpHost());
-            if (empty($referer) || !$contains) {
+            if (empty($referer) || ! $contains) {
                 abort(404);
             }
         }
 
         return response()->json([
-            'csrf_token' => csrf_token()
+            'csrf_token' => csrf_token(),
         ]);
     }
 
