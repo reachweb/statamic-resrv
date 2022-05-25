@@ -108,8 +108,8 @@ class Report
 
     protected function getTopExtras()
     {
-        return DB::table('resrv_reservation_extra')->select('extra_id', 'quantity')
-            ->addSelect(DB::raw('COUNT(reservation_id) AS occurrences'))
+        return DB::table('resrv_reservation_extra')
+            ->select(DB::raw('COUNT(reservation_id) AS occurrences', 'extra_id', 'quantity'))
             ->whereIn('reservation_id', $this->reservations->pluck('id'))
             ->groupBy('extra_id')
             ->orderBy('occurrences', 'DESC')
@@ -119,8 +119,7 @@ class Report
 
     protected function getTopLocations()
     {
-        return Reservation::select('location_start')
-            ->addSelect(DB::raw('COUNT(location_start) AS occurrences'))
+        return Reservation::select(DB::raw('COUNT(location_start) AS occurrences', 'location_start'))
             ->whereDate('date_start', '>=', $this->date_start)
             ->whereDate('date_start', '<=', $this->date_end)
             ->where('status', 'confirmed')
