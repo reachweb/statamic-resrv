@@ -1206,4 +1206,10 @@ class ReservationFrontTest extends TestCase
             'customer->first_name' => 'Test',
         ]);
     }
+
+    public function test_token_method()
+    {
+        $response = $this->get(route('resrv.utility.token'));
+        $response->assertStatus(200)->assertSee(csrf_token());
+    }
 }
