@@ -67,7 +67,7 @@
                             {{ reservation.location_end.name }}
                         </template>
                         <template slot="cell-customer" slot-scope="{ row: reservation }">
-                            <a :href="'mailto:'+reservation.customer.email" target="_blank">{{ reservation.customer.email }}</a>
+                            <a :href="'mailto:'+customerEmail(reservation.customer)">{{ customerEmail(reservation.customer) }}</a>
                         </template>
                         <template slot="actions" slot-scope="{ row: reservation }">
                             <dropdown-list>
@@ -139,6 +139,12 @@ export default {
         },
         refundConfirm(reservation) {
             this.refundId = reservation.id
+        },
+        customerEmail(customer) {
+            if (_.has(customer, 'email')) {
+                return customer.email
+            }
+            return ''
         },
         refund() {
             axios.patch(this.refundRoute, {id: this.refundId})
