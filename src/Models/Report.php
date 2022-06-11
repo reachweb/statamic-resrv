@@ -109,7 +109,8 @@ class Report
     protected function getTopExtras()
     {
         return DB::table('resrv_reservation_extra')
-            ->select(DB::raw('COUNT(reservation_id) AS occurrences', 'extra_id', 'quantity'))
+            ->select('extra_id')
+            ->addSelect(DB::raw('COUNT(reservation_id) AS occurrences'))
             ->whereIn('reservation_id', $this->reservations->pluck('id'))
             ->groupBy('extra_id')
             ->orderBy('occurrences', 'DESC')
