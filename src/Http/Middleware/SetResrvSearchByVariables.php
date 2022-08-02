@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Http\Middleware;
 
-use Closure;
 use Carbon\Carbon;
+use Closure;
 use Illuminate\Http\Request;
 use Reach\StatamicResrv\Jobs\SaveSearchToSession;
 
@@ -28,9 +28,9 @@ class SetResrvSearchByVariables
             $data->put('date_end', Carbon::parse($data->get('date_start'))->addDays($data->get('duration'))->toDateString());
             $data->forget('duration');
         }
-        
+
         SaveSearchToSession::dispatchSync($data->toArray());
-        
+
         return $next($request);
     }
 }

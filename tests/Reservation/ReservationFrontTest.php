@@ -1206,5 +1206,4 @@ class ReservationFrontTest extends TestCase
             'customer->first_name' => 'Test',
         ]);
     }
-    
 }
