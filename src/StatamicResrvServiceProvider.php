@@ -31,6 +31,10 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         'web' => __DIR__.'/../routes/web.php',
     ];
 
+    protected $commands = [
+        Console\Commands\InstallResrv::class,
+    ];
+
     protected $fieldtypes = [
         \Reach\StatamicResrv\Fieldtypes\ResrvAvailability::class,
         \Reach\StatamicResrv\Fieldtypes\ResrvOptions::class,
