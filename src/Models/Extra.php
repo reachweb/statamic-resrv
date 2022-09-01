@@ -60,6 +60,9 @@ class Extra extends Model
         if ($this->price_type == 'relative') {
             return $this->price->multiply($this->getRelativePrice($data))->format();
         }
+        if ($this->price_type == 'perday') {
+            return $this->price->multiply($this->duration)->format();
+        }
 
         return $this->price->format();
     }
@@ -74,7 +77,6 @@ class Extra extends Model
         if (isset($reservation->property)) {
             $data['advanced'] = $reservation->property;
         }
-
         return $this->priceForDates($data);
     }
 
