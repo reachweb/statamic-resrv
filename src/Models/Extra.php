@@ -99,6 +99,11 @@ class Extra extends Model
         }
     }
 
+    public function priceFromPivot()
+    {
+        return Price::create($this->pivot->price)->multiply($this->pivot->quantity)->format();
+    }
+
     public function scopeEntry($query, $entry)
     {
         $entry = $this->getDefaultSiteEntry($entry);
