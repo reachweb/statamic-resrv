@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\DynamicPricingFactory;
+use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
@@ -21,11 +22,26 @@ class DynamicPricing extends Model
 
     protected $table = 'resrv_dynamic_pricing';
 
-    protected $fillable = ['title', 'amount_type', 'amount_operation', 'amount', 'date_start', 'date_end', 'date_include', 'condition_type', 'condition_comparison', 'condition_value', 'order'];
+    protected $fillable = [
+        'title', 
+        'amount_type', 
+        'amount_operation', 
+        'amount', 
+        'date_start', 
+        'date_end', 
+        'date_include', 
+        'condition_type', 
+        'condition_comparison', 
+        'condition_value', 
+        'order',
+        'coupon',
+        'expire_at'
+    ];
 
     protected $casts = [
         'date_start' => 'datetime',
         'date_end' => 'datetime',
+        'expire_at' => 'datetime',
     ];
 
     protected static function newFactory()
@@ -173,6 +189,17 @@ class DynamicPricing extends Model
         return $this;
     }
 
+    public function scopeSearchForCoupon($query, $coupon)
+    {
+        $items = $query->where('coupon', $coupon)->get();
+        if ($items->count() > 0) {
+            return $items;
+        } else {
+            throw new CouponNotFoundException(__('This coupon does not exist.'));
+        }
+
+    }
+
     protected function checkAllParameters($items, $price, $date_start, $date_end, $duration)
     {
         $dynamicPricingThatApplies = collect();
@@ -183,6 +210,14 @@ class DynamicPricing extends Model
 
         foreach ($items as $item) {
             $pricing = $data->firstWhere('id', $item->dynamic_pricing_id);
+            if ($this->expired($pricing)) {
+                continue;
+            }
+            if ($this->hasCoupon($pricing)) {
+                if ($this->couponNotApplied($pricing)) {
+                    continue;
+                }
+            }
             if ($this->hasCondition($pricing)) {
                 if (! $this->checkCondition($pricing, $price, $duration)) {
                     continue;
@@ -202,6 +237,28 @@ class DynamicPricing extends Model
     protected function hasCondition($pricing)
     {
         return $pricing->condition_type;
+    }
+
+    protected function hasCoupon($pricing) 
+    {
+        if ($pricing->coupon) {
+            return true;
+        }
+        return false;
+    }
+
+    protected function couponNotApplied($pricing) {
+        return $pricing->coupon !== session('resrv_coupon');
+    }
+
+    protected function expired($pricing)
+    {   
+        if (! $pricing->expire_at) {
+            return false;
+        }
+        if (Carbon::parse($pricing->expire_at)->lessThan(now())) {
+            return true;
+        }
     }
 
     protected function checkCondition($pricing, PriceClass $price = null, $duration = null)

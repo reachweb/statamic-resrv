@@ -150,4 +150,24 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
+
+    public function expires()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'date_start' => today()->toIso8601String(),
+                'date_end' => today()->add(20, 'day')->toIso8601String(),
+                'expire_at' => today()->add(5, 'day')->add(8, 'hour')->toIso8601String(),
+            ];
+        });
+    }
+
+    public function withCoupon()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'coupon' => '20OFF',
+            ];
+        });
+    }
 }

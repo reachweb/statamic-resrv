@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class UtilitiesTest extends TestCase
@@ -36,6 +37,19 @@ class UtilitiesTest extends TestCase
     {
         $response = $this->get(route('resrv.utility.token'));
         $response->assertStatus(200)->assertSee(csrf_token());
+    }
+
+    public function test_can_add_coupon_if_exists()
+    {
+        DynamicPricing::factory()->withCoupon()->create();
+        $response = $this->post(route('resrv.utility.addCoupon'), ['coupon' => '20OFF']);
+        $response->assertStatus(200)->assertSessionHas(['resrv_coupon' => '20OFF']);
+    }
+
+    public function test_cannot_add_coupon_if_it_doesnt_exist()
+    {
+        $response = $this->post(route('resrv.utility.addCoupon'), ['coupon' => '20OFF']);
+        $response->assertStatus(412);
     }
 
     public function test_availability_search_can_be_set_by_url()

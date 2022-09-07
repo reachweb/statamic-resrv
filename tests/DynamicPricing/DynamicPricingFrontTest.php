@@ -449,6 +449,107 @@ class DynamicPricingFrontTest extends TestCase
         Cache::flush();
     }
 
+    public function test_dynamic_pricing_with_expiration_date()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(20, 'day')->toISOString(),
+            'price' => 25.23,
+            'available' => 2,
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->add(10, 'day')->setHour(12)->toISOString(),
+            'date_end' => today()->add(14, 'day')->setHour(12)->toISOString(),
+        ];
+
+        // We should get 80.74 for 20% percent decrease when not expired
+        $dynamic = DynamicPricing::factory()->expires()->make()->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('80.74');
+
+        Cache::flush();
+
+        // Testing for time - after 5 days and 5 hours it should not have expired
+        $this->travelBack();
+        $this->travelTo(today()->add(5, 'day')->setHour(5));
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('80.74');
+
+        // Testing for time - after 5 days and 11 hours it should have expired so we shoudn't see it
+        $this->travelBack();
+        $this->travelTo(today()->add(5, 'day')->setHour(11));
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertDontSee('80.74')->assertSee('100.92');
+
+        // After 6 days it should have expired so we shoudn't see it
+        $this->travelBack();
+        $this->travelTo(today()->add(6, 'day')->setHour(11));
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertDontSee('80.74')->assertSee('100.92');
+
+        Cache::flush();
+    }
+
+    public function test_dynamic_pricing_with_coupon()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(20, 'day')->toISOString(),
+            'price' => 25.23,
+            'available' => 2,
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
+        ];
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->make()->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        // We should not get the discount when the coupon is not in the session
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertDontSee('80.74')->assertSee('100.92');
+
+        Cache::flush();        
+        
+        // We should get the discount when the coupon is in the session
+        $response = $this->withSession(['resrv_coupon' => '20OFF'])->post(route('resrv.availability.show', $item->id()), $searchPayload);
+        $response->assertStatus(200)->assertSee('80.74');
+
+        Cache::flush();
+
+    }
+
     public function test_dynamic_pricing_applies_to_fixed_pricing()
     {
         $this->signInAdmin();

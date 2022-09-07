@@ -29,5 +29,6 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
 
         // Utility
         Route::post('/resrv/api/session/refresh-search', 'ResrvUtilityController@refreshSearchSession')->name('utility.refreshSearchSession');
+        Route::post('/resrv/api/session/coupon', 'ResrvUtilityController@addCoupon')->name('utility.addCoupon');
         Route::get('/resrv/api/token', 'ResrvUtilityController@token')->name('utility.token');
     });

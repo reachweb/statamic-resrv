@@ -2,10 +2,13 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
+use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
+use Reach\StatamicResrv\Models\DynamicPricing;
 
 class ResrvUtilityController extends Controller
 {
@@ -40,6 +43,24 @@ class ResrvUtilityController extends Controller
         return response()->json([
             'csrf_token' => csrf_token(),
         ]);
+    }
+
+    public function addCoupon(Request $request)
+    {
+        $data = $request->validate([
+            'coupon' => 'required|alpha_dash'
+        ]);
+
+        try {
+            DynamicPricing::searchForCoupon($data['coupon']);
+        } catch (CouponNotFoundException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 412);
+        }
+
+        session(['resrv_coupon' => $data['coupon']]);
+
+        return response()->json(['coupon' => $data['coupon']]);
+
     }
 
     protected function collectionsWithAvailabityField()
