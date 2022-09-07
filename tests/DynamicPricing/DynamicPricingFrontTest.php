@@ -540,14 +540,13 @@ class DynamicPricingFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertDontSee('80.74')->assertSee('100.92');
 
-        Cache::flush();        
-        
+        Cache::flush();
+
         // We should get the discount when the coupon is in the session
         $response = $this->withSession(['resrv_coupon' => '20OFF'])->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('80.74');
 
         Cache::flush();
-
     }
 
     public function test_dynamic_pricing_applies_to_fixed_pricing()

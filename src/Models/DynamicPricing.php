@@ -23,19 +23,19 @@ class DynamicPricing extends Model
     protected $table = 'resrv_dynamic_pricing';
 
     protected $fillable = [
-        'title', 
-        'amount_type', 
-        'amount_operation', 
-        'amount', 
-        'date_start', 
-        'date_end', 
-        'date_include', 
-        'condition_type', 
-        'condition_comparison', 
-        'condition_value', 
+        'title',
+        'amount_type',
+        'amount_operation',
+        'amount',
+        'date_start',
+        'date_end',
+        'date_include',
+        'condition_type',
+        'condition_comparison',
+        'condition_value',
         'order',
         'coupon',
-        'expire_at'
+        'expire_at',
     ];
 
     protected $casts = [
@@ -197,7 +197,6 @@ class DynamicPricing extends Model
         } else {
             throw new CouponNotFoundException(__('This coupon does not exist.'));
         }
-
     }
 
     protected function checkAllParameters($items, $price, $date_start, $date_end, $duration)
@@ -239,20 +238,22 @@ class DynamicPricing extends Model
         return $pricing->condition_type;
     }
 
-    protected function hasCoupon($pricing) 
+    protected function hasCoupon($pricing)
     {
         if ($pricing->coupon) {
             return true;
         }
+
         return false;
     }
 
-    protected function couponNotApplied($pricing) {
+    protected function couponNotApplied($pricing)
+    {
         return $pricing->coupon !== session('resrv_coupon');
     }
 
     protected function expired($pricing)
-    {   
+    {
         if (! $pricing->expire_at) {
             return false;
         }
