@@ -10,7 +10,7 @@
 
     <div>
         <dynamic-pricing-list
-            :timezone="{{ Js::from(config('app.timezone', 'UTC')) }}"
+            :timezone="{{ Illuminate\Support\Js::from(config('app.timezone', 'UTC')) }}"
         >
         </dynamic-pricing-list>
     </div>
