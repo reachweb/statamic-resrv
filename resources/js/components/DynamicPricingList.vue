@@ -69,7 +69,9 @@ export default {
                 condition_comparison : '',
                 condition_value : '',
                 entries: '',
-                extras: ''
+                extras: '',
+                coupon: '',
+                expire_at: '',
             }
         }
     },

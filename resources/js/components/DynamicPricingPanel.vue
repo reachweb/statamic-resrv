@@ -240,6 +240,56 @@
                         </div>  
                     </div>
 
+                    <div class="form-group w-full 2xl:w-1/2">
+                        <div class="font-bold mb-1 text-sm">
+                            <label for="name">Coupon</label>
+                            <div class="text-sm font-light"><p>Dynamic pricing applied only if coupon is applied during checkout.</p></div>
+                        </div>
+                        <div class="w-full">
+                            <input class="w-full border border-gray-700 rounded p-1" name="name" type="text" v-model="submit.coupon">
+                        </div>
+                        <div v-if="errors.coupon" class="w-full mt-1 text-sm text-red-400">
+                            {{ errors.coupon[0] }}
+                        </div>  
+                    </div>
+
+                    <div class="form-group w-full 2xl:w-1/2">
+                        <div class="font-bold mb-1 text-sm">
+                            <label for="name">Expire at</label>
+                            <div class="text-sm font-light"><p>Select a date / time that his dynamic pricing will expire.</p></div>
+                        </div>
+                        <div class="w-full">
+                            <div class="date-container input-group w-full">
+                                <v-date-picker
+                                    v-model="submit.expire_at"
+                                    :model-config="modelConfig"
+                                    :popover="{ visibility: 'click' }"
+                                    :masks="{ input: 'YYYY-MM-DD' }"
+                                    :mode="'dateTime'"
+                                    is24hr
+                                    >
+                                    <template v-slot="{ inputValue, inputEvents }">
+                                        <div class="input-group">
+                                        <div class="input-group-prepend flex items-center">
+                                            <svg-icon name="calendar" class="w-4 h-4" />
+                                        </div>
+                                        <div class="input-text border border-grey-50 border-l-0">
+                                            <input
+                                                class="input-text-minimal p-0 bg-transparent leading-none"
+                                                :value="inputValue"
+                                                v-on="inputEvents"
+                                            />
+                                        </div>
+                                    </div>
+                                    </template>
+                                </v-date-picker>
+                            </div>
+                        </div>
+                        <div v-if="errors.expire_at" class="w-full mt-1 text-sm text-red-400">
+                            {{ errors.expire_at[0] }}
+                        </div>  
+                    </div>
+
                     <div class="form-group field-w-full">
                         <div class="w-full">
                             <button 
