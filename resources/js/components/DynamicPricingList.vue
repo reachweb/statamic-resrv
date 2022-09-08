@@ -27,6 +27,7 @@
     <dynamic-pricing-panel            
         v-if="showPanel"
         :data="dynamic"
+        :timezone="timezone"
         @closed="togglePanel"
         @saved="dynamicSaved"
     >
@@ -48,6 +49,14 @@ import DynamicPricingPanel from './DynamicPricingPanel.vue'
 import VueDraggable from 'vuedraggable'
 
 export default {
+
+    props: {
+        timezone: {
+            type: String,
+            required: true,
+            default: 'UTC'
+        }
+    },
 
     data() {
         return {

@@ -266,6 +266,7 @@
                                     :popover="{ visibility: 'click' }"
                                     :masks="{ input: 'YYYY-MM-DD' }"
                                     :mode="'dateTime'"
+                                    :timezone="timezone"
                                     is24hr
                                     >
                                     <template v-slot="{ inputValue, inputEvents }">
@@ -318,6 +319,10 @@ export default {
     props: {
         data: {
             type: Object,
+            required: true
+        },
+        timezone: {
+            type: String,
             required: true
         },
         openPanel: {

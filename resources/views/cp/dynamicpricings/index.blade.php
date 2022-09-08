@@ -9,7 +9,10 @@
     </div>
 
     <div>
-        <dynamic-pricing-list></dynamic-pricing-list>
+        <dynamic-pricing-list
+            :timezone="{{ Js::from(config('app.timezone', 'UTC')) }}"
+        >
+        </dynamic-pricing-list>
     </div>
 
 @endsection
