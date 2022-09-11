@@ -585,7 +585,7 @@ class DynamicPricingFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');        
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');
 
         // Should apply if the reservation is just 2 days away
         $searchPayload = [
@@ -597,7 +597,6 @@ class DynamicPricingFrontTest extends TestCase
         $response->assertStatus(200)->assertSee($item->id())->assertSee('80.74');
 
         Cache::flush();
-
     }
 
     public function test_dynamic_pricing_applies_to_fixed_pricing()
