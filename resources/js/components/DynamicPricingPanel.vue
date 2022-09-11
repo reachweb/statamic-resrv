@@ -373,6 +373,10 @@ export default {
                 {
                     code: "reservation_price",
                     label: "The total price of the reservation is"
+                },
+                {
+                    code: "days_to_reservation",
+                    label: "Reservation start date compared to reservation made date"
                 }
             ],
             conditionComparison: [

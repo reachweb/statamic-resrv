@@ -170,4 +170,15 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
+
+    public function daysToReservation()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'condition_type' => 'days_to_reservation',
+                'condition_comparison' => '<=',
+                'condition_value' => '2',
+            ];
+        });
+    }
 }

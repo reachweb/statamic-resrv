@@ -218,7 +218,7 @@ class DynamicPricing extends Model
                 }
             }
             if ($this->hasCondition($pricing)) {
-                if (! $this->checkCondition($pricing, $price, $duration)) {
+                if (! $this->checkCondition($pricing, $price, $duration, $date_start)) {
                     continue;
                 }
             }
@@ -262,7 +262,7 @@ class DynamicPricing extends Model
         }
     }
 
-    protected function checkCondition($pricing, PriceClass $price = null, $duration = null)
+    protected function checkCondition($pricing, PriceClass $price = null, $duration = null, $date_start = null)
     {
         if ($pricing->condition_type == 'reservation_duration') {
             if ($this->compare($duration, $pricing->condition_comparison, $pricing->condition_value)) {
@@ -271,6 +271,11 @@ class DynamicPricing extends Model
         }
         if ($pricing->condition_type == 'reservation_price') {
             if ($this->compare($price->format(), $pricing->condition_comparison, $pricing->condition_value)) {
+                return true;
+            }
+        }
+        if ($pricing->condition_type == 'days_to_reservation') {
+            if ($this->compare(Carbon::parse($date_start)->diffInDays(now()->setHour(0)), $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }
         }

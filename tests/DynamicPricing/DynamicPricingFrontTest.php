@@ -549,6 +549,57 @@ class DynamicPricingFrontTest extends TestCase
         Cache::flush();
     }
 
+    public function test_dynamic_pricing_based_on_reservation_date()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(20, 'day')->toISOString(),
+            'price' => 25.23,
+            'available' => 2,
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        // We should get 80.74 for 20% percent decrease
+        $dynamic = DynamicPricing::factory()->daysToReservation()->make()->toArray();
+
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        $this->travelTo(today()->setHour(11));
+
+        Cache::flush();
+
+        // Should not apply if the reservation is 10 days away
+        $searchPayload = [
+            'date_start' => today()->add(10, 'day')->setHour(12)->toISOString(),
+            'date_end' => today()->add(14, 'day')->setHour(12)->toISOString(),
+        ];
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('100.92');        
+
+        // Should apply if the reservation is just 2 days away
+        $searchPayload = [
+            'date_start' => today()->add(2, 'day')->setHour(12)->toISOString(),
+            'date_end' => today()->add(6, 'day')->setHour(12)->toISOString(),
+        ];
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('80.74');
+
+        Cache::flush();
+
+    }
+
     public function test_dynamic_pricing_applies_to_fixed_pricing()
     {
         $this->signInAdmin();
