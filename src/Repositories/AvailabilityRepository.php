@@ -111,7 +111,6 @@ class AvailabilityRepository
 
     public function delete($date_start, $date_end, $advanced, $statamic_id)
     {
-        
         return $this->query($advanced)
             ->where('date', '>=', $date_start)
             ->where('date', '<=', $date_end)

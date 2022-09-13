@@ -3,8 +3,8 @@
 namespace Reach\StatamicResrv\Http\Controllers;
 
 use Carbon\CarbonPeriod;
-use Illuminate\Routing\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Http\Requests\AdvancedAvailabilityCpRequest;
 use Reach\StatamicResrv\Models\AdvancedAvailability;
 
@@ -56,6 +56,5 @@ class AdvancedAvailabilityCpController extends Controller
         (new AdvancedAvailability)->deleteForDates($data['date_start'], $data['date_end'], $data['advanced'], $data['statamic_id']);
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
-
     }
 }

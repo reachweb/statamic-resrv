@@ -112,5 +112,4 @@ class AdvancedAvailabilityCpTest extends TestCase
             'statamic_id' => $item->id(),
         ]);
     }
-    
 }
