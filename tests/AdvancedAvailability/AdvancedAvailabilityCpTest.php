@@ -79,4 +79,38 @@ class AdvancedAvailabilityCpTest extends TestCase
             'property' => 'something-else',
         ]);
     }
+
+    public function test_advanced_availability_can_be_deleted_for_date_range()
+    {
+        $item = $this->makeStatamicItem();
+
+        AdvancedAvailability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+            'statamic_id' => $item->id(),
+        ]);
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'advanced' => [['code' => 'something']],
+        ];
+
+        $response = $this->delete(cp_route('resrv.advancedavailability.delete'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseMissing('resrv_advanced_availabilities', [
+            'statamic_id' => $item->id(),
+        ]);
+    }
+    
 }

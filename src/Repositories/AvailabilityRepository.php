@@ -109,6 +109,19 @@ class AvailabilityRepository
             ->increment('available', $quantity);
     }
 
+    public function delete($date_start, $date_end, $advanced, $statamic_id)
+    {
+        
+        return $this->query($advanced)
+            ->where('date', '>=', $date_start)
+            ->where('date', '<=', $date_end)
+            ->where('statamic_id', $statamic_id)
+            ->when($advanced, function ($query, $advanced) {
+                $query->whereIn('property', $advanced);
+            })
+            ->delete();
+    }
+
     public function query($advanced)
     {
         if (! $advanced) {

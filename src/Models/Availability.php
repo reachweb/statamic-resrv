@@ -170,6 +170,11 @@ class Availability extends Model implements AvailabilityContract
         AvailabilityRepository::increment($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
     }
 
+    public function deleteForDates($date_start, $date_end, $advanced, $statamic_id)
+    {
+        AvailabilityRepository::delete($date_start, $date_end, $advanced, $statamic_id);
+    }
+
     protected function getAllAvailableItems()
     {
         $availableWithPricing = [];

@@ -45,4 +45,17 @@ class AvailabilityCpController extends Controller
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
+
+    public function delete(Request $request)
+    {
+        $data = $request->validate([
+            'statamic_id' => 'required',
+            'date_start' => 'required|date',
+            'date_end' => 'required|date',
+        ]);
+
+        (new Availability)->deleteForDates($data['date_start'], $data['date_end'], null, $data['statamic_id']);
+
+        return response()->json(['statamic_id' => $data['statamic_id']]);
+    }
 }
