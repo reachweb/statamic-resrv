@@ -32,15 +32,27 @@
                     </div>
                 </div>
             </div>
-            <div class="p-2 bg-grey-20 border-t flex items-center justify-end text-sm">
-                <button class="text-grey hover:text-grey-90" v-html="__('Cancel')" @click="$emit('cancel')"></button>
-                <button 
-                    class="ml-2 text-white bg-blue-500 rounded font-bold px-2 py-1" 
-                    v-html="__('Save')" 
-                    @click="save"
-                    :disabled="disableSave"
-                >
-                </button>
+            <div class="p-2 bg-grey-20 border-t flex items-center justify-between text-sm">
+                <div class="flex items-center">
+                    <button 
+                        class="text-white bg-red-400 rounded font-bold px-2 py-1" 
+                        v-html="__('Delete')" 
+                        @click="deleteAvailability"
+                        :disabled="disableSave"
+                    >
+                    </button>
+                </div>
+                <div class="flex item-center justify-end">
+                    <button class="text-grey hover:text-grey-90" v-html="__('Cancel')" @click="$emit('cancel')"></button>
+                    <button 
+                        class="ml-2 text-white bg-blue-500 rounded font-bold px-2 py-1" 
+                        v-html="__('Save')" 
+                        @click="save"
+                        :disabled="disableSave"
+                    >
+                    </button>
+                </div>
+
             </div>
         </div>        
     </modal>
@@ -84,6 +96,20 @@ export default {
         date_end() {
             // We need to subtract here because FullCaledar uses day+1 for end date
             return dayjs(this.dates.end).subtract(1, 'day').format('YYYY-MM-DD')
+        },
+        confirmDelete(extra) {
+            this.deleteId = extra.id
+        },
+        deleteAvailability() {
+            axios.delete('/cp/resrv/extra', {data: {'id': this.deleteId}})
+                .then(response => {
+                    this.$toast.success('Extra deleted')
+                    this.deleteId = false
+                    this.getAllExtras()
+                })
+                .catch(error => {
+                    this.$toast.error('Cannot delete extra')
+                })
         },
         submit() {
             let fields = {}

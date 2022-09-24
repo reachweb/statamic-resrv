@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "aeb316eea77e666bef485ddaed39ac31",
+    "content-hash": "064a392b3b8dfca62ae4ca884b96909f",
     "packages": [
         {
             "name": "ajthinking/archetype",
@@ -10370,16 +10370,16 @@
         },
         {
             "name": "spatie/laravel-ray",
-            "version": "1.29.6",
+            "version": "1.30.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/spatie/laravel-ray.git",
-                "reference": "d9ec9d8550dfab362167c866fbd24d4b0d4d1e02"
+                "reference": "1afe8d38cf13e9f7d0f6438e67bca71c3ed8d1f6"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/spatie/laravel-ray/zipball/d9ec9d8550dfab362167c866fbd24d4b0d4d1e02",
-                "reference": "d9ec9d8550dfab362167c866fbd24d4b0d4d1e02",
+                "url": "https://api.github.com/repos/spatie/laravel-ray/zipball/1afe8d38cf13e9f7d0f6438e67bca71c3ed8d1f6",
+                "reference": "1afe8d38cf13e9f7d0f6438e67bca71c3ed8d1f6",
                 "shasum": ""
             },
             "require": {
@@ -10438,7 +10438,7 @@
             ],
             "support": {
                 "issues": "https://github.com/spatie/laravel-ray/issues",
-                "source": "https://github.com/spatie/laravel-ray/tree/1.29.6"
+                "source": "https://github.com/spatie/laravel-ray/tree/1.30.0"
             },
             "funding": [
                 {
@@ -10450,7 +10450,7 @@
                     "type": "other"
                 }
             ],
-            "time": "2022-04-15T07:18:37+00:00"
+            "time": "2022-07-29T10:02:43+00:00"
         },
         {
             "name": "spatie/macroable",
@@ -10983,5 +10983,5 @@
         "php": "^8.0 || ^8.1"
     },
     "platform-dev": [],
-    "plugin-api-version": "2.3.0"
+    "plugin-api-version": "2.1.0"
 }
