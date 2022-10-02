@@ -55,7 +55,7 @@ class AdvancedAvailabilityCpController extends Controller
 
         foreach ($data['advanced'] as $property) {
             (new AdvancedAvailability)->deleteForDates($data['date_start'], $data['date_end'], [$property['code']], $data['statamic_id']);
-        }       
+        }
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
