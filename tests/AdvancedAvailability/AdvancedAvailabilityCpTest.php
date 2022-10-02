@@ -42,7 +42,7 @@ class AdvancedAvailabilityCpTest extends TestCase
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(5, 'day')->isoFormat('YYYY-MM-DD'),
-            'advanced' => [['code' => 'something']],
+            'advanced' => [['code' => 'something', 'label' => 'Something else']],
             'price' => 150,
             'available' => 2,
         ];
@@ -102,7 +102,7 @@ class AdvancedAvailabilityCpTest extends TestCase
             'statamic_id' => $item->id(),
             'date_start' => today()->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-            'advanced' => [['code' => 'something']],
+            'advanced' => [['code' => 'something', 'label' => 'Some label here']],
         ];
 
         $response = $this->delete(cp_route('resrv.advancedavailability.delete'), $payload);
