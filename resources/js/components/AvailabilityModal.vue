@@ -1,4 +1,5 @@
 <template>
+    <div>
     <modal name="availability-modal">
         <div class="availability-modal flex flex-col h-full">
             <div class="text-lg font-medium p-2 pb-0">
@@ -37,8 +38,8 @@
                     <button 
                         class="text-white bg-red-400 rounded font-bold px-2 py-1" 
                         v-html="__('Delete')" 
-                        @click="deleteAvailability"
-                        :disabled="disableSave"
+                        @click="confirmDelete"
+                        :disabled="disableDelete"
                     >
                     </button>
                 </div>
@@ -52,14 +53,24 @@
                     >
                     </button>
                 </div>
-
             </div>
         </div>        
     </modal>
+    <confirmation-modal
+        v-if="deleteId"
+        :title="__('Delete availability')"
+        :danger="true"
+        @confirm="deleteAvailability"
+        @cancel="deleteId = false"
+    >
+        {{ __('Are you sure you want to clear availability date for those dates?') }}
+    </confirmation-modal>
+    </div>    
 </template>
 
 <script>
 import FormHandler from '../mixins/FormHandler.vue'
+import axios from 'axios'
 import dayjs from 'dayjs'
 
 export default {
@@ -85,7 +96,8 @@ export default {
             price: null,
             successMessage: 'Availability successfully saved',
             postUrl: (this.property ? '/cp/resrv/advancedavailability' :'/cp/resrv/availability'),
-            method: 'post'
+            method: 'post',
+            deleteId: null,
         }
     },
 
@@ -94,23 +106,12 @@ export default {
             return dayjs(this.dates.start).format('YYYY-MM-DD')
         },
         date_end() {
-            // We need to subtract here because FullCaledar uses day+1 for end date
+            // We need to subtract here because FullCaledar uses day+1 for end date 
             return dayjs(this.dates.end).subtract(1, 'day').format('YYYY-MM-DD')
         },
-        confirmDelete(extra) {
-            this.deleteId = extra.id
-        },
-        deleteAvailability() {
-            axios.delete('/cp/resrv/extra', {data: {'id': this.deleteId}})
-                .then(response => {
-                    this.$toast.success('Extra deleted')
-                    this.deleteId = false
-                    this.getAllExtras()
-                })
-                .catch(error => {
-                    this.$toast.error('Cannot delete extra')
-                })
-        },
+        disableDelete() {
+            return false
+        },   
         submit() {
             let fields = {}
             fields.date_start = this.date_start
@@ -126,6 +127,30 @@ export default {
     },
 
     mixins: [ FormHandler ],
+
+    methods: {
+        confirmDelete() {
+            this.deleteId = this.parentId
+        },
+        deleteAvailability() {
+            let deleteData = {}
+            deleteData.statamic_id = this.deleteId
+            deleteData.date_start = this.date_start
+            deleteData.date_end = this.date_end
+            if (this.property) {
+                deleteData.advanced = [this.property]
+            }
+            axios.delete(this.postUrl, {data: deleteData})
+                .then(response => {
+                    this.$toast.success('Availability deleted')
+                    this.deleteId = false
+                    this.$emit('saved')
+                })
+                .catch(error => {
+                    this.$toast.error('Cannot delete availability')
+                })
+        },
+    }
   
 }
 </script>
