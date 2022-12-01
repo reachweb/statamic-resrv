@@ -18,7 +18,7 @@ class SetResrvSearchByVariables
      */
     public function handle(Request $request, Closure $next)
     {
-        if ($request->missing('date_start')) {
+        if ($request->missing('date_start') || ! $request->isMethod('get')) {
             return $next($request);
         }
 
