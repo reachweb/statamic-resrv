@@ -20,6 +20,7 @@ class AdvancedAvailabilityRequest extends FormRequest
                 'dates.*.date_end' => 'required|date',
                 'dates.*.quantity' => 'sometimes|integer',
                 'dates.*.advanced' => 'required|string',
+                'forget' => 'sometimes|boolean',
             ];
         }
 
@@ -28,6 +29,7 @@ class AdvancedAvailabilityRequest extends FormRequest
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
             'advanced' => 'required|string',
+            'forget' => 'sometimes|boolean',
         ];
     }
 }

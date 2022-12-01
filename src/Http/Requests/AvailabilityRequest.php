@@ -19,6 +19,7 @@ class AvailabilityRequest extends FormRequest
                 'dates.*.date_start' => 'required|date',
                 'dates.*.date_end' => 'required|date',
                 'dates.*.quantity' => 'sometimes|integer',
+                'forget' => 'sometimes|boolean',
             ];
         }
 
@@ -26,6 +27,7 @@ class AvailabilityRequest extends FormRequest
             'date_start' => 'required|date',
             'date_end' => 'required|date',
             'quantity' => 'sometimes|integer',
+            'forget' => 'sometimes|boolean',
         ];
     }
 }

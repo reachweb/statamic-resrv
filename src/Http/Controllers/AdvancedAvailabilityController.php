@@ -27,7 +27,9 @@ class AdvancedAvailabilityController extends Controller
             return response()->json(['error' => $exception->getMessage()], 412);
         }
 
-        SaveSearchToSession::dispatchSync($request->validated());
+        if (! $request->has('forget')) {
+            SaveSearchToSession::dispatchSync($request->validated());
+        }
 
         return response()->json($availabilityData);
     }
@@ -42,7 +44,9 @@ class AdvancedAvailabilityController extends Controller
             return response()->json(['error' => $exception->getMessage()], 412);
         }
 
-        SaveSearchToSession::dispatchSync($request->validated());
+        if (! $request->has('forget')) {
+            SaveSearchToSession::dispatchSync($request->validated());
+        }
 
         return response()->json($availabilityData);
     }

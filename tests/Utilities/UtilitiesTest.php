@@ -33,6 +33,22 @@ class UtilitiesTest extends TestCase
         ]);
     }
 
+    public function test_availability_search_does_not_get_saved_in_session()
+    {
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(1, 'day')->toISOString(),
+            'quantity' => 2,
+            'forget' => true,
+        ];
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+
+        $response->assertSessionMissing('resrv_search');
+    }
+
     public function test_token_method()
     {
         $response = $this->get(route('resrv.utility.token'));
