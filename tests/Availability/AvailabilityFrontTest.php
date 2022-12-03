@@ -62,8 +62,8 @@ class AvailabilityFrontTest extends TestCase
         // We should see item 1, 3 but not item 2
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)
-                    ->assertSee($item->id()
-                    )->assertSee('150')
+                    ->assertSee($item->id())
+                    ->assertSee('150')
                     ->assertDontSee($item2->id())
                     ->assertSee($item3->id())
                     ->assertSee('210')
@@ -350,7 +350,7 @@ class AvailabilityFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
-        $response->assertStatus(200)->assertSee('150')->assertSee('message":{"status":1}}', false);
+        $response->assertStatus(200)->assertSee('150')->assertSee('message":{"status":1}}', false)->assertSessionHas('resrv_search');
     }
 
     public function test_availability_can_get_unavailable_for_date_range_one_id_only()

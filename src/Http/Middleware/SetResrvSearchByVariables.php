@@ -5,7 +5,7 @@ namespace Reach\StatamicResrv\Http\Middleware;
 use Carbon\Carbon;
 use Closure;
 use Illuminate\Http\Request;
-use Reach\StatamicResrv\Jobs\SaveSearchToSession;
+use Reach\StatamicResrv\Events\AvailabilitySearch;
 
 class SetResrvSearchByVariables
 {
@@ -29,7 +29,7 @@ class SetResrvSearchByVariables
             $data->forget('duration');
         }
 
-        SaveSearchToSession::dispatchSync($data->toArray());
+        AvailabilitySearch::dispatch($data->toArray());
 
         return $next($request);
     }

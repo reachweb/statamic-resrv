@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv;
 
 use Illuminate\Support\Facades\Route;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
+use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -16,6 +17,7 @@ use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
+use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Models\AdvancedAvailability;
@@ -64,6 +66,9 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         ReservationRefunded::class  => [
             SendRefundReservationEmails::class,
             IncreaseAvailability::class,
+        ],
+        AvailabilitySearch::class  => [
+            SaveSearchToSession::class,
         ],
         \Statamic\Events\EntryDeleted::class => [
             EntryDeleted::class,
