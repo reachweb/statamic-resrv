@@ -28,7 +28,7 @@ class AvailabilityController extends Controller
         }
 
         AvailabilitySearch::dispatchUnless($request->get('forget'), $request->validated());
-        
+
         return response()->json($availabilityData);
     }
 
