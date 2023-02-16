@@ -30,6 +30,11 @@ class ResrvUtilityController extends Controller
         session()->forget('resrv_search');
     }
 
+    public function getSavedSearch()
+    {
+        return response()->json(session()->get('resrv_search'));
+    }
+
     public function token()
     {
         if (config('app.env') !== 'local' && config('app.env') !== 'testing') {

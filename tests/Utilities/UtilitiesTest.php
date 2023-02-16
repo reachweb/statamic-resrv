@@ -33,6 +33,27 @@ class UtilitiesTest extends TestCase
         ]);
     }
 
+    public function test_get_saved_availability_via_endpoint()
+    {
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(1, 'day')->toISOString(),
+            'quantity' => 2,
+        ];
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+
+        $response->assertSessionHas([
+            'resrv_search' => $searchPayload,
+        ]);
+
+        $response = $this->get(route('resrv.utility.getSavedSearch'));
+
+        $response->assertStatus(200)->assertJson($searchPayload);
+    }
+
     public function test_availability_search_does_not_get_saved_in_session()
     {
         $this->travelTo(today()->setHour(11));
