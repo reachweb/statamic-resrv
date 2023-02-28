@@ -94,7 +94,7 @@ class UtilitiesTest extends TestCase
         DynamicPricing::factory()->withCoupon()->create();
         $response = $this->post(route('resrv.utility.addCoupon'), ['coupon' => '20OFF']);
         $response->assertStatus(200)->assertSessionHas(['resrv_coupon' => '20OFF']);
-        
+
         $response = $this->delete(route('resrv.utility.removeCoupon'));
         $response->assertStatus(200)->assertSessionMissing(['resrv_coupon' => '20OFF']);
     }
