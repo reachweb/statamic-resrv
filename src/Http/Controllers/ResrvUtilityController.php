@@ -67,6 +67,18 @@ class ResrvUtilityController extends Controller
         return response()->json(['coupon' => $data['coupon']]);
     }
 
+    public function getCoupon()
+    {
+        return response()->json(session()->get('resrv_coupon'));
+    }
+
+    public function removeCoupon(Request $request)
+    {
+        session()->forget('resrv_coupon');
+
+        return response()->json(200);
+    }
+
     protected function collectionsWithAvailabityField()
     {
         $collections = [];

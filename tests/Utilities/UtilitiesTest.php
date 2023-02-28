@@ -89,6 +89,26 @@ class UtilitiesTest extends TestCase
         $response->assertStatus(412);
     }
 
+    public function test_can_remove_coupon()
+    {
+        DynamicPricing::factory()->withCoupon()->create();
+        $response = $this->post(route('resrv.utility.addCoupon'), ['coupon' => '20OFF']);
+        $response->assertStatus(200)->assertSessionHas(['resrv_coupon' => '20OFF']);
+        
+        $response = $this->delete(route('resrv.utility.removeCoupon'));
+        $response->assertStatus(200)->assertSessionMissing(['resrv_coupon' => '20OFF']);
+    }
+
+    public function test_can_get_coupon_in_session()
+    {
+        DynamicPricing::factory()->withCoupon()->create();
+        $response = $this->post(route('resrv.utility.addCoupon'), ['coupon' => '20OFF']);
+        $response->assertStatus(200)->assertSessionHas(['resrv_coupon' => '20OFF']);
+
+        $response = $this->get(route('resrv.utility.getCoupon'));
+        $response->assertStatus(200)->assertSee(['coupon' => '20OFF']);
+    }
+
     public function test_availability_search_can_be_set_by_url()
     {
         $item = $this->makeStatamicItem();
