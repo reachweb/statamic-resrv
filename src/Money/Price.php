@@ -70,7 +70,7 @@ class Price implements CastsAttributes
 
     public function increasePercent($percent)
     {
-        $by = bcmul((100 + $percent), 0.01, 4);
+        $by = bcmul(100 + $percent, 0.01, 4);
         $this->multiply($by);
 
         return $this;
