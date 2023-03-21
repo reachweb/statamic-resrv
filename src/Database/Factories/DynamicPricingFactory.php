@@ -181,4 +181,13 @@ class DynamicPricingFactory extends Factory
             ];
         });
     }
+
+    public function overridesAll()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'overrides_all' => true,
+            ];
+        });
+    }
 }

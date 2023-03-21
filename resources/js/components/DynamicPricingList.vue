@@ -9,6 +9,7 @@
             >
                 <div class="flex items-center space-x-2">
                     <span class="font-medium cursor-pointer" v-html="dynamic.title" @click="editPricing(dynamic)"></span>
+                    <span class="text-xs p-1 bg-gray-600 text-white rounded" v-if="dynamic.overrides_all">{{ __('OVERRIDING') }}</span>
                 </div>
                 <div>
                     <dropdown-list>
@@ -81,6 +82,7 @@ export default {
                 extras: '',
                 coupon: '',
                 expire_at: '',
+                overrides_all: false,
             }
         }
     },

@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\DynamicPricingFactory;
@@ -36,6 +37,7 @@ class DynamicPricing extends Model
         'order',
         'coupon',
         'expire_at',
+        'overrides_all',
     ];
 
     protected $casts = [
@@ -230,6 +232,10 @@ class DynamicPricing extends Model
             $dynamicPricingThatApplies->push($pricing);
         }
 
+        if ($override = $this->hasOverridingPolicy($dynamicPricingThatApplies->sortBy('order'))) {
+            return $override;
+        }
+
         return $dynamicPricingThatApplies->sortBy('order');
     }
 
@@ -324,6 +330,14 @@ class DynamicPricing extends Model
             }
         }
 
+        return false;
+    }
+
+    protected function hasOverridingPolicy($pricings): bool | Collection
+    {
+        if ($pricing = $pricings->firstWhere('overrides_all', true)) {
+            return collect([$pricing]);
+        }
         return false;
     }
 }

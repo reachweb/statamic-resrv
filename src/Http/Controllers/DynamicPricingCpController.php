@@ -48,6 +48,7 @@ class DynamicPricingCpController extends Controller
             'amount' => 'required|numeric',
             'coupon' => 'nullable|alpha_dash',
             'expire_at' => 'nullable|date',
+            'overrides_all' => 'nullable|boolean',
         ]);
 
         $order = $this->dynamicPricing->max('order') + 1;
@@ -78,6 +79,7 @@ class DynamicPricingCpController extends Controller
             'order' => 'required|integer',
             'coupon' => 'nullable|alpha_dash',
             'expire_at' => 'nullable|date',
+            'overrides_all' => 'nullable|boolean',
         ]);
 
         $dynamicPricing = $this->dynamicPricing->findOrFail($id);

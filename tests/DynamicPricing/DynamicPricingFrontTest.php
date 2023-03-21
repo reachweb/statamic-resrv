@@ -549,6 +549,68 @@ class DynamicPricingFrontTest extends TestCase
         Cache::flush();
     }
 
+    public function test_dynamic_pricing_that_overrides_others()
+    {
+        $this->signInAdmin();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(10, 'day')->toISOString(),
+            'price' => 50,
+            'available' => 2,
+        ];
+
+        $this->post(cp_route('resrv.availability.update'), $payload);
+
+        $this->travelTo(today()->setHour(11));
+
+        $searchPayload = [
+            'date_start' => today()->setHour(12)->toISOString(),
+            'date_end' => today()->setHour(12)->add(4, 'day')->toISOString(),
+        ];
+
+        // Lets add a 20% decrease and a 10% decrease
+        $dynamic = DynamicPricing::factory()->percentDecrease()->make([
+            'title' => 'Take 20% off',
+            'amount' => '20',
+        ])->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        $dynamic = DynamicPricing::factory()->percentDecrease()->make([
+            'title' => 'Take 10% off',
+            'amount' => '10',
+        ])->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        // We should get 144 for 20% percent decrease followed by 10% decrease
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('144');
+
+        // Let's add a dynamic pricing for 15% that overrides all
+        $dynamic = DynamicPricing::factory()->overridesAll()->make([
+            'title' => 'Take 15% off',
+            'amount' => '15',
+        ])->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        Cache::flush();
+
+        // We should get 170 for 15% percent decrease and the other two should be ignored
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('170');
+    }
+
     public function test_dynamic_pricing_based_on_reservation_date()
     {
         $this->signInAdmin();

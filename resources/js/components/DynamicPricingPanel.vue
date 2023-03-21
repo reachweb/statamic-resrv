@@ -292,6 +292,13 @@
                     </div>
 
                     <div class="form-group field-w-full">
+                        <div class="flex items-center">
+                            <toggle-input v-model="submit.overrides_all"></toggle-input> 
+                            <div class="text-sm ml-3">{{ __('Overrides all other dynamic pricing policies') }}</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group field-w-full">
                         <div class="w-full">
                             <button 
                                 class="w-full px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer"
