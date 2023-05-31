@@ -609,6 +609,22 @@ class DynamicPricingFrontTest extends TestCase
         // We should get 170 for 15% percent decrease and the other two should be ignored
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('170');
+
+        // Let's add another dynamic pricing for 50% that overrides all
+        $dynamic = DynamicPricing::factory()->overridesAll()->make([
+            'title' => 'Take 50% off',
+            'amount' => '50',
+            'order' => 1,
+        ])->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        Cache::flush();
+
+        // We should get 170 for 15% percent decrease and the other two should be ignored
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('170');
     }
 
     public function test_dynamic_pricing_based_on_reservation_date()

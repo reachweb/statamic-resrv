@@ -27,10 +27,12 @@ class TestCase extends OrchestraTestCase
         parent::setUp();
 
         $this->preventSavingStacheItemsToDisk();
+        
+        $this->withoutVite();
 
         Blueprint::setDirectory(__DIR__.'/../resources/blueprints');
 
-        Version::shouldReceive('get')->andReturn('3.3.5');
+        Version::shouldReceive('get')->andReturn('4.3.0');
         $this->addToAssertionCount(-1); // Dont want to assert this
 
         $this->withoutExceptionHandling();
@@ -149,6 +151,6 @@ class TestCase extends OrchestraTestCase
             ->data($entryData)
             ->save();
 
-        return Entry::findBySlug($slug, 'pages');
+        return Entry::query()->where('slug', $slug)->first();
     }
 }

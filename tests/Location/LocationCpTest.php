@@ -6,7 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Tests\TestCase;
 
-class LocationTest extends TestCase
+class LocationCpTest extends TestCase
 {
     use RefreshDatabase;
 

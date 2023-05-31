@@ -39,7 +39,7 @@ class FixedPricingCpTest extends TestCase
             );
 
         $response = $this->get(cp_route('resrv.fixedpricing.index', 'test'));
-        $response->assertSee('[]');
+        $response->assertStatus(200)->assertSee('[]');
     }
 
     public function test_fixed_pricing_update_method()

@@ -1,44 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit bootstrap="vendor/autoload.php"
-         backupGlobals="false"
-         backupStaticAttributes="false"
-         cacheResult="true"
-         colors="true"
-         verbose="true"
-         convertErrorsToExceptions="true"
-         convertNoticesToExceptions="true"
-         convertWarningsToExceptions="true"
-         processIsolation="true"
-         stopOnFailure="false">
-    <testsuites>
-        <testsuite name="Resrv">
-            <directory suffix="Test.php">tests/Availability/</directory>
-            <directory suffix="Test.php">tests/AdvancedAvailability/</directory>
-            <directory suffix="Test.php">tests/Extra/</directory>
-            <directory suffix="Test.php">tests/Option/</directory>
-            <directory suffix="Test.php">tests/Location/</directory>
-            <directory suffix="Test.php">tests/Reservation/</directory>
-            <directory suffix="Test.php">tests/FixedPricing/</directory>
-            <directory suffix="Test.php">tests/DynamicPricing/</directory>
-            <directory suffix="Test.php">tests/Reports/</directory>
-            <directory suffix="Test.php">tests/DataImport/</directory>
-            <directory suffix="Test.php">tests/Utilities/</directory>
-            <directory suffix="Test.php">tests/Unit/</directory>
-        </testsuite>
-    </testsuites>
-    <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="APP_KEY" value="base64:tIt56v64/nM+5fAClHWccPRxbhvdgeRsiYDHyqXh37Y="/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="DB_CONNECTION" value="sqlite" />
-        <env name="DB_DATABASE" value=":memory:" />
-        <env name="CACHE_DRIVER" value="array"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="QUEUE_DRIVER" value="sync"/>
-        <env name="MAIL_DRIVER" value="smtp"/>
-        <env name="MAIL_HOST" value="smtp.mailtrap.io"/>
-        <env name="MAIL_USERNAME" value="0e08d400c9e1ce"/>
-        <env name="MAIL_PASSWORD" value="d9d25da57f916b"/>
-        <env name="MAIL_ENCRYPTION" value="tls"/>
-    </php>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" bootstrap="vendor/autoload.php" backupGlobals="false" cacheResult="true" colors="true" processIsolation="true" stopOnFailure="false" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.1/phpunit.xsd" cacheDirectory=".phpunit.cache" backupStaticProperties="false">
+  <testsuites>
+    <testsuite name="Resrv">
+      <directory suffix="Test.php">tests/Availability/</directory>
+      <directory suffix="Test.php">tests/AdvancedAvailability/</directory>
+      <directory suffix="Test.php">tests/Extra/</directory>
+      <directory suffix="Test.php">tests/Option/</directory>
+      <directory suffix="Test.php">tests/Location/</directory>
+      <directory suffix="Test.php">tests/Reservation/</directory>
+      <directory suffix="Test.php">tests/FixedPricing/</directory>
+      <directory suffix="Test.php">tests/DynamicPricing/</directory>
+      <directory suffix="Test.php">tests/Reports/</directory>
+      <directory suffix="Test.php">tests/DataImport/</directory>
+      <directory suffix="Test.php">tests/Utilities/</directory>
+      <directory suffix="Test.php">tests/Unit/</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <env name="APP_ENV" value="testing"/>
+    <env name="APP_KEY" value="base64:tIt56v64/nM+5fAClHWccPRxbhvdgeRsiYDHyqXh37Y="/>
+    <env name="BCRYPT_ROUNDS" value="4"/>
+    <env name="DB_CONNECTION" value="sqlite"/>
+    <env name="DB_DATABASE" value=":memory:"/>
+    <env name="CACHE_DRIVER" value="array"/>
+    <env name="SESSION_DRIVER" value="array"/>
+    <env name="QUEUE_DRIVER" value="sync"/>
+    <env name="MAIL_DRIVER" value="smtp"/>
+    <env name="MAIL_HOST" value="smtp.mailtrap.io"/>
+    <env name="MAIL_USERNAME" value="0e08d400c9e1ce"/>
+    <env name="MAIL_PASSWORD" value="d9d25da57f916b"/>
+    <env name="MAIL_ENCRYPTION" value="tls"/>
+  </php>
 </phpunit>

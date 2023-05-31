@@ -44,7 +44,7 @@ class AvailabilityCpTest extends TestCase
             );
 
         $response = $this->get(cp_route('resrv.availability.index', 'test'));
-        $response->assertSee('[]');
+        $response->assertStatus(200)->assertSee('[]');
     }
 
     public function test_availability_can_add_for_date_range()

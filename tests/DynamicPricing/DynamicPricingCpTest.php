@@ -27,7 +27,7 @@ class DynamicPricingCpTest extends TestCase
 
     public function test_can_show_cp_index_page()
     {
-        $dynamic = DynamicPricing::factory()->create();
+        DynamicPricing::factory()->create();
 
         $response = $this->get(cp_route('resrv.dynamicpricings.index'));
         $response->assertStatus(200);
