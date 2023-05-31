@@ -27,7 +27,7 @@ class TestCase extends OrchestraTestCase
         parent::setUp();
 
         $this->preventSavingStacheItemsToDisk();
-        
+
         $this->withoutVite();
 
         Blueprint::setDirectory(__DIR__.'/../resources/blueprints');
