@@ -335,7 +335,7 @@ class ReservationFrontTest extends TestCase
                 'location_start' => $location->id,
                 'location_end' => $location->id,
             ]
-        );
+            );
 
         $response = $this->get(route('resrv.reservation.checkoutForm', $reservation->item_id));
         $response->assertStatus(200)->assertSee('input_type');
@@ -937,7 +937,7 @@ class ReservationFrontTest extends TestCase
 
         $payment = json_decode($response->content())->data->payment;
         $price = json_decode($response->content())->data->price;
-        $extra_price = ($extra->price->multiply($price)->format()) * 2;
+        $extra_price = $extra->price->multiply($price)->format() * 2;
         $total = json_decode($response->content())->data->price + $extra_price;
 
         $checkoutRequest = [

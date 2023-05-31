@@ -333,11 +333,12 @@ class DynamicPricing extends Model
         return false;
     }
 
-    protected function hasOverridingPolicy($pricings): bool | Collection
+    protected function hasOverridingPolicy($pricings): bool|Collection
     {
         if ($pricing = $pricings->firstWhere('overrides_all', true)) {
             return collect([$pricing]);
         }
+
         return false;
     }
 }
