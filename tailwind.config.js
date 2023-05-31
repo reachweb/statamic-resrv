@@ -8,7 +8,6 @@ module.exports = {
         './resources/views/cp/*/*.blade.php',
       ]
     },
-    important: false,
     theme: {
         extend: {},
         variants: {},

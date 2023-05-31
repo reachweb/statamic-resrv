@@ -159,7 +159,7 @@ export default {
         renderDay(arg) {
             let arrayOfDomNodes = []
             let day = dayjs(arg.date).format('YYYY-MM-DD')
-            const defaultClasses = ['p-1', 'text-xs', 'text-white', 'bg-green-500'];
+            const defaultClasses = ['p-2', 'text-xs', 'text-white', 'bg-green-700'];
             
             // Day label
             let dayLabel = document.createElement('div')
@@ -175,9 +175,7 @@ export default {
             if (this.hasAvailable(day)) {
                 let avail = document.createElement('div')     
                 if (this.hasAvailable(day) > 0) {
-                    avail.classList.add(...defaultClasses, 'bg-green-500')
-                } else {
-                    avail.classList.add(...defaultClasses, 'bg-yellow-400')
+                    avail.classList.add(...defaultClasses, 'bg-green-700')
                 }
                 avail.innerHTML = '# '+this.hasAvailable(day)
                 arrayOfDomNodes.push(avail)
@@ -187,9 +185,7 @@ export default {
             if (this.hasPrice(day)) {
                 let price = document.createElement('div')     
                 if (this.hasPrice(day) > 0) {
-                    price.classList.add(...defaultClasses, 'bg-gray-600')
-                } else {
-                    price.classList.add(...defaultClasses, 'bg-yellow-400')
+                    price.classList.add(...defaultClasses, 'bg-gray-700')
                 }
                 price.innerHTML = '€ '+this.hasPrice(day)
                 arrayOfDomNodes.push(price)
