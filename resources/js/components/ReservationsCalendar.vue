@@ -1,5 +1,5 @@
 <template>
-    <div class="card p-2">
+    <div class="card p-4">
         <div class="w-full flex">
             <div class="pt-2 pb-3 flex items-center">
                 <div class="mr-2">{{ __('Only show start dates') }}</div>
@@ -27,6 +27,7 @@ export default {
                 plugins: [ dayGridPlugin, interactionPlugin ],
                 initialView: 'dayGridMonth',
                 navLinks: true,
+                eventColor: '#2c3e50',
                 events: {
                     url: this.calendarJsonUrl,
                     extraParams: () => {
@@ -35,8 +36,9 @@ export default {
                                 onlyStart: 1
                             }
                         }
-                    }
-                },
+                    },
+                   
+                },                
                 timeZone: 'UTC',
                 eventTimeFormat: { 
                     hour: '2-digit',

@@ -19,10 +19,10 @@
         "vue-template-compiler": "^2.6.11"
     },
     "dependencies": {
-        "@fullcalendar/core": "^5.9.0",
-        "@fullcalendar/daygrid": "^5.9.0",
-        "@fullcalendar/interaction": "^5.9.0",
-        "@fullcalendar/vue": "^5.9.0",
+        "@fullcalendar/core": "^6.1.0",
+        "@fullcalendar/daygrid": "^6.1.0",
+        "@fullcalendar/interaction": "^6.1.0",
+        "@fullcalendar/vue": "^6.1.0",
         "axios": "^0.26.1",
         "dayjs": "^1.10.4",
         "lodash": "^4.17.21",

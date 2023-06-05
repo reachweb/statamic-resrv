@@ -31,7 +31,6 @@ class ReservationCalendarResource extends ResourceCollection
                 'start' => $this->formatDate($reservation->date_start),
                 'end' => $this->formatDate($reservation->date_end),
                 'url' => cp_route('resrv.reservation.show', $reservation->id),
-                'color' => 'hsl('.rand(0, 359).','.rand(0, 100).'%,'.rand(0, 55).'%)',
             ];
             // Remove end date if we only want the start date
             if ($request->has('onlyStart')) {
