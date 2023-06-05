@@ -429,6 +429,7 @@ class Reservation extends Model
     public function emptyEntry()
     {
         return [
+            'id' => null,
             'title' => '## Entry deleted ##',
             'api_url' => '## Entry deleted ##',
             'permalink' => '#',
