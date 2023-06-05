@@ -1,8 +1,8 @@
 <template>
     <div class="card p-2">
         <div class="w-full flex">
-            <div class="pt-1 pb-2 flex items-center">
-                <div class="mr-1">{{ __('Only show start dates') }}</div>
+            <div class="pt-2 pb-3 flex items-center">
+                <div class="mr-2">{{ __('Only show start dates') }}</div>
                 <toggle-input v-model="onlyStart"></toggle-input>
             </div> 
         </div>

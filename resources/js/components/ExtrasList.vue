@@ -1,20 +1,20 @@
 <template>
     <div>
     <div class="w-full h-full" v-if="extrasLoaded">
-        <vue-draggable class="mt-4 space-y-1" v-model="extras" @start="drag=true" @end="drag=false" @change="order">
+        <vue-draggable class="mt-4 space-y-2" v-model="extras" @start="drag=true" @end="drag=false" @change="order">
             <div
                 v-for="extra in extras"
                 :key="extra.id"
-                class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors bg-white"
+                class="w-full flex items-center justify-between p-3 shadow rounded-md transition-colors bg-gray-100"
             >
                 <div class="flex items-center space-x-2">
                     <div class="little-dot" :class="greenDot(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
                     <span class="font-medium cursor-pointer" v-html="extra.name" @click="editExtra(extra)"></span>
-                    <span>{{ extra.price }} <span class="text-xs text-gray-500" v-html="priceLabel(extra.price_type)"></span></span>
+                    <span>{{ extra.price }} <span class="text-xs text-gray-700" v-html="priceLabel(extra.price_type)"></span></span>
                 </div>
                 <div class="flex space-x-2">
                     <span 
-                        class="text-gray-500 text-sm uppercase cursor-pointer" 
+                        class="text-gray-700 text-sm uppercase cursor-pointer" 
                         v-html="extraEnabled(extra.id) ? 'Enabled' : 'Disabled'"
                         @click="associateEntryExtra(extra.id)"
                         v-if="insideEntry"

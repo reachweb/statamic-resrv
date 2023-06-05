@@ -1,11 +1,11 @@
 <template>
     <div>
     <div class="w-full h-full" v-if="locationsLoaded">
-        <vue-draggable class="mt-4 space-y-1" v-model="locations" @start="drag=true" @end="drag=false" @change="order">
+        <vue-draggable class="mt-4 space-y-2" v-model="locations" @start="drag=true" @end="drag=false" @change="order">
             <div
                 v-for="location in locations"
                 :key="location.id"
-                class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors bg-white"                  
+                class="w-full flex items-center justify-between p-3 shadow rounded-md transition-colors bg-gray-100"                  
             >
                 <div class="flex items-center space-x-2">
                     <div class="little-dot" :class="location.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>

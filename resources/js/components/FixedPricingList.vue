@@ -1,11 +1,11 @@
 <template>
     <div>
     <div class="w-full h-full" v-if="fixedPricingLoaded">
-        <div class="mt-4 space-y-1">
+        <div class="mt-4 space-y-2">
             <div
                 v-for="pricing in fixedPricings"
                 :key="pricing.id"
-                class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors bg-white"
+                class="w-full flex items-center justify-between p-3 shadow rounded-md transition-colors bg-gray-100"
             >
                 <div class="flex items-center space-x-2 cursor-pointer" v-if="pricing.days != 0" @click="editFixedPricing(pricing)">
                     <span>{{ __('Days:') }}</span>

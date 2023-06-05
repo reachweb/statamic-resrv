@@ -1,11 +1,11 @@
 <template>
     <div>
     <div class="w-full h-full" v-if="dynamicPricingLoaded">
-        <vue-draggable class="mt-4 space-y-1" v-model="dynamicPricings" @start="drag=true" @end="drag=false" @change="order">
+        <vue-draggable class="mt-4 space-y-2" v-model="dynamicPricings" @start="drag=true" @end="drag=false" @change="order">
             <div
                 v-for="dynamic in dynamicPricings"
                 :key="dynamic.id"
-                class="w-full flex items-center justify-between px-3 py-1 shadow rounded-md transition-colors bg-white"                  
+                class="w-full flex items-center justify-between p-3 shadow rounded-md transition-colors bg-gray-100"                  
             >
                 <div class="flex items-center space-x-2">
                     <span class="font-medium cursor-pointer" v-html="dynamic.title" @click="editPricing(dynamic)"></span>

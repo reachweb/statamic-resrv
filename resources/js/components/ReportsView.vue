@@ -1,6 +1,6 @@
 <template>
     <div class="card">
-        <div class="flex my-2">
+        <div class="flex py-4">
             <div class="date-container input-group max-w-xl">
                 <v-date-picker
                     v-model="date"
@@ -15,7 +15,7 @@
                         <div class="w-full flex items-center">
                         <div class="input-group">
                             <div class="input-group-prepend flex items-center">
-                                <svg-icon name="calendar" class="w-4 h-4" />
+                                <svg-icon name="light/calendar" class="w-4 h-4" />
                             </div>
                             <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
                                 <input
@@ -28,7 +28,7 @@
                         <div class="icon icon-arrow-right my-sm mx-1 text-grey-60" />
                         <div class="input-group">
                             <div class="input-group-prepend flex items-center">
-                                <svg-icon name="calendar" class="w-4 h-4" />
+                                <svg-icon name="light/calendar" class="w-4 h-4" />
                             </div>
                             <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
                                 <input
@@ -44,15 +44,15 @@
             </div>
         </div>
         <div class="flex flex-wrap items-center text-center border-t mt-4 pt-4">
-            <div class="w-full lg:w-1/3">
+            <div class="w-full lg:!w-1/3">
                 <div class="mb-2">{{ __('Reservations') }}</div>
                 <div class="text-2xl">{{ reportData.total_confirmed_reservations }}</div>
             </div>
-            <div class="w-full lg:w-1/3">
+            <div class="w-full lg:!w-1/3">
                 <div class="mb-2">{{ __('Revenue') }}</div>
                 <div class="text-2xl">{{ currency }} {{ reportData.total_revenue }}</div>
             </div>
-            <div class="w-full lg:w-1/3">
+            <div class="w-full lg:!w-1/3">
                 <div class="mb-2">{{ __('Average reservation value') }}</div>
                 <div class="text-2xl">{{ currency }} {{ reportData.avg_revenue }}</div>
             </div>

@@ -13,16 +13,27 @@
             :sort-direction="sortDirection"
         >
             <div slot-scope="{ hasSelections }">
-                <div class="card p-0 relative">
-                    <data-list-filter-presets
-                        v-if="!reordering"
-                        ref="presets"
-                        :active-preset="activePreset"
-                        :preferences-prefix="preferencesPrefix"
-                        @selected="selectPreset"
-                        @reset="filtersReset"
-                    />
-                    <div class="data-list-header">
+                <div class="card overflow-hidden p-0 relative">
+                    <div class="flex flex-wrap items-center justify-between px-2 pb-2 text-sm border-b">
+                        <data-list-filter-presets
+                            v-if="!reordering"
+                            ref="presets"
+                            :active-preset="activePreset"
+                            :preferences-prefix="preferencesPrefix"
+                            @selected="selectPreset"
+                            @reset="filtersReset"
+                        />
+
+                        <data-list-search class="h-8 mt-2 min-w-[240px] w-full" ref="search" v-model="searchQuery" :placeholder="searchPlaceholder" />
+
+                        <div class="flex space-x-2 mt-2">
+                            <button class="btn btn-sm ml-2" v-text="__('Reset')" v-show="isDirty" @click="$refs.presets.refreshPreset()" />
+                            <button class="btn btn-sm ml-2" v-text="__('Save')" v-show="isDirty" @click="$refs.presets.savePreset()" />
+                            <data-list-column-picker :preferences-key="preferencesKey('columns')" />
+                        </div>
+                    </div>
+
+                    <div>
                         <data-list-filters
                             :filters="filters"
                             :active-preset="activePreset"
@@ -42,40 +53,42 @@
                         />
                     </div>
 
-                    <div v-show="items.length === 0" class="p-3 text-center text-grey-50" v-text="__('No results')" />
+                    <div v-show="items.length === 0" class="p-6 text-center text-gray-500" v-text="__('No results')" />
 
-                    <data-list-table
-                        v-if="items.length"
-                        :loading="loading"
-                        :allow-bulk-actions="false"
-                        :allow-column-picker="true"
-                        :column-preferences-key="preferencesKey('columns')"
-                        @sorted="sorted"
-                    >
-                        <template slot="cell-status" slot-scope="{ row: reservation }">
-                            <a :href="showUrl(reservation)" :class="badgeClass(reservation.status)" class="inline-block min-w-[100px] text-center p-1 text-white text-xs bg-green-800">
-                                {{ reservation.status.toUpperCase() }}
-                            </a>                        
-                        </template>
-                        <template slot="cell-entry" slot-scope="{ row: reservation }">
-                            <a :href="reservation.entry.permalink" target="_blank">{{ reservation.entry.title }}</a>
-                        </template>
-                        <template slot="cell-location_start" slot-scope="{ row: reservation }">
-                            {{ reservation.location_start.name }}
-                        </template>
-                        <template slot="cell-location_end" slot-scope="{ row: reservation }">
-                            {{ reservation.location_end.name }}
-                        </template>
-                        <template slot="cell-customer" slot-scope="{ row: reservation }">
-                            <a :href="'mailto:'+customerEmail(reservation.customer)">{{ customerEmail(reservation.customer) }}</a>
-                        </template>
-                        <template slot="actions" slot-scope="{ row: reservation }">
-                            <dropdown-list>
-                                <dropdown-item :text="__('View')" :redirect="showUrl(reservation)" />                                
-                                <dropdown-item :text="__('Refund')" @click="refundConfirm(reservation)" />                                
-                            </dropdown-list>
-                        </template>
-                    </data-list-table>
+                    <div class="overflow-x-auto overflow-y-hidden">
+                        <data-list-table
+                            v-if="items.length"
+                            :loading="loading"
+                            :allow-bulk-actions="false"
+                            :allow-column-picker="true"
+                            :column-preferences-key="preferencesKey('columns')"
+                            @sorted="sorted"
+                        >
+                            <template slot="cell-status" slot-scope="{ row: reservation }">
+                                <a :href="showUrl(reservation)" :class="badgeClass(reservation.status)" class="inline-block min-w-[100px] text-center p-1 text-white text-xs bg-green-800">
+                                    {{ reservation.status.toUpperCase() }}
+                                </a>                        
+                            </template>
+                            <template slot="cell-entry" slot-scope="{ row: reservation }">
+                                <a :href="reservation.entry.permalink" target="_blank">{{ reservation.entry.title }}</a>
+                            </template>
+                            <template slot="cell-location_start" slot-scope="{ row: reservation }">
+                                {{ reservation.location_start.name }}
+                            </template>
+                            <template slot="cell-location_end" slot-scope="{ row: reservation }">
+                                {{ reservation.location_end.name }}
+                            </template>
+                            <template slot="cell-customer" slot-scope="{ row: reservation }">
+                                <a :href="'mailto:'+customerEmail(reservation.customer)">{{ customerEmail(reservation.customer) }}</a>
+                            </template>
+                            <template slot="actions" slot-scope="{ row: reservation }">
+                                <dropdown-list>
+                                    <dropdown-item :text="__('View')" :redirect="showUrl(reservation)" />                                
+                                    <dropdown-item :text="__('Refund')" @click="refundConfirm(reservation)" />                                
+                                </dropdown-list>
+                            </template>
+                        </data-list-table>
+                    </div>
                 </div>
 
                 <data-list-pagination

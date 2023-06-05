@@ -1,11 +1,11 @@
 <template>
     <div>
     <div class="w-full h-full" v-if="dataLoaded">
-        <vue-draggable class="mt-4 space-y-1" v-model="options" @start="drag=true" @end="drag=false" @change="order">
+        <vue-draggable class="mt-4 space-y-2" v-model="options" @start="drag=true" @end="drag=false" @change="order">
             <div
                 v-for="option in options"
                 :key="option.id"
-                class="w-full flex flex-wrap items-center justify-between px-3 py-2 shadow rounded-md transition-colors bg-white"
+                class="w-full flex flex-wrap items-center justify-between p-3 shadow rounded-md transition-colors bg-gray-100"
             >
                 <div class="flex items-center space-x-2">
                     <div class="little-dot" :class="option.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
@@ -13,7 +13,7 @@
                 </div>
                 <div class="flex space-x-2">
                     <span 
-                        class="text-gray-500 text-sm uppercase" 
+                        class="text-gray-700 text-sm uppercase" 
                         v-html="option.required ? 'Required' : 'Optional'"
                     ></span>
                     <dropdown-list>

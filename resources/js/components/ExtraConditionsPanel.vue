@@ -1,29 +1,31 @@
 <template>
     <stack name="statamic-resrv-extra-conditions" @closed="close">
-        <div slot-scope="{ close }" class="bg-white h-full flex flex-col">
-            <div class="bg-grey-20 px-3 py-1 border-b border-grey-30 text-lg font-medium flex items-center justify-between">
-                <div>{{ __('Extra conditions for:') }}  <span class="font-bold">{{ data.name }}</span></div>                
-                <button type="button" class="btn-close" @click="close">×</button>
-            </div>
-            <div class="p-4 bg-grey-20 h-full">
-                <div class="card rounded-tl-none">
-                    <extra-conditions-form 
-                        :data="conditionsSafe()"
-                        :extras="extras"
-                        :errors="errors"
-                        @updated="createSubmit"                  
-                    />
-                    <div class="w-full mt-4">
-                        <button 
-                            class="w-full px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointe disabled:opacity-30" 
-                            :disabled="disableSave"
-                            @click="save"
-                        >
-                            {{ __('Save') }}
-                        </button>
-                    </div>           
+        <div slot-scope="{ close }" class="h-full overflow-auto bg-gray-300">
+            <header class="flex items-center sticky top-0 inset-x-0 bg-white shadow px-8 py-2 z-1 h-13">
+                <div class="flex-1 flex items-center text-xl">{{ __('Extra conditions for:') }}  <span class="ml-2 font-bold">{{ data.name }}</span></div>                
+                <button type="button" class="text-gray-700 hover:text-gray-800 mr-6 text-sm" @click="close">Cancel</button>
+                <button 
+                    class="btn-primary" 
+                    :disabled="disableSave"
+                    @click="save"
+                >
+                    {{ __('Save') }}
+                </button>
+            </header>
+            <section class="py-4 px-3 md:px-8">
+                <div class="publish-sections">
+                    <div class="publish-sections-section">
+                        <div class="card">
+                            <extra-conditions-form 
+                            :data="conditionsSafe()"
+                            :extras="extras"
+                            :errors="errors"
+                            @updated="createSubmit"                  
+                        />
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </section>        
         </div>
     </stack>
 </template>

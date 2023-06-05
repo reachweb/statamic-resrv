@@ -1,12 +1,12 @@
 <template>
     <div>
-        <div class="mb-2 text-sm">
+        <div class="mb-4">
             {{ __('Select when to show, hide or make this extra required. When adding multiple conditions for an operation, all of them have to apply.') }}
         </div>
         <div v-for="(condition, index) in conditionsForm" :key="index">
-            <div class="flex items-center py-2 my-2 border-b">
-                <div class="min-w-xl">
-                    <div class="mb-1 text-sm">
+            <div class="flex items-center py-4 my-2 border-b">
+                <div class="min-w-[240px]">
+                    <div class="mb-1 text-sm font-semibold">
                         {{ __('Operation') }}
                     </div>
                     <div class="w-full">
@@ -16,8 +16,8 @@
                         {{ errors['conditions.'+index+'.operation'][0] }}
                     </div>  
                 </div>
-                <div class="min-w-xl ml-2">
-                    <div class="mb-1 text-sm">
+                <div class="min-w-[240px] ml-4">
+                    <div class="mb-1 text-sm font-semibold">
                         {{ __('Type') }}
                     </div>
                     <div class="w-full">
@@ -27,10 +27,10 @@
                         {{ errors['conditions.'+index+'.type'][0] }}
                     </div>  
                 </div>
-                <div class="ml-2" v-if="typeIsDate(index)">
+                <div class="ml-4" v-if="typeIsDate(index)">
                     <div class="flex items-center">
                         <div class="ml-2">
-                            <div class="mb-1 text-sm">
+                            <div class="mb-1 text-sm font-semibold">
                                 {{ __('Date start') }}
                             </div>
                             <div class="date-container input-group w-full">
@@ -44,7 +44,7 @@
                                     <template v-slot="{ inputValue, inputEvents }">
                                         <div class="input-group">
                                             <div class="input-group-prepend flex items-center">
-                                                <svg-icon name="calendar" class="w-4 h-4" />
+                                                <svg-icon name="light/calendar" class="w-4 h-4" />
                                             </div>
                                             <div class="input-text border border-grey-50 border-l-0">
                                                 <input
@@ -62,7 +62,7 @@
                             </div>  
                         </div>
                         <div class="ml-2">
-                            <div class="mb-1 text-sm">
+                            <div class="mb-1 text-sm font-semibold">
                                 {{ __('Date end') }}       
                             </div>
                             <div class="date-container input-group w-full">
@@ -76,7 +76,7 @@
                                     <template v-slot="{ inputValue, inputEvents }">
                                         <div class="input-group">
                                             <div class="input-group-prepend flex items-center">
-                                                <svg-icon name="calendar" class="w-4 h-4" />
+                                                <svg-icon name="light/calendar" class="w-4 h-4" />
                                             </div>
                                             <div class="input-text border border-grey-50 border-l-0">
                                                 <input
@@ -95,10 +95,10 @@
                         </div>                    
                     </div>
                 </div>
-                <div class="ml-2 mr-6" v-if="typeIsTime(index)">
+                <div class="ml-4 mr-6" v-if="typeIsTime(index)">
                     <div class="flex items-center">
                         <div class="ml-2">
-                            <div class="mb-1 text-sm">
+                            <div class="mb-1 text-sm font-semibold">
                                 {{ __('Time start') }}
                             </div>
                             <div class="time-fieldtype">
@@ -109,7 +109,7 @@
                             </div>  
                         </div>
                         <div class="ml-4">
-                            <div class="mb-1 text-sm">
+                            <div class="mb-1 text-sm font-semibold">
                                 {{ __('Time end') }}
                             </div>
                             <div class="time-fieldtype">
@@ -121,10 +121,10 @@
                         </div>
                     </div>                    
                 </div>
-                <div class="ml-2" v-if="typeIsValue(index)">
+                <div class="ml-4" v-if="typeIsValue(index)">
                     <div class="flex items-center">
                         <div class="ml-2 min-w-lg">
-                            <div class="mb-1 text-sm">
+                            <div class="mb-1 text-sm font-semibold">
                                 {{ __('Comparison') }}
                             </div>
                             <div class="w-full">
@@ -135,7 +135,7 @@
                             </div>  
                         </div>
                         <div class="ml-4">
-                            <div class="mb-1 text-sm">
+                            <div class="mb-1 text-sm font-semibold">
                                 {{ __('Value') }}
                             </div>
                             <div class="w-full">
@@ -147,10 +147,10 @@
                         </div>
                     </div>
                 </div>
-                <div class="ml-2" v-if="typeIsExtra(index)">
+                <div class="ml-4" v-if="typeIsExtra(index)">
                     <div class="flex items-center">
                         <div class="ml-2 min-w-lg">
-                            <div class="mb-1 text-sm">
+                            <div class="mb-1 text-sm font-semibold">
                                 {{ __('Extra') }}
                             </div>
                             <div class="w-full">
@@ -170,7 +170,7 @@
             </div>                
         </div>
         <button 
-            class="px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointer"
+            class="btn-primary mt-4"
             @click="add"
         >
             {{ __('Add condition') }}

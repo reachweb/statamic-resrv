@@ -1,59 +1,61 @@
 <template>
     <stack name="statamic-resrv-extra-mass-assign" @closed="close">
-        <div slot-scope="{ close }" class="bg-white h-full flex flex-col">
-            <div class="bg-grey-20 px-3 py-1 border-b border-grey-30 text-lg font-medium flex items-center justify-between">
-                <div>{{ __('Mass assign') }}  <span class="font-bold">{{ data.name }}</span></div>                
-                <button type="button" class="btn-close" @click="close">×</button>
-            </div>
-            <div class="p-4 bg-grey-20 h-full">
-                <div class="card rounded-tl-none">
-                    <div class="w-full">
-                        <div class="mb-1 text-sm">
-                            <label class="font-bold" for="name">Entries</label>
-                            <div class="text-sm font-light"><p>Select the entries that this extra should apply to.</p></div>
+        <div slot-scope="{ close }" class="h-full overflow-auto bg-gray-300">
+            <header class="flex items-center sticky top-0 inset-x-0 bg-white shadow px-8 py-2 z-1 h-13">
+                <div class="flex-1 flex items-center text-xl">{{ __('Mass assign') }}  <span class="font-bold ml-2">{{ data.name }}</span></div>                
+                <button type="button" class="text-gray-700 hover:text-gray-800 mr-6 text-sm" @click="close">Cancel</button>
+                <button 
+                    class="btn-primary" 
+                    :disabled="disableSave"
+                    @click="save"
+                >
+                    {{ __('Save') }}
+                </button>
+            </header>
+            <section class="py-4 px-3 md:px-8">
+                <div class="publish-sections">
+                    <div class="publish-sections-section">
+                        <div class="card">
+                            <div class="w-full">
+                                <div class="mb-1 text-sm">
+                                    <label class="font-semibold" for="name">Entries</label>
+                                    <div class="text-sm font-light"><p>Select the entries that this extra should apply to.</p></div>
+                                </div>
+                                <div class="w-full" v-if="entriesLoaded && selectedEntriesLoaded">
+                                    <v-select 
+                                        v-model="submit.entries" 
+                                        label="title"
+                                        multiple="multiple"
+                                        :close-on-select="false"
+                                        :options="entries" 
+                                        :searchable="true"
+                                        :reduce="type => type.id" 
+                                    >
+                                        <template #selected-option-container><i class="hidden"></i></template>
+                                        <template #footer="{ deselect }">                    
+                                            <div class="vs__selected-options-outside flex flex-wrap">
+                                                <span v-for="id in submit.entries" :key="id" class="vs__selected mt-1">
+                                                    {{ getEntryTitle(id) }}
+                                                    <button @click="deselect(id)" type="button" :aria-label="__('Deselect option')" class="vs__deselect">
+                                                        <span>×</span>
+                                                    </button>                 
+                                                </span>
+                                            </div>
+                                        </template>
+                                    </v-select>                            
+                                </div>
+                                <div v-if="errors.entries" class="w-full mt-1 text-sm text-red-400">
+                                    {{ errors.entries[0] }}
+                                </div>  
+                            </div>
+                            <div class="flex mt-4">
+                                <button class="btn-flat text-sm" @click="selectAll">{{ __('Select all') }}</button>
+                                <button class="btn-flat text-sm ml-2" @click="removeAll">{{ __('Remove all') }}</button>
+                            </div>
                         </div>
-                        <div class="w-full" v-if="entriesLoaded && selectedEntriesLoaded">
-                            <v-select 
-                                v-model="submit.entries" 
-                                label="title"
-                                multiple="multiple"
-                                :close-on-select="false"
-                                :options="entries" 
-                                :searchable="true"
-                                :reduce="type => type.id" 
-                            >
-                                <template #selected-option-container><i class="hidden"></i></template>
-                                <template #footer="{ deselect }">                    
-                                    <div class="vs__selected-options-outside flex flex-wrap">
-                                        <span v-for="id in submit.entries" :key="id" class="vs__selected mt-1">
-                                            {{ getEntryTitle(id) }}
-                                            <button @click="deselect(id)" type="button" :aria-label="__('Deselect option')" class="vs__deselect">
-                                                <span>×</span>
-                                            </button>                 
-                                        </span>
-                                    </div>
-                                </template>
-                            </v-select>                            
-                        </div>
-                        <div v-if="errors.entries" class="w-full mt-1 text-sm text-red-400">
-                            {{ errors.entries[0] }}
-                        </div>  
-                    </div>
-                    <div class="flex mt-4">
-                        <button class="btn-flat text-sm" @click="selectAll">{{ __('Select all') }}</button>
-                        <button class="btn-flat text-sm ml-2" @click="removeAll">{{ __('Remove all') }}</button>
-                    </div>
-                    <div class="w-full mt-4">
-                        <button 
-                            class="w-full px-2 py-1 bg-gray-600 hover:bg-gray-800 transition-colors text-white rounded cursor-pointe disabled:opacity-30" 
-                            :disabled="disableSave"
-                            @click="save"
-                        >
-                            {{ __('Save') }}
-                        </button>
-                    </div>           
+                    </div>            
                 </div>
-            </div>
+            </section>
         </div>
     </stack>
 </template>
