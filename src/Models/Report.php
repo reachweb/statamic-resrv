@@ -84,7 +84,7 @@ class Report
         $locations = $this->getTopLocations();
         $locations->transform(function ($item) {
             return [
-                'title' => $item->location_start_data->name,
+                'title' => $item->location_start_data->name ?? '## Location deleted ##',
                 'reservations' => (int) $item->occurrences,
                 'percentage' => round($item->occurrences / $this->countConfirmedReservations(), 2),
             ];
