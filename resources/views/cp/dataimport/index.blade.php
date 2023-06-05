@@ -6,13 +6,13 @@
 
     <form action="{{ cp_route('resrv.dataimport.confirm') }}" method="POST" enctype="multipart/form-data">
         {{ csrf_field() }}
-        <header class="mb-3">
+        <header class="mb-6">
             <div class="flex items-center justify-between">
                 <h1>Import availability</h1>
                 <button class="btn-primary">Continue</button>
             </div>
         </header>
-        <div class="card rounded p-3 lg:px-7 lg:py-5 shadow bg-white">
+        <div class="card rounded p-4 lg:px-8 lg:py-6 shadow bg-white">
             <div class="mb-5">
                 <label for="collection" class="font-bold text-base mb-2">Collection</label>
                 @if ($collections->count() == 0)

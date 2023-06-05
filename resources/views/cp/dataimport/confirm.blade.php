@@ -5,14 +5,14 @@
 @section('content')
 
 
-    <header class="mb-3">
+    <header class="mb-6">
         <div class="flex items-center justify-between">
             <h1>Import availability</h1>
             <a href="{{ cp_route('resrv.dataimport.store') }}" class="btn-primary">Continue</a>
         </div>
     </header>
 
-    <div class="card rounded p-3 lg:px-7 lg:py-5 shadow bg-white">
+    <div class="card rounded p-4 lg:px-8 lg:py-6 shadow bg-white">
         @if ($errors->count() > 0)
         <div class="mb-5">
             <div class="font-bold text-base mb-2">
