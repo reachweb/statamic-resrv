@@ -36,6 +36,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
+          tools: composer:v2
           coverage: none
 
       - name: Set PHP 8.1 Testbench
@@ -48,7 +49,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          composer require "laravel/framework:${{ matrix.framework }}" --ignore-platform-reqs --no-interaction --no-update
-          composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+          composer require "laravel/framework:${{ matrix.framework }}" --ignore-platform-reqs=php --no-interaction --no-update
+          composer update --${{ matrix.stability }} --ignore-platform-reqs=php --prefer-dist --no-interaction
       - name: Execute tests
         run: vendor/bin/phpunit
