@@ -66,12 +66,15 @@ class ConfigController extends BaseConfigController
     {
         return collect($values)->reject(function ($value) {
             return is_null($value);
-            })->transform(function ($value) {
-                if ($value === 'true') return true;
-                if ($value === 'false') return false;
-                return $value;
-            })->toArray();
-    }
-    
+        })->transform(function ($value) {
+            if ($value === 'true') {
+                return true;
+            }
+            if ($value === 'false') {
+                return false;
+            }
 
+            return $value;
+        })->toArray();
+    }
 }
