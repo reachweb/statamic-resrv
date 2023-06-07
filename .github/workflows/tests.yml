@@ -39,7 +39,7 @@ jobs:
           coverage: none
 
       - name: Set PHP 8.1 Testbench
-        run: composer require "orchestra/testbench ^7.0 edalzell/forma ^1.30" --no-interaction --no-update
+        run: composer require "orchestra/testbench ^7.0" "edalzell/forma ^1.30" --no-interaction --no-update
         if: matrix.laravel == '9.*' && matrix.php >= 8.1
         
       - name: Set PHP 8.2 Testbench
