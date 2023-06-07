@@ -39,7 +39,7 @@ jobs:
           coverage: none
 
       - name: Set PHP 8.1 Testbench
-        run: composer require "orchestra/testbench ^7.0" --ignore-platform-req=php --no-interaction --no-update
+        run: composer require "orchestra/testbench ^7.0" --no-interaction --no-update
         if: matrix.laravel == '9.*' && matrix.php >= 8.1
         
       - name: Set PHP 8.2 Testbench
@@ -48,7 +48,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          composer require "laravel/framework:${{ matrix.framework }}" --no-interaction --no-update
+          composer require "laravel/framework:${{ matrix.framework }}" --no-interaction --no-update --ignore-platform-req=php
           composer update --${{ matrix.stability }} --prefer-dist --no-interaction
       - name: Execute tests
         run: vendor/bin/phpunit
