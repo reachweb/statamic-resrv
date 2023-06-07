@@ -1,0 +1,178 @@
+general_information:
+  display: 'General information'
+  instructions: 'Put your business information here. Those information will be used for the emails.'
+  type: section
+name:
+  display: 'Business name'
+  type: text
+  width: 50
+  required: true
+address1:
+  display: 'Business address'
+  type: text
+  width: 50
+  required: true
+zip_city:
+  display: 'ZIP & City'
+  type: text
+  width: 50
+  required: true
+country:
+  display: 'Country'
+  type: text
+  width: 50
+  required: true
+phone:
+  display: 'Phone'
+  type: text
+  width: 50
+  required: true
+mail:
+  display: 'Email'
+  type: text
+  width: 50
+  required: true
+logo:
+  display: 'Logo (type "false" to use business name)'
+  type: text
+  required: true
+
+reservation_settings:
+  display: 'Reservation settings'
+  instructions: 'Change how the reservation engine behaves'
+  type: section
+enable_advanced_availability:
+  display: 'Enable advanced availability'
+  instructions: 'Enable multiple availability per item. YOU CANNOT SIMPLY CHANGE THIS OPTION IN PRODUCTION, WITHOUT MIGRATING YOUR DATA.'
+  type: toggle
+  required: true
+enable_locations:
+  display: 'Enable locations'
+  instructions: 'Checkout expects to receive location info to calculate any extra charges'
+  type: toggle
+  required: true
+enable_time:
+  display: 'Enable time'
+  instructions: 'The reservation will have an explicit pickup and drop-off time'
+  type: toggle
+  required: true
+minimum_days_before:
+  display: 'Minimum days before'
+  instructions: 'set this to the number of days allowed between booking date and pickup time (calendar days count not 24 hour difference)'
+  type: integer
+  required: true
+minimum_reservation_period_in_days:
+  display: 'Minimum reservation period (in days)'
+  instructions: 'The minimum reservation period allowed'
+  width: 50
+  type: integer
+  required: true
+maximum_reservation_period_in_days:
+  display: 'Maximum reservation period (in days)'
+  instructions: 'The maximum reservation period allowed'
+  width: 50
+  type: integer
+  required: true
+maximum_quantity:
+  display: 'Maximum quantity'
+  instructions: 'The maximum items a user can book in one reservation'
+  type: integer
+  required: true
+calculate_days_using_time:
+  display: 'Calculate days using time'
+  instructions: 'If enabled every reservation will charge an extra day for a drop off time after the pick up time' 
+  width: 50
+  type: toggle
+  required: true
+decrease_availability_for_extra_time:
+  display: 'Decrease availability for extra time'
+  instructions: 'If enabled, the extra day charged will behave as a normal reservation day and decrease availability'
+  width: 50
+  type: toggle
+  required: true
+admin_email:
+  display: 'Admin email'
+  instructions: 'Comma separated list of the emails that should be notified for reservations'
+  type: text
+  required: true
+
+checkout_settings:
+  display: 'Checkout settings'
+  instructions: 'Important settings that change how the checkout behaves'
+  type: section
+form_name:
+  display: 'Form name'
+  instructions: 'The Statamic handle of the checkout form (needed to work correctly!)'
+  type: text
+  required: true
+payment:
+  display: 'Payment type'
+  instructions: 'Select if it charges the full amount, a fixed deposit or a percentage'
+  type: select
+  required: true
+  options:
+    full: 'Charge the whole amount'
+    fixed: 'Charge a fixed amount' 
+    percent: 'Charge a percentage of the base price'
+fixed_amount:
+  display: 'Fixed amount'
+  instructions: 'The amount to charge for a reservation'
+  type: integer
+  required: true
+  if:
+    payment: fixed
+percent_amount:
+  display: 'Percentage'
+  instructions: 'The percentage to charge for a reservation (without %)'
+  type: integer
+  required: true
+  if:
+    payment: percent
+minutes_to_hold:
+  display: 'Minutes to hold'
+  instructions: 'How much time the user has the complete the checkout until availability is reset'
+  type: integer
+  required: true
+  
+checkout_url_settings:
+  display: 'Checkout URL settings'
+  instructions: 'These settings configure the checkout URLs when you are using legacy checkout. Leave them at "false" if using Javascript based checkout'
+  type: section
+checkout_uri:
+  display: 'Checkout URL'
+  instructions: 'The relative URL of the entry that acts like the checkout page'
+  type: text
+  required: true
+checkout_completed_uri:
+  display: 'Checkout completed URL'
+  instructions: 'The relative URL of the entry that is shown when checkout is completed'
+  type: text
+  required: true
+checkout_failed_uri:
+  display: 'Checkout failed URL'
+  instructions: 'The relative URL of the entry that is shown when checkout fails'
+  type: text
+  required: true
+
+currency_settings:
+  display: 'Currency settings'
+  instructions: 'Change what currency the engine uses (limited functionality for now)'
+  type: section
+currency_name:
+  display: 'Currency name'
+  instructions: 'For example: Euro'
+  type: text
+  required: true
+currency_isoCode:
+  display: 'Currency ISO code'
+  instructions: 'Make sure to use ISO_4217 https://en.wikipedia.org/wiki/ISO_4217'
+  type: text
+  required: true
+currency_symbol:
+  display: 'Currency symbol'
+  type: text
+  required: true
+currency_delimiter:
+  display: 'Currency delimited'
+  type: text
+  required: true

@@ -12,6 +12,7 @@ use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Controllers\AdvancedAvailabilityController;
 use Reach\StatamicResrv\Http\Controllers\AvailabilityController;
+use Reach\StatamicResrv\Http\Controllers\ConfigController;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
@@ -145,6 +146,8 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         }
 
         $this->createNavigation();
+
+        \Edalzell\Forma\Forma::add('reachweb/statamic-resrv', ConfigController::class);
 
         $this->bootPermissions();
     }
