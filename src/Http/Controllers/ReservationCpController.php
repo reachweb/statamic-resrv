@@ -105,8 +105,10 @@ class ReservationCpController extends Controller
         $sortOrder = request('order') ?? 'desc';
         $sortBy = request('sort') ?? 'created_at';
 
+        $this->reservation = $this->reservation->orderBy($sortBy, $sortOrder);
+
         if (! request()->filled('search')) {
-            return $this->reservation->orderBy($sortBy, $sortOrder);
+            return $this->reservation;
         }
 
         return $this->searchReservations();
