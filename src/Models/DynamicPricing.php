@@ -80,7 +80,9 @@ class DynamicPricing extends Model
             'dynamic_pricing_assignment',
             'resrv_dynamic_pricing_assignments',
             'dynamic_pricing_id',
-            'dynamic_pricing_assignment_id'
+            'dynamic_pricing_assignment_id',
+            'id',
+            'statamic_id',
         );
     }
 
@@ -191,14 +193,28 @@ class DynamicPricing extends Model
         return $this;
     }
 
-    public function scopeSearchForCoupon($query, $coupon)
+    public function scopeSearchForCoupon($query, $coupon, $statamic_id)
     {
-        $items = $query->where('coupon', $coupon)->get();
+        $items = $query->where('coupon', $coupon);
+
+        if ($statamic_id) {
+            $query->whereHas('entries', function ($query) use ($statamic_id) {
+                $query->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
+                      ->where('dynamic_pricing_assignment_id', $statamic_id);
+            });
+        }
+        
+        $items = $query->get();
+
         if ($items->count() > 0) {
             return $items;
-        } else {
-            throw new CouponNotFoundException(__('This coupon does not exist.'));
-        }
+        } 
+    
+        throw new CouponNotFoundException(
+            $statamic_id 
+            ? __('This coupon does not apply to this product.') 
+            : __('This coupon does not exist.')
+        );
     }
 
     protected function checkAllParameters($items, $price, $date_start, $date_end, $duration)

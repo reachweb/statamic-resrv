@@ -54,10 +54,11 @@ class ResrvUtilityController extends Controller
     {
         $data = $request->validate([
             'coupon' => 'required|alpha_dash',
+            'statamic_id' => 'sometimes|string'
         ]);
 
         try {
-            DynamicPricing::searchForCoupon($data['coupon']);
+            DynamicPricing::searchForCoupon($data['coupon'], $data['statamic_id'] ?? null);
         } catch (CouponNotFoundException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }

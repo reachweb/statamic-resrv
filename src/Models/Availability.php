@@ -23,6 +23,12 @@ class Availability extends Model implements AvailabilityContract
 
     protected $table = 'resrv_availabilities';
 
+    protected $primaryKey = 'statamic_id';
+
+    public $incrementing = false;
+    
+    protected $keyType = 'string';
+
     protected $fillable = ['statamic_id', 'date', 'price', 'available'];
 
     protected $casts = [
