@@ -18,7 +18,7 @@ class AdvancedAvailability extends Availability
     protected $primaryKey = 'statamic_id';
 
     public $incrementing = false;
-    
+
     protected $keyType = 'string';
 
     protected $fillable = ['statamic_id', 'date', 'price', 'available', 'property'];
