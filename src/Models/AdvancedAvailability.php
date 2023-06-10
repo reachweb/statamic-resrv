@@ -15,6 +15,12 @@ class AdvancedAvailability extends Availability
 
     protected $table = 'resrv_advanced_availabilities';
 
+    protected $primaryKey = 'statamic_id';
+
+    public $incrementing = false;
+    
+    protected $keyType = 'string';
+
     protected $fillable = ['statamic_id', 'date', 'price', 'available', 'property'];
 
     protected $casts = [
