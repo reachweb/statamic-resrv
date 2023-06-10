@@ -54,7 +54,7 @@ class ResrvUtilityController extends Controller
     {
         $data = $request->validate([
             'coupon' => 'required|alpha_dash',
-            'statamic_id' => 'sometimes|string'
+            'statamic_id' => 'sometimes|string',
         ]);
 
         try {

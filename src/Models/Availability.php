@@ -26,7 +26,7 @@ class Availability extends Model implements AvailabilityContract
     protected $primaryKey = 'statamic_id';
 
     public $incrementing = false;
-    
+
     protected $keyType = 'string';
 
     protected $fillable = ['statamic_id', 'date', 'price', 'available'];
