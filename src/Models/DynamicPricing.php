@@ -203,16 +203,16 @@ class DynamicPricing extends Model
                       ->where('dynamic_pricing_assignment_id', $statamic_id);
             });
         }
-        
+
         $items = $query->get();
 
         if ($items->count() > 0) {
             return $items;
-        } 
-    
+        }
+
         throw new CouponNotFoundException(
-            $statamic_id 
-            ? __('This coupon does not apply to this product.') 
+            $statamic_id
+            ? __('This coupon does not apply to this product.')
             : __('This coupon does not exist.')
         );
     }
