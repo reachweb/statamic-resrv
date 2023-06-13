@@ -2,7 +2,9 @@
 
 namespace Reach\StatamicResrv\Mail;
 
+use Illuminate\Container\Container;
 use Illuminate\Mail\Mailable as LaravelMailable;
+use Illuminate\Mail\Markdown;
 use Illuminate\Support\Arr;
 
 class Mailable extends LaravelMailable
