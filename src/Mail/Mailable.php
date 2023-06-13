@@ -2,43 +2,21 @@
 
 namespace Reach\StatamicResrv\Mail;
 
-use Illuminate\Container\Container;
 use Illuminate\Mail\Mailable as LaravelMailable;
-use Illuminate\Mail\Markdown;
 use Illuminate\Support\Arr;
 
 class Mailable extends LaravelMailable
 {
-    /**
-     * Override buildMarkdownView() to define new components path.
-     *
-     * @return array
-     *
-     * @throws \ReflectionException
-     * @throws \Illuminate\Contracts\Container\BindingResolutionException
-     */
+    // Override buildMarkdownView() to define new components path.
     protected function buildMarkdownView()
     {
-        /** @var Markdown $markdown */
-        $markdown = Container::getInstance()->make(Markdown::class);
+        $this->markdownRenderer()->loadComponentsFrom(
+            file_exists(resource_path().'/views/vendor/statamic-resrv/email/theme')
+                ? [resource_path().'/views/vendor/statamic-resrv/email/theme']
+                : [__DIR__.'/../../resources/views/email/theme']
+        );
 
-        // Use package resources path
-        if (file_exists(resource_path().'/views/vendor/statamic-resrv/email/theme')) {
-            $markdown->loadComponentsFrom([
-                resource_path().'/views/vendor/statamic-resrv/email/theme',
-            ]);
-        } else {
-            $markdown->loadComponentsFrom([
-                __DIR__.'/../../resources/views/email/theme',
-            ]);
-        }
-
-        $data = $this->buildViewData();
-
-        return [
-            'html' => $markdown->render($this->markdown, $data),
-            'text' => $this->buildMarkdownText($markdown, $data),
-        ];
+        return parent::buildMarkdownView();
     }
 
     protected function getOption($option, $offset = 0)
