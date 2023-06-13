@@ -20,8 +20,9 @@ class Mailable extends LaravelMailable
                     ? [resource_path().'/views/vendor/statamic-resrv/email/theme']
                     : [__DIR__.'/../../resources/views/email/theme']
             );
+
             return parent::buildMarkdownView();
-        } 
+        }
         // If markdownRenderer() doesn't exist (Laravel versions before 10)
         else {
             /** @var Markdown $markdown */
