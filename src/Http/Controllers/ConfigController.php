@@ -6,6 +6,7 @@ use Edalzell\Forma\ConfigController as BaseConfigController;
 use Edalzell\Forma\Events\ConfigSaved;
 use Edalzell\Forma\Forma;
 use Illuminate\Http\Request;
+use Statamic\Extend\Addon;
 use Statamic\Facades\Blueprint as BlueprintAPI;
 use Statamic\Facades\Path;
 use Statamic\Facades\YAML;
@@ -18,6 +19,8 @@ class ConfigController extends BaseConfigController
     {
         $slug = $request->segment(2);
 
+        $addon = Forma::findBySlug($slug);
+
         $blueprint = $this->getBlueprint($slug);
 
         $fields = $blueprint
@@ -29,6 +32,7 @@ class ConfigController extends BaseConfigController
             'blueprint' => $blueprint->toPublishArray(),
             'meta' => $fields->meta(),
             'route' => cp_route("{$slug}.config.update", ['handle' => $slug]),
+            'title' => $this->cpTitle($addon),
             'values' => $fields->values(),
         ]);
     }
@@ -76,5 +80,10 @@ class ConfigController extends BaseConfigController
 
             return $value;
         })->toArray();
+    }
+
+    private function cpTitle(Addon $addon)
+    {
+        return __(':name Settings', ['name' => $addon->name()]);
     }
 }

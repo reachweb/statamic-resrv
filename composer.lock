@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "406705b3a96a76284e5172fa310f66a6",
+    "content-hash": "53b8ec58ff2e47c1820c880591f7d2ef",
     "packages": [
         {
             "name": "ajthinking/archetype",
@@ -1398,21 +1398,21 @@
         },
         {
             "name": "edalzell/forma",
-            "version": "v2.0.1",
+            "version": "v2.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/edalzell/statamic-forma.git",
-                "reference": "1894d7747b7d5f7215ae4c8687f0710e8b002e4d"
+                "reference": "e4973bc1306ddaaaed0b8a89bdae548208acd639"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/edalzell/statamic-forma/zipball/1894d7747b7d5f7215ae4c8687f0710e8b002e4d",
-                "reference": "1894d7747b7d5f7215ae4c8687f0710e8b002e4d",
+                "url": "https://api.github.com/repos/edalzell/statamic-forma/zipball/e4973bc1306ddaaaed0b8a89bdae548208acd639",
+                "reference": "e4973bc1306ddaaaed0b8a89bdae548208acd639",
                 "shasum": ""
             },
             "require": {
                 "laravel/framework": "^9.6 || ^10.0",
-                "php": "^8.2",
+                "php": "^8.0",
                 "statamic/cms": "^4.0",
                 "stillat/proteus": "^2.0"
             },
@@ -1454,9 +1454,9 @@
             "description": "Give control panel access to your addon's config",
             "support": {
                 "issues": "https://github.com/edalzell/statamic-forma/issues",
-                "source": "https://github.com/edalzell/statamic-forma/tree/v2.0.1"
+                "source": "https://github.com/edalzell/statamic-forma/tree/v2.1"
             },
-            "time": "2023-05-16T22:10:21+00:00"
+            "time": "2023-07-19T00:57:51+00:00"
         },
         {
             "name": "egulias/email-validator",
