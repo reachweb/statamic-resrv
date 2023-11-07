@@ -163,4 +163,10 @@ export default {
 .vm--modal {
     overflow: visible !important;
 }
+.v-select .vs__selected-options {
+    flex-wrap: wrap;
+}
+.v-select:not(.vs--single) .vs__selected {
+    margin-bottom: 0.25rem;
+}
 </style>
