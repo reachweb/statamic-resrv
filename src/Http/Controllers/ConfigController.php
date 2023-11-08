@@ -43,6 +43,8 @@ class ConfigController extends BaseConfigController
 
         $blueprint = $this->getBlueprint($slug);
 
+        $addon = Forma::findBySlug($slug);
+
         // Get a Fields object, and populate it with the submitted values.
         $fields = $blueprint->fields()->addValues($request->all());
 
@@ -54,7 +56,7 @@ class ConfigController extends BaseConfigController
 
         ConfigWriter::writeMany('resrv-config', $data);
 
-        ConfigSaved::dispatch($data);
+        ConfigSaved::dispatch($data, $addon);
     }
 
     private function getBlueprint(string $slug): Blueprint
