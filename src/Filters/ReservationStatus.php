@@ -6,7 +6,7 @@ use Statamic\Query\Scopes\Filter;
 
 class ReservationStatus extends Filter
 {
-    //protected $pinned = true;
+    protected $pinned = true;
 
     public function fieldItems()
     {

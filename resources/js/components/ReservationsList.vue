@@ -16,10 +16,13 @@
                 <div class="card overflow-hidden p-0 relative">
                     <div class="flex flex-wrap items-center justify-between px-2 pb-2 text-sm border-b">
                         <data-list-filter-presets
-                            v-if="!reordering"
                             ref="presets"
                             :active-preset="activePreset"
+                            :active-preset-payload="activePresetPayload"
+                            :active-filters="activeFilters"
+                            :has-active-filters="hasActiveFilters"
                             :preferences-prefix="preferencesPrefix"
+                            :search-query="searchQuery"
                             @selected="selectPreset"
                             @reset="filtersReset"
                         />
@@ -35,6 +38,7 @@
 
                     <div>
                         <data-list-filters
+                            ref="filters"
                             :filters="filters"
                             :active-preset="activePreset"
                             :active-preset-payload="activePresetPayload"
@@ -42,14 +46,12 @@
                             :active-filter-badges="activeFilterBadges"
                             :active-count="activeFilterCount"
                             :search-query="searchQuery"
+                            :is-searching="true"
                             :saves-presets="true"
                             :preferences-prefix="preferencesPrefix"
-                            @filter-changed="filterChanged"
-                            @search-changed="searchChanged"
+                            @changed="filterChanged"
                             @saved="$refs.presets.setPreset($event)"
                             @deleted="$refs.presets.refreshPresets()"
-                            @restore-preset="$refs.presets.viewPreset($event)"
-                            @reset="filtersReset"
                         />
                     </div>
 
