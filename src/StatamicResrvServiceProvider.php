@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
+use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Controllers\AdvancedAvailabilityController;
 use Reach\StatamicResrv\Http\Controllers\AvailabilityController;
@@ -50,6 +51,7 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
     ];
 
     protected $scopes = [
+        ReservationStartingDate::class,
         ReservationStatus::class,
     ];
 

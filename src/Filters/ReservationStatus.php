@@ -8,6 +8,11 @@ class ReservationStatus extends Filter
 {
     protected $pinned = true;
 
+    public static function title()
+    {
+        return __('Status');
+    }
+
     public function fieldItems()
     {
         return [
