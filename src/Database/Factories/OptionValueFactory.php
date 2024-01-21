@@ -22,7 +22,7 @@ class OptionValueFactory extends Factory
     public function definition()
     {
         return [
-            'name'=> $this->faker->sentence(3),
+            'name' => $this->faker->sentence(3),
             'option_id' => '',
             'price' => '22.75',
             'price_type' => 'perday',

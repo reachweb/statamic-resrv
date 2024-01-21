@@ -5,12 +5,12 @@ namespace Reach\StatamicResrv\Traits;
 trait HandlesComparisons
 {
     private $operator = [
-        '=='  => 'equal',
-        '!='  => 'notEqual',
-        '>'   => 'greaterThan',
-        '<'   => 'lessThan',
-        '>='   => 'greaterOrEqualThan',
-        '<='   => 'lessOrEqualThan',
+        '==' => 'equal',
+        '!=' => 'notEqual',
+        '>' => 'greaterThan',
+        '<' => 'lessThan',
+        '>=' => 'greaterOrEqualThan',
+        '<=' => 'lessOrEqualThan',
     ];
 
     protected function compare($value_a, $operation, $value_b)

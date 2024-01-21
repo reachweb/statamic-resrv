@@ -30,7 +30,7 @@ use Statamic\Providers\AddonServiceProvider;
 class StatamicResrvServiceProvider extends AddonServiceProvider
 {
     protected $routes = [
-        'cp'  => __DIR__.'/../routes/cp.php',
+        'cp' => __DIR__.'/../routes/cp.php',
         'web' => __DIR__.'/../routes/web.php',
     ];
 
@@ -54,21 +54,21 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
     ];
 
     protected $listen = [
-        ReservationCreated::class  => [
+        ReservationCreated::class => [
             AddReservationIdToSession::class,
             DecreaseAvailability::class,
         ],
-        ReservationExpired::class  => [
+        ReservationExpired::class => [
             IncreaseAvailability::class,
         ],
-        ReservationConfirmed::class  => [
+        ReservationConfirmed::class => [
             SendNewReservationEmails::class,
         ],
-        ReservationRefunded::class  => [
+        ReservationRefunded::class => [
             SendRefundReservationEmails::class,
             IncreaseAvailability::class,
         ],
-        AvailabilitySearch::class  => [
+        AvailabilitySearch::class => [
             SaveSearchToSession::class,
         ],
         \Statamic\Events\EntryDeleted::class => [

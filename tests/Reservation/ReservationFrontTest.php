@@ -1184,7 +1184,7 @@ class ReservationFrontTest extends TestCase
     public function test_array_of_stripe_keys()
     {
         Config::set('resrv-config.stripe_secret_key', [
-            'pages' =>'sk_test_some-key',
+            'pages' => 'sk_test_some-key',
             'other-collection' => 'sk_test_some-other-key',
         ]);
 

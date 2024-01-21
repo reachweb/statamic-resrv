@@ -23,7 +23,7 @@ class LocationFactory extends Factory
     {
         return [
             'id' => '1',
-            'name'=> 'Location',
+            'name' => 'Location',
             'slug' => 'location',
             'extra_charge' => '5.72',
             'order' => 1,

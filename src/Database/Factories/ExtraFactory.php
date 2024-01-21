@@ -23,7 +23,7 @@ class ExtraFactory extends Factory
     {
         return [
             'id' => '1',
-            'name'=> 'This is an extra',
+            'name' => 'This is an extra',
             'slug' => 'this-is-an-extra',
             'price' => '4.65',
             'price_type' => 'perday',
@@ -39,7 +39,7 @@ class ExtraFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'id' => '2',
-                'name'=> 'This is a fixed extra',
+                'name' => 'This is a fixed extra',
                 'slug' => 'this-is-a-fixed-extra',
                 'price' => '25',
                 'price_type' => 'fixed',
@@ -52,7 +52,7 @@ class ExtraFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'id' => '3',
-                'name'=> 'This is a relative extra',
+                'name' => 'This is a relative extra',
                 'slug' => 'this-is-a-relative-extra',
                 'price' => '0.5',
                 'price_type' => 'relative',

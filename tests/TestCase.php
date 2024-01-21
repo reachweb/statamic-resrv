@@ -100,7 +100,7 @@ class TestCase extends OrchestraTestCase
         $app['config']->set('statamic.users.repository', 'file');
         $app['config']->set('statamic.stache.watcher', false);
         $app['config']->set('statamic.stache.stores.users', [
-            'class'     => UsersStore::class,
+            'class' => UsersStore::class,
             'directory' => __DIR__.'/__fixtures/users',
         ]);
         // Set the path for our forms

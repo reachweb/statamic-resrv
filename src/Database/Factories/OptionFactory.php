@@ -22,7 +22,7 @@ class OptionFactory extends Factory
     public function definition()
     {
         return [
-            'name'=> 'Reservation option',
+            'name' => 'Reservation option',
             'slug' => 'reservation-option',
             'description' => 'Select this option to improve your experience!',
             'required' => true,

@@ -23,7 +23,7 @@ class AdvancedAvailabilityFactory extends Factory
     {
         return [
             'statamic_id' => '',
-            'date'=> today(),
+            'date' => today(),
             'available' => 2,
             'price' => '150',
             'property' => 'something',

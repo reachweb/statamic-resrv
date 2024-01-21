@@ -23,7 +23,7 @@ class FixedPricingFactory extends Factory
     {
         return [
             'statamic_id' => '',
-            'days'=> 3,
+            'days' => 3,
             'price' => '77.35',
         ];
     }
