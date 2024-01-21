@@ -2,9 +2,9 @@
 
 namespace Reach\StatamicResrv\Filters;
 
-use Statamic\Query\Scopes\Filter;
-use Reach\StatamicResrv\Models\Reservation;
 use Carbon\Carbon;
+use Reach\StatamicResrv\Models\Reservation;
+use Statamic\Query\Scopes\Filter;
 
 class ReservationStartingDate extends Filter
 {
@@ -33,7 +33,7 @@ class ReservationStartingDate extends Filter
 
     public function badge($values)
     {
-        return $values['date'];       
+        return $values['date'];
     }
 
     public function visibleTo($key)
