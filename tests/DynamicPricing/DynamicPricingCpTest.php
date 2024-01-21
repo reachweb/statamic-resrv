@@ -31,7 +31,6 @@ class DynamicPricingCpTest extends TestCase
 
         $response = $this->get(cp_route('resrv.dynamicpricings.index'));
         $response->assertStatus(200)->assertSee('dynamic-pricing');
-        
     }
 
     public function test_can_add_dynamic_pricing_for_statamic_item()
