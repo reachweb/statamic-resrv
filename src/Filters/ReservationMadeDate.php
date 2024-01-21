@@ -6,15 +6,15 @@ use Carbon\Carbon;
 use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Query\Scopes\Filter;
 
-class ReservationStartingDate extends Filter
+class ReservationMadeDate extends Filter
 {
     use FiltersByDate;
 
-    protected static $handle = 'date_start';
+    protected static $handle = 'created_at';
 
     public static function title()
     {
-        return __('Reservation start date');
+        return __('Reservation made date');
     }
 
     public function visibleTo($key)
