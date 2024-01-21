@@ -12,6 +12,7 @@ class PriceTest extends TestCase
     {
         $price = Price::create(22.76);
         $this->assertInstanceOf(PriceClass::class, $price);
+        $this->assertTrue(true);
     }
 
     public function test_price_format()
@@ -19,6 +20,7 @@ class PriceTest extends TestCase
         $price = Price::create(22.76);
         $format = $price->format();
         $this->assertSame($format, '22.76');
+        $this->assertTrue(true);
     }
 
     public function test_price_addition()
@@ -71,6 +73,7 @@ class PriceTest extends TestCase
         $price1 = Price::create(100);
         $result = $price1->percent(30);
         $this->assertEquals($result, Price::create(30));
+        $this->assertTrue(true);
     }
 
     public function test_price_equals()

@@ -31,6 +31,8 @@ class UtilitiesTest extends TestCase
         $response->assertSessionHas([
             'resrv_search' => $searchPayload,
         ]);
+
+        $this->assertTrue(true);
     }
 
     public function test_get_saved_availability_via_endpoint()
@@ -68,6 +70,8 @@ class UtilitiesTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
 
         $response->assertSessionMissing('resrv_search');
+
+        $this->assertTrue(true);
     }
 
     public function test_token_method()
@@ -87,6 +91,7 @@ class UtilitiesTest extends TestCase
     {
         $response = $this->post(route('resrv.utility.addCoupon'), ['coupon' => '20OFF']);
         $response->assertStatus(412);
+        $this->assertTrue(true);
     }
 
     public function test_can_remove_coupon()
