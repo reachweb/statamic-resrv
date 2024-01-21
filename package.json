@@ -14,9 +14,9 @@
         "postcss-import": "^14.1.0",
         "postcss-nested": "^5.0.6",
         "postcss-preset-env": "^7.4.3",
-        "vue": "^2.6.14",
-        "vue-loader": "^17.4.2",
-        "vue-template-compiler": "^2.6.11"
+        "vue": "^2.7.16",
+        "vue-loader": "^15.11.1",
+        "vue-template-compiler": "^2.7.16"
     },
     "dependencies": {
         "@fullcalendar/core": "^6.1.0",
