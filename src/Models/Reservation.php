@@ -87,6 +87,7 @@ class Reservation extends Model
     public function getEntryAttribute()
     {
         $entry = Entry::find($this->item_id);
+
         return $entry ? $entry->toAugmentedArray(['title', 'permalink', 'api_url']) : $this->emptyEntry();
     }
 
