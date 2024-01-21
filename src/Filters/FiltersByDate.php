@@ -46,7 +46,7 @@ trait FiltersByDate
         $operator = $values['operator'];
 
         if ($operator == 'between') {
-            if (!isset($values['range_value']['date']['start']) || !isset($values['range_value']['date']['end'])) {
+            if (! isset($values['range_value']['date']['start']) || ! isset($values['range_value']['date']['end'])) {
                 return;
             }
 
@@ -56,7 +56,7 @@ trait FiltersByDate
             return;
         }
 
-        if (!isset($values['value'])) {
+        if (! isset($values['value'])) {
             return;
         }
 
@@ -71,14 +71,16 @@ trait FiltersByDate
         $translatedOperator = Arr::get($this->fieldItems(), "operator.options.{$operator}");
 
         if ($operator == 'between') {
-            if (!isset($values['range_value']['date']['start']) || !isset($values['range_value']['date']['end'])) {
+            if (! isset($values['range_value']['date']['start']) || ! isset($values['range_value']['date']['end'])) {
                 return;
             }
+
             return self::title().' '.strtolower($translatedOperator).' '.$values['range_value']['date']['start'].' '.__('and').' '.$values['range_value']['date']['end'];
         }
-        if (!isset($values['value'])) {
+        if (! isset($values['value'])) {
             return;
         }
+
         return self::title().' '.strtolower($translatedOperator).' '.$values['value']['date'];
     }
 }
