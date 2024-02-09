@@ -1,5 +1,10 @@
 <template>
     <div>
+    <div class="w-full flex justify-end mb-4">
+        <button class="btn-primary" @click="addLocation">
+            Add Location
+        </button>
+    </div>
     <div class="w-full h-full" v-if="locationsLoaded">
         <vue-draggable class="mt-4 space-y-2" v-model="locations" @start="drag=true" @end="drag=false" @change="order">
             <div
@@ -20,11 +25,6 @@
                 </div>
             </div>
         </vue-draggable>
-    </div>
-    <div class="w-full mt-4">
-        <button class="btn-primary" @click="addLocation">
-            Add Location
-        </button>
     </div>
     <locations-panel            
         v-if="showPanel"

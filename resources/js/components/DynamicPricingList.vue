@@ -1,5 +1,10 @@
 <template>
     <div>
+    <div class="w-full flex justify-end mb-4">
+        <button class="btn-primary" @click="addPricing">
+            Add Dynamic Pricing
+        </button>
+    </div>
     <div class="w-full h-full" v-if="dynamicPricingLoaded">
         <vue-draggable class="mt-4 space-y-2" v-model="dynamicPricings" @start="drag=true" @end="drag=false" @change="order">
             <div
@@ -19,11 +24,6 @@
                 </div>
             </div>
         </vue-draggable>
-    </div>
-    <div class="w-full mt-4">
-        <button class="btn-primary" @click="addPricing">
-            Add Dynamic Pricing
-        </button>
     </div>
     <dynamic-pricing-panel            
         v-if="showPanel"

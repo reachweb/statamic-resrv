@@ -1,5 +1,10 @@
 <template>
     <div>
+    <div class="w-full flex justify-end mb-4">
+        <button class="btn-primary" @click="addExtra">
+            Add extra
+        </button>
+    </div>
     <div class="w-full h-full" v-if="extrasLoaded">
         <vue-draggable class="mt-4 space-y-2" v-model="extras" @start="drag=true" @end="drag=false" @change="order">
             <div
@@ -28,11 +33,6 @@
                 </div>
             </div>
         </vue-draggable>
-    </div>
-    <div class="w-full mt-4">
-        <button class="btn-primary" @click="addExtra">
-            Add extra
-        </button>
     </div>
     <extras-panel            
         v-if="showPanel"
