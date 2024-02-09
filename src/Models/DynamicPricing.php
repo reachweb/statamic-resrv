@@ -352,6 +352,9 @@ class DynamicPricing extends Model
     protected function hasOverridingPolicy($pricings): bool|Collection
     {
         if ($pricing = $pricings->firstWhere('overrides_all', true)) {
+            if ($coupons = $pricings->whereNotNull('coupon')) {
+                return collect([$pricing])->merge($coupons);
+            }
             return collect([$pricing]);
         }
 

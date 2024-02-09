@@ -252,7 +252,7 @@
                                 <div class="form-group w-full 2xl:!w-1/2">
                                     <div class="mb-1 text-sm">
                                         <label class="font-semibold" for="name">Coupon</label>
-                                        <div class="text-sm font-light"><p>Dynamic pricing applied only if coupon is applied during checkout.</p></div>
+                                        <div class="text-sm font-light"><p>Dynamic pricing applied only if coupon is applied during checkout. Coupons get applied even if a another policy is set as overriding.</p></div>
                                     </div>
                                     <div class="w-full">
                                         <input class="input-text" name="name" type="text" v-model="submit.coupon">
