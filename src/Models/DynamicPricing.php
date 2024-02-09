@@ -355,6 +355,7 @@ class DynamicPricing extends Model
             if ($coupons = $pricings->whereNotNull('coupon')) {
                 return collect([$pricing])->merge($coupons);
             }
+
             return collect([$pricing]);
         }
 
