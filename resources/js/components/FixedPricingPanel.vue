@@ -1,6 +1,6 @@
 <template>
     <stack narrow name="statamic-resrv-fixed-pricing" @closed="close">
-        <div slot-scope="{ close }" class="bg-gray-100 h-full flex flex-col">
+        <div slot-scope="{ close }" class="bg-gray-100 h-full overflow-scroll overflow-x-auto flex flex-col">
             <header class="bg-white pl-6 pr-3 py-2 mb-4 border-b shadow-md text-lg font-medium flex items-center justify-between">
                 {{ __('Fixed pricing') }}
                 <button type="button" class="btn-close" @click="close">×</button>

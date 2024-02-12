@@ -1,6 +1,6 @@
 <template>
     <stack name="statamic-resrv-extra-mass-assign" @closed="close">
-        <div slot-scope="{ close }" class="h-full overflow-auto bg-gray-300">
+        <div slot-scope="{ close }" class="h-full overflow-scroll overflow-x-auto bg-gray-300">
             <header class="flex items-center sticky top-0 inset-x-0 bg-white shadow px-8 py-2 z-1 h-13">
                 <div class="flex-1 flex items-center text-xl">{{ __('Mass assign') }}  <span class="font-bold ml-2">{{ data.name }}</span></div>                
                 <button type="button" class="text-gray-700 hover:text-gray-800 mr-6 text-sm" @click="close">Cancel</button>
