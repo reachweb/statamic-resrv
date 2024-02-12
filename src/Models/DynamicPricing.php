@@ -110,6 +110,11 @@ class DynamicPricing extends Model
     protected static function booted()
     {
         static::addGlobalScope(new OrderScope);
+
+        static::saved(function () {
+            Cache::forget('dynamic_pricing_table');
+            Cache::forget('dynamic_pricing_assignments_table');
+        });
     }
 
     public function apply($price)
