@@ -133,7 +133,7 @@ export default {
             available: null,
             price: null,
             successMessage: 'Availability successfully saved',
-            postUrl: (this.property ? '/cp/resrv/advancedavailability' :'/cp/resrv/availability'),
+            postUrl: '/cp/resrv/availability',
             method: 'post',
             selectedProperty: (this.property ? this.property : null)
         }
