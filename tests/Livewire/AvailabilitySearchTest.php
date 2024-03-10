@@ -2,10 +2,10 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
-use Reach\StatamicResrv\Livewire\AvailabilitySearch;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Reach\StatamicResrv\Tests\TestCase;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Livewire\AvailabilitySearch;
+use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilitySearchTest extends TestCase
 {
