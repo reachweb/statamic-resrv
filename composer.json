@@ -31,7 +31,8 @@
         "stripe/stripe-php": "^7.77",
         "moneyphp/money": "^4.0",
         "spatie/simple-excel": "^3.2",
-        "edalzell/forma": "^2.1"
+        "edalzell/forma": "^2.1",
+        "livewire/livewire": "^3.4"
     },
     "require-dev": {
         "phpunit/phpunit": "^9.0 || ^10.0",
