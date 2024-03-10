@@ -49,6 +49,8 @@ trait CreatesEntries
         $this->entries[] = $this->makeStatamicItemWithAvailability(available: 0);
         $this->entries[] = $this->makeStatamicItemWithAvailability(available: 2);
         $this->entries[] = $this->makeStatamicItemWithAvailability(available: 1, price: 35);
+
+        return $this->entries;
     }
 
     public function createAdvancedEntries()
@@ -57,5 +59,7 @@ trait CreatesEntries
         $this->entries[] = $this->makeStatamicItemWithAvailability(available: 0, advanced: 'test');
         $this->entries[] = $this->makeStatamicItemWithAvailability(available: 2, advanced: 'test');
         $this->entries[] = $this->makeStatamicItemWithAvailability(available: 1, price: 35, advanced: 'test');
+
+        return $this->entries;
     }
 }

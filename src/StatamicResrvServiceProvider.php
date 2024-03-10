@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv;
 
 use Illuminate\Support\Facades\Route;
+use Livewire\Livewire;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
@@ -150,6 +151,11 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         \Edalzell\Forma\Forma::add('reachweb/statamic-resrv', ConfigController::class);
 
         $this->bootPermissions();
+    }
+
+    private function bootLivewireComponents(): void
+    {
+        Livewire::component('availability-search', \Reach\StatamicResrv\Livewire\AvailabilitySearch::class);
     }
 
     private function createNavigation(): void
