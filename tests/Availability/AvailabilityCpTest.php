@@ -117,7 +117,7 @@ class AvailabilityCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 150,
-        ]);
+        ])->assertDatabaseCount('resrv_availabilities', 3);
 
         $newPayload = [
             'statamic_id' => $item->id(),
@@ -132,7 +132,7 @@ class AvailabilityCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 200,
-        ]);
+        ])->assertDatabaseCount('resrv_availabilities', 3);
     }
 
     public function test_availability_can_delete_for_date_range()

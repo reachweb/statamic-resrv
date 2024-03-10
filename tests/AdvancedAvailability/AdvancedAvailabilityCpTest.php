@@ -3,7 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Reach\StatamicResrv\Models\AdvancedAvailability;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AdvancedAvailabilityCpTest extends TestCase
@@ -20,7 +20,8 @@ class AdvancedAvailabilityCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
 
-        AdvancedAvailability::factory()
+        Availability::factory()
+            ->advanced()
             ->count(2)
             ->sequence(
                 ['date' => today()],
@@ -30,7 +31,7 @@ class AdvancedAvailabilityCpTest extends TestCase
                 ['statamic_id' => $item->id()]
             );
 
-        $response = $this->get(cp_route('resrv.advancedavailability.index', [$item->id(), 'something']));
+        $response = $this->get(cp_route('resrv.availability.index', [$item->id(), 'something']));
         $response->assertStatus(200)->assertSee($item->id());
     }
 
@@ -46,13 +47,48 @@ class AdvancedAvailabilityCpTest extends TestCase
             'price' => 150,
             'available' => 2,
         ];
-        $response = $this->post(cp_route('resrv.advancedavailability.update'), $payload);
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'property' => 'something',
         ]);
+    }
+
+    public function test_advanced_availability_can_update_for_date_range()
+    {
+        $item = $this->makeStatamicItem();
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'advanced' => [['code' => 'something']],
+            'available' => 6,
+        ];
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'price' => 150,
+        ])->assertDatabaseCount('resrv_availabilities', 3);
+
+        $newPayload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 200,
+            'advanced' => [['code' => 'something']],
+            'available' => 2,
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'price' => 200,
+        ])->assertDatabaseCount('resrv_availabilities', 3);
     }
 
     public function test_advanced_availability_can_add_mass_update_for_date_range()
@@ -67,24 +103,25 @@ class AdvancedAvailabilityCpTest extends TestCase
             'price' => 150,
             'available' => 2,
         ];
-        $response = $this->post(cp_route('resrv.advancedavailability.update'), $payload);
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'property' => 'something',
-        ]);
-        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+        ])->assertDatabaseCount('resrv_availabilities', 10);
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'property' => 'something-else',
-        ]);
+        ])->assertDatabaseCount('resrv_availabilities', 10);
     }
 
     public function test_advanced_availability_can_be_deleted_for_date_range()
     {
         $item = $this->makeStatamicItem();
 
-        AdvancedAvailability::factory()
+        Availability::factory()
+            ->advanced()
             ->count(2)
             ->sequence(
                 ['date' => today()->isoFormat('YYYY-MM-DD')],
@@ -94,7 +131,7 @@ class AdvancedAvailabilityCpTest extends TestCase
                 ['statamic_id' => $item->id()]
             );
 
-        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
         ]);
 
@@ -105,10 +142,10 @@ class AdvancedAvailabilityCpTest extends TestCase
             'advanced' => [['code' => 'something', 'label' => 'Some label here']],
         ];
 
-        $response = $this->delete(cp_route('resrv.advancedavailability.delete'), $payload);
+        $response = $this->delete(cp_route('resrv.availability.delete'), $payload);
         $response->assertStatus(200);
 
-        $this->assertDatabaseMissing('resrv_advanced_availabilities', [
+        $this->assertDatabaseMissing('resrv_availabilities', [
             'statamic_id' => $item->id(),
         ]);
     }

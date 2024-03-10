@@ -16,10 +16,8 @@ class AvailabilityFactory extends Factory
 
     /**
      * Define the model's default state.
-     *
-     * @return array
      */
-    public function definition()
+    public function definition(): array
     {
         return [
             'statamic_id' => '',
@@ -27,5 +25,14 @@ class AvailabilityFactory extends Factory
             'available' => 2,
             'price' => '150',
         ];
+    }
+
+    public function advanced()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'property' => 'something',
+            ];
+        });
     }
 }

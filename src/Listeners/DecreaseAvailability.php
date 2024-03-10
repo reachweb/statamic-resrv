@@ -19,7 +19,13 @@ class DecreaseAvailability
         if ($event->reservation->type === 'parent') {
             $this->decreaseMultiple($event);
         } else {
-            $this->availability->decrementAvailability($event->reservation->date_start, $event->reservation->date_end, $event->reservation->quantity, $event->reservation->property, $event->reservation->item_id);
+            $this->availability->decrementAvailability(
+                date_start: $event->reservation->date_start,
+                date_end: $event->reservation->date_end,
+                quantity: $event->reservation->quantity,
+                statamic_id: $event->reservation->item_id,
+                advanced: $event->reservation->property
+            );
         }
     }
 
@@ -27,7 +33,13 @@ class DecreaseAvailability
     {
         $childs = $event->reservation->childs()->get();
         $childs->each(function ($child) use ($event) {
-            $this->availability->decrementAvailability($child->date_start, $child->date_end, $child->quantity, $child->property, $event->reservation->item_id);
+            $this->availability->decrementAvailability(
+                date_start: $child->date_start,
+                date_end: $child->date_end,
+                quantity: $child->quantity,
+                statamic_id: $event->reservation->item_id,
+                advanced: $child->property
+            );
         });
     }
 }

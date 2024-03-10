@@ -15,11 +15,12 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
+use Statamic\Facades\Blueprint;
 use Statamic\Facades\Entry;
 
 class Availability extends Model implements AvailabilityContract
 {
-    use HasFactory, HandlesAvailabilityDates, HandlesPricing, HandlesMultisiteIds;
+    use HandlesAvailabilityDates, HandlesMultisiteIds, HandlesPricing, HasFactory;
 
     protected $table = 'resrv_availabilities';
 
@@ -29,7 +30,13 @@ class Availability extends Model implements AvailabilityContract
 
     protected $keyType = 'string';
 
-    protected $fillable = ['statamic_id', 'date', 'price', 'available'];
+    protected $fillable = [
+        'statamic_id',
+        'date',
+        'price',
+        'available',
+        'property',
+    ];
 
     protected $casts = [
         'price' => PriceClass::class,
@@ -48,6 +55,20 @@ class Availability extends Model implements AvailabilityContract
     public function getPriceAttribute($value)
     {
         return Price::create($value);
+    }
+
+    public function getPropertyLabel($handle, $collection, $slug)
+    {
+        $blueprint = Blueprint::find('collections.'.$collection.'.'.$handle);
+        if (! $blueprint->hasField('resrv_availability')) {
+            return false;
+        }
+        $properties = $blueprint->field('resrv_availability')->get('advanced_availability');
+        if (array_key_exists($slug, $properties)) {
+            return $properties[$slug];
+        }
+
+        return $slug;
     }
 
     public function getAvailableItems($data)
@@ -117,8 +138,13 @@ class Availability extends Model implements AvailabilityContract
         $this->initiateAvailabilityUnsafe($data);
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
-        $results = AvailabilityRepository::itemPricesBetween($this->date_start, $this->date_end, $this->advanced, $entry->id())
-        ->first();
+        $results = AvailabilityRepository::itemPricesBetween(
+            date_start: $this->date_start,
+            date_end: $this->date_end,
+            statamic_id: $entry->id(),
+            advanced: $this->advanced,
+        )
+            ->first();
 
         if (! $results) {
             return false;
@@ -148,11 +174,18 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getResultsForItem($entry)
     {
-        return AvailabilityRepository::itemAvailableBetween($this->date_start, $this->date_end, $this->duration, $this->quantity, $this->advanced, $entry->id())
+        return AvailabilityRepository::itemAvailableBetween(
+            date_start: $this->date_start,
+            date_end: $this->date_end,
+            duration: $this->duration,
+            quantity: $this->quantity,
+            statamic_id: $entry->id(),
+            advanced: $this->advanced
+        )
             ->get();
     }
 
-    public function decrementAvailability($date_start, $date_end, $quantity, $advanced, $statamic_id)
+    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, ?string $advanced)
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
@@ -161,10 +194,16 @@ class Availability extends Model implements AvailabilityContract
             'advanced' => $advanced,
         ]);
 
-        AvailabilityRepository::decrement($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
+        AvailabilityRepository::decrement(
+            date_start: $this->date_start,
+            date_end: $this->date_end,
+            quantity: $this->quantity,
+            statamic_id: $statamic_id,
+            advanced: $this->advanced
+        );
     }
 
-    public function incrementAvailability($date_start, $date_end, $quantity, $advanced, $statamic_id)
+    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, ?string $advanced)
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
@@ -173,12 +212,22 @@ class Availability extends Model implements AvailabilityContract
             'advanced' => $advanced,
         ]);
 
-        AvailabilityRepository::increment($this->date_start, $this->date_end, $this->quantity, $this->advanced, $statamic_id);
+        AvailabilityRepository::increment(date_start: $this->date_start,
+            date_end: $this->date_end,
+            quantity: $this->quantity,
+            statamic_id: $statamic_id,
+            advanced: $this->advanced
+        );
     }
 
-    public function deleteForDates($date_start, $date_end, $advanced, $statamic_id)
+    public function deleteForDates(string $date_start, string $date_end, string $statamic_id, ?array $advanced)
     {
-        AvailabilityRepository::delete($date_start, $date_end, $advanced, $statamic_id);
+        AvailabilityRepository::delete(
+            date_start: $date_start,
+            date_end: $date_end,
+            statamic_id: $statamic_id,
+            advanced: $advanced
+        );
     }
 
     protected function getAllAvailableItems()
@@ -370,7 +419,13 @@ class Availability extends Model implements AvailabilityContract
 
     protected function availableForDates()
     {
-        $results = AvailabilityRepository::availableBetween($this->date_start, $this->date_end, $this->duration, $this->quantity, $this->advanced)->get();
+        $results = AvailabilityRepository::availableBetween(
+            date_start: $this->date_start,
+            date_end: $this->date_end,
+            duration: $this->duration,
+            quantity: $this->quantity,
+            advanced: $this->advanced
+        )->get();
 
         if ($results->count() == 0) {
             return [];
