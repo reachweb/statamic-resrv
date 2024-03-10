@@ -2,8 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests;
 
-use Facades\Reach\StatamicResrv\Tests\Factories\EntryFactory;
-
 trait CreatesEntries
 {
     public $entries = [];
