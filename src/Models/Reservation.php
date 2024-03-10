@@ -73,7 +73,7 @@ class Reservation extends Model
         if ($this->property == null) {
             return '';
         }
-        $availability = new AdvancedAvailability;
+        $availability = new Availability();
 
         if ($this->property instanceof Collection) {
             return $this->property->map(function ($item) use ($availability) {

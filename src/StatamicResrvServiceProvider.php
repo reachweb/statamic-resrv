@@ -13,7 +13,6 @@ use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
-use Reach\StatamicResrv\Http\Controllers\AdvancedAvailabilityController;
 use Reach\StatamicResrv\Http\Controllers\AvailabilityController;
 use Reach\StatamicResrv\Http\Controllers\ConfigController;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -24,7 +23,6 @@ use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
-use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Reach\StatamicResrv\Models\Availability;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
@@ -93,12 +91,8 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
     public function register()
     {
         $this->app->when(AvailabilityController::class)
-          ->needs(AvailabilityContract::class)
-          ->give(Availability::class);
-
-        $this->app->when(AdvancedAvailabilityController::class)
-          ->needs(AvailabilityContract::class)
-          ->give(AdvancedAvailability::class);
+            ->needs(AvailabilityContract::class)
+            ->give(Availability::class);
     }
 
     public function boot(): void
