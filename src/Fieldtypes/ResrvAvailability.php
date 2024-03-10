@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Fieldtypes;
 
-use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Reach\StatamicResrv\Models\Availability;
 use Statamic\Fields\Fieldtype;
 
@@ -14,11 +13,6 @@ class ResrvAvailability extends Fieldtype
     {
         if ($value != 'disabled') {
             $availability_data = Availability::entry($value)->where('available', '>', '0')->get();
-
-            // Retry for advanced availability
-            if ($availability_data->count() == 0 && config('resrv-config.enable_advanced_availability')) {
-                $availability_data = AdvancedAvailability::entry($value)->where('available', '>', '0')->get();
-            }
 
             if ($availability_data->count() == 0) {
                 return false;

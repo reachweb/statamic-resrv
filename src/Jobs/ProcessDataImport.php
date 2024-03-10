@@ -9,7 +9,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
-use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Reach\StatamicResrv\Models\Availability;
 
 class ProcessDataImport implements ShouldQueue
@@ -39,14 +38,12 @@ class ProcessDataImport implements ShouldQueue
                     ];
                     if ($advanced) {
                         $dayData['property'] = $data['advanced'];
+                    } else {
+                        $dayData['property'] = 'none';
                     }
                     $dataToAdd[] = $dayData;
                 }
-                if ($advanced) {
-                    AdvancedAvailability::upsert($dataToAdd, ['statamic_id', 'date', 'property'], ['price', 'available']);
-                } else {
-                    Availability::upsert($dataToAdd, ['statamic_id', 'date'], ['price', 'available']);
-                }
+                Availability::upsert($dataToAdd, ['statamic_id', 'date', 'property'], ['price', 'available']);
             });
         });
 

@@ -9,10 +9,15 @@ use Reach\StatamicResrv\Exceptions\AvailabilityException;
 trait HandlesAvailabilityDates
 {
     protected $date_start;
+
     protected $date_end;
+
     protected $duration;
+
     protected $quantity;
+
     protected $advanced;
+
     protected $round_trip;
 
     protected function useTime()
@@ -55,7 +60,7 @@ trait HandlesAvailabilityDates
     private function setAdvanced($data)
     {
         if (! Arr::exists($data, 'advanced')) {
-            $this->advanced = [];
+            $this->advanced = ['none'];
 
             return;
         }

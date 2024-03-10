@@ -62,12 +62,12 @@ class AvailabilityFrontTest extends TestCase
         // We should see item 1, 3 but not item 2
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)
-                    ->assertSee($item->id())
-                    ->assertSee('150')
-                    ->assertDontSee($item2->id())
-                    ->assertSee($item3->id())
-                    ->assertSee('210')
-                    ->assertSessionHas('resrv_search');
+            ->assertSee($item->id())
+            ->assertSee('150')
+            ->assertDontSee($item2->id())
+            ->assertSee($item3->id())
+            ->assertSee('210')
+            ->assertSessionHas('resrv_search');
 
         $response = $this->post(route('resrv.utility.refreshSearchSession'));
         $response->assertStatus(200)->assertSessionMissing('resrv_search');
@@ -150,6 +150,19 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('300');
 
+        // Add two days with lower price
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->toISOString(),
+            'date_end' => today()->add(1, 'day')->toISOString(),
+            'price' => 30,
+            'available' => 3,
+        ];
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('220');
+
         // Add a day with zero price
         $payload = [
             'statamic_id' => $item->id(),
@@ -161,7 +174,7 @@ class AvailabilityFrontTest extends TestCase
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
 
         $response = $this->post(route('resrv.availability.index'), $searchPayload);
-        $response->assertStatus(200)->assertSee($item->id())->assertSee('200');
+        $response->assertStatus(200)->assertSee($item->id())->assertSee('120');
     }
 
     public function test_availability_prices()

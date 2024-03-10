@@ -3,7 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Reach\StatamicResrv\Models\AdvancedAvailability;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AdvancedAvailabilityFrontTest extends TestCase
@@ -21,7 +21,8 @@ class AdvancedAvailabilityFrontTest extends TestCase
 
         $item = $this->makeStatamicItem();
 
-        AdvancedAvailability::factory()
+        Availability::factory()
+            ->advanced()
             ->count(2)
             ->sequence(
                 ['date' => today()],
@@ -39,11 +40,11 @@ class AdvancedAvailabilityFrontTest extends TestCase
             'advanced' => 'something',
         ];
 
-        $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('something')->assertSessionHas('resrv_search');
 
         // Test show route
-        $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('something');
 
         $searchPayload = [
@@ -52,7 +53,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
             'advanced' => 'something-else',
         ];
 
-        $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertDontSee($item->id());
     }
 
@@ -64,7 +65,8 @@ class AdvancedAvailabilityFrontTest extends TestCase
         $item2 = $this->makeStatamicItem();
         $item3 = $this->makeStatamicItem();
 
-        AdvancedAvailability::factory()
+        Availability::factory()
+            ->advanced()
             ->count(2)
             ->sequence(
                 ['date' => today()],
@@ -74,7 +76,8 @@ class AdvancedAvailabilityFrontTest extends TestCase
                 ['statamic_id' => $item->id()]
             );
 
-        AdvancedAvailability::factory()
+        Availability::factory()
+            ->advanced()
             ->count(2)
             ->sequence(
                 ['date' => today()],
@@ -88,7 +91,8 @@ class AdvancedAvailabilityFrontTest extends TestCase
                 ]
             );
 
-        AdvancedAvailability::factory()
+        Availability::factory()
+            ->advanced()
             ->count(2)
             ->sequence(
                 ['date' => today()],
@@ -110,7 +114,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
             'advanced' => 'any',
         ];
 
-        $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertSee($item3->id())->assertSee('something');
 
         $searchPayload = [
@@ -119,7 +123,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
             'advanced' => 'something|something-else',
         ];
 
-        $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertDontSee($item3->id())->assertSee('something')->assertSee('something-else');
     }
 
@@ -139,7 +143,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
             'advanced' => [['code' => 'something']],
         ];
 
-        $this->post(cp_route('resrv.advancedavailability.update'), $payload);
+        $this->post(cp_route('resrv.availability.update'), $payload);
 
         $payload = [
             'statamic_id' => $item2->id(),
@@ -150,7 +154,7 @@ class AdvancedAvailabilityFrontTest extends TestCase
             'advanced' => [['code' => 'something']],
         ];
 
-        $this->post(cp_route('resrv.advancedavailability.update'), $payload);
+        $this->post(cp_route('resrv.availability.update'), $payload);
 
         $this->travelTo(today()->setHour(11));
 
@@ -175,11 +179,11 @@ class AdvancedAvailabilityFrontTest extends TestCase
         ];
 
         // We should see if that it's available and the total price
-        $response = $this->post(route('resrv.advancedavailability.index'), $searchPayload);
+        $response = $this->post(route('resrv.availability.index'), $searchPayload);
         $response->assertStatus(200)->assertSee($item->id())->assertSee('200')->assertSee('something')->assertDontSee($item2->id());
 
         // Test the show method as well
-        $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('200')->assertSee('message":{"status":1}}', false);
     }
 }

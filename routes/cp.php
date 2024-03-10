@@ -3,13 +3,9 @@
 Route::namespace('\Reach\StatamicResrv\Http\Controllers')
     ->name('resrv.')
     ->group(function () {
-        Route::get('/resrv/availability/{statamic_id}', 'AvailabilityCpController@index')->name('availability.index');
+        Route::get('/resrv/availability/{statamic_id}/{property?}', 'AvailabilityCpController@index')->name('availability.index');
         Route::post('/resrv/availability', 'AvailabilityCpController@update')->name('availability.update');
         Route::delete('/resrv/availability', 'AvailabilityCpController@delete')->name('availability.delete');
-
-        Route::get('/resrv/advancedavailability/{statamic_id}/{property}', 'AdvancedAvailabilityCpController@index')->name('advancedavailability.index');
-        Route::post('/resrv/advancedavailability', 'AdvancedAvailabilityCpController@update')->name('advancedavailability.update');
-        Route::delete('/resrv/advancedavailability', 'AdvancedAvailabilityCpController@delete')->name('advancedavailability.delete');
 
         Route::get('/resrv/extras', 'ExtraCpController@indexCp')->name('extras.index');
         Route::get('/resrv/extra', 'ExtraCpController@index')->name('extra.index');

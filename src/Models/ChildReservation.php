@@ -34,7 +34,7 @@ class ChildReservation extends Model
         if ($this->property == null) {
             return '';
         }
-        $availability = new AdvancedAvailability;
+        $availability = new Availability;
 
         return $availability->getPropertyLabel($this->parent->entry()->blueprint, $this->parent->entry()->collection()->handle(), $this->property);
     }

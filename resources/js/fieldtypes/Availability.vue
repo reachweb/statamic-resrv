@@ -132,7 +132,7 @@ export default {
     watch: {
         property() {
             if (this.property !== null) {
-                this.getAdvancedAvailability()
+                this.getAvailability()
             } else {
                 this.clearAvailability()
                 this.calendar.destroy()
@@ -154,7 +154,7 @@ export default {
             }            
         },
         toggleAvailability() {
-            this.availabilityLoaded = !this.availabilityLoaded
+            this.availabilityLoaded = ! this.availabilityLoaded
         },
         renderDay(arg) {
             let arrayOfDomNodes = []
@@ -214,16 +214,16 @@ export default {
         },
         availabilitySaved() {
             this.toggleAvailability()
-            this.toggleModal()            
-            if (this.property !== null) {
-                this.getAdvancedAvailability()
-            } else {
-                this.getAvailability()
-            }
+            this.toggleModal()   
+            this.getAvailability()
             this.renderAgain()
         },
         getAvailability() {
-            axios.get('/cp/resrv/availability/'+this.meta.parent)
+            let url = '/cp/resrv/availability/'+this.meta.parent
+            if (this.property) {
+                url += '/'+this.property.code
+            }
+            axios.get(url)
             .then(response => {
                 this.availability = response.data
                 this.calendar.render()
@@ -231,17 +231,6 @@ export default {
             })
             .catch(error => {
                 this.$toast.error('Cannot retrieve availability')
-            })
-        },
-        getAdvancedAvailability() {
-            axios.get('/cp/resrv/advancedavailability/'+this.meta.parent+'/'+this.property.code)
-            .then(response => {
-                this.availability = response.data
-                this.calendar.render()
-                this.toggleAvailability()
-            })
-            .catch(error => {
-                this.$toast.error('Cannot retrieve advanced availability')
             })
         },
         clearAvailability() {

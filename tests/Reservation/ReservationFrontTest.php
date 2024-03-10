@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\ReservationMade;
-use Reach\StatamicResrv\Models\AdvancedAvailability;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCondition;
@@ -851,7 +850,8 @@ class ReservationFrontTest extends TestCase
         $item = $this->makeStatamicItem();
         $this->signInAdmin();
 
-        AdvancedAvailability::factory()
+        Availability::factory()
+            ->advanced()
             ->count(2)
             ->sequence(
                 ['date' => today()],
@@ -869,7 +869,7 @@ class ReservationFrontTest extends TestCase
             'advanced' => 'something',
         ];
 
-        $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('300')->assertSee('message":{"status":1}}', false);
 
         $payment = json_decode($response->content())->data->payment;
@@ -894,7 +894,7 @@ class ReservationFrontTest extends TestCase
             'property' => 'something',
         ]);
 
-        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'available' => 1,
             'property' => 'something',
@@ -1090,7 +1090,7 @@ class ReservationFrontTest extends TestCase
             'advanced' => [['code' => 'something']],
         ];
 
-        $response = $this->post(cp_route('resrv.advancedavailability.update'), $payload);
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
         $this->travelTo(today()->setHour(11));
@@ -1115,7 +1115,7 @@ class ReservationFrontTest extends TestCase
             ],
         ];
 
-        $response = $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);
+        $response = $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('200')->assertSee('message":{"status":1}}', false);
 
         $payment = json_decode($response->content())->data->payment;
@@ -1155,12 +1155,12 @@ class ReservationFrontTest extends TestCase
             'reservation_id' => 1,
         ]);
         // Check that only the needed availabities are decreased
-        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'date' => today()->setHour(12)->isoFormat('YYYY-MM-DD'),
             'available' => 1,
         ]);
-        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'date' => today()->setHour(12)->add(2, 'day')->isoFormat('YYYY-MM-DD'),
             'available' => 2,
@@ -1168,9 +1168,9 @@ class ReservationFrontTest extends TestCase
 
         // Check that the reservation expires and availability is back
         $this->travel(15)->minutes();
-        $this->post(route('resrv.advancedavailability.show', $item->id()), $searchPayload);
+        $this->post(route('resrv.availability.show', $item->id()), $searchPayload);
 
-        $this->assertDatabaseHas('resrv_advanced_availabilities', [
+        $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'date' => today()->setHour(12)->isoFormat('YYYY-MM-DD'),
             'available' => 2,
