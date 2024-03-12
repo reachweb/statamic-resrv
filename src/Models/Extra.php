@@ -16,7 +16,7 @@ use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Extra extends Model
 {
-    use HasFactory, HandlesOrdering, HandlesAvailabilityDates, HandlesMultisiteIds, SoftDeletes;
+    use HandlesAvailabilityDates, HandlesMultisiteIds, HandlesOrdering, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_extras';
 
@@ -119,7 +119,7 @@ class Extra extends Model
     public function scopeEntries($query)
     {
         return DB::table('resrv_statamicentry_extra')
-                ->where('extra_id', $this->id);
+            ->where('extra_id', $this->id);
     }
 
     public function scopeEntriesWithConditions($query, $entry)

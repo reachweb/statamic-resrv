@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\DB;
 class Report
 {
     protected $date_start;
+
     protected $date_end;
+
     protected $reservations;
 
     public function __construct($date_start, $date_end)

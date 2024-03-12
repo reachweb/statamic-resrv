@@ -13,6 +13,7 @@ class ReservationResource extends ResourceCollection
     use HasRequestedColumns;
 
     protected $blueprint;
+
     protected $columns;
 
     public function __construct($resource)

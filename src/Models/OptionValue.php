@@ -13,7 +13,7 @@ use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 
 class OptionValue extends Model
 {
-    use HasFactory, HandlesAvailabilityDates, SoftDeletes;
+    use HandlesAvailabilityDates, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_options_values';
 

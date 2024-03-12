@@ -196,13 +196,13 @@ class ExtraCpController extends Controller
     public function entries($extra_id)
     {
         $entryIds = $this->extra->find($extra_id)
-                    ->entries()
-                    ->get()
-                    ->map(fn ($item) => $item->statamicentry_id);
+            ->entries()
+            ->get()
+            ->map(fn ($item) => $item->statamicentry_id);
 
         $entries = Entry::query()
-                    ->whereIn('id', $entryIds->toArray())
-                    ->get(['id', 'title']);
+            ->whereIn('id', $entryIds->toArray())
+            ->get(['id', 'title']);
 
         return response()->json($entries);
     }

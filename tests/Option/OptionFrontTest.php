@@ -21,11 +21,11 @@ class OptionFrontTest extends TestCase
         $this->signInAdmin();
         $item = $this->makeStatamicItem();
         $option = Option::factory()
-                    ->state([
-                        'item_id' => $item->id(),
-                    ])
-                    ->has(OptionValue::factory()->count(3), 'values')
-                    ->create();
+            ->state([
+                'item_id' => $item->id(),
+            ])
+            ->has(OptionValue::factory()->count(3), 'values')
+            ->create();
 
         $this->travelTo(today()->setHour(11));
 

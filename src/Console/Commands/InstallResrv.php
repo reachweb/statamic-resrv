@@ -8,6 +8,7 @@ use Statamic\Console\RunsInPlease;
 class InstallResrv extends Command
 {
     use RunsInPlease;
+
     /**
      * The name and signature of the console command.
      *

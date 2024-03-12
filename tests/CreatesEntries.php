@@ -6,7 +6,7 @@ trait CreatesEntries
 {
     public $entries = [];
 
-    protected function makeStatamicItemWithAvailability(int $available = null, int $price = null, string $advanced = null)
+    protected function makeStatamicItemWithAvailability(?int $available = null, ?int $price = null, ?string $advanced = null)
     {
         $entryData = [
             'title' => fake()->sentence(),

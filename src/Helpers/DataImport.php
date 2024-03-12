@@ -118,10 +118,10 @@ class DataImport
         }
 
         $entry = $this->collection
-                ->queryEntries()
-                ->where($this->identifier, $value)
-                ->where('site', Site::default())
-                ->first();
+            ->queryEntries()
+            ->where($this->identifier, $value)
+            ->where('site', Site::default())
+            ->first();
         if ($entry) {
             return $entry->id();
         }

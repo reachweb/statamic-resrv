@@ -23,6 +23,7 @@ use Statamic\View\View;
 class ReservationController extends Controller
 {
     protected $reservation;
+
     protected $payment;
 
     public function __construct(Reservation $reservation, PaymentInterface $payment)
@@ -266,12 +267,12 @@ class ReservationController extends Controller
         }
 
         return (new View())
-           ->template('statamic-resrv::checkout.checkout_completed')
-           ->layout($layout ?? 'layout')
-           ->with([
-               'reservation' => $reservation,
-               'entry' => $reservation->entry(),
-           ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout completed']));
+            ->template('statamic-resrv::checkout.checkout_completed')
+            ->layout($layout ?? 'layout')
+            ->with([
+                'reservation' => $reservation,
+                'entry' => $reservation->entry(),
+            ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout completed']));
     }
 
     public function checkoutFailed(Request $request)
@@ -294,12 +295,12 @@ class ReservationController extends Controller
         }
 
         return (new View())
-           ->template('statamic-resrv::checkout.checkout_failed')
-           ->layout($layout ?? 'layout')
-           ->with([
-               'reservation' => $reservation,
-               'entry' => $reservation->entry(),
-           ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout failed']));
+            ->template('statamic-resrv::checkout.checkout_failed')
+            ->layout($layout ?? 'layout')
+            ->with([
+                'reservation' => $reservation,
+                'entry' => $reservation->entry(),
+            ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout failed']));
     }
 
     protected function validationRules($reservation)
@@ -393,16 +394,16 @@ class ReservationController extends Controller
         }
 
         return (new View())
-           ->template('statamic-resrv::checkout.checkout_start')
-           ->layout($layout ?? 'layout')
-           ->with([
-               'reservation' => $reservation,
-               'duration' => $reservation->duration(),
-               'prices' => $reservation->getPrices(),
-               'extras' => $extras->keyBy('slug'),
-               'options' => $options->keyBy('slug'),
-               'entry' => $reservation->entry(),
-               'form' => $this->reservation->checkoutForm($reservation->item_id),
-           ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout']));
+            ->template('statamic-resrv::checkout.checkout_start')
+            ->layout($layout ?? 'layout')
+            ->with([
+                'reservation' => $reservation,
+                'duration' => $reservation->duration(),
+                'prices' => $reservation->getPrices(),
+                'extras' => $extras->keyBy('slug'),
+                'options' => $options->keyBy('slug'),
+                'entry' => $reservation->entry(),
+                'form' => $this->reservation->checkoutForm($reservation->item_id),
+            ])->cascadeContent($checkoutEntry ?? collect(['title' => 'Checkout']));
     }
 }

@@ -19,6 +19,7 @@ class ReservationCpController extends Controller
     use QueriesFilters;
 
     protected $reservation;
+
     protected $payment;
 
     public function __construct(Reservation $reservation, PaymentInterface $payment)
@@ -48,10 +49,10 @@ class ReservationCpController extends Controller
         ]);
 
         $reservations = $this->reservation->whereDate('date_start', '>=', $data['start'])
-                        ->whereDate('date_end', '<=', $data['end'])
-                        ->where('status', 'confirmed')
-                        ->orderBy('date_start')
-                        ->get();
+            ->whereDate('date_end', '<=', $data['end'])
+            ->where('status', 'confirmed')
+            ->orderBy('date_start')
+            ->get();
 
         return response()->json(new ReservationCalendarResource($reservations));
     }
@@ -121,12 +122,12 @@ class ReservationCpController extends Controller
 
         return $this->reservation->where(function ($query) use ($searchTerm) {
             $query->where('customer', 'like', $searchTerm)
-            ->orWhere('id', 'like', $searchTerm)
-            ->orWhere('reference', 'like', $searchTerm)
-            ->orWhere('status', 'like', $searchTerm)
-            ->orWhere('created_at', 'like', $searchTerm)
-            ->orWhere('date_start', 'like', $searchTerm)
-            ->orWhere('date_end', 'like', $searchTerm);
+                ->orWhere('id', 'like', $searchTerm)
+                ->orWhere('reference', 'like', $searchTerm)
+                ->orWhere('status', 'like', $searchTerm)
+                ->orWhere('created_at', 'like', $searchTerm)
+                ->orWhere('date_start', 'like', $searchTerm)
+                ->orWhere('date_end', 'like', $searchTerm);
         });
     }
 }

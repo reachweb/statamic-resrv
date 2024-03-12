@@ -18,9 +18,9 @@ use Statamic\Support\Str;
 class TestCase extends OrchestraTestCase
 {
     use DatabaseMigrations;
-    use WithFaker;
-    use PreventSavingStacheItemsToDisk;
     use FakesViews;
+    use PreventSavingStacheItemsToDisk;
+    use WithFaker;
 
     protected function setUp(): void
     {
@@ -92,7 +92,7 @@ class TestCase extends OrchestraTestCase
         ];
 
         foreach ($configs as $config) {
-            $app['config']->set("statamic.$config", require(__DIR__."/../vendor/statamic/cms/config/{$config}.php"));
+            $app['config']->set("statamic.$config", require (__DIR__."/../vendor/statamic/cms/config/{$config}.php"));
         }
 
         //$app['config']->set("resrv-config", require(__DIR__."/../config/config.php"));
@@ -138,7 +138,7 @@ class TestCase extends OrchestraTestCase
         return $user;
     }
 
-    public function makeStatamicItem(array $data = null)
+    public function makeStatamicItem(?array $data = null)
     {
         $entryData = [
             'title' => $data['title'] ?? 'Test Statamic Item',
