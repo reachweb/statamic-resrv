@@ -2,8 +2,8 @@
 
 namespace Reach\StatamicResrv\Rules;
 
-use Closure;
 use Carbon\Carbon;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 class ResrvMinimumDate implements ValidationRule

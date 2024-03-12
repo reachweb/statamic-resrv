@@ -18,21 +18,20 @@ class AvailabilityData extends Form
         return [
             'dates' => ['required', 'array'],
             'dates.date_start' => [
-                'required', 
-                'date', 
-                'before:dates.date_end', 
+                'required',
+                'date',
+                'before:dates.date_end',
                 'after_or_equal:today',
                 new ResrvMinimumDate,
             ],
             'dates.date_end' => [
-                'required', 
-                'date', 
-                'after:dates.date_start', 
-                'after:today'
+                'required',
+                'date',
+                'after:dates.date_start',
+                'after:today',
             ],
             'quantity' => ['sometimes', 'integer'],
             'property' => ['nullable', 'string'],
         ];
     }
 }
-

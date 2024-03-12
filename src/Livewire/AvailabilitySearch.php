@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Livewire\Component;
-use Livewire\Attributes\Validate;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 
 class AvailabilitySearch extends Component
@@ -14,7 +13,7 @@ class AvailabilitySearch extends Component
     {
         $this->data->validate();
 
-        $this->dispatch('availability-search-updated', $this->data); 
+        $this->dispatch('availability-search-updated', $this->data);
     }
 
     public function render()
