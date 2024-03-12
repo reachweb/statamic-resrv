@@ -151,11 +151,14 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         \Edalzell\Forma\Forma::add('reachweb/statamic-resrv', ConfigController::class);
 
         $this->bootPermissions();
+
+        $this->bootLivewireComponents();
     }
 
     private function bootLivewireComponents(): void
     {
         Livewire::component('availability-search', \Reach\StatamicResrv\Livewire\AvailabilitySearch::class);
+        Livewire::component('availability-results', \Reach\StatamicResrv\Livewire\AvailabilityResults::class);
     }
 
     private function createNavigation(): void

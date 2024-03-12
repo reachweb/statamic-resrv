@@ -2,10 +2,14 @@
 
 namespace Reach\StatamicResrv\Tests;
 
+use Illuminate\Support\Collection as SupportCollection;
+use Illuminate\Support\Str;
+use Reach\StatamicResrv\Models\Availability;
+use Statamic\Entries\Entry;
+use Statamic\Facades\Collection;
+
 trait CreatesEntries
 {
-    public $entries = [];
-
     protected function makeStatamicItemWithAvailability(?int $available = null, ?int $price = null, ?string $advanced = null)
     {
         $entryData = [
@@ -20,8 +24,9 @@ trait CreatesEntries
         $entry = Entry::make()
             ->collection('pages')
             ->slug($slug)
-            ->data($entryData)
-            ->save();
+            ->data($entryData);
+
+        $entry->save();
 
         $availabilityData = [
             'available' => $available ?? 1,
@@ -43,23 +48,25 @@ trait CreatesEntries
         return $entry;
     }
 
-    public function createEntries()
+    public function createEntries(): SupportCollection
     {
-        $this->entries[] = $this->makeStatamicItemWithAvailability();
-        $this->entries[] = $this->makeStatamicItemWithAvailability(available: 0);
-        $this->entries[] = $this->makeStatamicItemWithAvailability(available: 2);
-        $this->entries[] = $this->makeStatamicItemWithAvailability(available: 1, price: 35);
+        $entries = collect();
+        $entries->push($this->makeStatamicItemWithAvailability());
+        $entries->push($this->makeStatamicItemWithAvailability(available: 0));
+        $entries->push($this->makeStatamicItemWithAvailability(available: 2));
+        $entries->push($this->makeStatamicItemWithAvailability(available: 1, price: 35));
 
-        return $this->entries;
+        return $entries;
     }
 
     public function createAdvancedEntries()
     {
-        $this->entries[] = $this->makeStatamicItemWithAvailability(advanced: 'test');
-        $this->entries[] = $this->makeStatamicItemWithAvailability(available: 0, advanced: 'test');
-        $this->entries[] = $this->makeStatamicItemWithAvailability(available: 2, advanced: 'test');
-        $this->entries[] = $this->makeStatamicItemWithAvailability(available: 1, price: 35, advanced: 'test');
+        $entries = collect();
+        $entries->push($this->makeStatamicItemWithAvailability(advanced: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(available: 0, advanced: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(available: 2, advanced: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(available: 1, price: 35, advanced: 'test'));
 
-        return $this->entries;
+        return $entries;
     }
 }
