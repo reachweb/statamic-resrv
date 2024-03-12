@@ -9,11 +9,27 @@ class AvailabilitySearch extends Component
 {
     public AvailabilityData $data;
 
-    public function updatedData()
+    public function mount(): void
+    {
+        if (session()->has('resrv-search')) {
+            $this->data->fillFromSession();
+            $this->updatedData();
+        }
+    }
+
+    public function updatedData(): void
     {
         $this->data->validate();
 
-        $this->dispatch('availability-search-updated', $this->data);
+        session()->put('resrv-search', $this->data->toArray());
+
+        $this->dispatch('availability-search-updated', [
+            'date_start' => $this->data->dates['date_start'],
+            'date_end' => $this->data->dates['date_end'],
+            'quantity' => $this->data->quantity,
+            'property' => $this->data->property,
+        ]
+        );
     }
 
     public function render()

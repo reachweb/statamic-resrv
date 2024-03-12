@@ -11,9 +11,22 @@ class AvailabilityData extends Form
 
     public int $quantity = 1;
 
-    public string $property;
+    public ?string $property = null;
 
-    public function rules()
+    public function fillFromSession(): void
+    {
+        $data = session('resrv-search');
+        $this->fill([
+            'dates' => [
+                'date_start' => $data['date_start'],
+                'date_end' => $data['date_end'],
+            ],
+            'quantity' => $data['quantity'] ?? 1,
+            'property' => $data['property'] ?? null,
+        ]);
+    }
+
+    public function rules(): array
     {
         return [
             'dates' => ['required', 'array'],

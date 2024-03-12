@@ -51,10 +51,13 @@ trait CreatesEntries
     public function createEntries(): SupportCollection
     {
         $entries = collect();
-        $entries->push($this->makeStatamicItemWithAvailability());
-        $entries->push($this->makeStatamicItemWithAvailability(available: 0));
-        $entries->push($this->makeStatamicItemWithAvailability(available: 2));
-        $entries->push($this->makeStatamicItemWithAvailability(available: 1, price: 35));
+        $entries->put('normal', $this->makeStatamicItemWithAvailability());
+        $entries->put('none-availabile', $this->makeStatamicItemWithAvailability(available: 0));
+        $entries->put('two-available', $this->makeStatamicItemWithAvailability(available: 2));
+        $entries->put('half-price', $this->makeStatamicItemWithAvailability(available: 1, price: 25));
+        $stopSalesEntry = $this->makeStatamicItemWithAvailability();
+        $stopSalesEntry->set('resrv_availability', 'disabled')->save();
+        $entries->put('stop-sales', $stopSalesEntry);
 
         return $entries;
     }

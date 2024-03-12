@@ -14,7 +14,7 @@ class AvailabilitySearchTest extends TestCase
     public function setUp(): void
     {
         parent::setUp();
-        $this->date = now()->setHour(12);
+        $this->date = now()->setTime(12, 0, 0);
     }
 
     /** @test */
@@ -39,8 +39,15 @@ class AvailabilitySearchTest extends TestCase
                     'date_end' => $this->date->copy()->add(1, 'day'),
                 ]
             )
-            ->assertDispatched('availability-search-updated')
-            ->assertStatus(200);
+            ->assertDispatched('availability-search-updated',
+                [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    'quantity' => 1,
+                    'property' => null,
+                ]
+            )
+            ->assertSessionHas('resrv-search');
     }
 
     /** @test */
@@ -94,7 +101,13 @@ class AvailabilitySearchTest extends TestCase
             ])
             ->set('data.quantity', 2)
             ->assertSet('data.quantity', 2)
-            ->assertDispatched('availability-search-updated')
+            ->assertDispatched('availability-search-updated',
+                [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    'quantity' => 2,
+                    'property' => null,
+                ])
             ->assertStatus(200);
     }
 
@@ -108,7 +121,37 @@ class AvailabilitySearchTest extends TestCase
             ])
             ->set('data.property', 'something')
             ->assertSet('data.property', 'something')
-            ->assertDispatched('availability-search-updated')
+            ->assertDispatched('availability-search-updated', [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                'quantity' => 1,
+                'property' => 'something',
+            ])
             ->assertStatus(200);
+    }
+
+    /** @test */
+    public function sets_search_from_session()
+    {
+        session(['resrv-search' => [
+            'date_start' => $this->date,
+            'date_end' => $this->date->copy()->add(1, 'day'),
+        ]]);
+
+        Livewire::test(AvailabilitySearch::class)
+            ->assertSet('data.dates',
+                [
+                    'date_start' => $this->date,
+                    'date_end' => $this->date->copy()->add(1, 'day'),
+                ]
+            )
+            ->assertDispatched('availability-search-updated',
+                [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    'quantity' => 1,
+                    'property' => null,
+                ]
+            );
     }
 }
