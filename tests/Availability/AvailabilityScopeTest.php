@@ -52,7 +52,6 @@ class AvailabilityScopeTest extends TestCase
         $this->assertContains($this->entries->get('two-available')->id(), $afterScope);
         $this->assertNotContains($this->entries->get('stop-sales')->id(), $afterScope);
         $this->assertContains($this->entries->get('half-price')->id(), $afterScope);
-
     }
 
     /** @test */
