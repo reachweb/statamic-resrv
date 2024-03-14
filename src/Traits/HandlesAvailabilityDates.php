@@ -86,8 +86,8 @@ trait HandlesAvailabilityDates
 
     public function initiateAvailability($data)
     {
-        $date_start = new Carbon($data['date_start']);
-        $date_end = new Carbon($data['date_end']);
+        $date_start = Carbon::parse($data['date_start']);
+        $date_end = Carbon::parse($data['date_end']);
 
         if ($date_start > $date_end) {
             throw new AvailabilityException(__('Your pickup date is before the drop-off date.'));

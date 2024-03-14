@@ -31,6 +31,14 @@ class AvailabilityResultsTest extends TestCase
     }
 
     /** @test */
+    public function can_set_extra_days_parameter()
+    {
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'extraDays' => 2])
+            ->assertSet('extraDays', 2)
+            ->assertStatus(200);
+    }
+
+    /** @test */
     public function listens_to_the_availability_search_updated_event()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
@@ -45,7 +53,17 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.data')
             ->assertViewHas('availability.data.price', '100.00')
             ->assertViewHas('availability.request')
-            ->assertViewHas('availability.request.days', 2);
+            ->assertViewHas('availability.request.days', 2)
+            ->dispatch('availability-search-updated',
+                [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(7, 'day')->toISOString(),
+                    'quantity' => 1,
+                    'property' => null,
+                ]
+            )
+            ->assertViewHas('availability.message')
+            ->assertViewHas('availability.message.status', false);
     }
 
     /** @test */
@@ -95,4 +113,54 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.message')
             ->assertViewHas('availability.message.status', false);
     }
+
+    /** @test */
+    public function returns_availability_for_extra_requested_days()
+    {
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'extraDays' => 2])
+            ->dispatch('availability-search-updated',
+                [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    'quantity' => 1,
+                    'property' => null,
+                ]
+            )
+            ->assertViewHasAll([
+                'availability.-2',
+                'availability.-1',
+                'availability.0',
+                'availability.+1',
+                'availability.+2',
+            ])
+            ->assertViewHas('availability.-2.message.status', false)
+            ->assertViewHas('availability.-1.message.status', false)
+            ->assertViewHas('availability.0.data.price', '100.00')
+            ->assertViewHas('availability.+1.data.price', '100.00')
+            ->assertViewHas('availability.+1.request.date_start', $this->date->copy()->addDays(1)->format('Y-m-d'))
+            ->assertViewHas('availability.+2.message.status', false);
+        }
+
+        /** @test */
+    public function returns_availability_for_extra_requested_days_with_offset()
+    {
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'extraDays' => 1, 'extraDaysOffset' => 1])
+            ->dispatch('availability-search-updated',
+                [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    'quantity' => 1,
+                    'property' => null,
+                ]
+            )
+            ->assertViewHasAll([
+                'availability.-1',
+                'availability.0',
+                'availability.+1',
+            ])
+            ->assertViewHas('availability.-1.message.status', false)
+            ->assertViewHas('availability.0.data.price', '50.00')
+            ->assertViewHas('availability.+1.data.price', '50.00')
+            ->assertViewHas('availability.+1.request.date_start', $this->date->copy()->addDays(2)->format('Y-m-d'));
+        }
 }
