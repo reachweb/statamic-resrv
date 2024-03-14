@@ -5,8 +5,8 @@ namespace Reach\StatamicResrv\Livewire;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use Livewire\Attributes\On;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Models\Availability;
@@ -37,10 +37,12 @@ class AvailabilityResults extends Component
     {
         if ($this->extraDays === 0) {
             $this->availability = collect($this->queryBaseAvailability($data));
+
             return;
         }
         if ($this->extraDays > 0) {
             $this->availability = $this->queryExtraAvailability($data);
+
             return;
         }
     }
@@ -84,22 +86,22 @@ class AvailabilityResults extends Component
         for ($i = 1; $i <= $this->extraDays; $i++) {
             $beforeStart = $dateStart->copy()->subDays($i + ($i * $this->extraDaysOffset));
             $beforeEnd = $dateEnd->copy()->subDays($i + ($i * $this->extraDaysOffset));
-            $datePeriods->put('-' . $i, [
-                'date_start' => $beforeStart, 
-                'date_end' => $beforeEnd
+            $datePeriods->put('-'.$i, [
+                'date_start' => $beforeStart,
+                'date_end' => $beforeEnd,
             ]);
-    
+
             $afterStart = $dateStart->copy()->addDays($i + ($i * $this->extraDaysOffset));
             $afterEnd = $dateEnd->copy()->addDays($i + ($i * $this->extraDaysOffset));
-            $datePeriods->put('+' . $i, [
-                'date_start' => $afterStart, 
-                'date_end' => $afterEnd
+            $datePeriods->put('+'.$i, [
+                'date_start' => $afterStart,
+                'date_end' => $afterEnd,
             ]);
         }
 
         $datePeriods->put(0, [
-            'date_start' => $dateStart, 
-            'date_end' => $dateEnd
+            'date_start' => $dateStart,
+            'date_end' => $dateEnd,
         ]);
 
         return $datePeriods->sortKeys();
