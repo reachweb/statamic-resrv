@@ -52,7 +52,7 @@ trait CreatesEntries
     {
         $entries = collect();
         $entries->put('normal', $this->makeStatamicItemWithAvailability());
-        $entries->put('none-availabile', $this->makeStatamicItemWithAvailability(available: 0));
+        $entries->put('none-available', $this->makeStatamicItemWithAvailability(available: 0));
         $entries->put('two-available', $this->makeStatamicItemWithAvailability(available: 2));
         $entries->put('half-price', $this->makeStatamicItemWithAvailability(available: 1, price: 25));
         $stopSalesEntry = $this->makeStatamicItemWithAvailability();
@@ -68,7 +68,10 @@ trait CreatesEntries
         $entries->push($this->makeStatamicItemWithAvailability(advanced: 'test'));
         $entries->push($this->makeStatamicItemWithAvailability(available: 0, advanced: 'test'));
         $entries->push($this->makeStatamicItemWithAvailability(available: 2, advanced: 'test'));
-        $entries->push($this->makeStatamicItemWithAvailability(available: 1, price: 35, advanced: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(available: 1, advanced: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(available: 1, advanced: 'another-test'));
+        $entries->push($this->makeStatamicItemWithAvailability(available: 1, advanced: 'another-test'));
+        $entries->push($this->makeStatamicItemWithAvailability(available: 1, advanced: 'yet-another-test'));
 
         return $entries;
     }

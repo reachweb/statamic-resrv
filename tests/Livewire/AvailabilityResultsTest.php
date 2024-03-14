@@ -69,7 +69,7 @@ class AvailabilityResultsTest extends TestCase
     /** @test */
     public function returns_no_availability_if_zero()
     {
-        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->get('none-availabile')->id()])
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->get('none-available')->id()])
             ->dispatch('availability-search-updated',
                 [
                     'date_start' => $this->date->toISOString(),
