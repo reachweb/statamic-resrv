@@ -180,7 +180,6 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         $instance = $this;
         \Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::hook('livewire-fetched-entries',
             function ($entries, $next) use ($instance) {
-
                 $searchData = $instance->availabilitySearchData($this->params);
 
                 if ($searchData->isEmpty()) {
