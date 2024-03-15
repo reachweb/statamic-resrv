@@ -5,7 +5,9 @@ namespace Reach\StatamicResrv\Livewire;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Session;
 use Livewire\Component;
+use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 
 class AvailabilityResults extends Component
@@ -15,6 +17,9 @@ class AvailabilityResults extends Component
     public string $entryId;
 
     public Collection $availability;
+
+    #[Session('resrv-search')]
+    public AvailabilityData $data;
 
     #[Locked]
     public int $extraDays = 0;
@@ -26,18 +31,27 @@ class AvailabilityResults extends Component
     {
         $this->entryId = $this->getDefaultSiteEntry($entry)->id();
         $this->availability = collect();
+        if (session()->has('resrv-search')) {
+            $this->availabilitySearchChanged(session('resrv-search'));
+        }
     }
 
     #[On('availability-search-updated')]
-    public function getAvailability($data): void
+    public function availabilitySearchChanged($data)
+    {
+        $this->data->fill($data);
+        $this->getAvailability();
+    }
+
+    public function getAvailability(): void
     {
         if ($this->extraDays === 0) {
-            $this->availability = collect($this->queryBaseAvailability($data));
+            $this->availability = collect($this->queryBaseAvailability());
 
             return;
         }
         if ($this->extraDays > 0) {
-            $this->availability = $this->queryExtraAvailability($data);
+            $this->availability = $this->queryExtraAvailability();
 
             return;
         }

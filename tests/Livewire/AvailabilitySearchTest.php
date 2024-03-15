@@ -41,8 +41,10 @@ class AvailabilitySearchTest extends TestCase
             )
             ->assertDispatched('availability-search-updated',
                 [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    ],
                     'quantity' => 1,
                     'property' => null,
                 ]
@@ -103,8 +105,10 @@ class AvailabilitySearchTest extends TestCase
             ->assertSet('data.quantity', 2)
             ->assertDispatched('availability-search-updated',
                 [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    ],
                     'quantity' => 2,
                     'property' => null,
                 ])
@@ -122,8 +126,10 @@ class AvailabilitySearchTest extends TestCase
             ->set('data.property', 'something')
             ->assertSet('data.property', 'something')
             ->assertDispatched('availability-search-updated', [
-                'date_start' => $this->date->toISOString(),
-                'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                ],
                 'quantity' => 1,
                 'property' => 'something',
             ])
@@ -133,25 +139,22 @@ class AvailabilitySearchTest extends TestCase
     /** @test */
     public function sets_search_from_session()
     {
-        session(['resrv-search' => [
-            'date_start' => $this->date,
-            'date_end' => $this->date->copy()->add(1, 'day'),
-        ]]);
+        // This test might look like it does nothing but the first call sets the dates in the session
+        // and the second one asserts that they are being retrieved from the session.
+
+        Livewire::test(AvailabilitySearch::class)
+            ->set('data.dates',
+                [
+                    'date_start' => $this->date,
+                    'date_end' => $this->date->copy()->add(1, 'day'),
+                ]
+            );
 
         Livewire::test(AvailabilitySearch::class)
             ->assertSet('data.dates',
                 [
                     'date_start' => $this->date,
                     'date_end' => $this->date->copy()->add(1, 'day'),
-                ]
-            )
-            ->assertDispatched('availability-search-updated',
-                [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
-                    'quantity' => 1,
-                    'property' => null,
-                ]
-            );
+                ])->assertStatus(200);
     }
 }

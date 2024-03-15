@@ -10,20 +10,21 @@ use Reach\StatamicResrv\Models\Availability;
 
 trait QueriesAvailability
 {
-    public function queryBaseAvailability($data): array
+    public function queryBaseAvailability(): array
     {
         try {
-            return (new Availability)->getAvailabilityForItem($data, $this->entryId);
+            return (new Availability)->getAvailabilityForItem($this->data->toResrvArray(), $this->entryId);
         } catch (AvailabilityException $exception) {
             $this->addError('availability', $exception->getMessage());
         }
     }
 
-    public function queryExtraAvailability($data): Collection
+    public function queryExtraAvailability(): Collection
     {
-        $periods = $this->generateDatePeriods($data);
-        $periods->transform(function ($period) use ($data) {
-            $searchData = array_merge($period, Arr::only($data, ['quantity', 'property']));
+        $periods = $this->generateDatePeriods($this->data);
+
+        $periods->transform(function ($period) {
+            $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'property']));
             try {
                 return (new Availability)->getAvailabilityForItem($searchData, $this->entryId);
             } catch (AvailabilityException $exception) {
@@ -39,10 +40,10 @@ trait QueriesAvailability
         return $periods;
     }
 
-    public function generateDatePeriods($data): Collection
+    public function generateDatePeriods(): Collection
     {
-        $dateStart = Carbon::parse($data['date_start']);
-        $dateEnd = Carbon::parse($data['date_end']);
+        $dateStart = Carbon::parse($this->data->dates['date_start']);
+        $dateEnd = Carbon::parse($this->data->dates['date_end']);
 
         $datePeriods = collect([]);
 

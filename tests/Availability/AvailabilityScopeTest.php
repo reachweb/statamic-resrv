@@ -2,7 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
-use Reach\StatamicResrv\Scopes\ResrvAvailability;
+use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Entry;
@@ -35,12 +35,14 @@ class AvailabilityScopeTest extends TestCase
         $this->assertContains($this->entries->get('two-available')->id(), $beforeScope);
         $this->assertContains($this->entries->get('stop-sales')->id(), $beforeScope);
 
-        session(['resrv-search' => [
-            'date_start' => $this->date,
-            'date_end' => $this->date->copy()->add(1, 'day'),
-        ]]);
+        $values = ['resrv_search:resrv_availability' => [
+            'dates' => [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ],
+        ]];
 
-        (new ResrvAvailability)->apply($query, null);
+        (new ResrvSearch)->apply($query, $values);
 
         $afterScope = $query->get()->pluck('id')->all();
 
@@ -58,12 +60,14 @@ class AvailabilityScopeTest extends TestCase
     {
         $query = Entry::query()->where('collection', 'pages');
 
-        session(['resrv-search' => [
-            'date_start' => $this->date,
-            'date_end' => $this->date->copy()->add(7, 'day'),
-        ]]);
+        $values = ['resrv_search:resrv_availability' => [
+            'dates' => [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(7, 'day'),
+            ],
+        ]];
 
-        (new ResrvAvailability)->apply($query, null);
+        (new ResrvSearch)->apply($query, $values);
 
         $afterScope = $query->get()->pluck('id')->all();
 
@@ -77,13 +81,15 @@ class AvailabilityScopeTest extends TestCase
     {
         $query = Entry::query()->where('collection', 'pages');
 
-        session(['resrv-search' => [
-            'date_start' => $this->date,
-            'date_end' => $this->date->copy()->add(1, 'day'),
+        $values = ['resrv_search:resrv_availability' => [
+            'dates' => [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ],
             'quantity' => 2,
-        ]]);
+        ]];
 
-        (new ResrvAvailability)->apply($query, null);
+        (new ResrvSearch)->apply($query, $values);
 
         $afterScope = $query->get()->pluck('id')->all();
 

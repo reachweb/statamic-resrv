@@ -13,19 +13,6 @@ class AvailabilityData extends Form
 
     public ?string $property = null;
 
-    public function fillFromSession(): void
-    {
-        $data = session('resrv-search');
-        $this->fill([
-            'dates' => [
-                'date_start' => $data['date_start'],
-                'date_end' => $data['date_end'],
-            ],
-            'quantity' => $data['quantity'] ?? 1,
-            'property' => $data['property'] ?? null,
-        ]);
-    }
-
     public function rules(): array
     {
         return [
@@ -45,6 +32,16 @@ class AvailabilityData extends Form
             ],
             'quantity' => ['sometimes', 'integer'],
             'property' => ['nullable', 'string'],
+        ];
+    }
+
+    public function toResrvArray()
+    {
+        return [
+            'date_start' => $this->dates['date_start'],
+            'date_end' => $this->dates['date_end'],
+            'quantity' => $this->quantity,
+            'property' => $this->property,
         ];
     }
 }

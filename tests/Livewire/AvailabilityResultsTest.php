@@ -20,6 +20,7 @@ class AvailabilityResultsTest extends TestCase
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
         $this->entries = $this->createEntries();
+        $this->travelTo(today()->setHour(12));
     }
 
     /** @test */
@@ -44,8 +45,10 @@ class AvailabilityResultsTest extends TestCase
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
             ->dispatch('availability-search-updated',
                 [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
                     'quantity' => 1,
                     'property' => null,
                 ]
@@ -56,8 +59,10 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.request.days', 2)
             ->dispatch('availability-search-updated',
                 [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(7, 'day')->toISOString(),
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(7, 'day')->toISOString(),
+                    ],
                     'quantity' => 1,
                     'property' => null,
                 ]
@@ -72,8 +77,10 @@ class AvailabilityResultsTest extends TestCase
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->get('none-available')->id()])
             ->dispatch('availability-search-updated',
                 [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
                     'quantity' => 1,
                     'property' => null,
                 ]
@@ -88,8 +95,10 @@ class AvailabilityResultsTest extends TestCase
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->get('stop-sales')->id()])
             ->dispatch('availability-search-updated',
                 [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
                     'quantity' => 1,
                     'property' => null,
                 ]
@@ -104,8 +113,10 @@ class AvailabilityResultsTest extends TestCase
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
             ->dispatch('availability-search-updated',
                 [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
                     'quantity' => 4,
                     'property' => null,
                 ]
@@ -120,8 +131,10 @@ class AvailabilityResultsTest extends TestCase
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'extraDays' => 2])
             ->dispatch('availability-search-updated',
                 [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
                     'quantity' => 1,
                     'property' => null,
                 ]
@@ -134,7 +147,7 @@ class AvailabilityResultsTest extends TestCase
                 'availability.+2',
             ])
             ->assertViewHas('availability.-2.message.status', false)
-            ->assertViewHas('availability.-1.message.status', false)
+            ->assertViewHas('availability.-1.data.price', '100.00')
             ->assertViewHas('availability.0.data.price', '100.00')
             ->assertViewHas('availability.+1.data.price', '100.00')
             ->assertViewHas('availability.+1.request.date_start', $this->date->copy()->addDays(1)->format('Y-m-d'))
@@ -147,8 +160,10 @@ class AvailabilityResultsTest extends TestCase
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'extraDays' => 1, 'extraDaysOffset' => 1])
             ->dispatch('availability-search-updated',
                 [
-                    'date_start' => $this->date->toISOString(),
-                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    ],
                     'quantity' => 1,
                     'property' => null,
                 ]
