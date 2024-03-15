@@ -2,15 +2,13 @@
 
 namespace Reach\StatamicResrv\Scopes;
 
-use Illuminate\Support\Str;
-use Reach\StatamicResrv\Exceptions\AvailabilityException;
-use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
-use Reach\StatamicResrv\Models\Availability;
+use Illuminate\Support\Arr;
+use Reach\StatamicResrv\Livewire\Traits\QueriesAvailability;
 use Statamic\Query\Scopes\Scope;
 
 class ResrvSearch extends Scope
 {
-    public AvailabilityData $data;
+    use QueriesAvailability;
 
     /**
      * Apply the scope to a given Eloquent query builder.
@@ -19,26 +17,18 @@ class ResrvSearch extends Scope
      */
     public function apply($query, $values)
     {
-        $search = collect($values)->filter(function ($value, $key) {
-            return Str::startsWith($key, 'resrv_search:');
-        })->first();
+        $searchData = $this->availabilitySearchData($values);
 
-        try {
-            $availability = (new Availability)->getAvailableItems($this->toResrvArray($search));
-        } catch (AvailabilityException $exception) {
+        if ($searchData->isEmpty()) {
             return $query;
         }
 
-        return $query->whereIn('id', array_keys($availability));
-    }
+        $result = $this->getAvailability($searchData);
 
-    public function toResrvArray($search)
-    {
-        return [
-            'date_start' => $search['dates']['date_start'],
-            'date_end' => $search['dates']['date_end'],
-            'quantity' => $search['quantity'] ?? 1,
-            'property' => $search['property'] ?? '',
-        ];
+        if (Arr::has($result, 'message.status') && data_get($result, 'message.status') === false) {
+            return $query;
+        }
+
+        return $query->whereIn('id', array_keys($result));
     }
 }

@@ -46,12 +46,12 @@ class AvailabilityResults extends Component
     public function getAvailability(): void
     {
         if ($this->extraDays === 0) {
-            $this->availability = collect($this->queryBaseAvailability());
+            $this->availability = collect($this->queryBaseAvailabilityForEntry());
 
             return;
         }
         if ($this->extraDays > 0) {
-            $this->availability = $this->queryExtraAvailability();
+            $this->availability = $this->queryExtraAvailabilityForEntry();
 
             return;
         }

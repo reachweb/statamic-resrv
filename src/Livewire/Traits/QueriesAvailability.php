@@ -5,12 +5,27 @@ namespace Reach\StatamicResrv\Livewire\Traits;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Models\Availability;
 
 trait QueriesAvailability
 {
-    public function queryBaseAvailability(): array
+    public function getAvailability(Collection $data): array
+    {
+        try {
+            return (new Availability)->getAvailableItems($this->toResrvArray($data->first()));
+        } catch (AvailabilityException $exception) {
+            return [
+                'message' => [
+                    'status' => false,
+                    'error' => $exception->getMessage(),
+                ],
+            ];
+        }
+    }
+
+    public function queryBaseAvailabilityForEntry(): array
     {
         try {
             return (new Availability)->getAvailabilityForItem($this->data->toResrvArray(), $this->entryId);
@@ -19,7 +34,7 @@ trait QueriesAvailability
         }
     }
 
-    public function queryExtraAvailability(): Collection
+    public function queryExtraAvailabilityForEntry(): Collection
     {
         $periods = $this->generateDatePeriods($this->data);
 
@@ -69,5 +84,22 @@ trait QueriesAvailability
         ]);
 
         return $datePeriods->sortKeys();
+    }
+
+    public function availabilitySearchData($values): Collection
+    {
+        return collect($values)->filter(function ($value, $key) {
+            return Str::startsWith($key, 'resrv_search:');
+        });
+    }
+
+    public function toResrvArray($search)
+    {
+        return [
+            'date_start' => $search['dates']['date_start'],
+            'date_end' => $search['dates']['date_end'],
+            'quantity' => $search['quantity'] ?? 1,
+            'property' => $search['property'] ?? '',
+        ];
     }
 }
