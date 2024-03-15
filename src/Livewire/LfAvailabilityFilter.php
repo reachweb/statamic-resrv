@@ -13,8 +13,6 @@ class LfAvailabilityFilter extends Component
 {
     use IsLivewireFilter;
 
-    public $selected = '';
-
     public AvailabilityData $data;
 
     #[Locked]
@@ -34,19 +32,11 @@ class LfAvailabilityFilter extends Component
             ->to(LivewireCollection::class);
     }
 
+    #[On('availability-search-cleared')]
     public function clear()
     {
-        $this->selected = '';
         $this->clearFilters();
     }
-
-    // #[On('preset-params')]
-    // public function setPresetSort($params)
-    // {
-    //     if (array_key_exists($this->getParamKey(), $params)) {
-    //         $this->selected = $params[$this->getParamKey()];
-    //     }
-    // }
 
     public function render()
     {

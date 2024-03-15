@@ -22,6 +22,11 @@ class AvailabilitySearch extends Component
         $this->dispatch('availability-search-updated', $this->data);
     }
 
+    public function clear()
+    {
+        $this->data->reset();
+    }
+
     public function render()
     {
         return view('statamic-resrv::livewire.availability-search');
