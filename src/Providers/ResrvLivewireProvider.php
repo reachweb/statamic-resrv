@@ -5,16 +5,11 @@ namespace Reach\StatamicResrv\Providers;
 use Illuminate\Support\Arr;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Traits\QueriesAvailability;
-use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Statamic\Providers\AddonServiceProvider;
 
 class ResrvLivewireProvider extends AddonServiceProvider
 {
     use QueriesAvailability;
-
-    protected $scopes = [
-        ResrvSearch::class,
-    ];
 
     public function boot(): void
     {
@@ -51,8 +46,6 @@ class ResrvLivewireProvider extends AddonServiceProvider
                 if (Arr::has($result, 'message.status') && data_get($result, 'message.status') === false) {
                     return $next($entries);
                 }
-
-                ray($result);
 
                 $entries->each(function ($entry) use ($result) {
                     if ($data = data_get($result, $entry->id, false)) {

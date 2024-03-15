@@ -24,6 +24,7 @@ use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
@@ -55,6 +56,7 @@ class ResrvProvider extends AddonServiceProvider
         ReservationStartingDate::class,
         ReservationStartingDateYear::class,
         ReservationStatus::class,
+        ResrvSearch::class,
     ];
 
     protected $listen = [
