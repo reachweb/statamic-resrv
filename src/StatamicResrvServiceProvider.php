@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv;
 
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
@@ -24,14 +25,17 @@ use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
+use Reach\StatamicResrv\Livewire\Traits\QueriesAvailability;
 use Reach\StatamicResrv\Models\Availability;
-use Reach\StatamicResrv\Scopes\ResrvAvailability;
+use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
 
 class StatamicResrvServiceProvider extends AddonServiceProvider
 {
+    use QueriesAvailability;
+
     protected $routes = [
         'cp' => __DIR__.'/../routes/cp.php',
         'web' => __DIR__.'/../routes/web.php',
@@ -57,7 +61,7 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         ReservationStartingDate::class,
         ReservationStartingDateYear::class,
         ReservationStatus::class,
-        ResrvAvailability::class,
+        ResrvSearch::class,
     ];
 
     protected $listen = [
@@ -155,12 +159,49 @@ class StatamicResrvServiceProvider extends AddonServiceProvider
         $this->bootPermissions();
 
         $this->bootLivewireComponents();
+
+        $this->bootHooks();
     }
 
     private function bootLivewireComponents(): void
     {
         Livewire::component('availability-search', \Reach\StatamicResrv\Livewire\AvailabilitySearch::class);
         Livewire::component('availability-results', \Reach\StatamicResrv\Livewire\AvailabilityResults::class);
+        if (class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {
+            Livewire::component('lf-availability-filter', \Reach\StatamicResrv\Livewire\LfAvailabilityFilter::class);
+        }
+    }
+
+    private function bootHooks(): void
+    {
+        if (! class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {
+            return;
+        }
+        $instance = $this;
+        \Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::hook('livewire-fetched-entries',
+            function ($entries, $next) use ($instance) {
+
+                $searchData = $instance->availabilitySearchData($this->params);
+
+                if ($searchData->isEmpty()) {
+                    return $next($entries);
+                }
+
+                $result = $instance->getAvailability($searchData);
+
+                if (Arr::has($result, 'message.status') && data_get($result, 'message.status') === false) {
+                    return $next($entries);
+                }
+
+                $entries->each(function ($entry) use ($result) {
+                    if ($data = data_get($result, $entry->id, false)) {
+                        $entry->set('live_availability', $data);
+                    }
+                });
+
+                return $next($entries);
+            }
+        );
     }
 
     private function createNavigation(): void
