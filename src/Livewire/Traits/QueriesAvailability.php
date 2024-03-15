@@ -90,7 +90,7 @@ trait QueriesAvailability
     {
         return collect($values)->filter(function ($value, $key) {
             return Str::startsWith($key, 'resrv_search:');
-        })->reject(fn ($value) => empty($value));
+        })->reject(fn ($value) => empty($value) || ! Arr::has($value, 'dates.date_start'));
     }
 
     public function toResrvArray($search)
