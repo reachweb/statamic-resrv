@@ -35,7 +35,7 @@ class AvailabilityData extends Form
         ];
     }
 
-    public function validationAttributes() 
+    public function validationAttributes()
     {
         return [
             'dates.date_start' => 'starting date',

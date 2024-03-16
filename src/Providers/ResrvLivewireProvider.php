@@ -22,7 +22,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
     }
 
     private function bootLivewireComponents(): void
-    {   
+    {
         Livewire::component('availability-search', \Reach\StatamicResrv\Livewire\AvailabilitySearch::class);
         Livewire::component('availability-results', \Reach\StatamicResrv\Livewire\AvailabilityResults::class);
         if (class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {

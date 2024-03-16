@@ -31,6 +31,7 @@ trait QueriesAvailability
             return (new Availability)->getAvailabilityForItem($this->data->toResrvArray(), $this->entryId);
         } catch (AvailabilityException $exception) {
             $this->addError('availability', $exception->getMessage());
+
             return [];
         }
     }
