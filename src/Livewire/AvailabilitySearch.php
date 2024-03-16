@@ -22,7 +22,7 @@ class AvailabilitySearch extends Component
         $this->dispatch('availability-search-updated', $this->data);
     }
 
-    public function clear()
+    public function clear(): void
     {
         $this->data->reset();
     }
