@@ -32,7 +32,7 @@ trait CreatesEntries
             'available' => $available ?? 1,
             'price' => $price ?? 50,
             'statamic_id' => $entry->id(),
-            'property' => $property ?? 'none',
+            'property' => $advanced ?? 'none',
         ];
 
         Availability::factory()

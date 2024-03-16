@@ -15,11 +15,14 @@ class AvailabilityResultsTest extends TestCase
 
     public $entries;
 
+    public $advancedEntries;
+
     public function setUp(): void
     {
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
         $this->entries = $this->createEntries();
+        $this->advancedEntries = $this->createAdvancedEntries();
         $this->travelTo(today()->setHour(12));
     }
 
@@ -50,7 +53,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'property' => null,
+                    'advanced' => null,
                 ]
             )
             ->assertViewHas('availability.data')
@@ -64,7 +67,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(7, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'property' => null,
+                    'advanced' => null,
                 ]
             )
             ->assertViewHas('availability.message')
@@ -82,7 +85,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'property' => null,
+                    'advanced' => null,
                 ]
             )
             ->assertViewHas('availability.message')
@@ -100,7 +103,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'property' => null,
+                    'advanced' => null,
                 ]
             )
             ->assertViewHas('availability.message')
@@ -118,7 +121,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 4,
-                    'property' => null,
+                    'advanced' => null,
                 ]
             )
             ->assertViewHas('availability.message')
@@ -136,7 +139,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'property' => null,
+                    'advanced' => null,
                 ]
             )
             ->assertViewHasAll([
@@ -165,7 +168,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'property' => null,
+                    'advanced' => null,
                 ]
             )
             ->assertViewHasAll([
@@ -177,5 +180,37 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.0.data.price', '50.00')
             ->assertViewHas('availability.+1.data.price', '50.00')
             ->assertViewHas('availability.+1.request.date_start', $this->date->copy()->addDays(2)->format('Y-m-d'));
+    }
+
+    /** @test */
+    public function returns_availability_for_specific_advanced()
+    {
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'test',
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '100.00')
+            ->assertViewHas('availability.request')
+            ->assertViewHas('availability.request.days', 2)
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'is-this-real-life-or-just-testing',
+                ]
+            )
+            ->assertViewHas('availability.message')
+            ->assertViewHas('availability.message.status', false);
     }
 }

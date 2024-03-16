@@ -11,7 +11,7 @@ class AvailabilityData extends Form
 
     public int $quantity = 1;
 
-    public ?string $property = null;
+    public ?string $advanced = null;
 
     public function rules(): array
     {
@@ -31,7 +31,7 @@ class AvailabilityData extends Form
                 'after:today',
             ],
             'quantity' => ['sometimes', 'integer'],
-            'property' => ['nullable', 'string'],
+            'advanced' => ['nullable', 'string'],
         ];
     }
 
@@ -41,7 +41,7 @@ class AvailabilityData extends Form
             'date_start' => $this->dates['date_start'],
             'date_end' => $this->dates['date_end'],
             'quantity' => $this->quantity,
-            'property' => $this->property,
+            'advanced' => $this->advanced,
         ];
     }
 }

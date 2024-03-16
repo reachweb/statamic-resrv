@@ -99,7 +99,7 @@ trait QueriesAvailability
             'date_start' => $search['dates']['date_start'],
             'date_end' => $search['dates']['date_end'],
             'quantity' => $search['quantity'] ?? 1,
-            'property' => $search['property'] ?? '',
+            'advanced' => $search['advanced'] ?? '',
         ];
     }
 }

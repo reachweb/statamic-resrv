@@ -46,7 +46,7 @@ class AvailabilitySearchTest extends TestCase
                         'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'property' => null,
+                    'advanced' => null,
                 ]
             )
             ->assertSessionHas('resrv-search');
@@ -110,28 +110,28 @@ class AvailabilitySearchTest extends TestCase
                         'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 2,
-                    'property' => null,
+                    'advanced' => null,
                 ])
             ->assertStatus(200);
     }
 
     /** @test */
-    public function can_set_property()
+    public function can_set_advanced()
     {
         Livewire::test(AvailabilitySearch::class)
             ->set('data.dates', [
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->set('data.property', 'something')
-            ->assertSet('data.property', 'something')
+            ->set('data.advanced', 'something')
+            ->assertSet('data.advanced', 'something')
             ->assertDispatched('availability-search-updated', [
                 'dates' => [
                     'date_start' => $this->date->toISOString(),
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'property' => 'something',
+                'advanced' => 'something',
             ])
             ->assertStatus(200);
     }
