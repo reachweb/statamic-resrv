@@ -28,7 +28,7 @@
 <script>
 Alpine.data('datepicker', () => {
     return {
-        mode: $wire.mode,
+        mode: $wire.calendar,
         dates: $wire.data.dates,
         get isDatesEmpty() {
             return $wire.data.dates.length === 0;

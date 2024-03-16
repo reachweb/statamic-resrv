@@ -13,7 +13,7 @@ class AvailabilitySearch extends Component
     public AvailabilityData $data;
 
     #[Locked]
-    public string $mode = 'single';
+    public string $calendar = 'single';
 
     public function updatedData(): void
     {

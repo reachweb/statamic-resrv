@@ -16,7 +16,7 @@ class LfAvailabilityFilter extends Component
     public AvailabilityData $data;
 
     #[Locked]
-    public string $mode = 'single';
+    public string $calendar = 'single';
 
     #[On('availability-search-updated')]
     public function availabilityChanged($data)
