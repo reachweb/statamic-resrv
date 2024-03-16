@@ -15,11 +15,14 @@ class AvailabilityScopeTest extends TestCase
 
     public $entries;
 
+    public $advancedEntries;
+
     public function setUp(): void
     {
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
         $this->entries = $this->createEntries();
+        $this->advancedEntries = $this->createAdvancedEntries();
     }
 
     /** @test */
@@ -94,5 +97,73 @@ class AvailabilityScopeTest extends TestCase
 
         $this->assertCount(1, $afterScope);
         $this->assertContains($this->entries->get('two-available')->id(), $afterScope);
+    }
+
+    /** @test */
+    public function it_filters_by_advanced_entry()
+    {
+        $query = Entry::query()->where('collection', 'advanced');
+
+        $values = ['resrv_search:resrv_availability' => [
+            'dates' => [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ],
+            'quantity' => 1,
+            'advanced' => 'test',
+        ]];
+
+        (new ResrvSearch)->apply($query, $values);
+
+        $afterScope = $query->get()->pluck('id')->all();
+
+        $this->assertCount(3, $afterScope);
+        $this->assertContains($this->advancedEntries->first()->id(), $afterScope);
+    }
+
+    /** @test */
+    public function it_filters_by_advanced_entry_and_quantity()
+    {
+        $query = Entry::query()->where('collection', 'advanced');
+
+        $values = ['resrv_search:resrv_availability' => [
+            'dates' => [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ],
+            'quantity' => 2,
+            'advanced' => 'test',
+        ]];
+
+        (new ResrvSearch)->apply($query, $values);
+
+        $afterScope = $query->get()->pluck('id')->all();
+
+        $this->assertCount(1, $afterScope);
+        $this->assertContains($this->advancedEntries[2]->id(), $afterScope);
+        $this->assertNotContains($this->advancedEntries->first()->id(), $afterScope);
+    }
+
+    /** @test */
+    public function it_can_get_all_availability_with_the_any_magic_word()
+    {
+        $query = Entry::query()->where('collection', 'advanced');
+
+        $values = ['resrv_search:resrv_availability' => [
+            'dates' => [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ],
+            'quantity' => 1,
+            'advanced' => 'any',
+        ]];
+
+        (new ResrvSearch)->apply($query, $values);
+
+        $afterScope = $query->get()->pluck('id')->all();
+
+        $this->assertCount(6, $afterScope);
+        $this->assertContains($this->advancedEntries->first()->id(), $afterScope);
+        $this->assertNotContains($this->advancedEntries[1]->id(), $afterScope);
     }
 }

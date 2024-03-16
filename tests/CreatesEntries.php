@@ -10,7 +10,7 @@ use Statamic\Facades\Collection;
 
 trait CreatesEntries
 {
-    protected function makeStatamicItemWithAvailability(?int $available = null, ?int $price = null, ?string $advanced = null)
+    protected function makeStatamicItemWithAvailability(?string $collection = 'pages', ?int $available = null, ?int $price = null, ?string $advanced = null)
     {
         $entryData = [
             'title' => fake()->sentence(),
@@ -19,10 +19,10 @@ trait CreatesEntries
 
         $slug = Str::slug($entryData['title']);
 
-        Collection::make('pages')->routes('/{slug}')->save();
+        Collection::make($collection)->routes('/{slug}')->save();
 
         $entry = Entry::make()
-            ->collection('pages')
+            ->collection($collection)
             ->slug($slug)
             ->data($entryData);
 
@@ -65,13 +65,13 @@ trait CreatesEntries
     public function createAdvancedEntries()
     {
         $entries = collect();
-        $entries->push($this->makeStatamicItemWithAvailability(advanced: 'test'));
-        $entries->push($this->makeStatamicItemWithAvailability(available: 0, advanced: 'test'));
-        $entries->push($this->makeStatamicItemWithAvailability(available: 2, advanced: 'test'));
-        $entries->push($this->makeStatamicItemWithAvailability(available: 1, advanced: 'test'));
-        $entries->push($this->makeStatamicItemWithAvailability(available: 1, advanced: 'another-test'));
-        $entries->push($this->makeStatamicItemWithAvailability(available: 1, advanced: 'another-test'));
-        $entries->push($this->makeStatamicItemWithAvailability(available: 1, advanced: 'yet-another-test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', advanced: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 0, advanced: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 2, advanced: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, advanced: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, advanced: 'another-test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, advanced: 'another-test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, advanced: 'yet-another-test'));
 
         return $entries;
     }
