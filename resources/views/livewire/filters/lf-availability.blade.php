@@ -1,3 +1,3 @@
 <div>
-    <livewire:availability-search :$calendar />
+    <livewire:availability-search :$calendar :live="true" />
 </div>

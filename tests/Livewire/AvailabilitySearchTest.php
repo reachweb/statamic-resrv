@@ -53,6 +53,34 @@ class AvailabilitySearchTest extends TestCase
     }
 
     /** @test */
+    public function does_not_dispatch_if_live_is_false_unless_search_is_called()
+    {
+        Livewire::test(AvailabilitySearch::class, ['live' => false])
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->assertSet('data.dates',
+                [
+                    'date_start' => $this->date,
+                    'date_end' => $this->date->copy()->add(1, 'day'),
+                ]
+            )
+            ->assertNotDispatched('availability-search-updated')
+            ->call('search')
+            ->assertDispatched('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            );
+    }
+
+    /** @test */
     public function cannot_set_dates_if_date_start_lte_date_end()
     {
         Livewire::test(AvailabilitySearch::class)
@@ -134,6 +162,30 @@ class AvailabilitySearchTest extends TestCase
                 'advanced' => 'something',
             ])
             ->assertStatus(200);
+    }
+
+    /** @test */
+    public function cannot_set_advanced_without_dates()
+    {
+        Livewire::test(AvailabilitySearch::class)
+            ->set('data.advanced', 'something-else')
+            ->assertSet('data.advanced', 'something-else')
+            ->assertHasErrors(['data.dates.date_start'])
+            ->assertSee('Availability search requires date information to be provided.')
+            ->assertNotDispatched('availability-search-updated')
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->assertSet('data.advanced', 'something-else')
+            ->assertDispatched('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => 'something-else',
+            ]);
     }
 
     /** @test */
