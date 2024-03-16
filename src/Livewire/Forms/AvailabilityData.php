@@ -35,6 +35,14 @@ class AvailabilityData extends Form
         ];
     }
 
+    public function validationAttributes() 
+    {
+        return [
+            'dates.date_start' => 'starting date',
+            'dates.date_end' => 'ending date',
+        ];
+    }
+
     public function toResrvArray()
     {
         return [

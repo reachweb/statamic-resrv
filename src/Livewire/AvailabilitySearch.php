@@ -15,6 +15,9 @@ class AvailabilitySearch extends Component
     #[Locked]
     public string $calendar = 'single';
 
+    #[Locked]
+    public bool $advanced = false;
+
     public function updatedData(): void
     {
         $this->data->validate();
@@ -22,9 +25,13 @@ class AvailabilitySearch extends Component
         $this->dispatch('availability-search-updated', $this->data);
     }
 
-    public function clear(): void
+    public function clearDates(): void
     {
-        $this->data->reset();
+        $this->data->reset('dates');
+
+        // Apparently validation errors don't reset with the above
+        $this->resetValidation('data.dates.date_start');
+        $this->resetValidation('data.dates.date_end');
     }
 
     public function render()

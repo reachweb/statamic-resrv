@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Providers;
 
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Traits\QueriesAvailability;
 use Statamic\Providers\AddonServiceProvider;
@@ -13,13 +14,15 @@ class ResrvLivewireProvider extends AddonServiceProvider
 
     public function boot(): void
     {
+        Blade::anonymousComponentPath(__DIR__.'/../../resources/views/livewire/components', 'resrv');
+
         $this->bootLivewireComponents();
 
         $this->bootHooks();
     }
 
     private function bootLivewireComponents(): void
-    {
+    {   
         Livewire::component('availability-search', \Reach\StatamicResrv\Livewire\AvailabilitySearch::class);
         Livewire::component('availability-results', \Reach\StatamicResrv\Livewire\AvailabilityResults::class);
         if (class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {
