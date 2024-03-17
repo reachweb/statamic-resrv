@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Providers;
 
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Traits\QueriesAvailability;
 use Statamic\Providers\AddonServiceProvider;
