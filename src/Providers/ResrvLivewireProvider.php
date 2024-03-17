@@ -14,8 +14,6 @@ class ResrvLivewireProvider extends AddonServiceProvider
 
     public function boot(): void
     {
-        Blade::anonymousComponentPath(__DIR__.'/../../resources/views/livewire/components', 'resrv');
-
         $this->bootLivewireComponents();
 
         $this->bootHooks();
