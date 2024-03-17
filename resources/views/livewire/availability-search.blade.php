@@ -12,8 +12,8 @@
             <input 
                 x-ref="dateInput"
                 type="text" 
-                placeholder="Select your dates"
-                class="min-w-[380px] form-input bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full px-10 py-2.5"
+                placeholder="{{ trans_choice('statamic-resrv::frontend.selectDate', ($calendar === 'range') ? 2 : 1) }}"
+                class="form-input min-w-[380px] bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full px-10 py-2.5"
             />
             <div 
                 x-show="! isDatesEmpty"
@@ -36,6 +36,23 @@
 
     @if ($advanced)
     <div>
+        <select 
+            id="availability-search-advanced" 
+            class="form-select min-w-[200px] bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full py-2.5"
+            wire:model.live="data.advanced"
+        >
+            <option selected value="any">{{ trans('statamic-resrv::frontend.selectProperty') }}</option>
+            @foreach ($this->advancedProperties as $value => $label)
+                <option value="{{ $value }}">
+                    {{ $label }}                   
+                </option>
+            @endforeach
+        </select>
+        @if ($errors->has('data.advanced'))
+        <div class="mt-2 text-red-600 text-sm space-y-1">
+            <span class="block">{{ $errors->first('data.advanced') }}</span>
+        </div>
+        @endif
     </div>
     @endif
     

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
 use Reach\StatamicResrv\Tests\TestCase;
+use Statamic\Facades;
 
 class AvailabilitySearchTest extends TestCase
 {
@@ -208,5 +209,60 @@ class AvailabilitySearchTest extends TestCase
                     'date_start' => $this->date,
                     'date_end' => $this->date->copy()->add(1, 'day'),
                 ])->assertStatus(200);
+    }
+
+    /** @test */
+    public function can_return_advanced_properties_if_set()
+    {
+        $component = Livewire::test(AvailabilitySearch::class, ['advanced' => true, 'overrideProperties' => ['something']])
+            ->assertSet('advanced', true)
+            ->assertSet('overrideProperties', ['something']);
+        $this->assertEquals(['something'], $component->__get('advancedProperties'));
+    }
+
+    /** @test */
+    public function can_return_advanced_properties_from_blueprint()
+    {
+        $collection = Facades\Collection::make('cars')->save();
+
+        $blueprint = Facades\Blueprint::make()->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'title',
+                            'field' => [
+                                'type' => 'text',
+                                'display' => 'Title',
+                            ],
+                        ],
+                        [
+
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'listable' => 'hidden',
+                                'advanced_availability' => [
+                                    'location1' => 'Location 1',
+                                    'location2' => 'Location 2',
+                                    'location3' => 'Location 3',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $blueprint->setHandle('cars')->setNamespace('collections.'.$collection->handle())->save();
+
+        $component = Livewire::test(AvailabilitySearch::class, ['advanced' => 'cars.cars'])
+            ->assertSet('advanced', 'cars.cars');
+
+        $this->assertEquals([
+            'location1' => 'Location 1',
+            'location2' => 'Location 2',
+            'location3' => 'Location 3',
+        ], $component->__get('advancedProperties'));
     }
 }

@@ -2,12 +2,15 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 
 class AvailabilitySearch extends Component
 {
+    use Traits\QueriesStatamic;
+
     #[Session('resrv-search')]
     public AvailabilityData $data;
 
@@ -15,14 +18,18 @@ class AvailabilitySearch extends Component
 
     public bool $live = true;
 
-    public bool $advanced = false;
+    public $advanced = false;
 
-    public array $advancedProperties;
+    public array $overrideProperties;
 
     #[Computed(persist: true)]
     public function advancedProperties(): array
     {
-        return $advancedProperties ?? $this->getProperties();
+        if (! $this->advanced) {
+            return [];
+        }
+
+        return $this->overrideProperties ?? $this->getProperties();
     }
 
     public function updatedData(): void
@@ -56,6 +63,11 @@ class AvailabilitySearch extends Component
         // Apparently validation errors don't reset with the above
         $this->resetValidation('data.dates.date_start');
         $this->resetValidation('data.dates.date_end');
+    }
+
+    public function getProperties()
+    {
+        return $this->getPropertiesFromBlueprint();
     }
 
     public function render()

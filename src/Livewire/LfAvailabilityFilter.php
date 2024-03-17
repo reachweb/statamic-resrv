@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -17,6 +18,19 @@ class LfAvailabilityFilter extends Component
 
     #[Locked]
     public string $calendar = 'single';
+
+    #[Locked]
+    public bool $advanced = false;
+
+    #[Computed(persist: true)]
+    public function enableAdvanced()
+    {
+        if ($this->advanced === true) {
+            return $this->collection.'.'.$this->blueprint;
+        }
+
+        return false;
+    }
 
     #[On('availability-search-updated')]
     public function availabilityChanged($data)
