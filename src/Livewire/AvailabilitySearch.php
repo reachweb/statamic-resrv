@@ -20,6 +20,8 @@ class AvailabilitySearch extends Component
 
     public $advanced = false;
 
+    public bool $enableQuantity = false;
+
     public array $overrideProperties;
 
     #[Computed(persist: true)]
@@ -32,8 +34,15 @@ class AvailabilitySearch extends Component
         return $this->overrideProperties ?? $this->getProperties();
     }
 
+    #[Computed(persist: true)]
+    public function maxQuantity(): int
+    {
+        return config('resrv-config.maximum_quantity');
+    }
+
     public function updatedData(): void
     {
+        ray($this->data);
         if ($this->live && $this->validateDatesAreSet()) {
             $this->search();
         }

@@ -145,6 +145,16 @@ class AvailabilitySearchTest extends TestCase
     }
 
     /** @test */
+    public function can_set_enable_quantity_property_and_shows_the_control()
+    {
+        $component = Livewire::test(AvailabilitySearch::class, ['enableQuantity' => true])
+            ->assertSet('enableQuantity', true)
+            ->assertSee('x-bind:value="quantity"', false);
+
+        $this->assertEquals(config('resrv-config.maximum_quantity'), $component->__get('maxQuantity'));
+    }
+
+    /** @test */
     public function can_set_advanced()
     {
         Livewire::test(AvailabilitySearch::class)
@@ -216,7 +226,8 @@ class AvailabilitySearchTest extends TestCase
     {
         $component = Livewire::test(AvailabilitySearch::class, ['advanced' => true, 'overrideProperties' => ['something']])
             ->assertSet('advanced', true)
-            ->assertSet('overrideProperties', ['something']);
+            ->assertSet('overrideProperties', ['something'])
+            ->assertSee('select');
         $this->assertEquals(['something'], $component->__get('advancedProperties'));
     }
 
