@@ -3,8 +3,6 @@
 namespace Reach\StatamicResrv\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationFactory extends Factory

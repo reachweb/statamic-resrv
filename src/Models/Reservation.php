@@ -364,11 +364,11 @@ class Reservation extends Model
         return Str::upper(Str::random(6));
     }
 
-    // TODO: cleanup these methods 
+    // TODO: cleanup these methods
     public function getCheckoutForm()
     {
         $formHandle = $this->entry()->get('resrv_override_form') ?? config('resrv-config.form_name', 'checkout');
-                
+
         return Form::find($formHandle)->fields()->values();
     }
 
