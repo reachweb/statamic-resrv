@@ -7,7 +7,6 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\WithFaker;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
 use Statamic\Extend\Manifest;
-use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\User;

@@ -653,7 +653,7 @@ class ReservationFrontTest extends TestCase
     public function test_reservation_confirm_method_with_required_extras()
     {
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
-        
+
         $this->withExceptionHandling();
         $item = $this->makeStatamicItem();
         $this->signInAdmin();
