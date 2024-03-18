@@ -15,6 +15,7 @@ use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
+use Statamic\Facades\Blueprint;
 
 class ReservationFrontTest extends TestCase
 {
@@ -325,6 +326,8 @@ class ReservationFrontTest extends TestCase
 
     public function test_reservation_customer_checkout_form_exists()
     {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
         $item = $this->makeStatamicItem();
         $location = Location::factory()->create();
 
@@ -342,7 +345,10 @@ class ReservationFrontTest extends TestCase
 
     public function test_reservation_customer_checkout_form_submit()
     {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
         $item = $this->makeStatamicItem();
+
         $reservation = Reservation::factory([
             'item_id' => $item->id(),
         ])->create();
@@ -430,6 +436,8 @@ class ReservationFrontTest extends TestCase
     public function test_reservation_customer_checkout_form_submit_error()
     {
         $this->withExceptionHandling();
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
         $reservation = Reservation::factory()->create();
 
         $customerData = [
@@ -644,6 +652,8 @@ class ReservationFrontTest extends TestCase
 
     public function test_reservation_confirm_method_with_required_extras()
     {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+        
         $this->withExceptionHandling();
         $item = $this->makeStatamicItem();
         $this->signInAdmin();
@@ -1183,6 +1193,8 @@ class ReservationFrontTest extends TestCase
 
     public function test_array_of_stripe_keys()
     {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
         Config::set('resrv-config.stripe_secret_key', [
             'pages' => 'sk_test_some-key',
             'other-collection' => 'sk_test_some-other-key',

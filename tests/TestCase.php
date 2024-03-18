@@ -30,12 +30,9 @@ class TestCase extends OrchestraTestCase
 
         $this->withoutVite();
 
-        Blueprint::setDirectory(__DIR__.'/../resources/blueprints');
-
-        Version::shouldReceive('get')->andReturn('4.3.0');
-        $this->addToAssertionCount(-1); // Dont want to assert this
-
         $this->withoutExceptionHandling();
+
+        Version::shouldReceive('get')->andReturn('4.50.0');
     }
 
     public function tearDown(): void
