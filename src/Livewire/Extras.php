@@ -6,7 +6,6 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
-use Reach\StatamicResrv\Models\Reservation;
 
 class Extras extends Component
 {

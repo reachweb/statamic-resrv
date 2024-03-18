@@ -18,7 +18,7 @@ trait HandlesExtrasQueries
 
             return $extra;
         });
-        
+
         return $extras;
     }
 }

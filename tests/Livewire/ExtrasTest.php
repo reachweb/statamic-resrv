@@ -2,14 +2,11 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
-use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Extras;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
-use Statamic\Entries\Entry;
-use Statamic\Facades\Blueprint;
 
 class ExtrasTest extends TestCase
 {
@@ -33,7 +30,6 @@ class ExtrasTest extends TestCase
         $this->reservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),
         ]);
-
     }
 
     /** @test */
@@ -52,6 +48,4 @@ class ExtrasTest extends TestCase
 
         $this->assertNotNull($component->extras);
     }
-
-   
 }
