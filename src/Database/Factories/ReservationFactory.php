@@ -3,6 +3,8 @@
 namespace Reach\StatamicResrv\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationFactory extends Factory
@@ -29,8 +31,6 @@ class ReservationFactory extends Factory
             'date_start' => today()->toIso8601String(),
             'date_end' => today()->add(2, 'day')->toIso8601String(),
             'quantity' => 1,
-            'location_start' => '',
-            'location_end' => '',
             'price' => 200,
             'payment' => 50,
             'payment_id' => '',
