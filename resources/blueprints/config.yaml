@@ -135,13 +135,14 @@ minutes_to_hold:
   required: true
   
 checkout_url_settings:
-  display: 'Checkout URL settings'
-  instructions: 'These settings configure the checkout URLs when you are using legacy checkout. Leave them at "false" if using Javascript based checkout'
+  display: 'Checkout settings'
+  instructions: 'These settings configure the checkout Livewire component'
   type: section
 checkout_uri:
   display: 'Checkout URL'
-  instructions: 'The relative URL of the entry that acts like the checkout page'
-  type: text
+  instructions: 'The entry that contains the Livewire checkout component'
+  type: entries
+  max_items: 1
   required: true
 checkout_completed_uri:
   display: 'Checkout completed URL'
