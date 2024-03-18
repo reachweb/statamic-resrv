@@ -9,7 +9,9 @@ use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 
 class AvailabilitySearch extends Component
 {
-    use Traits\QueriesStatamic;
+    use Traits\HandlesStatamicQueries;
+
+    public string $view = 'availability-search';
 
     #[Session('resrv-search')]
     public AvailabilityData $data;
@@ -83,6 +85,6 @@ class AvailabilitySearch extends Component
 
     public function render()
     {
-        return view('statamic-resrv::livewire.availability-search');
+        return view('statamic-resrv::livewire.'.$this->view);
     }
 }

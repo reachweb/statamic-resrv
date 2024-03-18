@@ -12,7 +12,9 @@ use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 
 class AvailabilityResults extends Component
 {
-    use HandlesMultisiteIds, Traits\QueriesAvailability;
+    use HandlesMultisiteIds, Traits\HandlesAvailabilityQueries;
+
+    public string $view = 'availability-results';
 
     public string $entryId;
 
@@ -60,8 +62,13 @@ class AvailabilityResults extends Component
         }
     }
 
+    public function checkout(): void
+    {
+        
+    }
+
     public function render()
     {
-        return view('statamic-resrv::livewire.availability-results');
+        return view('statamic-resrv::livewire.'.$this->view);
     }
 }

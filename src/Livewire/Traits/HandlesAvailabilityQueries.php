@@ -9,7 +9,7 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Models\Availability;
 
-trait QueriesAvailability
+trait HandlesAvailabilityQueries
 {
     public function getAvailability(Collection $data): array
     {

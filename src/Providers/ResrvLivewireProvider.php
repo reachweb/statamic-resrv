@@ -5,12 +5,12 @@ namespace Reach\StatamicResrv\Providers;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
-use Reach\StatamicResrv\Livewire\Traits\QueriesAvailability;
+use Reach\StatamicResrv\Livewire\Traits\HandlesAvailabilityQueries;
 use Statamic\Providers\AddonServiceProvider;
 
 class ResrvLivewireProvider extends AddonServiceProvider
 {
-    use QueriesAvailability;
+    use HandlesAvailabilityQueries;
 
     public function boot(): void
     {
@@ -25,6 +25,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
     {
         Livewire::component('availability-search', \Reach\StatamicResrv\Livewire\AvailabilitySearch::class);
         Livewire::component('availability-results', \Reach\StatamicResrv\Livewire\AvailabilityResults::class);
+        Livewire::component('checkout', \Reach\StatamicResrv\Livewire\Checkout::class);
         if (class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {
             Livewire::component('lf-availability-filter', \Reach\StatamicResrv\Livewire\LfAvailabilityFilter::class);
         }

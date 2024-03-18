@@ -3,12 +3,12 @@
 namespace Reach\StatamicResrv\Scopes;
 
 use Illuminate\Support\Arr;
-use Reach\StatamicResrv\Livewire\Traits\QueriesAvailability;
+use Reach\StatamicResrv\Livewire\Traits\HandlesAvailabilityQueries;
 use Statamic\Query\Scopes\Scope;
 
 class ResrvSearch extends Scope
 {
-    use QueriesAvailability;
+    use HandlesAvailabilityQueries;
 
     /**
      * Apply the scope to a given Eloquent query builder.

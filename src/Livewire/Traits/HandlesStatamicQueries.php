@@ -7,7 +7,7 @@ use Reach\StatamicResrv\Exceptions\FieldNotFoundException;
 use Reach\StatamicResrv\Exceptions\NoAdvancedAvailabilitySet;
 use Statamic\Facades\Blueprint;
 
-trait QueriesStatamic
+trait HandlesStatamicQueries
 {
     public function getStatamicBlueprint()
     {
