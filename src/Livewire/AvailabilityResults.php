@@ -12,12 +12,17 @@ use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 
 class AvailabilityResults extends Component
 {
-    use HandlesMultisiteIds, Traits\HandlesAvailabilityQueries;
+    use HandlesMultisiteIds,
+        Traits\HandlesAvailabilityQueries,
+        Traits\HandlesReservationQueries,
+        Traits\HandlesStatamicQueries;
 
     public string $view = 'availability-results';
 
+    #[Locked]
     public string $entryId;
 
+    #[Locked]
     public Collection $availability;
 
     #[Session('resrv-search')]
@@ -28,6 +33,10 @@ class AvailabilityResults extends Component
 
     #[Locked]
     public int $extraDaysOffset = 0;
+
+    public Collection $extras;
+
+    public Collection $options;
 
     public function mount(string $entry)
     {
@@ -64,6 +73,10 @@ class AvailabilityResults extends Component
 
     public function checkout(): void
     {
+        $this->createReservation();
+
+        $this->redirect($this->getCheckoutEntry()->url());
+
     }
 
     public function render()

@@ -2,10 +2,12 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
+use Statamic\Entries\Entry;
 
 class AvailabilityResultsTest extends TestCase
 {
@@ -212,5 +214,109 @@ class AvailabilityResultsTest extends TestCase
             )
             ->assertViewHas('availability.message')
             ->assertViewHas('availability.message.status', false);
+    }
+
+    /** @test */
+    public function creates_reservation_when_checkout_is_called()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'test',
+                ]
+            );
+
+        $availability = $component->viewData('availability');
+
+        $component->call('checkout');
+
+        $this->assertDatabaseHas('resrv_reservations',
+            [
+                'item_id' => $this->advancedEntries->first()->id(),
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(2, 'day'),
+                'quantity' => 1,
+                'property' => 'test',
+                'payment' => data_get($availability, 'data.payment'),
+            ]
+        );
+
+        Config::set('resrv-config.minutes_to_hold', 10);
+        // Check that availability gets decreased here
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $this->advancedEntries->first()->id(),
+            'date' => $this->date->startOfDay(),
+            'available' => 0,
+        ]);
+
+        // Check that the reservation expires and availability is back
+        $this->travel(15)->minutes();
+
+        // Call availability to run the jobs
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'test',
+                ]
+            );
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $this->advancedEntries->first()->id(),
+            'date' => $this->date->startOfDay(),
+            'available' => 1,
+        ]);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'item_id' => $this->advancedEntries->first()->id(),
+            'date_start' => $this->date->setTime(12, 0, 0),
+            'status' => 'expired',
+        ]);
+
+    }
+
+    /** @test */
+    public function redirects_to_checkout_after_reservation_is_created()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'test',
+                ]
+            )
+            ->call('checkout')
+            ->assertSessionHas('resrv_reservation', 1)
+            ->assertRedirect($entry->url());
     }
 }

@@ -138,7 +138,7 @@ checkout_url_settings:
   display: 'Checkout settings'
   instructions: 'These settings configure the checkout Livewire component'
   type: section
-checkout_uri:
+checkout_entry:
   display: 'Checkout URL'
   instructions: 'The entry that contains the Livewire checkout component'
   type: entries

@@ -3,9 +3,11 @@
 namespace Reach\StatamicResrv\Livewire\Traits;
 
 use Reach\StatamicResrv\Exceptions\BlueprintNotFoundException;
+use Reach\StatamicResrv\Exceptions\CheckoutEntryNotFound;
 use Reach\StatamicResrv\Exceptions\FieldNotFoundException;
 use Reach\StatamicResrv\Exceptions\NoAdvancedAvailabilitySet;
 use Statamic\Facades\Blueprint;
+use Statamic\Facades\Entry;
 
 trait HandlesStatamicQueries
 {
@@ -36,5 +38,13 @@ trait HandlesStatamicQueries
             return $config['advanced_availability'];
         }
         throw new NoAdvancedAvailabilitySet($this->advanced);
+    }
+
+    public function getCheckoutEntry()
+    {
+        if ($entry = Entry::find(config('resrv-config.checkout_entry'))) {
+            return $entry;
+        }
+        throw new CheckoutEntryNotFound();
     }
 }
