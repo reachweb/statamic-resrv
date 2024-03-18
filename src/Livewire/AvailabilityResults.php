@@ -76,7 +76,6 @@ class AvailabilityResults extends Component
         $this->createReservation();
 
         $this->redirect($this->getCheckoutEntry()->url());
-
     }
 
     public function render()

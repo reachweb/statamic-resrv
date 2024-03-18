@@ -289,7 +289,6 @@ class AvailabilityResultsTest extends TestCase
             'date_start' => $this->date->setTime(12, 0, 0),
             'status' => 'expired',
         ]);
-
     }
 
     /** @test */
