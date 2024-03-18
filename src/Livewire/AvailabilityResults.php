@@ -64,7 +64,6 @@ class AvailabilityResults extends Component
 
     public function checkout(): void
     {
-        
     }
 
     public function render()
