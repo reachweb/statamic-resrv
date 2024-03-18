@@ -25,6 +25,9 @@ class LfAvailabilityFilter extends Component
     #[Locked]
     public bool $enableQuantity = false;
 
+    #[Locked]
+    public bool $live = true;
+
     #[Computed(persist: true)]
     public function enableAdvanced()
     {

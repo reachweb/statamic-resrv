@@ -42,7 +42,6 @@ class AvailabilitySearch extends Component
 
     public function updatedData(): void
     {
-        ray($this->data);
         if ($this->live && $this->validateDatesAreSet()) {
             $this->search();
         }
@@ -52,6 +51,11 @@ class AvailabilitySearch extends Component
     {
         $this->data->validate();
         $this->dispatch('availability-search-updated', $this->data);
+    }
+
+    public function submit(): void
+    {
+        $this->search();
     }
 
     public function validateDatesAreSet(): bool
@@ -67,11 +71,9 @@ class AvailabilitySearch extends Component
 
     public function clearDates(): void
     {
-        $this->data->reset('dates');
-
+        $this->data->reset();
         // Apparently validation errors don't reset with the above
-        $this->resetValidation('data.dates.date_start');
-        $this->resetValidation('data.dates.date_end');
+        $this->resetValidation();
     }
 
     public function getProperties()
