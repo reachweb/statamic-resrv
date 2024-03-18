@@ -25,7 +25,7 @@ class Checkout extends Component
     #[Computed(persist: true)]
     public function entry()
     {
-        return $this->getEntry($this->reservation->item_id)->toAugmentedArray();
+        return $this->getEntry($this->reservation->item_id);
     }
 
     #[Computed(persist: true)]

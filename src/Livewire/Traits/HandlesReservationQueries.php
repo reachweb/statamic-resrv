@@ -21,7 +21,7 @@ trait HandlesReservationQueries
                 'date_end' => $this->data->dates['date_end'],
                 'quantity' => $this->data->quantity,
                 'property' => $this->data->advanced,
-                'price' => data_get($this->availability, 'data.total'),
+                'price' => data_get($this->availability, 'data.price'),
                 'payment' => data_get($this->availability, 'data.payment'),
                 'payment_id' => '',
                 'customer' => '',

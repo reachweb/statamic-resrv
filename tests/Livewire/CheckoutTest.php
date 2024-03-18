@@ -61,16 +61,13 @@ class CheckoutTest extends TestCase
         $component = Livewire::test(Checkout::class)
             ->assertViewIs('statamic-resrv::livewire.checkout');
 
-        $reservation = $component->get('reservation');
-        $this->assertEquals($this->reservation->id, $reservation->id);
-        $this->assertEquals($this->reservation->date_start, $reservation->date_start);
-        $this->assertEquals($this->reservation->quantity, $reservation->quantity);
-        $this->assertEquals($this->reservation->date_start, $reservation->date_start);
+        $this->assertEquals($this->reservation->id, $component->reservation->id);
+        $this->assertEquals($this->reservation->date_start, $component->reservation->date_start);
+        $this->assertEquals($this->reservation->quantity, $component->reservation->quantity);
+        $this->assertEquals($this->reservation->date_start, $component->reservation->date_start);
 
-        $entry = $component->get('entry');
-        $this->assertEquals($this->entries->first()->toAugmentedArray(), $entry);
+        $this->assertEquals($this->entries->first(), $component->entry);
 
-        $form = $component->get('checkoutForm');
-        $this->assertContains('first_name', $form->first()->toArray());
+        $this->assertContains('first_name', $component->checkoutForm->first()->toArray());
     }
 }

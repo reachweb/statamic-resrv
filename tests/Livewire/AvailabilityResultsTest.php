@@ -252,6 +252,7 @@ class AvailabilityResultsTest extends TestCase
                 'quantity' => 1,
                 'property' => 'test',
                 'payment' => data_get($availability, 'data.payment'),
+                'price' => data_get($availability, 'data.price'),
             ]
         );
 
