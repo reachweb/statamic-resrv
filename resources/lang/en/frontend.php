@@ -24,4 +24,7 @@ return [
     'customerInfo' => 'Customer info',
     'payment' => 'Payment',
     'extrasDescription' => 'You can select all the optional extras or options you want to add to your reservation.',
+    'price_fixed' => 'per reservation',
+    'price_perday' => 'per day',
+    'quantity' => 'Quantity',
 ];
