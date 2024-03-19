@@ -8,7 +8,7 @@
 
 
     <div class="w-full flex flex-col md:flex-row">
-        <div class="w-full w-4/12 bg-gray-100 rounded p-4 md:p-8 xl:p-12">
+        <div class="w-full md:w-4/12 bg-gray-100 rounded p-4 md:p-8 xl:p-12">
             <div>
                 <div class="text-lg xl:text-xl font-medium mb-2">
                     {{ trans('statamic-resrv::frontend.reservationDetails') }}
@@ -33,18 +33,18 @@
                             {{ $this->reservation->date_end }}
                         </p>
                     </div>
-                   
-                </div>
-                </div>
-                <div>
-                    
                 </div>
             </div>
-
         </div>
-        <div class="w-full w-8/12">
-            <div class="p-4 md:p-8 xl:p-12">
-                
+
+        <div class="w-full md:w-8/12 pl-8 xl:pl-12">
+            <div class="mt-4 mb-8">
+                <x-resrv::checkout-steps :$step :$enableExtrasStep />
+            </div>
+            <div class="my-4">
+                @if ($step === 1)
+                    <livewire:checkout-extras :reservationId="$this->reservation->id" :enabledExtras="$extras" />
+                @endif
             </div>
         </div>
     </div>

@@ -20,4 +20,8 @@ return [
     'from' => 'from',
     'to' => 'to',
     'entryTitle' => 'Entry title',
+    'extrasAndOptions' => 'Extras and options',
+    'customerInfo' => 'Customer info',
+    'payment' => 'Payment',
+    'extrasDescription' => 'You can select all the optional extras or options you want to add to your reservation.',
 ];

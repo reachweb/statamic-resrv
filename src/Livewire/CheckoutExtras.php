@@ -7,9 +7,9 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 
-class Extras extends Component
+class CheckoutExtras extends Component
 {
-    use Traits\HandlesStatamicQueries, Traits\HandlesExtrasQueries;
+    use Traits\HandlesExtrasQueries, Traits\HandlesStatamicQueries;
 
     public string $view = 'checkout-extras';
 

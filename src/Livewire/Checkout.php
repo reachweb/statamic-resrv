@@ -16,6 +16,16 @@ class Checkout extends Component
 
     public Collection $options;
 
+    public int $step = 1;
+
+    public bool $enableExtrasStep = true;
+
+    public function mount()
+    {
+        $this->extras = collect();
+        $this->options = collect();
+    }
+
     #[Computed(persist: true)]
     public function reservation()
     {
