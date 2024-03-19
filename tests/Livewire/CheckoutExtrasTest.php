@@ -34,13 +34,13 @@ class CheckoutExtrasTest extends TestCase
     /** @test */
     public function renders_successfully()
     {
-        Livewire::test(CheckoutExtras::class, ['reservationId' => $this->reservation->id])
+        Livewire::test(CheckoutExtras::class, ['extras' => collect([])])
             ->assertViewIs('statamic-resrv::livewire.checkout-extras')
             ->assertStatus(200);
     }
 
     /** @test */
-    public function it_loads_the_extras_for_the_entry()
+    public function it_loads_the_extras_for_the_entry_and_reservation()
     {
         $extra = ResrvExtra::factory()->create();
 
@@ -49,21 +49,17 @@ class CheckoutExtrasTest extends TestCase
             'extra_id' => $extra->id,
         ]);
 
-        // We need to do this because of the way we get the extra data in the Livewire component
-        $extra = json_decode($extra->toJson());
+        $extras = ResrvExtra::getPriceForDates($this->reservation);
 
-        $component = Livewire::test(CheckoutExtras::class, ['reservationId' => $this->reservation->id])
-            ->assertViewIs('statamic-resrv::livewire.checkout-extras');
-
-        // This price are for this reservation only
-        $this->assertEquals('9.30', $component->extras->first()->price);
-        $this->assertEquals('perday', $component->extras->first()->price_type);
+        Livewire::test(CheckoutExtras::class, ['extras' => $extras])
+            ->assertViewIs('statamic-resrv::livewire.checkout-extras')
+            ->assertViewHas('extras', fn ($extras) => $extras->first()->price == '9.30');
     }
 
     /** @test */
     public function it_listens_to_the_extra_changed_event_and_changed_the_enabled_extras_array()
     {
-        $component = Livewire::test(CheckoutExtras::class, ['reservationId' => $this->reservation->id])
+        $component = Livewire::test(CheckoutExtras::class, ['extras' => collect([])])
             ->dispatch('extra-changed', [
                 'id' => 1,
                 'price' => 4.65,
