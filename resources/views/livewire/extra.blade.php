@@ -35,7 +35,7 @@
                     </button>
                     <input type="text" id="counter-input" class="flex-shrink-0 text-gray-900 border-0 bg-transparent text-sm font-normal focus:outline-none focus:ring-0 max-w-[2.5rem] text-center" placeholder="" x-bind:value="quantity" required />
                     <button 
-                        type="button" 
+                        type="button"
                         class="flex-shrink-0 bg-gray-100 hover:bg-gray-200 inline-flex items-center justify-center border border-gray-300 rounded-md 
                         h-5 w-5 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         x-on:click="quantity++"

@@ -27,4 +27,5 @@ return [
     'price_fixed' => 'per reservation',
     'price_perday' => 'per day',
     'quantity' => 'Quantity',
+    'extras' => 'Extras',
 ];

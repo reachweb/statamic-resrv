@@ -8,13 +8,15 @@ use Livewire\Component;
 
 class Checkout extends Component
 {
-    use Traits\HandlesStatamicQueries;
+    use Traits\HandlesStatamicQueries, Traits\HandlesExtrasQueries;
 
     public string $view = 'checkout';
 
-    public Collection $extras;
+    public Collection $enabledExtras;
 
     public Collection $options;
+
+    public Collection $enabledOptions;
 
     public int $step = 1;
 
@@ -22,8 +24,9 @@ class Checkout extends Component
 
     public function mount()
     {
-        $this->extras = collect();
+        $this->enabledExtras = collect();
         $this->options = collect();
+        $this->enabledOptions = collect();
     }
 
     #[Computed(persist: true)]
@@ -42,6 +45,17 @@ class Checkout extends Component
     public function checkoutForm()
     {
         return $this->reservation->getCheckoutForm();
+    }
+
+    #[Computed(persist: true)]
+    public function extras()
+    {
+        return $this->getExtrasForEntry();
+    }
+
+    public function calculateTotals()
+    {
+        //
     }
 
     public function render()

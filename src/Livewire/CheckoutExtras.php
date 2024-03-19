@@ -3,27 +3,20 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Illuminate\Support\Collection;
-use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\Modelable;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 class CheckoutExtras extends Component
 {
-    use Traits\HandlesExtrasQueries, Traits\HandlesStatamicQueries;
-
     public string $view = 'checkout-extras';
 
     #[Locked]
-    public int $reservationId;
+    public Collection $extras;
 
+    #[Modelable, Locked]
     public Collection $enabledExtras;
-
-    #[Computed(persist: true)]
-    public function extras()
-    {
-        return $this->getExtrasForEntry();
-    }
 
     public function mount()
     {
