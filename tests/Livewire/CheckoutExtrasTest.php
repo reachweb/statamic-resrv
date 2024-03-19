@@ -29,7 +29,6 @@ class CheckoutExtrasTest extends TestCase
         $this->reservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),
         ]);
-
     }
 
     /** @test */
