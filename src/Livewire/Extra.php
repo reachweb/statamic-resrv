@@ -23,7 +23,6 @@ class Extra extends Component
     {
         if ($this->selected) {
             $this->quantity = 1;
-
         } else {
             $this->quantity = 0;
         }
