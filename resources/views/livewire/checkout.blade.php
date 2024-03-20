@@ -46,6 +46,7 @@
                         :options="$this->options"
                         :$enabledOptions 
                         :totals="$this->calculateTotals()"
+                        :key="'pt-'.$enabledExtras->pluck('id')->join('-').$enabledOptions->pluck('id')->join('-')"
                     />
                 </div>
             </div>

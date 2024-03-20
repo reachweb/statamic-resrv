@@ -57,7 +57,7 @@ class CheckoutExtrasTest extends TestCase
     }
 
     /** @test */
-    public function it_listens_to_the_extra_changed_event_and_changed_the_enabled_extras_array()
+    public function it_listens_to_the_extra_changed_event_and_changes_the_enabled_extras_array()
     {
         $component = Livewire::test(CheckoutExtras::class, ['extras' => collect([])])
             ->dispatch('extra-changed', [
@@ -76,7 +76,23 @@ class CheckoutExtrasTest extends TestCase
                 'price' => 4.65,
                 'quantity' => 0,
             ])
-            ->assertSet('enabledExtras', collect()
-            );
+            ->assertSet('enabledExtras', collect())
+            ->dispatch('extra-changed', [
+                'id' => 1,
+                'price' => 4.65,
+                'quantity' => 3,
+            ])
+            ->assertSet('enabledExtras', collect([0 => [
+                'id' => 1,
+                'price' => 4.65,
+                'quantity' => 3,
+            ]])
+            )
+            ->dispatch('extra-changed', [
+                'id' => 1,
+                'price' => 4.65,
+                'quantity' => 0,
+            ])
+            ->assertSet('enabledExtras', collect());
     }
 }
