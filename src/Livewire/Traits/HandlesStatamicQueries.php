@@ -53,9 +53,4 @@ trait HandlesStatamicQueries
     {
         return Entry::find($id);
     }
-
-    public function getReservation()
-    {
-        return Reservation::findOrFail(session('resrv_reservation'));
-    }
 }

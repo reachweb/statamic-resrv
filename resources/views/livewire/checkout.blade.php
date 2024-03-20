@@ -9,10 +9,18 @@
             <div class="my-4">
                 @if ($step === 1)
                     <livewire:checkout-extras wire:model.live="enabledExtras" :extras="$this->extras" />
+                    <div class="mt-6 xl:mt-8">
+                        <button 
+                            type="button" 
+                            class="w-full px-6 py-3.5 text-base font-medium text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg text-center"
+                            wire:click="handleFirstStep()"
+                        >
+                            {{ trans('statamic-resrv::frontend.continueToPersonalDetails') }}
+                        </button>
+                    </div>
                 @endif
             </div>
         </div>
-
         <div class="w-full md:w-4/12 bg-gray-100 rounded p-4 md:p-8 xl:p-10">
             <div class="flex flex-col justify-between h-full">
                 <div>
@@ -59,4 +67,14 @@
             </div>
         </div>
     </div>
+    @if ($errors->any())
+    <div class="flex flex-col pb-6">
+        <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.somethingWentWrong') }}</dt>
+        <dd class="mb-1 text-gray-500 lg:text-lg ">
+            @foreach ($errors->all() as $index => $error)
+                <div wire:key="{{ $index }}">{{ $error }}</div>
+            @endforeach
+        </dd>
+    </div>
+    @endif
 </div>

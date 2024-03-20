@@ -9,6 +9,11 @@ use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesReservationQueries
 {
+    public function getReservation()
+    {
+        return Reservation::findOrFail(session('resrv_reservation'));
+    }
+
     public function createReservation()
     {
         $reservation = Reservation::create(
@@ -29,5 +34,15 @@ trait HandlesReservationQueries
         );
 
         ReservationCreated::dispatch($reservation);
+    }
+
+    public function getAvailabilityDataFromReservation()
+    {
+        return [
+            'date_start' => $this->reservation->date_start,
+            'date_end' => $this->reservation->date_end,
+            'quantity' => $this->reservation->quantity,
+            'advanced' => $this->reservation->property,
+        ];
     }
 }

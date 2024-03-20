@@ -9,6 +9,7 @@ return [
     'tryAdjustingYourSearch' => 'Try adjusting your dates or quantity.',
     'yourSearch' => 'Your search',
     'searchError' => 'Search error',
+    'somethingWentWrong' => 'Something went wrong',
     'reservationDetails' => 'Reservation details',
     'reservationPeriod' => 'Reservation period',
     'paymentDetails' => 'Payment details',
