@@ -57,6 +57,7 @@ class Checkout extends Component
     public function calculateTotals()
     {
         // Init totals
+        $total = Price::create(0);
         $extrasTotal = Price::create(0);
         $optionsTotal = Price::create(0);
 
@@ -69,7 +70,7 @@ class Checkout extends Component
         if ($this->enabledOptions->count() > 0) {
             $optionsTotal = $optionsTotal->add(...$this->enabledOptions->map(fn ($extra) => Price::create($extra['price']))->toArray());
         }
-        $total = $reservationTotal->add($extrasTotal, $optionsTotal);
+        $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
 
         $payment = $this->reservation->payment;
 
