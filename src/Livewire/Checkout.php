@@ -70,6 +70,7 @@ class Checkout extends Component
             $this->confirmReservationIsValid();
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
+
             return;
         }
 
@@ -80,7 +81,7 @@ class Checkout extends Component
         $this->assignExtras();
         $this->assignOptions();
 
-        $this->step = 2;        
+        $this->step = 2;
     }
 
     protected function confirmReservationIsValid()
@@ -96,7 +97,7 @@ class Checkout extends Component
                 'total' => $totals->get('total'),
                 'extras' => $this->enabledExtras,
                 'options' => $this->enabledOptions,
-            ],            
+            ],
         ), $this->entry->id());
     }
 
@@ -150,7 +151,7 @@ class Checkout extends Component
         return collect(compact('total', 'reservationTotal', 'extrasTotal', 'optionsTotal', 'payment'));
     }
 
-    public function rules() 
+    public function rules()
     {
         return [
             'enabledExtras' => 'nullable|array',

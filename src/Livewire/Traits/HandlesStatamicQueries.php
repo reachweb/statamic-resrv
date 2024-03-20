@@ -6,7 +6,6 @@ use Reach\StatamicResrv\Exceptions\BlueprintNotFoundException;
 use Reach\StatamicResrv\Exceptions\CheckoutEntryNotFound;
 use Reach\StatamicResrv\Exceptions\FieldNotFoundException;
 use Reach\StatamicResrv\Exceptions\NoAdvancedAvailabilitySet;
-use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Entry;
 

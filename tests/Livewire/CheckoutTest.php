@@ -100,19 +100,17 @@ class CheckoutTest extends TestCase
             ->call('handleFirstStep')
             ->assertSet('step', 2);
 
-            ray(\Reach\StatamicResrv\Models\Reservation::all());
-            $this->assertDatabaseHas('resrv_reservations', [
-                'id' => $this->reservation->id,
-                'price' => '200',
-                'total' => '209.30',
-            ]);
-            $this->assertDatabaseHas('resrv_reservation_extra', [
-                'reservation_id' => $this->reservation->id,
-                'extra_id' => $this->extra->id,
-                'quantity' => 1,
-                'price' => '9.30',
-            ]);
+        ray(\Reach\StatamicResrv\Models\Reservation::all());
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'price' => '200',
+            'total' => '209.30',
+        ]);
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $this->extra->id,
+            'quantity' => 1,
+            'price' => '9.30',
+        ]);
     }
-
-    
 }
