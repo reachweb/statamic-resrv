@@ -47,6 +47,9 @@ class CheckoutTest extends TestCase
     /** @test */
     public function renders_successfully()
     {
+        session(['resrv_reservation' => $this->reservation->id]);
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+        
         Livewire::test(Checkout::class)
             ->assertViewIs('statamic-resrv::livewire.checkout')
             ->assertStatus(200);
