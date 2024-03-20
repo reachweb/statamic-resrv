@@ -19,14 +19,14 @@
         @if ($extra->allow_multiple)
         <div class="flex items-center justify-center">
             @if ($quantity > 0)
-            <div wire:transition.in.opacity.duration.200ms class="max-w-xs mx-auto flex items-center" x-data="{ quantity: $wire.entangle('quantity').live }">
+            <div class="max-w-xs mx-auto flex items-center" x-data="{ quantity: $wire.entangle('quantity').live }">
                 <label for="counter-input" class="block mr-3 text-sm font-medium text-gray-900">{{ trans('statamic-resrv::frontend.quantity') }}:</label>
                 <div class="relative flex items-center">
                     <button 
                         type="button" 
                         class="flex-shrink-0 bg-gray-100 hover:bg-gray-200 inline-flex items-center justify-center border border-gray-300 rounded-md 
                         h-5 w-5 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                        x-on:click="quantity--"
+                        x-on:click.throttle="quantity--"
                         x-bind:disabled="quantity === 1"
                     >
                         <svg class="w-2.5 h-2.5 text-gray-900" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 2">
@@ -38,7 +38,7 @@
                         type="button"
                         class="flex-shrink-0 bg-gray-100 hover:bg-gray-200 inline-flex items-center justify-center border border-gray-300 rounded-md 
                         h-5 w-5 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                        x-on:click="quantity++"
+                        x-on:click.throttle="quantity++"
                         x-bind:disabled="quantity === $wire.extra.maximum"
                     >
                         <svg class="w-2.5 h-2.5 text-gray-900" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 18">
