@@ -36,7 +36,6 @@ class Extra extends Component
 
     public function dispatchExtra()
     {
-        ray($this->extra);
         $this->dispatch('extra-changed', [
             'id' => $this->extra->id,
             'price' => $this->extra->price,

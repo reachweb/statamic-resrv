@@ -14,32 +14,39 @@
         </div>
 
         <div class="w-full md:w-4/12 bg-gray-100 rounded p-4 md:p-8 xl:p-10">
-            <div>
-                <div class="text-lg xl:text-xl font-medium mb-2">
-                    {{ trans('statamic-resrv::frontend.reservationDetails') }}
-                </div>
-                <hr class="h-px my-4 bg-gray-200 border-0">
-                <div wire:ignore>
-                    <div class="pb-3 md:pb-4 border-b border-gray-200">
-                        <p class="text-sm font-medium text-gray-500 truncate">
-                            {{ trans('statamic-resrv::frontend.entryTitle') }}
-                        </p>
-                        <p class="text-sm text-gray-900 truncate">
-                            {{ $this->entry->title }}
-                        </p>
+            <div class="flex flex-col justify-between h-full">
+                <div>
+                    <div class="text-lg xl:text-xl font-medium mb-2">
+                        {{ trans('statamic-resrv::frontend.reservationDetails') }}
                     </div>
-                    <div class="py-3 md:py-4 border-b border-gray-200">
-                        <p class="text-sm font-medium text-gray-500 truncate">
-                            {{ trans('statamic-resrv::frontend.reservationPeriod') }}
-                        </p>
-                        <p class="text-sm text-gray-900 truncate">
-                            {{ $this->reservation->date_start }}
-                            {{ trans('statamic-resrv::frontend.to') }}
-                            {{ $this->reservation->date_end }}
-                        </p>
-                    </div>                   
-                </div>
-                <div class="py-3 md:py-4">
+                    <hr class="h-px my-4 bg-gray-200 border-0">
+                    <div wire:ignore>
+                        <div class="pb-3 md:pb-4 border-b border-gray-200">
+                            <p class="text-sm font-medium text-gray-500 truncate">
+                                {{ trans('statamic-resrv::frontend.entryTitle') }}
+                            </p>
+                            <p class="text-sm text-gray-900 truncate">
+                                {{ $this->entry->title }}
+                                @if ($this->reservation->quantity > 1)
+                                <span class="text-xs text-gray-500">
+                                    (x{{ $this->reservation->quantity }})
+                                </span>
+                                @endif
+                            </p>
+                        </div>
+                        <div class="py-3 md:py-4 border-b border-gray-200">
+                            <p class="text-sm font-medium text-gray-500 truncate">
+                                {{ trans('statamic-resrv::frontend.reservationPeriod') }}
+                            </p>
+                            <p class="text-sm text-gray-900 truncate">
+                                {{ $this->reservation->date_start }}
+                                {{ trans('statamic-resrv::frontend.to') }}
+                                {{ $this->reservation->date_end }}
+                            </p>
+                        </div>                   
+                    </div>
+                </div>                
+                <div class="flex flex-grow pt-3 md:pt-4">
                     <x-resrv::checkout-payment-table 
                         :extras="$this->extras"
                         :$enabledExtras

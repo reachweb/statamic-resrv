@@ -52,9 +52,6 @@
         @endif
         <div class="flex items-center justify-end text-gray-900">
             <span>{{ config('resrv-config.currency_symbol') }} {{ $extra->price }}</span>
-            @unless ($extra->price_type === 'relative')
-            <span class="text-gray-500 ms-1 text-sm">{{ trans('statamic-resrv::frontend.price_'.$extra->price_type) }}</span>
-            @endunless
         </div>  
     </div>
 </div>

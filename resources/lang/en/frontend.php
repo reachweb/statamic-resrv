@@ -28,4 +28,8 @@ return [
     'price_perday' => 'per day',
     'quantity' => 'Quantity',
     'extras' => 'Extras',
+    'total' => 'Total',
+    'payableNow' => 'Payable now',
+    'reservationTotal' => 'Reservation total',
+    'continueToPersonalDetails' => 'Continue to customer info',
 ];
