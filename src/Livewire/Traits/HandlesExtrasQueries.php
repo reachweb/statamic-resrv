@@ -7,9 +7,9 @@ use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesExtrasQueries
 {
-    public function getExtrasForEntry($reservation = null)
+    public function getExtrasForEntry()
     {
-        $reservation = $reservation ?? Reservation::findOrFail($this->reservation->id)->only(['date_start', 'date_end', 'quantity', 'property', 'item_id']);
+        $reservation = $this->reservation ?? Reservation::findOrFail($this->reservation->id)->only(['date_start', 'date_end', 'quantity', 'property', 'item_id']);
 
         $extras = Extra::getPriceForDates($reservation);
 

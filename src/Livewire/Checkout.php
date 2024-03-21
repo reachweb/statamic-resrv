@@ -4,10 +4,14 @@ namespace Reach\StatamicResrv\Livewire;
 
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
 {
@@ -21,6 +25,9 @@ class Checkout extends Component
     public Collection $options;
 
     public Collection $enabledOptions;
+
+    #[Locked]
+    public string $clientSecret;
 
     public int $step = 1;
 
@@ -37,7 +44,7 @@ class Checkout extends Component
     }
 
     #[Computed(persist: true)]
-    public function reservation()
+    public function reservation(): Reservation
     {
         return $this->getReservation();
     }
@@ -49,12 +56,12 @@ class Checkout extends Component
     }
 
     #[Computed(persist: true)]
-    public function extras()
+    public function extras(): Collection
     {
         return $this->getExtrasForEntry();
     }
 
-    public function handleFirstStep()
+    public function handleFirstStep(): void
     {
         // Validate data
         $this->validate();
@@ -78,7 +85,28 @@ class Checkout extends Component
         $this->step = 2;
     }
 
-    protected function confirmReservationIsValid()
+    #[On('checkout-form-submitted')]
+    public function handleSecondStep(): void
+    {
+        // Get a fresh record from the database
+        $reservation = $this->reservation->fresh();
+
+        // Get an instance of the payment interface
+        $payment = app(PaymentInterface::class);
+
+        // Create a payment intent
+        $paymentIndent = $payment->paymentIntent($reservation->payment, $reservation, $reservation->customer);
+
+        // Save it in the database
+        $reservation->update(['payment_id' => $paymentIndent->id]);
+
+        // Set it in a public property so that we can access it at the payment step
+        $this->clientSecret = $paymentIndent->client_secret;
+
+        $this->step = 3;
+    }
+
+    protected function confirmReservationIsValid(): void
     {
         $totals = $this->calculateTotals();
 
@@ -95,7 +123,7 @@ class Checkout extends Component
         ), $this->entry->id());
     }
 
-    protected function assignExtras()
+    protected function assignExtras(): void
     {
         if ($this->enabledExtras->count() > 0) {
             $extrasToSync = $this->enabledExtras->mapWithKeys(function ($extra) {
@@ -110,7 +138,7 @@ class Checkout extends Component
         }
     }
 
-    protected function assignOptions()
+    protected function assignOptions(): void
     {
         if ($this->enabledOptions->count() > 0) {
             $optionsToSync = $this->enabledOptions->mapWithKeys(function ($option) {
@@ -122,7 +150,7 @@ class Checkout extends Component
         }
     }
 
-    public function calculateTotals()
+    public function calculateTotals(): Collection
     {
         // Init totals
         $total = Price::create(0);
@@ -145,7 +173,7 @@ class Checkout extends Component
         return collect(compact('total', 'reservationTotal', 'extrasTotal', 'optionsTotal', 'payment'));
     }
 
-    public function rules()
+    public function rules(): array
     {
         return [
             'enabledExtras' => 'nullable|array',
@@ -162,13 +190,6 @@ class Checkout extends Component
                 'integer',
             ],
         ];
-    }
-
-    public function checkout()
-    {
-        if ($this->step === 1) {
-            $this->handleFirstStep();
-        }
     }
 
     public function render()

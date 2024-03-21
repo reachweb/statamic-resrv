@@ -36,5 +36,8 @@ return [
     'continueToPayment' => 'Continue to payment',
     'personalDetails' => 'Personal details',
     'personalDetailsDescription' => 'We need some information about you to complete your reservation.',
+    'pay' => 'Pay',
+    'toCompleteYourReservation' => 'to complete your reservation',
+    'paymentDescription' => 'Securely pay for your reservation.',
 
 ];

@@ -46,6 +46,7 @@ class CheckoutTest extends TestCase
         $entry->save();
 
         Config::set('resrv-config.checkout_entry', $entry->id());
+        Config::set('resrv-config.checkout_completed_entry', $entry->id());
 
         $this->extra = ResrvExtra::factory()->create();
 

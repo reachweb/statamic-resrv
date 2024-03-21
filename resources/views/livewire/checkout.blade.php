@@ -13,6 +13,9 @@
                 @if ($step === 2)
                     <livewire:checkout-form :reservation="$this->reservation" />
                 @endif
+                @if ($step === 3)
+                    <livewire:checkout-payment :client_secret="$clientSecret" :amount="$this->reservation->payment->format()" />
+                @endif
             </div>
         </div>
         <div class="w-full md:w-4/12 bg-gray-100 rounded p-4 md:p-8 xl:p-10">

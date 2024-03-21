@@ -14,7 +14,7 @@
         @endforeach
     </div>
     <div class="mt-6 xl:mt-8">
-        <x-resrv::checkout-step-button wire:click="$parent.checkout()">
+        <x-resrv::checkout-step-button wire:click="$parent.handleFirstStep()">
             {{ trans('statamic-resrv::frontend.continueToPersonalDetails') }}
         </x-resrv::checkout-step-button>
     </div>

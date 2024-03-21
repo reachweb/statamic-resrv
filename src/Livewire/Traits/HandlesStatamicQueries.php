@@ -48,6 +48,14 @@ trait HandlesStatamicQueries
         throw new CheckoutEntryNotFound();
     }
 
+    public function getCheckoutCompleteEntry()
+    {
+        if ($entry = Entry::find(config('resrv-config.checkout_completed_entry'))) {
+            return $entry;
+        }
+        throw new CheckoutEntryNotFound();
+    }
+
     public function getEntry($id)
     {
         return Entry::find($id);
