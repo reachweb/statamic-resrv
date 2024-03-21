@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
-use Illuminate\Support\Collection;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
@@ -17,7 +16,8 @@ class CheckoutForm extends Component
     #[Validate]
     public array $form;
 
-    public function mount() {
+    public function mount()
+    {
         $this->form = collect($this->checkoutForm)->mapWithKeys(function ($field) {
             return [
                 $field['handle'] => $field['type'] === 'checkboxes' ? [] : '',
@@ -37,7 +37,8 @@ class CheckoutForm extends Component
         return collect($this->checkoutForm)->mapWithKeys(fn ($field) => ['form.'.$field['handle'] => $field['display']])->all();
     }
 
-    public function submit() {
+    public function submit()
+    {
         $this->validate();
         $this->dispatch('checkout-form-submitted', $this->form);
     }

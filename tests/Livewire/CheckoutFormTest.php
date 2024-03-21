@@ -3,10 +3,8 @@
 namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\CheckoutForm;
-use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -28,7 +26,7 @@ class CheckoutFormTest extends TestCase
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
         $this->entries = $this->createEntries();
-    
+
         $this->travelTo(today()->setHour(12));
         $this->reservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),
@@ -55,5 +53,4 @@ class CheckoutFormTest extends TestCase
             ->assertViewHas('checkoutForm')
             ->assertViewHas('form', fn ($data) => array_key_exists('first_name', $data));
     }
-
 }
