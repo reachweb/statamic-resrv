@@ -59,7 +59,7 @@ class CheckoutExtrasTest extends TestCase
     /** @test */
     public function it_listens_to_the_extra_changed_event_and_changes_the_enabled_extras_array()
     {
-        $component = Livewire::test(CheckoutExtras::class, ['extras' => collect([])])
+        $component = Livewire::test(CheckoutExtras::class, ['enabledExtras' => collect([]), 'extras' => collect([])])
             ->dispatch('extra-changed', [
                 'id' => 1,
                 'price' => 4.65,

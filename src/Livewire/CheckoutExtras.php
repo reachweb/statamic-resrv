@@ -18,11 +18,6 @@ class CheckoutExtras extends Component
     #[Modelable, Locked]
     public Collection $enabledExtras;
 
-    public function mount()
-    {
-        $this->enabledExtras = collect();
-    }
-
     #[On('extra-changed')]
     public function extraChanged($extra)
     {
