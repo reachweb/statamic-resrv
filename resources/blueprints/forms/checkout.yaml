@@ -52,7 +52,6 @@ tabs:
               validate:
                 - required
                 - email
-                - 'same:form.email'
               width: 50
               localizable: false
           -

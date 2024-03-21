@@ -443,12 +443,12 @@ class ReservationFrontTest extends TestCase
         $customerData = [
             'first_name' => 'Test',
             'last_name' => 'Testing',
-            'email' => 'test@test.com',
-            'repeat_email' => 'test@test.co',
+            'email' => 'test2test.com',
+            'repeat_email' => 'test@test.com',
         ];
 
         $response = $this->post(route('resrv.reservation.checkoutFormSubmit', $reservation->id), $customerData);
-        $response->assertSessionHasErrors(['repeat_email']);
+        $response->assertSessionHasErrors(['email']);
     }
 
     public function test_reservation_confirm_checkout_method()
