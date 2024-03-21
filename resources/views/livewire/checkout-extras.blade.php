@@ -13,4 +13,9 @@
             <livewire:extra :extra="$extra" :key="$id" />
         @endforeach
     </div>
+    <div class="">
+        <x-resrv::checkout-step-button>
+            {{ trans('statamic-resrv::frontend.continueToPersonalDetails') }}
+        </x-resrv::checkout-step-button>
+    </div>
 </div>

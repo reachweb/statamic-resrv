@@ -9,15 +9,9 @@
             <div class="my-4">
                 @if ($step === 1)
                     <livewire:checkout-extras wire:model.live="enabledExtras" :extras="$this->extras" />
-                    <div class="mt-6 xl:mt-8">
-                        <button 
-                            type="button" 
-                            class="w-full px-6 py-3.5 text-base font-medium text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg text-center"
-                            wire:click="handleFirstStep()"
-                        >
-                            {{ trans('statamic-resrv::frontend.continueToPersonalDetails') }}
-                        </button>
-                    </div>
+                @endif
+                @if ($step === 2)
+                    <livewire:checkout-form :checkout-form="$this->checkoutForm" />
                 @endif
             </div>
         </div>

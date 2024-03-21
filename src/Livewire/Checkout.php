@@ -11,7 +11,7 @@ use Reach\StatamicResrv\Facades\Price;
 
 class Checkout extends Component
 {
-    use Traits\HandlesExtrasQueries, Traits\HandlesStatamicQueries, Traits\HandlesReservationQueries;
+    use Traits\HandlesExtrasQueries, Traits\HandlesReservationQueries, Traits\HandlesStatamicQueries;
 
     public string $view = 'checkout';
 
@@ -32,7 +32,7 @@ class Checkout extends Component
         $this->options = collect();
         $this->enabledOptions = collect();
         if ($this->enableExtrasStep === false) {
-            $this->step = 2;
+            $this->handleFirstStep();
         }
     }
 
@@ -51,7 +51,7 @@ class Checkout extends Component
     #[Computed(persist: true)]
     public function checkoutForm()
     {
-        return $this->reservation->getCheckoutForm();
+        return $this->reservation->getCheckoutForm()->reject(fn ($field) => $field->get('input_type') === 'hidden')->toArray();
     }
 
     #[Computed(persist: true)]
@@ -168,6 +168,13 @@ class Checkout extends Component
                 'integer',
             ],
         ];
+    }
+
+    public function checkout()
+    {
+        if ($this->step === 1) {
+            $this->handleFirstStep();
+        }
     }
 
     public function render()
