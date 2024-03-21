@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -290,6 +291,42 @@ class AvailabilityResultsTest extends TestCase
             'date_start' => $this->date->setTime(12, 0, 0),
             'status' => 'expired',
         ]);
+    }
+
+    /** @test */
+    public function does_not_create_reservation_if_availability_changed()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '100.00');
+
+        // Change the availability manually
+        Availability::where('statamic_id', $this->entries->first()->id())
+            ->where('date', $this->date->startOfDay())
+            ->update(['available' => 0]);
+
+        // Call checkout and get a validation error
+        $component->call('checkout')
+            ->assertHasErrors('availability');
     }
 
     /** @test */

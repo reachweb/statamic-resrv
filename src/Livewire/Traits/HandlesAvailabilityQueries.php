@@ -57,7 +57,15 @@ trait HandlesAvailabilityQueries
         return $periods;
     }
 
-    public function generateDatePeriods(): Collection
+    public function validateAvailabilityAndPrice()
+    {
+        $searchData = array_merge(['price' => data_get($this->availability, 'data.price')], $this->data->toResrvArray());
+        if ((new Availability)->confirmAvailabilityAndPrice($searchData, $this->entryId) === false) {
+            throw new AvailabilityException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
+        }
+    }
+
+    protected function generateDatePeriods(): Collection
     {
         $dateStart = Carbon::parse($this->data->dates['date_start']);
         $dateEnd = Carbon::parse($this->data->dates['date_end']);

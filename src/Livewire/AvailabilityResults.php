@@ -7,6 +7,7 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
 use Livewire\Component;
+use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 
@@ -73,9 +74,15 @@ class AvailabilityResults extends Component
 
     public function checkout(): void
     {
-        $this->createReservation();
+        try {
+            $this->validateAvailabilityAndPrice();
+            $this->createReservation();
 
-        $this->redirect($this->getCheckoutEntry()->url());
+            $this->redirect($this->getCheckoutEntry()->url());
+
+        } catch (AvailabilityException $exception) {
+            $this->addError('availability', $exception->getMessage());
+        }
     }
 
     public function render()
