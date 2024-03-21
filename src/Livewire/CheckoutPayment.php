@@ -15,8 +15,8 @@ class CheckoutPayment extends Component
     public string $clientSecret;
 
     #[Locked]
-    public float $amount;   
-    
+    public float $amount;
+
     #[Locked]
     public string $checkoutCompletedUrl;
 
@@ -24,7 +24,7 @@ class CheckoutPayment extends Component
     {
         $this->checkoutCompletedUrl = $this->getCheckoutCompleteEntry()->absoluteUrl();
     }
-    
+
     public function render()
     {
         return view('statamic-resrv::livewire.'.$this->view);

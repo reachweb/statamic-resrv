@@ -49,6 +49,4 @@ class CheckoutPaymentTest extends TestCase
                 return $checkoutCompletedUrl === Entry::find(Config::get('resrv-config.checkout_completed_entry'))->absoluteUrl();
             });
     }
-
-   
 }
