@@ -55,7 +55,7 @@ class CheckoutFormTest extends TestCase
 
         $this->assertNotNull($component->checkoutForm);
     }
-    
+
     /** @test */
     public function checkout_form_validation_works()
     {
@@ -77,7 +77,7 @@ class CheckoutFormTest extends TestCase
 
         $component = Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])
             ->set('form', [
-                'first_name' => 'Jerry', 
+                'first_name' => 'Jerry',
                 'last_name' => 'Seinfeld',
                 'email' => 'about@nothing.com',
                 'repeat_email' => 'about@nothing.com',
@@ -88,9 +88,9 @@ class CheckoutFormTest extends TestCase
             ->assertDispatchedTo(Checkout::class, 'checkout-form-submitted')
             ->assertHasNoErrors('form.last_name');
 
-            $this->assertDatabaseHas('resrv_reservations', [
-                'customer->first_name' => 'Jerry',
-                'customer->last_name' => 'Seinfeld',
-            ]);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'customer->first_name' => 'Jerry',
+            'customer->last_name' => 'Seinfeld',
+        ]);
     }
 }
