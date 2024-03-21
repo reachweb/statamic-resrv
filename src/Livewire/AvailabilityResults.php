@@ -79,7 +79,6 @@ class AvailabilityResults extends Component
             $this->createReservation();
 
             $this->redirect($this->getCheckoutEntry()->url());
-
         } catch (AvailabilityException $exception) {
             $this->addError('availability', $exception->getMessage());
         }
