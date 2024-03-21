@@ -6,7 +6,7 @@
             <div class="mt-4 mb-8">
                 <x-resrv::checkout-steps :$step :$enableExtrasStep />
             </div>
-            <div class="my-4">
+            <div class="mt-4">
                 @if ($step === 1)
                     <livewire:checkout-extras wire:model.live="enabledExtras" :extras="$this->extras" />
                 @endif

@@ -1,92 +1,75 @@
-sections:
+tabs:
   main:
     display: Main
-    fields:
+    sections:
       -
-        handle: first_name
-        field:
-          input_type: text
-          antlers: false
-          display: 'First name'
-          type: text
-          icon: text
-          listable: hidden
-          validate:
-            - required
-      -
-        handle: last_name
-        field:
-          input_type: text
-          antlers: false
-          display: 'Last name'
-          type: text
-          icon: text
-          listable: hidden
-          validate:
-            - required
-      -
-        handle: email
-        field:
-          input_type: text
-          antlers: false
-          display: Email
-          type: text
-          icon: text
-          listable: hidden
-          validate:
-            - required
-            - email
-      -
-        handle: repeat_email
-        field:
-          input_type: text
-          antlers: false
-          display: 'Repeat email'
-          type: text
-          icon: text
-          listable: hidden
-          validate:
-            - required
-            - email
-            - 'same:email'
-      -
-        handle: phone
-        field:
-          input_type: text
-          prepend: (optional)
-          antlers: false
-          display: Phone
-          type: text
-          icon: text
-          listable: hidden
-      -
-        handle: country
-        field:
-          multiple: false
-          clearable: false
-          searchable: true
-          taggable: false
-          push_tags: false
-          cast_booleans: false
-          display: Country
-          type: select
-          icon: select
-          listable: hidden
-      -
-        handle: flight_number
-        field:
-          input_type: text
-          prepend: '(for airport pickup)'
-          antlers: false
-          display: 'Flight number'
-          type: text
-          icon: text
-          listable: hidden
-      -
-        handle: notes
-        field:
-          antlers: false
-          display: Notes
-          type: textarea
-          icon: textarea
-          listable: hidden
+        fields:
+          -
+            handle: first_name
+            field:
+              input_type: text
+              antlers: false
+              display: 'First name'
+              type: text
+              listable: hidden
+              validate:
+                - required
+              width: 50
+              localizable: false
+          -
+            handle: last_name
+            field:
+              input_type: text
+              antlers: false
+              display: 'Last name'
+              type: text
+              listable: hidden
+              validate:
+                - required
+              width: 50
+              localizable: false
+          -
+            handle: email
+            field:
+              input_type: text
+              antlers: false
+              display: Email
+              type: text
+              listable: hidden
+              validate:
+                - required
+                - email
+              width: 50
+              localizable: false
+          -
+            handle: repeat_email
+            field:
+              input_type: text
+              antlers: false
+              display: 'Repeat email'
+              type: text
+              listable: hidden
+              validate:
+                - required
+                - email
+                - 'same:form.email'
+              width: 50
+              localizable: false
+          -
+            handle: phone
+            field:
+              input_type: text
+              prepend: (optional)
+              antlers: false
+              display: Phone
+              type: text
+              listable: hidden
+              localizable: false
+          -
+            handle: notes
+            field:
+              antlers: false
+              display: Notes
+              type: textarea
+              listable: hidden
+              localizable: false

@@ -81,7 +81,7 @@ class CheckoutTest extends TestCase
 
         $this->assertEquals($this->entries->first(), $component->entry);
 
-        $this->assertContains('first_name', $component->checkoutForm->first()->toArray());
+        $this->assertContains('first_name', $component->checkoutForm[0]);
     }
 
     /** @test */
@@ -100,7 +100,6 @@ class CheckoutTest extends TestCase
             ->call('handleFirstStep')
             ->assertSet('step', 2);
 
-        ray(\Reach\StatamicResrv\Models\Reservation::all());
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $this->reservation->id,
             'price' => '200',
