@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\CheckoutForm;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
@@ -48,9 +49,48 @@ class CheckoutFormTest extends TestCase
         session(['resrv_reservation' => $this->reservation->id]);
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
 
-        $component = Livewire::test(CheckoutForm::class, ['checkoutForm' => $this->reservation->getCheckoutForm()->toArray()])
+        $component = Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])
             ->assertViewIs('statamic-resrv::livewire.checkout-form')
-            ->assertViewHas('checkoutForm')
             ->assertViewHas('form', fn ($data) => array_key_exists('first_name', $data));
+
+        $this->assertNotNull($component->checkoutForm);
+    }
+    
+    /** @test */
+    public function checkout_form_validation_works()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])
+            ->set('form', ['first_name' => '', 'last_name' => 'Superman'])
+            ->call('submit')
+            ->assertHasErrors('form.first_name')
+            ->assertHasNoErrors('form.last_name');
+    }
+
+    /** @test */
+    public function checkout_form_saves_customer()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $component = Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])
+            ->set('form', [
+                'first_name' => 'Jerry', 
+                'last_name' => 'Seinfeld',
+                'email' => 'about@nothing.com',
+                'repeat_email' => 'about@nothing.com',
+                'phone' => '1234567890',
+            ])
+            ->call('submit')
+            ->ray()
+            ->assertDispatchedTo(Checkout::class, 'checkout-form-submitted')
+            ->assertHasNoErrors('form.last_name');
+
+            $this->assertDatabaseHas('resrv_reservations', [
+                'customer->first_name' => 'Jerry',
+                'customer->last_name' => 'Seinfeld',
+            ]);
     }
 }

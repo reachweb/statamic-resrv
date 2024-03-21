@@ -2,22 +2,25 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
+use Reach\StatamicResrv\Models\Reservation;
 
 class CheckoutForm extends Component
 {
     public string $view = 'checkout-form';
 
     #[Locked]
-    public array $checkoutForm;
+    public Reservation $reservation;
 
     #[Validate]
     public array $form;
 
-    public function mount()
+    public function mount(Reservation $reservation): void
     {
+        $this->reservation = $reservation;
         $this->form = collect($this->checkoutForm)->mapWithKeys(function ($field) {
             return [
                 $field['handle'] => $field['type'] === 'checkboxes' ? [] : '',
@@ -25,22 +28,34 @@ class CheckoutForm extends Component
         })->all();
     }
 
-    public function rules()
+    #[Computed(persist: true)]
+    public function checkoutForm()
+    {
+        return $this->reservation->getCheckoutForm()->reject(fn ($field) => $field->get('input_type') === 'hidden')->toArray();
+    }
+
+    public function rules(): array
     {
         return collect($this->checkoutForm)->mapWithKeys(function ($field) {
             return ['form.'.$field['handle'] => isset($field['validate']) ? implode('|', $field['validate']) : 'nullable'];
         })->all();
     }
 
-    public function validationAttributes()
+    public function validationAttributes(): array
     {
         return collect($this->checkoutForm)->mapWithKeys(fn ($field) => ['form.'.$field['handle'] => $field['display']])->all();
     }
 
-    public function submit()
+    public function saveCustomer()
+    {
+        $this->reservation->update(['customer' => $this->form]);
+    }
+
+    public function submit(): void
     {
         $this->validate();
-        $this->dispatch('checkout-form-submitted', $this->form);
+        $this->saveCustomer();
+        $this->dispatch('checkout-form-submitted')->to(Checkout::class);
     }
 
     public function render()

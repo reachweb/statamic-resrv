@@ -49,12 +49,6 @@ class Checkout extends Component
     }
 
     #[Computed(persist: true)]
-    public function checkoutForm()
-    {
-        return $this->reservation->getCheckoutForm()->reject(fn ($field) => $field->get('input_type') === 'hidden')->toArray();
-    }
-
-    #[Computed(persist: true)]
     public function extras()
     {
         return $this->getExtrasForEntry();

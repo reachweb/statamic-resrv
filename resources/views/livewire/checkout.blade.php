@@ -11,7 +11,7 @@
                     <livewire:checkout-extras wire:model.live="enabledExtras" :extras="$this->extras" />
                 @endif
                 @if ($step === 2)
-                    <livewire:checkout-form :checkout-form="$this->checkoutForm" />
+                    <livewire:checkout-form :reservation="$this->reservation" />
                 @endif
             </div>
         </div>

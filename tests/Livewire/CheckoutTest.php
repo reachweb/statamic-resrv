@@ -66,7 +66,7 @@ class CheckoutTest extends TestCase
     }
 
     /** @test */
-    public function loads_reservation_entry_checkout_form_computed_property()
+    public function loads_reservation_and_entry()
     {
         session(['resrv_reservation' => $this->reservation->id]);
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
@@ -80,8 +80,6 @@ class CheckoutTest extends TestCase
         $this->assertEquals($this->reservation->date_start, $component->reservation->date_start);
 
         $this->assertEquals($this->entries->first(), $component->entry);
-
-        $this->assertContains('first_name', $component->checkoutForm[0]);
     }
 
     /** @test */
