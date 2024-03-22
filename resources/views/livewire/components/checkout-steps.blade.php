@@ -2,7 +2,14 @@
 
 <ol class="flex items-center w-full font-medium text-center text-gray-500 text-base">
     @if ($enableExtrasStep)
-    <li @class(["flex md:w-full items-center sm:after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-200 after:border-1 after:hidden sm:after:inline-block after:mx-6 transition-colors duration-300", "text-blue-600" => $step === 1])>
+    <li 
+        wire:click="{{ $step !== 1 ? 'goToStep(1)' : '' }}" 
+        @class([
+            "flex md:w-full items-center sm:after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-200 after:border-1 after:hidden sm:after:inline-block after:mx-6 transition-colors duration-300", 
+            "text-blue-600" => $step === 1,
+            "cursor-pointer" => $step !== 1,
+            ])
+    >
         <span class="flex basis-full items-center after:content-['/'] sm:after:hidden after:mx-2 after:text-gray-200">
             @if ($step === 1)            
             <svg class="w-3.5 h-3.5 sm:w-6 sm:h-6 me-2.5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">
@@ -17,7 +24,14 @@
         </span>
     </li>
     @endif
-    <li @class(["flex md:w-full items-center after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-200 after:border-1 after:hidden sm:after:inline-block after:mx-6 transition-colors duration-300", "text-blue-600" => $step === 2])>
+    <li 
+        wire:click="{{ $step !== 2 ? 'goToStep(2)' : '' }}" 
+        @class([
+            "flex md:w-full items-center sm:after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-200 after:border-1 after:hidden sm:after:inline-block after:mx-6 transition-colors duration-300", 
+            "text-blue-600" => $step === 2,
+            "cursor-pointer" => $step !== 2,
+            ])
+    >
         <span class="flex basis-full items-center after:content-['/'] sm:after:hidden after:mx-2 after:text-gray-200">
             @if ($step === 2)
             <svg class="w-3.5 h-3.5 sm:w-6 sm:h-6 me-2.5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20">

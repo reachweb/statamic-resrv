@@ -20,18 +20,27 @@ class CheckoutForm extends Component
 
     public function mount(Reservation $reservation): void
     {
-        $this->reservation = $reservation;
-        $this->form = collect($this->checkoutForm)->mapWithKeys(function ($field) {
-            return [
-                $field['handle'] => $field['type'] === 'checkboxes' ? [] : '',
-            ];
-        })->all();
+        $this->reservation = $reservation->fresh();
+        if ($this->reservation->customer) {
+            $this->form = $this->reservation->customer->all();
+        } else {
+            $this->initializeForm();
+        }
     }
 
     #[Computed(persist: true)]
     public function checkoutForm()
     {
         return $this->reservation->getCheckoutForm()->reject(fn ($field) => $field->get('input_type') === 'hidden')->toArray();
+    }
+
+    public function initializeForm()
+    {
+        $this->form = collect($this->checkoutForm)->mapWithKeys(function ($field) {
+            return [
+                $field['handle'] => $field['type'] === 'checkboxes' ? [] : '',
+            ];
+        })->all();
     }
 
     public function rules(): array

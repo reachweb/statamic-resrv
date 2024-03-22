@@ -61,6 +61,11 @@ class Checkout extends Component
         return $this->getExtrasForEntry();
     }
 
+    public function goToStep(int $step): void
+    {
+        $this->step = $step;
+    }
+
     public function handleFirstStep(): void
     {
         // Validate data

@@ -48,6 +48,11 @@ class CheckoutExtras extends Component
         $this->enabledExtras = $this->enabledExtras->reject(fn ($enabledExtra) => $enabledExtra['id'] === $extra['id']);
     }
 
+    public function findAlreadySelected($id)
+    {
+        return $this->enabledExtras->firstWhere('id', $id);
+    }
+
     public function render()
     {
         return view('statamic-resrv::livewire.'.$this->view);

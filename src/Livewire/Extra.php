@@ -19,6 +19,14 @@ class Extra extends Component
     #[Validate('required|boolean')]
     public bool $selected = false;
 
+    public function mount($alreadySelected = false)
+    {
+        if ($alreadySelected) {
+            $this->selected = true;
+            $this->quantity = $alreadySelected['quantity'];
+        }
+    }
+
     public function updatedSelected()
     {
         if ($this->selected) {

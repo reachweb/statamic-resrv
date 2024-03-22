@@ -10,7 +10,7 @@
     <hr class="h-px my-4 bg-gray-200 border-0">
     <div class="divide-y divide-gray-100">
         @foreach ($this->extras as $id => $extra)
-            <livewire:extra :extra="$extra" :key="$id" />
+            <livewire:extra :extra="$extra" :alreadySelected="$this->findAlreadySelected($extra->id)" :key="$id" />
         @endforeach
     </div>
     <div class="mt-6 xl:mt-8">

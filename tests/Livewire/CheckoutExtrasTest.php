@@ -51,7 +51,7 @@ class CheckoutExtrasTest extends TestCase
 
         $extras = ResrvExtra::getPriceForDates($this->reservation);
 
-        Livewire::test(CheckoutExtras::class, ['extras' => $extras])
+        Livewire::test(CheckoutExtras::class, ['extras' => $extras, 'enabledExtras' => collect([])])
             ->assertViewIs('statamic-resrv::livewire.checkout-extras')
             ->assertViewHas('extras', fn ($extras) => $extras->first()->price == '9.30');
     }
