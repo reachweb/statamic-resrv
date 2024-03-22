@@ -202,11 +202,8 @@ class DynamicPricing extends Model
     {
         $reservation = Reservation::find($reservation_id);
 
-        if ($statamic_id) {
-            $query->whereHas('entries', function ($query) use ($statamic_id) {
-                $query->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
-                    ->where('dynamic_pricing_assignment_id', $statamic_id);
-            });
+        if ($query->count() === 0) {
+            throw new CouponNotFoundException(__('This coupon does not exist'));
         }
 
         if ($reservation_id) {
