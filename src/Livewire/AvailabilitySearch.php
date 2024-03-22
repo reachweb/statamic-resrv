@@ -76,6 +76,8 @@ class AvailabilitySearch extends Component
         $this->data->reset();
         // Apparently validation errors don't reset with the above
         $this->resetValidation();
+
+        $this->dispatch('availability-search-updated', $this->data);
     }
 
     public function getProperties()

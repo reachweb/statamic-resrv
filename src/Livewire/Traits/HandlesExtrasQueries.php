@@ -9,7 +9,7 @@ trait HandlesExtrasQueries
 {
     public function getExtrasForEntry()
     {
-        $reservation = $this->reservation ?? Reservation::findOrFail($this->reservation->id)->only(['date_start', 'date_end', 'quantity', 'property', 'item_id']);
+        $reservation = $this->reservation ?? Reservation::findOrFail($this->reservation->id);
 
         $extras = Extra::getPriceForDates($reservation);
 

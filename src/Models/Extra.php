@@ -58,13 +58,13 @@ class Extra extends Model
             $this->price = $dynamicPricing->apply($this->price)->format();
         }
         if ($this->price_type == 'relative') {
-            return $this->price->multiply($this->getRelativePrice($data))->format();
+            return $this->price->multiply($this->getRelativePrice($data))->multiply($this->quantity)->format();
         }
         if ($this->price_type == 'perday') {
-            return $this->price->multiply($this->duration)->format();
+            return $this->price->multiply($this->duration)->multiply($this->quantity)->format();
         }
 
-        return $this->price->format();
+        return $this->price->multiply($this->quantity)->format();
     }
 
     public function priceForReservation($reservation)

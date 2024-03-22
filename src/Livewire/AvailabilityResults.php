@@ -51,10 +51,15 @@ class AvailabilityResults extends Component
     #[On('availability-search-updated')]
     public function availabilitySearchChanged($data): void
     {
-        // Fill the data from the session
+        // Clear availability so that we don't get a view error
+        $this->availability = collect();
+
+        // Fill the data
         $this->data->fill($data);
+
         // Validate again in case the session data is old
         $this->data->validate();
+
         $this->getAvailability();
     }
 
