@@ -16,15 +16,14 @@ use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
 {
-    use Traits\HandlesExtrasQueries, Traits\HandlesReservationQueries, Traits\HandlesStatamicQueries;
+    use Traits\HandlesExtrasQueries, Traits\HandlesOptionsQueries, Traits\HandlesReservationQueries, Traits\HandlesStatamicQueries;
 
     public string $view = 'checkout';
 
     #[Validate]
     public Collection $enabledExtras;
 
-    public Collection $options;
-
+    #[Validate]
     public Collection $enabledOptions;
 
     #[Locked]
@@ -37,7 +36,6 @@ class Checkout extends Component
     public function mount()
     {
         $this->enabledExtras = collect();
-        $this->options = collect();
         $this->enabledOptions = collect();
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
@@ -60,6 +58,12 @@ class Checkout extends Component
     public function extras(): Collection
     {
         return $this->getExtrasForEntry();
+    }
+
+    #[Computed(persist: true)]
+    public function options(): Collection
+    {
+        return $this->getOptionsForEntry();
     }
 
     public function goToStep(int $step): void
@@ -188,7 +192,7 @@ class Checkout extends Component
             $extrasTotal = $extrasTotal->add(...$this->enabledExtras->map(fn ($extra) => Price::create($extra['price'])->multiply($extra['quantity']))->toArray());
         }
         if ($this->enabledOptions->count() > 0) {
-            $optionsTotal = $optionsTotal->add(...$this->enabledOptions->map(fn ($extra) => Price::create($extra['price']))->toArray());
+            $optionsTotal = $optionsTotal->add(...$this->enabledOptions->map(fn ($option) => Price::create($option['price']))->toArray());
         }
         $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
 
@@ -210,6 +214,19 @@ class Checkout extends Component
                 'numeric',
             ],
             'enabledExtras.*.quantity' => [
+                'required',
+                'integer',
+            ],
+            'enabledOptions' => 'nullable|array',
+            'enabledOptions.*.id' => [
+                'required',
+                'integer',
+            ],
+            'enabledOptions.*.price' => [
+                'required',
+                'numeric',
+            ],
+            'enabledOptions.*.value' => [
                 'required',
                 'integer',
             ],

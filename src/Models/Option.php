@@ -42,7 +42,7 @@ class Option extends Model
     public function valuesPriceForDates($data)
     {
         foreach ($this->values as $value) {
-            $value->original_price = $value->price;
+            $value->original_price = $value->price->format();
             $value->price = $value->priceForDates($data);
         }
 

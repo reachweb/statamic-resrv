@@ -8,7 +8,15 @@
             </div>
             <div class="mt-4">
                 @if ($step === 1)
+                    <livewire:checkout-options wire:model.live="enabledOptions" :options="$this->options" />
+
                     <livewire:checkout-extras wire:model.live="enabledExtras" :extras="$this->extras" />
+
+                    <div class="mt-8 xl:mt-10">
+                        <x-resrv::checkout-step-button wire:click="handleFirstStep()">
+                            {{ trans('statamic-resrv::frontend.continueToPersonalDetails') }}
+                        </x-resrv::checkout-step-button>
+                    </div>
                 @endif
                 @if ($step === 2)
                     <livewire:checkout-form :reservation="$this->reservation" />

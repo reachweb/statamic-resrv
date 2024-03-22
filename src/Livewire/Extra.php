@@ -48,7 +48,7 @@ class Extra extends Component
             'id' => $this->extra->id,
             'price' => $this->extra->price,
             'quantity' => $this->quantity,
-        ]);
+        ])->to(CheckoutExtras::class);
     }
 
     public function render()

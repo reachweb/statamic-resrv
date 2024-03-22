@@ -27,9 +27,11 @@ class ResrvLivewireProvider extends AddonServiceProvider
         Livewire::component('availability-results', \Reach\StatamicResrv\Livewire\AvailabilityResults::class);
         Livewire::component('checkout', \Reach\StatamicResrv\Livewire\Checkout::class);
         Livewire::component('checkout-extras', \Reach\StatamicResrv\Livewire\CheckoutExtras::class);
+        Livewire::component('checkout-options', \Reach\StatamicResrv\Livewire\CheckoutOptions::class);
         Livewire::component('checkout-form', \Reach\StatamicResrv\Livewire\CheckoutForm::class);
         Livewire::component('checkout-payment', \Reach\StatamicResrv\Livewire\CheckoutPayment::class);
         Livewire::component('extra', \Reach\StatamicResrv\Livewire\Extra::class);
+        Livewire::component('option', \Reach\StatamicResrv\Livewire\Option::class);
         if (class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {
             Livewire::component('lf-availability-filter', \Reach\StatamicResrv\Livewire\LfAvailabilityFilter::class);
         }
