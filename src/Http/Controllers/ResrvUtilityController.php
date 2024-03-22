@@ -16,11 +16,11 @@ class ResrvUtilityController extends Controller
     {
         $collections = $this->collectionsWithAvailabityField();
         $entries = Entry::query()
-        ->whereIn('collection', $collections)
-        ->where('site', Site::default())
-        ->orderBy('title', 'asc')
-        ->get(['id', 'title'])
-        ->toAugmentedArray();
+            ->whereIn('collection', $collections)
+            ->where('site', Site::default())
+            ->orderBy('title', 'asc')
+            ->get(['id', 'title'])
+            ->toAugmentedArray();
 
         return response()->json($entries);
     }
@@ -54,11 +54,11 @@ class ResrvUtilityController extends Controller
     {
         $data = $request->validate([
             'coupon' => 'required|alpha_dash',
-            'statamic_id' => 'sometimes|string',
+            'reservation_id' => 'sometimes|integer',
         ]);
 
         try {
-            DynamicPricing::searchForCoupon($data['coupon'], $data['statamic_id'] ?? null);
+            DynamicPricing::searchForCoupon($data['coupon'], $data['reservation_id'] ?? null);
         } catch (CouponNotFoundException $exception) {
             return response()->json(['error' => $exception->getMessage()], 412);
         }

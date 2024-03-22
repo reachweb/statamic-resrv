@@ -19,7 +19,7 @@ use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class DynamicPricing extends Model
 {
-    use HasFactory, HandlesComparisons, HandlesOrdering;
+    use HandlesComparisons, HandlesOrdering, HasFactory;
 
     protected $table = 'resrv_dynamic_pricing';
 
@@ -89,9 +89,9 @@ class DynamicPricing extends Model
     public function getEntriesAttribute($value)
     {
         $entries = DB::table('resrv_dynamic_pricing_assignments')
-                ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
-                ->where('dynamic_pricing_id', $this->id)
-                ->get();
+            ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
+            ->where('dynamic_pricing_id', $this->id)
+            ->get();
 
         return $entries->map(function ($item) {
             return $item->dynamic_pricing_assignment_id;
@@ -158,7 +158,7 @@ class DynamicPricing extends Model
         });
 
         $itemsForId = $data->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
-                ->where('dynamic_pricing_assignment_id', $statamic_id);
+            ->where('dynamic_pricing_assignment_id', $statamic_id);
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -182,7 +182,7 @@ class DynamicPricing extends Model
         });
 
         $itemsForId = $data->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Extra')
-                ->where('dynamic_pricing_assignment_id', $extra_id);
+            ->where('dynamic_pricing_assignment_id', $extra_id);
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -198,28 +198,35 @@ class DynamicPricing extends Model
         return $this;
     }
 
-    public function scopeSearchForCoupon($query, $coupon, $statamic_id)
+    public function scopeSearchForCoupon($query, $coupon, $reservation_id)
     {
-        $items = $query->where('coupon', $coupon);
+        $reservation = Reservation::find($reservation_id);
 
-        if ($statamic_id) {
-            $query->whereHas('entries', function ($query) use ($statamic_id) {
-                $query->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
-                      ->where('dynamic_pricing_assignment_id', $statamic_id);
-            });
+        $query = $query->where('coupon', $coupon);
+
+        if ($query->count() === 0) {
+            throw new CouponNotFoundException(__('This coupon does not exist'));
         }
 
-        $items = $query->get();
-
-        if ($items->count() > 0) {
-            return $items;
+        if ($reservation_id) {
+            $query = $query->join('resrv_dynamic_pricing_assignments', 'resrv_dynamic_pricing.id', '=', 'resrv_dynamic_pricing_assignments.dynamic_pricing_id')
+                ->where('resrv_dynamic_pricing_assignments.dynamic_pricing_assignment_type', 'Reach\\StatamicResrv\\Models\\Availability')
+                ->where('resrv_dynamic_pricing_assignments.dynamic_pricing_assignment_id', $reservation->item_id);
         }
 
-        throw new CouponNotFoundException(
-            $statamic_id
-            ? __('This coupon does not apply to this product.')
-            : __('This coupon does not exist.')
-        );
+        $coupon = $query->get()->first();
+
+        if (! $coupon) {
+            throw new CouponNotFoundException(__('This coupon does not apply to this product.'));
+        }
+
+        if ($coupon && $this->hasDates($coupon) && $reservation) {
+            if (! $this->datesInRange($coupon, $reservation->date_start, $reservation->date_start)) {
+                throw new CouponNotFoundException(__('This coupon does not apply to the dates of your reservation.'));
+            }
+        }
+
+        return $coupon;
     }
 
     protected function checkAllParameters($items, $price, $date_start, $date_end, $duration)
@@ -289,7 +296,7 @@ class DynamicPricing extends Model
         }
     }
 
-    protected function checkCondition($pricing, PriceClass $price = null, $duration = null, $date_start = null)
+    protected function checkCondition($pricing, ?PriceClass $price = null, $duration = null, $date_start = null)
     {
         if ($pricing->condition_type == 'reservation_duration') {
             if ($this->compare($duration, $pricing->condition_comparison, $pricing->condition_value)) {
