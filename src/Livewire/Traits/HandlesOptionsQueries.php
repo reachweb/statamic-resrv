@@ -17,7 +17,7 @@ trait HandlesOptionsQueries
             ->get();
 
         if ($reservation->quantity > 1) {
-           $options = $options->map(function ($option) use ($reservation) {
+            $options = $options->map(function ($option) use ($reservation) {
                 return Option::find($option->id)->valuesPriceForDates($reservation);
             });
         }
