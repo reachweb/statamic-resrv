@@ -84,7 +84,6 @@ class CheckoutFormTest extends TestCase
                 'phone' => '1234567890',
             ])
             ->call('submit')
-            ->ray()
             ->assertDispatchedTo(Checkout::class, 'checkout-form-submitted')
             ->assertHasNoErrors('form.last_name');
 

@@ -9,4 +9,5 @@ enum ReservationStatus: string
     case CONFIRMED = 'confirmed';
     case CANCELLED = 'refunded';
     case COMPLETED = 'completed';
+    case EXPIRED = 'expired';
 }

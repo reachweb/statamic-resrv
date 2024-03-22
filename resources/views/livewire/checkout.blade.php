@@ -65,7 +65,7 @@
         </div>
     </div>
     @if ($errors->any())
-    <div class="flex flex-col pb-6">
+    <div class="flex flex-col pt-6">
         <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.somethingWentWrong') }}</dt>
         <dd class="mb-1 text-gray-500 lg:text-lg ">
             @foreach ($errors->all() as $index => $error)

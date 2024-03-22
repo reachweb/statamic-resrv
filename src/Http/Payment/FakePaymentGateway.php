@@ -35,4 +35,14 @@ class FakePaymentGateway implements PaymentInterface
             return $key[$handle];
         }
     }
+
+    public function supportsWebhooks(): bool
+    {
+        return true;
+    }
+
+    public function handleRedirectBack(): bool
+    {
+        return true;
+    }
 }

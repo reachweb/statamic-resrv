@@ -19,7 +19,7 @@ class ReservationFactory extends Factory
      *
      * @return array
      */
-    public function definition()
+    public function definition(): array
     {
         return [
             'status' => 'pending',
@@ -34,5 +34,14 @@ class ReservationFactory extends Factory
             'payment_id' => '',
             'customer' => '',
         ];
+    }
+
+    public function expired(): Factory
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'status' => 'expired',
+            ];
+        });
     }
 }

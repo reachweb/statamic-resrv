@@ -111,4 +111,44 @@ class CheckoutTest extends TestCase
             'price' => '9.30',
         ]);
     }
+
+    /** @test */
+    public function it_throws_exception_if_the_reservation_is_expired()
+    {
+        $reservation = Reservation::factory()->expired()->create([
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $this->expectException(\Illuminate\View\ViewException::class);
+
+        Livewire::test(Checkout::class);
+    }
+
+    /** @test */
+    public function it_throws_an_error_if_a_user_takes_too_long_in_the_extras_form()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->travel(30)->minutes();
+
+        $component->call('handleFirstStep')
+            ->assertHasErrors('reservation');
+    }
+
+    /** @test */
+    public function it_throws_an_error_if_a_user_takes_too_long_in_the_customer_form()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->travel(30)->minutes();
+
+        $component->dispatch('checkout-form-submitted')
+            ->assertHasErrors('reservation');
+    }
 }

@@ -5,13 +5,24 @@ namespace Reach\StatamicResrv\Livewire\Traits;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesReservationQueries
 {
     public function getReservation()
     {
-        return Reservation::findOrFail(session('resrv_reservation'));
+        $reservation = Reservation::findOrFail(session('resrv_reservation'));
+
+        if ($reservation->status === ReservationStatus::WEBHOOK->value) {
+            throw new ReservationException('This reservation is already paid. You cannot modify it.');
+        }
+
+        if ($reservation->status === ReservationStatus::EXPIRED->value) {
+            throw new ReservationException('This reservation is expired. Please start over.');
+        }
+
+        return $reservation;
     }
 
     public function createReservation()

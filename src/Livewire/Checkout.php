@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
@@ -71,9 +72,10 @@ class Checkout extends Component
         // Validate data
         $this->validate();
 
-        // Confirm that the reservation data is valid but cross-checking with the database
+        // Confirm that the reservation data is valid by cross-checking with the database
         try {
             $this->confirmReservationIsValid();
+            $this->confirmReservationHasNotExpired();
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
 
@@ -93,6 +95,15 @@ class Checkout extends Component
     #[On('checkout-form-submitted')]
     public function handleSecondStep(): void
     {
+        // Make sure the reservation is not expired
+        try {
+            $this->confirmReservationHasNotExpired();
+        } catch (ReservationException $e) {
+            $this->addError('reservation', $e->getMessage());
+
+            return;
+        }
+
         // Get a fresh record from the database
         $reservation = $this->reservation->fresh();
 
@@ -126,6 +137,14 @@ class Checkout extends Component
                 'options' => $this->enabledOptions,
             ],
         ), $this->entry->id());
+    }
+
+    protected function confirmReservationHasNotExpired(): void
+    {
+        $expireAt = Carbon::parse($this->reservation->created_at)->add(config('resrv-config.minutes_to_hold'), 'minute');
+        if ($expireAt < Carbon::now() || $this->reservation->fresh()->status === 'expired') {
+            throw new ReservationException('This reservation has expired. Please start over.');
+        }
     }
 
     protected function assignExtras(): void
