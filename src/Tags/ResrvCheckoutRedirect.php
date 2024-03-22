@@ -18,7 +18,6 @@ class ResrvCheckoutRedirect extends Tags
         }
 
         return $this->statusSuccess();
-
     }
 
     protected function statusSuccess(): array
