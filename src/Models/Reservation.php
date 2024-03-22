@@ -415,6 +415,11 @@ class Reservation extends Model
 
         $checkoutOptions = $data['options'];
 
+        // Convert checkoutOptions to array if it's a Laravel Collection
+        if ($checkoutOptions instanceof Collection) {
+            $checkoutOptions = $checkoutOptions->toArray();
+        }
+
         // Check if each required option is in the data array otherwise return false
         foreach ($requiredOptions as $id => $option) {
             if (! array_key_exists($id, $checkoutOptions)) {

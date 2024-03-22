@@ -18,7 +18,6 @@ class Option extends Component
 
     public function mount($alreadySelected = false)
     {
-        ray($this->option);
         if ($alreadySelected) {
             $this->selected = $alreadySelected['value'];
         }
@@ -26,10 +25,10 @@ class Option extends Component
 
     public function updatedSelected()
     {
-        ray($this->option);
+        $values = collect($this->option['values']);
         $this->dispatch('option-changed', [
-            'id' => $this->option->id,
-            'price' => $this->option->values->firstWhere('id', $this->selected)->price->format(),
+            'id' => $this->option['id'],
+            'price' => $values->firstWhere('id', $this->selected)['price'],
             'value' => $this->selected,
         ])->to(CheckoutOptions::class);
     }

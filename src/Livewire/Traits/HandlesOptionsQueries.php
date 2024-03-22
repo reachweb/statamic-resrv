@@ -23,7 +23,7 @@ trait HandlesOptionsQueries
         }
 
         return $options->map(function ($option) {
-            return $option->all();
+            return $option->toArray();
         });
     }
 }
