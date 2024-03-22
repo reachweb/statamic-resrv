@@ -49,6 +49,7 @@ class ResrvProvider extends AddonServiceProvider
 
     protected $tags = [
         \Reach\StatamicResrv\Tags\Resrv::class,
+        \Reach\StatamicResrv\Tags\ResrvCheckoutRedirect::class,
     ];
 
     protected $scopes = [

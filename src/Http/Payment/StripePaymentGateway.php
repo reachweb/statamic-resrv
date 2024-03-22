@@ -8,6 +8,7 @@ use Reach\StatamicResrv\Models\Reservation;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
 use Stripe\Stripe;
+use Stripe\StripeClient;
 
 class StripePaymentGateway implements PaymentInterface
 {
@@ -57,5 +58,32 @@ class StripePaymentGateway implements PaymentInterface
         if (array_key_exists($handle, $key)) {
             return $key[$handle];
         }
+    }
+
+    public function supportsWebhooks(): bool
+    {
+        return true;
+    }
+
+    public function handleRedirectBack(): bool
+    {
+        $paymentIntent = request()->input('payment_intent');
+
+        $reservation = Reservation::findByPaymentId($paymentIntent)->first();
+
+        $stripe = new StripeClient($this->getPublicKey($reservation));
+
+        $status = $stripe->paymentIntents->retrieve($paymentIntent, []);
+
+        if ($status->status === 'succeeded' || $status->status === 'processing') {
+            // Update the reservation status to webhook if it's still pending
+            if ($reservation->status === 'pending') {
+                $reservation->update(['status' => 'webhook']);
+            }
+
+            return true;
+        }
+
+        return false;
     }
 }

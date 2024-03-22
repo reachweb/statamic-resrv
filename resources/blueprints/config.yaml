@@ -144,6 +144,12 @@ checkout_entry:
   type: entries
   max_items: 1
   required: true
+checkout_completed_entry:
+  display: 'Checkout URL'
+  instructions: 'The entry will load after redirection from the payment provider'
+  type: entries
+  max_items: 1
+  required: true
 checkout_completed_uri:
   display: 'Checkout completed URL'
   instructions: 'The relative URL of the entry that is shown when checkout is completed'

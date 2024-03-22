@@ -112,6 +112,11 @@ class Reservation extends Model
         return $this->hasOne(Location::class, 'id', 'location_end')->withTrashed();
     }
 
+    public function scopeFindByPaymentId($query, $id)
+    {
+        return $query->where('payment_id', $id);
+    }
+
     public function isParent()
     {
         if ($this->type == 'parent') {
