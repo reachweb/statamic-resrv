@@ -9,7 +9,7 @@
     </div>
     <hr class="h-px my-4 bg-gray-200 border-0">
     <div class="divide-y divide-gray-100">
-        @foreach ($this->options as $id => $option)
+        @foreach ($options as $id => $option)
             <livewire:option :option="$option" :alreadySelected="$this->findAlreadySelected($option['id'])" :key="$id" />
         @endforeach
     </div>

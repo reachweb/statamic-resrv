@@ -27,16 +27,20 @@
                     value="{{ $value['id'] }}" 
                     class="form-radio w-5 h-5 text-blue-600 bg-gray-100 border-gray-300" 
                 />
-                <div class="block ml-3">
-                    <div class="w-full text-md xl:text-base font-medium text-gray-900">{{ $value['name'] }}</div>
-                    @if ($value['description'])
-                    <div class="w-full text-sm">{{ $value['description'] }}</div>
-                    @endif
-                    @if ($value['price_type'] !== 'free')
-                    <div class="w-full text-sm mt-1 font-medium text-gray-700">
-                        {{ config('resrv-config.currency_symbol') }} {{ $value['price'] }}
+                <div class="w-full flex flex-col md:flex-row justify-between md:items-center ml-3">
+                    <div>
+                        <div class="text-md xl:text-base font-medium text-gray-900">{{ $value['name'] }}</div>
+                        @if ($value['description'])
+                        <div class="text-sm">{{ $value['description'] }}</div>
+                        @endif
                     </div>
-                    @endif
+                    <div>
+                        @if ($value['price_type'] !== 'free')
+                        <div class="w-full text-sm mt-1 md:mt-0 md:ml-2 font-medium text-gray-700">
+                            {{ config('resrv-config.currency_symbol') }} {{ $value['price'] }}
+                        </div>
+                        @endif
+                    </div>                  
                 </div>
             </label>
         </li>
