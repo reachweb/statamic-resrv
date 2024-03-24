@@ -28,4 +28,14 @@
             {{ $reservation->date_end }}
         </p>
     </div>
+    @if ($reservation->property)
+    <div class="py-3 md:py-4 border-b border-gray-200">
+        <p class="text-sm font-medium text-gray-500 truncate">
+            {{ trans('statamic-resrv::frontend.property') }}
+        </p>
+        <p class="text-sm text-gray-900 truncate">
+            {{ $reservation->property }}
+        </p>
+    </div>
+    @endif
 </div>
