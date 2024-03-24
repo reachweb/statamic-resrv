@@ -84,33 +84,6 @@ class CheckoutTest extends TestCase
     }
 
     /** @test */
-    public function loads_extras_for_the_reservation()
-    {
-        session(['resrv_reservation' => $this->reservation->id]);
-        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
-
-        $component = Livewire::test(Checkout::class);
-
-        $this->assertEquals('9.30', $component->extras->first()->price);
-    }
-
-    /** @test */
-    public function loads_extras_for_the_reservation_with_extra_quantity()
-    {
-        $extraQuantityReservation = Reservation::factory()->create([
-            'item_id' => $this->entries->first()->id(),
-            'quantity' => 2,
-        ]);
-
-        session(['resrv_reservation' => $extraQuantityReservation->id]);
-        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
-
-        $component = Livewire::test(Checkout::class);
-
-        $this->assertEquals('18.60', $component->extras->first()->price);
-    }
-
-    /** @test */
     public function it_handles_first_step()
     {
         session(['resrv_reservation' => $this->reservation->id]);

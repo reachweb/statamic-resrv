@@ -4,7 +4,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
-use Reach\StatamicResrv\Livewire\CheckoutExtras;
+use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
@@ -20,6 +20,8 @@ class CheckoutExtrasTest extends TestCase
 
     public $reservation;
 
+    public $extras;
+
     public function setUp(): void
     {
         parent::setUp();
@@ -29,19 +31,7 @@ class CheckoutExtrasTest extends TestCase
         $this->reservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),
         ]);
-    }
 
-    /** @test */
-    public function renders_successfully()
-    {
-        Livewire::test(CheckoutExtras::class, ['extras' => collect([])])
-            ->assertViewIs('statamic-resrv::livewire.checkout-extras')
-            ->assertStatus(200);
-    }
-
-    /** @test */
-    public function it_loads_the_extras_for_the_entry_and_reservation()
-    {
         $extra = ResrvExtra::factory()->create();
 
         DB::table('resrv_statamicentry_extra')->insert([
@@ -49,50 +39,49 @@ class CheckoutExtrasTest extends TestCase
             'extra_id' => $extra->id,
         ]);
 
-        $extras = ResrvExtra::getPriceForDates($this->reservation);
-
-        Livewire::test(CheckoutExtras::class, ['extras' => $extras, 'enabledExtras' => collect([])])
-            ->assertViewIs('statamic-resrv::livewire.checkout-extras')
-            ->assertViewHas('extras', fn ($extras) => $extras->first()->price == '9.30');
+        $this->extras = ResrvExtra::getPriceForDates($this->reservation);
     }
 
     /** @test */
-    public function it_listens_to_the_extra_changed_event_and_changes_the_enabled_extras_array()
+    public function it_loads_the_extras_for_the_entry_and_reservation()
     {
-        $component = Livewire::test(CheckoutExtras::class, ['enabledExtras' => collect([]), 'extras' => collect([])])
-            ->dispatch('extra-changed', [
-                'id' => 1,
-                'price' => 4.65,
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->assertSee('This is an extra');
+
+        $this->assertEquals('This is an extra', $component->extras->first()->name);
+        $this->assertEquals('9.30', $component->extras->first()->price);
+    }
+
+    /** @test */
+    public function loads_extras_for_the_reservation_with_extra_quantity()
+    {
+        $extraQuantityReservation = Reservation::factory()->create([
+            'item_id' => $this->entries->first()->id(),
+            'quantity' => 2,
+        ]);
+
+        session(['resrv_reservation' => $extraQuantityReservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->assertEquals('18.60', $component->extras->first()->price);
+    }
+
+    /** @test */
+    public function loads_if_extra_is_selected_we_see_it_in_the_pricing_table_and_the_final_price()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->set('enabledExtras', [[
+                'id' => $this->extras->first()->id,
                 'quantity' => 1,
-            ])
-            ->assertSet('enabledExtras', collect([0 => [
-                'id' => 1,
-                'price' => 4.65,
-                'quantity' => 1,
+                'price' => $this->extras->first()->price,
             ]])
-            )
-            ->dispatch('extra-changed', [
-                'id' => 1,
-                'price' => 4.65,
-                'quantity' => 0,
-            ])
-            ->assertSet('enabledExtras', collect())
-            ->dispatch('extra-changed', [
-                'id' => 1,
-                'price' => 4.65,
-                'quantity' => 3,
-            ])
-            ->assertSet('enabledExtras', collect([0 => [
-                'id' => 1,
-                'price' => 4.65,
-                'quantity' => 3,
-            ]])
-            )
-            ->dispatch('extra-changed', [
-                'id' => 1,
-                'price' => 4.65,
-                'quantity' => 0,
-            ])
-            ->assertSet('enabledExtras', collect());
+            ->assertSee('€ 9.3')
+            ->assertSee('209.30');
     }
 }
