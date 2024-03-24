@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Providers;
 
-use Illuminate\Support\Facades\Route;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
