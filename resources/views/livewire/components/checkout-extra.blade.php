@@ -95,5 +95,4 @@
             <span>{{ config('resrv-config.currency_symbol') }} {{ $extra->price }}</span>
         </div>  
     </div>
-    <div x-text="'Selected: ' + selected"></div>
 </div>
