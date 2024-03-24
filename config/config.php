@@ -73,6 +73,7 @@ return [
     'payment_gateway' => Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
     'stripe_secret_key' => env('RESRV_STRIPE_SECRET', ''),
     'stripe_publishable_key' => env('RESRV_STRIPE_PUBLISHABLE', ''),
+    'stripe_webhook_secret' => env('RESRV_STRIPE_WEBHOOK_SECRET', ''),
 
     /**
      * Advanced features

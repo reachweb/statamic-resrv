@@ -3,12 +3,15 @@
 namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Models\Reservation;
+use Stripe\Event;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
 use Stripe\Stripe;
 use Stripe\StripeClient;
+use Stripe\Webhook;
 
 class StripePaymentGateway implements PaymentInterface
 {
@@ -85,5 +88,42 @@ class StripePaymentGateway implements PaymentInterface
         }
 
         return false;
+    }
+
+    public function verifyPayment($request): void
+    {
+        $payload = json_decode($request->getContent(), true);
+
+        $data = $payload['data']['object'];
+
+        $reservation = Reservation::findByPaymentId($data['id'])->first();
+
+        if (! $reservation) {
+            abort(404);
+        }
+
+        Stripe::setApiKey($this->getPublicKey($reservation));
+
+        try {
+            $event = Event::constructFrom(json_decode($request->getContent(), true));
+        } catch (\UnexpectedValueException $e) {
+            // Invalid payload
+            abort(403);
+        }
+
+        $sig_header = $_SERVER['HTTP_STRIPE_SIGNATURE'];
+
+        try {
+            $event = Webhook::constructEvent(
+                $request->getContent(), $sig_header, config('resrv-config.stripe_webhook_secret')
+            );
+        } catch (\Stripe\Exception\SignatureVerificationException $e) {
+            // Invalid signature
+            abort(403);
+        }
+
+        if ($event->type === 'payment_intent.succeeded') {
+            ReservationConfirmed::dispatch($reservation);
+        }
     }
 }

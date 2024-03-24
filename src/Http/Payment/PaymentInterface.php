@@ -15,4 +15,6 @@ interface PaymentInterface
     public function supportsWebhooks(): bool;
 
     public function handleRedirectBack(): bool;
+
+    public function verifyPayment($request): void;
 }

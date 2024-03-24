@@ -17,6 +17,7 @@ use Reach\StatamicResrv\Http\Controllers\AvailabilityController;
 use Reach\StatamicResrv\Http\Controllers\ConfigController;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
+use Reach\StatamicResrv\Listeners\ConfirmReservation;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
@@ -69,6 +70,7 @@ class ResrvProvider extends AddonServiceProvider
             IncreaseAvailability::class,
         ],
         ReservationConfirmed::class => [
+            ConfirmReservation::class,
             SendNewReservationEmails::class,
         ],
         ReservationRefunded::class => [
