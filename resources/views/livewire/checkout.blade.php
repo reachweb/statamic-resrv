@@ -10,7 +10,7 @@
                 @if ($step === 1)
                     <x-resrv::checkout-options :$enabledOptions :options="$this->options" />
 
-                    <livewire:checkout-extras wire:model.live="enabledExtras" :extras="$this->extras" />
+                    <x-resrv::checkout-extras :$enabledExtras :extras="$this->extras" />
 
                     <div class="mt-8 xl:mt-10">
                         <x-resrv::checkout-step-button wire:click="handleFirstStep()">

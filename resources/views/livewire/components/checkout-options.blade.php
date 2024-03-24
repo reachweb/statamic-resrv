@@ -1,4 +1,5 @@
 @props(['options', 'enabledOptions'])
+
 <div 
     x-data="{selectedOptions: {}}" 
     x-on:option-changed="selectedOptions[$event.detail.id.toString()] = $event.detail; $wire.set('enabledOptions', Object.assign({}, selectedOptions))"

@@ -2,7 +2,9 @@
 
 <div 
     class="py-3 xl:my-5" 
-    x-data="{selected: '{{ $selectedValue }}'}"
+    x-data="{selected: ''}"
+    x-init="selected = '{{ $selectedValue ?? '' }}'"
+
 >
     <div class="mb-3">
         <div class="flex items-center">
