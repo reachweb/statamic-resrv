@@ -12,8 +12,12 @@ trait HandlesReservationQueries
 {
     public function getReservation()
     {
-        $reservation = Reservation::findOrFail(session('resrv_reservation'));
-
+        try {
+            $reservation = Reservation::findOrFail(session('resrv_reservation'));
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            throw new ReservationException('Reservation not found in the session.');
+        }
+        
         if ($reservation->status === ReservationStatus::WEBHOOK->value) {
             throw new ReservationException('This reservation is already paid. You cannot modify it.');
         }
