@@ -16,14 +16,10 @@ trait HandlesOptionsQueries
             ->with('values')
             ->get();
 
-        if ($reservation->quantity > 1) {
-            $options = $options->map(function ($option) use ($reservation) {
-                return Option::find($option->id)->valuesPriceForDates($reservation);
-            });
-        }
-
-        return $options->map(function ($option) {
-            return $option->toArray();
+        $options = $options->map(function ($option) use ($reservation) {
+            return Option::find($option->id)->valuesPriceForDates($reservation);
         });
+
+        return $options;
     }
 }

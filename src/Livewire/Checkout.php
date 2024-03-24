@@ -192,7 +192,10 @@ class Checkout extends Component
             $extrasTotal = $extrasTotal->add(...$this->enabledExtras->map(fn ($extra) => Price::create($extra['price'])->multiply($extra['quantity']))->toArray());
         }
         if ($this->enabledOptions->count() > 0) {
-            $optionsTotal = $optionsTotal->add(...$this->enabledOptions->map(fn ($option) => Price::create($option['price']))->toArray());
+            $optionsTotal = $optionsTotal->add(...$this->enabledOptions
+                ->map(fn ($option) => Price::create($option['price']))
+                ->toArray()
+            );
         }
         $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
 

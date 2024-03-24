@@ -10,15 +10,15 @@
                 <div class="divide-y divide-gray-200">
                     @foreach ($enabledOptions as $option)
                     @php
-                    $optionModel = collect($options)->firstWhere('id', $option['id']);
-                    $selectedValue = collect($optionModel['values'])->firstWhere('id', $option['value']);
+                    $optionModel = $options->firstWhere('id', $option['id']);
+                    $selectedValue = $optionModel->values->firstWhere('id', $option['value']);
                     @endphp
                     <div class="flex justify-between items-center py-2" wire:key="{{ $option['id'] }}">
                         <div class="text-sm text-gray-900">
-                            {{ $optionModel['name'] }}: <span class="font-medium">{{ $selectedValue['name'] }}</span>
+                            {{ $optionModel->name }}: <span class="font-medium">{{ $selectedValue->name }}</span>
                         </div>
                         <div class="flex justify-end">
-                            @if ($selectedValue['price_type'] !== 'free')
+                            @if ($selectedValue->price_type !== 'free')
                             <span class="text-sm text-gray-900">
                                 {{ config('resrv-config.currency_symbol') }} {{ $option['price'] }}
                             </span>

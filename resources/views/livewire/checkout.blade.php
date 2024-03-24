@@ -8,7 +8,7 @@
             </div>
             <div class="mt-4">
                 @if ($step === 1)
-                    <livewire:checkout-options wire:model.live="enabledOptions" :options="$this->options" />
+                    <x-resrv::checkout-options :$enabledOptions :options="$this->options" />
 
                     <livewire:checkout-extras wire:model.live="enabledExtras" :extras="$this->extras" />
 

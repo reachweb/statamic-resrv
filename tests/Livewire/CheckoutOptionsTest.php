@@ -2,10 +2,10 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
-use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
-use Reach\StatamicResrv\Livewire\CheckoutOptions;
-use Reach\StatamicResrv\Models\Extra as ResrvExtra;
+use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Models\Option;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -20,6 +20,8 @@ class CheckoutOptionsTest extends TestCase
 
     public $reservation;
 
+    public $options;
+
     public function setUp(): void
     {
         parent::setUp();
@@ -27,72 +29,50 @@ class CheckoutOptionsTest extends TestCase
         $this->entries = $this->createEntries();
         $this->travelTo(today()->setHour(12));
         $this->reservation = Reservation::factory()->create([
+
             'item_id' => $this->entries->first()->id(),
         ]);
+
+        $this->options = Option::factory()
+            ->has(OptionValue::factory(), 'values')
+            ->create([
+                'item_id' => $this->entries->first()->id(),
+            ]);
     }
 
     /** @test */
-    public function renders_successfully()
+    public function loads_options_for_the_entry()
     {
-        Livewire::test(CheckoutOptions::class, ['options' => collect([])])
-            ->assertViewIs('statamic-resrv::livewire.checkout-options')
-            ->assertStatus(200);
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->assertEquals('Reservation option', $component->options->first()->name);
+        $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
     }
 
-    // /** @test */
-    // public function it_loads_the_extras_for_the_entry_and_reservation()
-    // {
-    //     $extra = ResrvExtra::factory()->create();
+    /** @test */
+    public function loads_options_list_in_the_view()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
 
-    //     DB::table('resrv_statamicentry_extra')->insert([
-    //         'statamicentry_id' => $this->entries->first()->id,
-    //         'extra_id' => $extra->id,
-    //     ]);
+        Livewire::test(Checkout::class)
+            ->assertSee($this->options->first()->name)
+            ->assertSee($this->options->first()->values->first()->name);
+    }
 
-    //     $extras = ResrvExtra::getPriceForDates($this->reservation);
+    /** @test */
+    public function loads_if_option_is_selected_we_see_it_in_the_pricing_table_and_the_final_price()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
 
-    //     Livewire::test(CheckoutExtras::class, ['extras' => $extras, 'enabledExtras' => collect([])])
-    //         ->assertViewIs('statamic-resrv::livewire.checkout-extras')
-    //         ->assertViewHas('extras', fn ($extras) => $extras->first()->price == '9.30');
-    // }
-
-    // /** @test */
-    // public function it_listens_to_the_extra_changed_event_and_changes_the_enabled_extras_array()
-    // {
-    //     $component = Livewire::test(CheckoutExtras::class, ['enabledExtras' => collect([]), 'extras' => collect([])])
-    //         ->dispatch('extra-changed', [
-    //             'id' => 1,
-    //             'price' => 4.65,
-    //             'quantity' => 1,
-    //         ])
-    //         ->assertSet('enabledExtras', collect([0 => [
-    //             'id' => 1,
-    //             'price' => 4.65,
-    //             'quantity' => 1,
-    //         ]])
-    //         )
-    //         ->dispatch('extra-changed', [
-    //             'id' => 1,
-    //             'price' => 4.65,
-    //             'quantity' => 0,
-    //         ])
-    //         ->assertSet('enabledExtras', collect())
-    //         ->dispatch('extra-changed', [
-    //             'id' => 1,
-    //             'price' => 4.65,
-    //             'quantity' => 3,
-    //         ])
-    //         ->assertSet('enabledExtras', collect([0 => [
-    //             'id' => 1,
-    //             'price' => 4.65,
-    //             'quantity' => 3,
-    //         ]])
-    //         )
-    //         ->dispatch('extra-changed', [
-    //             'id' => 1,
-    //             'price' => 4.65,
-    //             'quantity' => 0,
-    //         ])
-    //         ->assertSet('enabledExtras', collect());
-    // }
+        Livewire::test(Checkout::class)
+            ->set('enabledOptions', [[
+                'id' => $this->options->first()->id,
+                'value' => $this->options->first()->values->first()->id,
+                'price' => $this->options->first()->values->first()->price->format(),
+            ]])
+            ->assertSee($this->options->first()->name.': <span class="font-medium">'.$this->options->first()->values->first()->name, false)
+            ->assertSee('222.75');
+    }
 }

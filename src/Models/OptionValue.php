@@ -46,7 +46,7 @@ class OptionValue extends Model
 
     public function priceForDates($data)
     {
-        $this->initiateAvailability($data);
+        $this->initiateAvailabilityUnsafe($data);
 
         return $this->calculatePrice($data)->format();
     }
@@ -56,7 +56,7 @@ class OptionValue extends Model
         if ($this->price_type == 'free') {
             return $this->price;
         }
-        $this->initiateAvailability($data);
+        $this->initiateAvailabilityUnsafe($data);
         if ($this->price_type == 'fixed') {
             return $this->price->multiply($this->quantity);
         }
