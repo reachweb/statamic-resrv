@@ -17,7 +17,7 @@ trait HandlesReservationQueries
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             throw new ReservationException('Reservation not found in the session.');
         }
-        
+
         if ($reservation->status === ReservationStatus::WEBHOOK->value) {
             throw new ReservationException('This reservation is already paid. You cannot modify it.');
         }
