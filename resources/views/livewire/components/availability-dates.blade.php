@@ -35,7 +35,6 @@
     @endif
 </div>
 
-
 @script
 <script>
 Alpine.data('datepicker', () => ({
