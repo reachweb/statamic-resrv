@@ -8,9 +8,13 @@
             </div>
             <div class="mt-4">
                 @if ($step === 1)
+                    @if ($this->options->count() > 0)
                     <x-resrv::checkout-options :$enabledOptions :options="$this->options" />
+                    @endif
 
+                    @if ($this->extras->count() > 0)
                     <x-resrv::checkout-extras :$enabledExtras :extras="$this->extras" />
+                    @endif
 
                     <div class="mt-8 xl:mt-10">
                         <x-resrv::checkout-step-button wire:click="handleFirstStep()">
