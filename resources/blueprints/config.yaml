@@ -134,32 +134,37 @@ minutes_to_hold:
   type: integer
   required: true
   
-checkout_url_settings:
-  display: 'Checkout settings'
-  instructions: 'These settings configure the checkout Livewire component'
+checkout_livewire_settings:
+  display: 'Livewire checkout settings'
+  instructions: 'These settings configure the checkout Livewire component.'
   type: section
 checkout_entry:
   display: 'Checkout URL'
-  instructions: 'The entry that contains the Livewire checkout component'
+  instructions: 'The entry that contains the Livewire checkout component.'
   type: entries
   max_items: 1
   required: true
 checkout_completed_entry:
   display: 'Checkout URL'
-  instructions: 'The entry will load after redirection from the payment provider'
+  instructions: 'The entry will load after redirection from the payment provider, should contain the {{ {{ resrv_checkout_redirect }} tag.'
   type: entries
   max_items: 1
   required: true
+
+checkout_url_settings:
+  display: 'Checkout settings (Legacy)'
+  instructions: 'These settings configure the legacy checkout component'
+  type: section
 checkout_completed_uri:
   display: 'Checkout completed URL'
   instructions: 'The relative URL of the entry that is shown when checkout is completed'
   type: text
-  required: true
+  required: false
 checkout_failed_uri:
   display: 'Checkout failed URL'
   instructions: 'The relative URL of the entry that is shown when checkout fails'
   type: text
-  required: true
+  required: false
 
 currency_settings:
   display: 'Currency settings'
