@@ -39,7 +39,7 @@ class InstallResrv extends Command
         }
         if ($this->confirm('Do you want to publish the email templates? (needed only if you wish to edit them)')) {
             $this->publishEmailTemplates();
-        }       
+        }
         $this->info('Installation finished. Go get some reservations!');
     }
 
