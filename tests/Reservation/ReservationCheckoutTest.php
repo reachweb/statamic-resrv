@@ -1,4 +1,5 @@
-<?php 
+<?php
+
 namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Support\Facades\Config;
@@ -35,7 +36,7 @@ class ReservationCheckoutTest extends TestCase
             'customer' => [
                 'first_name' => 'John',
                 'last_name' => 'Doe',
-                'email' => 'test@test.com'
+                'email' => 'test@test.com',
             ],
         ]);
 
@@ -95,7 +96,7 @@ class ReservationCheckoutTest extends TestCase
 
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $this->reservation->id,
-            'status' => 'confirmed'
+            'status' => 'confirmed',
         ]);
     }
 
@@ -125,7 +126,6 @@ class ReservationCheckoutTest extends TestCase
         Event::assertDispatched(\Reach\StatamicResrv\Events\ReservationCancelled::class, function ($event) {
             return $event->reservation->id === $this->reservation->id;
         });
-          
     }
 
     /** @test */

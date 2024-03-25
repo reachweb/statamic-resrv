@@ -135,4 +135,3 @@ class StripePaymentGateway implements PaymentInterface
         }
     }
 }
-

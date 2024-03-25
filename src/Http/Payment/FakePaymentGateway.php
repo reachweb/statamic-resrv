@@ -3,8 +3,8 @@
 namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Str;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Models\Reservation;
 
 class FakePaymentGateway implements PaymentInterface
