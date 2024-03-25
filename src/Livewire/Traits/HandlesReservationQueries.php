@@ -18,6 +18,10 @@ trait HandlesReservationQueries
             throw new ReservationException('Reservation not found in the session.');
         }
 
+        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
+            throw new ReservationException('This reservation is already confirmed.');
+        }
+
         if ($reservation->status === ReservationStatus::WEBHOOK->value) {
             throw new ReservationException('This reservation is already paid. You cannot modify it.');
         }

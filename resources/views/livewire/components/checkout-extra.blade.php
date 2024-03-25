@@ -60,7 +60,7 @@
                             type="button"
                             class="flex-shrink-0 bg-gray-100 hover:bg-gray-200 inline-flex items-center justify-center border border-gray-300 rounded-md 
                             h-5 w-5 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                            x-on:click="quantity = Math.max(1, quantity - 1)"
+                            x-on:click.throttle="quantity = Math.max(1, quantity - 1)"
                             x-bind:disabled="quantity === 1"
                         >
                             <svg class="w-2.5 h-2.5 text-gray-900" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 2">
@@ -79,7 +79,7 @@
                             type="button"
                             class="flex-shrink-0 bg-gray-100 hover:bg-gray-200 inline-flex items-center justify-center border border-gray-300 rounded-md 
                             h-5 w-5 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                            x-on:click="quantity = Math.min(quantity + 1, {{ $extra->maximum }})"
+                            x-on:click.throttle="quantity = Math.min(quantity + 1, {{ $extra->maximum }})"
                             x-bind:disabled="quantity >= {{ $extra->maximum }}"
                         >
                             <svg class="w-2.5 h-2.5 text-gray-900" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 18">
