@@ -3,10 +3,10 @@
 namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Routing\Controller;
-use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Http\Requests\AvailabilityRequest;
+use Reach\StatamicResrv\Models\Availability;
 
 class AvailabilityController extends Controller
 {
