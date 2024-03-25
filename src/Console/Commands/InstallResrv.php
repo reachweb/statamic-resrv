@@ -34,12 +34,12 @@ class InstallResrv extends Command
         if ($this->confirm('Do you want to publish the checkout form? (needed for Resrv to work correctly)', true)) {
             $this->publishCheckoutForm();
         }
-        if ($this->confirm('Do you want to publish the email templates? (needed only if you wish to edit them)')) {
-            $this->publishEmailTemplates();
-        }
-        if ($this->confirm('Do you want to publish the checkout views? (needed only if you wish to edit them)')) {
+        if ($this->confirm('Do you want to publish the Livewire checkout views? (recommended)', true)) {
             $this->publishCheckoutViews();
         }
+        if ($this->confirm('Do you want to publish the email templates? (needed only if you wish to edit them)')) {
+            $this->publishEmailTemplates();
+        }       
         $this->info('Installation finished. Go get some reservations!');
     }
 
