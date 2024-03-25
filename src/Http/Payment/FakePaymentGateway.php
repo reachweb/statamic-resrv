@@ -46,7 +46,7 @@ class FakePaymentGateway implements PaymentInterface
         return true;
     }
 
-    public function verifyPayment($request): void
+    public function verifyPayment($request)
     {
     }
 }

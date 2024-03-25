@@ -13,7 +13,5 @@ class WebhookController extends Controller
         $payment = app(PaymentInterface::class);
 
         $payment->verifyPayment($request);
-
-        ray($request->all());
     }
 }

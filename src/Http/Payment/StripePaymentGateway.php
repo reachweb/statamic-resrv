@@ -3,7 +3,9 @@
 namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Models\Reservation;
 use Stripe\Event;
@@ -79,18 +81,13 @@ class StripePaymentGateway implements PaymentInterface
         $status = $stripe->paymentIntents->retrieve($paymentIntent, []);
 
         if ($status->status === 'succeeded' || $status->status === 'processing') {
-            // Update the reservation status to webhook if it's still pending
-            if ($reservation->status === 'pending') {
-                $reservation->update(['status' => 'webhook']);
-            }
-
             return true;
         }
 
         return false;
     }
 
-    public function verifyPayment($request): void
+    public function verifyPayment($request)
     {
         $payload = json_decode($request->getContent(), true);
 
@@ -100,6 +97,10 @@ class StripePaymentGateway implements PaymentInterface
 
         if (! $reservation) {
             abort(404);
+        }
+
+        if ($reservation->status === ReservationStatus::CONFIRMED) {
+            return response()->json([], 200);
         }
 
         Stripe::setApiKey($this->getPublicKey($reservation));
@@ -124,6 +125,14 @@ class StripePaymentGateway implements PaymentInterface
 
         if ($event->type === 'payment_intent.succeeded') {
             ReservationConfirmed::dispatch($reservation);
+
+            return response()->json([], 200);
+
+        }
+        if ($event->type === 'payment_intent.payment_failed' || $event->type === 'payment_intent.canceled') {
+            ReservationCancelled::dispatch($reservation);
+
+            return response()->json([], 200);
         }
     }
 }

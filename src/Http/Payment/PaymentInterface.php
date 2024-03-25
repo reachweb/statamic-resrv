@@ -16,5 +16,5 @@ interface PaymentInterface
 
     public function handleRedirectBack(): bool;
 
-    public function verifyPayment($request): void;
+    public function verifyPayment($request);
 }

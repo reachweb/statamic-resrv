@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Providers;
 
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
+use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -16,6 +17,7 @@ use Reach\StatamicResrv\Http\Controllers\AvailabilityController;
 use Reach\StatamicResrv\Http\Controllers\ConfigController;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
+use Reach\StatamicResrv\Listeners\CancelReservation;
 use Reach\StatamicResrv\Listeners\ConfirmReservation;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
@@ -71,6 +73,10 @@ class ResrvProvider extends AddonServiceProvider
         ReservationConfirmed::class => [
             ConfirmReservation::class,
             SendNewReservationEmails::class,
+        ],
+        ReservationCancelled::class => [
+            CancelReservation::class,
+            IncreaseAvailability::class,
         ],
         ReservationRefunded::class => [
             SendRefundReservationEmails::class,
