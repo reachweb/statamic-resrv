@@ -4,8 +4,8 @@ namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Models\Reservation;
 use Stripe\Event;
@@ -127,7 +127,6 @@ class StripePaymentGateway implements PaymentInterface
             ReservationConfirmed::dispatch($reservation);
 
             return response()->json([], 200);
-
         }
         if ($event->type === 'payment_intent.payment_failed' || $event->type === 'payment_intent.canceled') {
             ReservationCancelled::dispatch($reservation);
