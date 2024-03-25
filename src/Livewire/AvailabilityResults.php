@@ -61,6 +61,8 @@ class AvailabilityResults extends Component
         $this->data->validate();
 
         $this->getAvailability();
+
+        $this->dispatch('availability-results-updated');
     }
 
     public function getAvailability(): void

@@ -50,6 +50,8 @@ class LfAvailabilityFilter extends Component
             modifier: $this->modifier,
         )
             ->to(LivewireCollection::class);
+            
+        $this->dispatch('availability-results-updated');
     }
 
     #[On('availability-search-cleared')]
