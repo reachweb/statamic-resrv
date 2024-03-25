@@ -98,13 +98,6 @@ class ResrvProvider extends AddonServiceProvider
         __DIR__.'/../../public/css/resrv.css',
     ];
 
-    public function register()
-    {
-        $this->app->when(AvailabilityController::class)
-            ->needs(AvailabilityContract::class)
-            ->give(Availability::class);
-    }
-
     public function boot(): void
     {
         parent::boot();
@@ -120,7 +113,7 @@ class ResrvProvider extends AddonServiceProvider
         ], 'resrv-config');
 
         $this->publishes([
-            __DIR__.'/../../resources/views/checkout' => resource_path('views/vendor/statamic-resrv/checkout'),
+            __DIR__.'/../../resources/views/livewire' => resource_path('views/vendor/statamic-resrv/livewire'),
         ], 'resrv-checkout-views');
 
         $this->publishes([

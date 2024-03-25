@@ -3,7 +3,7 @@
 namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Routing\Controller;
-use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Http\Requests\AvailabilityRequest;
@@ -12,7 +12,7 @@ class AvailabilityController extends Controller
 {
     public $availability;
 
-    public function __construct(AvailabilityContract $availability)
+    public function __construct(Availability $availability)
     {
         $this->availability = $availability;
     }
