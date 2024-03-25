@@ -17,7 +17,7 @@ class ResrvCheckoutRedirect extends Tags
         session()->forget('resrv_reservation');
 
         if ($status === false) {
-            return $this->successFailed();
+            return $this->statusFailed();
         }
 
         return $this->statusSuccess();

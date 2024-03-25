@@ -35,7 +35,7 @@ trait FakesViews
         $this->withFakeViews();
 
         $this->viewShouldReturnRaw('layout', '{{ template_content }}');
-        $this->viewShouldReturnRaw('default', '{{ content }}');
+        $this->viewShouldReturnRaw('default', '{{ title }}{{ content }}');
     }
 
     public function withStandardFakeErrorViews()

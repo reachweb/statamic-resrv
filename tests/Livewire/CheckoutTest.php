@@ -113,6 +113,26 @@ class CheckoutTest extends TestCase
     }
 
     /** @test */
+    public function it_handles_second_step()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'payment_id' => '',
+        ]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->assertSet('step', 3);
+
+        $this->assertDatabaseMissing('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'payment_id' => '',
+        ]);
+    }
+
+    /** @test */
     public function it_throws_exception_if_the_reservation_is_expired()
     {
         $reservation = Reservation::factory()->expired()->create([

@@ -36,5 +36,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         // Payments
         Route::post('/resrv/checkout/completed', 'ReservationController@checkoutCompleted')->name('reservation.checkoutCompleted')->withoutMiddleware([VerifyCsrfToken::class]);
         Route::post('/resrv/checkout/failed', 'ReservationController@checkoutFailed')->name('reservation.checkoutFailed')->withoutMiddleware([VerifyCsrfToken::class]);
+
+        // Webhook
         Route::post('/resrv/api/webhook', 'WebhookController@store')->name('webhook.store')->withoutMiddleware([VerifyCsrfToken::class]);
     });
