@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Models\FixedPricing;
 trait HandlesPricing
 {
     protected $original_price;
+
     protected $reservation_price;
 
     protected function calculatePrice($prices, $id)

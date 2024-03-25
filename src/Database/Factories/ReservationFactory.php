@@ -19,7 +19,7 @@ class ReservationFactory extends Factory
      *
      * @return array
      */
-    public function definition()
+    public function definition(): array
     {
         return [
             'status' => 'pending',
@@ -29,12 +29,19 @@ class ReservationFactory extends Factory
             'date_start' => today()->toIso8601String(),
             'date_end' => today()->add(2, 'day')->toIso8601String(),
             'quantity' => 1,
-            'location_start' => '',
-            'location_end' => '',
             'price' => 200,
             'payment' => 50,
             'payment_id' => '',
             'customer' => '',
         ];
+    }
+
+    public function expired(): Factory
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'status' => 'expired',
+            ];
+        });
     }
 }

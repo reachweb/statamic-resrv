@@ -47,11 +47,11 @@ class ReportsCpTest extends TestCase
 
         $response = $this->get(cp_route('resrv.report.index').'?start='.now()->toDateString().'&end='.now()->addWeek()->toDateString());
         $response->assertStatus(200)
-                ->assertJson([
-                    'total_confirmed_reservations' => 6,
-                    'total_revenue' => '1200.00',
-                    'avg_revenue' => '200.00',
-                ])
-                ->assertSee('Test Statamic Item');
+            ->assertJson([
+                'total_confirmed_reservations' => 6,
+                'total_revenue' => '1200.00',
+                'avg_revenue' => '200.00',
+            ])
+            ->assertSee('Test Statamic Item');
     }
 }

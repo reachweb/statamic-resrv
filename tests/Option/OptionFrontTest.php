@@ -21,11 +21,11 @@ class OptionFrontTest extends TestCase
         $this->signInAdmin();
         $item = $this->makeStatamicItem();
         $option = Option::factory()
-                    ->state([
-                        'item_id' => $item->id(),
-                    ])
-                    ->has(OptionValue::factory()->count(3), 'values')
-                    ->create();
+            ->state([
+                'item_id' => $item->id(),
+            ])
+            ->has(OptionValue::factory()->count(3), 'values')
+            ->create();
 
         $this->travelTo(today()->setHour(11));
 
@@ -36,11 +36,11 @@ class OptionFrontTest extends TestCase
         ];
 
         $response = $this->post(route('resrv.option.index'), $checkoutRequest);
-        $response->assertStatus(200)->assertSee($option->slug)->assertSee('22.75');
+        $response->assertStatus(200)->assertSee($option->slug)->assertSee(22.75 * 2);
 
         // Check for multiple items
         $checkoutRequest['quantity'] = 3;
         $response = $this->post(route('resrv.option.index'), $checkoutRequest);
-        $response->assertStatus(200)->assertSee($option->slug)->assertSee('68.25');
+        $response->assertStatus(200)->assertSee($option->slug)->assertSee(22.75 * 2 * 3);
     }
 }

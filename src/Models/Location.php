@@ -13,7 +13,7 @@ use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Location extends Model
 {
-    use HasFactory, HandlesOrdering, SoftDeletes;
+    use HandlesOrdering, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_locations';
 

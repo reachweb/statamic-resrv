@@ -16,7 +16,7 @@ use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Extra extends Model
 {
-    use HasFactory, HandlesOrdering, HandlesAvailabilityDates, HandlesMultisiteIds, SoftDeletes;
+    use HandlesAvailabilityDates, HandlesMultisiteIds, HandlesOrdering, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_extras';
 
@@ -58,13 +58,13 @@ class Extra extends Model
             $this->price = $dynamicPricing->apply($this->price)->format();
         }
         if ($this->price_type == 'relative') {
-            return $this->price->multiply($this->getRelativePrice($data))->format();
+            return $this->price->multiply($this->getRelativePrice($data))->multiply($this->quantity)->format();
         }
         if ($this->price_type == 'perday') {
-            return $this->price->multiply($this->duration)->format();
+            return $this->price->multiply($this->duration)->multiply($this->quantity)->format();
         }
 
-        return $this->price->format();
+        return $this->price->multiply($this->quantity)->format();
     }
 
     public function priceForReservation($reservation)
@@ -119,7 +119,7 @@ class Extra extends Model
     public function scopeEntries($query)
     {
         return DB::table('resrv_statamicentry_extra')
-                ->where('extra_id', $this->id);
+            ->where('extra_id', $this->id);
     }
 
     public function scopeEntriesWithConditions($query, $entry)

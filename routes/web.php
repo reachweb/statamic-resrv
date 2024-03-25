@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+
 Route::namespace('\Reach\StatamicResrv\Http\Controllers')
     ->name('resrv.')
     ->group(function () {
@@ -30,4 +32,11 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::delete('/resrv/api/session/coupon', 'ResrvUtilityController@removeCoupon')->name('utility.removeCoupon');
         Route::get('/resrv/api/session/coupon', 'ResrvUtilityController@getCoupon')->name('utility.getCoupon');
         Route::get('/resrv/api/token', 'ResrvUtilityController@token')->name('utility.token');
+
+        // Payments
+        Route::post('/resrv/checkout/completed', 'ReservationController@checkoutCompleted')->name('reservation.checkoutCompleted')->withoutMiddleware([VerifyCsrfToken::class]);
+        Route::post('/resrv/checkout/failed', 'ReservationController@checkoutFailed')->name('reservation.checkoutFailed')->withoutMiddleware([VerifyCsrfToken::class]);
+
+        // Webhook
+        Route::post('/resrv/api/webhook', 'WebhookController@store')->name('webhook.store')->withoutMiddleware([VerifyCsrfToken::class]);
     });

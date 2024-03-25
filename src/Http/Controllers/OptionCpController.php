@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Models\OptionValue;
 class OptionCpController extends Controller
 {
     protected $option;
+
     protected $value;
 
     public function __construct(Option $option, OptionValue $value)

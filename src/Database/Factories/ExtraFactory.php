@@ -30,6 +30,7 @@ class ExtraFactory extends Factory
             'allow_multiple' => true,
             'maximum' => 3,
             'order' => 1,
+            'description' => '',
             'published' => true,
         ];
     }

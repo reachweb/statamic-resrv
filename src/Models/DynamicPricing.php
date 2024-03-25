@@ -202,8 +202,6 @@ class DynamicPricing extends Model
     {
         $reservation = Reservation::find($reservation_id);
 
-        $query = $query->where('coupon', $coupon);
-
         if ($query->count() === 0) {
             throw new CouponNotFoundException(__('This coupon does not exist'));
         }

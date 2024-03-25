@@ -24,6 +24,7 @@ class AvailabilityFactory extends Factory
             'date' => today(),
             'available' => 2,
             'price' => '150',
+            'property' => 'none',
         ];
     }
 

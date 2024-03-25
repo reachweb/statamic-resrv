@@ -3,11 +3,17 @@
 namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Models\Reservation;
+use Stripe\Event;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
 use Stripe\Stripe;
+use Stripe\StripeClient;
+use Stripe\Webhook;
 
 class StripePaymentGateway implements PaymentInterface
 {
@@ -56,6 +62,76 @@ class StripePaymentGateway implements PaymentInterface
         $handle = $reservation->entry()->collection->handle();
         if (array_key_exists($handle, $key)) {
             return $key[$handle];
+        }
+    }
+
+    public function supportsWebhooks(): bool
+    {
+        return true;
+    }
+
+    public function handleRedirectBack(): bool
+    {
+        $paymentIntent = request()->input('payment_intent');
+
+        $reservation = Reservation::findByPaymentId($paymentIntent)->first();
+
+        $stripe = new StripeClient($this->getPublicKey($reservation));
+
+        $status = $stripe->paymentIntents->retrieve($paymentIntent, []);
+
+        if ($status->status === 'succeeded' || $status->status === 'processing') {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function verifyPayment($request)
+    {
+        $payload = json_decode($request->getContent(), true);
+
+        $data = $payload['data']['object'];
+
+        $reservation = Reservation::findByPaymentId($data['id'])->first();
+
+        if (! $reservation) {
+            abort(404);
+        }
+
+        if ($reservation->status === ReservationStatus::CONFIRMED) {
+            return response()->json([], 200);
+        }
+
+        Stripe::setApiKey($this->getPublicKey($reservation));
+
+        try {
+            $event = Event::constructFrom(json_decode($request->getContent(), true));
+        } catch (\UnexpectedValueException $e) {
+            // Invalid payload
+            abort(403);
+        }
+
+        $sig_header = $_SERVER['HTTP_STRIPE_SIGNATURE'];
+
+        try {
+            $event = Webhook::constructEvent(
+                $request->getContent(), $sig_header, config('resrv-config.stripe_webhook_secret')
+            );
+        } catch (\Stripe\Exception\SignatureVerificationException $e) {
+            // Invalid signature
+            abort(403);
+        }
+
+        if ($event->type === 'payment_intent.succeeded') {
+            ReservationConfirmed::dispatch($reservation);
+
+            return response()->json([], 200);
+        }
+        if ($event->type === 'payment_intent.payment_failed' || $event->type === 'payment_intent.canceled') {
+            ReservationCancelled::dispatch($reservation);
+
+            return response()->json([], 200);
         }
     }
 }

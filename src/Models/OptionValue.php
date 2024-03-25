@@ -13,7 +13,7 @@ use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 
 class OptionValue extends Model
 {
-    use HasFactory, HandlesAvailabilityDates, SoftDeletes;
+    use HandlesAvailabilityDates, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_options_values';
 
@@ -46,17 +46,20 @@ class OptionValue extends Model
 
     public function priceForDates($data)
     {
-        $this->initiateAvailability($data);
+        $this->initiateAvailabilityUnsafe($data);
 
-        return $this->price->multiply($this->quantity)->format();
+        return $this->calculatePrice($data)->format();
     }
 
     public function calculatePrice($data)
     {
-        if ($this->price_type == 'free' || $this->price_type == 'fixed') {
+        if ($this->price_type == 'free') {
             return $this->price;
         }
-        $this->initiateAvailability($data);
+        $this->initiateAvailabilityUnsafe($data);
+        if ($this->price_type == 'fixed') {
+            return $this->price->multiply($this->quantity);
+        }
         if ($this->price_type == 'perday') {
             return $this->price->multiply($this->duration)->multiply($this->quantity);
         }

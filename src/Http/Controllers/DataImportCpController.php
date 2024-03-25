@@ -51,7 +51,7 @@ class DataImportCpController extends Controller
 
         if ($errors->count() > 0) {
             return view('statamic-resrv::cp.dataimport.confirm')
-            ->with('errors', $errors);
+                ->with('errors', $errors);
         }
 
         $sample = $dataImport->prepare(true)->all();

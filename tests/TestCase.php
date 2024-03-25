@@ -7,7 +7,6 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\WithFaker;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
 use Statamic\Extend\Manifest;
-use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\User;
@@ -18,9 +17,9 @@ use Statamic\Support\Str;
 class TestCase extends OrchestraTestCase
 {
     use DatabaseMigrations;
-    use WithFaker;
-    use PreventSavingStacheItemsToDisk;
     use FakesViews;
+    use PreventSavingStacheItemsToDisk;
+    use WithFaker;
 
     protected function setUp(): void
     {
@@ -30,12 +29,9 @@ class TestCase extends OrchestraTestCase
 
         $this->withoutVite();
 
-        Blueprint::setDirectory(__DIR__.'/../resources/blueprints');
-
-        Version::shouldReceive('get')->andReturn('4.3.0');
-        $this->addToAssertionCount(-1); // Dont want to assert this
-
         $this->withoutExceptionHandling();
+
+        Version::shouldReceive('get')->andReturn('4.50.0');
     }
 
     public function tearDown(): void
@@ -59,6 +55,7 @@ class TestCase extends OrchestraTestCase
     {
         return [
             \Statamic\Providers\StatamicServiceProvider::class,
+            \Livewire\LivewireServiceProvider::class,
             \Reach\StatamicResrv\StatamicResrvServiceProvider::class,
             \Spatie\LaravelRay\RayServiceProvider::class,
         ];
@@ -91,7 +88,7 @@ class TestCase extends OrchestraTestCase
         ];
 
         foreach ($configs as $config) {
-            $app['config']->set("statamic.$config", require(__DIR__."/../vendor/statamic/cms/config/{$config}.php"));
+            $app['config']->set("statamic.$config", require (__DIR__."/../vendor/statamic/cms/config/{$config}.php"));
         }
 
         //$app['config']->set("resrv-config", require(__DIR__."/../config/config.php"));
@@ -137,7 +134,7 @@ class TestCase extends OrchestraTestCase
         return $user;
     }
 
-    public function makeStatamicItem(array $data = null)
+    public function makeStatamicItem(?array $data = null)
     {
         $entryData = [
             'title' => $data['title'] ?? 'Test Statamic Item',

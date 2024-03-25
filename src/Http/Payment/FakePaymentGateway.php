@@ -3,6 +3,9 @@
 namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Models\Reservation;
 
 class FakePaymentGateway implements PaymentInterface
 {
@@ -33,6 +36,38 @@ class FakePaymentGateway implements PaymentInterface
         $handle = $reservation->entry()->collection->handle();
         if (in_array($handle, $key)) {
             return $key[$handle];
+        }
+    }
+
+    public function supportsWebhooks(): bool
+    {
+        return true;
+    }
+
+    public function handleRedirectBack(): bool
+    {
+        $status = request()->input('status');
+
+        if ($status === 'success') {
+            return true;
+        }
+
+        return false;
+    }
+
+    public function verifyPayment($request)
+    {
+        $reservation = Reservation::findOrFail($request->get('reservation_id'));
+
+        if ($request->get('status') === 'success') {
+            ReservationConfirmed::dispatch($reservation);
+
+            return response()->json([], 200);
+        }
+        if ($request->get('status') === 'fail') {
+            ReservationCancelled::dispatch($reservation);
+
+            return response()->json([], 200);
         }
     }
 }

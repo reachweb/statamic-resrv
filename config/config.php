@@ -36,7 +36,7 @@ return [
     'calculate_days_using_time' => false,
     'decrease_availability_for_extra_time' => false,
     'admin_email' => false,
-    'checkout_uri' => false,
+    'checkout_entry' => null,
     'checkout_completed_uri' => false,
     'checkout_failed_uri' => false,
     'checkout_post_id' => false,
@@ -73,6 +73,7 @@ return [
     'payment_gateway' => Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
     'stripe_secret_key' => env('RESRV_STRIPE_SECRET', ''),
     'stripe_publishable_key' => env('RESRV_STRIPE_PUBLISHABLE', ''),
+    'stripe_webhook_secret' => env('RESRV_STRIPE_WEBHOOK_SECRET', ''),
 
     /**
      * Advanced features

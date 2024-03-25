@@ -12,7 +12,7 @@ use Reach\StatamicResrv\Traits\HandlesComparisons;
 
 class ExtraCondition extends Model
 {
-    use HasFactory, HandlesComparisons;
+    use HandlesComparisons, HasFactory;
 
     protected $table = 'resrv_extra_conditions';
 
@@ -37,12 +37,12 @@ class ExtraCondition extends Model
     public function requiredExtrasForEntry($statamic_id)
     {
         $extras = Extra::entriesWithConditions($statamic_id)
-                    ->get()
-                    ->transform(function ($extra) {
-                        $extra->conditions = collect(json_decode($extra->conditions));
+            ->get()
+            ->transform(function ($extra) {
+                $extra->conditions = collect(json_decode($extra->conditions));
 
-                        return $extra;
-                    });
+                return $extra;
+            });
 
         if ($extras->count() == 0) {
             return false;

@@ -165,9 +165,15 @@ class Availability extends Model implements AvailabilityContract
 
         $entry = $this->getDefaultSiteEntry($statamic_id);
 
-        $results = $this->getResultsForItem($entry)->first();
+        $prices = AvailabilityRepository::itemPricesBetween(
+            date_start: $this->date_start,
+            date_end: $this->date_end,
+            statamic_id: $entry->id(),
+            advanced: $this->advanced,
+        )
+            ->first();
 
-        $this->calculatePrice($this->createPricesCollection($results->prices), $entry->id());
+        $this->calculatePrice($this->createPricesCollection($prices->prices), $entry->id());
 
         return $this->reservation_price;
     }
