@@ -62,6 +62,7 @@ class AvailabilityResults extends Component
             $this->data->validate();
         } catch (\Exception $exception) {
             $this->dispatch('availability-results-updated');
+
             return;
         }
 
