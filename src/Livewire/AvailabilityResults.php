@@ -58,7 +58,12 @@ class AvailabilityResults extends Component
         $this->data->fill($data);
 
         // Validate again in case the session data is old
-        $this->data->validate();
+        try {
+            $this->data->validate();
+        } catch (\Exception $exception) {
+            $this->dispatch('availability-results-updated');
+            return;
+        }
 
         $this->getAvailability();
 
