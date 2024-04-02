@@ -50,7 +50,7 @@ trait HandlesPricing
     {
         // Convert comma separated prices to collection of Price objects
         $prices = collect(explode(',', $prices))->transform(fn ($price) => Price::create($price));
-        
+
         $start = Price::create(0);
         $originalPrice = null;
 
@@ -76,6 +76,7 @@ trait HandlesPricing
         if (! $dynamicPricing) {
             return false;
         }
+
         return $dynamicPricing->apply($price);
     }
 }
