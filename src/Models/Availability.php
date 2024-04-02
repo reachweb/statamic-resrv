@@ -6,12 +6,14 @@ use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Resources\AvailabilityItemResource;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
@@ -64,6 +66,7 @@ class Availability extends Model implements AvailabilityContract
             return false;
         }
         $properties = $blueprint->field('resrv_availability')->get('advanced_availability');
+
         if (array_key_exists($slug, $properties)) {
             return $properties[$slug];
         }
@@ -94,6 +97,16 @@ class Availability extends Model implements AvailabilityContract
         $this->initiateAvailability($data);
 
         return $this->getSpecificItem($statamic_id);
+    }
+
+    // TODO: remove the method above
+    public function getAvailabilityForEntry($data, $statamic_id)
+    {
+        ExpireReservations::dispatchSync();
+
+        $this->initiateAvailability($data);
+
+        return $this->getSpecificItemCollection($statamic_id)->resolve();
     }
 
     public function getMultipleAvailabilityForItem($data, $statamic_id)
@@ -178,7 +191,7 @@ class Availability extends Model implements AvailabilityContract
         return $this->reservation_price;
     }
 
-    protected function getResultsForItem($entry)
+    protected function getResultsForItem($entry, $property = null)
     {
         return AvailabilityRepository::itemAvailableBetween(
             date_start: $this->date_start,
@@ -186,7 +199,7 @@ class Availability extends Model implements AvailabilityContract
             duration: $this->duration,
             quantity: $this->quantity,
             statamic_id: $entry->id(),
-            advanced: $this->advanced
+            advanced: $property ?? $this->advanced
         )
             ->get();
     }
@@ -280,6 +293,71 @@ class Availability extends Model implements AvailabilityContract
         }
 
         return $availableWithPricing;
+    }
+
+    // TODO: remove the getSpecificItem method below
+    protected function getSpecificItemCollection($statamic_id)
+    {
+        $entry = $this->getDefaultSiteEntry($statamic_id);
+
+        $request = $this->requestCollection();
+
+        $availability = collect();
+
+        if ($entry->get('resrv_availability') == 'disabled') {
+            return new AvailabilityItemResource($availability, $request);
+        }
+
+        if ($this->advanced && in_array('any', $this->advanced)) {
+            return $this->getMultiplePropertiesAvailability($entry, $request);
+        }
+
+        $results = $this->getResultsForItem($entry)->first();
+
+        if (! $results) {
+            return new AvailabilityItemResource($availability, $request);
+        }
+
+        $availability->push($this->populateAvailability($results));
+
+        return new AvailabilityItemResource($availability, $request);
+    }
+
+    protected function getMultiplePropertiesAvailability($entry, $request)
+    {
+        $availability = collect();
+
+        $properties = AvailabilityRepository::itemGetProperties($entry->id())->pluck('property');
+
+        foreach ($properties as $property) {
+            $this->advanced = $property;
+
+            $results = $this->getResultsForItem($entry, [$property])->first();
+
+            if ($results) {
+                $propertyLabel = cache()->remember($property.'_availability_label', 60, function () use ($entry, $property) {
+                    if ($field = $entry->blueprint()->field('resrv_availability')) {
+                        return $field->get('advanced_availability')[$property] ?? $property;
+                    }
+                });
+                $availability->put($property, $this->populateAvailability($results, $propertyLabel));
+            }
+        }
+
+        return new AvailabilityItemResource($availability->sortBy('price'), $request);
+    }
+
+    protected function populateAvailability($results, $label = null)
+    {
+        $prices = $this->getPrices($results->prices, $results->statamic_id);
+
+        return collect([
+            'price' => $prices['reservationPrice']->format(),
+            'original_price' => $prices['originalPrice'] ? $prices['originalPrice']->format() : null,
+            'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
+            'property' => $results->property,
+            'propertyLabel' => $label,
+        ]);
     }
 
     protected function getSpecificItem($statamic_id)
@@ -457,14 +535,15 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
+    // TODO: check where this is used
     protected function getProperty($results, $statamic_id, $singleItem = false)
     {
         if (! $singleItem) {
             $results = $results->where('statamic_id', $statamic_id);
         }
-        if (! ($results->first() instanceof AdvancedAvailability)) {
-            return false;
-        }
+        // if (! ($results->first() instanceof AdvancedAvailability)) {
+        //     return false;
+        // }
         $property = $results->first()->property;
         if (! $results->every(fn ($item) => $item->property == $property)) {
             return false;
@@ -508,5 +587,16 @@ class Availability extends Model implements AvailabilityContract
         if (config('resrv-config.payment') == 'percent') {
             return $price->percent(config('resrv-config.percent_amount'));
         }
+    }
+
+    protected function requestCollection($label = null): Collection
+    {
+        return collect([
+            'duration' => $this->duration,
+            'date_start' => $this->date_start,
+            'date_end' => $this->date_end,
+            'quantity' => $this->quantity,
+            'property' => $this->advanced,
+        ]);
     }
 }

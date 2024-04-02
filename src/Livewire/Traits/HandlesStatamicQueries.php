@@ -11,6 +11,11 @@ use Statamic\Facades\Entry;
 
 trait HandlesStatamicQueries
 {
+    public function getProperties()
+    {
+        return $this->getPropertiesFromBlueprint();
+    }
+
     public function getStatamicBlueprint()
     {
         if ($blueprint = Blueprint::find('collections.'.$this->advanced)) {

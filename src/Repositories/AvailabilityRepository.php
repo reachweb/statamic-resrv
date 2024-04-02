@@ -52,6 +52,14 @@ class AvailabilityRepository
             ->groupBy('statamic_id');
     }
 
+    public function itemGetProperties(string $statamic_id)
+    {
+        return Availability::select('property')
+            ->where('statamic_id', $statamic_id)
+            ->groupBy('property')
+            ->get();
+    }
+
     public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced)
     {
         return Availability::where('date', '>=', $date_start)

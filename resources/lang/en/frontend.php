@@ -7,6 +7,8 @@ return [
     'search' => 'Search',
     'noAvailability' => 'No availability',
     'tryAdjustingYourSearch' => 'Try adjusting your dates or quantity.',
+    'multipleAvailable' => 'Multiple properties available.',
+    'pleaseSelectProperty' => 'Please select a property from the search form to check prices and continue.',
     'yourSearch' => 'Your search',
     'searchError' => 'Search error',
     'somethingWentWrong' => 'Something went wrong',

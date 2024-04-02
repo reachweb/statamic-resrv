@@ -1,7 +1,7 @@
 @use(Carbon\Carbon)
 
 <div class="relative">
-    @if (data_get($availability, 'message.status') === 1)
+    @if (data_get($availability, 'message.status') === true && data_get($availability, 'request.property') !== 'any')
     <div class="divide-y divide-gray-200">
         <div class="flex flex-col pb-6">
             <div class="text-lg font-medium mb-2">{{ trans('statamic-resrv::frontend.yourSearch') }}</div>
@@ -42,7 +42,7 @@
                     {{ config('resrv-config.currency_symbol') }} {{ $availability->get('data')['payment'] }}
                  </div>
             </div>
-        </div>     
+        </div>
     </div>
     <div class="mt-6 xl:mt-8">
         <button 
@@ -53,16 +53,21 @@
             {{ trans('statamic-resrv::frontend.bookNow') }}
         </button>
     </div>
+    @elseif (data_get($availability, 'request.property') === 'any')
+    <div class="flex flex-col py-4">
+        <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.multipleAvailable') }}</dt>
+        <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.pleaseSelectProperty') }}</dd>
+    </div>
     @elseif (! $errors->has('availability'))
-    <div class="flex flex-col pb-6">
+    <div class="flex flex-col py-4">
         <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.noAvailability') }}</dt>
-        <dd class="mb-1 text-gray-500 lg:text-lg ">{{ trans('statamic-resrv::frontend.tryAdjustingYourSearch') }}</dd>
+        <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.tryAdjustingYourSearch') }}</dd>
     </div>
     @endif
     @if ($errors->has('availability'))
-    <div class="flex flex-col pb-6">
+    <div class="flex flex-col py-4">
         <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.searchError') }}</dt>
-        <dd class="mb-1 text-gray-500 lg:text-lg ">{{ $errors->first('availability') }}</dd>
+        <dd class="mb-1 text-gray-500">{{ $errors->first('availability') }}</dd>
     </div>
     @endif
     <div class="absolute left-0 right-0 top-0 w-full h-full bg-white/50" wire:loading.delay.long>

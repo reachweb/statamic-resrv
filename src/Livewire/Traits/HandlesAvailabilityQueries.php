@@ -28,7 +28,7 @@ trait HandlesAvailabilityQueries
     public function queryBaseAvailabilityForEntry(): array
     {
         try {
-            return (new Availability)->getAvailabilityForItem($this->data->toResrvArray(), $this->entryId);
+            return (new Availability)->getAvailabilityForEntry($this->data->toResrvArray(), $this->entryId);
         } catch (AvailabilityException $exception) {
             $this->addError('availability', $exception->getMessage());
 
@@ -43,7 +43,7 @@ trait HandlesAvailabilityQueries
         $periods->transform(function ($period) {
             $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'property']));
             try {
-                return (new Availability)->getAvailabilityForItem($searchData, $this->entryId);
+                return (new Availability)->getAvailabilityForEntry($searchData, $this->entryId);
             } catch (AvailabilityException $exception) {
                 return [
                     'message' => [

@@ -22,6 +22,8 @@ class AvailabilitySearch extends Component
 
     public $advanced = false;
 
+    public bool $anyAdvanced = false;
+
     public bool $enableQuantity = false;
 
     public array $overrideProperties;
@@ -52,6 +54,11 @@ class AvailabilitySearch extends Component
     public function search(): void
     {
         $this->data->validate();
+
+        if ($this->data->advanced == null && $this->anyAdvanced) {
+            $this->data->advanced = 'any';
+        }
+
         $this->dispatch('availability-search-updated', $this->data);
     }
 
@@ -78,11 +85,6 @@ class AvailabilitySearch extends Component
         $this->resetValidation();
 
         $this->dispatch('availability-search-updated', $this->data);
-    }
-
-    public function getProperties()
-    {
-        return $this->getPropertiesFromBlueprint();
     }
 
     public function render()

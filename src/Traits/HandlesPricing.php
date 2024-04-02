@@ -44,4 +44,38 @@ trait HandlesPricing
             $this->reservation_price = $dynamicPricing->apply($this->reservation_price);
         }
     }
+
+    // TODO: remove the methods above
+    protected function getPrices($prices, $id)
+    {
+        // Convert comma separated prices to collection of Price objects
+        $prices = collect(explode(',', $prices))->transform(fn ($price) => Price::create($price));
+        
+        $start = Price::create(0);
+        $originalPrice = null;
+
+        $reservationPrice = $start->add(...$prices->toArray());
+
+        // If FixedPricing exists, replace the price
+        if (FixedPricing::getFixedPricing($id, $this->duration)) {
+            $reservationPrice = FixedPricing::getFixedPricing($id, $this->duration);
+        }
+
+        // Apply dynamic pricing
+        if ($discountedPrice = $this->processDynamicPricing($reservationPrice, $id)) {
+            $original_price = $reservationPrice;
+            $reservation_price = $discountedPrice;
+        }
+
+        return compact('originalPrice', 'reservationPrice');
+    }
+
+    protected function processDynamicPricing($price, $id)
+    {
+        $dynamicPricing = $this->getDynamicPricing($id);
+        if (! $dynamicPricing) {
+            return false;
+        }
+        return $dynamicPricing->apply($price);
+    }
 }
