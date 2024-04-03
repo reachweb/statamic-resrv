@@ -164,7 +164,7 @@ class Extra extends Model
         if (isset($reservation->property)) {
             $data['advanced'] = $reservation->property;
         }
-        
+
         return (new Availability())->getPriceForItem($data, $data['item_id'])->format();
     }
 
