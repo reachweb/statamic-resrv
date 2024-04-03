@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Resources\AvailabilityItemResource;
+use Reach\StatamicResrv\Resources\AvailabilityResource;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
@@ -81,6 +82,16 @@ class Availability extends Model implements AvailabilityContract
         $this->initiateAvailability($data);
 
         return $this->getAllAvailableItems();
+    }
+
+    // TODO: remove the method above
+    public function getAvailable($data)
+    {
+        ExpireReservations::dispatchSync();
+
+        $this->initiateAvailability($data);
+
+        return $this->getAvailabilityCollection()->resolve();
     }
 
     public function getMultipleAvailableItems($data)
@@ -263,6 +274,24 @@ class Availability extends Model implements AvailabilityContract
         return $availableWithPricing;
     }
 
+    // TODO: remove the method above
+    protected function getAvailabilityCollection()
+    {
+        $availableWithPricing = collect();
+        $available = $this->availableForDates()->groupBy('statamic_id');
+        $request = $this->requestCollection();
+
+        foreach ($available as $id => $items) {
+            $availabilities = collect();
+            foreach ($items as $item) {
+                $availabilities->push($this->populateAvailability($item));
+            }
+            $availableWithPricing->put($id, $availabilities->sortBy('price'));
+        }
+
+        return new AvailabilityResource($availableWithPricing, $request);
+    }
+
     protected function getMultiple($data)
     {
         $available = collect();
@@ -295,7 +324,7 @@ class Availability extends Model implements AvailabilityContract
         return $availableWithPricing;
     }
 
-    // TODO: remove the getSpecificItem method below
+    // TODO: remove the getSpecificItem method below, improve the returns here
     protected function getSpecificItemCollection($statamic_id)
     {
         $entry = $this->getDefaultSiteEntry($statamic_id);
@@ -512,7 +541,7 @@ class Availability extends Model implements AvailabilityContract
         )->get();
 
         if ($results->count() == 0) {
-            return [];
+            return collect([]);
         }
 
         $disabled = $this->getDisabledIds();

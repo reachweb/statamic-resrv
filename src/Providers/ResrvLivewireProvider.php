@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Providers;
 
-use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Traits\HandlesAvailabilityQueries;
@@ -49,12 +48,16 @@ class ResrvLivewireProvider extends AddonServiceProvider
 
                 $result = $instance->getAvailability($searchData);
 
-                if (Arr::has($result, 'message.status') && data_get($result, 'message.status') === false) {
+                if (data_get($result, 'message.status') === false) {
                     return $next($entries);
                 }
 
                 $entries->each(function ($entry) use ($result) {
-                    if ($data = data_get($result, $entry->id, false)) {
+                    if ($data = data_get($result, 'data.'.$entry->id(), false)) {
+                        if ($data->count() === 1) {
+                            $data = $data->first();
+                        }
+
                         $entry->set('live_availability', $data);
                     }
                 });

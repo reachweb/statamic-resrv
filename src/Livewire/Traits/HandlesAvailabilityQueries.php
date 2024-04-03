@@ -14,7 +14,7 @@ trait HandlesAvailabilityQueries
     public function getAvailability(Collection $data): array
     {
         try {
-            return (new Availability)->getAvailableItems($this->toResrvArray($data->first()));
+            return (new Availability)->getAvailable($this->toResrvArray($data->first()));
         } catch (AvailabilityException $exception) {
             return [
                 'message' => [

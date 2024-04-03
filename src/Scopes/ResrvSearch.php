@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Scopes;
 
-use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Livewire\Traits\HandlesAvailabilityQueries;
 use Statamic\Query\Scopes\Scope;
 
@@ -25,10 +24,6 @@ class ResrvSearch extends Scope
 
         $result = $this->getAvailability($searchData);
 
-        if (Arr::has($result, 'message.status') && data_get($result, 'message.status') === false) {
-            return $query;
-        }
-
-        return $query->whereIn('id', array_keys($result));
+        return $query->whereIn('id', $result['data']->keys()->toArray());
     }
 }
