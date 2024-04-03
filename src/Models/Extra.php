@@ -154,8 +154,17 @@ class Extra extends Model
         return $extras;
     }
 
-    protected function getRelativePrice($data)
+    protected function getRelativePrice($reservation)
     {
+        $data = [];
+        $data['date_start'] = $reservation->date_start;
+        $data['date_end'] = $reservation->date_end;
+        $data['quantity'] = $reservation->quantity;
+        $data['item_id'] = $reservation->item_id ?? $reservation->parent->item_id;
+        if (isset($reservation->property)) {
+            $data['advanced'] = $reservation->property;
+        }
+        
         return (new Availability())->getPriceForItem($data, $data['item_id'])->format();
     }
 
