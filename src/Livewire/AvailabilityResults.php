@@ -35,10 +35,6 @@ class AvailabilityResults extends Component
     #[Locked]
     public int $extraDaysOffset = 0;
 
-    public Collection $extras;
-
-    public Collection $options;
-
     public function mount(string $entry)
     {
         $this->entryId = $this->getDefaultSiteEntry($entry)->id();
