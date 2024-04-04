@@ -13,11 +13,6 @@ class AvailabilityData extends Form
 
     public ?string $advanced = null;
 
-    public function incrementQuantity(): void
-    {
-        $this->quantity++;
-    }
-
     public function rules(): array
     {
         return [
