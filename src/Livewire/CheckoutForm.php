@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Livewire;
 
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\Session;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
 use Reach\StatamicResrv\Models\Reservation;
@@ -31,14 +32,27 @@ class CheckoutForm extends Component
     #[Computed(persist: true)]
     public function checkoutForm()
     {
-        return $this->reservation->getCheckoutForm()->reject(fn ($field) => $field->get('input_type') === 'hidden')->toArray();
+        return $this->reservation->getCheckoutForm()->toArray();
     }
 
     public function initializeForm()
     {
-        $this->form = collect($this->checkoutForm)->mapWithKeys(function ($field) {
+        $custom = [];
+        if (session()->has('resrv-search')) {
+            $custom = session('resrv-search')->custom ?? [];
+        }
+
+        $this->form = collect($this->checkoutForm)->mapWithKeys(function ($field) use ($custom) {
+            // Default to an empty string or an empty array based on the field type
+            $value = $field['type'] === 'checkboxes' ? [] : '';
+
+            // If the field is in the custom session data, prepopulate that value
+            if (array_key_exists($field['handle'], $custom)) {
+                $value = $custom[$field['handle']];
+            }
+
             return [
-                $field['handle'] => $field['type'] === 'checkboxes' ? [] : '',
+                $field['handle'] => $value,
             ];
         })->all();
     }

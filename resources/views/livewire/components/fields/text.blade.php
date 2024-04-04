@@ -1,5 +1,6 @@
 @props(['field', 'key', 'errors'])
 
+@unless ($field['input_type'] === 'hidden')
 <div {{ $attributes->class(['relative', 'col-span-2' => $field['width'] === 100, 'col-span-1' => $field['width'] === 50,]) }} wire:key={{ $key }}>
     <label for="{{ $field['handle'] }}" class="block mb-2 text-sm font-medium text-gray-900">
         {{ __($field['display']) }}
@@ -22,3 +23,4 @@
     <p class="mt-2 text-sm text-red-600">{{ implode(', ', $errors->get('form.' . $field['handle'])) }}</p>
     @endif
 </div>
+@endunless

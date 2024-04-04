@@ -57,6 +57,27 @@ class CheckoutFormTest extends TestCase
     }
 
     /** @test */
+    public function renders_successfully_and_preloads_custom_data()
+    {
+        // Fake the AvailabilityForm data
+        $availabilityForm = new \stdClass;
+        $availabilityForm->dates = [];
+        $availabilityForm->quantity = 1;
+        $availabilityForm->advanced = null;
+        $availabilityForm->custom = ['email' => 'larry@david.com'];
+
+        session(['resrv_reservation' => $this->reservation->id]);
+        session(['resrv-search' => $availabilityForm]);
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $component = Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])
+            ->assertViewIs('statamic-resrv::livewire.checkout-form')
+            ->assertViewHas('form', fn ($data) => $data['email'] === 'larry@david.com');
+
+        $this->assertNotNull($component->checkoutForm);
+    }
+
+    /** @test */
     public function checkout_form_validation_works()
     {
         session(['resrv_reservation' => $this->reservation->id]);

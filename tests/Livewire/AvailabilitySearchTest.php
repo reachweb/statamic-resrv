@@ -48,6 +48,7 @@ class AvailabilitySearchTest extends TestCase
                     ],
                     'quantity' => 1,
                     'advanced' => null,
+                    'custom' => [],
                 ]
             )
             ->assertSessionHas('resrv-search');
@@ -77,6 +78,7 @@ class AvailabilitySearchTest extends TestCase
                     ],
                     'quantity' => 1,
                     'advanced' => null,
+                    'custom' => [],
                 ]
             );
     }
@@ -140,6 +142,7 @@ class AvailabilitySearchTest extends TestCase
                     ],
                     'quantity' => 2,
                     'advanced' => null,
+                    'custom' => [],
                 ])
             ->assertStatus(200);
     }
@@ -171,6 +174,7 @@ class AvailabilitySearchTest extends TestCase
                 ],
                 'quantity' => 1,
                 'advanced' => 'something',
+                'custom' => [],
             ])
             ->assertStatus(200);
     }
@@ -196,6 +200,7 @@ class AvailabilitySearchTest extends TestCase
                 ],
                 'quantity' => 1,
                 'advanced' => 'something-else',
+                'custom' => [],
             ]);
     }
 
@@ -275,5 +280,13 @@ class AvailabilitySearchTest extends TestCase
             'location2' => 'Location 2',
             'location3' => 'Location 3',
         ], $component->__get('advancedProperties'));
+    }
+
+    /** @test */
+    public function can_set_a_custom_value()
+    {
+        Livewire::test(AvailabilitySearch::class)
+            ->set('data.custom.adults', 2)
+            ->assertSet('data.custom', ['adults' => 2]);
     }
 }
