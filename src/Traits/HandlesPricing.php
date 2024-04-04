@@ -49,12 +49,12 @@ trait HandlesPricing
     protected function getPrices($prices, $id)
     {
         // Convert comma separated prices to collection of Price objects
-        $prices = collect(explode(',', $prices))->transform(fn ($price) => Price::create($price));
+        $pricesCollection = collect(explode(',', $prices))->transform(fn ($price) => Price::create($price));
 
         $start = Price::create(0);
         $originalPrice = null;
 
-        $reservationPrice = $start->add(...$prices->toArray());
+        $reservationPrice = $start->add(...$pricesCollection->toArray());
 
         // If FixedPricing exists, replace the price
         if (FixedPricing::getFixedPricing($id, $this->duration)) {
@@ -63,8 +63,15 @@ trait HandlesPricing
 
         // Apply dynamic pricing
         if ($discountedPrice = $this->processDynamicPricing($reservationPrice, $id)) {
-            $original_price = $reservationPrice;
-            $reservation_price = $discountedPrice;
+            $originalPrice = $reservationPrice;
+            $reservationPrice = $discountedPrice;
+        }
+
+        if ($this->quantity > 1) {
+            $reservationPrice = $reservationPrice->multiply($this->quantity);
+            if ($originalPrice !== null) {
+                $originalPrice = $originalPrice->multiply($this->quantity);
+            }
         }
 
         return compact('originalPrice', 'reservationPrice');
@@ -72,11 +79,11 @@ trait HandlesPricing
 
     protected function processDynamicPricing($price, $id)
     {
-        $dynamicPricing = $this->getDynamicPricing($id);
-        if (! $dynamicPricing) {
+        $dynamicPricings = DynamicPricing::searchForAvailability($id, $price, $this->date_start, $this->date_end, $this->duration);
+        if (! $dynamicPricings) {
             return false;
         }
 
-        return $dynamicPricing->apply($price);
+        return $dynamicPricings->apply(clone $price);
     }
 }

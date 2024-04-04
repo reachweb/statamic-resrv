@@ -154,17 +154,20 @@ class Extra extends Model
         return $extras;
     }
 
-    protected function getRelativePrice($reservation)
+    protected function getRelativePrice($data)
     {
-        $data = [];
-        $data['date_start'] = $reservation->date_start;
-        $data['date_end'] = $reservation->date_end;
-        $data['quantity'] = $reservation->quantity;
-        $data['item_id'] = $reservation->item_id ?? $reservation->parent->item_id;
-        if (isset($reservation->property)) {
-            $data['advanced'] = $reservation->property;
+        if ($data instanceof Reservation) {
+            $reservationData = [];
+            $reservationData['date_start'] = $data->date_start;
+            $reservationData['date_end'] = $data->date_end;
+            $reservationData['quantity'] = $data->quantity;
+            $reservationData['item_id'] = $data->item_id ?? $data->parent->item_id;
+            if (isset($data->property)) {
+                $reservationData['advanced'] = $data->property;
+            }
+            $data = $reservationData;
         }
-        
+
         return (new Availability())->getPriceForItem($data, $data['item_id'])->format();
     }
 

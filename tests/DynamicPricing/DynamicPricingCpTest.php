@@ -123,12 +123,12 @@ class DynamicPricingCpTest extends TestCase
         $item1 = $this->makeStatamicItem();
         $item2 = $this->makeStatamicItem();
 
-        $dynamic = DynamicPricing::factory()->make()->toArray();
+        $dynamic = DynamicPricing::factory()->create()->toArray();
 
         $dynamic['entries'] = [$item1->id(), $item2->id()];
         $dynamic['extras'] = [];
 
-        $response = $this->post(cp_route('resrv.dynamicpricing.create'), $dynamic);
+        $response = $this->patch(cp_route('resrv.dynamicpricing.update', $dynamic['id']), $dynamic);
 
         $response = $this->delete(cp_route('resrv.dynamicpricing.delete', $dynamic));
 

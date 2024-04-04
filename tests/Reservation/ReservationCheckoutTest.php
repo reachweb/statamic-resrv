@@ -2,10 +2,14 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -138,5 +142,44 @@ class ReservationCheckoutTest extends TestCase
         Mail::assertSent(ReservationConfirmed::class, function ($mail) {
             return $mail->reservation->id === $this->reservation->id;
         });
+    }
+
+    /** @test */
+    public function it_saves_dynamic_pricings_that_were_applied()
+    {
+        $dynamic = DynamicPricing::factory()->create([
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(10, 'day')->toIso8601String(),
+            'condition_value' => '1',
+        ]);
+        $dynamicFixed = DynamicPricing::factory()->fixedIncrease()->create([
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(10, 'day')->toIso8601String(),
+            'condition_value' => '1',
+        ]);
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamicFixed->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        Cache::forget('dynamic_pricing_table');
+        Cache::forget('dynamic_pricing_assignments_table');
+
+        event(new ReservationConfirmedEvent($this->reservation));
+
+        $this->assertDatabaseHas('resrv_reservation_dynamic_pricing',
+            [
+                'reservation_id' => 1,
+                'dynamic_pricing_id' => $dynamic->id,
+            ]
+        );
     }
 }

@@ -86,6 +86,11 @@ class DynamicPricing extends Model
         );
     }
 
+    public function reservations()
+    {
+        return $this->belongsToMany(Reservation::class, 'resrv_reservation_dynamic_pricing');
+    }
+
     public function getEntriesAttribute($value)
     {
         $entries = DB::table('resrv_dynamic_pricing_assignments')
@@ -125,6 +130,11 @@ class DynamicPricing extends Model
         }
 
         return $price;
+    }
+
+    public function getToApply()
+    {
+        return $this->toApply;
     }
 
     public function percent(PriceClass $price, $policy)

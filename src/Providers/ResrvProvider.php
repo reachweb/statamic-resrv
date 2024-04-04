@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Controllers\ConfigController;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\CancelReservation;
 use Reach\StatamicResrv\Listeners\ConfirmReservation;
@@ -69,7 +70,8 @@ class ResrvProvider extends AddonServiceProvider
         ],
         ReservationConfirmed::class => [
             ConfirmReservation::class,
-            SendNewReservationEmails::class,
+            AddDynamicPricingsToReservation::class,
+            SendNewReservationEmails::class,            
         ],
         ReservationCancelled::class => [
             CancelReservation::class,

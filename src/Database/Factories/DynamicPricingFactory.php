@@ -22,7 +22,6 @@ class DynamicPricingFactory extends Factory
     public function definition()
     {
         return [
-            'id' => 1,
             'title' => '20% off for 3 days',
             'amount_type' => 'percent',
             'amount_operation' => 'decrease',

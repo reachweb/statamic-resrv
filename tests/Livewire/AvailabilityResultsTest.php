@@ -3,11 +3,9 @@
 namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Availability;
-use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -286,57 +284,6 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewMissing('availability.data.test')
             ->assertViewHas('availability.message')
             ->assertViewHas('availability.message.status', false);
-    }
-
-    /** @test */
-    public function saves_dynamic_pricing_when_creating_reservation()
-    {
-        $entry = Entry::make()
-            ->collection('pages')
-            ->slug('checkout')
-            ->data(['title' => 'Checkout']);
-
-        $entry->save();
-
-        Config::set('resrv-config.checkout_entry', $entry->id());
-
-        $dynamic = DynamicPricing::factory()->create();
-        $dynamicFixed = DynamicPricing::factory()->fixedIncrease()->create();
-
-        DB::table('resrv_dynamic_pricing_assignments')->insert([
-            'dynamic_pricing_id' => $dynamic->id,
-            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
-            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
-        ]);
-
-        DB::table('resrv_dynamic_pricing_assignments')->insert([
-            'dynamic_pricing_id' => $dynamicFixed->id,
-            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
-            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
-        ]);
-
-        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
-            ->dispatch('availability-search-updated',
-                [
-                    'dates' => [
-                        'date_start' => $this->date->toISOString(),
-                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
-                    ],
-                    'quantity' => 1,
-                    'advanced' => 'test',
-                ]
-            );
-
-        $availability = $component->viewData('availability');
-
-        $component->call('checkout');
-
-        $this->assertDatabaseHas('resrv_reservation_dynamic_pricing',
-            [
-                'reservation_id' => 1,
-                'dynamic_pricing' => $dynamic->toArray(),
-            ]
-        );
     }
 
     /** @test */

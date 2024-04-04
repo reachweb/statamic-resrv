@@ -382,7 +382,7 @@ class Availability extends Model implements AvailabilityContract
 
         return collect([
             'price' => $prices['reservationPrice']->format(),
-            'original_price' => $prices['originalPrice'] ? $prices['originalPrice']->format() : null,
+            'original_price' => $prices['originalPrice'] === Price::create(0) ? $prices['originalPrice']->format() : null,
             'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
             'property' => $results->property,
             'propertyLabel' => $label,
@@ -627,5 +627,41 @@ class Availability extends Model implements AvailabilityContract
             'quantity' => $this->quantity,
             'property' => $this->advanced,
         ]);
+    }
+
+    public function getDynamicPricingsForReservation(Reservation $reservation)
+    {
+        $entry = $this->getDefaultSiteEntry($reservation->item_id);
+
+        $data = [
+            'date_start' => $reservation->date_start,
+            'date_end' => $reservation->date_end,
+            'quantity' => $reservation->quantity,
+            'advanced' => $reservation->property,
+        ];
+
+        $this->initiateAvailabilityUnsafe($data);
+
+        $dbPrices = AvailabilityRepository::itemPricesBetween(
+            date_start: $this->date_start,
+            date_end: $this->date_end,
+            statamic_id: $entry->id(),
+            advanced: $this->advanced,
+        )
+            ->first();
+
+        if (! $dbPrices) {
+            return false;
+        }
+
+        $prices = $this->getPrices($dbPrices['prices'], $entry->id());
+
+        return DynamicPricing::searchForAvailability(
+            $entry->id(),
+            $prices['originalPrice'] ?? $prices['reservationPrice'],
+            $this->date_start,
+            $this->date_end,
+            $this->duration
+        );
     }
 }

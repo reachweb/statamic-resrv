@@ -50,6 +50,11 @@ class Reservation extends Model
         return $this->hasMany(ChildReservation::class);
     }
 
+    public function dynamicPricings()
+    {
+        return $this->belongsToMany(DynamicPricing::class, 'resrv_reservation_dynamic_pricing');
+    }
+
     public function getPriceAttribute($value)
     {
         return Price::create($value);

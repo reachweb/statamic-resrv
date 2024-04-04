@@ -5,6 +5,7 @@ return [
     'selectDate' => 'Select your date|Select your dates',
     'quantityLabel' => 'items',
     'search' => 'Search',
+    'property' => 'Property',
     'noAvailability' => 'No availability',
     'tryAdjustingYourSearch' => 'Try adjusting your dates or quantity.',
     'multipleAvailable' => 'Multiple properties available.',
