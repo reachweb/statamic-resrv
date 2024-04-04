@@ -71,7 +71,7 @@ class ResrvProvider extends AddonServiceProvider
         ReservationConfirmed::class => [
             ConfirmReservation::class,
             AddDynamicPricingsToReservation::class,
-            SendNewReservationEmails::class,            
+            SendNewReservationEmails::class,
         ],
         ReservationCancelled::class => [
             CancelReservation::class,

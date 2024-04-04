@@ -41,6 +41,7 @@ class Price implements CastsAttributes
     public function multiply(string $by)
     {
         $this->money = $this->money->multiply($by);
+
         return $this;
     }
 
