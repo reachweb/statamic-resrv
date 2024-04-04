@@ -13,7 +13,16 @@ class ResrvLivewireProvider extends AddonServiceProvider
 
     public function boot(): void
     {
-        Blade::anonymousComponentPath(__DIR__.'/../../resources/views/livewire/components', 'resrv');
+        // Define the base path for overridden views
+        $overridePath = resource_path('views/vendor/statamic-resrv/livewire/components');
+
+        // Define the default package view path
+        $packagePath = __DIR__ . '/../../resources/views/livewire/components';
+
+        // Use the override path if it exists; otherwise, use the package's default path
+        $viewPath = is_dir($overridePath) ? $overridePath : $packagePath;
+
+        Blade::anonymousComponentPath($viewPath, 'resrv');
 
         $this->bootLivewireComponents();
 
