@@ -17,7 +17,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
         $overridePath = resource_path('views/vendor/statamic-resrv/livewire/components');
 
         // Define the default package view path
-        $packagePath = __DIR__ . '/../../resources/views/livewire/components';
+        $packagePath = __DIR__.'/../../resources/views/livewire/components';
 
         // Use the override path if it exists; otherwise, use the package's default path
         $viewPath = is_dir($overridePath) ? $overridePath : $packagePath;
