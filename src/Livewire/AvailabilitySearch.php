@@ -26,7 +26,7 @@ class AvailabilitySearch extends Component
 
     public bool $enableQuantity = false;
 
-    public string $redirectTo = null;
+    public ?string $redirectTo = null;
 
     public array $overrideProperties;
 
