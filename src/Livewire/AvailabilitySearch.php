@@ -26,6 +26,8 @@ class AvailabilitySearch extends Component
 
     public bool $enableQuantity = false;
 
+    public string $redirectTo = null;
+
     public array $overrideProperties;
 
     #[Computed(persist: true)]
@@ -60,6 +62,10 @@ class AvailabilitySearch extends Component
         }
 
         $this->dispatch('availability-search-updated', $this->data);
+
+        if ($this->redirectTo && ! $this->live) {
+            return redirect($this->redirectTo);
+        }
     }
 
     public function submit(): void
