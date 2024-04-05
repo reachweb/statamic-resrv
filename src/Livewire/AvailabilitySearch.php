@@ -64,7 +64,7 @@ class AvailabilitySearch extends Component
         $this->dispatch('availability-search-updated', $this->data);
 
         if ($this->redirectTo && ! $this->live) {
-            return redirect($this->redirectTo);
+            redirect($this->redirectTo);
         }
     }
 
