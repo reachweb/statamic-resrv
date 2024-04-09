@@ -41,7 +41,7 @@ trait HandlesAvailabilityQueries
         $periods = $this->generateDatePeriods($this->data);
 
         $periods->transform(function ($period) {
-            $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'property']));
+            $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'advanced']));
             try {
                 return (new Availability)->getAvailabilityForEntry($searchData, $this->entryId);
             } catch (AvailabilityException $exception) {
