@@ -57,7 +57,7 @@ class AvailabilitySearch extends Component
     {
         $this->data->validate();
 
-        if ($this->data->advanced == null && $this->anyAdvanced) {
+        if ($this->anyAdvanced) {
             $this->data->advanced = 'any';
         }
 
