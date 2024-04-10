@@ -24,11 +24,21 @@ class AvailabilitySearch extends Component
 
     public bool $anyAdvanced = false;
 
+    public bool $resetAdvancedOnBoot = false;
+
     public bool $enableQuantity = false;
 
     public ?string $redirectTo = null;
 
     public array $overrideProperties;
+
+    public function boot(): void
+    {
+        if ($this->resetAdvancedOnBoot) {
+            $this->data->advanced = null;
+            $this->search();
+        }
+    }
 
     #[Computed(persist: true)]
     public function advancedProperties(): array
@@ -57,7 +67,7 @@ class AvailabilitySearch extends Component
     {
         $this->data->validate();
 
-        if ($this->anyAdvanced) {
+        if ($this->data->advanced == null && $this->anyAdvanced) {
             $this->data->advanced = 'any';
         }
 
