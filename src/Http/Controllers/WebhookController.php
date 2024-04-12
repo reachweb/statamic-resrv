@@ -14,7 +14,7 @@ class WebhookController extends Controller
 
         return response()->json($payment->verifyWebhook());
     }
-    
+
     public function store(Request $request)
     {
         $payment = app(PaymentInterface::class);
