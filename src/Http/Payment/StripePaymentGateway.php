@@ -70,6 +70,11 @@ class StripePaymentGateway implements PaymentInterface
         return true;
     }
 
+    public function redirectsForPayment(): bool
+    {
+        return false;
+    }
+
     public function handleRedirectBack(): bool
     {
         $paymentIntent = request()->input('payment_intent');

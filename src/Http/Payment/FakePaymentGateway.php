@@ -44,6 +44,11 @@ class FakePaymentGateway implements PaymentInterface
         return true;
     }
 
+    public function redirectsForPayment(): bool
+    {
+        return false;
+    }
+
     public function handleRedirectBack(): bool
     {
         $status = request()->input('status');

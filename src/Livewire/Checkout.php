@@ -97,7 +97,7 @@ class Checkout extends Component
     }
 
     #[On('checkout-form-submitted')]
-    public function handleSecondStep(): void
+    public function handleSecondStep()
     {
         // Make sure the reservation is not expired
         try {
@@ -119,6 +119,11 @@ class Checkout extends Component
 
         // Save it in the database
         $reservation->update(['payment_id' => $paymentIndent->id]);
+
+        // If the payment method needs to redirect to another website do so
+        if ($payment->redirectsForPayment()) {
+            return redirect()->away($paymentIndent->redirectTo);
+        }
 
         // Set it in a public property so that we can access it at the payment step
         $this->clientSecret = $paymentIndent->client_secret;
