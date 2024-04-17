@@ -32,7 +32,8 @@
         "moneyphp/money": "^4.0",
         "spatie/simple-excel": "^3.2",
         "edalzell/forma": "^2.1",
-        "livewire/livewire": "^3.4"
+        "livewire/livewire": "^3.4",
+        "jonassiewertsen/statamic-livewire": "^3.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^9.0 || ^10.0",
