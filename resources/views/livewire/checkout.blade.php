@@ -1,8 +1,8 @@
 @use(Carbon\Carbon)
 
-<div>
-    <div class="w-full flex flex-col md:flex-row">
-        <div class="w-full md:w-8/12 md:pr-8 xl:pr-16">
+<div x-ref="checkout" x-data="{ step: $wire.entangle('step') }" x-init="$watch('step', () => $refs.checkout.scrollIntoView({ behavior: 'smooth' }))">
+    <div class="w-full flex flex-col lg:flex-row">
+        <div class="w-full lg:w-8/12 md:pr-8 xl:pr-16 order-2 lg:order-1">
             <div class="mt-4 mb-8">
                 <x-resrv::checkout-steps :$step :$enableExtrasStep />
             </div>
@@ -40,7 +40,7 @@
             </div>
             @endif
         </div>
-        <div class="w-full md:w-4/12 bg-gray-100 rounded p-4 md:p-8 xl:p-10">
+        <div class="w-full lg:w-4/12 bg-gray-100 rounded p-4 lg:p-8 2xl:p-10 mb-8 lg:mb-0 order-1 lg:order-2">
             <div class="flex flex-col justify-between h-full">
                 <div>
                     <x-resrv::checkout-reservation-details 
@@ -48,7 +48,7 @@
                         :reservation="$this->reservation"
                     />
                 </div>
-                <div class="flex flex-grow pt-3 md:pt-4">
+                <div class="flex flex-grow pt-2 md:pt-4">
                     <x-resrv::checkout-payment-table 
                         :extras="$this->extras"
                         :$enabledExtras

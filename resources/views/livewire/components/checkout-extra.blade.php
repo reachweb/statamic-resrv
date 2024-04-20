@@ -28,8 +28,8 @@
         });
     "
 >
-    <div @class(["grid items-center py-3 lg:py-5", "grid-cols-2" => ! $extra->allow_multiple, "grid-cols-3" => $extra->allow_multiple])>
-        <div>
+    <div class="grid grid-cols-4 items-center py-3 lg:py-5">
+        <div @class(["grid items-center py-3 lg:py-5", "col-span-3" => ! $extra->allow_multiple, "col-span-2" => $extra->allow_multiple])>
             <label class="inline-flex items-center cursor-pointer">
                 <input 
                     type="checkbox" 
@@ -38,7 +38,7 @@
                     x-on:change="selected === true ? dispatchEvent() : dispatchRemovedEvent()"
                 >
                 <div 
-                    class="relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 
+                    class="relative flex-shrink-0 w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 
                     rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
                     after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 
                     after:border after:rounded-full after:w-5 after:h-5 after:transition-all peer-checked:bg-blue-600"
@@ -53,8 +53,8 @@
         @if ($extra->allow_multiple)
         <div class="flex items-center justify-center">
             <template x-if="selected === true">
-                <div class="max-w-xs mx-auto flex items-center">
-                    <label for="counter-input" class="block mr-3 text-sm font-medium text-gray-900">{{ trans('statamic-resrv::frontend.quantity') }}:</label>
+                <div class="max-w-xs mx-auto flex flex-col lg:flex-row items-center">
+                    <label for="counter-input" class="block mb-2 lg:mb-0 lg:mr-3 text-sm font-medium text-gray-900">{{ trans('statamic-resrv::frontend.quantity') }}</label>
                     <div class="relative flex items-center">
                         <button 
                             type="button"
