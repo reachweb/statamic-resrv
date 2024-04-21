@@ -14,7 +14,7 @@
             x-ref="dateInput"
             type="text" 
             placeholder="{{ trans_choice('statamic-resrv::frontend.selectDate', ($calendar === 'range') ? 2 : 1) }}"
-            class="form-input min-w-[380px] h-11 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full px-10 py-2.5"
+            class="form-input min-w-[380px] h-11 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full px-10 py-2.5"
         />
         <div 
             x-show="! isDatesEmpty"
@@ -38,7 +38,7 @@
         </div>
     </div>
     @if ($errors->has('data.dates.date_start') || $errors->has('data.dates.date_end'))
-    <div class="mt-2 text-red-600 text-sm space-y-1">
+    <div class="mt-2 text-red-600 space-y-1">
         <span class="block">{{ $errors->first('data.dates.date_start') }}</span>
         <span class="block">{{ $errors->first('data.dates.date_end') }}</span>
     </div>

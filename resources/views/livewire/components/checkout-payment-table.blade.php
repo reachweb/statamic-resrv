@@ -65,7 +65,7 @@
         <div class="mt-2 lg:mt-4 xl:mt-6">
             <div class="divide-y divide-gray-200">
                 <div class="flex justify-between items-center py-3">
-                    <div class="text-gray-900 text-xl">
+                    <div class="text-gray-900 text-lg md:text-xl">
                         {{ trans('statamic-resrv::frontend.reservationTotal') }}
                     </div>
                     <div class="flex justify-end">
@@ -75,22 +75,22 @@
                     </div>
                 </div>
                 <div class="flex justify-between items-center py-3">
-                    <div class="text-lg text-gray-900">
+                    <div class="md:text-lg text-gray-900">
                         {{ trans('statamic-resrv::frontend.total') }}
                     </div>
                     <div class="flex justify-end">
-                        <span class="text-lg text-gray-900">
+                        <span class="md:text-lg text-gray-900">
                             {{ config('resrv-config.currency_symbol') }} {{ $totals->get('total')->format() }}
                         </span>
                     </div>
                 </div>
                 @if (config('resrv-config.payment') !== 'full')
-                <div class="flex justify-between items-center py-3">
-                    <div class="text-md text-gray-900">
+                <div class="flex justify-between items-center pt-3">
+                    <div class="md:text-lg text-gray-900">
                         {{ trans('statamic-resrv::frontend.payableNow') }}
                     </div>
                     <div class="flex justify-end">
-                        <span class="text-md text-gray-900">
+                        <span class="md:text-lg text-gray-900">
                             {{ config('resrv-config.currency_symbol') }} {{ $totals->get('payment')->format() }}
                         </span>
                     </div>

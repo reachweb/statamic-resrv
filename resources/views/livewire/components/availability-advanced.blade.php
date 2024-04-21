@@ -3,7 +3,7 @@
 <div class="{{ $attributes->get('class') }}">
     <select 
         id="availability-search-advanced" 
-        class="form-select min-w-[200px] h-11 bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full py-2.5"
+        class="form-select min-w-[200px] h-11 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full py-2.5"
         {{ $attributes->whereStartsWith('wire:model') }}
     >
         <option selected value="any">{{ trans('statamic-resrv::frontend.selectProperty') }}</option>
