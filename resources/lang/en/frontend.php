@@ -5,6 +5,7 @@ return [
     'selectDate' => 'Select your date|Select your dates',
     'quantityLabel' => 'items',
     'search' => 'Search',
+    'returnToThePreviousPage' => 'Return to the previous page',
     'property' => 'Property',
     'noAvailability' => 'No availability',
     'tryAdjustingYourSearch' => 'Try adjusting your dates or quantity.',
@@ -44,7 +45,8 @@ return [
     'personalDetails' => 'Personal details',
     'personalDetailsDescription' => 'We need some information about you to complete your reservation.',
     'pay' => 'Pay',
+    'apply' => 'Apply',
     'toCompleteYourReservation' => 'to complete your reservation',
     'paymentDescription' => 'Securely pay for your reservation.',
-
+    'addCoupon' => 'Add discount coupon',
 ];

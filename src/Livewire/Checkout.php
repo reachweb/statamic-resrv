@@ -12,6 +12,8 @@ use Livewire\Component;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
@@ -29,21 +31,34 @@ class Checkout extends Component
     #[Locked]
     public string $clientSecret;
 
+    #[Locked]
+    public string $coupon;
+
+    #[Locked]
+    public bool $enableCoupon = true;
+
     public int $step = 1;
 
     public bool $enableExtrasStep = true;
 
+    public $reservationError = false;
+
     public function mount()
     {
+        try {
+            $this->reservation();
+         } catch (ReservationException $e) {
+             $this->reservationError = $e->getMessage();
+         }
         $this->enabledExtras = collect();
         $this->enabledOptions = collect();
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
-        }
+        }        
     }
 
     #[Computed(persist: true)]
-    public function reservation(): Reservation
+    public function reservation()
     {
         return $this->getReservation();
     }
@@ -51,18 +66,27 @@ class Checkout extends Component
     #[Computed(persist: true)]
     public function entry()
     {
+        if (! $this->reservation) {
+            return;
+        }
         return $this->getEntry($this->reservation->item_id);
     }
 
     #[Computed(persist: true)]
     public function extras(): Collection
     {
+        if (! $this->reservation) {
+            return collect();
+        }
         return $this->getExtrasForEntry();
     }
 
     #[Computed(persist: true)]
     public function options(): Collection
     {
+        if (! $this->reservation) {
+            return collect();
+        }
         return $this->getOptionsForEntry();
     }
 
@@ -183,6 +207,21 @@ class Checkout extends Component
         }
     }
 
+    public function addCoupon(string $coupon)
+    {
+        $data = validator(['coupon' => $coupon], ['coupon' => 'required|alpha_dash'], ['coupon' => 'The coupon code is invalid.'])->validate();
+
+        try {
+            DynamicPricing::searchForCoupon($data['coupon'], $this->reservation->id);
+        } catch (CouponNotFoundException $exception) {
+            $this->addError('coupon', $exception->getMessage());
+            return;
+        }
+        session(['resrv_coupon' => $data['coupon']]);
+        $this->coupon = $data['coupon'];
+        $this->dispatch('coupon-applied');
+    }
+
     public function calculateTotals(): Collection
     {
         // Init totals
@@ -243,6 +282,9 @@ class Checkout extends Component
 
     public function render()
     {
-        return view('statamic-resrv::livewire.'.$this->view);
+        if ($this->reservationError) {
+            return view('statamic-resrv::livewire.checkout-error', ['message' => $this->reservationError]);
+        }
+        return view('statamic-resrv::livewire.'.$this->view);     
     }
 }
