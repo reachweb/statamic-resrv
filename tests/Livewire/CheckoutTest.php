@@ -35,7 +35,10 @@ class CheckoutTest extends TestCase
         $this->entries = $this->createEntries();
         $this->advancedEntries = $this->createAdvancedEntries();
         $this->travelTo(today()->setHour(12));
+        // Override the price here because we are getting it from availability
         $this->reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '100.00',
             'item_id' => $this->entries->first()->id(),
         ]);
 
@@ -102,8 +105,8 @@ class CheckoutTest extends TestCase
 
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $this->reservation->id,
-            'price' => '200',
-            'total' => '209.30',
+            'price' => '100',
+            'total' => '109.30',
         ]);
         $this->assertDatabaseHas('resrv_reservation_extra', [
             'reservation_id' => $this->reservation->id,
