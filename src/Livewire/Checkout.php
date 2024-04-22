@@ -9,10 +9,10 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
+use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
-use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
 
@@ -47,15 +47,15 @@ class Checkout extends Component
     {
         try {
             $this->reservation();
-         } catch (ReservationException $e) {
-             $this->reservationError = $e->getMessage();
-         }
+        } catch (ReservationException $e) {
+            $this->reservationError = $e->getMessage();
+        }
         $this->enabledExtras = collect();
         $this->enabledOptions = collect();
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
         }
-        $this->coupon = session('resrv_coupon') ?? null;   
+        $this->coupon = session('resrv_coupon') ?? null;
     }
 
     #[Computed(persist: true)]
@@ -207,6 +207,7 @@ class Checkout extends Component
             DynamicPricing::searchForCoupon($data['coupon'], $this->reservation->id);
         } catch (CouponNotFoundException $exception) {
             $this->addError('coupon', $exception->getMessage());
+
             return;
         }
         session(['resrv_coupon' => $data['coupon']]);
@@ -296,6 +297,7 @@ class Checkout extends Component
         if ($this->reservationError) {
             return view('statamic-resrv::livewire.checkout-error', ['message' => $this->reservationError]);
         }
-        return view('statamic-resrv::livewire.'.$this->view);     
+
+        return view('statamic-resrv::livewire.'.$this->view);
     }
 }
