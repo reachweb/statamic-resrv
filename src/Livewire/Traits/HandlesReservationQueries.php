@@ -6,6 +6,7 @@ use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesReservationQueries
@@ -27,7 +28,7 @@ trait HandlesReservationQueries
         }
 
         if ($reservation->status === ReservationStatus::EXPIRED->value) {
-            throw new ReservationException('This reservation is expired. Please start over.');
+            throw new ReservationException('This reservation has expired. Please start over.');
         }
 
         return $reservation;
@@ -63,5 +64,10 @@ trait HandlesReservationQueries
             'quantity' => $this->reservation->quantity,
             'advanced' => $this->reservation->property,
         ];
+    }
+
+    public function getUpdatedPrices()
+    {
+        return (new Availability)->getPricing($this->getAvailabilityDataFromReservation(), $this->reservation->item_id);
     }
 }

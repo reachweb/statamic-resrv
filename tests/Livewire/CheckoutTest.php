@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
@@ -133,7 +134,7 @@ class CheckoutTest extends TestCase
     }
 
     /** @test */
-    public function it_throws_exception_if_the_reservation_is_expired()
+    public function it_shows_an_arror_if_the_reservation_is_expired()
     {
         $reservation = Reservation::factory()->expired()->create([
             'item_id' => $this->entries->first()->id(),
@@ -141,9 +142,9 @@ class CheckoutTest extends TestCase
 
         session(['resrv_reservation' => $reservation->id]);
 
-        $this->expectException(\Illuminate\View\ViewException::class);
-
-        Livewire::test(Checkout::class);
+        Livewire::test(Checkout::class)
+            ->assertViewIs('statamic-resrv::livewire.checkout-error')
+            ->assertSee('This reservation has expired');
     }
 
     /** @test */
@@ -170,5 +171,97 @@ class CheckoutTest extends TestCase
 
         $component->dispatch('checkout-form-submitted')
             ->assertHasErrors('reservation');
+    }
+
+    /** @test */
+    public function it_successfully_applies_a_coupon()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', '20OFF')
+            ->assertSet('coupon', '20OFF')
+            ->assertSessionHas('resrv_coupon', '20OFF')
+            ->assertDispatched('coupon-applied');
+    }
+
+    /** @test */
+    public function it_adds_an_error_if_coupon_does_not_exist()
+    {
+        DynamicPricing::factory()->withCoupon()->create();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', '10OFF')
+            ->assertHasErrors(['coupon'])
+            ->assertSet('coupon', null)
+            ->assertSessionMissing('resrv_coupon')
+            ->assertSee('This coupon does not exist');
+    }
+
+    /** @test */
+    public function it_adds_an_error_if_coupon_does_not_apply_to_the_product()
+    {
+        DynamicPricing::factory()->withCoupon()->create();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', '20OFF')
+            ->assertHasErrors(['coupon'])
+            ->assertSet('coupon', null)
+            ->assertSessionMissing('resrv_coupon')
+            ->assertSee('This coupon does not apply to this product');
+    }
+
+    /** @test */
+    public function it_adds_an_error_if_the_coupon_is_invalid()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', '20%OFF')
+            ->assertHasErrors(['coupon'])
+            ->assertSet('coupon', null)
+            ->assertSessionMissing('resrv_coupon')
+            ->assertSee('The coupon code is invalid');
+    }
+
+    /** @test */
+    public function it_removes_a_coupon_from_the_session()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', '20OFF')
+            ->assertSet('coupon', '20OFF')
+            ->assertSessionHas('resrv_coupon', '20OFF')
+            ->assertDispatched('coupon-applied')
+            ->call('removeCoupon')
+            ->assertSet('coupon', null)
+            ->assertSessionMissing('resrv_coupon')
+            ->assertDispatched('coupon-removed');
     }
 }

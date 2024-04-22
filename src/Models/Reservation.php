@@ -320,7 +320,9 @@ class Reservation extends Model
     // TODO: remove the method above and keep only this for Livewire frontend
     public function validateTotal($data, $statamic_id)
     {
-        $reservationCost = $data['price'];
+        $prices = (new Availability)->getPricing($data, $statamic_id);
+
+        $reservationCost = Price::create($prices['price']);
 
         $dbTotal = $reservationCost->add($this->validateExtraCharges($data, $statamic_id));
         $frontendTotal = $data['total'];

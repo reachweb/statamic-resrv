@@ -32,7 +32,7 @@ class Checkout extends Component
     public string $clientSecret;
 
     #[Locked]
-    public string $coupon;
+    public $coupon;
 
     #[Locked]
     public bool $enableCoupon = true;
@@ -54,7 +54,8 @@ class Checkout extends Component
         $this->enabledOptions = collect();
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
-        }        
+        }
+        $this->coupon = session('resrv_coupon') ?? null;   
     }
 
     #[Computed(persist: true)]
@@ -66,27 +67,18 @@ class Checkout extends Component
     #[Computed(persist: true)]
     public function entry()
     {
-        if (! $this->reservation) {
-            return;
-        }
         return $this->getEntry($this->reservation->item_id);
     }
 
     #[Computed(persist: true)]
     public function extras(): Collection
     {
-        if (! $this->reservation) {
-            return collect();
-        }
         return $this->getExtrasForEntry();
     }
 
     #[Computed(persist: true)]
     public function options(): Collection
     {
-        if (! $this->reservation) {
-            return collect();
-        }
         return $this->getOptionsForEntry();
     }
 
@@ -219,7 +211,26 @@ class Checkout extends Component
         }
         session(['resrv_coupon' => $data['coupon']]);
         $this->coupon = $data['coupon'];
+        $this->resetValidation('coupon');
         $this->dispatch('coupon-applied');
+    }
+
+    public function removeCoupon()
+    {
+        session()->forget('resrv_coupon');
+        $this->coupon = null;
+        $this->dispatch('coupon-removed');
+    }
+
+    #[On('coupon-applied'), On('coupon-removed')]
+    public function updateTotals(): void
+    {
+        // Get the prices after applying the coupon
+        $prices = $this->getUpdatedPrices();
+        // Update the reservation with the new prices
+        $this->reservation->update(['price' => $prices['price'], 'payment' => $prices['payment']]);
+        unset($this->reservation);
+        $this->calculateTotals();
     }
 
     public function calculateTotals(): Collection
