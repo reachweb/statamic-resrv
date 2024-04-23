@@ -61,7 +61,6 @@ class AvailabilityResults extends Component
 
             return;
         }
-
         $this->getAvailability();
 
         $this->dispatch('availability-results-updated');

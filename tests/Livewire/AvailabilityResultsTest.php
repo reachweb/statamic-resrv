@@ -3,9 +3,11 @@
 namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -284,6 +286,142 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewMissing('availability.data.test')
             ->assertViewHas('availability.message')
             ->assertViewHas('availability.message.status', false);
+    }
+
+    /** @test */
+    public function applies_dynamic_pricing_if_conditions_are_met()
+    {
+        $dynamic = DynamicPricing::factory()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '100.00')
+            ->assertViewHas('availability.data.original_price', null)
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '120.00')
+            ->assertViewHas('availability.data.original_price', '150.00');
+    }
+
+    /** @test */
+    public function applies_dynamic_pricing_if_conditions_are_met_price_over()
+    {
+        $dynamic = DynamicPricing::factory()->conditionPriceOver()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '50.00')
+            ->assertViewHas('availability.data.original_price', null)
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '120.00')
+            ->assertViewHas('availability.data.original_price', '150.00');
+    }
+
+    /** @test */
+    public function applies_dynamic_pricing_if_conditions_are_met_fixed_increase()
+    {
+        $dynamic = DynamicPricing::factory()->fixedIncrease()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '160.08')
+            ->assertViewHas('availability.data.original_price', '150.00');
+    }
+
+    /** @test */
+    public function applies_dynamic_pricing_coupon_when_in_session()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_coupon' => '20OFF']);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '120.00')
+            ->assertViewHas('availability.data.original_price', '150.00');
     }
 
     /** @test */
