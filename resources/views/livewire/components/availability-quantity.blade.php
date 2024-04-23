@@ -1,7 +1,7 @@
 @props(['maxQuantity', 'errors'])
 
 <div class="{{ $attributes->get('class') }}">
-    <div class="relative flex items-center min-w-32" x-data="{ quantity: $wire.entangle('data.quantity').live }"">
+    <div class="relative flex items-center min-w-32" x-data="{ quantity: $wire.entangle('data.quantity').live }">
         <button 
             type="button" 
             class="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2.5 h-11 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
