@@ -382,7 +382,7 @@ class Availability extends Model implements AvailabilityContract
 
         return collect([
             'price' => $prices['reservationPrice']->format(),
-            'original_price' => $prices['originalPrice'] === Price::create(0) ? $prices['originalPrice']->format() : null,
+            'original_price' => $prices['originalPrice'] ? $prices['originalPrice']->format() : null,
             'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
             'property' => $results->property,
             'propertyLabel' => $label,
