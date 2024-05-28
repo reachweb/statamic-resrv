@@ -15,8 +15,8 @@ jobs:
 
     strategy:
       matrix:
-        php: [8.2]
-        laravel: [10.*]
+        php: [8.2, 8.3]
+        laravel: [10.*, 11.*]
         stability: [prefer-stable]
         os: [ubuntu-latest]
         include:
@@ -67,6 +67,10 @@ jobs:
       - name: Set PHP 8.2 Testbench
         run: composer require "orchestra/testbench ^8.0" --no-interaction --no-update
         if: matrix.laravel == '10.*' && matrix.php >= 8.2
+
+      - name: Set PHP 8.3 Testbench
+        run: composer require "orchestra/testbench ^9.0" --no-interaction --no-update
+        if: matrix.laravel == '11.*' && matrix.php >= 8.3
 
       - name: Install dependencies
         run: |
