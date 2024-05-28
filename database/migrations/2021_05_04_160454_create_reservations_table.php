@@ -24,7 +24,7 @@ class CreateReservationsTable extends Migration
             $table->string('location_end')->nullable();
             $table->float('price', 8, 2);
             $table->float('payment', 8, 2);
-            $table->string('payment_id')->collation('utf8_bin');
+            $table->string('payment_id');
             $table->json('customer');
             $table->timestamps();
         });

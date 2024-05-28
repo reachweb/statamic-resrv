@@ -589,7 +589,7 @@ class Availability extends Model implements AvailabilityContract
             ->get('id')
             ->toArray();
 
-        return array_flatten($results);
+        return Arr::flatten($results);
     }
 
     protected function getPeriod()

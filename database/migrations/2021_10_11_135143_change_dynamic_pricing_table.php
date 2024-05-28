@@ -14,7 +14,7 @@ class ChangeDynamicPricingTable extends Migration
     public function up()
     {
         Schema::table('resrv_dynamic_pricing', function (Blueprint $table) {
-            $table->string('date_include')->change();
+            $table->string('date_include')->nullable()->change();
         });
     }
 }

@@ -14,7 +14,7 @@ return new class extends Migration
     public function up()
     {
         Schema::table('resrv_availabilities', function (Blueprint $table) {
-            $table->string('property')->after('price')->index()->default('none');
+            $table->string('property')->after('price')->default('none');            
         });
     }
 

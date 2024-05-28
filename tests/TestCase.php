@@ -13,6 +13,7 @@ use Statamic\Facades\User;
 use Statamic\Stache\Stores\UsersStore;
 use Statamic\Statamic;
 use Statamic\Support\Str;
+use Statamic\Facades\Site;
 
 class TestCase extends OrchestraTestCase
 {
@@ -21,22 +22,41 @@ class TestCase extends OrchestraTestCase
     use PreventSavingStacheItemsToDisk;
     use WithFaker;
 
+    protected $fakeStacheDirectory = __DIR__.'/__fixtures__/dev-null';
+
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->preventSavingStacheItemsToDisk();
-
         $this->withoutVite();
+
+        $uses = array_flip(class_uses_recursive(static::class));
+
+        if (isset($uses[PreventSavingStacheItemsToDisk::class])) {
+            $this->preventSavingStacheItemsToDisk();
+        }
 
         $this->withoutExceptionHandling();
 
-        Version::shouldReceive('get')->andReturn('4.50.0');
+        Version::shouldReceive('get')->andReturn('5.5.0');
+
+        Site::setSites([
+            'en' => [
+                'name' => 'English',
+                'url' => 'http://localhost/',
+                'locale' => 'en_US',
+                'lang' => 'en',
+            ],
+        ]);
     }
 
     public function tearDown(): void
     {
-        $this->deleteFakeStacheDirectory();
+        $uses = array_flip(class_uses_recursive(static::class));
+
+        if (isset($uses[PreventSavingStacheItemsToDisk::class])) {
+            $this->deleteFakeStacheDirectory();
+        }
 
         parent::tearDown();
     }
@@ -84,7 +104,7 @@ class TestCase extends OrchestraTestCase
 
         $configs = [
             'assets', 'cp', 'forms', 'routes', 'static_caching',
-            'sites', 'stache', 'system', 'users',
+            'stache', 'system', 'users',
         ];
 
         foreach ($configs as $config) {
