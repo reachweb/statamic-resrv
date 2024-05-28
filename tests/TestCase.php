@@ -9,11 +9,11 @@ use Orchestra\Testbench\TestCase as OrchestraTestCase;
 use Statamic\Extend\Manifest;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
+use Statamic\Facades\Site;
 use Statamic\Facades\User;
 use Statamic\Stache\Stores\UsersStore;
 use Statamic\Statamic;
 use Statamic\Support\Str;
-use Statamic\Facades\Site;
 
 class TestCase extends OrchestraTestCase
 {

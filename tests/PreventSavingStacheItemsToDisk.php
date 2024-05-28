@@ -8,4 +8,3 @@ trait PreventSavingStacheItemsToDisk
 {
     use BasePreventsSavingStacheItemsToDisk;
 }
-
