@@ -22,7 +22,9 @@ jobs:
         include:
           - laravel: 10.*
             framework: ^10.0
-
+          - laravel: 11.*
+            framework: ^11.0
+            
     name: P${{ matrix.php }} - L${{ matrix.laravel }} - ${{ matrix.stability }} - ${{ matrix.os }}
 
     steps:
