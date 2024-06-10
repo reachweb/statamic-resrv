@@ -13,20 +13,23 @@ use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
+use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
 {
-    use Traits\HandlesExtrasQueries, Traits\HandlesOptionsQueries, Traits\HandlesReservationQueries, Traits\HandlesStatamicQueries;
+    use Traits\HandlesExtrasQueries,
+        Traits\HandlesOptionsQueries,
+        Traits\HandlesReservationQueries,
+        Traits\HandlesStatamicQueries;
 
     public string $view = 'checkout';
 
-    #[Validate]
-    public Collection $enabledExtras;
+    public EnabledExtras $enabledExtras;
 
-    #[Validate]
-    public Collection $enabledOptions;
+    public EnabledOptions $enabledOptions;
 
     #[Locked]
     public string $clientSecret;
@@ -50,8 +53,8 @@ class Checkout extends Component
         } catch (ReservationException $e) {
             $this->reservationError = $e->getMessage();
         }
-        $this->enabledExtras = collect();
-        $this->enabledOptions = collect();
+        $this->enabledExtras->extras = collect();
+        $this->enabledOptions->options = collect();
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
         }
@@ -158,8 +161,8 @@ class Checkout extends Component
                 'payment' => $this->reservation->payment,
                 'price' => $this->reservation->price,
                 'total' => $totals->get('total'),
-                'extras' => $this->enabledExtras,
-                'options' => $this->enabledOptions,
+                'extras' => $this->enabledExtras->extras,
+                'options' => $this->enabledOptions->options,
             ],
         ), $this->entry->id());
     }
@@ -174,8 +177,8 @@ class Checkout extends Component
 
     protected function assignExtras(): void
     {
-        if ($this->enabledExtras->count() > 0) {
-            $extrasToSync = $this->enabledExtras->mapWithKeys(function ($extra) {
+        if ($this->enabledExtras->extras->count() > 0) {
+            $extrasToSync = $this->enabledExtras->extras->mapWithKeys(function ($extra) {
                 return [
                     $extra['id'] => [
                         'quantity' => $extra['quantity'],
@@ -189,8 +192,8 @@ class Checkout extends Component
 
     protected function assignOptions(): void
     {
-        if ($this->enabledOptions->count() > 0) {
-            $optionsToSync = $this->enabledOptions->mapWithKeys(function ($option) {
+        if ($this->enabledOptions->options->count() > 0) {
+            $optionsToSync = $this->enabledOptions->options->mapWithKeys(function ($option) {
                 return [
                     $option['id'] => ['value' => $option['value']],
                 ];
@@ -244,11 +247,11 @@ class Checkout extends Component
         $reservationTotal = $this->reservation->price;
 
         // Calculate totals
-        if ($this->enabledExtras->count() > 0) {
-            $extrasTotal = $extrasTotal->add(...$this->enabledExtras->map(fn ($extra) => Price::create($extra['price'])->multiply($extra['quantity']))->toArray());
+        if ($this->enabledExtras->extras->count() > 0) {
+            $extrasTotal = $extrasTotal->add(...$this->enabledExtras->extras->map(fn ($extra) => Price::create($extra['price'])->multiply($extra['quantity']))->toArray());
         }
-        if ($this->enabledOptions->count() > 0) {
-            $optionsTotal = $optionsTotal->add(...$this->enabledOptions
+        if ($this->enabledOptions->options->count() > 0) {
+            $optionsTotal = $optionsTotal->add(...$this->enabledOptions->options
                 ->map(fn ($option) => Price::create($option['price']))
                 ->toArray()
             );
@@ -258,38 +261,6 @@ class Checkout extends Component
         $payment = $this->reservation->payment;
 
         return collect(compact('total', 'reservationTotal', 'extrasTotal', 'optionsTotal', 'payment'));
-    }
-
-    public function rules(): array
-    {
-        return [
-            'enabledExtras' => 'nullable|array',
-            'enabledExtras.*.id' => [
-                'required',
-                'integer',
-            ],
-            'enabledExtras.*.price' => [
-                'required',
-                'numeric',
-            ],
-            'enabledExtras.*.quantity' => [
-                'required',
-                'integer',
-            ],
-            'enabledOptions' => 'nullable|array',
-            'enabledOptions.*.id' => [
-                'required',
-                'integer',
-            ],
-            'enabledOptions.*.price' => [
-                'required',
-                'numeric',
-            ],
-            'enabledOptions.*.value' => [
-                'required',
-                'integer',
-            ],
-        ];
     }
 
     public function render()

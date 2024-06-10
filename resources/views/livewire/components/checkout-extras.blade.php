@@ -2,9 +2,9 @@
 
 <div
     x-data="{selectedExtras: {}}" 
-    x-on:extra-changed="selectedExtras[$event.detail.id.toString()] = $event.detail; $wire.set('enabledExtras', Object.assign({}, selectedExtras));"
-    x-on:extra-removed="delete selectedExtras[$event.detail.id.toString()]; $wire.set('enabledExtras', Object.assign({}, selectedExtras));"
-    x-init="selectedExtras = @js($enabledExtras)"
+    x-on:extra-changed="selectedExtras[$event.detail.id.toString()] = $event.detail; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
+    x-on:extra-removed="delete selectedExtras[$event.detail.id.toString()]; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
+    x-init="selectedExtras = @js($enabledExtras->extras)"
 >
     <div class="mt-6 xl:mt-8">
         <div class="text-lg xl:text-xl font-medium mb-2">
@@ -17,7 +17,7 @@
     <hr class="h-px my-4 bg-gray-200 border-0">
     <div class="divide-y divide-gray-100">
         @foreach ($this->extras as $id => $extra)
-            <x-resrv::checkout-extra :extra="$extra" :selectedValue="data_get($enabledExtras, $extra->id)" x-bind:key="{{ $extra->id }}" />
+            <x-resrv::checkout-extra :extra="$extra" :selectedValue="data_get($enabledExtras->extras, $extra->id)" x-bind:key="{{ $extra->id }}" />
         @endforeach
     </div>
 </div>

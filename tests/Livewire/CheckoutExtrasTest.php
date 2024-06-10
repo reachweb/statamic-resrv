@@ -76,7 +76,7 @@ class CheckoutExtrasTest extends TestCase
         session(['resrv_reservation' => $this->reservation->id]);
 
         Livewire::test(Checkout::class)
-            ->set('enabledExtras', [[
+            ->set('enabledExtras.extras', [[
                 'id' => $this->extras->first()->id,
                 'quantity' => 1,
                 'price' => $this->extras->first()->price,

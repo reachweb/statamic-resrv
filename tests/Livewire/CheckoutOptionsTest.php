@@ -67,7 +67,7 @@ class CheckoutOptionsTest extends TestCase
         session(['resrv_reservation' => $this->reservation->id]);
 
         Livewire::test(Checkout::class)
-            ->set('enabledOptions', [[
+            ->set('enabledOptions.options', [[
                 'id' => $this->options->first()->id,
                 'value' => $this->options->first()->values->first()->id,
                 'price' => $this->options->first()->values->first()->price->format(),
