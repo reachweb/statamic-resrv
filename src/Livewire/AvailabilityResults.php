@@ -66,14 +66,13 @@ class AvailabilityResults extends Component
             $extras = $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
             if ($this->showExtras === true) {
                 return $extras;
-            }
-            else {
+            } else {
                 $extrasToShow = explode('|', $this->showExtras);
+
                 return $extras->filter(function ($extra) use ($extrasToShow) {
                     return in_array($extra->id, $extrasToShow);
                 });
             }
-            
         }
 
         return collect();
@@ -86,9 +85,9 @@ class AvailabilityResults extends Component
             $options = $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
             if ($this->showOptions === true) {
                 return $options;
-            }
-            else {
+            } else {
                 $optionsToShow = explode('|', $this->showOptions);
+
                 return $options->filter(function ($option) use ($optionsToShow) {
                     return in_array($option->id, $optionsToShow);
                 });
