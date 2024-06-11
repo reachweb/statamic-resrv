@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Illuminate\Support\Collection;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
@@ -15,6 +16,8 @@ class AvailabilityResults extends Component
 {
     use HandlesMultisiteIds,
         Traits\HandlesAvailabilityQueries,
+        Traits\HandlesExtrasQueries,
+        Traits\HandlesOptionsQueries,
         Traits\HandlesReservationQueries,
         Traits\HandlesStatamicQueries;
 
@@ -35,6 +38,12 @@ class AvailabilityResults extends Component
     #[Locked]
     public int $extraDaysOffset = 0;
 
+    #[Locked]
+    public bool $showExtras = false;
+
+    #[Locked]
+    public bool $showOptions = false;
+
     public function mount(string $entry)
     {
         $this->entryId = $this->getDefaultSiteEntry($entry)->id();
@@ -42,6 +51,26 @@ class AvailabilityResults extends Component
         if (session()->has('resrv-search')) {
             $this->availabilitySearchChanged(session('resrv-search'));
         }
+    }
+
+    #[Computed(persist: true)]
+    public function extras(): Collection
+    {
+        if ($this->showExtras) {
+            return $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
+        }
+
+        return collect();
+    }
+
+    #[Computed(persist: true)]
+    public function options(): Collection
+    {
+        if ($this->showOptions) {
+            return $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
+        }
+
+        return collect();
     }
 
     #[On('availability-search-updated')]

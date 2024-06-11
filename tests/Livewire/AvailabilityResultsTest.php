@@ -8,6 +8,9 @@ use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\Option;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -29,6 +32,19 @@ class AvailabilityResultsTest extends TestCase
         $this->entries = $this->createEntries();
         $this->advancedEntries = $this->createAdvancedEntries();
         $this->travelTo(today()->setHour(12));
+
+        Option::factory()
+            ->has(OptionValue::factory(), 'values')
+            ->create([
+                'item_id' => $this->entries->first()->id(),
+            ]);
+
+        $extra = Extra::factory()->create();
+
+        DB::table('resrv_statamicentry_extra')->insert([
+            'statamicentry_id' => $this->entries->first()->id,
+            'extra_id' => $extra->id,
+        ]);
     }
 
     /** @test */
@@ -286,6 +302,48 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewMissing('availability.data.test')
             ->assertViewHas('availability.message')
             ->assertViewHas('availability.message.status', false);
+    }
+
+    /** @test */
+    public function gets_options_if_property_is_enabled()
+    {
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'showOptions' => true])
+            ->assertSet('showOptions', true)
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertStatus(200);
+
+        $this->assertEquals('Reservation option', $component->options->first()->name);
+        $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
+    }
+
+    /** @test */
+    public function gets_extras_if_property_is_enabled()
+    {
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'showExtras' => true])
+            ->assertSet('showExtras', true)
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertStatus(200);
+
+        $this->assertEquals('This is an extra', $component->extras->first()->name);
+        $this->assertEquals('9.30', $component->extras->first()->price);
     }
 
     /** @test */

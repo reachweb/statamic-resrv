@@ -7,7 +7,6 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
-use Livewire\Attributes\Validate;
 use Livewire\Component;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
@@ -16,7 +15,6 @@ use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
-use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
 {
@@ -76,13 +74,13 @@ class Checkout extends Component
     #[Computed(persist: true)]
     public function extras(): Collection
     {
-        return $this->getExtrasForEntry();
+        return $this->getExtrasForReservation();
     }
 
     #[Computed(persist: true)]
     public function options(): Collection
     {
-        return $this->getOptionsForEntry();
+        return $this->getOptionsForReservation();
     }
 
     public function goToStep(int $step): void
