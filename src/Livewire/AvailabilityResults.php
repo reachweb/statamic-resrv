@@ -10,6 +10,8 @@ use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
+use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
+use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 
 class AvailabilityResults extends Component
@@ -39,10 +41,14 @@ class AvailabilityResults extends Component
     public int $extraDaysOffset = 0;
 
     #[Locked]
-    public bool $showExtras = false;
+    public $showExtras = false;
 
     #[Locked]
-    public bool $showOptions = false;
+    public $showOptions = false;
+
+    public EnabledExtras $enabledExtras;
+
+    public EnabledOptions $enabledOptions;
 
     public function mount(string $entry)
     {
@@ -57,7 +63,17 @@ class AvailabilityResults extends Component
     public function extras(): Collection
     {
         if ($this->showExtras) {
-            return $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
+            $extras = $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
+            if ($this->showExtras === true) {
+                return $extras;
+            }
+            else {
+                $extrasToShow = explode('|', $this->showExtras);
+                return $extras->filter(function ($extra) use ($extrasToShow) {
+                    return in_array($extra->id, $extrasToShow);
+                });
+            }
+            
         }
 
         return collect();
@@ -67,7 +83,16 @@ class AvailabilityResults extends Component
     public function options(): Collection
     {
         if ($this->showOptions) {
-            return $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
+            $options = $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
+            if ($this->showOptions === true) {
+                return $options;
+            }
+            else {
+                $optionsToShow = explode('|', $this->showOptions);
+                return $options->filter(function ($option) use ($optionsToShow) {
+                    return in_array($option->id, $optionsToShow);
+                });
+            }
         }
 
         return collect();
