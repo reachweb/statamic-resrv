@@ -11,6 +11,15 @@ class EnabledOptions extends Form
     #[Validate]
     public Collection $options;
 
+    public function optionsToSync(): Collection
+    {
+        return $this->options->mapWithKeys(function ($option) {
+            return [
+                $option['id'] => ['value' => $option['value']],
+            ];
+        });
+    }
+
     public function rules(): array
     {
         return [

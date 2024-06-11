@@ -11,6 +11,18 @@ class EnabledExtras extends Form
     #[Validate]
     public Collection $extras;
 
+    public function extrasToSync(): Collection
+    {
+        return $this->extras->mapWithKeys(function ($extra) {
+            return [
+                $extra['id'] => [
+                    'quantity' => $extra['quantity'],
+                    'price' => $extra['price'],
+                ],
+            ];
+        });
+    }
+
     public function rules(): array
     {
         return [
