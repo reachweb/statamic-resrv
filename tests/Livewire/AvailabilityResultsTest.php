@@ -25,6 +25,8 @@ class AvailabilityResultsTest extends TestCase
 
     public $advancedEntries;
 
+    public $option;
+
     public function setUp(): void
     {
         parent::setUp();
@@ -33,7 +35,7 @@ class AvailabilityResultsTest extends TestCase
         $this->advancedEntries = $this->createAdvancedEntries();
         $this->travelTo(today()->setHour(12));
 
-        Option::factory()
+        $this->option = Option::factory()
             ->has(OptionValue::factory(), 'values')
             ->create([
                 'item_id' => $this->entries->first()->id(),
@@ -319,7 +321,7 @@ class AvailabilityResultsTest extends TestCase
                     'advanced' => null,
                 ]
             )
-            ->assertStatus(200);
+            ->assertSee('Reservation option');
 
         $this->assertEquals('Reservation option', $component->options->first()->name);
         $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
@@ -340,7 +342,7 @@ class AvailabilityResultsTest extends TestCase
                     'advanced' => null,
                 ]
             )
-            ->assertStatus(200);
+            ->assertSee('This is an extra');
 
         $this->assertEquals('This is an extra', $component->extras->first()->name);
         $this->assertEquals('9.30', $component->extras->first()->price);

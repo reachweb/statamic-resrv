@@ -2,6 +2,16 @@
 
 <div class="relative">
     @if (data_get($availability, 'message.status') === true && data_get($availability, 'request.property') !== 'any')
+        @if ($this->showExtras || $this->showOptions)
+        <div class="flex flex-col gap-y-6 py-6">
+            @if ($this->showOptions)
+            <x-resrv::availability-options :$enabledOptions :options="$this->options" />
+            @endif
+            @if ($this->showExtras)
+            <x-resrv::availability-extras :$enabledExtras :extras="$this->extras" />
+            @endif
+        </div>
+        @endif    
     <div class="divide-y divide-gray-200">
         <div class="flex flex-col pb-6">
             <div class="text-lg font-medium mb-2">{{ trans('statamic-resrv::frontend.yourSearch') }}</div>

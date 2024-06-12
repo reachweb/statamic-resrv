@@ -1,4 +1,4 @@
-@props(['extra', 'selectedValue' => null])
+@props(['extra', 'selectedValue' => null, 'compact' => false])
 
 <div 
     x-data="{
@@ -28,8 +28,18 @@
         });
     "
 >
-    <div class="grid grid-cols-4 items-center py-3 lg:py-5">
-        <div @class(["grid items-center py-3 lg:py-5", "col-span-3" => ! $extra->allow_multiple, "col-span-2" => $extra->allow_multiple])>
+    <div @class([
+        'grid grid-cols-4 items-center',
+        'py-3 lg:py-5' => ! $compact, 
+        'py-2 lg:py-3' => $compact
+    ])>
+        <div @class([
+            'grid items-center order-0', 
+            'py-3 lg:py-5' => ! $compact, 
+            'py-2 lg:py-3' => $compact,
+            'col-span-3' => ! $extra->allow_multiple || ($extra->allow_multiple && $compact), 
+            'col-span-2' => $extra->allow_multiple && ! $compact
+        ])>
             <label class="inline-flex items-center cursor-pointer">
                 <input 
                     type="checkbox" 
@@ -51,47 +61,14 @@
             @endif
         </div>
         @if ($extra->allow_multiple)
-        <div class="flex items-center justify-center">
-            <template x-if="selected === true">
-                <div class="max-w-xs mx-auto flex flex-col lg:flex-row items-center">
-                    <label for="counter-input" class="block mb-2 lg:mb-0 lg:mr-3 text-sm font-medium text-gray-900">{{ trans('statamic-resrv::frontend.quantity') }}</label>
-                    <div class="relative flex items-center">
-                        <button 
-                            type="button"
-                            class="flex-shrink-0 bg-gray-100 hover:bg-gray-200 inline-flex items-center justify-center border border-gray-300 rounded-md 
-                            h-5 w-5 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                            x-on:click.throttle="quantity = Math.max(1, quantity - 1)"
-                            x-bind:disabled="quantity === 1"
-                        >
-                            <svg class="w-2.5 h-2.5 text-gray-900" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 2">
-                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1h16"/>
-                            </svg>
-                        </button>
-                        <input 
-                            type="text" 
-                            id="counter-input" 
-                            class="flex-shrink-0 text-gray-900 border-0 bg-transparent text-sm font-normal focus:outline-none focus:ring-0 max-w-[2.5rem] text-center" 
-                            placeholder="" 
-                            x-bind:value="quantity" 
-                            required
-                        />
-                        <button 
-                            type="button"
-                            class="flex-shrink-0 bg-gray-100 hover:bg-gray-200 inline-flex items-center justify-center border border-gray-300 rounded-md 
-                            h-5 w-5 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                            x-on:click.throttle="quantity = Math.min(quantity + 1, {{ $extra->maximum }})"
-                            x-bind:disabled="quantity >= {{ $extra->maximum }}"
-                        >
-                            <svg class="w-2.5 h-2.5 text-gray-900" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 18">
-                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 1v16M1 9h16"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </template>
-        </div>
+            <div @class(['order-2 col-span-4' => $compact])>
+            @include('statamic-resrv::livewire.components.partials.extras-quantity')
+            </div>
         @endif
-        <div class="flex items-center justify-end text-gray-900">
+        <div @class([
+            'flex items-center justify-end text-gray-900 col-span-1',
+            'order-1' => $compact,
+        ])>
             <span>{{ config('resrv-config.currency_symbol') }} {{ $extra->price }}</span>
         </div>  
     </div>

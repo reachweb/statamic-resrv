@@ -54,6 +54,8 @@ class AvailabilityResults extends Component
     {
         $this->entryId = $this->getDefaultSiteEntry($entry)->id();
         $this->availability = collect();
+        $this->enabledExtras->extras = collect();
+        $this->enabledOptions->options = collect();
         if (session()->has('resrv-search')) {
             $this->availabilitySearchChanged(session('resrv-search'));
         }

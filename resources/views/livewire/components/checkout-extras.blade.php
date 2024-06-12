@@ -1,4 +1,4 @@
-@props(['options', 'enabledExtras'])
+@props(['extras', 'enabledExtras'])
 
 <div
     x-data="{selectedExtras: {}}" 
