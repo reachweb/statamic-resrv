@@ -1,15 +1,15 @@
 @props(['extras', 'enabledExtras', 'options', 'enabledOptions', 'totals', 'key'])
 <div {{ $attributes->merge(['class' => 'flex flex-grow']) }} wire:key={{ $key }}>
     <div class="flex flex-grow flex-col justify-between">
-        @if ($enabledOptions->count() > 0 || $enabledExtras->count() > 0)
+        @if ($enabledOptions->options->count() > 0 || $enabledExtras->extras->count() > 0)
         <div class="flex flex-col mb-4 lg:mb-6 gap-y-3 md:gap-y-4 xl:gap-y-6">       
             <div>
-                @if ($enabledOptions->count() > 0)
+                @if ($enabledOptions->options->count() > 0)
                 <p class="font-medium text-gray-500 truncate mb-1">
                     {{ trans('statamic-resrv::frontend.options') }}
                 </p>
                 <div class="divide-y divide-gray-200">
-                    @foreach ($enabledOptions as $option)
+                    @foreach ($enabledOptions->options as $option)
                     @php
                     $optionModel = $options->firstWhere('id', $option['id']);
                     $selectedValue = $optionModel->values->firstWhere('id', $option['value']);
@@ -35,12 +35,12 @@
                 @endif
             </div>
             <div>
-                @if ($enabledExtras->count() > 0)
+                @if ($enabledExtras->extras->count() > 0)
                 <p class="font-medium text-gray-500 truncate mb-1">
                     {{ trans('statamic-resrv::frontend.extras') }}
                 </p>
                 <div class="divide-y divide-gray-200">
-                    @foreach ($enabledExtras as $extra)
+                    @foreach ($enabledExtras->extras as $extra)
                     <div class="flex justify-between items-center py-2" wire:key="{{ $extra['id'] }}">
                         <div class="text-gray-900">
                             {{ $extras->firstWhere('id', $extra['id'])->name }}

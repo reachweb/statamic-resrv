@@ -95,7 +95,7 @@ class CheckoutTest extends TestCase
         $extras = ResrvExtra::getPriceForDates($this->reservation);
 
         $component = Livewire::test(Checkout::class)
-            ->set('enabledExtras', collect([0 => [
+            ->set('enabledExtras.extras', collect([0 => [
                 'id' => $this->extra->id,
                 'price' => $extras->first()->price,
                 'quantity' => 1,

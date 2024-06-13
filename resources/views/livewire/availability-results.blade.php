@@ -2,6 +2,16 @@
 
 <div class="relative">
     @if (data_get($availability, 'message.status') === true && data_get($availability, 'request.property') !== 'any')
+        @if ($this->showExtras || $this->showOptions)
+        <div class="flex flex-col gap-y-6 py-6">
+            @if ($this->showOptions)
+            <x-resrv::availability-options :$enabledOptions :options="$this->options" />
+            @endif
+            @if ($this->showExtras)
+            <x-resrv::availability-extras :$enabledExtras :extras="$this->extras" />
+            @endif
+        </div>
+        @endif    
     <div class="divide-y divide-gray-200">
         <div class="flex flex-col pb-6">
             <div class="text-lg font-medium mb-2">{{ trans('statamic-resrv::frontend.yourSearch') }}</div>
@@ -21,27 +31,7 @@
             </div>
         </div>
         <div class="flex flex-col py-6">
-            <div class="text-lg font-medium mb-3">{{ trans('statamic-resrv::frontend.paymentDetails') }}</div>
-            <div class="flex items-center space-x-4 mb-2">
-                <div class="flex-1 min-w-0">
-                    <p class="font-medium text-gray-500 truncate">
-                        {{ trans('statamic-resrv::frontend.totalAmount') }}
-                    </p>
-                 </div>
-                 <div class="inline-flex items-center text-base font-medium">
-                    {{ config('resrv-config.currency_symbol') }} {{ $availability->get('data')['price'] }}
-                 </div>
-            </div>
-            <div class="flex items-center space-x-4 mb-2">
-                <div class="flex-1 min-w-0">
-                    <p class="font-medium text-gray-500 truncate">
-                        {{ trans('statamic-resrv::frontend.payableNow') }}
-                    </p>
-                 </div>
-                 <div class="inline-flex items-center text-base font-medium">
-                    {{ config('resrv-config.currency_symbol') }} {{ $availability->get('data')['payment'] }}
-                 </div>
-            </div>
+            @include('statamic-resrv::livewire.components.partials.availability-results-pricing')
         </div>
     </div>
     <div class="mt-6 xl:mt-8">

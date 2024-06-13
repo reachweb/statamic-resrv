@@ -7,26 +7,30 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
-use Livewire\Attributes\Validate;
+use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
-use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
+use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
-use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
 {
-    use Traits\HandlesExtrasQueries, Traits\HandlesOptionsQueries, Traits\HandlesReservationQueries, Traits\HandlesStatamicQueries;
+    use Traits\HandlesExtrasQueries,
+        Traits\HandlesOptionsQueries,
+        Traits\HandlesPricing,
+        Traits\HandlesReservationQueries,
+        Traits\HandlesStatamicQueries;
 
     public string $view = 'checkout';
 
-    #[Validate]
-    public Collection $enabledExtras;
+    #[Session('resrv-extras')]
+    public EnabledExtras $enabledExtras;
 
-    #[Validate]
-    public Collection $enabledOptions;
+    #[Session('resrv-options')]
+    public EnabledOptions $enabledOptions;
 
     #[Locked]
     public string $clientSecret;
@@ -50,12 +54,21 @@ class Checkout extends Component
         } catch (ReservationException $e) {
             $this->reservationError = $e->getMessage();
         }
-        $this->enabledExtras = collect();
-        $this->enabledOptions = collect();
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
         }
+        if (session()->has('resrv-extras')) {
+            $this->enabledExtras->fill(session('resrv-extras'));
+        } else {
+            $this->enabledExtras->extras = collect();
+        }
+        if (session()->has('resrv-options')) {
+            $this->enabledOptions->fill(session('resrv-options'));
+        } else {
+            $this->enabledOptions->options = collect();
+        }
         $this->coupon = session('resrv_coupon') ?? null;
+        ray($this->enabledExtras, $this->enabledOptions);
     }
 
     #[Computed(persist: true)]
@@ -73,13 +86,13 @@ class Checkout extends Component
     #[Computed(persist: true)]
     public function extras(): Collection
     {
-        return $this->getExtrasForEntry();
+        return $this->getExtrasForReservation();
     }
 
     #[Computed(persist: true)]
     public function options(): Collection
     {
-        return $this->getOptionsForEntry();
+        return $this->getOptionsForReservation();
     }
 
     public function goToStep(int $step): void
@@ -103,7 +116,7 @@ class Checkout extends Component
         }
 
         // Update the reservation with the total
-        $this->reservation->update(['total' => $this->calculateTotals()->get('total')->format()]);
+        $this->reservation->update(['total' => $this->calculateReservationTotals()->get('total')->format()]);
 
         // Sync extras & options to the database
         $this->assignExtras();
@@ -149,7 +162,7 @@ class Checkout extends Component
 
     protected function confirmReservationIsValid(): void
     {
-        $totals = $this->calculateTotals();
+        $totals = $this->calculateReservationTotals();
 
         // Confirm everything is OK before we move on
         $this->reservation->validateReservation(array_merge(
@@ -158,8 +171,8 @@ class Checkout extends Component
                 'payment' => $this->reservation->payment,
                 'price' => $this->reservation->price,
                 'total' => $totals->get('total'),
-                'extras' => $this->enabledExtras,
-                'options' => $this->enabledOptions,
+                'extras' => $this->enabledExtras->extras,
+                'options' => $this->enabledOptions->options,
             ],
         ), $this->entry->id());
     }
@@ -174,28 +187,15 @@ class Checkout extends Component
 
     protected function assignExtras(): void
     {
-        if ($this->enabledExtras->count() > 0) {
-            $extrasToSync = $this->enabledExtras->mapWithKeys(function ($extra) {
-                return [
-                    $extra['id'] => [
-                        'quantity' => $extra['quantity'],
-                        'price' => $extra['price'],
-                    ],
-                ];
-            });
-            $this->reservation->extras()->sync($extrasToSync);
+        if ($this->enabledExtras->extras->count() > 0) {
+            $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
         }
     }
 
     protected function assignOptions(): void
     {
-        if ($this->enabledOptions->count() > 0) {
-            $optionsToSync = $this->enabledOptions->mapWithKeys(function ($option) {
-                return [
-                    $option['id'] => ['value' => $option['value']],
-                ];
-            });
-            $this->reservation->options()->sync($optionsToSync);
+        if ($this->enabledOptions->options->count() > 0) {
+            $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
         }
     }
 
@@ -231,65 +231,7 @@ class Checkout extends Component
         // Update the reservation with the new prices
         $this->reservation->update(['price' => $prices['price'], 'payment' => $prices['payment']]);
         unset($this->reservation);
-        $this->calculateTotals();
-    }
-
-    public function calculateTotals(): Collection
-    {
-        // Init totals
-        $total = Price::create(0);
-        $extrasTotal = Price::create(0);
-        $optionsTotal = Price::create(0);
-
-        $reservationTotal = $this->reservation->price;
-
-        // Calculate totals
-        if ($this->enabledExtras->count() > 0) {
-            $extrasTotal = $extrasTotal->add(...$this->enabledExtras->map(fn ($extra) => Price::create($extra['price'])->multiply($extra['quantity']))->toArray());
-        }
-        if ($this->enabledOptions->count() > 0) {
-            $optionsTotal = $optionsTotal->add(...$this->enabledOptions
-                ->map(fn ($option) => Price::create($option['price']))
-                ->toArray()
-            );
-        }
-        $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
-
-        $payment = $this->reservation->payment;
-
-        return collect(compact('total', 'reservationTotal', 'extrasTotal', 'optionsTotal', 'payment'));
-    }
-
-    public function rules(): array
-    {
-        return [
-            'enabledExtras' => 'nullable|array',
-            'enabledExtras.*.id' => [
-                'required',
-                'integer',
-            ],
-            'enabledExtras.*.price' => [
-                'required',
-                'numeric',
-            ],
-            'enabledExtras.*.quantity' => [
-                'required',
-                'integer',
-            ],
-            'enabledOptions' => 'nullable|array',
-            'enabledOptions.*.id' => [
-                'required',
-                'integer',
-            ],
-            'enabledOptions.*.price' => [
-                'required',
-                'numeric',
-            ],
-            'enabledOptions.*.value' => [
-                'required',
-                'integer',
-            ],
-        ];
+        $this->calculateReservationTotals();
     }
 
     public function render()
