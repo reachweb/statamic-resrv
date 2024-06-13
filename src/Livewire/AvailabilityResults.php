@@ -20,6 +20,7 @@ class AvailabilityResults extends Component
         Traits\HandlesAvailabilityQueries,
         Traits\HandlesExtrasQueries,
         Traits\HandlesOptionsQueries,
+        Traits\HandlesPricing,
         Traits\HandlesReservationQueries,
         Traits\HandlesStatamicQueries;
 

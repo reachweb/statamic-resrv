@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Livewire\Traits;
 
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 
 trait HandlesPricing
 {
@@ -17,12 +18,22 @@ trait HandlesPricing
         // Calculate totals
         $extrasTotal = $this->calculateExtraTotals();
         $optionsTotal = $this->calculateOptionTotals();
-        
+
         $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
 
         $payment = $this->reservation->payment;
 
         return collect(compact('total', 'reservationTotal', 'extrasTotal', 'optionsTotal', 'payment'));
+    }
+
+    public function calculateAvailabilityTotals($availabilityTotal): PriceClass
+    {
+        $total = Price::create($availabilityTotal);
+
+        $extrasTotal = $this->calculateExtraTotals();
+        $optionsTotal = $this->calculateOptionTotals();
+
+        return $total->add($extrasTotal, $optionsTotal);
     }
 
     public function calculateExtraTotals()
