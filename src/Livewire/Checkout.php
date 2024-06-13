@@ -68,7 +68,6 @@ class Checkout extends Component
             $this->enabledOptions->options = collect();
         }
         $this->coupon = session('resrv_coupon') ?? null;
-        ray($this->enabledExtras, $this->enabledOptions);
     }
 
     #[Computed(persist: true)]
