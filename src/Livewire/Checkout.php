@@ -11,7 +11,6 @@ use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
-use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
@@ -21,6 +20,7 @@ class Checkout extends Component
 {
     use Traits\HandlesExtrasQueries,
         Traits\HandlesOptionsQueries,
+        Traits\HandlesPricing,
         Traits\HandlesReservationQueries,
         Traits\HandlesStatamicQueries;
 
@@ -116,7 +116,7 @@ class Checkout extends Component
         }
 
         // Update the reservation with the total
-        $this->reservation->update(['total' => $this->calculateTotals()->get('total')->format()]);
+        $this->reservation->update(['total' => $this->calculateReservationTotals()->get('total')->format()]);
 
         // Sync extras & options to the database
         $this->assignExtras();
@@ -162,7 +162,7 @@ class Checkout extends Component
 
     protected function confirmReservationIsValid(): void
     {
-        $totals = $this->calculateTotals();
+        $totals = $this->calculateReservationTotals();
 
         // Confirm everything is OK before we move on
         $this->reservation->validateReservation(array_merge(
@@ -231,33 +231,7 @@ class Checkout extends Component
         // Update the reservation with the new prices
         $this->reservation->update(['price' => $prices['price'], 'payment' => $prices['payment']]);
         unset($this->reservation);
-        $this->calculateTotals();
-    }
-
-    public function calculateTotals(): Collection
-    {
-        // Init totals
-        $total = Price::create(0);
-        $extrasTotal = Price::create(0);
-        $optionsTotal = Price::create(0);
-
-        $reservationTotal = $this->reservation->price;
-
-        // Calculate totals
-        if ($this->enabledExtras->extras->count() > 0) {
-            $extrasTotal = $extrasTotal->add(...$this->enabledExtras->extras->map(fn ($extra) => Price::create($extra['price'])->multiply($extra['quantity']))->toArray());
-        }
-        if ($this->enabledOptions->options->count() > 0) {
-            $optionsTotal = $optionsTotal->add(...$this->enabledOptions->options
-                ->map(fn ($option) => Price::create($option['price']))
-                ->toArray()
-            );
-        }
-        $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
-
-        $payment = $this->reservation->payment;
-
-        return collect(compact('total', 'reservationTotal', 'extrasTotal', 'optionsTotal', 'payment'));
+        $this->calculateReservationTotals();
     }
 
     public function render()

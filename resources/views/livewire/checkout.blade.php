@@ -62,7 +62,7 @@
                         :$enabledExtras
                         :options="$this->options"
                         :$enabledOptions
-                        :totals="$this->calculateTotals()"
+                        :totals="$this->calculateReservationTotals()"
                         :key="'pt-'.$enabledExtras->extras->pluck('id')->join('-').$enabledOptions->options->pluck('id')->join('-')"
                     />
                 </div>
