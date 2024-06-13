@@ -17,7 +17,7 @@ trait HandlesPricing
         // Calculate totals
         $extrasTotal = $this->calculateExtraTotals();
         $optionsTotal = $this->calculateOptionTotals();
-        
+
         $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
 
         $payment = $this->reservation->payment;
