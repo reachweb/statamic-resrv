@@ -37,6 +37,9 @@ class InstallResrv extends Command
         if ($this->confirm('Do you want to publish the Livewire checkout views? (recommended)', true)) {
             $this->publishCheckoutViews();
         }
+        if ($this->confirm('Do you want to publish the language files? (needed only if you wish to edit them)')) {
+            $this->publishLanguageFiles();
+        }
         if ($this->confirm('Do you want to publish the email templates? (needed only if you wish to edit them)')) {
             $this->publishEmailTemplates();
         }
@@ -88,6 +91,17 @@ class InstallResrv extends Command
 
         $this->callSilent('vendor:publish', [
             '--tag' => 'resrv-emails',
+        ]);
+
+        return $this;
+    }
+
+    protected function publishLanguageFiles()
+    {
+        $this->info('Publishing language files');
+
+        $this->callSilent('vendor:publish', [
+            '--tag' => 'resrv-language',
         ]);
 
         return $this;

@@ -124,6 +124,10 @@ class ResrvProvider extends AddonServiceProvider
         ], 'resrv-forms');
 
         $this->publishes([
+            __DIR__.'/../../resources/lang' => lang_path('vendor/statamic-resrv'),
+        ], 'resrv-language');
+
+        $this->publishes([
             __DIR__.'/../../resources/views/email' => resource_path('views/vendor/statamic-resrv/email'),
         ], 'resrv-emails');
 
