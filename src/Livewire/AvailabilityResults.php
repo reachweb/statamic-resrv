@@ -46,8 +46,10 @@ class AvailabilityResults extends Component
     #[Locked]
     public $showOptions = false;
 
+    #[Session('resrv-extras')]
     public EnabledExtras $enabledExtras;
 
+    #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
     public function mount(string $entry)

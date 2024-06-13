@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
@@ -25,8 +26,10 @@ class Checkout extends Component
 
     public string $view = 'checkout';
 
+    #[Session('resrv-extras')]
     public EnabledExtras $enabledExtras;
 
+    #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
     #[Locked]
@@ -51,12 +54,21 @@ class Checkout extends Component
         } catch (ReservationException $e) {
             $this->reservationError = $e->getMessage();
         }
-        $this->enabledExtras->extras = collect();
-        $this->enabledOptions->options = collect();
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
         }
+        if (session()->has('resrv-extras')) {
+            $this->enabledExtras->fill(session('resrv-extras'));
+        } else {
+            $this->enabledExtras->extras = collect();
+        }
+        if (session()->has('resrv-options')) {
+            $this->enabledOptions->fill(session('resrv-options'));
+        } else {
+            $this->enabledOptions->options = collect();
+        }
         $this->coupon = session('resrv_coupon') ?? null;
+        ray($this->enabledExtras, $this->enabledOptions);
     }
 
     #[Computed(persist: true)]

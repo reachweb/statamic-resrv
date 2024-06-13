@@ -3,9 +3,13 @@
 <div 
     class="{{ $attributes->get('class') }}"
     x-data="{
-        selected: '{{ $option->required ? $option->values->first() : '' }}',
+        values: @js($option->values),
+        selected: '{{ $option->required ? $option->values->first()->id : '' }}',
         dispatchOptionChanged() {
-            $dispatch('option-changed', {id: {{ $option->id }}, price: this.selected.price, value: this.selected});
+            let selectedValue = this.values.find(value => value.id == this.selected);
+            if (selectedValue !== undefined) {
+                $dispatch('option-changed', {id: {{ $option->id }}, price: selectedValue.price, value: selectedValue.id});
+            }
         },
         dispatchOptionRemoved() {
             $dispatch('option-removed', {id: {{ $option->id }}});
@@ -13,7 +17,7 @@
     }"
     x-init="
         if (selected !== '') {
-            this.dispatchOptionChanged();
+            dispatchOptionChanged();
         }
         $watch('selected', value => (value === '' ? dispatchOptionRemoved() : dispatchOptionChanged()));     
     "
@@ -28,7 +32,7 @@
         </option>
         @endif
         @foreach ($option->values as $value)
-            <option value="{{ $value }}" @selected($option->required && $loop->first)>
+            <option value="{{ $value->id }}" @selected($option->required && $loop->first)>
                 {{ $value->name }}
                 @if ($value->price_type !== 'free')
                 ({{ config('resrv-config.currency_symbol') }} {{ $value->price->format() }})
