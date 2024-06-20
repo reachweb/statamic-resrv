@@ -118,7 +118,7 @@
     </div>
     @endif
     
-    @if ($reservation->customer->count() > 1)
+    @if ($reservation->customer && $reservation->customer->count() > 1)
     <div>
         <div class="mb-2 content">
             <h2 class="text-base">{{ __("Checkout data") }}</h2>
