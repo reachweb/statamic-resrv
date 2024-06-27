@@ -16,6 +16,51 @@ class AvailabilityCpTest extends TestCase
         $this->signInAdmin();
     }
 
+    public function test_entry_saved_on_the_entries_table_on_save()
+    {
+        $item = $this->makeStatamicItem();
+
+        $item->save();
+
+        $this->assertDatabaseHas('resrv_entries', [
+            'item_id' => $item->id(),
+            'title' => $item->get('title'),
+            'enabled' => 1,
+            'collection' => $item->collection(),
+            'handle' => $item->blueprint(),
+        ]);
+    }
+
+    public function test_entry_disabled_when_resrv_availability_off()
+    {
+        $item = $this->makeStatamicItem();
+
+        $item->save();
+
+        $item->set('resrv_availability', 'disabled');
+
+        $item->save();
+
+        $this->assertDatabaseHas('resrv_entries', [
+            'item_id' => $item->id(),
+            'title' => $item->get('title'),
+            'enabled' => 0,
+            'collection' => $item->collection(),
+            'handle' => $item->blueprint(),
+        ]);
+    }
+
+    public function test_entry_deletion_soft_deletes()
+    {
+        $item = $this->makeStatamicItem();
+
+        $item->delete();
+
+        $this->assertSoftDeleted('resrv_entries', [
+            'item_id' => $item->id(),
+        ]);
+    }
+
     public function test_availability_can_index_for_a_statamic_item()
     {
         $item = $this->makeStatamicItem();
