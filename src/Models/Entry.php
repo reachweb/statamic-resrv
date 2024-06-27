@@ -40,8 +40,8 @@ class Entry extends Model
             [
                 'title' => $entry->get('title'),
                 'enabled' => $entry->get('resrv_availability') === 'disabled' ? false : true,
-                'collection' => $entry->collection(),
-                'handle' => $entry->blueprint(),
+                'collection' => $entry->collection()->handle(),
+                'handle' => $entry->blueprint()->handle(),
             ]
         );
     }
