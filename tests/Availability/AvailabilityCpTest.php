@@ -37,7 +37,7 @@ class AvailabilityCpTest extends TestCase
 
         $item->save();
 
-        $item->set('resrv_availability_enabled', 'disabled');
+        $item->set('resrv_availability', 'disabled');
 
         $item->save();
 
