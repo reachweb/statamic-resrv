@@ -35,7 +35,7 @@ class Entry extends Model
 
         $this->updateOrCreate(
             [
-                'item_id' => $entry->id()
+                'item_id' => $entry->id(),
             ],
             [
                 'title' => $entry->get('title'),
