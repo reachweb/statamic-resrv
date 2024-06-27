@@ -16,6 +16,7 @@ use Reach\StatamicResrv\Http\Controllers\ConfigController;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
+use Reach\StatamicResrv\Listeners\AddResrvEntryToDatabase;
 use Reach\StatamicResrv\Listeners\CancelReservation;
 use Reach\StatamicResrv\Listeners\ConfirmReservation;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
@@ -24,6 +25,7 @@ use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
+use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
@@ -84,8 +86,12 @@ class ResrvProvider extends AddonServiceProvider
         AvailabilitySearch::class => [
             SaveSearchToSession::class,
         ],
+        \Statamic\Events\EntrySaved::class => [
+            AddResrvEntryToDatabase::class,
+        ],
         \Statamic\Events\EntryDeleted::class => [
             EntryDeleted::class,
+            SoftDeleteResrvEntryFromDatabase::class,
         ],
     ];
 
