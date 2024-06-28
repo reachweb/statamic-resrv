@@ -15,7 +15,7 @@ class EntryDeleted
         }
 
         $id = $event->entry->id();
-        
+
         // Delete availability
         Availability::where('statamic_id', $id)->delete();
 

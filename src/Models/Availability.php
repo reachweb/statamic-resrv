@@ -79,6 +79,7 @@ class Availability extends Model implements AvailabilityContract
     public function getConnectedAvailabilitySetting()
     {
         $blueprint = $this->entry->getStatamicEntry()->blueprint();
+
         return Cache::rememberForever('connected_availability_'.$blueprint->namespace(), function () use ($blueprint) {
             if (! $blueprint->hasField('resrv_availability')) {
                 return false;
