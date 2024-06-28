@@ -22,19 +22,13 @@ use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
 use Statamic\Facades\Blueprint;
-use Statamic\Facades\Entry;
+use Statamic\Facades\Entry as StatamicEntry;
 
 class Availability extends Model implements AvailabilityContract
 {
     use HandlesAvailabilityDates, HandlesMultisiteIds, HandlesPricing, HasFactory;
 
     protected $table = 'resrv_availabilities';
-
-    protected $primaryKey = 'statamic_id';
-
-    public $incrementing = false;
-
-    protected $keyType = 'string';
 
     protected $fillable = [
         'statamic_id',
@@ -49,7 +43,7 @@ class Availability extends Model implements AvailabilityContract
     ];
 
     protected $dispatchesEvents = [
-        'saved' => AvailabilityChanged::class,
+        'updated' => AvailabilityChanged::class,
     ];
 
     protected static function newFactory()
@@ -59,7 +53,7 @@ class Availability extends Model implements AvailabilityContract
 
     public function entry(): BelongsTo
     {
-        return $this->belongsTo(Entry::class, 'item_id', 'statamic_id');
+        return $this->belongsTo(Entry::class, 'statamic_id', 'item_id');
     }
 
     public function getPriceAttribute($value)
@@ -82,10 +76,10 @@ class Availability extends Model implements AvailabilityContract
         return $slug;
     }
 
-    public function getConnectedAvailabilitySetting($handle, $collection)
+    public function getConnectedAvailabilitySetting()
     {
-        return Cache::rememberForever('connected_availability_'.$collection.$handle, function () use ($handle, $collection) {
-            $blueprint = Blueprint::find('collections.'.$collection.'.'.$handle);
+        $blueprint = $this->entry->getStatamicEntry()->blueprint();
+        return Cache::rememberForever('connected_availability_'.$blueprint->namespace(), function () use ($blueprint) {
             if (! $blueprint->hasField('resrv_availability')) {
                 return false;
             }
@@ -614,7 +608,7 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getDisabledIds()
     {
-        $results = Entry::query()
+        $results = StatamicEntry::query()
             ->where('resrv_availability', 'disabled')
             ->where('published', true)
             ->get('id')
