@@ -12,7 +12,7 @@ class ResrvAvailability extends Fieldtype
     public function augment($value)
     {
         if ($value != 'disabled') {
-            $availability_data = Availability::entry($value)->where('available', '>', '0')->get();
+            $availability_data = Availability::where('statamic_id', $value)->where('available', '>', '0')->get();
 
             if ($availability_data->count() == 0) {
                 return false;

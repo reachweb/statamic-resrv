@@ -4,8 +4,6 @@ namespace Reach\StatamicResrv\Contracts\Models;
 
 interface AvailabilityContract
 {
-    public function scopeEntry($query, $entry);
-
     public function getPriceAttribute($value);
 
     public function getAvailableItems(array $data);

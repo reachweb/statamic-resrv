@@ -5,10 +5,13 @@ namespace Reach\StatamicResrv\Models;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
@@ -45,14 +48,18 @@ class Availability extends Model implements AvailabilityContract
         'price' => PriceClass::class,
     ];
 
+    protected $dispatchesEvents = [
+        'saved' => AvailabilityChanged::class,
+    ];
+
     protected static function newFactory()
     {
         return AvailabilityFactory::new();
     }
 
-    public function scopeEntry($query, $entry)
+    public function entry(): BelongsTo
     {
-        return $query->where('statamic_id', $entry);
+        return $this->belongsTo(Entry::class, 'item_id', 'statamic_id');
     }
 
     public function getPriceAttribute($value)
@@ -73,6 +80,30 @@ class Availability extends Model implements AvailabilityContract
         }
 
         return $slug;
+    }
+
+    public function getConnectedAvailabilitySetting($handle, $collection)
+    {
+        return Cache::rememberForever('connected_availability_'.$collection.$handle, function () use ($handle, $collection) {
+            $blueprint = Blueprint::find('collections.'.$collection.'.'.$handle);
+            if (! $blueprint->hasField('resrv_availability')) {
+                return false;
+            }
+
+            return $blueprint->field('resrv_availability')->get('connected_availabilities');
+        });
+    }
+
+    public function getConnectedAvailabilityManualSetting($handle, $collection)
+    {
+        return Cache::rememberForever('connected_availability_manual_setting_'.$collection.$handle, function () use ($handle, $collection) {
+            if ($this->getConnectedAvailabilitySetting($handle, $collection) !== 'select') {
+                return false;
+            }
+            $blueprint = Blueprint::find('collections.'.$collection.'.'.$handle);
+
+            return $blueprint->field('resrv_availability')->get('manual_connected_availabilities');
+        });
     }
 
     public function getAvailableItems($data)
