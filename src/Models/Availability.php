@@ -89,14 +89,11 @@ class Availability extends Model implements AvailabilityContract
         });
     }
 
-    public function getConnectedAvailabilityManualSetting($handle, $collection)
+    public function getConnectedAvailabilityManualSetting()
     {
-        return Cache::rememberForever('connected_availability_manual_setting_'.$collection.$handle, function () use ($handle, $collection) {
-            if ($this->getConnectedAvailabilitySetting($handle, $collection) !== 'select') {
-                return false;
-            }
-            $blueprint = Blueprint::find('collections.'.$collection.'.'.$handle);
+        $blueprint = $this->entry->getStatamicEntry()->blueprint();
 
+        return Cache::rememberForever('connected_availability_manual_setting_'.$blueprint->namespace(), function () use ($blueprint) {
             return $blueprint->field('resrv_availability')->get('manual_connected_availabilities');
         });
     }

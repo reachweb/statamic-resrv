@@ -161,7 +161,7 @@ class TestCase extends OrchestraTestCase
             'resrv_availability' => $data['resrv_availability'] ?? Str::random('6'),
         ];
 
-        Collection::make('pages')->routes('/{slug}')->save();
+        $collection = Collection::make('pages')->routes('/{slug}')->save();
 
         Entry::make()
             ->collection('pages')

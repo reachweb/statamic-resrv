@@ -22,10 +22,10 @@ class UpdateConnectedAvailabilities
                 $this->updateAllConnectedAvailabilities($availability);
                 break;
             case 'same_slug':
-                // method
+                $this->updateSameSlugConnectedAvailabilities($availability);
                 break;
             case 'select':
-                // method
+                $this->updateSelectConnectedAvailabilities($availability);
                 break;
         }
     }
@@ -38,5 +38,35 @@ class UpdateConnectedAvailabilities
             ->update([
                 'available' => $availability->available,
             ]);
+    }
+
+    public function updateSameSlugConnectedAvailabilities($availability): void
+    {
+        Availability::where('date', $availability->date)
+            ->where('property', $availability->property)
+            ->whereNot('statamic_id', $availability->statamic_id)
+            ->update([
+                'available' => $availability->available,
+            ]);
+    }
+
+    public function updateSelectConnectedAvailabilities($availability): void
+    {
+        $propertiesToUpdate = $availability->getConnectedAvailabilityManualSetting();
+
+        if (! array_key_exists($availability->property, $propertiesToUpdate)) {
+            return;
+        }
+
+        $properties = explode(',', $propertiesToUpdate[$availability->property]);
+
+        foreach ($properties as $property) {
+            Availability::where('statamic_id', $availability->statamic_id)
+                ->where('date', $availability->date)
+                ->where('property', $property)
+                ->update([
+                    'available' => $availability->available,
+                ]);
+        }
     }
 }
