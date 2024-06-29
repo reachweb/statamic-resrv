@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Reach\StatamicResrv\Database\Factories\EntryFactory;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
@@ -44,5 +45,15 @@ class Entry extends Model
                 'handle' => $entry->blueprint()->handle(),
             ]
         );
+    }
+
+    public function availabilities(): HasMany
+    {
+        return $this->hasMany(Availability::class, 'statamic_id', 'item_id');
+    }
+
+    public function getStatamicEntry(): StatamicEntry
+    {
+        return StatamicEntry::find($this->item_id);
     }
 }

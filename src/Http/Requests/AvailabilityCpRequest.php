@@ -17,9 +17,10 @@ class AvailabilityCpRequest extends FormRequest
             'statamic_id' => ['required'],
             'date_start' => ['required', 'date'],
             'date_end' => ['required', 'date'],
-            'price' => ['required', 'numeric'],
+            'price' => ['required_unless:available_only,true', 'numeric'],
             'available' => ['required', 'numeric'],
             'advanced' => ['sometimes', 'array'],
+            'available_only' => ['sometimes', 'boolean'],
         ];
     }
 }

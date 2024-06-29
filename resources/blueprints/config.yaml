@@ -46,6 +46,11 @@ enable_advanced_availability:
   instructions: 'Enable multiple availability per item. YOU CANNOT SIMPLY CHANGE THIS OPTION IN PRODUCTION, WITHOUT MIGRATING YOUR DATA.'
   type: toggle
   required: true
+enable_connected_availabilities:
+  display: 'Enable connected advanced availabilities'
+  instructions: 'Enable the ability to "connect" advanced availabilities so that any operations on one of them will be reflected on the others.'
+  type: toggle
+  required: true
 enable_locations:
   display: 'Enable locations'
   instructions: 'Checkout expects to receive location info to calculate any extra charges'

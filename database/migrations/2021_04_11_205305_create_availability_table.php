@@ -14,6 +14,7 @@ class CreateAvailabilityTable extends Migration
     public function up()
     {
         Schema::create('resrv_availabilities', function (Blueprint $table) {
+            $table->id();
             $table->string('statamic_id')->index();
             $table->date('date')->index();
             $table->integer('available');

@@ -78,6 +78,8 @@ return [
     /**
      * Advanced features
      * enable_advanced_availability: set different availability and price for an item depending on the property.
+     * enable_connected_availabilities: enable the ability to "connect" advanced availabilities.
      */
     'enable_advanced_availability' => false,
+    'enable_connected_availabilities' => false,
 ];

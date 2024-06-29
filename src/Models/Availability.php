@@ -5,10 +5,13 @@ namespace Reach\StatamicResrv\Models;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
@@ -19,19 +22,13 @@ use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
 use Statamic\Facades\Blueprint;
-use Statamic\Facades\Entry;
+use Statamic\Facades\Entry as StatamicEntry;
 
 class Availability extends Model implements AvailabilityContract
 {
     use HandlesAvailabilityDates, HandlesMultisiteIds, HandlesPricing, HasFactory;
 
     protected $table = 'resrv_availabilities';
-
-    protected $primaryKey = 'statamic_id';
-
-    public $incrementing = false;
-
-    protected $keyType = 'string';
 
     protected $fillable = [
         'statamic_id',
@@ -45,14 +42,18 @@ class Availability extends Model implements AvailabilityContract
         'price' => PriceClass::class,
     ];
 
+    protected $dispatchesEvents = [
+        'updated' => AvailabilityChanged::class,
+    ];
+
     protected static function newFactory()
     {
         return AvailabilityFactory::new();
     }
 
-    public function scopeEntry($query, $entry)
+    public function entry(): BelongsTo
     {
-        return $query->where('statamic_id', $entry);
+        return $this->belongsTo(Entry::class, 'statamic_id', 'item_id');
     }
 
     public function getPriceAttribute($value)
@@ -73,6 +74,28 @@ class Availability extends Model implements AvailabilityContract
         }
 
         return $slug;
+    }
+
+    public function getConnectedAvailabilitySetting()
+    {
+        $blueprint = $this->entry->getStatamicEntry()->blueprint();
+
+        return Cache::rememberForever('connected_availability_'.$blueprint->namespace(), function () use ($blueprint) {
+            if (! $blueprint->hasField('resrv_availability')) {
+                return false;
+            }
+
+            return $blueprint->field('resrv_availability')->get('connected_availabilities');
+        });
+    }
+
+    public function getConnectedAvailabilityManualSetting()
+    {
+        $blueprint = $this->entry->getStatamicEntry()->blueprint();
+
+        return Cache::rememberForever('connected_availability_manual_setting_'.$blueprint->namespace(), function () use ($blueprint) {
+            return $blueprint->field('resrv_availability')->get('manual_connected_availabilities');
+        });
     }
 
     public function getAvailableItems($data)
@@ -583,7 +606,7 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getDisabledIds()
     {
-        $results = Entry::query()
+        $results = StatamicEntry::query()
             ->where('resrv_availability', 'disabled')
             ->where('published', true)
             ->get('id')

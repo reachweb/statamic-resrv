@@ -32,10 +32,10 @@ class AvailabilityCpController extends Controller
 
         if (array_key_exists('advanced', $data)) {
             foreach ($data['advanced'] as $property) {
-                $this->upsertData($data, $property['code']);
+                $this->updateAvailability($data, $property['code']);
             }
         } else {
-            $this->upsertData($data);
+            $this->updateAvailability($data);
         }
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
@@ -71,19 +71,27 @@ class AvailabilityCpController extends Controller
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
 
-    private function upsertData(array $data, ?string $property = null)
+    private function updateAvailability(array $data, ?string $property = null)
     {
         $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
-        $dataToAdd = [];
         foreach ($period as $day) {
-            $dataToAdd[] = [
-                'statamic_id' => $data['statamic_id'],
-                'date' => $day->isoFormat('YYYY-MM-DD'),
-                'price' => $data['price'],
+            $toUpdate = [
                 'available' => $data['available'],
-                'property' => $property ?? 'none',
+                'price' => $data['price'] ?? 0,
             ];
+
+            if (array_key_exists('available_only', $data) && $data['available_only'] === true) {
+                unset($toUpdate['price']);
+            }
+
+            Availability::updateOrCreate(
+                [
+                    'statamic_id' => $data['statamic_id'],
+                    'date' => $day->isoFormat('YYYY-MM-DD'),
+                    'property' => $property ?? 'none',
+                ],
+                $toUpdate
+            );
         }
-        Availability::upsert($dataToAdd, ['statamic_id', 'date', 'property'], ['price', 'available']);
     }
 }

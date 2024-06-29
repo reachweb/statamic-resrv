@@ -15,8 +15,9 @@ class EntryDeleted
         }
 
         $id = $event->entry->id();
+
         // Delete availability
-        Availability::entry($id)->delete();
+        Availability::where('statamic_id', $id)->delete();
 
         // Delete dynamic pricing associations
         DB::table('resrv_dynamic_pricing_assignments')

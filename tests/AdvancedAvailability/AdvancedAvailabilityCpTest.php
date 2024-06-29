@@ -72,6 +72,7 @@ class AdvancedAvailabilityCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 150,
+            'available' => 6,
         ])->assertDatabaseCount('resrv_availabilities', 3);
 
         $newPayload = [
@@ -88,6 +89,7 @@ class AdvancedAvailabilityCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 200,
+            'available' => 2,
         ])->assertDatabaseCount('resrv_availabilities', 3);
     }
 

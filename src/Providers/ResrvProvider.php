@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Providers;
 
+use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
@@ -26,6 +27,7 @@ use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
+use Reach\StatamicResrv\Listeners\UpdateConnectedAvailabilities;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
@@ -85,6 +87,9 @@ class ResrvProvider extends AddonServiceProvider
         ],
         AvailabilitySearch::class => [
             SaveSearchToSession::class,
+        ],
+        AvailabilityChanged::class => [
+            UpdateConnectedAvailabilities::class,
         ],
         \Statamic\Events\EntrySaved::class => [
             AddResrvEntryToDatabase::class,
