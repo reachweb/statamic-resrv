@@ -62,7 +62,7 @@ class AvailabilityRepository
 
     public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced)
     {
-        return Availability::where('date', '>=', $date_start)
+        $availabilities = Availability::where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($advanced, function (Builder $query, array $advanced) {
@@ -70,12 +70,17 @@ class AvailabilityRepository
                     $query->whereIn('property', $advanced);
                 }
             })
-            ->decrement('available', $quantity);
+            ->get();
+
+        foreach ($availabilities as $availability) {
+            $available = $availability->available - $quantity;
+            $availability->update(['available' => $available]);
+        }
     }
 
-    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced)
+    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced): void
     {
-        return Availability::where('date', '>=', $date_start)
+        $availabilities = Availability::where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($advanced, function (Builder $query, array $advanced) {
@@ -83,7 +88,12 @@ class AvailabilityRepository
                     $query->whereIn('property', $advanced);
                 }
             })
-            ->increment('available', $quantity);
+            ->get();
+
+        foreach ($availabilities as $availability) {
+            $available = $availability->available + $quantity;
+            $availability->update(['available' => $available]);
+        }
     }
 
     public function delete(string $date_start, string $date_end, string $statamic_id, array $advanced)
