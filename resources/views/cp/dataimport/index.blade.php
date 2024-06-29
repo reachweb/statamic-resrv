@@ -12,7 +12,7 @@
                 <button class="btn-primary">Continue</button>
             </div>
         </header>
-        <div class="card rounded p-4 lg:px-8 lg:py-6 shadow bg-white">
+        <div class="card rounded p-4 lg:px-8 lg:py-6 shadow bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm">
             <div class="mb-5">
                 <label for="collection" class="font-bold text-base mb-2">Collection</label>
                 @if ($collections->count() == 0)

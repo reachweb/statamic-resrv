@@ -5,13 +5,13 @@
             <div
                 v-for="value in values"
                 :key="value.id"
-                class="w-full flex items-center text-sm justify-between px-3 py-2 border-t border-gray-200"
+                class="w-full flex items-center text-sm justify-between px-3 py-2 border-t border-gray-200 dark:border-gray-500"
             >
                 <div class="flex items-center space-x-2">
                     <div class="little-dot" :class="value.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
                     <span class="font-medium cursor-pointer" v-html="value.name" @click="edit(value)"></span>
-                    <span v-if="value.price_type != 'free'">{{ value.price }} <span class="text-xs text-gray-700" v-html="priceLabel(value.price_type)"></span></span>
-                    <span v-else class="text-xs text-gray-700" v-html="__('Free')"></span></span>
+                    <span v-if="value.price_type != 'free'">{{ value.price }} <span class="text-xs text-gray-700 dark:text-dark-100" v-html="priceLabel(value.price_type)"></span></span>
+                    <span v-else class="text-xs text-gray-700 dark:text-dark-100" v-html="__('Free')"></span>
                 </div>
                 <div class="flex space-x-2">                    
                     <dropdown-list>

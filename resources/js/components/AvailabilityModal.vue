@@ -2,7 +2,7 @@
     <div>
     <modal name="availability-modal">
         <div class="availability-modal flex flex-col h-full">
-            <div class="text-lg font-semibold px-5 py-3 bg-gray-200 rounded-t-lg border-b">
+            <div class="text-lg font-semibold px-5 py-3 bg-gray-200 dark:bg-dark-500 rounded-t-lg border-b dark:border-dark-900">
                 {{ __('Change availability') }}
                 <span class="block mt-1 text-md" v-if="property"><span class="font-light">For:</span> {{ property.label }}</span>
                 <span class="block mt-1 font-light text-sm">From {{ date_start }} to {{ date_end }}</span>
@@ -14,7 +14,7 @@
                             <label for="available">Available</label>
                         </div>
                         <div class="w-full">
-                            <input class="w-full border border-gray-700 rounded p-2" name="available" type="text" v-model="available">
+                            <input class="input-text" name="available" type="text" v-model="available">
                         </div>
                         <div v-if="errors.available" class="w-full mt-1 text-sm text-red-400">
                             {{ errors.available[0] }}
@@ -25,7 +25,7 @@
                             <label for="available">Price</label>
                         </div>
                         <div class="w-full">
-                            <input class="w-full border border-gray-700 rounded p-2" name="price" type="text" v-model="price">
+                            <input class="input-text" name="price" type="text" v-model="price">
                         </div>
                         <div v-if="errors.price" class="w-full mt-1 text-sm text-red-400">
                             {{ errors.price[0] }}
@@ -42,7 +42,7 @@
                     {{ errors.available_only[0] }}
                 </div>
             </div>
-            <div class="p-4 bg-gray-200 border-t rounded-b-lg flex items-center justify-between">
+            <div class="p-4 bg-gray-200 dark:bg-dark-500 border-t dark:border-dark-900 rounded-b-lg flex items-center justify-between">
                 <div class="flex items-center">
                     <button 
                         class="text-white bg-red-400 rounded font-bold py-2 px-6" 
@@ -53,7 +53,7 @@
                     </button>
                 </div>
                 <div class="flex item-center justify-end">
-                    <button class="text-gray-700 hover:text-gray-900" v-html="__('Cancel')" @click="$emit('cancel')"></button>
+                    <button class="text-gray-700 hover:text-gray-900 dark:text-dark-100 dark:hover:text-dark-175" v-html="__('Cancel')" @click="$emit('cancel')"></button>
                     <button 
                         class="ml-4 text-white bg-blue-500 rounded font-bold py-2 px-6" 
                         v-html="__('Save')" 

@@ -3,6 +3,18 @@
         flex-direction: column !important;
         flex-wrap: wrap !important;
     }
+    .fc-theme-standard td, .fc-theme-standard th {
+        @apply border border-gray-200;
+    }
+    :is(.dark .fc-theme-standard) td, :is(.dark .fc-theme-standard) th {
+        @apply border border-neutral-700;
+    }
+    .fc-theme-standard .fc-scrollgrid {
+        @apply border border-gray-200;
+    }
+    :is(.dark .fc-theme-standard) .fc-scrollgrid {
+        @apply border border-neutral-700;
+    }
 }
 
 .fade-enter-active, .fade-leave-active {

@@ -74,10 +74,10 @@
                             <template slot="cell-entry" slot-scope="{ row: reservation }">
                                 <a :href="reservation.entry.permalink" target="_blank">{{ reservation.entry.title }}</a>
                             </template>
-                            <template slot="cell-location_start" slot-scope="{ row: reservation }">
+                            <template slot="cell-location_start" slot-scope="{ row: reservation }" v-if="reservation.location_start">
                                 {{ reservation.location_start.name }}
                             </template>
-                            <template slot="cell-location_end" slot-scope="{ row: reservation }">
+                            <template slot="cell-location_end" slot-scope="{ row: reservation }" v-if="reservation.location_start">
                                 {{ reservation.location_end.name }}
                             </template>
                             <template slot="cell-customer" slot-scope="{ row: reservation }">

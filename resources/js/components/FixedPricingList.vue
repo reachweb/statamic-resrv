@@ -5,7 +5,8 @@
             <div
                 v-for="pricing in fixedPricings"
                 :key="pricing.id"
-                class="w-full flex items-center justify-between p-3 shadow rounded-md transition-colors bg-gray-100"
+                class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
+                bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"
             >
                 <div class="flex items-center space-x-2 cursor-pointer" v-if="pricing.days != 0" @click="editFixedPricing(pricing)">
                     <span>{{ __('Days:') }}</span>

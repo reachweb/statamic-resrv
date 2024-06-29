@@ -10,16 +10,17 @@
             <div
                 v-for="extra in extras"
                 :key="extra.id"
-                class="w-full flex items-center justify-between p-3 shadow rounded-md transition-colors bg-gray-100"
+                class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
+                bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"
             >
                 <div class="flex items-center space-x-2">
                     <div class="little-dot" :class="greenDot(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
                     <span class="font-medium cursor-pointer" v-html="extra.name" @click="editExtra(extra)"></span>
-                    <span>{{ extra.price }} <span class="text-xs text-gray-700" v-html="priceLabel(extra.price_type)"></span></span>
+                    <span>{{ extra.price }} <span class="text-xs text-gray-700 dark:text-dark-100" v-html="priceLabel(extra.price_type)"></span></span>
                 </div>
                 <div class="flex space-x-2">
                     <span 
-                        class="text-gray-700 text-sm uppercase cursor-pointer" 
+                        class="text-gray-700 dark:text-dark-100 text-sm uppercase cursor-pointer" 
                         v-html="extraEnabled(extra.id) ? 'Enabled' : 'Disabled'"
                         @click="associateEntryExtra(extra.id)"
                         v-if="insideEntry"
