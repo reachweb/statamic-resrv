@@ -24,6 +24,7 @@ class DecreaseAvailability
                 date_end: $event->reservation->date_end,
                 quantity: $event->reservation->quantity,
                 statamic_id: $event->reservation->item_id,
+                reservationId: $event->reservation->id,
                 advanced: $event->reservation->property
             );
         }
@@ -38,6 +39,7 @@ class DecreaseAvailability
                 date_end: $child->date_end,
                 quantity: $child->quantity,
                 statamic_id: $event->reservation->item_id,
+                reservationId: $child->id,
                 advanced: $child->property
             );
         });

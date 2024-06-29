@@ -3,6 +3,8 @@
 namespace Reach\StatamicResrv\Repositories;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Models\Availability;
 
 class AvailabilityRepository
@@ -60,40 +62,66 @@ class AvailabilityRepository
             ->get();
     }
 
-    public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced)
+    public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced, int $reservationId)
     {
-        $availabilities = Availability::where('date', '>=', $date_start)
-            ->where('date', '<', $date_end)
-            ->where('statamic_id', $statamic_id)
-            ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
-                }
-            })
-            ->get();
+        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $advanced, $reservationId) {
+            $availabilities = Availability::where('date', '>=', $date_start)
+                ->where('date', '<', $date_end)
+                ->where('statamic_id', $statamic_id)
+                ->when($advanced, function (Builder $query, array $advanced) {
+                    if (! in_array('any', $advanced)) {
+                        $query->whereIn('property', $advanced);
+                    }
+                })
+                ->lockForUpdate()
+                ->get();
 
-        foreach ($availabilities as $availability) {
-            $available = $availability->available - $quantity;
-            $availability->update(['available' => $available]);
-        }
+            foreach ($availabilities as $availability) {
+                $pending = $availability->pending ?? [];
+
+                if (in_array($reservationId, $pending)) {
+                    Log::error("Reservation ID $reservationId was already found in pending list for availability ID {$availability->id}");
+                    throw new \Exception("Reservation ID $reservationId was already found in the pending list.");
+                }
+
+                $available = $availability->available - $quantity;
+                $availability->update([
+                    'available' => $available,
+                    'pending' => array_merge($pending, [$reservationId]),
+                ]);
+            }
+        });
     }
 
-    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced): void
+    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced, int $reservationId): void
     {
-        $availabilities = Availability::where('date', '>=', $date_start)
-            ->where('date', '<', $date_end)
-            ->where('statamic_id', $statamic_id)
-            ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
-                }
-            })
-            ->get();
+        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $advanced, $reservationId) {
+            $availabilities = Availability::where('date', '>=', $date_start)
+                ->where('date', '<', $date_end)
+                ->where('statamic_id', $statamic_id)
+                ->when($advanced, function (Builder $query, array $advanced) {
+                    if (! in_array('any', $advanced)) {
+                        $query->whereIn('property', $advanced);
+                    }
+                })
+                ->lockForUpdate()
+                ->get();
 
-        foreach ($availabilities as $availability) {
-            $available = $availability->available + $quantity;
-            $availability->update(['available' => $available]);
-        }
+            foreach ($availabilities as $availability) {
+                $pending = $availability->pending ?? [];
+
+                if (! in_array($reservationId, $pending)) {
+                    Log::error("Reservation ID $reservationId not found in pending list for availability ID {$availability->id}");
+                    throw new \Exception("Reservation ID $reservationId not found in pending list.");
+                }
+
+                $available = $availability->available + $quantity;
+                $availability->update([
+                    'available' => $available,
+                    'pending' => array_values(array_diff($pending, [$reservationId])),
+                ]);
+            }
+        });
     }
 
     public function delete(string $date_start, string $date_end, string $statamic_id, array $advanced)
