@@ -75,7 +75,6 @@ class AvailabilityCpController extends Controller
     {
         $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
         foreach ($period as $day) {
-
             $toUpdate = [
                 'available' => $data['available'],
                 'price' => $data['price'] ?? 0,
