@@ -10,11 +10,12 @@
             <div
                 v-for="dynamic in dynamicPricings"
                 :key="dynamic.id"
-                class="w-full flex items-center justify-between p-3 shadow rounded-md transition-colors bg-gray-100"                  
+                class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
+                bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"                  
             >
                 <div class="flex items-center space-x-2">
                     <span class="font-medium cursor-pointer" v-html="dynamic.title" @click="editPricing(dynamic)"></span>
-                    <span class="text-xs p-1 bg-gray-600 text-white rounded" v-if="dynamic.overrides_all">{{ __('OVERRIDING') }}</span>
+                    <span class="text-xs p-1 bg-gray-600 dark:text-dark-150 text-white rounded" v-if="dynamic.overrides_all">{{ __('OVERRIDING') }}</span>
                 </div>
                 <div>
                     <dropdown-list>
