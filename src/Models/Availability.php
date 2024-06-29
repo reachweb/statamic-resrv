@@ -36,10 +36,12 @@ class Availability extends Model implements AvailabilityContract
         'price',
         'available',
         'property',
+        'pending',
     ];
 
     protected $casts = [
         'price' => PriceClass::class,
+        'pending' => 'array',
     ];
 
     protected $dispatchesEvents = [
@@ -238,7 +240,7 @@ class Availability extends Model implements AvailabilityContract
             ->get();
     }
 
-    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, ?string $advanced)
+    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced)
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
@@ -252,11 +254,12 @@ class Availability extends Model implements AvailabilityContract
             date_end: $this->date_end,
             quantity: $this->quantity,
             statamic_id: $statamic_id,
-            advanced: $this->advanced
+            advanced: $this->advanced,
+            reservationId: $reservationId
         );
     }
 
-    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, ?string $advanced)
+    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced)
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
@@ -269,7 +272,8 @@ class Availability extends Model implements AvailabilityContract
             date_end: $this->date_end,
             quantity: $this->quantity,
             statamic_id: $statamic_id,
-            advanced: $this->advanced
+            advanced: $this->advanced,
+            reservationId: $reservationId
         );
     }
 

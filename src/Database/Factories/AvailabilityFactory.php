@@ -25,6 +25,7 @@ class AvailabilityFactory extends Factory
             'available' => 2,
             'price' => '150',
             'property' => 'none',
+            'pending' => [],
         ];
     }
 
@@ -33,6 +34,15 @@ class AvailabilityFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'property' => 'something',
+            ];
+        });
+    }
+
+    public function withPendingArray()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'pending' => [1, 2, 3],
             ];
         });
     }

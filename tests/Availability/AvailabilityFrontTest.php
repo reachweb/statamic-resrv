@@ -4,7 +4,11 @@ namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Event;
+use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityFrontTest extends TestCase
@@ -548,5 +552,111 @@ class AvailabilityFrontTest extends TestCase
 
         $response = $this->post(route('resrv.availability.show', $item2->id()), $searchPayload);
         $response->assertStatus(200)->assertSee('{"message":{"status":false}}', false);
+    }
+
+    public function test_availability_decreases_on_reservation_created()
+    {
+        $item = $this->makeStatamicItem();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $reservation = Reservation::factory()
+            ->create(
+                ['item_id' => $item->id()]
+            );
+
+        Event::dispatch(new ReservationCreated($reservation));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 1,
+            'pending' => '[1]',
+        ]);
+    }
+
+    public function test_availability_increases_on_reservation_expired()
+    {
+        $item = $this->makeStatamicItem();
+
+        Availability::factory()
+            ->withPendingArray()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $reservation = Reservation::factory()
+            ->create(
+                ['item_id' => $item->id()]
+            );
+
+        $this->dispatchEventAndCatchException(new ReservationExpired($reservation));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 3,
+            'pending' => '[2,3]',
+        ]);
+    }
+
+    public function test_availability_does_increase_multiple_times_on_reservation_expired()
+    {
+        $item = $this->makeStatamicItem();
+
+        Availability::factory()
+            ->withPendingArray()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                ['statamic_id' => $item->id()]
+            );
+
+        $reservation = Reservation::factory()
+            ->create(
+                ['item_id' => $item->id()]
+            );
+
+        $reservation2 = Reservation::factory()
+            ->create(
+                ['item_id' => $item->id()]
+            );
+
+        $this->dispatchEventAndCatchException(new ReservationExpired($reservation));
+        $this->dispatchEventAndCatchException(new ReservationExpired($reservation));
+        $this->dispatchEventAndCatchException(new ReservationExpired($reservation));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 3,
+            'pending' => '[2,3]',
+        ]);
+
+        $this->dispatchEventAndCatchException(new ReservationExpired($reservation2));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 4,
+            'pending' => '[3]',
+        ]);
+    }
+
+    public function dispatchEventAndCatchException($event)
+    {
+        try {
+            Event::dispatch($event);
+        } catch (\Exception $e) {
+            // Handle the exception or log it
+        }
     }
 }
