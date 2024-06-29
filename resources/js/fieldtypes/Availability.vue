@@ -1,10 +1,10 @@
 <template>
     <element-container @resized="containerWidth = $event.width">
-    <div class="w-full h-full text-center my-4 text-gray-700 text-lg" v-if="newItem">
+    <div class="w-full h-full text-center my-4 text-gray-700 dark:text-dark-100 text-lg" v-if="newItem">
         {{ __('You need to save this entry before you can add availability information.') }}
     </div>
     <div class="statamic-resrv-availability relative" v-else>
-        <div class="flex items-center py-1 my-4 border-b border-t">
+        <div class="flex items-center py-1 my-4 border-b border-t dark:border-gray-500">
             <span class="font-bold mr-4">{{ __('Enable reservations') }}</span>    
             <toggle v-model="enabled" @input="changeAvailability" :parent="this.meta.parent"></toggle>
         </div>

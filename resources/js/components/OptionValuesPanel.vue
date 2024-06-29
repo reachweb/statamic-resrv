@@ -1,7 +1,7 @@
 <template>
     <stack narrow name="statamic-resrv-option-value" @closed="close">
-        <div slot-scope="{ close }" class="bg-gray-100 h-full overflow-scroll overflow-x-auto flex flex-col">
-            <header class="bg-white pl-6 pr-3 py-2 mb-4 border-b shadow-md text-lg font-medium flex items-center justify-between">
+        <div slot-scope="{ close }" class="bg-gray-100 dark:bg-dark-700 h-full overflow-scroll overflow-x-auto flex flex-col">
+            <header class="bg-white dark:bg-dark-550 pl-6 pr-3 py-2 mb-4 border-b dark:border-dark-950 shadow-md text-lg font-medium flex items-center justify-between">
                 Add an option value
                 <button type="button" class="btn-close" @click="close">×</button>
             </header>
@@ -63,7 +63,7 @@
                     </div>
                 </div>    
             </div>
-            <div class="bg-gray-200 p-4 border-t flex items-center justify-between">
+            <div class="bg-gray-200 dark:bg-dark-500 p-4 border-t dark:border-dark-900 flex items-center justify-between">
                 <div class="w-full">
                     <button 
                         class="btn-primary w-full"

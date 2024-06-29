@@ -5,7 +5,8 @@
             <div
                 v-for="option in options"
                 :key="option.id"
-                class="w-full flex flex-wrap items-center justify-between p-3 shadow rounded-md transition-colors bg-gray-100"
+                class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
+                bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"
             >
                 <div class="flex items-center space-x-2">
                     <div class="little-dot" :class="option.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
@@ -13,7 +14,7 @@
                 </div>
                 <div class="flex space-x-2">
                     <span 
-                        class="text-gray-700 text-sm uppercase" 
+                        class="text-gray-700 dark:text-dark-100 text-sm uppercase" 
                         v-html="option.required ? 'Required' : 'Optional'"
                     ></span>
                     <dropdown-list>
@@ -25,7 +26,7 @@
                     <option-values-list
                         :values="option.values"
                         :parent="option.id"
-                        @saved="valueSaved"                    
+                        @saved="valueSaved"
                     >
                     </option-values-list>
                 </div>

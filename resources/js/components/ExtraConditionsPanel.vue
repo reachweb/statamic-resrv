@@ -1,9 +1,9 @@
 <template>
     <stack name="statamic-resrv-extra-conditions" @closed="close">
-        <div slot-scope="{ close }" class="h-full overflow-scroll overflow-x-auto bg-gray-300">
-            <header class="flex items-center sticky top-0 inset-x-0 bg-white shadow px-8 py-2 z-1 h-13">
+        <div slot-scope="{ close }" class="h-full overflow-scroll overflow-x-auto bg-gray-100 dark:bg-dark-600">
+            <header class="flex items-center sticky top-0 inset-x-0 bg-gray-300 dark:bg-dark-600 border-b dark:border-dark-900 shadow px-8 py-2 z-1 h-13">
                 <div class="flex-1 flex items-center text-xl">{{ __('Extra conditions for:') }}  <span class="ml-2 font-bold">{{ data.name }}</span></div>                
-                <button type="button" class="text-gray-700 hover:text-gray-800 mr-6 text-sm" @click="close">Cancel</button>
+                <button type="button" class="text-gray-700 hover:text-gray-800 dark:text-dark-100 dark:hover:text-dark-175 mr-6 text-sm" @click="close">Cancel</button>
                 <button 
                     class="btn-primary" 
                     :disabled="disableSave"
