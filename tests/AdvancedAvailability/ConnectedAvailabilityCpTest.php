@@ -124,8 +124,8 @@ class ConnectedAvailabilityCpTest extends TestCase
 
         $newPayload = [
             'statamic_id' => $item->id(),
-            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_start' => today()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'advanced' => [['code' => 'something-else-completely']],
             'available' => 12,
             'available_only' => true,

@@ -16,7 +16,7 @@
                     <button class="text-grey hover:text-grey-90" @click="selectedProperty = propertiesOptions">{{ __('Select all') }}</button>
                 </div>
             </div>
-            <div class="px-4 mt-3 mb-4">
+            <div class="px-4 mt-2 mb-4">
                 <span class="block mb-2 text-md">{{ __('Select dates') }}</span>
                 <div class="date-container input-group w-full">
                     <v-date-picker
@@ -63,7 +63,7 @@
                     {{ __('Date range is required') }}
                 </div>  
             </div>
-            <div class="flex-1 px-4 mb-4">
+            <div class="flex-1 px-4 mb-2">
                 <div class="flex flex-wrap items-center space-x-4">
                     <div class="flex-1">
                         <div class="mb-1 text-sm font-bold">
@@ -88,6 +88,15 @@
                         </div>                     
                     </div>
                 </div>
+            </div>
+            <div class="flex-1 px-4 mb-4">
+                <div class="flex items-center">
+                    <toggle-input v-model="available_only"></toggle-input> 
+                    <div class="text-sm ml-3">Only edit availability</div>
+                </div>
+                <div v-if="errors.available_only" class="w-full mt-1 text-sm text-red-400">
+                    {{ errors.available_only[0] }}
+                </div>      
             </div>
             <div class="p-4 bg-gray-200 border-t rounded-b-lg flex items-center justify-between">
                 <button class="text-gray-700 hover:text-gray-900" v-html="__('Cancel')" @click="$emit('cancel')"></button>
@@ -131,6 +140,7 @@ export default {
                 end: ''
             },
             available: null,
+            available_only: false,
             price: null,
             successMessage: 'Availability successfully saved',
             postUrl: '/cp/resrv/availability',
@@ -145,8 +155,11 @@ export default {
             fields.date_start = this.dates ? dayjs(this.dates.start).format('YYYY-MM-DD') : ''
             fields.date_end = this.dates ? dayjs(this.dates.end).format('YYYY-MM-DD') : ''
             fields.statamic_id = this.parentId
-            fields.price = this.price
+            if (this.available_only === false) {
+                fields.price = this.price
+            }
             fields.available = this.available
+            fields.available_only = this.available_only
             if (this.property) {
                 fields.advanced = _.isArray(this.selectedProperty) ? this.selectedProperty : [_.findWhere(this.propertiesOptions, {'code': this.selectedProperty.code})]
             }
