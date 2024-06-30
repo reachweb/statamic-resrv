@@ -107,6 +107,8 @@ export default {
                 price: '',
                 price_type: '',
                 allow_multiple : 0,
+                custom: '',
+                override_label: '',
                 maximum: 0,
                 published : 1
             }
@@ -221,6 +223,10 @@ export default {
                 return '/ day'
             } else if (code == 'fixed') {
                 return '/ reservation'
+            } else if (code == 'relative') {
+                return 'relative'
+            } else if (code == 'custom') {
+                return 'custom'
             }
         },
         getAllExtras() {

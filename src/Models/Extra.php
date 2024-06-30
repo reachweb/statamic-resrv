@@ -20,7 +20,19 @@ class Extra extends Model
 
     protected $table = 'resrv_extras';
 
-    protected $fillable = ['name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'order', 'published'];
+    protected $fillable = [
+        'name',
+        'slug',
+        'price',
+        'price_type',
+        'allow_multiple',
+        'custom',
+        'override_label',
+        'maximum',
+        'description',
+        'order',
+        'published',
+    ];
 
     protected $casts = [
         'published' => 'boolean',
