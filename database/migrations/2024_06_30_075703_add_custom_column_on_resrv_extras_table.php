@@ -27,8 +27,7 @@ return new class extends Migration
     public function down()
     {
         Schema::table('resrv_extras', function (Blueprint $table) {
-            $table->dropColumn('custom');
-            $table->dropColumn('override_label');
+            $table->dropColumn(['custom', 'override_label']);
         });
     }
 };
