@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -185,10 +186,23 @@ class Extra extends Model
     protected function getCustomPrice($reservation)
     {
         if (! $reservation instanceof Reservation) {
-            $customer = $reservation['customer'];
+            if (array_key_exists('customer', $reservation)) {
+                $customer = $reservation['customer'];
+            } else {
+                // This part handles the case when the extra is loaded before checkout
+                if (session()->has('resrv-search') && 
+                    isset(session('resrv-search')->customer) && 
+                    array_key_exists($this->custom, session('resrv-search')->customer)
+                ) {
+                    return session('resrv-search')->customer[$this->custom];
+                } else {
+                    // Fail gracefull if not found
+                    return 1;
+                }
+            }
         } else {
             if (! $reservation->customer || ! $reservation->customer->has($this->custom)) {
-                throw new \Exception('The reservation is missing customer data');
+                return 1;
             }
             $customer = $reservation->customer;
         }
@@ -205,7 +219,7 @@ class Extra extends Model
 
         return $value;
     }
-
+    
     protected function initiateAvailabilityFromReservation($data)
     {
         $reservationData = [];
