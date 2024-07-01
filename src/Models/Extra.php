@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -190,8 +189,8 @@ class Extra extends Model
                 $customer = $reservation['customer'];
             } else {
                 // This part handles the case when the extra is loaded before checkout
-                if (session()->has('resrv-search') && 
-                    isset(session('resrv-search')->customer) && 
+                if (session()->has('resrv-search') &&
+                    isset(session('resrv-search')->customer) &&
                     array_key_exists($this->custom, session('resrv-search')->customer)
                 ) {
                     return session('resrv-search')->customer[$this->custom];
@@ -219,7 +218,7 @@ class Extra extends Model
 
         return $value;
     }
-    
+
     protected function initiateAvailabilityFromReservation($data)
     {
         $reservationData = [];
