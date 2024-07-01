@@ -172,6 +172,7 @@ class Checkout extends Component
                 'total' => $totals->get('total'),
                 'extras' => $this->enabledExtras->extras,
                 'options' => $this->enabledOptions->options,
+                'customer' => $this->reservation->customer ?? collect(),
             ],
         ), $this->entry->id());
     }
