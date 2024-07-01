@@ -84,4 +84,32 @@ class CheckoutExtrasTest extends TestCase
             ->assertSee('€ 9.3')
             ->assertSee('209.30');
     }
+
+    /** @test */
+    public function gets_correct_price_for_custom_price_extra()
+    {
+        $reservation = Reservation::factory()->create([
+            'item_id' => $this->entries->first()->id(),
+            'customer' => ['adults' => 3],
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $extra = ResrvExtra::factory()->custom()->create();
+
+        DB::table('resrv_statamicentry_extra')->insert([
+            'statamicentry_id' => $this->entries->first()->id,
+            'extra_id' => $extra->id,
+        ]);
+
+        $extras = ResrvExtra::getPriceForDates($reservation);
+
+        Livewire::test(Checkout::class)
+            ->set('enabledExtras.extras', [[
+                'id' => $extra->id,
+                'quantity' => 1,
+                'price' => '10.00',
+            ]])
+            ->assertSee('€ 30');
+    }
 }

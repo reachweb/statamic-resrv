@@ -63,6 +63,29 @@ class ExtraCpTest extends TestCase
         ]);
     }
 
+    public function test_can_add_custom_extra()
+    {
+        $payload = [
+            'name' => 'This is an extra',
+            'slug' => 'this-is-an-extra',
+            'price' => 150,
+            'price_type' => 'custom',
+            'custom' => 'adults',
+            'override_label' => 'per person',
+            'allow_multiple' => 1,
+            'maximum' => 3,
+            'published' => 1,
+        ];
+        $response = $this->post(cp_route('resrv.extra.create'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_extras', [
+            'slug' => 'this-is-an-extra',
+            'custom' => 'adults',
+            'override_label' => 'per person',
+        ]);
+    }
+
     public function test_can_update_extra()
     {
         $payload = [

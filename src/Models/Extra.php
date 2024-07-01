@@ -20,7 +20,19 @@ class Extra extends Model
 
     protected $table = 'resrv_extras';
 
-    protected $fillable = ['name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'order', 'published'];
+    protected $fillable = [
+        'name',
+        'slug',
+        'price',
+        'price_type',
+        'allow_multiple',
+        'custom',
+        'override_label',
+        'maximum',
+        'description',
+        'order',
+        'published',
+    ];
 
     protected $casts = [
         'published' => 'boolean',
@@ -63,6 +75,9 @@ class Extra extends Model
         if ($this->price_type == 'perday') {
             return $this->price->multiply($this->duration)->multiply($this->quantity)->format();
         }
+        if ($this->price_type == 'custom') {
+            return $this->price->multiply($this->getCustomPrice($data))->multiply($this->quantity)->format();
+        }
 
         return $this->price->multiply($this->quantity)->format();
     }
@@ -81,6 +96,7 @@ class Extra extends Model
         return $this->priceForDates($data);
     }
 
+    // TODO: merge these two methods ?
     public function calculatePrice($data, $quantity)
     {
         $this->initiateAvailabilityUnsafe($data);
@@ -96,6 +112,9 @@ class Extra extends Model
         }
         if ($this->price_type == 'relative') {
             return $this->price->multiply($this->getRelativePrice($data))->multiply($quantity)->multiply($this->quantity);
+        }
+        if ($this->price_type == 'custom') {
+            return $this->price->multiply($this->getCustomPrice($data))->multiply($this->quantity);
         }
     }
 
@@ -157,18 +176,48 @@ class Extra extends Model
     protected function getRelativePrice($data)
     {
         if ($data instanceof Reservation) {
-            $reservationData = [];
-            $reservationData['date_start'] = $data->date_start;
-            $reservationData['date_end'] = $data->date_end;
-            $reservationData['quantity'] = $data->quantity;
-            $reservationData['item_id'] = $data->item_id ?? $data->parent->item_id;
-            if (isset($data->property)) {
-                $reservationData['advanced'] = $data->property;
-            }
-            $data = $reservationData;
+            $data = $this->initiateAvailabilityFromReservation($data);
         }
 
         return (new Availability())->getPriceForItem($data, $data['item_id'])->format();
+    }
+
+    protected function getCustomPrice($reservation)
+    {
+        if (! $reservation instanceof Reservation) {
+            $customer = $reservation['customer'];
+        } else {
+            if (! $reservation->customer || ! $reservation->customer->has($this->custom)) {
+                throw new \Exception('The reservation is missing customer data');
+            }
+            $customer = $reservation->customer;
+        }
+
+        if (! $customer->has($this->custom)) {
+            throw new \Exception('The custom price data is missing for extra'.$this->name);
+        }
+
+        $value = $customer->get($this->custom);
+
+        if (! is_numeric($value)) {
+            throw new \Exception('The custom price data is not a number for extra'.$this->name);
+        }
+
+        return $value;
+    }
+
+    protected function initiateAvailabilityFromReservation($data)
+    {
+        $reservationData = [];
+        $reservationData['date_start'] = $data->date_start;
+        $reservationData['date_end'] = $data->date_end;
+        $reservationData['quantity'] = $data->quantity;
+        $reservationData['item_id'] = $data->item_id ?? $data->parent->item_id;
+        if (isset($data->property)) {
+            $reservationData['advanced'] = $data->property;
+        }
+
+        return $reservationData;
     }
 
     protected function getDynamicPricing($id, $price)

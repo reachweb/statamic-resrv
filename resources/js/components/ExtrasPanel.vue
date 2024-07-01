@@ -54,6 +54,28 @@
                                         {{ errors.price_type[0] }}
                                     </div>  
                                 </div>
+                                <div class="pb-3" v-if="submit.price_type === 'custom'">
+                                    <div class="mb-1 text-sm">
+                                        <label class="font-semibold" for="custom">Custom field</label>
+                                    </div>
+                                    <div class="w-full">
+                                        <input class="input-text" name="custom" type="text" v-model="submit.custom">
+                                    </div>
+                                    <div v-if="errors.custom" class="w-full mt-2 text-sm text-red-400">
+                                        {{ errors.custom[0] }}
+                                    </div>  
+                                </div>
+                                <div class="pb-3">
+                                    <div class="mb-1 text-sm">
+                                        <label class="font-semibold" for="override_label">Override label</label>
+                                    </div>
+                                    <div class="w-full">
+                                        <input class="input-text" name="override_label" type="text" v-model="submit.override_label">
+                                    </div>
+                                    <div v-if="errors.override_label" class="w-full mt-2 text-sm text-red-400">
+                                        {{ errors.override_label[0] }}
+                                    </div>  
+                                </div>
                                 <div class="pb-3 flex items-center">
                                     <toggle-input v-model="submit.allow_multiple"></toggle-input> 
                                     <div class="text-sm ml-3">Can add more than 1</div>
@@ -162,6 +184,10 @@ export default {
                 {
                     code: "relative",
                     label: "Relative to the reservation price"
+                },
+                {
+                    code: "custom",
+                    label: "Relative to a checkout form item"
                 }
             ]
         }

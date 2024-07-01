@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Livewire;
 
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
-use Livewire\Attributes\Session;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
 use Reach\StatamicResrv\Models\Reservation;
@@ -22,11 +21,7 @@ class CheckoutForm extends Component
     public function mount(Reservation $reservation): void
     {
         $this->reservation = $reservation->fresh();
-        if ($this->reservation->customer) {
-            $this->form = $this->reservation->customer->all();
-        } else {
-            $this->initializeForm();
-        }
+        $this->initializeForm();
     }
 
     #[Computed(persist: true)]
@@ -37,18 +32,12 @@ class CheckoutForm extends Component
 
     public function initializeForm()
     {
-        $custom = [];
-        if (session()->has('resrv-search')) {
-            $custom = session('resrv-search')->custom ?? [];
-        }
-
-        $this->form = collect($this->checkoutForm)->mapWithKeys(function ($field) use ($custom) {
+        $this->form = collect($this->checkoutForm)->mapWithKeys(function ($field) {
             // Default to an empty string or an empty array based on the field type
             $value = $field['type'] === 'checkboxes' ? [] : '';
-
-            // If the field is in the custom session data, prepopulate that value
-            if (array_key_exists($field['handle'], $custom)) {
-                $value = $custom[$field['handle']];
+            // If the field is in the customer form, prepopulate that value
+            if ($this->reservation->customer && $this->reservation->customer->has($field['handle'])) {
+                $value = $this->reservation->customer->get($field['handle']);
             }
 
             return [

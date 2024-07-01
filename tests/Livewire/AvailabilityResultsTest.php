@@ -561,6 +561,52 @@ class AvailabilityResultsTest extends TestCase
     }
 
     /** @test */
+    public function creates_reservation_and_saves_custom_data_in_the_database()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'test',
+                    'custom' => [
+                        'adults' => 2,
+                        'children' => 1,
+                    ],
+                ]
+            );
+
+        $availability = $component->viewData('availability');
+
+        $component->call('checkout');
+
+        $this->assertDatabaseHas('resrv_reservations',
+            [
+                'item_id' => $this->advancedEntries->first()->id(),
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(2, 'day'),
+                'quantity' => 1,
+                'property' => 'test',
+                'payment' => data_get($availability, 'data.payment'),
+                'price' => data_get($availability, 'data.price'),
+                'customer' => json_encode(['adults' => 2, 'children' => 1]),
+            ]
+        );
+    }
+
+    /** @test */
     public function does_not_create_reservation_if_availability_changed()
     {
         $entry = Entry::make()

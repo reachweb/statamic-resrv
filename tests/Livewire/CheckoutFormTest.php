@@ -31,6 +31,7 @@ class CheckoutFormTest extends TestCase
         $this->travelTo(today()->setHour(12));
         $this->reservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),
+            'customer' => ['email' => 'larry@david.com'],
         ]);
 
         $entry = Entry::make()
@@ -67,7 +68,6 @@ class CheckoutFormTest extends TestCase
         $availabilityForm->custom = ['email' => 'larry@david.com'];
 
         session(['resrv_reservation' => $this->reservation->id]);
-        session(['resrv-search' => $availabilityForm]);
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
 
         $component = Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])

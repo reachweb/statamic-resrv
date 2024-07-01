@@ -60,4 +60,19 @@ class ExtraFactory extends Factory
             ];
         });
     }
+
+    public function custom()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'id' => '4',
+                'name' => 'This is a relative extra',
+                'slug' => 'this-is-a-relative-extra',
+                'price' => '10',
+                'price_type' => 'custom',
+                'custom' => 'adults',
+                'override_label' => 'per adult',
+            ];
+        });
+    }
 }

@@ -49,7 +49,7 @@ trait HandlesReservationQueries
                 'price' => data_get($this->availability, 'data.price'),
                 'payment' => data_get($this->availability, 'data.payment'),
                 'payment_id' => '',
-                'customer' => '',
+                'customer' => $this->data->custom ?? '',
             ]
         );
 
