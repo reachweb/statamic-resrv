@@ -54,8 +54,8 @@ return [
     /**
      * Checkout settings.
      * form_name: handle of the checkout form (needed to work correctly!)
-     * payment: full charges the whole amount, fixed charges a fixed deposit and percent charges a percentage
-     * fixed_amount: the amout to charge for a reservation
+     * payment: full charges the whole amount, everything the amount plus extras and options and fixed charges a fixed deposit and percent charges a percentage
+     * fixed_amount: the amount to charge for a reservation
      * percent_amount: the percentage of the reservation to charge as an amount
      * minutes_to_hold: how much time the user has the complete the checkout until availability is reset.
      */

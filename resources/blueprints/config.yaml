@@ -117,6 +117,7 @@ payment:
   required: true
   options:
     full: 'Charge the whole amount'
+    everything: 'Charge the whole amount plus any options and extras'
     fixed: 'Charge a fixed amount' 
     percent: 'Charge a percentage of the base price'
 fixed_amount:

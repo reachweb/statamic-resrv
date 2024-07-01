@@ -30,4 +30,18 @@ class OptionValueFactory extends Factory
             'published' => true,
         ];
     }
+
+    public function fixed()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'name' => $this->faker->sentence(3),
+                'option_id' => '',
+                'price' => '30',
+                'price_type' => 'fixed',
+                'order' => 1,
+                'published' => true,
+            ];
+        });
+    }
 }

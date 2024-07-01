@@ -8,6 +8,8 @@ use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
+use Reach\StatamicResrv\Models\Option;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -27,6 +29,8 @@ class CheckoutTest extends TestCase
     public $reservation;
 
     public $extra;
+
+    public $options;
 
     public function setUp(): void
     {
@@ -58,6 +62,13 @@ class CheckoutTest extends TestCase
             'statamicentry_id' => $this->entries->first()->id,
             'extra_id' => $this->extra->id,
         ]);
+
+        $this->options = Option::factory()
+            ->notRequired()
+            ->has(OptionValue::factory()->fixed(), 'values')
+            ->create([
+                'item_id' => $this->entries->first()->id(),
+            ]);
     }
 
     /** @test */
@@ -266,5 +277,65 @@ class CheckoutTest extends TestCase
             ->assertSet('coupon', null)
             ->assertSessionMissing('resrv_coupon')
             ->assertDispatched('coupon-removed');
+    }
+
+    /** @test */
+    public function it_charges_only_the_reservation_price_when_payment_is_set_to_full()
+    {
+        Config::set('resrv-config.payment', 'full');
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $extras = ResrvExtra::getPriceForDates($this->reservation);
+
+        $component = Livewire::test(Checkout::class)
+            ->set('enabledExtras.extras', collect([0 => [
+                'id' => $this->extra->id,
+                'price' => $extras->first()->price,
+                'quantity' => 1,
+            ]]))
+            ->set('enabledOptions.options', [[
+                'id' => $this->options->first()->id,
+                'value' => $this->options->first()->values->first()->id,
+                'price' => $this->options->first()->values->first()->price->format(),
+            ]])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'price' => '100',
+            'total' => '139.30',
+        ]);
+    }
+
+    /** @test */
+    public function it_charges_everything_when_payment_is_set_to_everything()
+    {
+        Config::set('resrv-config.payment', 'everything');
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $extras = ResrvExtra::getPriceForDates($this->reservation);
+
+        $component = Livewire::test(Checkout::class)
+            ->set('enabledExtras.extras', collect([0 => [
+                'id' => $this->extra->id,
+                'price' => $extras->first()->price,
+                'quantity' => 1,
+            ]]))
+            ->set('enabledOptions.options', [[
+                'id' => $this->options->first()->id,
+                'value' => $this->options->first()->values->first()->id,
+                'price' => $this->options->first()->values->first()->price->format(),
+            ]])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'price' => '139.30',
+            'total' => '139.30',
+        ]);
     }
 }
