@@ -81,7 +81,8 @@ class AvailabilityRepository
 
                 if (in_array($reservationId, $pending)) {
                     Log::error("Reservation ID $reservationId was already found in pending list for availability ID {$availability->id}");
-                    throw new \Exception("Reservation ID $reservationId was already found in the pending list.");
+
+                    continue;
                 }
 
                 $available = $availability->available - $quantity;
@@ -112,7 +113,8 @@ class AvailabilityRepository
 
                 if (! in_array($reservationId, $pending)) {
                     Log::error("Reservation ID $reservationId not found in pending list for availability ID {$availability->id}");
-                    throw new \Exception("Reservation ID $reservationId not found in pending list.");
+
+                    continue;
                 }
 
                 $available = $availability->available + $quantity;
