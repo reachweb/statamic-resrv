@@ -305,6 +305,7 @@ class CheckoutTest extends TestCase
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $this->reservation->id,
             'price' => '100',
+            'payment' => '100',
             'total' => '139.30',
         ]);
     }
@@ -334,7 +335,8 @@ class CheckoutTest extends TestCase
 
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $this->reservation->id,
-            'price' => '139.30',
+            'price' => '100',
+            'payment' => '139.30',
             'total' => '139.30',
         ]);
     }

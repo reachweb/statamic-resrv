@@ -121,7 +121,7 @@ class Checkout extends Component
         ];
 
         if (config('resrv-config.payment') == 'everything') {
-            $toUpdate['price'] = $totals->get('total')->format();
+            $toUpdate['payment'] = $totals->get('total')->format();
         }
 
         // Update the reservation with the total
