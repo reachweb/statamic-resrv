@@ -581,7 +581,7 @@ class AvailabilityResultsTest extends TestCase
                     ],
                     'quantity' => 1,
                     'advanced' => 'test',
-                    'custom' => [
+                    'customer' => [
                         'adults' => 2,
                         'children' => 1,
                     ],

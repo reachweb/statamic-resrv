@@ -32,7 +32,7 @@
         x-cloak
         x-ref="guestsPopup"
         x-anchor.offset.10="$refs.guestsButton"
-        >
+    >
         <div class="overflow-hidden shadow rounded-md border border-gray-300" role="none">
             <div class="relative">
                 <div class="bg-gray-50 p-4 lg:min-w-xl">
@@ -115,34 +115,34 @@
 @script
 <script>
 Alpine.data('guests', () => ({
-    adults: $wire.data.custom.adults,
-    children: $wire.data.custom.children,
-    infants: $wire.data.custom.infants,
+    adults: $wire.data.customer.adults,
+    children: $wire.data.customer.children,
+    infants: $wire.data.customer.infants,
     guestsPopup: false,
 
     init() {
         if (this.adults === undefined) {
             this.adults = 2;
-            $wire.set('data.custom.adults', 1);
+            $wire.set('data.customer.adults', 1);
         }
         if (this.children === undefined) {
             this.children = 0;
-            $wire.set('data.custom.children', 0);
+            $wire.set('data.customer.children', 0);
         }
         if (this.infants === undefined) {
             this.infants = 0;
-            $wire.set('data.custom.infants', 0);
+            $wire.set('data.customer.infants', 0);
         }
         this.$watch('adults', value => {
-            $wire.set('data.custom.adults', value);
+            $wire.set('data.customer.adults', value);
         });
 
         this.$watch('children', value => {
-            $wire.set('data.custom.children', value);
+            $wire.set('data.customer.children', value);
         });
 
         this.$watch('children', value => {
-            $wire.set('data.custom.infants', value);
+            $wire.set('data.customer.infants', value);
         });
     },
 

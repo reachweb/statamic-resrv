@@ -13,7 +13,7 @@ class AvailabilityData extends Form
 
     public ?string $advanced = null;
 
-    public ?array $custom = [];
+    public ?array $customer = [];
 
     public function rules(): array
     {
@@ -34,7 +34,7 @@ class AvailabilityData extends Form
             ],
             'quantity' => ['sometimes', 'integer'],
             'advanced' => ['nullable', 'string'],
-            'custom' => ['sometimes', 'array'],
+            'customer' => ['sometimes', 'array'],
         ];
     }
 
