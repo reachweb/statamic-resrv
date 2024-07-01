@@ -114,8 +114,18 @@ class Checkout extends Component
             return;
         }
 
+        $totals = $this->calculateReservationTotals();
+
+        $toUpdate = [
+            'total' => $totals->get('total')->format(),
+        ];
+
+        if (config('resrv-config.payment') == 'everything') {
+            $toUpdate['payment'] = $totals->get('total')->format();
+        }
+
         // Update the reservation with the total
-        $this->reservation->update(['total' => $this->calculateReservationTotals()->get('total')->format()]);
+        $this->reservation->update($toUpdate);
 
         // Sync extras & options to the database
         $this->assignExtras();

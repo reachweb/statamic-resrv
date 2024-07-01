@@ -634,7 +634,7 @@ class Availability extends Model implements AvailabilityContract
         if (is_array($price)) {
             $price = $price['reservation_price'];
         }
-        if (config('resrv-config.payment', 'full') == 'full') {
+        if (config('resrv-config.payment') == 'full' || config('resrv-config.payment') == 'everything') {
             return $price;
         }
         if (config('resrv-config.payment') == 'fixed') {
