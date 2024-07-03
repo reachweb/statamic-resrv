@@ -61,6 +61,11 @@ enable_time:
   instructions: 'The reservation will have an explicit pickup and drop-off time'
   type: toggle
   required: true
+enable_affiliates:
+  display: 'Enable affiliates'
+  instructions: 'Enable the affiliate system that lets you generate affiliate code and track reservations by partners'
+  type: toggle
+  required: true
 minimum_days_before:
   display: 'Minimum days before'
   instructions: 'set this to the number of days allowed between booking date and pickup time (calendar days count not 24 hour difference)'
