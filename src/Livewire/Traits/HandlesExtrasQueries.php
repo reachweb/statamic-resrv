@@ -35,4 +35,13 @@ trait HandlesExtrasQueries
 
         return $extras;
     }
+
+    public function updateEnabledExtraPrices()
+    {
+        $this->enabledExtras->extras->transform(function ($extra) {
+            $extra['price'] = $this->extras->where('id', $extra['id'])->first()->price;
+
+            return $extra;
+        });
+    }
 }

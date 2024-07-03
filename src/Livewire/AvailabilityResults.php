@@ -121,6 +121,9 @@ class AvailabilityResults extends Component
         }
         $this->getAvailability();
 
+        unset($this->extras);
+        unset($this->options);
+
         $this->dispatch('availability-results-updated');
     }
 

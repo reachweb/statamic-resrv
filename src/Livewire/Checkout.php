@@ -240,7 +240,12 @@ class Checkout extends Component
         $prices = $this->getUpdatedPrices();
         // Update the reservation with the new prices
         $this->reservation->update(['price' => $prices['price'], 'payment' => $prices['payment']]);
+        // Remove the caches
         unset($this->reservation);
+        unset($this->extras);
+        unset($this->options);
+        // Update pricing
+        $this->updateEnabledExtraPrices();
         $this->calculateReservationTotals();
     }
 
