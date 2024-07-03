@@ -36,6 +36,7 @@ trait HandlesReservationQueries
 
     public function createReservation()
     {
+
         $reservation = Reservation::create(
             [
                 'status' => ReservationStatus::PENDING,

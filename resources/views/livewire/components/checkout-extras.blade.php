@@ -17,7 +17,9 @@
     <hr class="h-px my-4 bg-gray-200 border-0">
     <div class="divide-y divide-gray-100">
         @foreach ($this->extras as $id => $extra)
-            <x-resrv::checkout-extra :extra="$extra" :selectedValue="data_get($enabledExtras->extras, $extra->id)" x-bind:key="{{ $extra->id }}" />
+            <div wire:key="{{ $extra->id }}.{{ $extra->price }}">
+                <x-resrv::checkout-extra :extra="$extra" :selectedValue="data_get($enabledExtras->extras, $extra->id)" x-bind:key="{{ $extra->id }}" />
+            </div>
         @endforeach
     </div>
 </div>

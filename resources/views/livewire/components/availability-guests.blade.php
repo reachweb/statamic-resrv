@@ -47,7 +47,7 @@
                                 x-bind:class="{'opacity-25' : adults == 1}"
                                 x-on:click="decrement('adults')"
                             >
-                                <span class="mt-px">-</span>
+                                <span>-</span>
                             </div>
                             <div class="px-4" x-html="adults"></div>
                             <div 
@@ -55,7 +55,7 @@
                                 x-bind:class="{'opacity-25' : adults == 8}"
                                 x-on:click="increment('adults')"
                             >
-                                <span class="mt-px">+</span>
+                                <span>+</span>
                             </div>
                         </div>
                     </div>
@@ -70,7 +70,7 @@
                                 x-bind:class="{'opacity-25' : children == 0}"
                                 x-on:click="decrement('children')"
                             >
-                                <span class="mt-px">-</span>
+                                <span>-</span>
                             </div>
                             <div class="px-4" x-html="children"></div>
                             <div 
@@ -78,7 +78,7 @@
                                 x-bind:class="{'opacity-25' : children == 4}"
                                 x-on:click="increment('children')"
                             >
-                                <span class="mt-px">+</span>
+                                <span>+</span>
                             </div>
                         </div>
                     </div>
@@ -93,7 +93,7 @@
                                 x-bind:class="{'opacity-25' : infants == 0}"
                                 x-on:click="decrement('infants')"
                             >
-                                <span class="mt-px">-</span>
+                                <span>-</span>
                             </div>
                             <div class="px-4" x-html="infants"></div>
                             <div 
@@ -101,7 +101,7 @@
                                 x-bind:class="{'opacity-25' : infants == 2}"
                                 x-on:click="increment('infants')"
                             >
-                                <span class="mt-px">+</span>
+                                <span>+</span>
                             </div>
                         </div>
                     </div>

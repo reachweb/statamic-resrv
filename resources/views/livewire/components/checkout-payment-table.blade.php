@@ -1,5 +1,5 @@
 @props(['extras', 'enabledExtras', 'options', 'enabledOptions', 'totals', 'key'])
-<div {{ $attributes->merge(['class' => 'flex flex-grow']) }} wire:key={{ $key }}>
+<div {{ $attributes->merge(['class' => 'flex flex-grow']) }} wire:key="{{ $key }}"">
     <div class="flex flex-grow flex-col justify-between">
         @if ($enabledOptions->options->count() > 0 || $enabledExtras->extras->count() > 0)
         <div class="flex flex-col mb-4 lg:mb-6 gap-y-3 md:gap-y-4 xl:gap-y-6">       
@@ -86,7 +86,7 @@
                         </span>
                     </div>
                 </div>
-                @if (config('resrv-config.payment') !== 'full')
+                @if (config('resrv-config.payment') !== 'everything' )
                 <div class="flex justify-between items-center pt-3">
                     <div class="md:text-lg text-gray-900">
                         {{ trans('statamic-resrv::frontend.payableNow') }}
