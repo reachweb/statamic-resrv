@@ -24,6 +24,14 @@ class AffiliateCpTest extends TestCase
         $response->assertStatus(200)->assertSee($affiliate->name);
     }
 
+    public function test_can_show_cp_index_page()
+    {
+        Affiliate::factory()->create();
+
+        $response = $this->get(cp_route('resrv.affiliates.index'));
+        $response->assertStatus(200)->assertSee('affiliate');
+    }
+
     public function test_can_create_an_affiliate()
     {
         $affiliate = Affiliate::factory()->make();
