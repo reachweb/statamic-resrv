@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Controllers\ConfigController;
+use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
@@ -38,6 +39,12 @@ class ResrvProvider extends AddonServiceProvider
     protected $routes = [
         'cp' => __DIR__.'/../../routes/cp.php',
         'web' => __DIR__.'/../../routes/web.php',
+    ];
+
+    protected $middlewareGroups = [
+        'statamic.web' => [
+            SetResrvAffiliateCookie::class,
+        ],
     ];
 
     protected $commands = [
