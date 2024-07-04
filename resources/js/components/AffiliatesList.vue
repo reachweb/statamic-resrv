@@ -71,6 +71,7 @@ export default {
                 cookie_duration: '',
                 fee : '',
                 allow_skipping_payment: 0,
+                send_reservation_email: 0,
                 published : 1
             }
         }

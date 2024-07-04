@@ -22,6 +22,7 @@ return new class extends Migration
             $table->float('fee', 8, 2);
             $table->boolean('published')->default(true);
             $table->boolean('allow_skipping_payment')->default(false);
+            $table->boolean('send_reservation_email')->default(false);
             $table->json('options')->nullable();
             $table->softDeletes();
             $table->timestamps();

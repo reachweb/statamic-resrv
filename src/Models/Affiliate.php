@@ -22,12 +22,14 @@ class Affiliate extends Model
         'fee',
         'published',
         'allow_skipping_payment',
+        'send_reservation_email',
         'options',
     ];
 
     protected $casts = [
         'published' => 'boolean',
         'allow_skipping_payment' => 'boolean',
+        'send_reservation_email' => 'boolean',
         'options' => 'array',
     ];
 

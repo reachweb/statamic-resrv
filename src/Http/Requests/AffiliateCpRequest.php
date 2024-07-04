@@ -34,6 +34,7 @@ class AffiliateCpRequest extends FormRequest
             'fee' => ['required', 'numeric', 'min:0', 'max:100'],
             'published' => ['boolean'],
             'allow_skipping_payment' => ['boolean'],
+            'send_reservation_email' => ['boolean'],
             'options' => ['nullable', 'json'],
         ];
     }

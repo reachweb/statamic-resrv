@@ -29,6 +29,7 @@ class AffiliateFactory extends Factory
             'fee' => 20,
             'published' => true,
             'allow_skipping_payment' => true,
+            'send_reservation_email' => true,
         ];
     }
 }

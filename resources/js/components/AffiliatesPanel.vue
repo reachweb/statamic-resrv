@@ -67,11 +67,15 @@
                                 </div>
                                 <div class="pb-3 flex items-center">
                                     <toggle-input v-model="submit.allow_skipping_payment"></toggle-input> 
-                                    <div class="text-sm ml-3">Allow skipping payment</div>
+                                    <div class="text-sm ml-3">{{ __('Allow skipping payment') }}</div>
+                                </div>
+                                <div class="pb-3 flex items-center">
+                                    <toggle-input v-model="submit.send_reservation_email"></toggle-input> 
+                                    <div class="text-sm ml-3">{{ __('Send reservation email') }}</div>
                                 </div>
                                 <div class="pb-3 flex items-center">
                                     <toggle-input v-model="submit.published"></toggle-input> 
-                                    <div class="text-sm ml-3">Published</div>
+                                    <div class="text-sm ml-3">{{ __('Published') }}</div>
                                 </div>
                             </div>
                         </div>
