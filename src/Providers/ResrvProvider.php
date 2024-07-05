@@ -16,6 +16,7 @@ use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Controllers\ConfigController;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
 use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\AddResrvEntryToDatabase;
@@ -73,6 +74,7 @@ class ResrvProvider extends AddonServiceProvider
 
     protected $listen = [
         ReservationCreated::class => [
+            AddAffiliateToReservation::class,
             AddReservationIdToSession::class,
             DecreaseAvailability::class,
         ],

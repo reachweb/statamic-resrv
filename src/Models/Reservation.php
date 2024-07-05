@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -43,6 +44,11 @@ class Reservation extends Model
     public function entry()
     {
         return Entry::find($this->item_id) ?? $this->emptyEntry();
+    }
+
+    public function affiliate(): BelongsToMany
+    {
+        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate');
     }
 
     public function childs()

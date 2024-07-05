@@ -3,7 +3,11 @@
 namespace Reach\StatamicResrv\Tests\Extra;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
+use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
+use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
 use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AffiliateFrontTest extends TestCase
@@ -45,5 +49,19 @@ class AffiliateFrontTest extends TestCase
 
         $response = $this->get('/'.$this->item->slug.'?afid='.$newAffiliate->code);
         $response->assertStatus(200)->assertCookie('resrv_afid', $newAffiliate->code);
+    }
+
+    public function test_listener_listens_to_reservation_created_event()
+    {
+        Event::fake();
+
+        $reservation = Reservation::factory()->create();
+
+        event(new ReservationCreatedEvent($reservation));
+
+        Event::assertListening(
+            ReservationCreatedEvent::class,
+            AddAffiliateToReservation::class,
+        );
     }
 }

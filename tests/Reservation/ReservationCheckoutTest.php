@@ -8,7 +8,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
+use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
+use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
+use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
@@ -179,6 +183,44 @@ class ReservationCheckoutTest extends TestCase
             [
                 'reservation_id' => 1,
                 'dynamic_pricing_id' => $dynamic->id,
+            ]
+        );
+    }
+
+    /** @test */
+    public function test_listener_listens_to_reservation_created_event()
+    {
+        Event::fake();
+
+        $reservation = Reservation::factory()->create();
+
+        event(new ReservationCreatedEvent($reservation));
+
+        Event::assertListening(
+            ReservationCreatedEvent::class,
+            DecreaseAvailability::class,
+        );
+
+        Event::assertListening(
+            ReservationCreatedEvent::class,
+            AddReservationIdToSession::class,
+        );
+    }
+
+    /** @test */
+    public function it_saves_affiliate_when_present_in_the_event()
+    {
+        $this->withStandardFakeViews();
+
+        $affiliate = Affiliate::factory()->create();
+
+        event(new ReservationCreatedEvent($this->reservation, $affiliate));
+
+        $this->assertDatabaseHas('resrv_reservation_affiliate',
+            [
+                'reservation_id' => 1,
+                'affiliate_id' => $affiliate->id,
+                'fee' => $affiliate->fee,
             ]
         );
     }

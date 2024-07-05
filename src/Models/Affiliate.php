@@ -4,7 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Reach\StatamicResrv\Database\Factories\AffiliateFactory;
 
@@ -38,8 +38,8 @@ class Affiliate extends Model
         return AffiliateFactory::new();
     }
 
-    public function reservations(): HasMany
+    public function reservations(): BelongsToMany
     {
-        return $this->hasMany(Reservation::class);
+        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate');
     }
 }

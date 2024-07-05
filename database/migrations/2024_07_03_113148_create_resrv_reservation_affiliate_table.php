@@ -18,7 +18,7 @@ return new class extends Migration
             $table->integer('reservation_id');
             $table->integer('affiliate_id');
             $table->float('fee', 8, 2);
-            $table->json('data');
+            $table->json('data')->nullable();
             $table->timestamps();
         });
     }

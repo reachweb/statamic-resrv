@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra;
@@ -668,5 +669,43 @@ class AvailabilityResultsTest extends TestCase
             ->call('checkout')
             ->assertSessionHas('resrv_reservation', 1)
             ->assertRedirect($entry->url());
+    }
+
+    /** @test */
+    public function creates_reservation_and_saves_affiliate_when_cookie_is_in_session()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        $affiliate = Affiliate::factory()->create();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        $component = Livewire::withCookies(['resrv_afid' => $affiliate->code])
+            ->test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'test',
+                ]
+            );
+
+        $component->call('checkout');
+
+        $this->assertDatabaseHas('resrv_reservation_affiliate',
+            [
+                'reservation_id' => 1,
+                'affiliate_id' => $affiliate->id,
+                'fee' => $affiliate->fee,
+            ]
+        );
     }
 }

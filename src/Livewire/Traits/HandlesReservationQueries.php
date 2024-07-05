@@ -11,6 +11,8 @@ use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesReservationQueries
 {
+    use HandlesAffiliates;
+
     public function getReservation()
     {
         try {
@@ -34,7 +36,7 @@ trait HandlesReservationQueries
         return $reservation;
     }
 
-    public function createReservation()
+    public function createReservation(): void
     {
         $reservation = Reservation::create(
             [
@@ -53,10 +55,14 @@ trait HandlesReservationQueries
             ]
         );
 
-        ReservationCreated::dispatch($reservation);
+        if ($affiliate = $this->getAffiliateIfCookieExists()) {
+            ReservationCreated::dispatch($reservation, $affiliate);
+        } else {
+            ReservationCreated::dispatch($reservation);
+        }
     }
 
-    public function getAvailabilityDataFromReservation()
+    public function getAvailabilityDataFromReservation(): array
     {
         return [
             'date_start' => $this->reservation->date_start,
@@ -66,7 +72,7 @@ trait HandlesReservationQueries
         ];
     }
 
-    public function getUpdatedPrices()
+    public function getUpdatedPrices(): array
     {
         return (new Availability)->getPricing($this->getAvailabilityDataFromReservation(), $this->reservation->item_id);
     }
