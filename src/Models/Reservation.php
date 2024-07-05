@@ -48,7 +48,7 @@ class Reservation extends Model
 
     public function affiliate(): BelongsToMany
     {
-        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate');
+        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee');
     }
 
     public function childs()
@@ -67,6 +67,11 @@ class Reservation extends Model
     }
 
     public function getPaymentAttribute($value)
+    {
+        return Price::create($value);
+    }
+
+    public function getTotalAttribute($value)
     {
         return Price::create($value);
     }

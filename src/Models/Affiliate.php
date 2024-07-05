@@ -40,6 +40,6 @@ class Affiliate extends Model
 
     public function reservations(): BelongsToMany
     {
-        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate');
+        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee');
     }
 }
