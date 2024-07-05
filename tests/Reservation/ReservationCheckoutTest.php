@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
-use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
+use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
@@ -167,6 +167,12 @@ class ReservationCheckoutTest extends TestCase
             'condition_value' => '1',
         ]);
 
+        $dynamicCoupon = DynamicPricing::factory()->withCoupon()->create([
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(10, 'day')->toIso8601String(),
+            'condition_value' => '1',
+        ]);
+
         DB::table('resrv_dynamic_pricing_assignments')->insert([
             'dynamic_pricing_id' => $dynamic->id,
             'dynamic_pricing_assignment_id' => $this->entries->first()->id,
@@ -179,15 +185,39 @@ class ReservationCheckoutTest extends TestCase
             'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
         ]);
 
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamicCoupon->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
         Cache::forget('dynamic_pricing_table');
         Cache::forget('dynamic_pricing_assignments_table');
 
-        event(new ReservationConfirmedEvent($this->reservation));
+        session(['resrv_coupon' => $dynamicCoupon->coupon]);
+
+        event(new ReservationCreatedEvent($this->reservation, new ReservationData(
+            coupon: $dynamicCoupon->coupon,
+        )));
 
         $this->assertDatabaseHas('resrv_reservation_dynamic_pricing',
             [
                 'reservation_id' => 1,
                 'dynamic_pricing_id' => $dynamic->id,
+            ]
+        );
+
+        $this->assertDatabaseHas('resrv_reservation_dynamic_pricing',
+            [
+                'reservation_id' => 1,
+                'dynamic_pricing_id' => $dynamicFixed->id,
+            ]
+        );
+
+        $this->assertDatabaseHas('resrv_reservation_dynamic_pricing',
+            [
+                'reservation_id' => 1,
+                'dynamic_pricing_id' => $dynamicCoupon->id,
             ]
         );
     }
@@ -219,7 +249,9 @@ class ReservationCheckoutTest extends TestCase
 
         $affiliate = Affiliate::factory()->create();
 
-        event(new ReservationCreatedEvent($this->reservation, $affiliate));
+        event(new ReservationCreatedEvent($this->reservation, new ReservationData(
+            affiliate: $affiliate,
+        )));
 
         $this->assertDatabaseHas('resrv_reservation_affiliate',
             [

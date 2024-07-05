@@ -5,7 +5,7 @@ namespace Reach\StatamicResrv\Events;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
-use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationCreated
@@ -14,11 +14,11 @@ class ReservationCreated
 
     public $reservation;
 
-    public $affiliate;
+    public $data;
 
-    public function __construct(Reservation $reservation, ?Affiliate $affiliate = null)
+    public function __construct(Reservation $reservation, ?ReservationData $data = null)
     {
         $this->reservation = $reservation;
-        $this->affiliate = $affiliate;
+        $this->data = $data ?? new ReservationData();
     }
 }

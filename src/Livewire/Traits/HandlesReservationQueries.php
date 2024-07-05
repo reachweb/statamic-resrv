@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationCreated;
@@ -55,11 +56,10 @@ trait HandlesReservationQueries
             ]
         );
 
-        if ($affiliate = $this->getAffiliateIfCookieExists()) {
-            ReservationCreated::dispatch($reservation, $affiliate);
-        } else {
-            ReservationCreated::dispatch($reservation);
-        }
+        ReservationCreated::dispatch($reservation, new ReservationData(
+            affiliate: $this->getAffiliateIfCookieExists(),
+            coupon: session('resrv_coupon') ?? null,
+        ));
     }
 
     public function getAvailabilityDataFromReservation(): array

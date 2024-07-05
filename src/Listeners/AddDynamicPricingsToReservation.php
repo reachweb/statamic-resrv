@@ -2,13 +2,17 @@
 
 namespace Reach\StatamicResrv\Listeners;
 
-use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Models\Availability;
 
 class AddDynamicPricingsToReservation
 {
-    public function handle(ReservationConfirmed $event)
+    public function handle(ReservationCreated $event)
     {
+        if ($event->data->hasCoupon()) {
+            session('resrv_coupon', $event->data->coupon);
+        }
+
         $dynamicPricingData = (new Availability)->getDynamicPricingsForReservation($event->reservation);
 
         if (! $dynamicPricingData) {

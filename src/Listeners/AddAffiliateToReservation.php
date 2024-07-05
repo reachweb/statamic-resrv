@@ -8,8 +8,8 @@ class AddAffiliateToReservation
 {
     public function handle(ReservationCreated $event)
     {
-        if ($event->affiliate) {
-            $event->reservation->affiliate()->attach($event->affiliate, ['fee' => $event->affiliate->fee]);
+        if ($event->data->hasAffiliate()) {
+            $event->reservation->affiliate()->attach($event->data->affiliate, ['fee' => $event->data->affiliate->fee]);
         }
     }
 }

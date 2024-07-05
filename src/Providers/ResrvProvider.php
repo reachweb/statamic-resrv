@@ -75,6 +75,7 @@ class ResrvProvider extends AddonServiceProvider
     protected $listen = [
         ReservationCreated::class => [
             AddAffiliateToReservation::class,
+            AddDynamicPricingsToReservation::class,
             AddReservationIdToSession::class,
             DecreaseAvailability::class,
         ],
@@ -83,7 +84,6 @@ class ResrvProvider extends AddonServiceProvider
         ],
         ReservationConfirmed::class => [
             ConfirmReservation::class,
-            AddDynamicPricingsToReservation::class,
             SendNewReservationEmails::class,
         ],
         ReservationCancelled::class => [
