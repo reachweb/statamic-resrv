@@ -22,6 +22,7 @@
                 <div class="flex space-x-2">
                     <dropdown-list>
                         <dropdown-item :text="__('Edit')" @click="editAffiliate(affiliate)" />
+                        <dropdown-item :text="__('Copy affiliate link')" @click="copyLink(affiliate)" />
                         <dropdown-item :text="__('Delete')" @click="confirmDelete(affiliate)" />         
                     </dropdown-list>
                 </div>
@@ -111,6 +112,15 @@ export default {
         editAffiliate(affiliate) {
             this.affiliate = affiliate
             this.togglePanel()
+        },
+        copyLink(affiliate) {
+            let link = window.location.origin + '/?afid=' + affiliate.code
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(link)
+                this.$toast.success('Affiliate link copied to clipboard')
+            } else {
+                this.$toast.error('Failed to copy link. Are you using SSL?')
+            }            
         },
         affiliateSaved() {
             this.togglePanel()
