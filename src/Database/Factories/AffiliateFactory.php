@@ -22,7 +22,7 @@ class AffiliateFactory extends Factory
     public function definition()
     {
         return [
-            'name' => $this->faker->name,
+            'name' => 'Larry David',
             'code' => 'AFFILIATE',
             'email' => $this->faker->unique()->safeEmail,
             'cookie_duration' => 2,
