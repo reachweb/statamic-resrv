@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -45,6 +46,11 @@ class Reservation extends Model
         return Entry::find($this->item_id) ?? $this->emptyEntry();
     }
 
+    public function affiliate(): BelongsToMany
+    {
+        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee');
+    }
+
     public function childs()
     {
         return $this->hasMany(ChildReservation::class);
@@ -61,6 +67,11 @@ class Reservation extends Model
     }
 
     public function getPaymentAttribute($value)
+    {
+        return Price::create($value);
+    }
+
+    public function getTotalAttribute($value)
     {
         return Price::create($value);
     }

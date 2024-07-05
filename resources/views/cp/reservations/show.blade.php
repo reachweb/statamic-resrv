@@ -51,7 +51,7 @@
                 </div>      
             </div>
             @endif
-            @if (config('resrv-config.enable_locations'))
+            @if (config('resrv-config.enable_locations') && $reservation->location_start_data && $reservation->location_end_data)
             <div class="grid grid-cols-2 my-2 pt-2">
                 <div>
                     <div class="font-bold mb-2">{{ __("Pick-up location") }}</div>
@@ -187,21 +187,55 @@
     </div>
     @endif
 
+    @if ($reservation->affiliate->count() > 0)
+    <div>
+        <div class="mb-2 content">
+            <h2 class="text-base">{{ __("Affiliate") }}</h2>
+        </div>
+        <div class="card px-6 py-4 mb-6">
+            <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
+                <div>{{ $reservation->affiliate->first()->name }}</div>
+                <div class="font-bold">
+                    {{ $reservation->affiliate->first()->email }}
+                </div>
+            </div>
+            <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
+                <div>{{ __('Fee at the time of reservation') }}</div>
+                <div class="font-bold">
+                    {{ $reservation->affiliate->first()->pivot->fee }}%
+                </div>
+            </div>
+            <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
+                <div>{{ __('Preliminary fee to be paid') }}</div>
+                <div class="font-bold">
+                    {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->multiply($reservation->affiliate->first()->pivot->fee / 100)->format() }}
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
     <div>
         <div class="mb-2 content">
             <h2 class="text-base">{{ __("Payment information") }}</h2>
         </div>
         <div class="card px-6 py-4 mb-6">
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
-                <div>{{ __("Deposit") }}</div>
+                <div>{{ __("Payment") }}</div>
                 <div class="font-bold">
                     {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }}
                 </div>
+            </div>
+            <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
+                <div>{{ __("Reservation price") }}</div>
+                <div class="font-bold">
+                    {{ config('resrv-config.currency_symbol') }} {{ $reservation->price->format() }}
+                </div>
             </div>  
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
-                <div class="font-bold text-xl">{{ __("Total price") }}</div>
+                <div class="font-bold text-xl">{{ __("Total price (including extras & options)") }}</div>
                 <div class="font-bold text-xl">
-                    {{ config('resrv-config.currency_symbol') }} {{ $reservation->price->format() }}
+                    {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->format() }}
                 </div>
             </div>  
         </div>        

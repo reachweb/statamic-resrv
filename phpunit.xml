@@ -2,6 +2,7 @@
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.1/phpunit.xsd" backupGlobals="false" bootstrap="vendor/autoload.php" colors="true" processIsolation="false" stopOnFailure="false" cacheDirectory=".phpunit.cache" backupStaticProperties="false">
   <testsuites>
     <testsuite name="Resrv">
+      <directory suffix="Test.php">tests/Affiliate/</directory>
       <directory suffix="Test.php">tests/Availability/</directory>
       <directory suffix="Test.php">tests/AdvancedAvailability/</directory>
       <directory suffix="Test.php">tests/Extra/</directory>

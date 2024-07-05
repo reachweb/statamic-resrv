@@ -8,7 +8,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
+use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
+use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
+use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Mail\ReservationMade;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
@@ -142,6 +147,10 @@ class ReservationCheckoutTest extends TestCase
         Mail::assertSent(ReservationConfirmed::class, function ($mail) {
             return $mail->reservation->id === $this->reservation->id;
         });
+
+        Mail::assertSent(ReservationMade::class, function ($mail) {
+            return $mail->reservation->id === $this->reservation->id;
+        });
     }
 
     /** @test */
@@ -181,5 +190,89 @@ class ReservationCheckoutTest extends TestCase
                 'dynamic_pricing_id' => $dynamic->id,
             ]
         );
+    }
+
+    /** @test */
+    public function test_listener_listens_to_reservation_created_event()
+    {
+        Event::fake();
+
+        $reservation = Reservation::factory()->create();
+
+        event(new ReservationCreatedEvent($reservation));
+
+        Event::assertListening(
+            ReservationCreatedEvent::class,
+            DecreaseAvailability::class,
+        );
+
+        Event::assertListening(
+            ReservationCreatedEvent::class,
+            AddReservationIdToSession::class,
+        );
+    }
+
+    /** @test */
+    public function it_saves_affiliate_when_present_in_the_event()
+    {
+        $this->withStandardFakeViews();
+
+        $affiliate = Affiliate::factory()->create();
+
+        event(new ReservationCreatedEvent($this->reservation, $affiliate));
+
+        $this->assertDatabaseHas('resrv_reservation_affiliate',
+            [
+                'reservation_id' => 1,
+                'affiliate_id' => $affiliate->id,
+                'fee' => $affiliate->fee,
+            ]
+        );
+    }
+
+    /** @test */
+    public function email_is_sent_to_affiliate_if_enabled()
+    {
+        Config::set('resrv-config.enable_affiliates', true);
+
+        Mail::fake();
+
+        $affiliate = Affiliate::factory()->create();
+
+        DB::table('resrv_reservation_affiliate')->insert([
+            'reservation_id' => $this->reservation->id,
+            'affiliate_id' => $affiliate->id,
+            'fee' => $affiliate->fee,
+        ]);
+
+        $this->post(route('resrv.webhook.store', ['reservation_id' => $this->reservation->id, 'status' => 'success']));
+
+        Mail::assertSent(ReservationMade::class, function ($mail) use ($affiliate) {
+            return $mail->hasTo($affiliate->email);
+        });
+    }
+
+    /** @test */
+    public function email_is_not_sent_to_affiliate_if_disabled()
+    {
+        Config::set('resrv-config.enable_affiliates', true);
+
+        Mail::fake();
+
+        $affiliate = Affiliate::factory()->create([
+            'send_reservation_email' => false,
+        ]);
+
+        DB::table('resrv_reservation_affiliate')->insert([
+            'reservation_id' => $this->reservation->id,
+            'affiliate_id' => $affiliate->id,
+            'fee' => $affiliate->fee,
+        ]);
+
+        $this->post(route('resrv.webhook.store', ['reservation_id' => $this->reservation->id, 'status' => 'success']));
+
+        Mail::assertNotSent(ReservationMade::class, function ($mail) use ($affiliate) {
+            return $mail->hasTo($affiliate->email);
+        });
     }
 }

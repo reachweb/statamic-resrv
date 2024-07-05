@@ -63,4 +63,10 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/dataimport/store', 'DataImportCpController@store')->name('dataimport.store');
 
         Route::get('/resrv/utility/entries', 'ResrvUtilityController@entries')->name('utilities.entries');
+
+        Route::get('/resrv/affiliates', 'AffiliateCpController@indexCp')->name('affiliates.index');
+        Route::get('/resrv/affiliate', 'AffiliateCpController@index')->name('affiliate.index');
+        Route::post('/resrv/affiliate', 'AffiliateCpController@create')->name('affiliate.create');
+        Route::patch('/resrv/affiliate/{affiliate}', 'AffiliateCpController@update')->name('affiliate.update');
+        Route::delete('/resrv/affiliate/{affiliate}', 'AffiliateCpController@delete')->name('affiliate.delete');
     });

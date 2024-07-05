@@ -3,6 +3,7 @@ import OptionsFieldtype from './fieldtypes/Options.vue'
 import ExtrasFieldtype from './fieldtypes/Extras.vue'
 import FixedPricing from './fieldtypes/FixedPricing.vue'
 
+import AffiliatesList from './components/AffiliatesList.vue'
 import ExtrasList from './components/ExtrasList.vue'
 import LocationsList from './components/LocationsList.vue'
 import ReservationsList from './components/ReservationsList.vue'
@@ -19,6 +20,7 @@ Statamic.booting(() => {
     Statamic.$components.register('resrv_fixed_pricing-fieldtype', FixedPricing);
 
     // Lists
+    Statamic.$components.register('affiliates-list', AffiliatesList);
     Statamic.$components.register('extras-list', ExtrasList);
     Statamic.$components.register('locations-list', LocationsList);
     Statamic.$components.register('reservations-list', ReservationsList);
