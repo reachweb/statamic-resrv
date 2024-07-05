@@ -25,6 +25,13 @@ class ReservationMade extends Mailable
             $this->to(explode(',', config('resrv-config.admin_email')));
         }
 
+        if (config('resrv-config.enable_affiliates') && $reservation->affiliate->count() > 0) {
+            $affiliate = $reservation->affiliate->first();
+            if ($affiliate->send_reservation_email === true) {
+                $this->to($affiliate->email);
+            }
+        }
+
         $this->subject($this->generateSubject($reservation));
     }
 
