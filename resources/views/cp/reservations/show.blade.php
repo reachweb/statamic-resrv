@@ -175,7 +175,7 @@
             <h2 class="text-base">{{ __("Extras") }}</h2>
         </div>
         <div class="card px-6 py-4 mb-6">
-        @foreach ($reservation->extras as $extra)               
+        @foreach ($reservation->extras as $extra)
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
                 <div>{{ $extra->name }} x{{ $extra->pivot->quantity }}</div>
                 <div class="font-bold">
@@ -188,29 +188,66 @@
     @endif
 
     @if ($reservation->affiliate->count() > 0)
+    @php
+        $affiliate = $reservation->affiliate->first();
+    @endphp
     <div>
         <div class="mb-2 content">
             <h2 class="text-base">{{ __("Affiliate") }}</h2>
         </div>
         <div class="card px-6 py-4 mb-6">
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
-                <div>{{ $reservation->affiliate->first()->name }}</div>
+                <div>{{ $affiliate->name }}</div>
                 <div class="font-bold">
-                    {{ $reservation->affiliate->first()->email }}
+                    {{ $affiliate->email }}
                 </div>
             </div>
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
                 <div>{{ __('Fee at the time of reservation') }}</div>
                 <div class="font-bold">
-                    {{ $reservation->affiliate->first()->pivot->fee }}%
+                    {{ $affiliate->pivot->fee }}%
                 </div>
             </div>
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
                 <div>{{ __('Preliminary fee to be paid') }}</div>
                 <div class="font-bold">
-                    {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->multiply($reservation->affiliate->first()->pivot->fee / 100)->format() }}
+                    {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->multiply($affiliate->pivot->fee / 100)->format() }}
                 </div>
             </div>
+        </div>
+    </div>
+    @endif
+
+    @if ($reservation->dynamicPricings->count() > 0)
+    <div>
+        <div class="mb-2 content">
+            <h2 class="text-base">{{ __("Dynamic pricing policies applied") }}</h2>
+        </div>
+        <div class="card px-6 py-4 mb-6">
+            @foreach ($reservation->dynamicPricings as $pricing)
+            <div class="mb-2 border-b border-gray grid grid-cols-2 p-2">
+                <div>
+                    <div class="mb-1">{{ __('Title') }}</div>
+                    <div class="font-bold">
+                        <span class="mr-1 text-sm font-light">{{ $pricing->order }}</span>
+                        {{ $pricing->title }}
+                    </div>
+                </div>
+                <div>
+                    <div class="mb-1">{{ __('Amount') }}</div>
+                    <div class="font-bold">
+                        {{ $pricing->amount }}
+                        @if ($pricing->amount_type == 'fixed')
+                            {{ config('resrv-config.currency_symbol') }}
+                        @elseif ($pricing->amount_type == 'percent')
+                            %
+                        @endif
+                        <span class="ml-3 text-sm font-light">{{ $pricing->amount_operation }}</span>
+                    </div>
+                </div>
+              
+            </div>
+            @endforeach
         </div>
     </div>
     @endif

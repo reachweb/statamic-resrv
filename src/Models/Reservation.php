@@ -58,7 +58,7 @@ class Reservation extends Model
 
     public function dynamicPricings()
     {
-        return $this->belongsToMany(DynamicPricing::class, 'resrv_reservation_dynamic_pricing');
+        return $this->belongsToMany(DynamicPricing::class, 'resrv_reservation_dynamic_pricing')->withPivot('data');
     }
 
     public function getPriceAttribute($value)
