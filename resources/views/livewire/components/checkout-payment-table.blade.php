@@ -86,7 +86,7 @@
                         </span>
                     </div>
                 </div>
-                @if (config('resrv-config.payment') !== 'everything' )
+                @if (config('resrv-config.payment') !== 'everything' && $this->freeCancellationPossible())
                 <div class="flex justify-between items-center pt-3">
                     <div class="md:text-lg text-gray-900">
                         {{ trans('statamic-resrv::frontend.payableNow') }}
