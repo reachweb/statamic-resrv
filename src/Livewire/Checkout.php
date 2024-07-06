@@ -120,7 +120,7 @@ class Checkout extends Component
             'total' => $totals->get('total')->format(),
         ];
 
-        if (config('resrv-config.payment') == 'everything') {
+        if (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible()) {
             $toUpdate['payment'] = $totals->get('total')->format();
         }
 

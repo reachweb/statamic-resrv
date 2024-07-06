@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -59,5 +60,28 @@ trait HandlesPricing
         }
 
         return $optionsTotal;
+    }
+
+    public function freeCancellationPossible(): bool
+    {
+        if (config('resrv-config.full_payment_after_free_cancellation') === false) {
+            return true;
+        }
+        $freeCancellation = config('resrv-config.free_cancellation_period');
+        $freeCancellationDays = false;
+
+        if ($this instanceof \Reach\StatamicResrv\Livewire\AvailabilityResults) {
+            $dateStart = Carbon::parse($this->data->dates['date_start']);
+            $freeCancellationDays = Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay());
+        }
+        if ($this instanceof \Reach\StatamicResrv\Livewire\Checkout) {
+            $dateStart = Carbon::parse($this->reservation->date_start);
+            $freeCancellationDays = Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay());
+        }
+        if ($freeCancellationDays !== false && $freeCancellationDays <= $freeCancellation) {
+            return false;
+        }
+
+        return true;
     }
 }

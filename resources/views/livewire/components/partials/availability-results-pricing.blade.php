@@ -9,7 +9,7 @@
         {{ config('resrv-config.currency_symbol') }} {{ $this->calculateAvailabilityTotals($availability->get('data')['price'])->format() }}
      </div>
 </div>
-@if (config('resrv-config.payment') !== 'everything' )
+@if (config('resrv-config.payment') !== 'everything' && $this->freeCancellationPossible())
 <div class="flex items-center space-x-4 mb-2">
     <div class="flex-1 min-w-0">
         <p class="font-medium text-gray-500 truncate">

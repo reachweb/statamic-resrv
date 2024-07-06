@@ -83,6 +83,18 @@ maximum_reservation_period_in_days:
   width: 50
   type: integer
   required: true
+free_cancellation_period:
+  display: 'Free cancellation (in days)'
+  instructions: 'The period that you allow a user to cancel his reservation for free, used only for payment'
+  width: 50
+  type: integer
+  required: true
+full_payment_after_free_cancellation:
+  display: 'Require full payment if free cancellation has passed'
+  instructions: 'If the reservation creation after is after free cancellation has passed, require the full amount'
+  width: 50
+  type: toggle
+  required: true
 maximum_quantity:
   display: 'Maximum quantity'
   instructions: 'The maximum items a user can book in one reservation'

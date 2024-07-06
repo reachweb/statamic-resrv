@@ -340,4 +340,44 @@ class CheckoutTest extends TestCase
             'total' => '139.30',
         ]);
     }
+
+    /** @test */
+    public function it_charges_everything_when_after_free_cancellation_period()
+    {
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', '20');
+        Config::set('resrv-config.free_cancellation_period', 0);
+        Config::set('resrv-config.full_payment_after_free_cancellation', true);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '20.00',
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $extras = ResrvExtra::getPriceForDates($reservation);
+
+        $component = Livewire::test(Checkout::class)
+            ->set('enabledExtras.extras', collect([0 => [
+                'id' => $this->extra->id,
+                'price' => $extras->first()->price,
+                'quantity' => 1,
+            ]]))
+            ->set('enabledOptions.options', [[
+                'id' => $this->options->first()->id,
+                'value' => $this->options->first()->values->first()->id,
+                'price' => $this->options->first()->values->first()->price->format(),
+            ]])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'price' => '100',
+            'payment' => '139.30',
+            'total' => '139.30',
+        ]);
+    }
 }
