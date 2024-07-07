@@ -43,6 +43,7 @@ return [
     'reservationTotal' => 'Reservation total',
     'continueToPersonalDetails' => 'Continue to customer info',
     'continueToPayment' => 'Continue to payment',
+    'completeWithoutPayment' => 'Complete reservation and pay later',
     'personalDetails' => 'Personal details',
     'personalDetailsDescription' => 'We need some information about you to complete your reservation.',
     'pay' => 'Pay',

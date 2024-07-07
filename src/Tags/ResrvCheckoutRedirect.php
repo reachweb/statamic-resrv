@@ -10,34 +10,29 @@ class ResrvCheckoutRedirect extends Tags
     public function index(): array
     {
         $payment = app(PaymentInterface::class);
-
-        $status = $payment->handleRedirectBack();
+        $redirectData = $payment->handleRedirectBack();
 
         session()->forget('resrv-search');
         session()->forget('resrv_reservation');
 
-        if ($status === false) {
-            return $this->statusFailed();
+        if ($redirectData['status'] === false) {
+            return $this->makeResponse('failed', __('Payment failed'), __('Your payment was not successful. Please contact us or try again.'));
         }
-
-        return $this->statusSuccess();
+        if ($redirectData['status'] === true) {
+            return $this->makeResponse('success', __('Payment successful'), __('Your payment has been processed successfully. You will receive an email confirmation shortly.'), $redirectData);
+        }
+        if ($redirectData['status'] === 'pending') {
+            return $this->makeResponse('pending', __('Reservation confirmed successfully'), __('Your reservation is not confirmed, pending payment. You will receive an email confirmation shortly.'), $redirectData);
+        }
     }
 
-    protected function statusSuccess(): array
+    protected function makeResponse(string $status, string $title, string $message, array $redirectData = []): array
     {
         return [
-            'status' => 'success',
-            'title' => __('Payment successful'),
-            'message' => __('Your payment has been processed successfully. You will receive an email confirmation shortly.'),
-        ];
-    }
-
-    protected function statusFailed(): array
-    {
-        return [
-            'status' => 'success',
-            'title' => __('Payment failed'),
-            'message' => __('Your payment was not successful. Please contact us or try again.'),
+            'status' => $status,
+            'title' => $title,
+            'message' => $message,
+            'reservation' => $redirectData['reservation'] ?? [],
         ];
     }
 }

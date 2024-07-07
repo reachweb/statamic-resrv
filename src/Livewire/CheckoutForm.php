@@ -15,6 +15,9 @@ class CheckoutForm extends Component
     #[Locked]
     public Reservation $reservation;
 
+    #[Locked]
+    public bool $affiliateCanSkipPayment = false;
+
     #[Validate]
     public array $form;
 
@@ -68,6 +71,13 @@ class CheckoutForm extends Component
         $this->validate();
         $this->saveCustomer();
         $this->dispatch('checkout-form-submitted')->to(Checkout::class);
+    }
+
+    public function confirmWithoutPayment(): void
+    {
+        $this->validate();
+        $this->saveCustomer();
+        $this->dispatch('checkout-form-submitted-without-payment')->to(Checkout::class);
     }
 
     public function render()

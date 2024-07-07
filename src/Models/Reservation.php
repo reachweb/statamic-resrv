@@ -144,7 +144,7 @@ class Reservation extends Model
 
     public function amountRemaining()
     {
-        return $this->price->subtract($this->payment)->format();
+        return $this->total->subtract($this->payment)->format();
     }
 
     public function amountRemainingWithoutExtras()

@@ -1,8 +1,14 @@
+@props(['affiliateCanSkipPayment' => false])
+
 <div>
     <button
         type="button"
-        class="relative w-full px-6 py-3.5 text-base font-medium text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 
-        focus:outline-none focus:ring-blue-300 rounded-lg text-center disabled:opacity-70 transition-opacity duration-300"
+        @class([
+            'relative w-full px-6 py-3.5 text-base font-medium focus:ring-4 focus:outline-none   
+            focus:ring-blue-300 rounded-lg text-center disabled:opacity-70 transition-all duration-300',
+            'bg-blue-700 hover:bg-blue-800 text-white' => ! $affiliateCanSkipPayment,
+            'border border-blue-700 text-blue-700 hover:bg-blue-700 hover:text-white' => $affiliateCanSkipPayment
+        ])
         {{ $attributes->whereStartsWith('wire:click') }}
     >   
         <span class="absolute left-0 right-0 top-0 w-full h-full bg-white/20" wire:loading.delay.long>
@@ -13,6 +19,5 @@
             </span>
         </span>
         <span>{{ $slot }}</span>
-
     </button>
 </div>

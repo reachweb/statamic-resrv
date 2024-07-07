@@ -144,6 +144,8 @@ export default {
         badgeClass(status) {
             if (status == 'confirmed') {
                 return 'bg-green-800'
+            } else if (status == 'partner') {
+                return 'bg-green-600'
             } else if (status == 'refunded') {
                 return 'bg-yellow-800'
             } else if (status == 'expired') {

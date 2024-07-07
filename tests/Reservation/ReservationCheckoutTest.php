@@ -96,6 +96,19 @@ class ReservationCheckoutTest extends TestCase
     }
 
     /** @test */
+    public function checkout_completed_page_shows_pending()
+    {
+        $this->withFakeViews();
+
+        $this->viewShouldReturnRaw('layout', '{{ template_content }}');
+        $this->viewShouldReturnRaw('default', '{{ title }} {{ resrv_checkout_redirect }}{{ title }}{{ /resrv_checkout_redirect }}');
+
+        $this->get($this->entry->absoluteUrl().'?payment_pending=1')
+            ->assertOk()
+            ->assertSee('Reservation confirmed successfully');
+    }
+
+    /** @test */
     public function webhook_can_confirm_reservation()
     {
         Mail::fake();

@@ -22,7 +22,7 @@
                     </div>
                 @endif
                 @if ($step === 2)
-                    <livewire:checkout-form :reservation="$this->reservation" />
+                    <livewire:checkout-form :reservation="$this->reservation" :affiliateCanSkipPayment="$this->affiliateCanSkipPayment()" />
                 @endif
                 @if ($step === 3)
                     <livewire:checkout-payment :client_secret="$clientSecret" :amount="$this->reservation->payment->format()" />
