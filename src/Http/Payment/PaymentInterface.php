@@ -16,7 +16,9 @@ interface PaymentInterface
 
     public function redirectsForPayment(): bool;
 
-    public function handleRedirectBack(): bool;
+    public function handleRedirectBack(): array;
+
+    public function handlePaymentPending(): bool|array;
 
     public function verifyPayment($request);
 }

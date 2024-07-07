@@ -10,4 +10,5 @@ enum ReservationStatus: string
     case CANCELLED = 'refunded';
     case COMPLETED = 'completed';
     case EXPIRED = 'expired';
+    case PARTNER = 'partner';
 }

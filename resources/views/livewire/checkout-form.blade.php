@@ -22,4 +22,11 @@
             {{ trans('statamic-resrv::frontend.continueToPayment') }}
         </x-resrv::checkout-step-button>
     </div>
+    @if ($affiliateCanSkipPayment)
+    <div class="mt-2 xl:mt-3">
+        <x-resrv::checkout-step-button wire:click="confirmWithoutPayment()" :$affiliateCanSkipPayment>
+            {{ trans('statamic-resrv::frontend.completeWithoutPayment') }}
+        </x-resrv::checkout-step-button>
+    </div>
+    @endif
 </div>

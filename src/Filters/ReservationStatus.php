@@ -17,9 +17,10 @@ class ReservationStatus extends Filter
     {
         return [
             'status' => [
-                'type' => 'radio',
+                'type' => 'checkboxes',
                 'options' => [
                     'confirmed' => 'Confirmed',
+                    'partner' => 'Partner',
                     'refunded' => 'Refunded',
                     'pending' => 'Pending',
                     'expired' => 'Expired',
@@ -31,27 +32,18 @@ class ReservationStatus extends Filter
     public function autoApply()
     {
         return [
-            'status' => 'confirmed',
+            'status' => ['confirmed', 'partner'],
         ];
     }
 
     public function apply($query, $values)
     {
-        $query->where('status', $values['status']);
+        $query->whereIn('status', $values['status']);
     }
 
     public function badge($values)
     {
-        switch ($values['status']) {
-            case 'confirmed':
-                return 'Confirmed';
-            case 'refunded':
-                return 'Refunded';
-            case 'pending':
-                return 'Pending';
-            case 'expired':
-                return 'Expired';
-        }
+        return implode(', ', array_map('ucwords', $values['status']));
     }
 
     public function visibleTo($key)

@@ -9,6 +9,7 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
 use Livewire\Component;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -167,6 +168,35 @@ class Checkout extends Component
         $this->clientSecret = $paymentIndent->client_secret;
 
         $this->step = 3;
+    }
+
+    #[On('checkout-form-submitted-without-payment')]
+    public function handleReservationWithoutPayment()
+    {
+        // Make sure the reservation is not expired
+        try {
+            $this->confirmReservationHasNotExpired();
+        } catch (ReservationException $e) {
+            $this->addError('reservation', $e->getMessage());
+
+            return;
+        }
+
+        // Get a fresh record from the database
+        $reservation = $this->reservation->fresh();
+
+        // Ensure once again that the affiliate can confirm the reservation without payment
+        if (! $this->affiliateCanSkipPayment()) {
+            $this->addError('reservation', 'You cannot confirm this reservation without payment. Please clear your cookies and try again.');
+
+            return;
+        }
+
+        // Update the reservation status
+        $reservation->update(['status' => 'partner']);
+        ReservationConfirmed::dispatch($reservation);
+
+        return redirect()->to($this->getCheckoutCompleteEntry()->absoluteUrl().'?payment_pending='.$reservation->id);
     }
 
     protected function confirmReservationIsValid(): void

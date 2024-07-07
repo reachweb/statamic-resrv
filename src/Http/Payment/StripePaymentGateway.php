@@ -75,8 +75,13 @@ class StripePaymentGateway implements PaymentInterface
         return false;
     }
 
-    public function handleRedirectBack(): bool
+    public function handleRedirectBack(): array
     {
+
+        if ($pending = $this->handlePaymentPending()) {
+            return $pending;
+        }
+
         $paymentIntent = request()->input('payment_intent');
 
         $reservation = Reservation::findByPaymentId($paymentIntent)->first();
@@ -86,10 +91,30 @@ class StripePaymentGateway implements PaymentInterface
         $status = $stripe->paymentIntents->retrieve($paymentIntent, []);
 
         if ($status->status === 'succeeded' || $status->status === 'processing') {
-            return true;
+            return [
+                'status' => true,
+                'reservation' => $reservation->toArray(),
+            ];
         }
 
-        return false;
+        return [
+            'status' => false,
+            'reservation' => $reservation->toArray(),
+        ];
+    }
+
+    public function handlePaymentPending(): bool|array
+    {
+        if (! request()->has('payment_pending')) {
+            return false;
+        }
+
+        $reservation = Reservation::find(request()->input('payment_pending'));
+
+        return [
+            'status' => 'pending',
+            'reservation' => $reservation->toArray() ?? [],
+        ];
     }
 
     public function verifyPayment($request)
