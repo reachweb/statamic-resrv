@@ -77,7 +77,6 @@ class StripePaymentGateway implements PaymentInterface
 
     public function handleRedirectBack(): array
     {
-
         if ($pending = $this->handlePaymentPending()) {
             return $pending;
         }
