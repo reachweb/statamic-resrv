@@ -25,7 +25,7 @@ class ResrvSearch extends Scope
         $result = $this->getAvailability($searchData);
 
         // TODO: thow an exception here
-        if (isset($result['message']['status']) && $result['message']['status'] === false) {
+        if (! isset($result['data']) && $result['message']['status'] === false) {
             return $query;
         }
 
