@@ -24,6 +24,11 @@ class ResrvSearch extends Scope
 
         $result = $this->getAvailability($searchData);
 
+        // TODO: thow an exception here
+        if (isset($result['message']['status']) && $result['message']['status'] === false) {
+            return $query;
+        }
+
         return $query->whereIn('id', $result['data']->keys()->toArray());
     }
 }

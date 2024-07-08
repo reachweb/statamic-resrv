@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Livewire\Forms;
 
 use Livewire\Form;
 use Reach\StatamicResrv\Rules\ResrvMinimumDate;
+use Reach\StatamicResrv\Rules\ResrvMinimumDuration;
 
 class AvailabilityData extends Form
 {
@@ -18,7 +19,7 @@ class AvailabilityData extends Form
     public function rules(): array
     {
         return [
-            'dates' => ['required', 'array'],
+            'dates' => ['required', 'array', new ResrvMinimumDuration],
             'dates.date_start' => [
                 'required',
                 'date',

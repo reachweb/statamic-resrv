@@ -37,8 +37,9 @@
             </span>
         </div>
     </div>
-    @if ($errors->has('data.dates.date_start') || $errors->has('data.dates.date_end'))
+    @if ($errors->has('data.dates') || $errors->has('data.dates.date_start') || $errors->has('data.date_end'))
     <div class="mt-2 text-red-600 space-y-1">
+        <span class="block">{{ $errors->first('data.dates') }}</span>
         <span class="block">{{ $errors->first('data.dates.date_start') }}</span>
         <span class="block">{{ $errors->first('data.dates.date_end') }}</span>
     </div>

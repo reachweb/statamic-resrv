@@ -125,6 +125,48 @@ class AvailabilitySearchTest extends TestCase
     }
 
     /** @test */
+    public function cannot_set_dates_with_duration_smaller_than_the_allowed_period()
+    {
+        Config::set('resrv-config.minimum_reservation_period_in_days', 3);
+
+        Livewire::test(AvailabilitySearch::class)
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->assertSet('data.dates',
+                [
+                    'date_start' => $this->date,
+                    'date_end' => $this->date->copy()->add(1, 'day'),
+                ]
+            )
+            ->assertHasErrors(['data.dates'])
+            ->assertNotDispatched('availability-search-updated')
+            ->assertStatus(200);
+    }
+
+    /** @test */
+    public function cannot_set_dates_with_duration_bigger_than_the_allowed_period()
+    {
+        Config::set('resrv-config.maximum_reservation_period_in_days', 1);
+
+        Livewire::test(AvailabilitySearch::class)
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(3, 'day'),
+            ])
+            ->assertSet('data.dates',
+                [
+                    'date_start' => $this->date,
+                    'date_end' => $this->date->copy()->add(3, 'day'),
+                ]
+            )
+            ->assertHasErrors(['data.dates'])
+            ->assertNotDispatched('availability-search-updated')
+            ->assertStatus(200);
+    }
+
+    /** @test */
     public function can_set_quantity()
     {
         Livewire::test(AvailabilitySearch::class)
