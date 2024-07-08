@@ -87,7 +87,7 @@ class AvailabilitySearch extends Component
     {
         $datesAreSet = isset($this->data->dates['date_start']) && isset($this->data->dates['date_end']);
 
-        if (! $datesAreSet) {
+        if (! $datesAreSet && ! $this->anyAdvanced) {
             $this->addError('data.dates.date_start', 'Availability search requires date information to be provided.');
         }
 
