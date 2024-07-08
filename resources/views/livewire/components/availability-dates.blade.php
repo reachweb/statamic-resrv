@@ -36,14 +36,14 @@
                 </svg>   
             </span>
         </div>
+        @if ($errors->has('data.dates') || $errors->has('data.dates.date_start') || $errors->has('data.date_end'))
+        <div class="bg-white border-zinc-100 rounded-md px-4 py-2 shadow text-red-600 text-sm space-y-1" x-anchor.offset.10="$refs.dateInput">
+            <span class="block">{{ $errors->first('data.dates') }}</span>
+            <span class="block">{{ $errors->first('data.dates.date_start') }}</span>
+            <span class="block">{{ $errors->first('data.dates.date_end') }}</span>
+        </div>
+        @endif
     </div>
-    @if ($errors->has('data.dates') || $errors->has('data.dates.date_start') || $errors->has('data.date_end'))
-    <div class="mt-2 text-red-600 space-y-1">
-        <span class="block">{{ $errors->first('data.dates') }}</span>
-        <span class="block">{{ $errors->first('data.dates.date_start') }}</span>
-        <span class="block">{{ $errors->first('data.dates.date_end') }}</span>
-    </div>
-    @endif
 </div>
 
 @script
