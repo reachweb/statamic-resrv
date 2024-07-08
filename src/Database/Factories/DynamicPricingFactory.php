@@ -166,6 +166,7 @@ class DynamicPricingFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'coupon' => '20OFF',
+                'condition_value' => '1',
             ];
         });
     }

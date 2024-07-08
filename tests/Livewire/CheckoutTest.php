@@ -4,7 +4,9 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
@@ -206,6 +208,46 @@ class CheckoutTest extends TestCase
             ->assertSet('coupon', '20OFF')
             ->assertSessionHas('resrv_coupon', '20OFF')
             ->assertDispatched('coupon-applied');
+    }
+
+    /** @test */
+    public function it_dispatches_coupon_updated_event_on_add()
+    {
+        Event::fake();
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->dispatch('coupon-applied', $dynamic->coupon);
+
+        Event::assertDispatched(CouponUpdated::class, function ($event) use ($dynamic) {
+            return $event->coupon === $dynamic->coupon;
+        });
+    }
+
+    /** @test */
+    public function it_dispatches_coupon_updated_event_on_remove()
+    {
+        Event::fake();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->dispatch('coupon-removed', 'something', true);
+
+        Event::assertDispatched(CouponUpdated::class, function ($event) {
+            return $event->remove === true;
+        });
     }
 
     /** @test */

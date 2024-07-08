@@ -9,6 +9,7 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
 use Livewire\Component;
+use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
@@ -244,7 +245,7 @@ class Checkout extends Component
         $data = validator(['coupon' => $coupon], ['coupon' => 'required|alpha_dash'], ['coupon' => 'The coupon code is invalid.'])->validate();
 
         try {
-            DynamicPricing::searchForCoupon($data['coupon'], $this->reservation->id);
+            $couponModel = DynamicPricing::searchForCoupon($data['coupon'], $this->reservation->id);
         } catch (CouponNotFoundException $exception) {
             $this->addError('coupon', $exception->getMessage());
 
@@ -253,18 +254,18 @@ class Checkout extends Component
         session(['resrv_coupon' => $data['coupon']]);
         $this->coupon = $data['coupon'];
         $this->resetValidation('coupon');
-        $this->dispatch('coupon-applied');
+        $this->dispatch('coupon-applied', $this->coupon);
     }
 
     public function removeCoupon()
     {
+        $this->dispatch('coupon-removed', $this->coupon, true);
         session()->forget('resrv_coupon');
         $this->coupon = null;
-        $this->dispatch('coupon-removed');
     }
 
     #[On('coupon-applied'), On('coupon-removed')]
-    public function updateTotals(): void
+    public function updateTotals($coupon, $removeCoupon = false): void
     {
         // Get the prices after applying the coupon
         $prices = $this->getUpdatedPrices();
@@ -277,6 +278,7 @@ class Checkout extends Component
         // Update pricing
         $this->updateEnabledExtraPrices();
         $this->calculateReservationTotals();
+        CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
     }
 
     public function render()

@@ -8,9 +8,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Data\ReservationData;
+use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
+use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Models\Affiliate;
@@ -233,6 +235,65 @@ class ReservationCheckoutTest extends TestCase
                 'dynamic_pricing_id' => $dynamicCoupon->id,
             ]
         );
+    }
+
+    /** @test */
+    public function test_listener_listens_to_coupon_updated_event()
+    {
+        Event::fake();
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        event(new CouponUpdated($this->reservation, $dynamic->coupon));
+
+        Event::assertListening(
+            CouponUpdated::class,
+            UpdateCouponAppliedToReservation::class,
+        );
+    }
+
+    /** @test */
+    public function test_coupon_updated_event_adds_and_removes_coupon_from_reservation()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        event(new CouponUpdated($this->reservation, $dynamic->coupon));
+
+        $this->assertDatabaseHas('resrv_reservation_dynamic_pricing',
+            [
+                'reservation_id' => 1,
+                'dynamic_pricing_id' => $dynamic->id,
+            ]
+        );
+
+        $this->assertDatabaseCount('resrv_reservation_dynamic_pricing', 1);
+
+        event(new CouponUpdated($this->reservation, $dynamic->coupon));
+
+        $this->assertDatabaseCount('resrv_reservation_dynamic_pricing', 1);
+
+        event(new CouponUpdated($this->reservation, $dynamic->coupon, true));
+
+        $this->assertDatabaseMissing('resrv_reservation_dynamic_pricing',
+            [
+                'reservation_id' => 1,
+                'dynamic_pricing_id' => $dynamic->id,
+            ]
+        );
+
+        $this->assertDatabaseCount('resrv_reservation_dynamic_pricing', 0);
     }
 
     /** @test */

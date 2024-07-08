@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Providers;
 
 use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
+use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
@@ -30,6 +31,7 @@ use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Listeners\UpdateConnectedAvailabilities;
+use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
@@ -93,6 +95,9 @@ class ResrvProvider extends AddonServiceProvider
         ReservationRefunded::class => [
             SendRefundReservationEmails::class,
             IncreaseAvailability::class,
+        ],
+        CouponUpdated::class => [
+            UpdateCouponAppliedToReservation::class,
         ],
         AvailabilitySearch::class => [
             SaveSearchToSession::class,
