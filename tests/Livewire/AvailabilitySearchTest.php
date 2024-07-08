@@ -190,6 +190,23 @@ class AvailabilitySearchTest extends TestCase
     }
 
     /** @test */
+    public function cannot_set_quantity_greater_than_max_quantity()
+    {
+        Config::set('resrv-config.maximum_quantity', 2);
+
+        Livewire::test(AvailabilitySearch::class)
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->set('data.quantity', 3)
+            ->assertSet('data.quantity', 3)
+            ->assertHasErrors(['data.quantity'])
+            ->assertNotDispatched('availability-search-updated')
+            ->assertStatus(200);
+    }
+
+    /** @test */
     public function can_set_enable_quantity_property_and_shows_the_control()
     {
         $component = Livewire::test(AvailabilitySearch::class, ['enableQuantity' => true])
