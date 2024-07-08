@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -347,6 +348,129 @@ class ConnectedAvailabilityFrontTest extends TestCase
             'statamic_id' => $item2->id(),
             'available' => 2,
             'property' => 'something-else',
+        ]);
+    }
+
+    public function test_connected_availability_gets_updated_on_select_multiple()
+    {
+        Config::set('resrv-config.enable_connected_availabilities', true);
+
+        $item = $this->makeStatamicItem();
+
+        Blueprint::find('collections.pages.pages')->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'advanced_availability' => [
+                                    'morning' => 'Morning',
+                                    'afternoon' => 'Afternoon',
+                                    'fullday' => 'Full day',
+                                ],
+                                'connected_availabilities' => 'select',
+                                'manual_connected_availabilities' => [
+                                    'morning' => 'fullday',
+                                    'afternoon' => 'fullday',
+                                    'fullday' => 'morning,afternoon',
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ])->save();
+
+        $item->save();
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item->id(),
+                    'property' => 'morning',
+                    'available' => 1,
+                ]
+            );
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item->id(),
+                    'property' => 'afternoon',
+                    'available' => 1,
+                ]
+            );
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item->id(),
+                    'property' => 'fullday',
+                    'available' => 1,
+                ]
+            );
+
+        $reservation = Reservation::factory()
+            ->create(
+                [
+                    'item_id' => $item->id(),
+                    'property' => 'morning',
+                ]
+            );
+
+        Event::dispatch(new ReservationCreated($reservation));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 0,
+            'property' => 'fullday',
+        ]);
+
+        $reservation2 = Reservation::factory()
+            ->advanced()
+            ->create(
+                [
+                    'item_id' => $item->id(),
+                    'property' => 'afternoon',
+                ]
+            );
+
+        Event::dispatch(new ReservationCreated($reservation2));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 0,
+            'property' => 'fullday',
+        ]);
+
+        Event::dispatch(new ReservationExpired($reservation));
+        Event::dispatch(new ReservationExpired($reservation2));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 1,
+            'property' => 'fullday',
         ]);
     }
 }
