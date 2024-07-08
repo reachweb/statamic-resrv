@@ -122,7 +122,7 @@ Alpine.data('guests', () => ({
 
     init() {
         if (this.adults === undefined) {
-            this.adults = 2;
+            this.adults = 1;
             $wire.set('data.customer.adults', 1);
         }
         if (this.children === undefined) {
