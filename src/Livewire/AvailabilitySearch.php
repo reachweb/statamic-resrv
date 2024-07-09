@@ -34,7 +34,7 @@ class AvailabilitySearch extends Component
 
     public function boot(): void
     {
-        if ($this->resetAdvancedOnBoot) {
+        if ($this->resetAdvancedOnBoot && $this->data->advanced !== null) {
             $this->data->advanced = null;
             $this->search();
         }
