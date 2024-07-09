@@ -92,13 +92,13 @@ class StripePaymentGateway implements PaymentInterface
         if ($status->status === 'succeeded' || $status->status === 'processing') {
             return [
                 'status' => true,
-                'reservation' => $reservation->toArray(),
+                'reservation' => $reservation ? $reservation->toArray() : [],
             ];
         }
 
         return [
             'status' => false,
-            'reservation' => $reservation->toArray(),
+            'reservation' => $reservation ? $reservation->toArray() : [],
         ];
     }
 
@@ -112,7 +112,7 @@ class StripePaymentGateway implements PaymentInterface
 
         return [
             'status' => 'pending',
-            'reservation' => $reservation->toArray() ?? [],
+            'reservation' => $reservation ? $reservation->toArray() : [],
         ];
     }
 

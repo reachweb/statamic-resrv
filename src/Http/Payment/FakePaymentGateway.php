@@ -78,7 +78,7 @@ class FakePaymentGateway implements PaymentInterface
 
         return [
             'status' => 'pending',
-            'reservation' => $reservation->toArray() ?? [],
+            'reservation' => $reservation ? $reservation->toArray() : [],
         ];
     }
 
