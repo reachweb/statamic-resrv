@@ -73,7 +73,7 @@ class AvailabilityRepository
                         $query->whereIn('property', $advanced);
                     }
                 })
-                ->lockForUpdate()
+                ->sharedLock()
                 ->get();
 
             foreach ($availabilities as $availability) {
@@ -105,7 +105,7 @@ class AvailabilityRepository
                         $query->whereIn('property', $advanced);
                     }
                 })
-                ->lockForUpdate()
+                ->sharedLock()
                 ->get();
 
             foreach ($availabilities as $availability) {
