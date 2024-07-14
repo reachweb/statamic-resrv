@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Jonassiewertsen\Livewire\RestoreCurrentSite;
 use Reach\StatamicResrv\Exceptions\BlueprintNotFoundException;
 use Reach\StatamicResrv\Exceptions\CheckoutEntryNotFound;
 use Reach\StatamicResrv\Exceptions\FieldNotFoundException;
@@ -11,6 +12,8 @@ use Statamic\Facades\Entry;
 
 trait HandlesStatamicQueries
 {
+    use RestoreCurrentSite;
+
     public function getProperties()
     {
         return $this->getPropertiesFromBlueprint();
@@ -48,6 +51,10 @@ trait HandlesStatamicQueries
     public function getCheckoutEntry()
     {
         if ($entry = Entry::find(config('resrv-config.checkout_entry'))) {
+            if ($localizedCheckout = $this->getLocalizedEntry($entry)) {
+                return $localizedCheckout;
+            }
+
             return $entry;
         }
         throw new CheckoutEntryNotFound();
@@ -56,9 +63,24 @@ trait HandlesStatamicQueries
     public function getCheckoutCompleteEntry()
     {
         if ($entry = Entry::find(config('resrv-config.checkout_completed_entry'))) {
+            if ($localizedComplete = $this->getLocalizedEntry($entry)) {
+                return $localizedComplete;
+            }
+
             return $entry;
         }
         throw new CheckoutEntryNotFound();
+    }
+
+    public function getLocalizedEntry($entry)
+    {
+        if ($localizedEntry = $entry->in(Site::current()->handle())) {
+            if ($this->isSafe($localizedEntry)) {
+                return $localizedEntry;
+            }
+        }
+
+        return false;
     }
 
     public function getEntry($id)
