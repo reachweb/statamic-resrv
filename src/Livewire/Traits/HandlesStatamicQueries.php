@@ -88,4 +88,11 @@ trait HandlesStatamicQueries
     {
         return Entry::find($id);
     }
+
+    public function isSafe($content)
+    {
+        return $content->published()
+            && ! $content->private()
+            && $content->url();
+    }
 }
