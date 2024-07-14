@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Exceptions\FieldNotFoundException;
 use Reach\StatamicResrv\Exceptions\NoAdvancedAvailabilitySet;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Entry;
+use Statamic\Facades\Site;
 
 trait HandlesStatamicQueries
 {
