@@ -101,6 +101,10 @@ class AvailabilitySearch extends Component
         $this->resetValidation();
 
         $this->dispatch('availability-search-updated', $this->data);
+
+        if (! $this->live) {
+            $this->dispatch('availability-results-updated');
+        }
     }
 
     public function render()
