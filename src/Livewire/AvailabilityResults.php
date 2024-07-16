@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
+use Statamic\Entries\Entry;
 
 class AvailabilityResults extends Component
 {
@@ -100,6 +101,12 @@ class AvailabilityResults extends Component
         }
 
         return collect();
+    }
+
+    #[Computed(persist: true)]
+    public function entry(): ?Entry
+    {
+        return $this->getEntry($this->entryId) ?? null;
     }
 
     #[On('availability-search-updated')]

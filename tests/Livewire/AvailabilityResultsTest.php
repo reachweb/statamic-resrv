@@ -67,6 +67,15 @@ class AvailabilityResultsTest extends TestCase
     }
 
     /** @test */
+    public function can_access_the_statamic_entry()
+    {
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->assertStatus(200);
+
+        $this->assertEquals($this->entries->first(), $component->entry);
+    }
+
+    /** @test */
     public function listens_to_the_availability_search_updated_event()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
