@@ -1,0 +1,19 @@
+{
+  "resources/css/resrv.css": {
+    "file": "assets/resrv-9e6f56f9.css",
+    "isEntry": true,
+    "src": "resources/css/resrv.css"
+  },
+  "resources/js/resrv.css": {
+    "file": "assets/resrv-253fab7e.css",
+    "src": "resources/js/resrv.css"
+  },
+  "resources/js/resrv.js": {
+    "css": [
+      "assets/resrv-253fab7e.css"
+    ],
+    "file": "assets/resrv-2724d2f9.js",
+    "isEntry": true,
+    "src": "resources/js/resrv.js"
+  }
+}

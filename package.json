@@ -1,22 +1,21 @@
 {
+    "name": "statamic-resrv",
     "private": true,
     "scripts": {
-        "development": "mix",
-        "watch": "mix watch",
-        "watch-poll": "mix watch -- --watch-options-poll=1000",
-        "hot": "mix watch --hot",
-        "production": "mix --production"
+        "dev": "rm -rf resources/dist/build && vite",
+        "build": "vite build",
+        "frontend-dev": "vite -c vite-frontend.config.js",
+        "frontend-build": "vite build -c vite-frontend.config.js"
     },
     "devDependencies": {
-        "autoprefixer": "^10.0.2",
+        "@tailwindcss/forms": "^0.5.7",
+        "@vitejs/plugin-vue2": "^2.2.0",
+        "autoprefixer": "^10.4.0",
         "cross-env": "^7.0.3",
-        "laravel-mix": "^6.0.0",
-        "postcss-import": "^14.1.0",
-        "postcss-nested": "^5.0.6",
-        "postcss-preset-env": "^7.4.3",
-        "vue": "^2.7.16",
-        "vue-loader": "^15.11.1",
-        "vue-template-compiler": "^2.7.16"
+        "laravel-vite-plugin": "^0.7.2",
+        "postcss": "^8.4.31",
+        "vite": "^4.5.3",
+        "vue": "^2.7.16"
     },
     "dependencies": {
         "@fullcalendar/core": "^6.1.0",
@@ -25,6 +24,7 @@
         "@fullcalendar/vue": "^6.1.0",
         "axios": "^1.6.0",
         "dayjs": "^1.10.4",
+        "flatpickr": "^4.6.13",
         "lodash": "^4.17.21",
         "tailwindcss": "^3.3.0",
         "vue-select": "^3.11.2",

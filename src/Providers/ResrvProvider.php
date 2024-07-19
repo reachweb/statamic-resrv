@@ -114,12 +114,17 @@ class ResrvProvider extends AddonServiceProvider
         ],
     ];
 
-    protected $scripts = [
-        __DIR__.'/../../public/js/resrv.js',
+    protected $vite = [ 
+        'input' => [
+            'resources/js/resrv.js',
+            'resources/css/resrv.css',
+        ],
+        'publicDirectory' => 'resources/dist',
+        'hotFile' => __DIR__.'/../../resources/dist/hot',
     ];
 
-    protected $stylesheets = [
-        __DIR__.'/../../public/css/resrv.css',
+    protected $publishables = [
+        __DIR__.'/../resources/frontend' => 'frontend',
     ];
 
     public function boot(): void

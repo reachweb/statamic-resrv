@@ -1,9 +1,10 @@
 .DS_Store
 .idea
-build
 docs
 vendor
 coverage
 /node_modules/
 .phpunit.result.cache
 .phpunit.cache/test-results
+/resources/dist/hot
+/resources/frontend/hot
