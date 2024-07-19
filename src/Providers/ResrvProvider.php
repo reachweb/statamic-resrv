@@ -114,7 +114,7 @@ class ResrvProvider extends AddonServiceProvider
         ],
     ];
 
-    protected $vite = [ 
+    protected $vite = [
         'input' => [
             'resources/js/resrv.js',
             'resources/css/resrv.css',
