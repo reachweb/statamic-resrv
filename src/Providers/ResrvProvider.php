@@ -124,7 +124,7 @@ class ResrvProvider extends AddonServiceProvider
     ];
 
     protected $publishables = [
-        __DIR__.'/../resources/frontend' => 'frontend',
+        __DIR__.'/../../resources/frontend' => 'frontend',
     ];
 
     public function boot(): void
