@@ -48,9 +48,7 @@ class OptionValue extends Model
     {
         $this->initiateAvailabilityUnsafe($data);
 
-        $basePrice = $this->calculatePrice($data);
-
-        return $this->applyQuantityIfNeeded($basePrice)->format();
+        return $this->calculatePrice($data)->format();
     }
 
     public function calculatePrice($data)
@@ -59,21 +57,14 @@ class OptionValue extends Model
             return $this->price;
         }
         $this->initiateAvailabilityUnsafe($data);
+        $applyQuantity = $this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false);
+
         if ($this->price_type == 'fixed') {
-            return $this->price;
+            return $applyQuantity ? $this->price->multiply($this->quantity) : $this->price;
         }
         if ($this->price_type == 'perday') {
-            return $this->price->multiply($this->duration);
+            return $applyQuantity ? $this->price->multiply($this->duration)->multiply($this->quantity) : $this->price->multiply($this->duration);
         }
-    }
-
-    private function applyQuantityIfNeeded($price)
-    {
-        if ($this->quantity > 1 && config('resrv-config.ignore_quantity_for_prices', false) === false) {
-            $price = $price->multiply($this->quantity);
-        }
-
-        return $price;
     }
 
     public function changeOrder($order)
