@@ -116,7 +116,7 @@ class Extra extends Model
 
     private function applyQuantityIfNeeded($price)
     {
-    if ($this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false)) {
+        if ($this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false)) {
             $price = $price->multiply($this->quantity);
         }
 
