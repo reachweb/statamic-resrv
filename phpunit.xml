@@ -32,5 +32,6 @@
     <env name="MAIL_USERNAME" value="0e08d400c9e1ce"/>
     <env name="MAIL_PASSWORD" value="d9d25da57f916b"/>
     <env name="MAIL_ENCRYPTION" value="tls"/>
+    <ini name="memory_limit" value="512M"/>
   </php>
 </phpunit>
