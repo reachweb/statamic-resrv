@@ -23,6 +23,7 @@ return [
      * minimum_reservation_period_in_days: the minimum days for a reservation
      * maximum_reservation_period_in_day: the maximum days for a reservation
      * maximum_quantity: the maximum items a user can book in one reservation
+     * ignore_quantity_for_prices: use quantity for availability calculations but ignore it for pricing
      * free_cancellation_period: the number of days a user can cancel a reservation without being charged
      * full_payment_after_free_cancellation: If the reservation creation after is after free cancellation has passed, require the full amount
      * calculate_days_using_time: if true every reservation will charge a day for drop off time after pick up
@@ -35,6 +36,7 @@ return [
     'minimum_reservation_period_in_days' => 1,
     'maximum_reservation_period_in_days' => 30,
     'maximum_quantity' => 8,
+    'ignore_quantity_for_prices' => false,
     'free_cancellation_period' => 0,
     'full_payment_after_free_cancellation' => false,
     'calculate_days_using_time' => false,

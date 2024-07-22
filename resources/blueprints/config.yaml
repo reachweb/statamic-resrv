@@ -98,7 +98,14 @@ full_payment_after_free_cancellation:
 maximum_quantity:
   display: 'Maximum quantity'
   instructions: 'The maximum items a user can book in one reservation'
+  width: 50
   type: integer
+  required: true
+ignore_quantity_for_prices:
+  display: 'Ignore quantity for prices'
+  instructions: 'Use quantity for availability calculations but ignore it for pricing'
+  width: 50
+  type: toggle
   required: true
 calculate_days_using_time:
   display: 'Calculate days using time'
