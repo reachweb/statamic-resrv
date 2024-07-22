@@ -65,21 +65,62 @@ class Extra extends Model
     public function priceForDates($data)
     {
         $this->initiateAvailabilityUnsafe($data);
+        $this->applyDynamicPricing();
+
+        $basePrice = $this->calculatePriceByType($data);
+
+        return $this->applyQuantityIfNeeded($basePrice)->format();
+    }
+
+    private function applyDynamicPricing()
+    {
         $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
         if ($dynamicPricing) {
             $this->price = $dynamicPricing->apply($this->price)->format();
         }
-        if ($this->price_type == 'relative') {
-            return $this->price->multiply($this->getRelativePrice($data))->multiply($this->quantity)->format();
+    }
+
+    private function calculatePriceByType($data)
+    {
+        switch ($this->price_type) {
+            case 'relative':
+                return $this->calculateRelativePrice($data);
+            case 'perday':
+                return $this->calculatePerDayPrice();
+            case 'custom':
+                return $this->calculateCustomPrice($data);
+            default:
+                return $this->calculateDefaultPrice();
         }
-        if ($this->price_type == 'perday') {
-            return $this->price->multiply($this->duration)->multiply($this->quantity)->format();
-        }
-        if ($this->price_type == 'custom') {
-            return $this->price->multiply($this->getCustomPrice($data))->multiply($this->quantity)->format();
+    }
+
+    private function calculateRelativePrice($data)
+    {
+        return $this->price->multiply($this->getRelativePrice($data));
+    }
+
+    private function calculatePerDayPrice()
+    {
+        return $this->price->multiply($this->duration);
+    }
+
+    private function calculateCustomPrice($data)
+    {
+        return $this->price->multiply($this->getCustomPrice($data));
+    }
+
+    private function calculateDefaultPrice()
+    {
+        return $this->price;
+    }
+
+    private function applyQuantityIfNeeded($price)
+    {
+        if ($this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false)) {
+            $price = $price->multiply($this->quantity);
         }
 
-        return $this->price->multiply($this->quantity)->format();
+        return $price;
     }
 
     public function priceForReservation($reservation)

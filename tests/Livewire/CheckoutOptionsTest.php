@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\Option;
@@ -29,7 +30,6 @@ class CheckoutOptionsTest extends TestCase
         $this->entries = $this->createEntries();
         $this->travelTo(today()->setHour(12));
         $this->reservation = Reservation::factory()->create([
-
             'item_id' => $this->entries->first()->id(),
         ]);
 
@@ -44,6 +44,38 @@ class CheckoutOptionsTest extends TestCase
     public function loads_options_for_the_entry()
     {
         session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->assertEquals('Reservation option', $component->options->first()->name);
+        $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
+    }
+
+    /** @test */
+    public function loads_options_for_the_entry_with_correct_price_for_extra_quantity()
+    {
+        $reservation = Reservation::factory()->create([
+            'quantity' => 2,
+            'item_id' => $this->entries->first()->id(),
+        ]);
+        session(['resrv_reservation' => $reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->assertEquals('Reservation option', $component->options->first()->name);
+        $this->assertEquals('91.00', $component->options->first()->values->first()->price->format());
+    }
+
+    /** @test */
+    public function loads_options_for_the_entry_with_extra_quantity_but_same_price_if_configured()
+    {
+        Config::set('resrv-config.ignore_quantity_for_prices', true);
+
+        $reservation = Reservation::factory()->create([
+            'quantity' => 2,
+            'item_id' => $this->entries->first()->id(),
+        ]);
+        session(['resrv_reservation' => $reservation->id]);
 
         $component = Livewire::test(Checkout::class);
 

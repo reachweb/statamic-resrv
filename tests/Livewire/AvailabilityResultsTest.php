@@ -162,6 +162,50 @@ class AvailabilityResultsTest extends TestCase
     }
 
     /** @test */
+    public function returns_correct_price_for_extra_quantity()
+    {
+        Availability::where('statamic_id', $this->entries->first()->id())
+            ->update(['available' => 2]);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 2,
+                    'advanced' => null,
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '200.00');
+    }
+
+    /** @test */
+    public function returns_same_price_for_extra_quantity_if_configured()
+    {
+        Config::set('resrv-config.ignore_quantity_for_prices', true);
+
+        Availability::where('statamic_id', $this->entries->first()->id())
+            ->update(['available' => 2]);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 2,
+                    'advanced' => null,
+                ]
+            )
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '100.00');
+    }
+
+    /** @test */
     public function returns_availability_for_extra_requested_days()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'extraDays' => 2])

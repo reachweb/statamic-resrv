@@ -57,11 +57,13 @@ class OptionValue extends Model
             return $this->price;
         }
         $this->initiateAvailabilityUnsafe($data);
+        $applyQuantity = $this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false);
+
         if ($this->price_type == 'fixed') {
-            return $this->price->multiply($this->quantity);
+            return $applyQuantity ? $this->price->multiply($this->quantity) : $this->price;
         }
         if ($this->price_type == 'perday') {
-            return $this->price->multiply($this->duration)->multiply($this->quantity);
+            return $applyQuantity ? $this->price->multiply($this->duration)->multiply($this->quantity) : $this->price->multiply($this->duration);
         }
     }
 

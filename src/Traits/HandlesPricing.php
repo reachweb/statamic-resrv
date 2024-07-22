@@ -67,7 +67,7 @@ trait HandlesPricing
             $reservationPrice = $discountedPrice;
         }
 
-        if ($this->quantity > 1) {
+        if ($this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false)) {
             $reservationPrice = $reservationPrice->multiply($this->quantity);
             if ($originalPrice !== null) {
                 $originalPrice = $originalPrice->multiply($this->quantity);

@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
@@ -68,6 +69,23 @@ class CheckoutExtrasTest extends TestCase
         $component = Livewire::test(Checkout::class);
 
         $this->assertEquals('18.60', $component->extras->first()->price);
+    }
+
+    /** @test */
+    public function loads_extras_for_the_reservation_with_extra_quantity_but_same_price_if_configured()
+    {
+        Config::set('resrv-config.ignore_quantity_for_prices', true);
+
+        $extraQuantityReservation = Reservation::factory()->create([
+            'item_id' => $this->entries->first()->id(),
+            'quantity' => 2,
+        ]);
+
+        session(['resrv_reservation' => $extraQuantityReservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->assertEquals('9.30', $component->extras->first()->price);
     }
 
     /** @test */
