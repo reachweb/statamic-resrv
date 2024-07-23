@@ -150,6 +150,24 @@ class CheckoutTest extends TestCase
     }
 
     /** @test */
+    public function it_redirects_to_the_checkout_complete_page_if_the_reservation_payment_is_zero()
+    {
+        Event::fake();
+
+        $reservation = Reservation::factory()->create([
+            'price' => '0',
+            'payment' => '0',
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->assertRedirect(Entry::find(Config::get('resrv-config.checkout_completed_entry'))->absoluteUrl().'?payment_pending='.$reservation->id);
+    }
+
+    /** @test */
     public function it_shows_an_arror_if_the_reservation_is_expired()
     {
         $reservation = Reservation::factory()->expired()->create([

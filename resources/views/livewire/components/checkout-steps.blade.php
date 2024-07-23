@@ -27,7 +27,8 @@
     <li 
         wire:click="{{ $step > 2 ? 'goToStep(2)' : '' }}" 
         @class([
-            "flex md:w-full items-center md:after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-200 after:border-1 after:hidden md:after:inline-block after:mx-6 transition-colors duration-300", 
+            "flex md:w-full items-center transition-colors duration-300", 
+            "md:after:content-[''] after:w-full after:h-1 after:border-b after:border-gray-200 after:border-1 after:hidden md:after:inline-block after:mx-6" => ! $this->reservation->payment->isZero(),
             "text-blue-600" => $step === 2,
             "cursor-pointer" => $step > 2,
             ])
@@ -45,6 +46,7 @@
             {{ trans('statamic-resrv::frontend.customerInfo') }}
         </span>
     </li>
+    @if (! $this->reservation->payment->isZero())
     <li @class(["flex items-center transition-colors duration-300", "text-blue-600" => $step === 3])>
         <span class="flex flex-shrink-0 items-center">
             @if ($step === 3)
@@ -59,4 +61,5 @@
             {{ trans('statamic-resrv::frontend.payment') }}
         </span>
     </li>
+    @endif
 </ol>

@@ -76,4 +76,9 @@ trait HandlesReservationQueries
     {
         return (new Availability)->getPricing($this->getAvailabilityDataFromReservation(), $this->reservation->item_id);
     }
+
+    public function reservationPaymentIsZero(): bool
+    {
+        return $this->reservation->payment->isZero();
+    }
 }

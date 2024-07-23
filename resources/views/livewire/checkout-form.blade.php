@@ -19,7 +19,11 @@
     </div>
     <div class="mt-6 xl:mt-8">
         <x-resrv::checkout-step-button wire:click="submit()">
-            {{ trans('statamic-resrv::frontend.continueToPayment') }}
+            @if ($this->reservation->payment->isZero())
+                {{ trans('statamic-resrv::frontend.confirmReservation') }}
+            @else
+                {{ trans('statamic-resrv::frontend.continueToPayment') }}
+            @endif
         </x-resrv::checkout-step-button>
     </div>
     @if ($affiliateCanSkipPayment)
