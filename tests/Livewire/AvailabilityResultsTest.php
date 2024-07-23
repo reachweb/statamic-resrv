@@ -717,6 +717,51 @@ class AvailabilityResultsTest extends TestCase
     }
 
     /** @test */
+    public function starts_checkout_correctly_when_extra_quantity_is_ignored_for_pricing()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+        Config::set('resrv-config.ignore_quantity_for_prices', true);
+
+        Availability::where('statamic_id', $this->advancedEntries->first()->id())
+            ->update(['available' => 3]);
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 3,
+                    'advanced' => 'test',
+                ]
+            );
+
+        $availability = $component->viewData('availability');
+
+        $component->call('checkout');
+
+        $this->assertDatabaseHas('resrv_reservations',
+            [
+                'item_id' => $this->advancedEntries->first()->id(),
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(2, 'day'),
+                'quantity' => 3,
+                'property' => 'test',
+                'payment' => data_get($availability, 'data.payment'),
+                'price' => data_get($availability, 'data.price'),
+            ]
+        );
+    }
+
+    /** @test */
     public function redirects_to_checkout_after_reservation_is_created()
     {
         $entry = Entry::make()

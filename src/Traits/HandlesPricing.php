@@ -26,7 +26,7 @@ trait HandlesPricing
         // Apply dynamic pricing
         $this->applyDynamicPricing($id);
 
-        if ($this->quantity > 1) {
+        if ($this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false)) {
             $this->reservation_price = $this->reservation_price->multiply($this->quantity);
         }
     }
