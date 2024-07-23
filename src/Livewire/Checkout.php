@@ -139,6 +139,11 @@ class Checkout extends Component
     #[On('checkout-form-submitted')]
     public function handleSecondStep()
     {
+        // If the payment amount is zero, just show the confirmation page
+        if ($this->reservationPaymentIsZero()) {
+            return $this->handleReservationWithZeroPayment();
+        }
+
         // Make sure the reservation is not expired
         try {
             $this->confirmReservationHasNotExpired();
@@ -198,6 +203,21 @@ class Checkout extends Component
         ReservationConfirmed::dispatch($reservation);
 
         return redirect()->to($this->getCheckoutCompleteEntry()->absoluteUrl().'?payment_pending='.$reservation->id);
+    }
+
+    protected function handleReservationWithZeroPayment()
+    {
+        // Ensure once again that the total is zero
+        if (! $this->reservationPaymentIsZero()) {
+            $this->addError('reservation', 'We cannot confirm this reservation. Please try again.');
+
+            return;
+        }
+
+        // Update the reservation status
+        ReservationConfirmed::dispatch($this->reservation);
+
+        return redirect()->to($this->getCheckoutCompleteEntry()->absoluteUrl().'?payment_pending='.$this->reservation->id);
     }
 
     protected function confirmReservationIsValid(): void
