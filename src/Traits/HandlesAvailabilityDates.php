@@ -37,8 +37,9 @@ trait HandlesAvailabilityDates
 
     protected function checkMinimumDate($date_start)
     {
-        if (config('resrv-config.minimum_days_before')) {
-            if ($date_start->diffInDays(Carbon::now()->startOfDay()) < config('resrv-config.minimum_days_before')) {
+        if (config('resrv-config.minimum_days_before') > 0) {
+            $date = Carbon::create($date_start->year, $date_start->month, $date_start->day, 0, 0, 0);
+            if ($date->diffInDays(Carbon::now()->startOfDay()) < config('resrv-config.minimum_days_before')) {
                 throw new AvailabilityException(__('Your pickup date is closer than allowed.'));
             }
         }

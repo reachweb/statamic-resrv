@@ -55,6 +55,21 @@ class AvailabilitySearchTest extends TestCase
     }
 
     /** @test */
+    public function cannot_set_dates_closer_than_allowed()
+    {
+        Config::set('resrv-config.minimum_days_before', 1);
+
+        Livewire::test(AvailabilitySearch::class)
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->assertHasErrors(['data.dates.date_start'])
+            ->assertNotDispatched('availability-search-updated')
+            ->assertStatus(200);
+    }
+
+    /** @test */
     public function does_not_dispatch_if_live_is_false_unless_search_is_called()
     {
         Livewire::test(AvailabilitySearch::class, ['live' => false])

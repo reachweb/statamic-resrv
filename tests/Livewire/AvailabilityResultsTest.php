@@ -162,6 +162,26 @@ class AvailabilityResultsTest extends TestCase
     }
 
     /** @test */
+    public function returns_no_availability_if_date_is_too_close()
+    {
+        Config::set('resrv-config.minimum_days_before', 2);
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertHasErrors('availability')
+            ->assertSee('The starting date is closer than allowed');
+    }
+
+    /** @test */
     public function returns_correct_price_for_extra_quantity()
     {
         Availability::where('statamic_id', $this->entries->first()->id())

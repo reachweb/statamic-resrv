@@ -15,9 +15,12 @@ class ResrvMinimumDate implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        if (config('resrv-config.minimum_days_before')) {
-            $value = Carbon::parse($value);
-            if ($value->diffInDays(Carbon::now()->startOfDay()) < config('resrv-config.minimum_days_before')) {
+        if (config('resrv-config.minimum_days_before') > 0) {
+            // We do a double create to get rid of the user's timezone
+            $value = Carbon::create($value);
+            $date = Carbon::create($value->year, $value->month, $value->day, 0, 0, 0);
+
+            if ($date->diffInDays(Carbon::now()->startOfDay()) < config('resrv-config.minimum_days_before')) {
                 $fail('The :attribute is closer than allowed.');
             }
         }
