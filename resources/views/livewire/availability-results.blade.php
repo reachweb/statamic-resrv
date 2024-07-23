@@ -48,13 +48,13 @@
         <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.multipleAvailable') }}</dt>
         <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.pleaseSelectProperty') }}</dd>
     </div>
-    @elseif (! $errors->has('availability'))
+    @elseif ($availability->count() === 0)
     <div class="flex flex-col py-4">
         <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.noAvailability') }}</dt>
         <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.tryAdjustingYourSearch') }}</dd>
     </div>
     @endif
-    @if ($errors->has('availability'))
+    @if ($errors->has('availability') && $availability->count() !== 0)
     <div class="flex flex-col py-4">
         <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.searchError') }}</dt>
         <dd class="mb-1 text-gray-500">{{ $errors->first('availability') }}</dd>
