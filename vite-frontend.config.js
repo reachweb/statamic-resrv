@@ -1,17 +1,26 @@
 import { defineConfig } from 'vite';
-import laravel from 'laravel-vite-plugin';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 
 export default defineConfig({
-    plugins: [
-        laravel({
-            hotFile: 'resources/frontend/hot',
-            publicDirectory: "resources/frontend",
-            input: ['resources/css/resrv-frontend.css', 'resources/js/resrv-frontend.js'],
-            refresh: true,
-        }),
-    ],
+    build: {
+        outDir: 'resources/frontend',
+        rollupOptions: {
+            input: {
+                main: 'resources/js/resrv-frontend.js',
+                tailwind: 'resources/css/resrv-tailwind.css'
+            },
+            output: {
+                entryFileNames: 'js/resrv-frontend.js',
+                assetFileNames: (assetInfo) => {
+                    if (assetInfo.name.includes('resrv-tailwind.css')) {
+                        return 'css/resrv-tailwind.css'; 
+                    } 
+                    return 'css/[name].[ext]';
+                },
+            }
+        }
+    },
     css: {
         postcss: {
             plugins: [
