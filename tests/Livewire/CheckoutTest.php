@@ -152,13 +152,12 @@ class CheckoutTest extends TestCase
     /** @test */
     public function it_redirects_to_the_checkout_complete_page_if_the_reservation_payment_is_zero()
     {
-        Config::set('resrv-config.admin_email', 'jerry@seinfeld.com');
+        Event::fake();
 
         $reservation = Reservation::factory()->create([
             'price' => '0',
             'payment' => '0',
             'item_id' => $this->entries->first()->id(),
-            'customer' => ['email' => 'larry@david.com'],
         ]);
 
         session(['resrv_reservation' => $reservation->id]);
