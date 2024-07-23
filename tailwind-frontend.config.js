@@ -1,6 +1,6 @@
 export default {
     content: [
-      './resources/views/livewire/*/*.blade.php',
+      './resources/views/livewire/**/*.blade.php',
     ],
 
     plugins: [

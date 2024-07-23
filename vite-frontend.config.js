@@ -5,6 +5,7 @@ import autoprefixer from 'autoprefixer';
 export default defineConfig({
     build: {
         outDir: 'resources/frontend',
+        emptyOutDir: false,
         rollupOptions: {
             input: {
                 main: 'resources/js/resrv-frontend.js',
