@@ -11,6 +11,7 @@ return [
     'noAvailability' => 'No availability',
     'tryAdjustingYourSearch' => 'Try adjusting your dates or quantity.',
     'multipleAvailable' => 'Multiple properties available.',
+    'pleaseSelectDates' => 'Please select dates to search for availability.',
     'pleaseSelectProperty' => 'Please select a property from the search form to check prices and continue.',
     'yourSearch' => 'Your search',
     'searchError' => 'Search error',

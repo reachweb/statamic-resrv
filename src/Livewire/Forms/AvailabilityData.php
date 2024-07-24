@@ -57,4 +57,9 @@ class AvailabilityData extends Form
             'advanced' => $this->advanced,
         ];
     }
+
+    public function hasDates()
+    {
+        return isset($this->dates['date_start']) && isset($this->dates['date_end']);
+    }
 }
