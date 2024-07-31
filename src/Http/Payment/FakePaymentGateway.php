@@ -97,4 +97,9 @@ class FakePaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
     }
+
+    public function verifyWebhook()
+    {
+        return true;
+    }
 }

@@ -21,4 +21,6 @@ interface PaymentInterface
     public function handlePaymentPending(): bool|array;
 
     public function verifyPayment($request);
+
+    public function verifyWebhook();
 }
