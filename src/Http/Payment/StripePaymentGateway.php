@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
@@ -125,6 +126,7 @@ class StripePaymentGateway implements PaymentInterface
         $reservation = Reservation::findByPaymentId($data['id'])->first();
 
         if (! $reservation) {
+            Log::info('Reservation not found for id '.$data['id']);
             abort(404);
         }
 
