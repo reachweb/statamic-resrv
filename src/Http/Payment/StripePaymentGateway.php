@@ -127,7 +127,7 @@ class StripePaymentGateway implements PaymentInterface
 
         if (! $reservation) {
             Log::info('Reservation not found for id '.$data['id']);
-            abort(404);
+            return response()->json([], 200);
         }
 
         if ($reservation->status === ReservationStatus::CONFIRMED) {
