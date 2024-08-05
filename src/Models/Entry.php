@@ -30,6 +30,10 @@ class Entry extends Model
 
     public function syncToDatabase(StatamicEntry $entry): void
     {
+        if (! $entry->blueprint()->hasField('resrv_availability')) {
+            return;
+        }
+
         if ($entry->hasOrigin()) {
             return;
         }

@@ -166,7 +166,24 @@ class TestCase extends OrchestraTestCase
         Entry::make()
             ->collection('pages')
             ->slug($slug = Str::random('6'))
-            ->data($entryData)
+            ->data($data ?? $entryData)
+            ->save();
+
+        return Entry::query()->where('slug', $slug)->first();
+    }
+
+    public function makeStatamicWithoutResrvAvailabilityField($data = null)
+    {
+        $entryData = [
+            'title' => $data['title'] ?? 'Test Statamic Item',
+        ];
+
+        $collection = Collection::make('something')->routes('/something/{slug}')->save();
+
+        Entry::make()
+            ->collection('something')
+            ->slug($slug = Str::random('6'))
+            ->data($data ?? $entryData)
             ->save();
 
         return Entry::query()->where('slug', $slug)->first();

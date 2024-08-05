@@ -31,6 +31,20 @@ class AvailabilityCpTest extends TestCase
         ]);
     }
 
+    public function test_entry_does_not_get_saved_on_the_entries_table_if_no_resrv_availability_field()
+    {
+        $item = $this->makeStatamicWithoutResrvAvailabilityField([
+            'title' => 'This is an entry',
+        ]);
+
+        $item->save();
+
+        $this->assertDatabaseMissing('resrv_entries', [
+            'item_id' => $item->id(),
+            'title' => $item->get('title'),
+        ]);
+    }
+
     public function test_entry_disabled_when_resrv_availability_off()
     {
         $item = $this->makeStatamicItem();
