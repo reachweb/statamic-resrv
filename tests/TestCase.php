@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\WithFaker;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
 use Statamic\Extend\Manifest;
+use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
@@ -162,6 +163,56 @@ class TestCase extends OrchestraTestCase
         ];
 
         $collection = Collection::make('pages')->routes('/{slug}')->save();
+
+        Entry::make()
+            ->collection('pages')
+            ->slug($slug = Str::random('6'))
+            ->data($data ?? $entryData)
+            ->save();
+
+        return Entry::query()->where('slug', $slug)->first();
+    }
+
+    public function makeStatamicItemWithResrvAvailabilityField(?array $data = null)
+    {
+        $entryData = [
+            'title' => $data['title'] ?? 'Test Statamic Item',
+            'resrv_availability' => $data['resrv_availability'] ?? Str::random('6'),
+        ];
+
+        $collection = Collection::make('pages')->routes('/{slug}')->save();
+
+        $blueprint = Blueprint::make()->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'title',
+                            'field' => [
+                                'type' => 'text',
+                                'display' => 'Title',
+                            ],
+                        ],
+                        [
+                            'handle' => 'slug',
+                            'field' => [
+                                'type' => 'text',
+                                'display' => 'Slug',
+                            ],
+                        ],
+                        [
+
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $blueprint->setHandle('pages')->setNamespace('collections.'.$collection->handle())->save();
 
         Entry::make()
             ->collection('pages')

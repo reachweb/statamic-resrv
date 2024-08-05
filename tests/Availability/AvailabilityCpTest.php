@@ -18,7 +18,7 @@ class AvailabilityCpTest extends TestCase
 
     public function test_entry_saved_on_the_entries_table_on_save()
     {
-        $item = $this->makeStatamicItem();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
 
         $item->save();
 
