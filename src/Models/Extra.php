@@ -138,6 +138,8 @@ class Extra extends Model
     }
 
     // TODO: merge these two methods ?
+    // More info: this one calculates the price for the extra including the quantity the user has selected
+    // and is used to validate the price for the reservation. Probably should merge with getPriceForDates.
     public function calculatePrice($data, $quantity)
     {
         $this->initiateAvailabilityUnsafe($data);
@@ -146,17 +148,19 @@ class Extra extends Model
             $this->price = $dynamicPricing->apply($this->price)->format();
         }
         if ($this->price_type == 'perday') {
-            return $this->price->multiply($quantity)->multiply($this->duration)->multiply($this->quantity);
+            $price = $this->price->multiply($quantity)->multiply($this->duration);
         }
         if ($this->price_type == 'fixed') {
-            return $this->price->multiply($quantity)->multiply($this->quantity);
+            $price = $this->price->multiply($quantity);
         }
         if ($this->price_type == 'relative') {
-            return $this->price->multiply($this->getRelativePrice($data))->multiply($quantity)->multiply($this->quantity);
+            $price = $this->price->multiply($this->getRelativePrice($data))->multiply($quantity);
         }
         if ($this->price_type == 'custom') {
-            return $this->price->multiply($this->getCustomPrice($data))->multiply($this->quantity);
+            $price = $this->price->multiply($this->getCustomPrice($data));
         }
+
+        return $this->applyQuantityIfNeeded($price);
     }
 
     public function priceFromPivot()
