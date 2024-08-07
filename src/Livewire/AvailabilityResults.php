@@ -14,10 +14,12 @@ use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry;
+use Statamic\Support\Traits\Hookable;
 
 class AvailabilityResults extends Component
 {
     use HandlesMultisiteIds,
+        Hookable,
         Traits\HandlesAvailabilityQueries,
         Traits\HandlesExtrasQueries,
         Traits\HandlesOptionsQueries,
@@ -63,6 +65,8 @@ class AvailabilityResults extends Component
         if (session()->has('resrv-search')) {
             $this->availabilitySearchChanged(session('resrv-search'));
         }
+
+        $this->runHooks('init');
     }
 
     #[Computed(persist: true)]
@@ -121,6 +125,7 @@ class AvailabilityResults extends Component
         // Validate again in case the session data is old
         try {
             $this->data->validate();
+            $this->runHooks('availability-search-updated', $this->data);
         } catch (\Exception $exception) {
             $this->dispatch('availability-results-updated');
             $this->addError('availability', $exception->getMessage());
@@ -131,6 +136,8 @@ class AvailabilityResults extends Component
 
         unset($this->extras);
         unset($this->options);
+
+        $this->runHooks('availability-results-updated', $this->availability);
 
         $this->dispatch('availability-results-updated');
     }
