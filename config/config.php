@@ -32,7 +32,7 @@ return [
      */
     'enable_locations' => false,
     'enable_time' => false,
-    'minimum_days_before' => false,
+    'minimum_days_before' => 0,
     'minimum_reservation_period_in_days' => 1,
     'maximum_reservation_period_in_days' => 30,
     'maximum_quantity' => 8,
