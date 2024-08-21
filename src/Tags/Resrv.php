@@ -2,7 +2,10 @@
 
 namespace Reach\StatamicResrv\Tags;
 
+use Illuminate\Support\Facades\Validator;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Location;
+use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Tags\Tags;
 
 class Resrv extends Tags
@@ -19,5 +22,18 @@ class Resrv extends Tags
         }
 
         return json_encode(session()->get('resrv_search'));
+    }
+
+    public function reservationFromUri()
+    {
+        $validator = Validator::make(request()->all(), [
+            'res_id' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            abort(400, 'Invalid reservation ID.');
+        }
+
+        return Reservation::where('id', request()->get('res_id'))->where('status', ReservationStatus::CONFIRMED)->firstOrFail();
     }
 }
