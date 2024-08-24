@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
+use Reach\StatamicResrv\Filters\ReservationEntry;
 use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
@@ -68,6 +69,7 @@ class ResrvProvider extends AddonServiceProvider
 
     protected $scopes = [
         ReservationMadeDate::class,
+        ReservationEntry::class,
         ReservationStartingDate::class,
         ReservationStartingDateYear::class,
         ReservationStatus::class,
