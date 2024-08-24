@@ -38,6 +38,9 @@ class ReservationStatus extends Filter
 
     public function apply($query, $values)
     {
+        if (count($values['status']) === 0) {
+            return;
+        }
         $query->whereIn('status', $values['status']);
     }
 
