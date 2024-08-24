@@ -29,7 +29,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
         $this->bootHooks();
     }
 
-    private function bootLivewireComponents(): void
+    protected function bootLivewireComponents(): void
     {
         Livewire::component('availability-search', \Reach\StatamicResrv\Livewire\AvailabilitySearch::class);
         Livewire::component('availability-results', \Reach\StatamicResrv\Livewire\AvailabilityResults::class);
@@ -41,7 +41,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
         }
     }
 
-    private function bootHooks(): void
+    protected function bootHooks(): void
     {
         if (! class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {
             return;
