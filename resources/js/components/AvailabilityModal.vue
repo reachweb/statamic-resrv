@@ -7,14 +7,14 @@
                 <span class="block mt-1 text-md" v-if="property"><span class="font-light">For:</span> {{ property.label }}</span>
                 <span class="block mt-1 font-light text-sm">From {{ date_start }} to {{ date_end }}</span>
             </div>
-            <div class="flex-1 pt-4 px-4 text-grey">
+            <div class="flex-1 py-4 px-4 text-grey">
                 <div class="flex flex-wrap items-center space-x-4">
                     <div class="flex-1">
                         <div class="mb-2 text-sm font-bold">
                             <label for="available">Available</label>
                         </div>
                         <div class="w-full">
-                            <input class="input-text" name="available" type="text" v-model="available">
+                            <input class="input-text" name="available" type="text" v-model="available" @keyup="handleEnterKey">
                         </div>
                         <div v-if="errors.available" class="w-full mt-1 text-sm text-red-400">
                             {{ errors.available[0] }}
@@ -25,21 +25,12 @@
                             <label for="available">Price</label>
                         </div>
                         <div class="w-full">
-                            <input class="input-text" name="price" type="text" v-model="price">
+                            <input class="input-text" name="price" type="text" v-model="price" @keyup="handleEnterKey">
                         </div>
                         <div v-if="errors.price" class="w-full mt-1 text-sm text-red-400">
                             {{ errors.price[0] }}
                         </div>                     
                     </div>
-                </div>
-            </div>
-            <div class="flex-1 px-4 pt-1 pb-4">
-                <div class="flex items-center">
-                    <toggle-input v-model="available_only"></toggle-input> 
-                    <div class="text-sm ml-3">Only edit availability</div>
-                </div>
-                <div v-if="errors.available_only" class="w-full mt-1 text-sm text-red-400">
-                    {{ errors.available_only[0] }}
                 </div>
             </div>
             <div class="p-4 bg-gray-200 dark:bg-dark-500 border-t dark:border-dark-900 rounded-b-lg flex items-center justify-between">
@@ -103,7 +94,6 @@ export default {
         return {
             available: null,
             price: null,
-            available_only: false,
             successMessage: 'Availability successfully saved',
             postUrl: '/cp/resrv/availability',
             method: 'post',
@@ -127,11 +117,8 @@ export default {
             fields.date_start = this.date_start
             fields.date_end = this.date_end
             fields.statamic_id = this.parentId
-            if (this.available_only === false) {
-                fields.price = this.price
-            }
+            fields.price = this.price
             fields.available = this.available
-            fields.available_only = this.available_only
             if (this.property) {
                 fields.advanced = [this.property]
             }
@@ -162,6 +149,11 @@ export default {
                 .catch(error => {
                     this.$toast.error('Cannot delete availability')
                 })
+        },
+        handleEnterKey(event) {
+            if (event.key === 'Enter') {
+                this.save();
+            }
         },
     }
   

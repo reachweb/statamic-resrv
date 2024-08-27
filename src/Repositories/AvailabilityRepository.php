@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Repositories;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -52,6 +53,25 @@ class AvailabilityRepository
                 }
             })
             ->groupBy('statamic_id');
+    }
+
+    public function itemsExistAndHavePrices(string $date_start, string $date_end, string $statamic_id, array $advanced)
+    {
+        $query = Availability::where('date', '>=', $date_start)
+            ->where('date', '<=', $date_end)
+            ->where('statamic_id', $statamic_id)
+            ->when($advanced, function (Builder $query, array $advanced) {
+                if (! in_array('any', $advanced)) {
+                    $query->whereIn('property', $advanced);
+                }
+            });
+
+        $totalDays = $query->count();
+        $daysWithPrices = $query->whereNotNull('price')->count();
+
+        $expectedDays = Carbon::parse($date_start)->diffInDays(Carbon::parse($date_end)->addDay());
+
+        return $totalDays > 0 && $totalDays === $daysWithPrices && $totalDays === $expectedDays;
     }
 
     public function itemGetProperties(string $statamic_id)

@@ -102,7 +102,7 @@ class ConnectedAvailabilityCpTest extends TestCase
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'advanced' => [['code' => 'something']],
             'available' => 6,
-            'available_only' => true,
+            'price' => null,
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
@@ -128,7 +128,7 @@ class ConnectedAvailabilityCpTest extends TestCase
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'advanced' => [['code' => 'something-else-completely']],
             'available' => 12,
-            'available_only' => true,
+            'price' => null,
         ];
 
         $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
@@ -216,7 +216,7 @@ class ConnectedAvailabilityCpTest extends TestCase
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'advanced' => [['code' => 'something-else']],
             'available' => 6,
-            'available_only' => true,
+            'price' => null,
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
@@ -332,7 +332,7 @@ class ConnectedAvailabilityCpTest extends TestCase
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'advanced' => [['code' => 'something']],
             'available' => 6,
-            'available_only' => true,
+            'price' => null,
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
@@ -355,7 +355,7 @@ class ConnectedAvailabilityCpTest extends TestCase
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'advanced' => [['code' => 'something-else-completely']],
             'available' => 11,
-            'available_only' => true,
+            'price' => null,
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload2);
         $response->assertStatus(200);

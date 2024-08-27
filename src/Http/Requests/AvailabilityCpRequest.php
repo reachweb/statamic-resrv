@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Reach\StatamicResrv\Rules\ResrvAvailabilityExists;
 
 class AvailabilityCpRequest extends FormRequest
 {
@@ -17,10 +18,9 @@ class AvailabilityCpRequest extends FormRequest
             'statamic_id' => ['required'],
             'date_start' => ['required', 'date'],
             'date_end' => ['required', 'date'],
-            'price' => ['required_unless:available_only,true', 'numeric'],
-            'available' => ['required', 'numeric'],
+            'price' => ['nullable', 'numeric', 'required_if:available,null', new ResrvAvailabilityExists],
+            'available' => ['nullable', 'numeric', 'required_if:price,null', new ResrvAvailabilityExists],
             'advanced' => ['sometimes', 'array'],
-            'available_only' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -216,7 +216,7 @@ class AvailabilityCpTest extends TestCase
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'available' => 2,
-            'available_only' => true,
+            'price' => null,
         ];
 
         $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
@@ -225,6 +225,95 @@ class AvailabilityCpTest extends TestCase
         $this->assertDatabaseHas('resrv_availabilities', [
             'available' => 2,
             'price' => 150,
+        ])->assertDatabaseCount('resrv_availabilities', 3);
+    }
+
+    public function test_availability_cannot_update_if_price_missing()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItem();
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 6,
+        ];
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'price' => 150,
+        ])->assertDatabaseCount('resrv_availabilities', 3);
+
+        $newPayload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(4, 'day')->isoFormat('YYYY-MM-DD'),
+            'available' => 2,
+            'price' => null,
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
+        $response->assertStatus(302)->assertInvalid(['available']);
+    }
+
+    public function test_availability_can_save_price_when_availability_missing()
+    {
+
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItem();
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 6,
+        ];
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $newPayload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(4, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 120,
+            'available' => null,
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
+        $response->assertStatus(302)->assertInvalid(['price']);
+    }
+
+    public function test_availability_cannot_save_price_without_availability()
+    {
+        $item = $this->makeStatamicItem();
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 6,
+        ];
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $newPayload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 120,
+            'available' => null,
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 6,
+            'price' => 120,
         ])->assertDatabaseCount('resrv_availabilities', 3);
     }
 

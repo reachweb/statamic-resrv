@@ -74,14 +74,16 @@ class AvailabilityCpController extends Controller
     private function updateAvailability(array $data, ?string $property = null)
     {
         $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
-        foreach ($period as $day) {
-            $toUpdate = [
-                'available' => $data['available'],
-                'price' => $data['price'] ?? 0,
-            ];
 
-            if (array_key_exists('available_only', $data) && $data['available_only'] === true) {
-                unset($toUpdate['price']);
+        foreach ($period as $day) {
+            $toUpdate = [];
+
+            if (! is_null($data['price'])) {
+                $toUpdate['price'] = $data['price'];
+            }
+
+            if (! is_null($data['available'])) {
+                $toUpdate['available'] = $data['available'];
             }
 
             Availability::updateOrCreate(
