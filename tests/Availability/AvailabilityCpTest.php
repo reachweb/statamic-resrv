@@ -261,7 +261,6 @@ class AvailabilityCpTest extends TestCase
 
     public function test_availability_can_save_price_when_availability_missing()
     {
-
         $this->withExceptionHandling();
 
         $item = $this->makeStatamicItem();
