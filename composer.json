@@ -24,7 +24,6 @@
     },
     "require": {
         "php": "^8.0",
-        "doctrine/dbal": "^3.0",
         "laravel/framework": "^10.0 || ^11.00",
         "illuminate/support": "^10.0 || ^11.0",
         "statamic/cms": "^4.50.0 || ^5.0.0",
@@ -32,7 +31,7 @@
         "moneyphp/money": "^4.0",
         "spatie/simple-excel": "^3.2",
         "edalzell/forma": "^3.0",
-        "livewire/livewire": "^3.4",
+        "livewire/livewire": "^3.5",
         "jonassiewertsen/statamic-livewire": "^3.0"
     },
     "require-dev": {
