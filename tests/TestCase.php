@@ -137,6 +137,9 @@ class TestCase extends OrchestraTestCase
         // Assume the pro edition within tests
         $app['config']->set('statamic.editions.pro', true);
 
+        // Enable legacy endpoints for testing
+        $app['config']->set('resrv-config.enable_legacy_endpoints', true);
+
         Statamic::pushCpRoutes(function () {
             return require_once realpath(__DIR__.'/../routes/cp.php');
         });

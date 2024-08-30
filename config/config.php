@@ -43,6 +43,8 @@ return [
     'decrease_availability_for_extra_time' => false,
     'admin_email' => false,
     'checkout_entry' => null,
+    'checkout_completed_entry' => null,
+    'enable_legacy_endpoints' => false,
     'checkout_completed_uri' => false,
     'checkout_failed_uri' => false,
     'checkout_post_id' => false,
@@ -85,7 +87,11 @@ return [
      * Advanced features
      * enable_advanced_availability: set different availability and price for an item depending on the property.
      * enable_connected_availabilities: enable the ability to "connect" advanced availabilities.
+     * enable_affiliates: enable the ability to have affiliates that can book on behalf of a customer and / or get commision based on the reservations they make.
+     * ignore_quantity_for_prices: use quantity for availability calculations but ignore it for pricing
      */
     'enable_advanced_availability' => false,
     'enable_connected_availabilities' => false,
+    'enable_affiliates' => true,
+    'ignore_quantity_for_prices' => false,
 ];
