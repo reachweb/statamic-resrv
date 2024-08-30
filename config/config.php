@@ -88,7 +88,7 @@ return [
      * enable_advanced_availability: set different availability and price for an item depending on the property.
      * enable_connected_availabilities: enable the ability to "connect" advanced availabilities.
      * enable_affiliates: enable the ability to have affiliates that can book on behalf of a customer and / or get commision based on the reservations they make.
-     * ignore_quantity_for_prices: use quantity for availability calculations but ignore it for pricing
+     * ignore_quantity_for_prices: use quantity for availability calculations but ignore it for pricing.
      */
     'enable_advanced_availability' => false,
     'enable_connected_availabilities' => false,
