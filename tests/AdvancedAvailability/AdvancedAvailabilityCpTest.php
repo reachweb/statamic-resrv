@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -16,7 +17,8 @@ class AdvancedAvailabilityCpTest extends TestCase
         $this->signInAdmin();
     }
 
-    public function test_advanced_availability_can_index_for_a_statamic_item()
+    #[Test]
+    public function advanced_availability_can_index_for_a_statamic_item()
     {
         $item = $this->makeStatamicItem();
 
@@ -35,7 +37,8 @@ class AdvancedAvailabilityCpTest extends TestCase
         $response->assertStatus(200)->assertSee($item->id());
     }
 
-    public function test_advanced_availability_can_add_for_date_range()
+    #[Test]
+    public function advanced_availability_can_add_for_date_range()
     {
         $item = $this->makeStatamicItem();
 
@@ -56,7 +59,8 @@ class AdvancedAvailabilityCpTest extends TestCase
         ]);
     }
 
-    public function test_advanced_availability_can_update_for_date_range()
+    #[Test]
+    public function advanced_availability_can_update_for_date_range()
     {
         $item = $this->makeStatamicItem();
         $payload = [
@@ -93,7 +97,8 @@ class AdvancedAvailabilityCpTest extends TestCase
         ])->assertDatabaseCount('resrv_availabilities', 3);
     }
 
-    public function test_advanced_availability_can_add_mass_update_for_date_range()
+    #[Test]
+    public function advanced_availability_can_add_mass_update_for_date_range()
     {
         $item = $this->makeStatamicItem();
 
@@ -118,7 +123,8 @@ class AdvancedAvailabilityCpTest extends TestCase
         ])->assertDatabaseCount('resrv_availabilities', 10);
     }
 
-    public function test_advanced_availability_can_be_deleted_for_date_range()
+    #[Test]
+    public function advanced_availability_can_be_deleted_for_date_range()
     {
         $item = $this->makeStatamicItem();
 
