@@ -19,7 +19,7 @@ class ReservationResource extends ResourceCollection
     public function __construct($resource)
     {
         parent::__construct($resource);
-        $reservationBlueprint = new ReservationBlueprint();
+        $reservationBlueprint = new ReservationBlueprint;
         $this->blueprint = $reservationBlueprint();
     }
 

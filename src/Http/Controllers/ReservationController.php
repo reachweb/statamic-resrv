@@ -266,7 +266,7 @@ class ReservationController extends Controller
             $layout = Arr::get($checkoutEntry->toAugmentedArray(), 'collection')->value()->layout();
         }
 
-        return (new View())
+        return (new View)
             ->template('statamic-resrv::checkout.checkout_completed')
             ->layout($layout ?? 'layout')
             ->with([
@@ -294,7 +294,7 @@ class ReservationController extends Controller
             $layout = Arr::get($checkoutEntry->toAugmentedArray(), 'collection')->value()->layout();
         }
 
-        return (new View())
+        return (new View)
             ->template('statamic-resrv::checkout.checkout_failed')
             ->layout($layout ?? 'layout')
             ->with([
@@ -393,7 +393,7 @@ class ReservationController extends Controller
             $layout = Arr::get($checkoutEntry->toAugmentedArray(), 'collection')->value()->layout();
         }
 
-        return (new View())
+        return (new View)
             ->template('statamic-resrv::checkout.checkout_start')
             ->layout($layout ?? 'layout')
             ->with([

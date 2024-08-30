@@ -93,7 +93,7 @@ class Price implements CastsAttributes
 
     public function format()
     {
-        $currencies = new ISOCurrencies();
+        $currencies = new ISOCurrencies;
         $moneyFormatter = new DecimalMoneyFormatter($currencies);
 
         return $moneyFormatter->format($this->money);

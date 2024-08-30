@@ -4,6 +4,4 @@ namespace Reach\StatamicResrv\Exceptions;
 
 use Exception;
 
-class AvailabilityException extends Exception
-{
-}
+class AvailabilityException extends Exception {}

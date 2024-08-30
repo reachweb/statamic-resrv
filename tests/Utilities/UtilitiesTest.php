@@ -125,9 +125,9 @@ class UtilitiesTest extends TestCase
         ];
 
         // Test normal
-        $response = (new \Reach\StatamicResrv\Http\Middleware\SetResrvSearchByVariables())->handle(
+        $response = (new \Reach\StatamicResrv\Http\Middleware\SetResrvSearchByVariables)->handle(
             Request::create('/'.$item->slug.'?date_start='.$s['date_start'].'&date_end='.$s['date_end'], 'GET'),
-            fn () => new \Symfony\Component\HttpFoundation\Response()
+            fn () => new \Symfony\Component\HttpFoundation\Response
         );
 
         // Again to enable assertion (probably there is a better way to do this)
@@ -138,9 +138,9 @@ class UtilitiesTest extends TestCase
         ]);
 
         // Test normal with duration
-        $response = (new \Reach\StatamicResrv\Http\Middleware\SetResrvSearchByVariables())->handle(
+        $response = (new \Reach\StatamicResrv\Http\Middleware\SetResrvSearchByVariables)->handle(
             Request::create('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&advanced=something', 'GET'),
-            fn () => new \Symfony\Component\HttpFoundation\Response()
+            fn () => new \Symfony\Component\HttpFoundation\Response
         );
 
         $response = $this->get('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&advanced=something');

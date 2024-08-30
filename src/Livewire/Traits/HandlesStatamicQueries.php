@@ -58,7 +58,7 @@ trait HandlesStatamicQueries
 
             return $entry;
         }
-        throw new CheckoutEntryNotFound();
+        throw new CheckoutEntryNotFound;
     }
 
     public function getCheckoutCompleteEntry()
@@ -70,7 +70,7 @@ trait HandlesStatamicQueries
 
             return $entry;
         }
-        throw new CheckoutEntryNotFound();
+        throw new CheckoutEntryNotFound;
     }
 
     public function getLocalizedEntry($entry)

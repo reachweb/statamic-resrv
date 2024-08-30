@@ -19,6 +19,6 @@ class ReservationCreated
     public function __construct(Reservation $reservation, ?ReservationData $data = null)
     {
         $this->reservation = $reservation;
-        $this->data = $data ?? new ReservationData();
+        $this->data = $data ?? new ReservationData;
     }
 }
