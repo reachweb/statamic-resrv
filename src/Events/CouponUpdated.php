@@ -13,5 +13,6 @@ class CouponUpdated
         public Reservation $reservation,
         public string $coupon,
         public bool $remove = false,
-    ) {}
+    ) {
+    }
 }
