@@ -40,8 +40,7 @@ class CheckoutPaymentTest extends TestCase
         Config::set('resrv-config.checkout_completed_entry', $entry->id());
     }
 
-    /** @test */
-    public function renders_successfully()
+    public function test_renders_successfully()
     {
         Livewire::test(CheckoutPayment::class)
             ->assertViewIs('statamic-resrv::livewire.checkout-payment')

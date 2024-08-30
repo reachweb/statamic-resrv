@@ -73,8 +73,7 @@ class CheckoutTest extends TestCase
             ]);
     }
 
-    /** @test */
-    public function renders_successfully()
+    public function test_renders_successfully()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -83,8 +82,7 @@ class CheckoutTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function loads_reservation_and_entry()
+    public function test_loads_reservation_and_entry()
     {
         session(['resrv_reservation' => $this->reservation->id]);
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
@@ -100,8 +98,7 @@ class CheckoutTest extends TestCase
         $this->assertEquals($this->entries->first(), $component->entry);
     }
 
-    /** @test */
-    public function it_handles_first_step()
+    public function test_it_handles_first_step()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -129,8 +126,7 @@ class CheckoutTest extends TestCase
         ]);
     }
 
-    /** @test */
-    public function it_handles_second_step()
+    public function test_it_handles_second_step()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -149,8 +145,7 @@ class CheckoutTest extends TestCase
         ]);
     }
 
-    /** @test */
-    public function it_redirects_to_the_checkout_complete_page_if_the_reservation_payment_is_zero()
+    public function test_it_redirects_to_the_checkout_complete_page_if_the_reservation_payment_is_zero()
     {
         Event::fake();
 
@@ -167,8 +162,7 @@ class CheckoutTest extends TestCase
             ->assertRedirect(Entry::find(Config::get('resrv-config.checkout_completed_entry'))->absoluteUrl().'?payment_pending='.$reservation->id);
     }
 
-    /** @test */
-    public function it_shows_an_arror_if_the_reservation_is_expired()
+    public function test_it_shows_an_arror_if_the_reservation_is_expired()
     {
         $reservation = Reservation::factory()->expired()->create([
             'item_id' => $this->entries->first()->id(),
@@ -181,8 +175,7 @@ class CheckoutTest extends TestCase
             ->assertSee('This reservation has expired');
     }
 
-    /** @test */
-    public function it_throws_an_error_if_a_user_takes_too_long_in_the_extras_form()
+    public function test_it_throws_an_error_if_a_user_takes_too_long_in_the_extras_form()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -194,8 +187,7 @@ class CheckoutTest extends TestCase
             ->assertHasErrors('reservation');
     }
 
-    /** @test */
-    public function it_throws_an_error_if_a_user_takes_too_long_in_the_customer_form()
+    public function test_it_throws_an_error_if_a_user_takes_too_long_in_the_customer_form()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -207,8 +199,7 @@ class CheckoutTest extends TestCase
             ->assertHasErrors('reservation');
     }
 
-    /** @test */
-    public function it_successfully_applies_a_coupon()
+    public function test_it_successfully_applies_a_coupon()
     {
         $dynamic = DynamicPricing::factory()->withCoupon()->create();
 
@@ -228,8 +219,7 @@ class CheckoutTest extends TestCase
             ->assertDispatched('coupon-applied');
     }
 
-    /** @test */
-    public function it_dispatches_coupon_updated_event_on_add()
+    public function test_it_dispatches_coupon_updated_event_on_add()
     {
         Event::fake();
 
@@ -252,8 +242,7 @@ class CheckoutTest extends TestCase
         });
     }
 
-    /** @test */
-    public function it_dispatches_coupon_updated_event_on_remove()
+    public function test_it_dispatches_coupon_updated_event_on_remove()
     {
         Event::fake();
 
@@ -268,8 +257,7 @@ class CheckoutTest extends TestCase
         });
     }
 
-    /** @test */
-    public function it_adds_an_error_if_coupon_does_not_exist()
+    public function test_it_adds_an_error_if_coupon_does_not_exist()
     {
         DynamicPricing::factory()->withCoupon()->create();
 
@@ -284,8 +272,7 @@ class CheckoutTest extends TestCase
             ->assertSee('This coupon does not exist');
     }
 
-    /** @test */
-    public function it_adds_an_error_if_coupon_does_not_apply_to_the_product()
+    public function test_it_adds_an_error_if_coupon_does_not_apply_to_the_product()
     {
         DynamicPricing::factory()->withCoupon()->create();
 
@@ -300,8 +287,7 @@ class CheckoutTest extends TestCase
             ->assertSee('This coupon does not apply to this product');
     }
 
-    /** @test */
-    public function it_adds_an_error_if_the_coupon_is_invalid()
+    public function test_it_adds_an_error_if_the_coupon_is_invalid()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -314,8 +300,7 @@ class CheckoutTest extends TestCase
             ->assertSee('The coupon code is invalid');
     }
 
-    /** @test */
-    public function it_removes_a_coupon_from_the_session()
+    public function test_it_removes_a_coupon_from_the_session()
     {
         $dynamic = DynamicPricing::factory()->withCoupon()->create();
 
@@ -339,8 +324,7 @@ class CheckoutTest extends TestCase
             ->assertDispatched('coupon-removed');
     }
 
-    /** @test */
-    public function it_charges_only_the_reservation_price_when_payment_is_set_to_full()
+    public function test_it_charges_only_the_reservation_price_when_payment_is_set_to_full()
     {
         Config::set('resrv-config.payment', 'full');
 
@@ -370,8 +354,7 @@ class CheckoutTest extends TestCase
         ]);
     }
 
-    /** @test */
-    public function it_charges_everything_when_payment_is_set_to_everything()
+    public function test_it_charges_everything_when_payment_is_set_to_everything()
     {
         Config::set('resrv-config.payment', 'everything');
 
@@ -401,8 +384,7 @@ class CheckoutTest extends TestCase
         ]);
     }
 
-    /** @test */
-    public function it_charges_everything_when_after_free_cancellation_period()
+    public function test_it_charges_everything_when_after_free_cancellation_period()
     {
         Config::set('resrv-config.payment', 'percent');
         Config::set('resrv-config.percent_amount', '20');

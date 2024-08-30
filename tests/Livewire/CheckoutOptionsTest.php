@@ -40,8 +40,7 @@ class CheckoutOptionsTest extends TestCase
             ]);
     }
 
-    /** @test */
-    public function loads_options_for_the_entry()
+    public function test_loads_options_for_the_entry()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -51,8 +50,7 @@ class CheckoutOptionsTest extends TestCase
         $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
     }
 
-    /** @test */
-    public function loads_options_for_the_entry_with_correct_price_for_extra_quantity()
+    public function test_loads_options_for_the_entry_with_correct_price_for_extra_quantity()
     {
         $reservation = Reservation::factory()->create([
             'quantity' => 2,
@@ -66,8 +64,7 @@ class CheckoutOptionsTest extends TestCase
         $this->assertEquals('91.00', $component->options->first()->values->first()->price->format());
     }
 
-    /** @test */
-    public function loads_options_for_the_entry_with_extra_quantity_but_same_price_if_configured()
+    public function test_loads_options_for_the_entry_with_extra_quantity_but_same_price_if_configured()
     {
         Config::set('resrv-config.ignore_quantity_for_prices', true);
 
@@ -83,8 +80,7 @@ class CheckoutOptionsTest extends TestCase
         $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
     }
 
-    /** @test */
-    public function loads_options_list_in_the_view()
+    public function test_loads_options_list_in_the_view()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -93,8 +89,7 @@ class CheckoutOptionsTest extends TestCase
             ->assertSee($this->options->first()->values->first()->name);
     }
 
-    /** @test */
-    public function loads_if_option_is_selected_we_see_it_in_the_pricing_table_and_the_final_price()
+    public function test_loads_if_option_is_selected_we_see_it_in_the_pricing_table_and_the_final_price()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 

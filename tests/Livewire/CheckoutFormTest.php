@@ -44,8 +44,7 @@ class CheckoutFormTest extends TestCase
         Config::set('resrv-config.checkout_entry', $entry->id());
     }
 
-    /** @test */
-    public function renders_successfully_and_loads_form_and_form_data()
+    public function test_renders_successfully_and_loads_form_and_form_data()
     {
         session(['resrv_reservation' => $this->reservation->id]);
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
@@ -57,8 +56,7 @@ class CheckoutFormTest extends TestCase
         $this->assertNotNull($component->checkoutForm);
     }
 
-    /** @test */
-    public function renders_successfully_and_preloads_custom_data()
+    public function test_renders_successfully_and_preloads_custom_data()
     {
         // Fake the AvailabilityForm data
         $availabilityForm = new \stdClass;
@@ -77,8 +75,7 @@ class CheckoutFormTest extends TestCase
         $this->assertNotNull($component->checkoutForm);
     }
 
-    /** @test */
-    public function checkout_form_validation_works()
+    public function test_checkout_form_validation_works()
     {
         session(['resrv_reservation' => $this->reservation->id]);
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
@@ -90,8 +87,7 @@ class CheckoutFormTest extends TestCase
             ->assertHasNoErrors('form.last_name');
     }
 
-    /** @test */
-    public function checkout_form_saves_customer()
+    public function test_checkout_form_saves_customer()
     {
         session(['resrv_reservation' => $this->reservation->id]);
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');

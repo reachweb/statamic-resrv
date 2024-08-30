@@ -61,8 +61,7 @@ class ReservationCheckoutTest extends TestCase
         Config::set('resrv-config.checkout_completed_entry', $this->entry->id());
     }
 
-    /** @test */
-    public function checkout_completed_page_loads()
+    public function test_checkout_completed_page_loads()
     {
         $this->withStandardFakeViews();
 
@@ -71,8 +70,7 @@ class ReservationCheckoutTest extends TestCase
             ->assertSee($this->entry->title);
     }
 
-    /** @test */
-    public function checkout_completed_page_shows_success()
+    public function test_checkout_completed_page_shows_success()
     {
         $this->withFakeViews();
 
@@ -84,8 +82,7 @@ class ReservationCheckoutTest extends TestCase
             ->assertSee('Payment successful');
     }
 
-    /** @test */
-    public function checkout_completed_page_shows_failure()
+    public function test_checkout_completed_page_shows_failure()
     {
         $this->withFakeViews();
 
@@ -97,8 +94,7 @@ class ReservationCheckoutTest extends TestCase
             ->assertSee('Payment failed');
     }
 
-    /** @test */
-    public function checkout_completed_page_shows_pending()
+    public function test_checkout_completed_page_shows_pending()
     {
         $this->withFakeViews();
 
@@ -110,8 +106,7 @@ class ReservationCheckoutTest extends TestCase
             ->assertSee('Reservation confirmed successfully');
     }
 
-    /** @test */
-    public function webhook_can_confirm_reservation()
+    public function test_webhook_can_confirm_reservation()
     {
         Mail::fake();
 
@@ -124,8 +119,7 @@ class ReservationCheckoutTest extends TestCase
         ]);
     }
 
-    /** @test */
-    public function webhook_fires_reservation_confirmed_event()
+    public function test_webhook_fires_reservation_confirmed_event()
     {
         Mail::fake();
         Event::fake();
@@ -138,8 +132,7 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
-    /** @test */
-    public function webhook_can_cancel_reservation()
+    public function test_webhook_can_cancel_reservation()
     {
         Mail::fake();
         Event::fake();
@@ -152,8 +145,7 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
-    /** @test */
-    public function email_is_sent_when_reservation_is_confirmed()
+    public function test_email_is_sent_when_reservation_is_confirmed()
     {
         Mail::fake();
 
@@ -168,8 +160,7 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
-    /** @test */
-    public function it_saves_dynamic_pricings_that_were_applied()
+    public function test_it_saves_dynamic_pricings_that_were_applied()
     {
         $dynamic = DynamicPricing::factory()->create([
             'date_start' => today()->toIso8601String(),
@@ -237,8 +228,7 @@ class ReservationCheckoutTest extends TestCase
         );
     }
 
-    /** @test */
-    public function test_listener_listens_to_coupon_updated_event()
+    public function test_test_listener_listens_to_coupon_updated_event()
     {
         Event::fake();
 
@@ -258,8 +248,7 @@ class ReservationCheckoutTest extends TestCase
         );
     }
 
-    /** @test */
-    public function test_coupon_updated_event_adds_and_removes_coupon_from_reservation()
+    public function test_test_coupon_updated_event_adds_and_removes_coupon_from_reservation()
     {
         $dynamic = DynamicPricing::factory()->withCoupon()->create();
 
@@ -296,8 +285,7 @@ class ReservationCheckoutTest extends TestCase
         $this->assertDatabaseCount('resrv_reservation_dynamic_pricing', 0);
     }
 
-    /** @test */
-    public function test_listener_listens_to_reservation_created_event()
+    public function test_test_listener_listens_to_reservation_created_event()
     {
         Event::fake();
 
@@ -316,8 +304,7 @@ class ReservationCheckoutTest extends TestCase
         );
     }
 
-    /** @test */
-    public function it_saves_affiliate_when_present_in_the_event()
+    public function test_it_saves_affiliate_when_present_in_the_event()
     {
         $this->withStandardFakeViews();
 
@@ -336,8 +323,7 @@ class ReservationCheckoutTest extends TestCase
         );
     }
 
-    /** @test */
-    public function email_is_sent_to_affiliate_if_enabled()
+    public function test_email_is_sent_to_affiliate_if_enabled()
     {
         Config::set('resrv-config.enable_affiliates', true);
 
@@ -358,8 +344,7 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
-    /** @test */
-    public function email_is_not_sent_to_affiliate_if_disabled()
+    public function test_email_is_not_sent_to_affiliate_if_disabled()
     {
         Config::set('resrv-config.enable_affiliates', true);
 

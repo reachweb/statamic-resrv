@@ -25,8 +25,7 @@ class AvailabilityScopeTest extends TestCase
         $this->advancedEntries = $this->createAdvancedEntries();
     }
 
-    /** @test */
-    public function it_can_filter_entries()
+    public function test_it_can_filter_entries()
     {
         $query = Entry::query()->where('collection', 'pages');
 
@@ -57,8 +56,7 @@ class AvailabilityScopeTest extends TestCase
         $this->assertContains($this->entries->get('half-price')->id(), $afterScope);
     }
 
-    /** @test */
-    public function it_returns_nothing_for_7_days()
+    public function test_it_returns_nothing_for_7_days()
     {
         $query = Entry::query()->where('collection', 'pages');
 
@@ -78,8 +76,7 @@ class AvailabilityScopeTest extends TestCase
         $this->assertEmpty($afterScope);
     }
 
-    /** @test */
-    public function it_returns_the_correct_one_for_quantity_2()
+    public function test_it_returns_the_correct_one_for_quantity_2()
     {
         $query = Entry::query()->where('collection', 'pages');
 
@@ -99,8 +96,7 @@ class AvailabilityScopeTest extends TestCase
         $this->assertContains($this->entries->get('two-available')->id(), $afterScope);
     }
 
-    /** @test */
-    public function it_filters_by_advanced_entry()
+    public function test_it_filters_by_advanced_entry()
     {
         $query = Entry::query()->where('collection', 'advanced');
 
@@ -121,8 +117,7 @@ class AvailabilityScopeTest extends TestCase
         $this->assertContains($this->advancedEntries->first()->id(), $afterScope);
     }
 
-    /** @test */
-    public function it_filters_by_advanced_entry_and_quantity()
+    public function test_it_filters_by_advanced_entry_and_quantity()
     {
         $query = Entry::query()->where('collection', 'advanced');
 
@@ -144,8 +139,7 @@ class AvailabilityScopeTest extends TestCase
         $this->assertNotContains($this->advancedEntries->first()->id(), $afterScope);
     }
 
-    /** @test */
-    public function it_can_get_all_availability_with_the_any_magic_word()
+    public function test_it_can_get_all_availability_with_the_any_magic_word()
     {
         $query = Entry::query()->where('collection', 'advanced');
 

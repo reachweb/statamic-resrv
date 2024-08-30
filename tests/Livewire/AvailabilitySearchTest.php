@@ -18,16 +18,14 @@ class AvailabilitySearchTest extends TestCase
         $this->date = now()->setTime(12, 0, 0);
     }
 
-    /** @test */
-    public function renders_successfully()
+    public function test_renders_successfully()
     {
         Livewire::test(AvailabilitySearch::class)
             ->assertViewIs('statamic-resrv::livewire.availability-search')
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function can_set_dates()
+    public function test_can_set_dates()
     {
         Livewire::test(AvailabilitySearch::class)
             ->set('data.dates', [
@@ -54,8 +52,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertSessionHas('resrv-search');
     }
 
-    /** @test */
-    public function cannot_set_dates_closer_than_allowed()
+    public function test_cannot_set_dates_closer_than_allowed()
     {
         Config::set('resrv-config.minimum_days_before', 1);
 
@@ -69,8 +66,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function does_not_dispatch_if_live_is_false_unless_search_is_called()
+    public function test_does_not_dispatch_if_live_is_false_unless_search_is_called()
     {
         Livewire::test(AvailabilitySearch::class, ['live' => false])
             ->set('data.dates', [
@@ -98,8 +94,7 @@ class AvailabilitySearchTest extends TestCase
             );
     }
 
-    /** @test */
-    public function cannot_set_dates_if_date_start_lte_date_end()
+    public function test_cannot_set_dates_if_date_start_lte_date_end()
     {
         Livewire::test(AvailabilitySearch::class)
             ->set('data.dates', [
@@ -118,8 +113,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function cannot_set_dates_before_the_allowed_period()
+    public function test_cannot_set_dates_before_the_allowed_period()
     {
         Config::set('resrv-config.minimum_days_before', 2);
 
@@ -139,8 +133,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function cannot_set_dates_with_duration_smaller_than_the_allowed_period()
+    public function test_cannot_set_dates_with_duration_smaller_than_the_allowed_period()
     {
         Config::set('resrv-config.minimum_reservation_period_in_days', 3);
 
@@ -160,8 +153,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function cannot_set_dates_with_duration_bigger_than_the_allowed_period()
+    public function test_cannot_set_dates_with_duration_bigger_than_the_allowed_period()
     {
         Config::set('resrv-config.maximum_reservation_period_in_days', 1);
 
@@ -181,8 +173,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function can_set_quantity()
+    public function test_can_set_quantity()
     {
         Livewire::test(AvailabilitySearch::class)
             ->set('data.dates', [
@@ -204,8 +195,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function cannot_set_quantity_greater_than_max_quantity()
+    public function test_cannot_set_quantity_greater_than_max_quantity()
     {
         Config::set('resrv-config.maximum_quantity', 2);
 
@@ -221,8 +211,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function can_set_enable_quantity_property_and_shows_the_control()
+    public function test_can_set_enable_quantity_property_and_shows_the_control()
     {
         $component = Livewire::test(AvailabilitySearch::class, ['enableQuantity' => true])
             ->assertSet('enableQuantity', true)
@@ -231,8 +220,7 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(config('resrv-config.maximum_quantity'), $component->__get('maxQuantity'));
     }
 
-    /** @test */
-    public function can_set_advanced()
+    public function test_can_set_advanced()
     {
         Livewire::test(AvailabilitySearch::class)
             ->set('data.dates', [
@@ -253,8 +241,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertStatus(200);
     }
 
-    /** @test */
-    public function cannot_set_advanced_without_dates()
+    public function test_cannot_set_advanced_without_dates()
     {
         Livewire::test(AvailabilitySearch::class)
             ->set('data.advanced', 'something-else')
@@ -278,8 +265,7 @@ class AvailabilitySearchTest extends TestCase
             ]);
     }
 
-    /** @test */
-    public function sets_search_from_session()
+    public function test_sets_search_from_session()
     {
         // This test might look like it does nothing but the first call sets the dates in the session
         // and the second one asserts that they are being retrieved from the session.
@@ -300,8 +286,7 @@ class AvailabilitySearchTest extends TestCase
                 ])->assertStatus(200);
     }
 
-    /** @test */
-    public function can_return_advanced_properties_if_set()
+    public function test_can_return_advanced_properties_if_set()
     {
         $component = Livewire::test(AvailabilitySearch::class, ['advanced' => true, 'overrideProperties' => ['something']])
             ->assertSet('advanced', true)
@@ -310,8 +295,7 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(['something'], $component->__get('advancedProperties'));
     }
 
-    /** @test */
-    public function can_return_advanced_properties_from_blueprint()
+    public function test_can_return_advanced_properties_from_blueprint()
     {
         $collection = Facades\Collection::make('cars')->save();
 
@@ -356,8 +340,7 @@ class AvailabilitySearchTest extends TestCase
         ], $component->__get('advancedProperties'));
     }
 
-    /** @test */
-    public function can_set_a_custom_value()
+    public function test_can_set_a_custom_value()
     {
         Livewire::test(AvailabilitySearch::class)
             ->set('data.customer.adults', 2)

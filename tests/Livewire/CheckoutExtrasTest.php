@@ -43,8 +43,7 @@ class CheckoutExtrasTest extends TestCase
         $this->extras = ResrvExtra::getPriceForDates($this->reservation);
     }
 
-    /** @test */
-    public function it_loads_the_extras_for_the_entry_and_reservation()
+    public function test_it_loads_the_extras_for_the_entry_and_reservation()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -56,8 +55,7 @@ class CheckoutExtrasTest extends TestCase
         $this->assertEquals('9.30', $component->extras->first()->price);
     }
 
-    /** @test */
-    public function loads_extras_for_the_reservation_with_extra_quantity()
+    public function test_loads_extras_for_the_reservation_with_extra_quantity()
     {
         $extraQuantityReservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),
@@ -71,8 +69,7 @@ class CheckoutExtrasTest extends TestCase
         $this->assertEquals('18.60', $component->extras->first()->price);
     }
 
-    /** @test */
-    public function loads_extras_for_the_reservation_with_extra_quantity_but_same_price_if_configured()
+    public function test_loads_extras_for_the_reservation_with_extra_quantity_but_same_price_if_configured()
     {
         Config::set('resrv-config.ignore_quantity_for_prices', true);
 
@@ -88,8 +85,7 @@ class CheckoutExtrasTest extends TestCase
         $this->assertEquals('9.30', $component->extras->first()->price);
     }
 
-    /** @test */
-    public function loads_if_extra_is_selected_we_see_it_in_the_pricing_table_and_the_final_price()
+    public function test_loads_if_extra_is_selected_we_see_it_in_the_pricing_table_and_the_final_price()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -103,8 +99,7 @@ class CheckoutExtrasTest extends TestCase
             ->assertSee('209.30');
     }
 
-    /** @test */
-    public function gets_correct_price_for_custom_price_extra()
+    public function test_gets_correct_price_for_custom_price_extra()
     {
         $reservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),
