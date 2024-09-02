@@ -4,4 +4,6 @@ namespace Reach\StatamicResrv\Exceptions;
 
 use Exception;
 
-class ReservationException extends Exception {}
+class ReservationException extends Exception
+{
+}
