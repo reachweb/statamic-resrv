@@ -50,7 +50,7 @@ class ResrvAvailability extends Fieldtype
         $config = [
             'advanced_availability' => [
                 'display' => __('Advanced availability'),
-                'instructions' => __('Add properties to create advanced availability rules. <em>(please avoid using reserved slug "any")</em>'),
+                'instructions' => __('Add properties to create advanced availability rules. <em>(please avoid using reserved slugs "any" or "none")</em>'),
                 'type' => 'array',
                 'key_header' => __('Slug'),
                 'value_header' => __('Label'),
