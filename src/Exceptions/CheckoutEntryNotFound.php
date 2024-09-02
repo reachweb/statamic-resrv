@@ -4,6 +4,4 @@ namespace Reach\StatamicResrv\Exceptions;
 
 use Exception;
 
-class CheckoutEntryNotFound extends Exception
-{
-}
+class CheckoutEntryNotFound extends Exception {}
