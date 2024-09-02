@@ -12,7 +12,7 @@
                 <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1h16"/>
             </svg>
         </button>
-        <input type="text" class="bg-gray-50 border-x-0 border-gray-300 h-11 font-medium text-center text-gray-900 text-sm focus:ring-blue-500 focus:border-blue-500 block w-full pb-4" placeholder="" x-bind:value="quantity" required />
+        <input type="text" class="bg-gray-50 border-x-0 border-gray-300 h-11 font-medium text-center text-gray-900 text-sm block w-full pb-4" placeholder="" x-bind:value="quantity" required disabled />
         <div class="absolute bottom-1 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 flex items-center text-xs text-gray-400 space-x-1 rtl:space-x-reverse">
             <span>{{ trans('statamic-resrv::frontend.quantityLabel') }}</span>
         </div>
