@@ -6,6 +6,7 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Reach\StatamicLivewireFilters\Exceptions\FieldNotFoundException;
 use Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection;
 use Reach\StatamicLivewireFilters\Http\Livewire\Traits\IsLivewireFilter;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
@@ -36,6 +37,21 @@ class LfAvailabilityFilter extends Component
         }
 
         return false;
+    }
+
+    public function initiateField()
+    {
+        $this->field = 'resrv_availability';
+        $this->condition = 'query_scope';
+        $this->modifier = 'resrv_search';
+
+        $blueprint = $this->getStatamicBlueprint();
+
+        if ($field = $blueprint->field('resrv_availability')) {
+            $this->statamic_field = $field->toArray();
+        } else {
+            throw new FieldNotFoundException('resrv_availability', $this->blueprint);
+        }
     }
 
     #[On('availability-search-updated')]
