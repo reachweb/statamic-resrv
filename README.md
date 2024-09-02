@@ -22,7 +22,9 @@ Basic features:
 * Starter kits available soon!
 
 ## Documentation
-Coming soon!
+Temporary documentation page: https://resrv-docs.pages.dev/installation.html
+
+*(final docs and domain coming soon)*
 
 ## License 
 
