@@ -34,12 +34,15 @@ use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Listeners\UpdateConnectedAvailabilities;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
+use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
 
 class ResrvProvider extends AddonServiceProvider
 {
+    use HandlesAvailabilityHooks;
+
     protected $routes = [
         'cp' => __DIR__.'/../../routes/cp.php',
         'web' => __DIR__.'/../../routes/web.php',
@@ -176,6 +179,8 @@ class ResrvProvider extends AddonServiceProvider
         \Edalzell\Forma\Forma::add('reachweb/statamic-resrv', ConfigController::class);
 
         $this->bootPermissions();
+
+        $this->bootHooks();
     }
 
     private function createNavigation(): void
@@ -245,6 +250,13 @@ class ResrvProvider extends AddonServiceProvider
                         ->description(__('Allow usage of Resrv'));
                 });
             });
+        });
+    }
+
+    protected function bootHooks(): void
+    {
+        $this->bootEntriesHooks('fetched-entries', function ($hookName, $callback) {
+            \Statamic\Tags\Collection\Collection::hook($hookName, $callback);
         });
     }
 }
