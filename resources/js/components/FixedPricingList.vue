@@ -130,7 +130,9 @@ export default {
             this.getFixedPricing()
         },
         hasExtraDayPricing() {
-            return _.some(this.fixedPricings, ['days', '0'])
+            return _.some(this.fixedPricings, function(pricing) {
+                return pricing.days == '0';
+            });
         },
         getFixedPricing() {
             axios.get('/cp/resrv/fixedpricing/'+this.parent)

@@ -18,7 +18,7 @@
                                         <input class="input-text" name="name" type="text" v-model="submit.days">
                                     </div>
                                     <div v-if="errors.days" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.name[0] }}
+                                        {{ errors.days[0] }}
                                     </div>  
                                 </div>                                
                                 <div class="pb-3">
