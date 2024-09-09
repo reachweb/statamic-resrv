@@ -62,7 +62,7 @@ export default {
 
     data() {
         return {
-            enabled: (this.value ? this.value : false),
+            enabled: (this.value ? this.value : 'disabled'),
             containerWidth: null,
             showModal: false,
             selectedDates: false,
@@ -113,6 +113,9 @@ export default {
 
     mounted() {
         this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
+        if (! this.newItem) {
+            this.$emit('input', this.enabled)
+        }
         if (! this.newItem && ! this.isAdvanced) {
             this.getAvailability()            
             this.calendar.render()
