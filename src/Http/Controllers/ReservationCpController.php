@@ -50,7 +50,7 @@ class ReservationCpController extends Controller
 
         $reservations = $this->reservation->whereDate('date_start', '>=', $data['start'])
             ->whereDate('date_end', '<=', $data['end'])
-            ->where('status', 'confirmed')
+            ->whereIn('status', ['confirmed', 'partner'])
             ->orderBy('date_start')
             ->get();
 

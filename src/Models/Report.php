@@ -18,7 +18,7 @@ class Report
         $this->date_end = $date_end;
         $this->reservations = Reservation::whereDate('date_start', '>=', $this->date_start)
             ->whereDate('date_start', '<=', $this->date_end)
-            ->where('status', 'confirmed')
+            ->whereIn('status', ['confirmed', 'partner'])
             ->get();
     }
 
