@@ -76,7 +76,7 @@ class InstallResrv extends Command
 
     protected function publishCheckoutViews()
     {
-        $this->info('Publishing checkout views');
+        $this->info('Publishing Livewire views');
 
         $this->callSilent('vendor:publish', [
             '--tag' => 'resrv-checkout-views',
@@ -87,7 +87,7 @@ class InstallResrv extends Command
 
     protected function publishEmailTemplates()
     {
-        $this->info('Publishing checkout views');
+        $this->info('Publishing email templates');
 
         $this->callSilent('vendor:publish', [
             '--tag' => 'resrv-emails',
