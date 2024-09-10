@@ -1,9 +1,20 @@
 # Statamic Resrv - a Statamic reservation engine
 
-**Statamic Resrv** is a fully featured reservations engine build using Laravel and "living" inside a Statamic CMS installation. Resrv is build with simplicity in mind and tries to cover as many features as possible while keeping the codebase relatively simple and easy to maintain.
-It works pretty well for small to medium companies that need to manage availability and reservations and escape the monthly fees most services offer. It should work pretty well in many scenarios, including but not limited to businesses like: rent a car, hotels, tours. You can use the full power of Statamic in order to create your resrv-able entries and then attach the fields you need to use using the blueprint.
+![resrv-logo](https://github.com/user-attachments/assets/36e959ff-976d-4e2b-8268-5d48769fe546)
 
-Basic features:
+**Statamic Resrv** is a content-agnostic reservation engine built using Laravel and "living" inside a Statamic CMS installation. It integrates with the power of Statamic to provide a powerful and flexible reservation system for any possible use.
+
+Resrv is designed to be flexible and cater to many different business scenarios like a hotel, a restaurant, a conference, car rental, boat rental, doctors and more. 
+
+Besides the core functionality, it also has many extra functionalities that can be used to build your reservation system. That way, every business can have an in-house reservation system on their website and take reservations without paying huge reservation fees or expensive monthly subscriptions.
+
+## Documentation
+Dcumentation page (WIP): https://resrv.eu/
+
+*(final docs coming soon)*
+
+## Basic features
+
 * Availability and price management: set available items per day
 * Advanced availabity: set different price / availability for a single item on an unlimited number of properties
 * Online reservation and payment (using Stripe) plus email notifications to the admins and user. 
@@ -20,11 +31,6 @@ Basic features:
 * Report page: see a quick summary of how your business is booming thank to Resrv!
 * Highly tested codebase: 100+ tests, 450+ assertions
 * Starter kits available soon!
-
-## Documentation
-Dcumentation page (WIP): https://resrv.eu/
-
-*(final docs coming soon)*
 
 ## License 
 
