@@ -386,8 +386,6 @@ class Availability extends Model implements AvailabilityContract
         $properties = AvailabilityRepository::itemGetProperties($entry->id())->pluck('property');
 
         foreach ($properties as $property) {
-            $this->advanced = $property;
-
             $results = $this->getResultsForItem($entry, [$property])->first();
 
             if ($results) {
