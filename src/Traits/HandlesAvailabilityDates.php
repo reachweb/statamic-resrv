@@ -16,9 +16,14 @@ trait HandlesAvailabilityDates
 
     protected int $quantity;
 
+    /**
+     * @var array<string>
+     */
     protected array $advanced;
 
     protected bool $round_trip;
+
+    protected bool $dates_initiated = false;
 
     protected function useTime(): bool
     {
@@ -35,19 +40,26 @@ trait HandlesAvailabilityDates
         }
     }
 
-    protected function checkMinimumDate($date_start): void
+    protected function checkMinimumDate(Carbon $date_start): void
     {
         if (config('resrv-config.minimum_days_before') > 0) {
             $date = Carbon::create($date_start->year, $date_start->month, $date_start->day, 0, 0, 0);
-            if ($date->diffInDays(Carbon::now()->startOfDay()) < config('resrv-config.minimum_days_before')) {
-                throw new AvailabilityException(__('Your pickup date is closer than allowed.'));
+            if ($date instanceof Carbon) {
+                if ($date->diffInDays(Carbon::now()->startOfDay()) < config('resrv-config.minimum_days_before')) {
+                    throw new AvailabilityException(__('Your pickup date is closer than allowed.'));
+                }
+            } else {
+                throw new AvailabilityException(__('Unable to parse start date.'));
             }
         }
     }
 
-    private function setQuantity($data): void
+    /**
+     * @param  array<string, int|string|Carbon>  $data
+     */
+    private function setQuantity(array $data): void
     {
-        if (! Arr::exists($data, 'quantity')) {
+        if (! Arr::exists($data, 'quantity') || ! is_numeric($data['quantity'])) {
             $this->quantity = 1;
 
             return;
@@ -55,27 +67,30 @@ trait HandlesAvailabilityDates
         if ($data['quantity'] > config('resrv-config.maximum_quantity')) {
             throw new AvailabilityException(__('You cannot reserve these many in one reservation.'));
         }
-        $this->quantity = $data['quantity'];
+        $this->quantity = (int) $data['quantity'];
     }
 
-    private function setAdvanced($data): void
+    /**
+     * @param  array<string, int|string|Carbon>  $data
+     */
+    private function setAdvanced(array $data): void
     {
         if (! Arr::exists($data, 'advanced')) {
             $this->advanced = ['none'];
 
             return;
         }
-        $this->advanced = $data['advanced'] ? explode('|', $data['advanced']) : [];
+        $this->advanced = $data['advanced'] ? explode('|', (string) $data['advanced']) : [];
     }
 
-    private function setDates($date_start, $date_end): void
+    private function setDates(Carbon $date_start, Carbon $date_end): void
     {
         // If we charge extra for using over a 24hour day, add an extra day here.
         if ($this->useTime()) {
             $time_start = ($date_start->hour * 60) + $date_start->minute;
             $time_end = ($date_end->hour * 60) + $date_end->minute;
             if ($time_end > $time_start) {
-                $date_end = $date_end->add(1, 'day');
+                $date_end = $date_end->addDay();
             }
         }
 
@@ -85,10 +100,13 @@ trait HandlesAvailabilityDates
         $this->dates_initiated = true;
     }
 
-    public function initiateAvailability($data): void
+    /**
+     * @param  array<string, int|string|Carbon>  $data
+     */
+    public function initiateAvailability(array $data): void
     {
-        $date_start = Carbon::parse($data['date_start']);
-        $date_end = Carbon::parse($data['date_end']);
+        $date_start = $data['date_start'] instanceof Carbon ? $data['date_start'] : new Carbon((string) $data['date_start']);
+        $date_end = $data['date_end'] instanceof Carbon ? $data['date_end'] : new Carbon((string) $data['date_end']);
 
         if ($date_start > $date_end) {
             throw new AvailabilityException(__('Your pickup date is before the drop-off date.'));
@@ -109,11 +127,15 @@ trait HandlesAvailabilityDates
         $this->checkDurationValidity();
     }
 
-    // Quick method to use when extra checks are not required, will merge later
-    public function initiateAvailabilityUnsafe($data): void
+    /**
+     * Quick method to use when extra checks are not required, will merge later
+     *
+     * @param  array<string, int|string|Carbon>  $data
+     */
+    public function initiateAvailabilityUnsafe(array $data): void
     {
-        $date_start = new Carbon($data['date_start']);
-        $date_end = new Carbon($data['date_end']);
+        $date_start = $data['date_start'] instanceof Carbon ? $data['date_start'] : new Carbon((string) $data['date_start']);
+        $date_end = $data['date_end'] instanceof Carbon ? $data['date_end'] : new Carbon((string) $data['date_end']);
 
         $this->setQuantity($data);
 

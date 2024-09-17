@@ -46,7 +46,7 @@ class OptionValue extends Model
 
     public function priceForDates($data)
     {
-        $this->initiateAvailabilityUnsafe($data);
+        $this->initiateAvailabilityUnsafe($data instanceof Reservation ? $data->toArray() : $data);
 
         return $this->calculatePrice($data)->format();
     }
@@ -56,7 +56,7 @@ class OptionValue extends Model
         if ($this->price_type == 'free') {
             return $this->price;
         }
-        $this->initiateAvailabilityUnsafe($data);
+        $this->initiateAvailabilityUnsafe($data instanceof Reservation ? $data->toArray() : $data);
         $applyQuantity = $this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false);
 
         if ($this->price_type == 'fixed') {

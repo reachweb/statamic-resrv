@@ -67,7 +67,7 @@ class Extra extends Model
 
     public function priceForDates($data)
     {
-        $this->initiateAvailabilityUnsafe($data);
+        $this->initiateAvailabilityUnsafe($data instanceof Reservation ? $data->toArray() : $data);
         $this->applyDynamicPricing();
 
         $basePrice = $this->calculatePriceByType($data);
@@ -145,7 +145,7 @@ class Extra extends Model
     // and is used to validate the price for the reservation. Probably should merge with getPriceForDates.
     public function calculatePrice($data, $quantity)
     {
-        $this->initiateAvailabilityUnsafe($data);
+        $this->initiateAvailabilityUnsafe($data instanceof Reservation ? $data->toArray() : $data);
         $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
         if ($dynamicPricing) {
             $this->price = $dynamicPricing->apply($this->price)->format();
