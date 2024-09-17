@@ -8,24 +8,24 @@ use Reach\StatamicResrv\Exceptions\AvailabilityException;
 
 trait HandlesAvailabilityDates
 {
-    protected $date_start;
+    protected string $date_start;
 
-    protected $date_end;
+    protected string $date_end;
 
-    protected $duration;
+    protected int $duration;
 
-    protected $quantity;
+    protected int $quantity;
 
-    protected $advanced;
+    protected array $advanced;
 
-    protected $round_trip;
+    protected bool $round_trip;
 
-    protected function useTime()
+    protected function useTime(): bool
     {
         return config('resrv-config.calculate_days_using_time');
     }
 
-    protected function checkDurationValidity()
+    protected function checkDurationValidity(): void
     {
         if ($this->duration > config('resrv-config.maximum_reservation_period_in_days')) {
             throw new AvailabilityException(__('The period you selected exceeds the maximum allowed reservation period.'));
@@ -35,7 +35,7 @@ trait HandlesAvailabilityDates
         }
     }
 
-    protected function checkMinimumDate($date_start)
+    protected function checkMinimumDate($date_start): void
     {
         if (config('resrv-config.minimum_days_before') > 0) {
             $date = Carbon::create($date_start->year, $date_start->month, $date_start->day, 0, 0, 0);
@@ -45,7 +45,7 @@ trait HandlesAvailabilityDates
         }
     }
 
-    private function setQuantity($data)
+    private function setQuantity($data): void
     {
         if (! Arr::exists($data, 'quantity')) {
             $this->quantity = 1;
@@ -58,7 +58,7 @@ trait HandlesAvailabilityDates
         $this->quantity = $data['quantity'];
     }
 
-    private function setAdvanced($data)
+    private function setAdvanced($data): void
     {
         if (! Arr::exists($data, 'advanced')) {
             $this->advanced = ['none'];
@@ -68,7 +68,7 @@ trait HandlesAvailabilityDates
         $this->advanced = $data['advanced'] ? explode('|', $data['advanced']) : [];
     }
 
-    private function setDates($date_start, $date_end)
+    private function setDates($date_start, $date_end): void
     {
         // If we charge extra for using over a 24hour day, add an extra day here.
         if ($this->useTime()) {
@@ -85,7 +85,7 @@ trait HandlesAvailabilityDates
         $this->dates_initiated = true;
     }
 
-    public function initiateAvailability($data)
+    public function initiateAvailability($data): void
     {
         $date_start = Carbon::parse($data['date_start']);
         $date_end = Carbon::parse($data['date_end']);
@@ -110,7 +110,7 @@ trait HandlesAvailabilityDates
     }
 
     // Quick method to use when extra checks are not required, will merge later
-    public function initiateAvailabilityUnsafe($data)
+    public function initiateAvailabilityUnsafe($data): void
     {
         $date_start = new Carbon($data['date_start']);
         $date_end = new Carbon($data['date_end']);

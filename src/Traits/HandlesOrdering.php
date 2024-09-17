@@ -4,7 +4,7 @@ namespace Reach\StatamicResrv\Traits;
 
 trait HandlesOrdering
 {
-    public function changeOrder($order)
+    public function changeOrder(int $order): void
     {
         if ($this->order == $order) {
             return;

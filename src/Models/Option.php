@@ -9,6 +9,9 @@ use Reach\StatamicResrv\Database\Factories\OptionFactory;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 
+/**
+ * @property int $order
+ */
 class Option extends Model
 {
     use HandlesOrdering, HasFactory, SoftDeletes;

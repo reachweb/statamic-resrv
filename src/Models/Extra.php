@@ -14,6 +14,9 @@ use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 
+/**
+ * @property int $order
+ */
 class Extra extends Model
 {
     use HandlesAvailabilityDates, HandlesMultisiteIds, HandlesOrdering, HasFactory, SoftDeletes;

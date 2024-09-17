@@ -17,6 +17,9 @@ use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesComparisons;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 
+/**
+ * @property int $order
+ */
 class DynamicPricing extends Model
 {
     use HandlesComparisons, HandlesOrdering, HasFactory;

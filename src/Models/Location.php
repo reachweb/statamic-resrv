@@ -11,6 +11,9 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 
+/**
+ * @property int $order
+ */
 class Location extends Model
 {
     use HandlesOrdering, HasFactory, SoftDeletes;
