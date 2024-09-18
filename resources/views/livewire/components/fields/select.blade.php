@@ -14,7 +14,7 @@
     >
         <option selected>{{ __('Please select') }}</option>
         @foreach ($field['options'] as $key => $label)
-        <option value="{{ $key }}">{{ __($label) }}</option>
+        <option value="{{ $option['key'] }}">{{ __($option['value']) }}</option>
         @endforeach
     </select>
     @if (array_key_exists('instructions', $field))
