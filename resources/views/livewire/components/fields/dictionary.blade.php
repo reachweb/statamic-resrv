@@ -5,7 +5,7 @@
         {{ __($field['display']) }}
     </label>
     <div 
-        x-data="filteredSelect"
+        x-data="filteredSelect(@js($this->getDictionaryItems($field['handle'])), '{{ $field['handle'] }}')"
         x-modelable="selectedItem"
         wire:model="form.{{ $field['handle'] }}"
         x-on:keydown.escape="if (selectOpen) { selectOpen = false; $refs.selectButton.focus(); }"
@@ -55,6 +55,12 @@
                     aria-expanded="true"
                 >
             </div>
+            <div 
+                class="px-3 py-2 text-center text-gray-600 italic" 
+                x-show="Object.keys(filteredItems).length === 0"
+                x-text="'{{ __('No results found') }}'"
+            >
+            </div>
             <ul 
                 x-ref="selectableItemsList" 
                 x-bind:id="selectId + '-listbox'"
@@ -92,10 +98,10 @@
 
 @script
 <script>
-Alpine.data('filteredSelect', () => ({
+Alpine.data('filteredSelect', (initialItems, fieldHandle) => ({
     selectOpen: false,
     selectedItem: null,
-    selectableItems: @json($this->getDictionaryItems($field['handle'])),
+    selectableItems: initialItems,
     filteredItems: {},
     selectableItemActive: null,
     selectId: null,
