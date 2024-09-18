@@ -7,6 +7,7 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
 use Reach\StatamicResrv\Models\Reservation;
+use Statamic\Facades\Dictionary;
 
 class CheckoutForm extends Component
 {
@@ -59,6 +60,15 @@ class CheckoutForm extends Component
     public function validationAttributes(): array
     {
         return collect($this->checkoutForm)->mapWithKeys(fn ($field) => ['form.'.$field['handle'] => $field['display']])->all();
+    }
+
+    public function getDictionaryItems(string $handle): array
+    {
+        $dictionary = $this->reservation->getCheckoutForm()->firstOrFail(function ($field) use ($handle) {
+            return $field->handle() === $handle;
+        })->config()['dictionary'];
+
+        return Dictionary::find($dictionary)->options();
     }
 
     public function saveCustomer()

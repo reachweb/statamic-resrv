@@ -1,6 +1,6 @@
 @props(['field', 'key', 'errors'])
 
-<div {{ $attributes->class(['relative', 'md:col-span-2' => $field['width'] === 100, 'md:col-span-1' => $field['width'] === 50,]) }} wire:key={{ $key }}>
+<div {{ $attributes->class(['relative', 'md:col-span-2' => $field['width'] === 100, 'md:col-span-1' => $field['width'] === 50,]) }} wire:key="{{ $key }}">
     <label for="{{ $field['handle'] }}" class="block mb-2 font-medium text-gray-900">
         {{ __($field['display']) }}
     </label>
