@@ -13,7 +13,7 @@
         @endif
     >
         <option selected>{{ __('Please select') }}</option>
-        @foreach ($field['options'] as $key => $label)
+        @foreach ($field['options'] as $option)
         <option value="{{ $option['key'] }}">{{ __($option['value']) }}</option>
         @endforeach
     </select>
