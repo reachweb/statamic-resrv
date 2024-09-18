@@ -1,6 +1,6 @@
 @props(['field', 'key', 'errors'])
 
-<div {{ $attributes->class(['relative', 'md:col-span-2' => $field['width'] === 100, 'md:col-span-1' => $field['width'] === 50,]) }} wire:key={{ $key }}>
+<div {{ $attributes->class(['relative', 'md:col-span-2' => $field['width'] === 100, 'md:col-span-1' => $field['width'] === 50,]) }} wire:key="{{ $key }}">
     <label class="inline-flex items-center cursor-pointer">
         <input type="checkbox" class="sr-only peer" wire:model="form.{{ $field['handle'] }}">
         <div 
