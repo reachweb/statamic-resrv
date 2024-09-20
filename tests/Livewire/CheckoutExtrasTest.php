@@ -43,6 +43,7 @@ class CheckoutExtrasTest extends TestCase
         $this->extras = ResrvExtra::getPriceForDates($this->reservation);
     }
 
+    // Test that extras are correctly loaded for the Reservation
     public function test_it_loads_the_extras_for_the_entry_and_reservation()
     {
         session(['resrv_reservation' => $this->reservation->id]);
@@ -55,6 +56,7 @@ class CheckoutExtrasTest extends TestCase
         $this->assertEquals('9.30', $component->extras->first()->price);
     }
 
+    // Test that extras prices are correctly calculated when Reservation quantity is greater than 1
     public function test_loads_extras_for_the_reservation_with_extra_quantity()
     {
         $extraQuantityReservation = Reservation::factory()->create([
@@ -69,6 +71,7 @@ class CheckoutExtrasTest extends TestCase
         $this->assertEquals('18.60', $component->extras->first()->price);
     }
 
+    // Test that extras prices remain the same when ignore_quantity_for_prices config is set to true
     public function test_loads_extras_for_the_reservation_with_extra_quantity_but_same_price_if_configured()
     {
         Config::set('resrv-config.ignore_quantity_for_prices', true);
@@ -85,6 +88,7 @@ class CheckoutExtrasTest extends TestCase
         $this->assertEquals('9.30', $component->extras->first()->price);
     }
 
+    // Test that selected extras are correctly displayed in the pricing table and final price
     public function test_loads_if_extra_is_selected_we_see_it_in_the_pricing_table_and_the_final_price()
     {
         session(['resrv_reservation' => $this->reservation->id]);
@@ -99,6 +103,7 @@ class CheckoutExtrasTest extends TestCase
             ->assertSee('209.30');
     }
 
+    // Test that extras relative to a checkout form item are correctly calculated
     public function test_gets_correct_price_for_custom_price_extra()
     {
         $reservation = Reservation::factory()->create([
@@ -124,5 +129,29 @@ class CheckoutExtrasTest extends TestCase
                 'price' => '10.00',
             ]])
             ->assertSee('€ 30');
+    }
+
+    // Test that relative price extras are correctly calculated based on the Reservation price
+    public function test_gets_correct_price_for_relative_price_extra()
+    {
+        $reservation = Reservation::factory()->create([
+            'item_id' => $this->entries->first()->id(),
+            'customer' => ['adults' => 3],
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $extra = ResrvExtra::factory()->relative()->create();
+
+        DB::table('resrv_statamicentry_extra')->insert([
+            'statamicentry_id' => $this->entries->first()->id,
+            'extra_id' => $extra->id,
+        ]);
+
+        $this->travelTo(today()->subDay()->setHour(12));
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->assertEquals('50.00', $component->extras[1]->price);
     }
 }

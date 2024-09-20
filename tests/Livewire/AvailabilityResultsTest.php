@@ -50,6 +50,7 @@ class AvailabilityResultsTest extends TestCase
         ]);
     }
 
+    // Test that the component renders successfully
     public function test_renders_successfully()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
@@ -57,6 +58,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertStatus(200);
     }
 
+    // Test that it can set the extra days parameter
     public function test_can_set_extra_days_parameter()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'extraDays' => 2])
@@ -64,6 +66,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertStatus(200);
     }
 
+    // Test that it can access the Statamic entry
     public function test_can_access_the_statamic_entry()
     {
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
@@ -72,6 +75,7 @@ class AvailabilityResultsTest extends TestCase
         $this->assertEquals($this->entries->first(), $component->entry);
     }
 
+    // Test that it listens to the availability-search-updated event and shows price and availability or not
     public function test_listens_to_the_availability_search_updated_event()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
@@ -103,6 +107,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.message.status', false);
     }
 
+    // Test that it returns no availability (false) if no availability is set
     public function test_returns_no_availability_if_zero()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->get('none-available')->id()])
@@ -120,6 +125,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.message.status', false);
     }
 
+    // Test that it returns no availability (false) if the item is set to stop sales (resrv_availability = 'disabled')
     public function test_returns_no_availability_if_stop_sales()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->get('stop-sales')->id()])
@@ -137,6 +143,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.message.status', false);
     }
 
+    // Test that it returns no availability (false) if the quantity is not enough
     public function test_returns_no_availability_if_quantity_not_enough()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
@@ -154,6 +161,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.message.status', false);
     }
 
+    // Test that it returns no availability (false) if the closer than minimum_days_before allows
     public function test_returns_no_availability_if_date_is_too_close()
     {
         Config::set('resrv-config.minimum_days_before', 2);
@@ -173,6 +181,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertSee('The starting date is closer than allowed');
     }
 
+    // Test that it returns the correct price for extra quantity
     public function test_returns_correct_price_for_extra_quantity()
     {
         Availability::where('statamic_id', $this->entries->first()->id())
@@ -193,6 +202,122 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.data.price', '200.00');
     }
 
+    // Test that it returns false if one day is zero availability
+    public function test_returns_false_if_one_day_is_zero_availability()
+    {
+        $zeroAvailabilityEntry = $this->makeStatamicItemWithAvailability(customAvailability: [
+            'available' => [1, 1, 0, 1],
+        ]);
+
+        $searchPayload = [
+            'dates' => [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+            ],
+            'quantity' => 1,
+            'advanced' => null,
+        ];
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $zeroAvailabilityEntry->id()])
+            ->dispatch('availability-search-updated', $searchPayload)
+            ->assertViewHas('availability.message')
+            ->assertViewHas('availability.message.status', false);
+    }
+
+    // Test that it returns the correct prices if the prices vary
+    public function test_availability_variable_prices()
+    {
+        $varyingPriceEntry = $this->makeStatamicItemWithAvailability(customAvailability: [
+            'price' => [50, 30, 50, 50],
+        ]);
+
+        $searchPayload = [
+            'dates' => [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+            ],
+            'quantity' => 1,
+            'advanced' => null,
+        ];
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $varyingPriceEntry->id()])
+            ->dispatch('availability-search-updated', $searchPayload)
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '130.00');
+    }
+
+    // Test that it gives an error for reservations less than the minimum days setting
+    public function test_availability_honors_min_days_setting()
+    {
+        Config::set('resrv-config.minimum_reservation_period_in_days', 3);
+
+        $searchPayload = [
+            'dates' => [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+            ],
+            'quantity' => 1,
+            'advanced' => null,
+        ];
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries['normal']->id()])
+            ->dispatch('availability-search-updated', $searchPayload)
+            ->assertHasErrors('availability');
+    }
+
+    // Test that it gives an error for reservations more than the maximum days setting
+    public function test_availability_honors_max_days_setting()
+    {
+        Config::set('resrv-config.maximum_reservation_period_in_days', 3);
+
+        $searchPayload = [
+            'dates' => [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(5, 'day')->toISOString(),
+            ],
+            'quantity' => 1,
+            'advanced' => null,
+        ];
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries['normal']->id()])
+            ->dispatch('availability-search-updated', $searchPayload)
+            ->assertHasErrors('availability');
+    }
+
+    // Test that it calculates correct prices for decimals
+    public function test_availability_prices()
+    {
+        $this->travelTo(today()->setHour(11));
+
+        $item = $this->makeStatamicItemWithAvailability(customAvailability: [
+            'dates' => [
+                today(),
+                today()->addDay(),
+                today()->addDays(2),
+                today()->addDays(3),
+            ],
+            'price' => 25.23,
+            'available' => 2,
+        ]);
+
+        $searchPayload = [
+            'dates' => [
+                'date_start' => today()->setHour(12)->toISOString(),
+                'date_end' => today()->setHour(12)->add(3, 'day')->toISOString(),
+            ],
+            'quantity' => 1,
+            'advanced' => null,
+        ];
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $item->id()])
+            ->dispatch('availability-search-updated', $searchPayload)
+            ->assertViewHas('availability.data')
+            ->assertViewHas('availability.data.price', '75.69')
+            ->assertViewHas('availability.request')
+            ->assertViewHas('availability.request.days', 3);
+    }
+
+    // Test that it ignores quantity for pricing if configured
     public function test_returns_same_price_for_extra_quantity_if_configured()
     {
         Config::set('resrv-config.ignore_quantity_for_prices', true);
@@ -215,6 +340,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.data.price', '100.00');
     }
 
+    // Test that it returns availability for any extra requested days
     public function test_returns_availability_for_extra_requested_days()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'extraDays' => 2])
@@ -243,6 +369,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.+2.message.status', false);
     }
 
+    // Test that it returns availability for any extra requested days with offset
     public function test_returns_availability_for_extra_requested_days_with_offset()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'extraDays' => 1, 'extraDaysOffset' => 1])
@@ -267,6 +394,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.+1.request.date_start', $this->date->copy()->addDays(2)->format('Y-m-d'));
     }
 
+    // Test that it returns availability for specific advanced property
     public function test_returns_availability_for_specific_advanced()
     {
         Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
@@ -298,6 +426,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.message.status', false);
     }
 
+    // Test that it returns availability for all advanced properties sorted by price if searching for advanced 'any'
     public function test_returns_availability_for_all_advanced_sorted_by_price()
     {
         $availabilityData = [
@@ -366,6 +495,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.message.status', false);
     }
 
+    // Test that it gets options if property is enabled
     public function test_gets_options_if_property_is_enabled()
     {
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'showOptions' => true])
@@ -386,6 +516,7 @@ class AvailabilityResultsTest extends TestCase
         $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
     }
 
+    // Test that it gets extras if property is enabled
     public function test_gets_extras_if_property_is_enabled()
     {
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'showExtras' => true])
@@ -406,6 +537,7 @@ class AvailabilityResultsTest extends TestCase
         $this->assertEquals('9.30', $component->extras->first()->price);
     }
 
+    // Test that it applies dynamic pricing if conditions are met
     public function test_applies_dynamic_pricing_if_conditions_are_met()
     {
         $dynamic = DynamicPricing::factory()->create();
@@ -445,7 +577,8 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.data.original_price', '150.00');
     }
 
-    public function test_applies_dynamic_pricing_if_conditions_are_met_price_over()
+    // Test that it applies dynamic pricing if conditions are met price_over
+    public function test_applies_dynamic_pricing_for_reservation_price_over_an_ammount()
     {
         $dynamic = DynamicPricing::factory()->conditionPriceOver()->create();
 
@@ -484,6 +617,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.data.original_price', '150.00');
     }
 
+    // Test that it applies dynamic pricing with a fixed increase
     public function test_applies_dynamic_pricing_if_conditions_are_met_fixed_increase()
     {
         $dynamic = DynamicPricing::factory()->fixedIncrease()->create();
@@ -510,6 +644,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.data.original_price', '150.00');
     }
 
+    // Test that it applies dynamic pricing with a coupon when it is set in the session
     public function test_applies_dynamic_pricing_coupon_when_in_session()
     {
         $dynamic = DynamicPricing::factory()->withCoupon()->create();
@@ -538,6 +673,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.data.original_price', '150.00');
     }
 
+    // Test that it creates a reservation when the checkout method is called and that it decreases availability
     public function test_creates_reservation_when_checkout_is_called()
     {
         $entry = Entry::make()
@@ -613,6 +749,7 @@ class AvailabilityResultsTest extends TestCase
         ]);
     }
 
+    // Test that it creates a reservation and saves customer data in the database if present before checkout
     public function test_creates_reservation_and_saves_custom_data_in_the_database()
     {
         $entry = Entry::make()
@@ -658,6 +795,7 @@ class AvailabilityResultsTest extends TestCase
         );
     }
 
+    // Test that it return an error if the availability has changed after the results have been shown
     public function test_does_not_create_reservation_if_availability_changed()
     {
         $entry = Entry::make()
@@ -693,6 +831,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertHasErrors('availability');
     }
 
+    // Test that it starts the checkout correctly when extra quantity is ignored for pricing
     public function test_starts_checkout_correctly_when_extra_quantity_is_ignored_for_pricing()
     {
         $entry = Entry::make()
@@ -737,6 +876,7 @@ class AvailabilityResultsTest extends TestCase
         );
     }
 
+    // Test that it redirects to the checkout after a reservation is created
     public function test_redirects_to_checkout_after_reservation_is_created()
     {
         $entry = Entry::make()
@@ -764,6 +904,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertRedirect($entry->url());
     }
 
+    // Test that it creates a reservation and saves affiliate when the cookie is in the session
     public function test_creates_reservation_and_saves_affiliate_when_cookie_is_in_session()
     {
         $entry = Entry::make()

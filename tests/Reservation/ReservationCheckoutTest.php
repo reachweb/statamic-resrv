@@ -61,6 +61,7 @@ class ReservationCheckoutTest extends TestCase
         Config::set('resrv-config.checkout_completed_entry', $this->entry->id());
     }
 
+    // Test if the checkout completed page loads correctly
     public function test_checkout_completed_page_loads()
     {
         $this->withStandardFakeViews();
@@ -70,6 +71,7 @@ class ReservationCheckoutTest extends TestCase
             ->assertSee($this->entry->title);
     }
 
+    // Test if the checkout completed page shows success message
     public function test_checkout_completed_page_shows_success()
     {
         $this->withFakeViews();
@@ -82,6 +84,7 @@ class ReservationCheckoutTest extends TestCase
             ->assertSee('Payment successful');
     }
 
+    // Test if the checkout completed page shows failure message
     public function test_checkout_completed_page_shows_failure()
     {
         $this->withFakeViews();
@@ -94,6 +97,7 @@ class ReservationCheckoutTest extends TestCase
             ->assertSee('Payment failed');
     }
 
+    // Test if the checkout completed page shows pending message
     public function test_checkout_completed_page_shows_pending()
     {
         $this->withFakeViews();
@@ -106,6 +110,7 @@ class ReservationCheckoutTest extends TestCase
             ->assertSee('Reservation confirmed successfully');
     }
 
+    // Test if webhook can confirm a reservation
     public function test_webhook_can_confirm_reservation()
     {
         Mail::fake();
@@ -119,6 +124,7 @@ class ReservationCheckoutTest extends TestCase
         ]);
     }
 
+    // Test if webhook fires reservation confirmed event
     public function test_webhook_fires_reservation_confirmed_event()
     {
         Mail::fake();
@@ -132,6 +138,7 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
+    // Test if the webhook will cancel a reservation for failed status
     public function test_webhook_can_cancel_reservation()
     {
         Mail::fake();
@@ -145,6 +152,7 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
+    // Test if email is sent when reservation is confirmed
     public function test_email_is_sent_when_reservation_is_confirmed()
     {
         Mail::fake();
@@ -160,6 +168,28 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
+    // Test if reservation email renders correct information
+    public function test_reservation_email_renders_correct_information()
+    {
+        Config::set('resrv-config.admin_email', 'someone@test.com,someonelse@example.com');
+
+        $mail = new ReservationConfirmed($this->reservation);
+        $html = $mail->render();
+
+        $mailMade = new ReservationMade($this->reservation);
+        $htmlMade = $mailMade->render();
+
+        $this->assertStringContainsString($this->entries->first()->title, $html);
+        $this->assertStringContainsString($this->reservation->customer->get('email'), $html);
+        $this->assertStringContainsString($this->reservation->customer->get('first_name'), $html);
+        $this->assertStringContainsString('500', $html);
+        $this->assertStringContainsString($this->entries->first()->title, $htmlMade);
+        $this->assertStringContainsString($this->reservation->customer->get('email'), $htmlMade);
+        $this->assertStringContainsString($this->reservation->customer->get('first_name'), $htmlMade);
+        $this->assertStringContainsString('500', $htmlMade);
+    }
+
+    // Test if it saves dynamic pricings that were applied
     public function test_it_saves_dynamic_pricings_that_were_applied()
     {
         $dynamic = DynamicPricing::factory()->create([
@@ -228,6 +258,7 @@ class ReservationCheckoutTest extends TestCase
         );
     }
 
+    // Test if listener listens to coupon updated event
     public function test_test_listener_listens_to_coupon_updated_event()
     {
         Event::fake();
@@ -248,6 +279,7 @@ class ReservationCheckoutTest extends TestCase
         );
     }
 
+    // Test if coupon updated event adds and removes coupon from reservation
     public function test_test_coupon_updated_event_adds_and_removes_coupon_from_reservation()
     {
         $dynamic = DynamicPricing::factory()->withCoupon()->create();
@@ -285,6 +317,7 @@ class ReservationCheckoutTest extends TestCase
         $this->assertDatabaseCount('resrv_reservation_dynamic_pricing', 0);
     }
 
+    // Test if listener listens to reservation created event
     public function test_test_listener_listens_to_reservation_created_event()
     {
         Event::fake();
@@ -304,6 +337,7 @@ class ReservationCheckoutTest extends TestCase
         );
     }
 
+    // Test if it saves affiliate when present in the event data
     public function test_it_saves_affiliate_when_present_in_the_event()
     {
         $this->withStandardFakeViews();
@@ -323,6 +357,7 @@ class ReservationCheckoutTest extends TestCase
         );
     }
 
+    // Test if email is sent to affiliate if send_reservation_email is enabled
     public function test_email_is_sent_to_affiliate_if_enabled()
     {
         Config::set('resrv-config.enable_affiliates', true);
@@ -344,6 +379,7 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
+    // Test if email is not sent to affiliate if send_reservation_email is disabled
     public function test_email_is_not_sent_to_affiliate_if_disabled()
     {
         Config::set('resrv-config.enable_affiliates', true);
