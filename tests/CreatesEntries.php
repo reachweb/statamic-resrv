@@ -97,4 +97,20 @@ trait CreatesEntries
 
         return $entries;
     }
+
+    protected function createAvailabilityForEntry(Entry $entry, float $price, int $available, ?string $property = 'none', int $days = 20)
+    {
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count($days)
+            ->sequence(fn ($sequence) => [
+                'date' => $startDate->copy()->addDays($sequence->index),
+                'price' => $price,
+                'available' => $available,
+                'statamic_id' => $entry->id(),
+                'property' => $property,
+            ])
+            ->create();
+    }
 }

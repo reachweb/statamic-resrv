@@ -578,7 +578,7 @@ class AvailabilityResultsTest extends TestCase
     }
 
     // Test that it applies dynamic pricing if conditions are met price_over
-    public function test_applies_dynamic_pricing_for_reservation_price_over_an_ammount()
+    public function test_applies_dynamic_pricing_for_reservation_price_over_an_amount()
     {
         $dynamic = DynamicPricing::factory()->conditionPriceOver()->create();
 
