@@ -181,25 +181,6 @@ checkout_completed_entry:
   max_items: 1
   required: true
 
-checkout_url_settings:
-  display: 'Legacy settings'
-  instructions: 'These settings configure the legacy availability / checkout component'
-  type: section
-enable_legacy_endpoints:
-  display: 'Enable legacy endpoints'
-  instructions: 'Enable the legacy API endpoints for availability and checkout'
-  type: toggle
-checkout_completed_uri:
-  display: 'Checkout completed URL'
-  instructions: 'The relative URL of the entry that is shown when checkout is completed'
-  type: text
-  required: false
-checkout_failed_uri:
-  display: 'Checkout failed URL'
-  instructions: 'The relative URL of the entry that is shown when checkout fails'
-  type: text
-  required: false
-
 currency_settings:
   display: 'Currency settings'
   instructions: 'Change what currency the engine uses (limited functionality for now)'

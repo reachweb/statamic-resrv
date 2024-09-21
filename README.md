@@ -9,7 +9,7 @@ Resrv is designed to be flexible and cater to many different business scenarios 
 Besides the core functionality, it also has many extra functionalities that can be used to build your reservation system. That way, every business can have an in-house reservation system on their website and take reservations without paying huge reservation fees or expensive monthly subscriptions.
 
 ## Documentation
-Dcumentation page: https://resrv.eu/
+Dcumentation page: https://resrv.dev/
 
 ## Basic features
 

@@ -9,7 +9,7 @@
         "reservations",
         "availability"
     ],
-    "homepage": "https://www.reach.gr",
+    "homepage": "https://resrv.dev",
     "license": "proprietary",
     "type": "statamic-addon",
     "authors": [
