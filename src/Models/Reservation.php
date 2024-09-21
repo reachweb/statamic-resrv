@@ -199,29 +199,6 @@ class Reservation extends Model
         return (new Availability)->getPricing($this->buildDataArray(), $this->item_id);
     }
 
-    public function confirmReservation($data, $statamic_id, $checkExtras = true, $checkOptions = true)
-    {
-        $this->checkAvailability($data, $statamic_id);
-
-        $this->confirmTotal($data, $statamic_id);
-
-        $this->checkMaxQuantity($data['quantity']);
-
-        if ($checkOptions && ! $this->checkForRequiredOptions($statamic_id, $data)) {
-            throw new ReservationException(__('There are required options you did not select.'));
-        }
-
-        if ($checkExtras) {
-            $requiredExtras = $this->checkForRequiredExtras($statamic_id, $data);
-            if ($requiredExtras) {
-                throw new ReservationException($requiredExtras);
-            }
-        }
-
-        return true;
-    }
-
-    // TODO: remove the method above and keep only this for Livewire frontend
     public function validateReservation($data, $statamic_id, $checkExtras = true, $checkOptions = true)
     {
         $this->validateTotal($data, $statamic_id);
@@ -237,44 +214,6 @@ class Reservation extends Model
             if ($requiredExtras) {
                 throw new ReservationException($requiredExtras);
             }
-        }
-
-        return true;
-    }
-
-    public function confirmMultipleReservation($data, $statamic_id, $checkOptions = true)
-    {
-        $dates = collect($data['dates']);
-        $extraCharges = Price::create(0);
-        foreach ($dates as $reservation) {
-            $dateData = [
-                'date_start' => $reservation['date_start'],
-                'date_end' => $reservation['date_end'],
-                'quantity' => $reservation['quantity'] ?? 1,
-            ];
-            if (isset($reservation['advanced'])) {
-                $dateData['advanced'] = $reservation['advanced'];
-            }
-            $availability = new Availability;
-            $checkAvailability = $availability->confirmAvailability($dateData, $statamic_id);
-            if ($checkAvailability == false) {
-                throw new ReservationException(__('This item is not available anymore. Please refresh and try searching again!'));
-            }
-            $dateData = array_replace($data, $dateData);
-            $extraCharges->add($this->getExtraCharges($dateData, $statamic_id));
-            $this->checkMaxQuantity($reservation['quantity'] ?? 1);
-        }
-
-        $reservationCost = Price::create($data['price']);
-        $dbTotal = $reservationCost->add($extraCharges);
-        $frontendTotal = Price::create($data['total']);
-
-        if (! $dbTotal->equals($frontendTotal)) {
-            throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
-        }
-
-        if ($checkOptions && ! $this->checkForRequiredOptions($statamic_id, $data)) {
-            throw new ReservationException(__('There are required options you did not select.'));
         }
 
         return true;
@@ -315,20 +254,6 @@ class Reservation extends Model
         }
     }
 
-    public function confirmTotal($data, $statamic_id)
-    {
-        $reservationCost = Price::create($data['price']);
-
-        $dbTotal = $reservationCost->add($this->getExtraCharges($data, $statamic_id));
-        $frontendTotal = Price::create($data['total']);
-        if (! $dbTotal->equals($frontendTotal)) {
-            throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
-        }
-
-        return true;
-    }
-
-    // TODO: remove the method above and keep only this for Livewire frontend
     public function validateTotal($data, $statamic_id)
     {
         $prices = (new Availability)->getPricing($data, $statamic_id);
@@ -345,38 +270,6 @@ class Reservation extends Model
         return true;
     }
 
-    protected function getExtraCharges($data, $statamic_id)
-    {
-        $extraCharges = Price::create(0);
-
-        $optionsCost = Price::create(0);
-        if (array_key_exists('options', $data) > 0) {
-            foreach ($data['options'] as $id => $properties) {
-                $optionsCost->add(Option::find($id)->calculatePrice($data, $properties['value']));
-            }
-        }
-
-        $extrasCost = Price::create(0);
-        if (array_key_exists('extras', $data) > 0) {
-            $data['item_id'] = $statamic_id;
-            foreach ($data['extras'] as $id => $properties) {
-                $extrasCost->add(Extra::find($id)->calculatePrice($data, $properties['quantity']));
-            }
-        }
-
-        $locationCost = Price::create(0);
-        if (config('resrv-config.enable_locations') == true) {
-            $locationCost->add(Location::find($data['location_start'])->extra_charge);
-            $locationCost->add(Location::find($data['location_end'])->extra_charge);
-            if (array_key_exists('quantity', $data) > 0) {
-                $locationCost->multiply($data['quantity']);
-            }
-        }
-
-        return $extraCharges->add($optionsCost, $extrasCost, $locationCost);
-    }
-
-    // TODO: remove the method above and keep only this for Livewire frontend
     protected function validateExtraCharges($data, $statamic_id)
     {
         $extraCharges = Price::create(0);
