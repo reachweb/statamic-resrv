@@ -6,9 +6,9 @@ interface AvailabilityContract
 {
     public function getPriceAttribute($value);
 
-    public function getAvailableItems(array $data);
+    public function getAvailable(array $data);
 
-    public function getAvailabilityForItem(array $data, string $statamic_id);
+    public function getAvailabilityForEntry(array $data, string $statamic_id);
 
     public function confirmAvailabilityAndPrice(array $data, string $statamic_id);
 

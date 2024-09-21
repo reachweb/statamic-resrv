@@ -76,7 +76,7 @@ class ExtraCondition extends Model
         }
 
         $check = $required->filter(function ($messages, $extra) use ($data) {
-            if (! array_key_exists($extra, $data['extras'])) {
+            if (! $data['extras']->contains('id', $extra)) {
                 return true;
             }
         });
@@ -181,7 +181,7 @@ class ExtraCondition extends Model
         if (! Arr::exists($data, 'extras')) {
             return false;
         }
-        if (array_key_exists($condition->value, $data['extras'])) {
+        if ($data['extras']->contains('id', $condition->value)) {
             return true;
         }
 

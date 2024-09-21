@@ -10,8 +10,13 @@ use Statamic\Facades\Collection;
 
 trait CreatesEntries
 {
-    protected function makeStatamicItemWithAvailability(?string $collection = 'pages', ?int $available = null, ?int $price = null, ?string $advanced = null)
-    {
+    protected function makeStatamicItemWithAvailability(
+        ?string $collection = 'pages',
+        ?int $available = null,
+        ?int $price = null,
+        ?string $advanced = null,
+        ?array $customAvailability = null
+    ) {
         $entryData = [
             'title' => fake()->sentence(),
             'resrv_availability' => fake()->uuid(),
@@ -28,22 +33,39 @@ trait CreatesEntries
 
         $entry->save();
 
-        $availabilityData = [
+        $defaultAvailabilityData = [
             'available' => $available ?? 1,
             'price' => $price ?? 50,
             'statamic_id' => $entry->id(),
             'property' => $advanced ?? 'none',
         ];
 
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->add(1, 'day')],
-                ['date' => today()->add(2, 'day')],
-                ['date' => today()->add(3, 'day')],
-            )
-            ->create($availabilityData);
+        if ($customAvailability) {
+            $dates = $customAvailability['dates'] ?? [today(), today()->addDay(), today()->addDays(2), today()->addDays(3)];
+            $availables = $customAvailability['available'] ?? array_fill(0, count($dates), $defaultAvailabilityData['available']);
+            $prices = $customAvailability['price'] ?? array_fill(0, count($dates), $defaultAvailabilityData['price']);
+
+            Availability::factory()
+                ->count(count($dates))
+                ->sequence(fn ($sequence) => [
+                    'date' => $dates[$sequence->index],
+                    'available' => is_array($availables) ? $availables[$sequence->index] : $availables,
+                    'price' => is_array($prices) ? $prices[$sequence->index] : $prices,
+                    'statamic_id' => $defaultAvailabilityData['statamic_id'],
+                    'property' => $defaultAvailabilityData['property'],
+                ])
+                ->create();
+        } else {
+            Availability::factory()
+                ->count(4)
+                ->sequence(
+                    ['date' => today()],
+                    ['date' => today()->addDay()],
+                    ['date' => today()->addDays(2)],
+                    ['date' => today()->addDays(3)],
+                )
+                ->create($defaultAvailabilityData);
+        }
 
         return $entry;
     }
@@ -74,5 +96,21 @@ trait CreatesEntries
         $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, advanced: 'yet-another-test'));
 
         return $entries;
+    }
+
+    protected function createAvailabilityForEntry(Entry $entry, float $price, int $available, ?string $property = 'none', int $days = 20)
+    {
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count($days)
+            ->sequence(fn ($sequence) => [
+                'date' => $startDate->copy()->addDays($sequence->index),
+                'price' => $price,
+                'available' => $available,
+                'statamic_id' => $entry->id(),
+                'property' => $property,
+            ])
+            ->create();
     }
 }

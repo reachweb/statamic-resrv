@@ -44,10 +44,6 @@ return [
     'admin_email' => false,
     'checkout_entry' => null,
     'checkout_completed_entry' => null,
-    'enable_legacy_endpoints' => false,
-    'checkout_completed_uri' => false,
-    'checkout_failed_uri' => false,
-    'checkout_post_id' => false,
 
     /**
      * Currency.

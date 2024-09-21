@@ -59,7 +59,7 @@ class ExtraConditionFactory extends Factory
                 'conditions' => [[
                     'operation' => 'required',
                     'type' => 'extra_selected',
-                    'value' => 2,
+                    'value' => 1,
                 ]],
             ];
         });
