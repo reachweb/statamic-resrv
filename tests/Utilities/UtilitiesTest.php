@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
-use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class UtilitiesTest extends TestCase

@@ -100,16 +100,6 @@ class Availability extends Model implements AvailabilityContract
         });
     }
 
-    public function getAvailableItems($data)
-    {
-        ExpireReservations::dispatchSync();
-
-        $this->initiateAvailability($data);
-
-        return $this->getAllAvailableItems();
-    }
-
-    // TODO: remove the method above
     public function getAvailable($data)
     {
         ExpireReservations::dispatchSync();
@@ -119,23 +109,6 @@ class Availability extends Model implements AvailabilityContract
         return $this->getAvailabilityCollection()->resolve();
     }
 
-    public function getMultipleAvailableItems($data)
-    {
-        ExpireReservations::dispatchSync();
-
-        return $this->getMultiple($data);
-    }
-
-    public function getAvailabilityForItem($data, $statamic_id)
-    {
-        ExpireReservations::dispatchSync();
-
-        $this->initiateAvailability($data);
-
-        return $this->getSpecificItem($statamic_id);
-    }
-
-    // TODO: remove the method above
     public function getAvailabilityForEntry($data, $statamic_id)
     {
         ExpireReservations::dispatchSync();
@@ -145,18 +118,11 @@ class Availability extends Model implements AvailabilityContract
         return $this->getSpecificItemCollection($statamic_id)->resolve();
     }
 
-    public function getMultipleAvailabilityForItem($data, $statamic_id)
-    {
-        ExpireReservations::dispatchSync();
-
-        return $this->getMultiSpecificItem($data, $statamic_id);
-    }
-
     public function confirmAvailability($data, $statamic_id)
     {
         $this->initiateAvailability($data);
 
-        $availability = $this->getSpecificItem($statamic_id);
+        $availability = $this->getSpecificItemCollection($statamic_id)->resolve();
 
         if ($availability['message']['status'] != 1) {
             return false;
@@ -169,7 +135,7 @@ class Availability extends Model implements AvailabilityContract
     {
         $this->initiateAvailability($data);
 
-        $availability = $this->getSpecificItem($statamic_id);
+        $availability = $this->getSpecificItemCollection($statamic_id)->resolve();
 
         if ($availability['message']['status'] != 1) {
             return false;
@@ -287,21 +253,6 @@ class Availability extends Model implements AvailabilityContract
         );
     }
 
-    protected function getAllAvailableItems()
-    {
-        $availableWithPricing = [];
-        $available = $this->availableForDates();
-
-        foreach ($available as $item) {
-            $id = $this->getDefaultSiteEntry($item->statamic_id)->id();
-            $price = $this->getPriceForDates($item, $id);
-            $availableWithPricing[$id] = $this->buildItemsArray($id, $price, $item->property);
-        }
-
-        return $availableWithPricing;
-    }
-
-    // TODO: remove the method above
     protected function getAvailabilityCollection()
     {
         $availableWithPricing = collect();
@@ -319,39 +270,6 @@ class Availability extends Model implements AvailabilityContract
         return new AvailabilityResource($availableWithPricing, $request);
     }
 
-    protected function getMultiple($data)
-    {
-        $available = collect();
-        // Get all available items for these date ranges
-        foreach ($data['dates'] as $dates) {
-            $this->initiateAvailability($dates);
-            $available->push($this->availableForDates()->keyBy('statamic_id'));
-        }
-
-        // Get an array of their IDs and keep only the values that are in ever range
-        $availableAtAllDates = $available->map(function ($date) {
-            return $date->keys()->toArray();
-        });
-        $availableAtAllDates = array_intersect(...array_values($availableAtAllDates->toArray()));
-
-        $availableWithPricing = [];
-        foreach ($availableAtAllDates as $id) {
-            $data = $available->map(function ($item) use ($id) {
-                return $item->get($id);
-            });
-            $id = $this->getDefaultSiteEntry($id)->id();
-            $price = Price::create(0);
-            $property = $data->first()->property;
-            $data->each(function ($item) use ($id, &$price) {
-                $price->add($this->getPriceForDates($item, $id)['reservation_price']);
-            });
-            $availableWithPricing[$id] = $this->buildMultiItemsArray($id, $price, $property);
-        }
-
-        return $availableWithPricing;
-    }
-
-    // TODO: remove the getSpecificItem method below, improve the returns here
     protected function getSpecificItemCollection($statamic_id)
     {
         $entry = $this->getDefaultSiteEntry($statamic_id);
@@ -414,147 +332,6 @@ class Availability extends Model implements AvailabilityContract
             'property' => $results->property,
             'propertyLabel' => $label,
         ]);
-    }
-
-    protected function getSpecificItem($statamic_id)
-    {
-        $entry = $this->getDefaultSiteEntry($statamic_id);
-
-        $entryAvailabilityValue = $entry->get('resrv_availability');
-
-        $results = $this->getResultsForItem($entry)->first();
-
-        if (! $results || $entryAvailabilityValue == 'disabled') {
-            return [
-                'message' => [
-                    'status' => false,
-                ],
-            ];
-        }
-
-        $this->calculatePrice($this->createPricesCollection($results->prices), $entry->id());
-
-        return $this->buildSpecificItemArray($results->property);
-    }
-
-    protected function getMultiSpecificItem($data, $statamic_id)
-    {
-        $entry = $this->getDefaultSiteEntry($statamic_id);
-        $entryAvailabilityValue = $entry->get('resrv_availability');
-
-        $days = collect();
-        $available = collect();
-
-        foreach ($data['dates'] as $dates) {
-            $this->initiateAvailability($dates);
-            $days = $days->push($this->duration);
-            $results = $this->getResultsForItem($entry);
-            if ($results->count() == 0) {
-                continue;
-            }
-            $results->transform(function ($item) use ($entry) {
-                return array_merge($item->toArray(), $this->getPriceForDates($item, $entry->id()));
-            });
-            $available->push($results);
-        }
-
-        if ($available->count() !== count($data['dates']) || $entryAvailabilityValue == 'disabled') {
-            return [
-                'message' => [
-                    'status' => false,
-                ],
-            ];
-        }
-
-        $totalPrice = Price::create(0);
-        $totalOriginalPrice = Price::create(0);
-        $property = Arr::get($available->first(), 'property', null);
-
-        foreach ($available->flatten(1) as $item) {
-            $totalPrice = $totalPrice->add($item['reservation_price']);
-            if ($item['original_price'] != null) {
-                $totalOriginalPrice = $totalOriginalPrice->add($item['original_price']);
-            }
-        }
-
-        return $this->buildMultiSpecificItemArray($days, $totalPrice, $totalOriginalPrice, $property);
-    }
-
-    protected function buildSpecificItemArray($property)
-    {
-        return [
-            'request' => [
-                'days' => $this->duration,
-                'date_start' => $this->date_start,
-                'date_end' => $this->date_end,
-                'quantity' => $this->quantity,
-            ],
-            'data' => [
-                'price' => $this->reservation_price->format(),
-                'payment' => $this->calculatePayment($this->reservation_price)->format(),
-                'original_price' => $this->original_price ?? null,
-                'property' => $property ?? null,
-            ],
-            'message' => [
-                'status' => 1,
-            ],
-        ];
-    }
-
-    protected function buildItemsArray($id, $price, $property)
-    {
-        return [
-            'id' => $id,
-            'request' => [
-                'days' => $this->duration,
-                'date_start' => $this->date_start,
-                'date_end' => $this->date_end,
-                'quantity' => $this->quantity,
-            ],
-            'data' => [
-                'price' => $price['reservation_price']->format(),
-                'payment' => $this->calculatePayment($price)->format(),
-                'original_price' => ($price['original_price'] ?? null),
-                'property' => $property ?? null,
-            ],
-            'message' => [
-                'status' => 1,
-            ],
-        ];
-    }
-
-    protected function buildMultiSpecificItemArray($days, $totalPrice, $totalOriginalPrice, $property)
-    {
-        return [
-            'request' => [
-                'days' => $days->sum(),
-            ],
-            'data' => [
-                'price' => $totalPrice->format(),
-                'payment' => $this->calculatePayment($totalPrice)->format(),
-                'original_price' => $totalOriginalPrice->isZero() ? null : $totalOriginalPrice,
-                'property' => $property ?? null,
-            ],
-            'message' => [
-                'status' => 1,
-            ],
-        ];
-    }
-
-    protected function buildMultiItemsArray($id, $price, $property)
-    {
-        return [
-            'id' => $id,
-            'data' => [
-                'price' => $price->format(),
-                'payment' => $this->calculatePayment($price)->format(),
-                'original_price' => (isset($this->original_price) ? $this->original_price : null),
-                'property' => $property ?? null,
-            ],
-            'message' => [
-                'status' => 1,
-            ],
-        ];
     }
 
     protected function availableForDates()
