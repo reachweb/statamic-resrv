@@ -23,11 +23,7 @@
 | {{ __("Pick-up date") }}      | {{ $reservation->date_start->format('d-m-Y H:i') }} |
 | {{ __("Drop-off date") }}     | {{ $reservation->date_end->format('d-m-Y H:i') }} |
 @endif
-@if (config('resrv-config.enable_locations'))
-| {{ __("Pick-up location") }}  | {{ $reservation->location_start_data->name }} |
-| {{ __("Drop-off location") }} | {{ $reservation->location_end_data->name }} |
-@endif
-| {{ __("Vehicle") }}   | {{ $reservation->entry()->title }} |
+| {{ __("Property") }}   | {{ $reservation->entry()->title }} |
 @if ($reservation->type !== 'parent')
 @if (config('resrv-config.maximum_quantity') > 1)
 | {{ __("Quantity") }}  | x {{ $reservation->quantity }} |
