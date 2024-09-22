@@ -224,7 +224,7 @@ class Extra extends Model
             $data = $this->initiateAvailabilityFromReservation($data);
         }
 
-        return (new Availability)->getPriceForItem($data, $data['item_id'])->format();
+        return (new Availability)->getPricing($data, $data['item_id'], true);
     }
 
     protected function getCustomPrice($reservation)

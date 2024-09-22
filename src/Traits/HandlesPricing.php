@@ -5,48 +5,11 @@ namespace Reach\StatamicResrv\Traits;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\FixedPricing;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 
 trait HandlesPricing
 {
-    protected $original_price;
-
-    protected $reservation_price;
-
-    protected function calculatePrice($prices, $id)
-    {
-        $start = Price::create(0);
-        $this->original_price = null;
-
-        $this->reservation_price = $start->add(...$prices->toArray());
-
-        // If FixedPricing exists, replace the price
-        if (FixedPricing::getFixedPricing($id, $this->duration)) {
-            $this->reservation_price = FixedPricing::getFixedPricing($id, $this->duration);
-        }
-        // Apply dynamic pricing
-        $this->applyDynamicPricing($id);
-
-        if ($this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false)) {
-            $this->reservation_price = $this->reservation_price->multiply($this->quantity);
-        }
-    }
-
-    protected function getDynamicPricing($id)
-    {
-        return DynamicPricing::searchForAvailability($id, $this->reservation_price, $this->date_start, $this->date_end, $this->duration);
-    }
-
-    protected function applyDynamicPricing($id)
-    {
-        $dynamicPricing = $this->getDynamicPricing($id);
-        if ($dynamicPricing) {
-            $this->original_price = $this->reservation_price->format();
-            $this->reservation_price = $dynamicPricing->apply($this->reservation_price);
-        }
-    }
-
-    // TODO: remove the methods above
-    protected function getPrices($prices, $id)
+    protected function getPrices($prices, $id): array
     {
         // Convert comma separated prices to collection of Price objects
         $pricesCollection = collect(explode(',', $prices))->transform(fn ($price) => Price::create($price));
@@ -85,5 +48,21 @@ trait HandlesPricing
         }
 
         return $dynamicPricings->apply(clone $price);
+    }
+
+    protected function calculatePayment($price): PriceClass
+    {
+        if (is_array($price)) {
+            $price = $price['reservation_price'];
+        }
+        if (config('resrv-config.payment') == 'full' || config('resrv-config.payment') == 'everything') {
+            return $price;
+        }
+        if (config('resrv-config.payment') == 'fixed') {
+            return Price::create(config('resrv-config.fixed_amount'));
+        }
+        if (config('resrv-config.payment') == 'percent') {
+            return $price->percent(config('resrv-config.percent_amount'));
+        }
     }
 }

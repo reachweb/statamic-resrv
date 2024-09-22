@@ -148,7 +148,7 @@ class Availability extends Model implements AvailabilityContract
         return true;
     }
 
-    public function getPricing($data, $statamic_id)
+    public function getPricing($data, $statamic_id, $onlyPrice = false)
     {
         $this->initiateAvailabilityUnsafe($data);
         $entry = $this->getDefaultSiteEntry($statamic_id);
@@ -165,32 +165,17 @@ class Availability extends Model implements AvailabilityContract
             return false;
         }
 
-        $this->calculatePrice($this->createPricesCollection($results->prices), $entry->id());
+        $prices = $this->getPrices($results->prices, $entry->id());
+
+        if ($onlyPrice) {
+            return $prices['reservationPrice']->format();
+        }
 
         return [
-            'price' => $this->reservation_price->format(),
-            'original_price' => $this->original_price ?? null,
-            'payment' => $this->calculatePayment($this->reservation_price)->format(),
+            'price' => $prices['reservationPrice']->format(),
+            'original_price' => $prices['originalPrice'] ? $prices['originalPrice']->format() : null,
+            'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
         ];
-    }
-
-    public function getPriceForItem($data, $statamic_id)
-    {
-        $this->initiateAvailability($data);
-
-        $entry = $this->getDefaultSiteEntry($statamic_id);
-
-        $prices = AvailabilityRepository::itemPricesBetween(
-            date_start: $this->date_start,
-            date_end: $this->date_end,
-            statamic_id: $entry->id(),
-            advanced: $this->advanced,
-        )
-            ->first();
-
-        $this->calculatePrice($this->createPricesCollection($prices->prices), $entry->id());
-
-        return $this->reservation_price;
     }
 
     protected function getResultsForItem($entry, $property = null)
@@ -359,12 +344,11 @@ class Availability extends Model implements AvailabilityContract
 
     public function getPriceForDates($item, $id)
     {
-        $prices = $this->createPricesCollection($item->prices);
-        $this->calculatePrice($prices, $id);
+        $prices = $this->getPrices($item->prices, $id);
 
         return [
-            'reservation_price' => $this->reservation_price,
-            'original_price' => $this->original_price ?? null,
+            'reservation_price' => $prices['reservationPrice']->format(),
+            'original_price' => $prices['originalPrice'] ? $prices['originalPrice']->format() : null,
         ];
     }
 
@@ -404,22 +388,6 @@ class Availability extends Model implements AvailabilityContract
     protected function createPricesCollection($prices)
     {
         return collect(explode(',', $prices))->transform(fn ($price) => Price::create($price));
-    }
-
-    protected function calculatePayment($price): PriceClass
-    {
-        if (is_array($price)) {
-            $price = $price['reservation_price'];
-        }
-        if (config('resrv-config.payment') == 'full' || config('resrv-config.payment') == 'everything') {
-            return $price;
-        }
-        if (config('resrv-config.payment') == 'fixed') {
-            return Price::create(config('resrv-config.fixed_amount'));
-        }
-        if (config('resrv-config.payment') == 'percent') {
-            return $price->percent(config('resrv-config.percent_amount'));
-        }
     }
 
     protected function requestCollection($label = null): Collection
