@@ -5,7 +5,6 @@ import FixedPricing from './fieldtypes/FixedPricing.vue'
 
 import AffiliatesList from './components/AffiliatesList.vue'
 import ExtrasList from './components/ExtrasList.vue'
-import LocationsList from './components/LocationsList.vue'
 import ReservationsList from './components/ReservationsList.vue'
 import DynamicPricingList from './components/DynamicPricingList.vue'
 import ReportsView from './components/ReportsView.vue'
@@ -22,7 +21,6 @@ Statamic.booting(() => {
     // Lists
     Statamic.$components.register('affiliates-list', AffiliatesList);
     Statamic.$components.register('extras-list', ExtrasList);
-    Statamic.$components.register('locations-list', LocationsList);
     Statamic.$components.register('reservations-list', ReservationsList);
     Statamic.$components.register('dynamic-pricing-list', DynamicPricingList);
     Statamic.$components.register('reports-view', ReportsView);
