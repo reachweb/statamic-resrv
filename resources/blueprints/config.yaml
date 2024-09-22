@@ -51,11 +51,6 @@ enable_connected_availabilities:
   instructions: 'Enable the ability to "connect" advanced availabilities so that any operations on one of them will be reflected on the others.'
   type: toggle
   required: true
-enable_locations:
-  display: 'Enable locations'
-  instructions: 'Checkout expects to receive location info to calculate any extra charges'
-  type: toggle
-  required: true
 enable_time:
   display: 'Enable time'
   instructions: 'The reservation will have an explicit pickup and drop-off time'
