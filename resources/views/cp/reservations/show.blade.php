@@ -51,18 +51,6 @@
                 </div>      
             </div>
             @endif
-            @if (config('resrv-config.enable_locations') && $reservation->location_start_data && $reservation->location_end_data)
-            <div class="grid grid-cols-2 my-2 pt-2">
-                <div>
-                    <div class="font-bold mb-2">{{ __("Pick-up location") }}</div>
-                    <div>{{ $reservation->location_start_data->name }}</div>
-                </div>
-                <div>
-                    <div class="font-bold mb-2">{{ __("Drop-off location") }}</div>
-                    <div>{{ $reservation->location_end_data->name }}</div>
-                </div>
-            </div>
-            @endif
             @if ($reservation->type !== 'parent')
             <div class="grid grid-cols-2 my-2 pt-2">
                 @if (config('resrv-config.maximum_quantity') > 1)

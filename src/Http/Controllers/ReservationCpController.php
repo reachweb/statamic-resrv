@@ -75,7 +75,7 @@ class ReservationCpController extends Controller
 
     public function show($id)
     {
-        $reservation = $this->reservation->with('location_start_data', 'location_end_data', 'extras', 'options', 'affiliate', 'dynamicPricings')->find($id);
+        $reservation = $this->reservation->with('extras', 'options', 'affiliate', 'dynamicPricings')->find($id);
         $fields = $reservation->checkoutFormFieldsArray(is_array($reservation->entry()) ? null : $reservation->entry()->id());
 
         return view('statamic-resrv::cp.reservations.show', compact('reservation', 'fields'));

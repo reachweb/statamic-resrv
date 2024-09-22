@@ -103,22 +103,6 @@ class ReservationBlueprint
                             ],
                         ],
                         [
-                            'handle' => 'location_start',
-                            'field' => [
-                                'type' => 'text',
-                                'listable' => true,
-                                'display' => 'Start location',
-                            ],
-                        ],
-                        [
-                            'handle' => 'location_end',
-                            'field' => [
-                                'type' => 'text',
-                                'listable' => true,
-                                'display' => 'End location',
-                            ],
-                        ],
-                        [
                             'handle' => 'customer',
                             'field' => [
                                 'type' => 'text',

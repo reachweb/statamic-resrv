@@ -45,8 +45,6 @@ class ReservationResource extends ResourceCollection
                     'quantity' => $reservation->quantity,
                     'payment' => config('resrv-config.currency_symbol').' '.$reservation->payment->format(),
                     'price' => config('resrv-config.currency_symbol').' '.$reservation->price->format(),
-                    'location_start' => $reservation->location_start_data,
-                    'location_end' => $reservation->location_end_data,
                     'date_start' => $this->formatDate($reservation->date_start),
                     'date_end' => $this->formatDate($reservation->date_end),
                     'customer' => $reservation->customer,
@@ -67,11 +65,6 @@ class ReservationResource extends ResourceCollection
     private function setColumns()
     {
         $columns = $this->blueprint->columns();
-
-        if (config('resrv-config.enable_locations') == false) {
-            unset($columns['location_start']);
-            unset($columns['location_end']);
-        }
 
         if (config('resrv-config.maximum_quantity') == 1) {
             unset($columns['quantity']);
