@@ -118,16 +118,6 @@ class Reservation extends Model
         return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot(['quantity', 'price'])->withTrashed();
     }
 
-    public function location_start_data()
-    {
-        return $this->hasOne(Location::class, 'id', 'location_start')->withTrashed();
-    }
-
-    public function location_end_data()
-    {
-        return $this->hasOne(Location::class, 'id', 'location_end')->withTrashed();
-    }
-
     public function scopeFindByPaymentId($query, $id)
     {
         return $query->where('payment_id', $id);
@@ -178,20 +168,7 @@ class Reservation extends Model
             }
         }
 
-        $locationCost = Price::create(0);
-        if (config('resrv-config.enable_locations') == true) {
-            if ($this->location_start) {
-                $locationCost->add($this->location_start_data()->extra_charge);
-            }
-            if ($this->location_end) {
-                $locationCost->add($this->location_end_data()->extra_charge);
-            }
-            if (array_key_exists('quantity', $data) > 0) {
-                $locationCost->multiply($data['quantity']);
-            }
-        }
-
-        return $extraCharges->add($optionsCost, $extrasCost, $locationCost);
+        return $extraCharges->add($optionsCost, $extrasCost);
     }
 
     public function getPrices()

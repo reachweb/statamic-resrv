@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Tests\Reports;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Reach\StatamicResrv\Models\Location;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -27,21 +26,16 @@ class ReportsCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $item2 = $this->makeStatamicItem();
-        $location = Location::factory()->create();
 
         $reservation = Reservation::factory([
             'customer' => ['email' => 'test@test.com'],
             'item_id' => $item->id(),
-            'location_start' => $location->id,
-            'location_end' => $location->id,
             'status' => 'confirmed',
         ])->count(4)->create();
 
         $reservation2 = Reservation::factory([
             'customer' => ['email' => 'test@test.com'],
             'item_id' => $item2->id(),
-            'location_start' => $location->id,
-            'location_end' => $location->id,
             'status' => 'confirmed',
         ])->count(2)->create();
 
