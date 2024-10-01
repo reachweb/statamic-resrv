@@ -80,6 +80,7 @@ trait HandlesAvailabilityDates
         }
         $date_start = $this->clearTime($date_start);
         $date_end = $this->clearTime($date_end);
+
         $this->duration = $date_start->diffInDays($date_end);
         $this->date_start = $date_start->isoFormat('YYYY-MM-DD');
         $this->date_end = $date_end->isoFormat('YYYY-MM-DD');
