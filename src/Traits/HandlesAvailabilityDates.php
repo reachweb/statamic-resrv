@@ -72,8 +72,9 @@ trait HandlesAvailabilityDates
                 $date_end = $date_end->add(1, 'day');
             }
         }
-
-        $this->duration = $date_start->startOfDay()->diffInDays($date_end->startOfDay());
+        $date_start = $this->clearTime($date_start);
+        $date_end = $this->clearTime($date_end);
+        $this->duration = $date_start->diffInDays($date_end);
         $this->date_start = $date_start->isoFormat('YYYY-MM-DD');
         $this->date_end = $date_end->isoFormat('YYYY-MM-DD');
         $this->dates_initiated = true;
@@ -114,5 +115,10 @@ trait HandlesAvailabilityDates
         $this->setAdvanced($data);
 
         $this->setDates($date_start, $date_end);
+    }
+
+    public function clearTime(Carbon $date): Carbon
+    {
+        return Carbon::create($date->year, $date->month, $date->day, 0, 0, 0);
     }
 }
