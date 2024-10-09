@@ -65,7 +65,13 @@ class ConfigController extends BaseConfigController
 
         $path = Path::assemble($addon->directory(), 'resources', 'blueprints', 'config.yaml');
 
-        return BlueprintAPI::makeFromFields(YAML::file($path)->parse());
+        $yaml = YAML::file($path)->parse();
+
+        if ($yaml['tabs'] ?? false) {
+            return BlueprintAPI::make()->setContents($yaml);
+        }
+
+        return BlueprintAPI::makeFromFields($yaml);
     }
 
     protected function postProcess(array $values): array
