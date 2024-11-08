@@ -5,7 +5,8 @@
         "dev": "rm -rf resources/dist/build && vite",
         "build": "vite build",
         "frontend-dev": "vite -c vite-frontend.config.js",
-        "frontend-build": "vite build -c vite-frontend.config.js"
+        "frontend-build": "vite build -c vite-frontend.config.js",
+        "frontend-build-calendar": "vite build -c vite-frontend-calendar-pro.config.js"
     },
     "devDependencies": {
         "@tailwindcss/forms": "^0.5.7",
@@ -27,6 +28,7 @@
         "flatpickr": "^4.6.13",
         "lodash": "^4.17.21",
         "tailwindcss": "^3.3.0",
+        "vanilla-calendar-pro": "^3.0.0",
         "vue-select": "^3.11.2",
         "vuedraggable": "^2.24.3"
     }
