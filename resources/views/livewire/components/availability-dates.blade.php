@@ -1,4 +1,4 @@
-@props(['calendar', 'errors'])
+@props(['calendar', 'disabledDays' => false, 'pricesCalendar' => false, 'errors'])
 
 <div class="{{ $attributes->get('class') }}">
     <div 
@@ -6,7 +6,7 @@
         class="relative"
     >
         <div class="absolute inset-y-0 start-0 flex z-1 items-center ps-3.5 pointer-events-none">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5p">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
             </svg>
         </div>
@@ -27,9 +27,10 @@
             </svg>
         </div>
         <div 
-            x-data="{ loading: false}" 
+            x-data="{ loading: false }" 
             x-on:availability-search-updated.window="loading = true" 
-            x-on:availability-results-updated.window="setTimeout(() => {loading = false}, 300)">
+            x-on:availability-results-updated.window="setTimeout(() => {loading = false}, 300)"
+        >
             <span x-show="loading === true" class="absolute left-0 right-0 top-0 flex items-center justify-center w-full h-full bg-white/50 ">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="animate-spin w-5 h-5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
@@ -51,41 +52,149 @@
 Alpine.data('datepicker', () => ({
     mode: $wire.calendar,
     dates: $wire.data.dates,
+    calendar: null,
+    minPeriod: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
+    maxPeriod: {{ config('resrv-config.maximum_reservation_period_in_days', 30) }},
+    disabledDays: @json($disabledDays),
+    pricesCalendar: @json($pricesCalendar),
+    
     get isDatesEmpty() {
         return $wire.data.dates.length === 0;
     },
+
     init() {
-        flatpickr(this.$refs.dateInput, {
-            mode: this.mode ?? 'range',
-            minDate: dayjs().add({{ config('resrv-config.minimum_days_before') }}, 'day').toDate(),
-            defaultDate: this.mode === 'range' ? [this.dates.date_start, this.dates.date_end] : this.dates.date_start,
-            onChange: (selectedDates, dateStr, instance) => {
-                this.dateChanged(selectedDates);
+        const minDate = dayjs().add({{ config('resrv-config.minimum_days_before') }}, 'day').format('YYYY-MM-DD');
+        
+        this.calendar = new window.calendar(this.$refs.dateInput, {
+            type: this.mode === 'range' ? 'multiple' : 'default',
+            inputMode: true,
+            dateMin: minDate,
+            selectionDatesMode: this.mode === 'range' ? 'multiple-ranged' : 'single',
+            selectedDates: this.getInitialDates(),
+            selectedWeekends: [],
+            selectedTheme: 'light',
+            displayDatesOutside: true,
+            positionToInput: 'auto',
+
+            onCreateDateEls: (self, dateEl) => {
+                if (this.pricesCalendar !== false) {
+                    this.addPriceToEachDate(dateEl);
+                }
+                if (this.disabledDays !== false) {
+                    this.disableDays(dateEl);
+                }
+            },
+
+            onChangeToInput: (self, event) => {
+                if (! self.context.inputElement) return;
+                if (self.context.selectedDates[0] && self.context.selectedDates[1]) {
+                    self.context.inputElement.value = self.context.selectedDates[0]+' to '+self.context.selectedDates[1];
+                    self.hide();
+                } else {
+                    self.context.inputElement.value = '';
+                }
+            },
+            
+            onClickDate: (self, event) => {
+                if (this.mode === 'range') {
+                    this.handleRanges(self, event);
+                }
+                
+                //this.dateChanged(self.context.selectedDates);
             },
         });
+
+        this.calendar.init();
     },
+
+    getInitialDates() {
+        if (! (this.dates.date_start || this.dates.date_end)) return [];
+        let date_start = dayjs(this.dates.date_start).format('YYYY-MM-DD');
+        let date_end = dayjs(this.dates.date_end).format('YYYY-MM-DD');
+        if (this.mode === 'range') {
+            this.$refs.dateInput.value = date_start+' to '+date_end;
+            return [date_start+','+date_end];
+        } else {
+            this.$refs.dateInput.value = date_start;
+            return [date_start];
+        }
+        return [];
+    },
+
     dateChanged(selectedDates) {
+        if (!selectedDates || selectedDates.length === 0) return;
+
         const dateStart = dayjs(selectedDates[0]);
+        
         if (this.mode === 'range' && selectedDates.length === 2) {
             $wire.set('data.dates', {
                 date_start: dateStart.format(),
-                date_end: dayjs(selectedDates[1]).format(),
+                date_end: dayjs(selectedDates[1]).format()
             });
         }
+        
         if (this.mode === 'single') {
-            // Add a day to the selected date for single mode
             const dateEnd = dateStart.add(1, 'day');
             $wire.set('data.dates', {
                 date_start: dateStart.format(),
-                date_end: dateEnd.format(),
+                date_end: dateEnd.format()
             });
         }
     },
+
+    addPriceToEachDate(dateEl) {
+        const button = dateEl.querySelector('button');
+
+        button.insertAdjacentHTML('beforeend', `<span class="text-[12px]">€ 180</span>`);
+    },
+
+    disableDays(dateEl) {
+        if (! this.disabledDays.includes(dateEl.dataset.vcDateWeekDay)) return;
+        dateEl.onclick = (event) => event.stopPropagation();
+        dateEl.style.cssText = 'cursor: default; opacity: 0.5;';
+    },
+
+    handleRanges(self, event) {
+        const dateBtnEl = event.target;
+        const minPeriod = this.minPeriod;
+        const maxPeriod = this.maxPeriod;
+
+        if (self.context.selectedDates.length === 1) {
+            const dateStr = dateBtnEl.parentElement.dataset.vcDate;
+            const date = dayjs(dateStr);
+            const minDate = date.add(minPeriod, 'days');
+            const maxDate = date.add(maxPeriod, 'days');
+            
+            self.set(
+                { 
+                    disableAllDates: true, 
+                    enableDates: [`${minDate.format('YYYY-MM-DD')}:${maxDate.format('YYYY-MM-DD')}`] 
+                },
+                { dates: false, month: false, year: false, locale: false }
+            );
+        }
+
+        if (!self.context.selectedDates[1]) return;
+        
+        self.set(
+            { disableAllDates: false, enableDates: [] },
+            { dates: false, month: false, year: false, locale: false }
+        );
+    },
+
     resetDates() {
-        this.$refs.dateInput._flatpickr.setDate([], false);
+        this.calendar.update({
+            dates: true,
+        });
         $wire.clearDates();
         $dispatch('availability-search-cleared');
     },
+
+    destroy() {
+        if (this.calendar) {
+            this.calendar.destroy();
+        }
+    }
 }));
 </script>
 @endscript
