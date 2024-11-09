@@ -1,6 +1,6 @@
-import flatpickr from "flatpickr";
-window.flatpickr = flatpickr;
-import "flatpickr/dist/flatpickr.css";
+import { Calendar } from 'vanilla-calendar-pro';
+import 'vanilla-calendar-pro/styles/index.css';
+window.calendar = Calendar;
 
 import dayjs from "dayjs";
 window.dayjs = dayjs;
