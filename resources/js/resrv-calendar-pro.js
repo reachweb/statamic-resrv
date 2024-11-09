@@ -1,5 +1,5 @@
 import { Calendar } from 'vanilla-calendar-pro';
-import 'vanilla-calendar-pro/styles/index.css';
+import '../css/resrv-calendar-pro.css';
 window.calendar = Calendar;
 
 import dayjs from "dayjs";
