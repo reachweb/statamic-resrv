@@ -100,7 +100,7 @@ Alpine.data('datepicker', () => ({
                     this.handleRanges(self, event);
                 }
                 
-                //this.dateChanged(self.context.selectedDates);
+                this.dateChanged(self.context.selectedDates);
             },
         });
 
@@ -151,7 +151,7 @@ Alpine.data('datepicker', () => ({
     disableDays(dateEl) {
         if (! this.disabledDays.includes(dateEl.dataset.vcDateWeekDay)) return;
         dateEl.onclick = (event) => event.stopPropagation();
-        dateEl.style.cssText = 'cursor: default; opacity: 0.5;';
+        dateEl.style.cssText = 'cursor: default; opacity: 0.7;';
     },
 
     handleRanges(self, event) {
@@ -174,7 +174,7 @@ Alpine.data('datepicker', () => ({
             );
         }
 
-        if (!self.context.selectedDates[1]) return;
+        if (! self.context.selectedDates[1]) return;
         
         self.set(
             { disableAllDates: false, enableDates: [] },
@@ -187,14 +187,10 @@ Alpine.data('datepicker', () => ({
             dates: true,
         });
         $wire.clearDates();
+        this.$refs.dateInput.value = '';
         $dispatch('availability-search-cleared');
     },
 
-    destroy() {
-        if (this.calendar) {
-            this.calendar.destroy();
-        }
-    }
 }));
 </script>
 @endscript
