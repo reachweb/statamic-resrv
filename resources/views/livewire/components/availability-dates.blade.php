@@ -151,7 +151,7 @@ Alpine.data('datepicker', () => ({
     disableDays(dateEl) {
         if (! this.disabledDays.includes(dateEl.dataset.vcDateWeekDay)) return;
         dateEl.onclick = (event) => event.stopPropagation();
-        dateEl.style.cssText = 'cursor: default; opacity: 0.7;';
+        dateEl.style.cssText = 'cursor: default; opacity: 0.5;';
     },
 
     handleRanges(self, event) {
