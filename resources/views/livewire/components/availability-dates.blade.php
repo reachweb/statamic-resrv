@@ -87,8 +87,11 @@ Alpine.data('datepicker', () => ({
 
             onChangeToInput: (self, event) => {
                 if (! self.context.inputElement) return;
-                if (self.context.selectedDates[0] && self.context.selectedDates[1]) {
+                if (this.mode === 'range' && self.context.selectedDates[0] && self.context.selectedDates[1]) {
                     self.context.inputElement.value = self.context.selectedDates[0]+' to '+self.context.selectedDates[1];
+                    self.hide();
+                } else if (this.mode === 'single' && self.context.selectedDates[0]) {
+                    self.context.inputElement.value = self.context.selectedDates[0];
                     self.hide();
                 } else {
                     self.context.inputElement.value = '';
@@ -102,6 +105,10 @@ Alpine.data('datepicker', () => ({
                 
                 this.dateChanged(self.context.selectedDates);
             },
+
+            onUpdate(self, event) {
+                self.set({ selectedDates: [] });
+            }
         });
 
         this.calendar.init();
@@ -186,8 +193,8 @@ Alpine.data('datepicker', () => ({
         this.calendar.update({
             dates: true,
         });
-        $wire.clearDates();
         this.$refs.dateInput.value = '';
+        $wire.clearDates();
         $dispatch('availability-search-cleared');
     },
 
