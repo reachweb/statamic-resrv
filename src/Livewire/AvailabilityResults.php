@@ -158,6 +158,9 @@ class AvailabilityResults extends Component
 
     public function checkout(): void
     {
+        if ($this->extraDays !== 0 && $this->availability->count() > 1) {
+            $this->availability = collect($this->availability->get(0));
+        }
         try {
             $this->validateAvailabilityAndPrice();
             $this->createReservation();

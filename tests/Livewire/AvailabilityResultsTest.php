@@ -795,6 +795,52 @@ class AvailabilityResultsTest extends TestCase
         );
     }
 
+    // Test that it creates a reservation when multiple days results are enabled
+    public function test_checkout_works_for_multiple_days()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'extraDays' => 1, 'extraDaysOffset' => 1])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'test',
+                    'customer' => [
+                        'adults' => 2,
+                        'children' => 1,
+                    ],
+                ]
+            );
+
+        $availability = $component->viewData('availability');
+
+        $component->call('checkout');
+
+        $this->assertDatabaseHas('resrv_reservations',
+            [
+                'item_id' => $this->advancedEntries->first()->id(),
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(2, 'day'),
+                'quantity' => 1,
+                'property' => 'test',
+                'payment' => data_get($availability[0], 'data.payment'),
+                'price' => data_get($availability[0], 'data.price'),
+                'customer' => json_encode(['adults' => 2, 'children' => 1]),
+            ]
+        );
+    }
+
     // Test that it return an error if the availability has changed after the results have been shown
     public function test_does_not_create_reservation_if_availability_changed()
     {
