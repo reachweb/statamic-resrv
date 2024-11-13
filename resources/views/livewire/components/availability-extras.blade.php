@@ -7,7 +7,7 @@
     x-init="selectedExtras = @js($enabledExtras->extras)"
 >
     <div class="flex flex-col gap-y-6">
-        @foreach ($this->extras as $id => $extra)
+        @foreach ($extras as $id => $extra)
             <div wire:key="{{ $extra->id }}.{{ $extra->price }}">
                 <div class="font-medium mb-2">{{ $extra->name }}</div>
                 <x-resrv::checkout-extra :extra="$extra" x-bind:key="{{ $extra->id }}" compact="true" />
