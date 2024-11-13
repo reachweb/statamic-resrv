@@ -14,7 +14,7 @@ trait HandlesAvailabilityQueries
     public function getAvailability(Collection $data): array
     {
         try {
-            return (new Availability)->getAvailable($this->toResrvArray($data->first()));
+            return app(Availability::class)->getAvailable($this->toResrvArray($data->first()));
         } catch (AvailabilityException $exception) {
             return [
                 'message' => [
@@ -28,7 +28,7 @@ trait HandlesAvailabilityQueries
     public function queryBaseAvailabilityForEntry(): array
     {
         try {
-            return (new Availability)->getAvailabilityForEntry($this->data->toResrvArray(), $this->entryId);
+            return app(Availability::class)->getAvailabilityForEntry($this->data->toResrvArray(), $this->entryId);
         } catch (AvailabilityException $exception) {
             $this->addError('availability', $exception->getMessage());
 
@@ -43,7 +43,7 @@ trait HandlesAvailabilityQueries
         $periods->transform(function ($period) {
             $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'advanced']));
             try {
-                return (new Availability)->getAvailabilityForEntry($searchData, $this->entryId);
+                return app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId);
             } catch (AvailabilityException $exception) {
                 return [
                     'message' => [
@@ -60,7 +60,7 @@ trait HandlesAvailabilityQueries
     public function validateAvailabilityAndPrice()
     {
         $searchData = array_merge(['price' => data_get($this->availability, 'data.price')], $this->data->toResrvArray());
-        if ((new Availability)->confirmAvailabilityAndPrice($searchData, $this->entryId) === false) {
+        if (app(Availability::class)->confirmAvailabilityAndPrice($searchData, $this->entryId) === false) {
             throw new AvailabilityException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
     }
