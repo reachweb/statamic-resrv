@@ -6,10 +6,55 @@
         required: {{ $required ? 'true' : 'false' }},
         hide: {{ $hide ? 'true' : 'false' }},
         quantity: 1,
+
+        init() {
+            this.initializeSelection(@js($selectedValue));
+            this.initializeRequired();
+            this.setupWatchers();
+        },
+
+        initializeSelection(selectedValue) {
+            if (selectedValue) {
+                this.selected = true;
+                this.quantity = selectedValue.quantity;
+            }
+        },
+
+        initializeRequired() {
+            if (this.required) {
+                this.selectAndDispatch();
+            }
+        },
+
+        setupWatchers() {
+            this.$watch('quantity', () => this.dispatchEvent());
+            this.$watch('hide', () => this.handleHideChange());
+            this.$watch('required', () => this.handleRequiredChange());
+        },
+
+        handleHideChange() {
+            if (this.hide && this.selected) {
+                this.selected = false;
+                this.dispatchRemovedEvent();
+            }
+        },
+
+        handleRequiredChange() {
+            if (this.required) {
+                this.selectAndDispatch();
+            }
+        },
+
+        selectAndDispatch() {
+            this.selected = true;
+            this.dispatchEvent();
+        },
+
         handleConditionsChange(event) {
             this.required = event.detail[0].required.includes({{ $extra->id }});
             this.hide = event.detail[0].hide.includes({{ $extra->id }});
         },
+
         dispatchEvent() {
             this.$dispatch('extra-changed', {
                 id: {{ $extra->id }}, 
@@ -17,38 +62,13 @@
                 quantity: this.quantity,
             });
         },
+
         dispatchRemovedEvent() {
             this.$dispatch('extra-removed', {
                 id: {{ $extra->id }}, 
             });
         }
     }"
-    x-init="
-        let alreadySelected = @js($selectedValue);
-        if (alreadySelected) {
-            selected = true;
-            quantity = alreadySelected.quantity;
-        }
-        if (required) {
-            selected = true;
-            dispatchEvent();
-        }
-        $watch('quantity', () => {
-            dispatchEvent();
-        });
-        $watch('hide', () => {
-            if (hide && selected) {
-                selected = false;
-                dispatchRemovedEvent();
-            }
-        });
-        $watch('required', () => {
-            if (required) {
-                selected = true
-                dispatchEvent();
-            }
-        });
-    "
     x-on:extra-conditions-changed.window="handleConditionsChange($event)"
 >
     <div 
