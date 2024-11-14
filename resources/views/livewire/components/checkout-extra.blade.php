@@ -82,7 +82,7 @@
         @class([
             'grid grid-cols-4 items-center',
             'py-3 lg:py-5 xl:py-8' => ! $compact, 
-            'py-2 lg:py-3' => $compact
+            'py-2 lg:py-3 xl:py-6' => $compact
         ])
     >
         <div @class([
@@ -114,7 +114,7 @@
             @endif
         </div>
         @if ($extra->allow_multiple)
-            <div @class(['order-2 col-span-4' => $compact])>
+            <div @class(['order-2 col-span-4 justify-start' => $compact])>
             @include('statamic-resrv::livewire.components.partials.extras-quantity')
             </div>
         @endif
