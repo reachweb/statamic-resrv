@@ -15,10 +15,16 @@
         </div>
     </div>
     <hr class="h-px my-4 bg-gray-200 border-0">
-    <div class="divide-y divide-gray-100">
+    <div>
         @foreach ($extras as $id => $extra)
             <div wire:key="{{ $extra->id }}.{{ $extra->price }}">
-                <x-resrv::checkout-extra :extra="$extra" :selectedValue="data_get($enabledExtras->extras, $extra->id)" x-bind:key="{{ $extra->id }}" />
+                <x-resrv::checkout-extra 
+                    :extra="$extra" 
+                    :selectedValue="data_get($enabledExtras->extras, $extra->id)"
+                    :required="$this->extraConditions->get('required')->contains($extra->id)"
+                    :hide="$this->extraConditions->get('hide')->contains($extra->id)"
+                    x-bind:key="{{ $extra->id }}" 
+                />
             </div>
         @endforeach
     </div>

@@ -7,7 +7,11 @@ use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Database\Factories\ExtraConditionFactory;
+use Reach\StatamicResrv\Enums\ExtraConditionOperation as Operation;
+use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
+use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Traits\HandlesComparisons;
 
 class ExtraCondition extends Model
@@ -111,6 +115,86 @@ class ExtraCondition extends Model
         return $extrasThatApply;
     }
 
+    public function calculateConditionArrays(Collection $extras, EnabledExtras $enabledExtras, AvailabilityData|Reservation $data): Collection
+    {
+        $required = collect();
+        $hide = collect();
+        $data = $this->mergeData($data, $enabledExtras);
+        $extras->each(function ($extra) use ($data, $required, $hide) {
+            $extra->conditions->each(function ($condition) use ($data, $required, $hide) {
+                [$requiredConditions, $hideConditions] = $condition->createConditionsArray($data);
+                if ($requiredConditions->count() > 0) {
+                    $required->push($requiredConditions->toArray());
+                }
+                if ($hideConditions->count() > 0) {
+                    $hide->push($hideConditions->toArray());
+                }
+            });
+        });
+
+        return collect([
+            'required' => $required->flatten(),
+            'hide' => $hide->flatten(),
+        ]);
+    }
+
+    private function mergeData(AvailabilityData|Reservation $data, EnabledExtras $enabledExtras): array
+    {
+        return array_merge(
+            $data instanceof Reservation ? $data->toArray() : $data->toResrvArray(),
+            ['extras' => $enabledExtras->extras->keys()]
+        );
+    }
+
+    protected function createConditionsArray(array $data): array
+    {
+        $required = collect();
+        $hide = collect();
+
+        $this->conditions->each(function ($condition) use ($data, $required, $hide) {
+            $condition = (object) $condition;
+
+            if (! $this->shouldApplyCondition($condition, $data)) {
+                $this->handleNotApplied($this->extra_id, $condition, $hide);
+
+                return;
+            }
+
+            $this->handleApplied($this->extra_id, $condition, $required, $hide);
+        });
+
+        return [$required, $hide];
+    }
+
+    private function shouldApplyCondition(object $condition, array $data): bool
+    {
+        return match ($condition->type) {
+            'always' => true,
+            'pickup_time' => $this->checkTime($condition, $data['date_start']),
+            'dropoff_time' => $this->checkTime($condition, $data['date_end']),
+            'reservation_dates' => $this->checkDates($condition, $data),
+            'reservation_duration' => $this->checkDuration($condition, $data),
+            'extra_selected' => $this->checkInSelectedExtras($condition, $data),
+            default => false
+        };
+    }
+
+    private function handleApplied(int $extraId, object $condition, Collection $required, Collection $hide): void
+    {
+        match ($condition->operation) {
+            Operation::REQUIRED->value => $required->push($extraId),
+            Operation::HIDDEN->value => $hide->push($extraId),
+            default => null
+        };
+    }
+
+    private function handleNotApplied(int $extraId, object $condition, Collection $hide): void
+    {
+        if ($condition->operation === Operation::SHOW->value) {
+            $hide->push($extraId);
+        }
+    }
+
     protected function checkAllParameters($condition, $extra_id, $data)
     {
         switch ($condition->type) {
@@ -182,6 +266,19 @@ class ExtraCondition extends Model
             return false;
         }
         if ($data['extras']->contains('id', $condition->value)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    protected function checkInSelectedExtras($condition, $data)
+    {
+        if (! Arr::exists($data, 'extras') || $data['extras']->count() == 0) {
+            return false;
+        }
+
+        if ($data['extras']->contains($condition->value)) {
             return true;
         }
 
