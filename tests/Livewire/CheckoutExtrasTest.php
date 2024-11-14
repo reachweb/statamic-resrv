@@ -253,4 +253,55 @@ class CheckoutExtrasTest extends TestCase
             'extra_id' => $extra2->id,
         ]);
     }
+
+    // Test that it generates extras conditions correctly
+    public function test_it_loads_extras_conditions_collection()
+    {
+        $extra = $this->extras->first();
+
+        ExtraCondition::factory()->hideReservationDates()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        ExtraCondition::factory()->requiredReservationDates()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->assertTrue($component->extraConditions->get('hide')->contains($extra->id));
+        $this->assertTrue($component->extraConditions->get('required')->contains($extra->id));
+    }
+
+    // Test that it changes the extra conditions array when an extra is selected
+    public function test_it_changes_extras_conditions_on_selected_extra()
+    {
+        $item = $this->entries->first();
+
+        $extra = $this->extras->first();
+
+        $extra2 = ResrvExtra::factory()->fixed()->create();
+
+        DB::table('resrv_statamicentry_extra')->insert([
+            ['statamicentry_id' => $item->id(), 'extra_id' => $extra2->id],
+        ]);
+
+        ExtraCondition::factory()->showExtraSelected()->create([
+            'extra_id' => $extra2->id,
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->assertTrue($component->extraConditions->get('hide')->contains($extra2->id));
+
+        $component->set('enabledExtras.extras', [
+            $extra->id => ['id' => $extra->id, 'quantity' => 1, 'price' => $extra->price],
+        ])->assertDispatched('extra-conditions-changed');
+
+        $this->assertFalse($component->extraConditions->get('hide')->contains($extra2->id));
+    }
 }

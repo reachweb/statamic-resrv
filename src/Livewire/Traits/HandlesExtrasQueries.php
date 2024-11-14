@@ -53,12 +53,17 @@ trait HandlesExtrasQueries
 
     public function handleExtrasConditions($extras)
     {
+        $current = $this->extraConditions;
         $extras = collect($extras)->filter(fn ($extra) => count($extra->conditions) > 0);
         $data = $this instanceof Checkout ? $this->reservation : $this->data;
 
         if ($extras->count() > 0) {
             $this->extraConditions = app(ExtraCondition::class)->calculateConditionArrays($extras, $this->enabledExtras, $data);
-            $this->dispatch('extra-conditions-changed', $this->extraConditions);
+            // Only fire the event if the conditions changed
+            if ($this->extraConditions->get('hide') !== $current->get('hide', collect()
+                && $this->extraConditions->get('required') !== $current->get('required', collect()))) {
+                $this->dispatch('extra-conditions-changed', $this->extraConditions);
+            }
         }
     }
 }

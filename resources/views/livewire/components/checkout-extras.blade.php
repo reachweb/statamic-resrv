@@ -21,8 +21,8 @@
                 <x-resrv::checkout-extra 
                     :extra="$extra" 
                     :selectedValue="data_get($enabledExtras->extras, $extra->id)"
-                    :required="$this->extraConditions->get('required')->contains($extra->id)"
-                    :hide="$this->extraConditions->get('hide')->contains($extra->id)"
+                    :required="$this->extraConditions->get('required', collect())->contains($extra->id)"
+                    :hide="$this->extraConditions->get('hide', collect())->contains($extra->id)"
                     x-bind:key="{{ $extra->id }}" 
                 />
             </div>
