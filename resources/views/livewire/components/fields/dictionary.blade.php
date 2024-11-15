@@ -1,188 +1,135 @@
 @props(['field', 'key', 'errors'])
 
-<div {{ $attributes->class(['relative', 'md:col-span-2' => $field['width'] === 100, 'md:col-span-1' => $field['width'] === 50,]) }} wire:key={{ $key }}>
+<div 
+    {{ $attributes->class([
+        'relative',
+        'md:col-span-2' => $field['width'] === 100,
+        'md:col-span-1' => $field['width'] === 50,
+    ]) }}
+    wire:key={{ $key }}
+>
     <label for="{{ $field['handle'] }}" class="block mb-2 font-medium text-gray-900">
         {{ __($field['display']) }}
     </label>
     <div 
-        x-data="filteredSelect(@js($this->getDictionaryItems($field['handle'])), '{{ $field['handle'] }}')"
-        x-modelable="selectedItem"
+        x-data="combobox(@js($this->getDictionaryItems($field['handle'])), '{{ $field['handle'] }}')"
+        x-modelable="selectedOption"
         wire:model="form.{{ $field['handle'] }}"
-        x-on:keydown.escape="if (selectOpen) { selectOpen = false; $refs.selectButton.focus(); }"
-        x-on:keydown.down="if (selectOpen) { selectableItemActiveNext(); } else { selectOpen = true; } $event.preventDefault();"
-        x-on:keydown.up="if (selectOpen){ selectableItemActivePrevious(); } else { selectOpen = true; } $event.preventDefault();"
-        x-on:keydown.enter.prevent="if (selectOpen && selectableItemActive){ selectedItem = selectableItemActive; selectOpen=false; $refs.selectButton.focus(); }"
-        class="relative w-full"
+        class="flex w-full flex-col gap-1"
+        x-on:keydown="handleKeydownOnOptions($event)"
+        x-on:keydown.esc.window="isOpen = false, openedWithKeyboard = false"
     >
-        <button 
-            x-ref="selectButton" 
-            x-on:click="selectOpen = ! selectOpen"
-            x-bind:id="selectId + '-button'"
-            aria-haspopup="listbox"
-            x-bind:aria-expanded="selectOpen"
-            x-bind:aria-labelledby="selectId + '-label'"
-            x-bind:class="{ 'focus:ring-blue-500 focus:border-blue-500' : ! selectOpen }"
-            class="relative form-input flex items-center justify-between bg-gray-50 border border-gray-300 text-gray-900 rounded-lg block w-full p-2.5 focus:outline-none"
-        >
-            <span x-text="selectedItem ? selectableItems[selectedItem] : '{{ __('Select') }}'" class="truncate">{{ __('Select') }}</span>
-            <span class="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" class="w-5 h-5 text-gray-400"><path fill-rule="evenodd" d="M10 3a.75.75 0 01.55.24l3.25 3.5a.75.75 0 11-1.1 1.02L10 4.852 7.3 7.76a.75.75 0 01-1.1-1.02l3.25-3.5A.75.75 0 0110 3zm-3.76 9.2a.75.75 0 011.06.04l2.7 2.908 2.7-2.908a.75.75 0 111.1 1.02l-3.25 3.5a.75.75 0 01-1.1 0l-3.25-3.5a.75.75 0 01.04-1.06z" clip-rule="evenodd"></path></svg>
-            </span>
-        </button>
-        <div 
-            x-show="selectOpen"
-            x-transition:enter="transition ease-out duration-50"
-            x-transition:enter-start="opacity-0 -translate-y-1"
-            x-transition:enter-end="opacity-100"
-            x-bind:class="{ 'bottom-0 mb-10' : selectDropdownPosition == 'top', 'top-0 mt-10' : selectDropdownPosition == 'bottom' }"
-            class="absolute w-full py-1 mt-1 bg-gray-50 rounded-md shadow-md ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
-            x-on:click.away="selectOpen = false"
-            x-cloak
-        >
-            <div class="px-3 py-2">
-                <label x-bind:for="selectId + '-filter'" class="sr-only">{{ __('Filter') }}</label>
-                <input 
-                    x-ref="filterInput"
-                    x-model="filterText" 
-                    x-on:input="updateFilteredItems()" 
-                    x-bind:id="selectId + '-filter'"
-                    type="text" 
-                    placeholder="{{ __('Filter...') }}" 
-                    class="form-input w-full px-2 py-1 border rounded"
-                    aria-autocomplete="list"
-                    x-bind:aria-controls="selectId + '-listbox'"
-                    role="combobox"
-                    aria-expanded="true"
-                >
-            </div>
+        <div class="relative">
+            <button 
+                type="button"
+                class="inline-flex w-full items-center justify-between gap-2 bg-gray-50 border border-gray-300 rounded-md px-4 py-2.5 font-medium tracking-wide text-neutral-600 transition hover:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                role="combobox"
+                aria-controls="list"
+                aria-haspopup="listbox"
+                x-on:click="isOpen = ! isOpen"
+                x-on:keydown.down.prevent="openedWithKeyboard = true"
+                x-on:keydown.enter.prevent="openedWithKeyboard = true"
+                x-on:keydown.space.prevent="openedWithKeyboard = true"
+                x-bind:aria-expanded="isOpen || openedWithKeyboard"
+                x-bind:aria-label="selectedOption ? selectedOption : 'Please Select'"
+            >
+                <span class="font-normal" x-text="selectedOption ? selectedOption : 'Please Select'"></span>
+                <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
+                </svg>
+            </button>
+
             <div 
-                class="px-3 py-2 text-center text-gray-600 italic" 
-                x-show="Object.keys(filteredItems).length === 0"
-                x-text="'{{ __('No results found') }}'"
-            >
-            </div>
-            <ul 
-                x-ref="selectableItemsList" 
-                x-bind:id="selectId + '-listbox'"
+                x-show="isOpen || openedWithKeyboard"
+                id="statesList"
+                class="absolute left-0 top-11 z-10 w-full overflow-hidden rounded-md border border-neutral-300 bg-neutral-50"
                 role="listbox"
-                x-bind:aria-labelledby="selectId + '-label'"
-                class="max-h-56 overflow-auto"
+                aria-label="list"
+                x-on:click.outside="isOpen = false, openedWithKeyboard = false"
+                x-on:keydown.down.prevent="$focus.wrap().next()"
+                x-on:keydown.up.prevent="$focus.wrap().previous()"
+                x-transition
+                x-trap="openedWithKeyboard"
             >
-                <template x-for="[code, label] in Object.entries(filteredItems)" :key="code">
-                    <li 
-                        x-bind:id="code + '-' + selectId"
-                        x-on:click="selectedItem = code; selectOpen = false; $refs.selectButton.focus();"
-                        x-bind:class="{ 'bg-neutral-300 text-gray-900' : selectableItemIsActive(code), '' : ! selectableItemIsActive(code) }"
-                        x-on:mousemove="selectableItemActive = code"
-                        class="relative flex items-center h-full py-2 pl-4 text-gray-700 cursor-default select-none transition-colors duration-100 hover:bg-blue-100"
-                        role="option"
-                        x-bind:aria-selected="selectedItem == code"
-                        x-bind:tabindex="selectableItemIsActive(code) ? 0 : -1"
-                    >
-                        <svg x-show="selectedItem == code" class="absolute right-4 w-4 h-4 ml-2 stroke-current text-neutral-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        <span class="block font-medium truncate" x-text="label"></span>
+                <div class="relative">
+                    <svg class="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-neutral-600/50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
+                    </svg>
+                    <input 
+                        type="text"
+                        class="w-full border-b border-neutral-300 bg-neutral-50 py-2.5 pl-11 pr-4 text-sm text-neutral-600 focus:outline-none focus-visible:border-blue-600 disabled:cursor-not-allowed disabled:opacity-75"
+                        name="searchField"
+                        aria-label="Search"
+                        x-on:input="getFilteredOptions($el.value)"
+                        x-ref="searchField"
+                        placeholder="{{ __('Filter...') }}"
+                    />
+                </div>
+                <ul class="flex max-h-44 flex-col overflow-y-auto bg-white">
+                    <li class="hidden px-4 py-2 text-sm text-neutral-600" x-ref="noResultsMessage">
+                        <span>{{ __('No results found') }}</span>
                     </li>
-                </template>
-            </ul>
+                    <template x-for="(item, index) in options" x-bind:key="item.value">
+                        <li 
+                            class="combobox-option inline-flex cursor-pointer justify-between gap-6 bg-neutral-50 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-900/5 hover:text-neutral-900 focus-visible:bg-neutral-900/5 focus-visible:text-neutral-900 focus-visible:outline-none"
+                            role="option"
+                            x-on:click="setSelectedOption(item)"
+                            x-on:keydown.enter="setSelectedOption(item)"
+                            x-bind:id="'option-' + index"
+                            tabindex="0"
+                        >
+                            <div class="flex items-center gap-2">
+                                <span x-bind:class="selectedOption == item ? 'font-bold' : null" x-text="item.label"></span>
+                                <span class="sr-only" x-text="selectedOption == item ? 'selected' : null"></span>
+                            </div>
+                            <svg 
+                                x-cloak
+                                x-show="selectedOption == item"
+                                class="size-4"
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                fill="none"
+                                stroke-width="2"
+                                aria-hidden="true"
+                            >
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5">
+                            </svg>
+                        </li>
+                    </template>
+                </ul>
+            </div>
         </div>
     </div>
-    @if (array_key_exists('instructions', $field))
-    <p id="{{ $field['handle'] }}-explanation" class="mt-2 text-gray-500">
-        {{ __($field['instructions']) }}
-    </p>
-    @endif
-    @if ($errors->has('form.' . $field['handle']))
-    <p class="mt-2 text-red-600">{{ implode(', ', $errors->get('form.' . $field['handle'])) }}</p>
-    @endif
 </div>
 
 @script
 <script>
-Alpine.data('filteredSelect', (initialItems, fieldHandle) => ({
-    selectOpen: false,
-    selectedItem: null,
-    selectableItems: initialItems,
-    filteredItems: {},
-    selectableItemActive: null,
-    selectId: null,
-    selectDropdownPosition: 'bottom',
-    filterText: '',
-
-    init() {
-        this.selectId = this.$id('select');
-        this.filteredItems = {...this.selectableItems};
-        
-        this.$watch('selectOpen', () => {
-            if (!this.selectedItem) {
-                this.selectableItemActive = Object.keys(this.filteredItems)[0];
-            } else {
-                this.selectableItemActive = this.selectedItem;
-            }
-            this.$nextTick(() => {
-                this.selectScrollToActiveItem();
-                if (this.selectOpen) {
-                    this.$refs.filterInput.focus();
-                }
-            });
-            this.selectPositionUpdate();
-            window.addEventListener('resize', () => this.selectPositionUpdate());
-        });
+Alpine.data('combobox', (comboboxData, fieldHandle) => ({
+    options: comboboxData,
+    isOpen: false,
+    openedWithKeyboard: false,
+    selectedOption: null,
+    setSelectedOption(option) {
+        this.selectedOption = option.label
+        this.isOpen = false
+        this.openedWithKeyboard = false
     },
-
-    updateFilteredItems() {
-        this.filteredItems = Object.fromEntries(
-            Object.entries(this.selectableItems).filter(([code, label]) =>
-                label.toLowerCase().includes(this.filterText.toLowerCase())
-            )
-        );
-        this.selectableItemActive = Object.keys(this.filteredItems)[0];
-    },
-
-    selectableItemIsActive(code) {
-        return this.selectableItemActive === code;
-    },
-
-    selectableItemActiveNext() {
-        let keys = Object.keys(this.filteredItems);
-        let index = keys.indexOf(this.selectableItemActive);
-        if (index < keys.length - 1) {
-            this.selectableItemActive = keys[index + 1];
-            this.selectScrollToActiveItem();
-        }
-    },
-
-    selectableItemActivePrevious() {
-        let keys = Object.keys(this.filteredItems);
-        let index = keys.indexOf(this.selectableItemActive);
-        if (index > 0) {
-            this.selectableItemActive = keys[index - 1];
-            this.selectScrollToActiveItem();
-        }
-    },
-
-    selectScrollToActiveItem() {
-        if (this.selectableItemActive) {
-            let activeElement = document.getElementById(this.selectableItemActive + '-' + this.selectId);
-            if (activeElement) {
-                let newScrollPos = (activeElement.offsetTop + activeElement.offsetHeight) - this.$refs.selectableItemsList.offsetHeight;
-                if (newScrollPos > 0) {
-                    this.$refs.selectableItemsList.scrollTop = newScrollPos;
-                } else {
-                    this.$refs.selectableItemsList.scrollTop = 0;
-                }
-                activeElement.focus();
-            }
-        }
-    },
-
-    selectPositionUpdate() {
-        let selectDropdownBottomPos = this.$refs.selectButton.getBoundingClientRect().top + this.$refs.selectButton.offsetHeight + parseInt(window.getComputedStyle(this.$refs.selectableItemsList).maxHeight);
-        if (window.innerHeight < selectDropdownBottomPos) {
-            this.selectDropdownPosition = 'top';
+    getFilteredOptions(query) {
+        this.options = comboboxData.filter((option) =>
+            option.label.toLowerCase().includes(query.toLowerCase())
+        )
+        if (this.options.length === 0) {
+            this.$refs.noResultsMessage.classList.remove('hidden')
         } else {
-            this.selectDropdownPosition = 'bottom';
+            this.$refs.noResultsMessage.classList.add('hidden')
         }
-    }
-}));
+    },
+    handleKeydownOnOptions(event) {
+        if ((event.keyCode >= 65 && event.keyCode <= 90) || (event.keyCode >= 48 && event.keyCode <= 57) || event.keyCode === 8) {
+            this.$refs.searchField.focus()
+        }
+    },
+}))
 </script>
 @endscript

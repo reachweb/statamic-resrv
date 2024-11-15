@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
@@ -62,13 +63,13 @@ class CheckoutForm extends Component
         return collect($this->checkoutForm)->mapWithKeys(fn ($field) => ['form.'.$field['handle'] => $field['display']])->all();
     }
 
-    public function getDictionaryItems(string $handle): array
+    public function getDictionaryItems(string $handle): Collection
     {
         $dictionary = $this->reservation->getCheckoutForm()->firstOrFail(function ($field) use ($handle) {
             return $field->handle() === $handle;
         })->config()['dictionary'];
 
-        return Dictionary::find($dictionary)->options();
+        return collect(Dictionary::find($dictionary)->optionItems())->map(fn ($item) => $item->toArray())->values();
     }
 
     public function saveCustomer()
