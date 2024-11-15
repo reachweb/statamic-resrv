@@ -76,7 +76,7 @@ class CheckoutForm extends Component
             return $field->handle() === $handle;
         })->config()['dictionary'];
 
-        return collect(Dictionary::find($dictionary)->optionItems())->map(fn ($item) => $item->toArray())->values();
+        return collect(Dictionary::find(is_array($dictionary) ? $dictionary['type'] : $dictionary)->optionItems())->map(fn ($item) => $item->toArray())->values();
     }
 
     public function saveCustomer()
