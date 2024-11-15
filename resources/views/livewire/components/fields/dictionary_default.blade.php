@@ -20,7 +20,7 @@
         <div class="relative">
             <button 
                 type="button"
-                class="inline-flex w-full items-center justify-between gap-2 bg-gray-50 border border-gray-300 rounded-md px-4 py-2.5 font-medium tracking-wide text-neutral-600 transition hover:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                class="inline-flex w-full items-center justify-between gap-2 bg-gray-50 border border-gray-300 rounded-md px-4 py-2.5 font-medium tracking-wide transition hover:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                 role="combobox"
                 aria-controls="list"
                 aria-haspopup="listbox"
@@ -29,9 +29,9 @@
                 x-on:keydown.enter.prevent="openedWithKeyboard = true"
                 x-on:keydown.space.prevent="openedWithKeyboard = true"
                 x-bind:aria-expanded="isOpen || openedWithKeyboard"
-                x-bind:aria-label="selectedOption ? selectedOption : 'Please Select'"
+                x-bind:aria-label="selectedOption ? selectedOption : '{{ __('Please select') }}'"
             >
-                <span class="font-normal" x-text="selectedOption ? selectedOption : 'Please Select'"></span>
+                <span class="font-normal" x-text="selectedOption ? selectedOption : '{{ __('Please select') }}'"></span>
                 <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
                 </svg>
@@ -40,7 +40,7 @@
             <div 
                 x-show="isOpen || openedWithKeyboard"
                 id="statesList"
-                class="absolute left-0 top-11 z-10 w-full overflow-hidden rounded-md border border-neutral-300 bg-neutral-50"
+                class="absolute left-0 top-11 z-10 w-full overflow-hidden rounded-md border border-gray-300 bg-gray-50"
                 role="listbox"
                 aria-label="list"
                 x-on:click.outside="isOpen = false, openedWithKeyboard = false"
@@ -50,12 +50,12 @@
                 x-trap="openedWithKeyboard"
             >
                 <div class="relative">
-                    <svg class="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-neutral-600/50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.5" aria-hidden="true">
+                    <svg class="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-gray-600/50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="1.5" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/>
                     </svg>
                     <input 
                         type="text"
-                        class="w-full border-b border-neutral-300 bg-neutral-50 py-2.5 pl-11 pr-4 text-sm text-neutral-600 focus:outline-none focus-visible:border-blue-600 disabled:cursor-not-allowed disabled:opacity-75"
+                        class="w-full border-b border-gray-300 bg-gray-50 py-2.5 pl-11 pr-4 text-sm focus:outline-none focus-visible:border-blue-600 disabled:cursor-not-allowed disabled:opacity-75"
                         name="searchField"
                         aria-label="Search"
                         x-on:input="getFilteredOptions($el.value)"
@@ -63,13 +63,13 @@
                         placeholder="{{ __('Filter...') }}"
                     />
                 </div>
-                <ul class="flex max-h-44 flex-col overflow-y-auto bg-white">
-                    <li class="hidden px-4 py-2 text-sm text-neutral-600" x-ref="noResultsMessage">
+                <ul class="flex max-h-44 flex-col overflow-y-auto">
+                    <li class="hidden px-4 py-2 text-sm text-gray-600" x-ref="noResultsMessage">
                         <span>{{ __('No results found') }}</span>
                     </li>
                     <template x-for="(item, index) in options" x-bind:key="item.value">
                         <li 
-                            class="combobox-option inline-flex cursor-pointer justify-between gap-6 bg-neutral-50 px-4 py-2 text-sm text-neutral-600 hover:bg-neutral-900/5 hover:text-neutral-900 focus-visible:bg-neutral-900/5 focus-visible:text-neutral-900 focus-visible:outline-none"
+                            class="combobox-option inline-flex cursor-pointer justify-between gap-6 bg-gray-50 px-4 py-2 text-sm text-gray-600 hover:bg-gray-900/5 hover:text-gray-900 focus-visible:bg-gray-900/5 focus-visible:text-gray-900 focus-visible:outline-none"
                             role="option"
                             x-on:click="setSelectedOption(item)"
                             x-on:keydown.enter="setSelectedOption(item)"
@@ -78,11 +78,11 @@
                         >
                             <div class="flex items-center gap-2">
                                 <span x-bind:class="selectedOption == item ? 'font-bold' : null" x-text="item.label"></span>
-                                <span class="sr-only" x-text="selectedOption == item ? 'selected' : null"></span>
+                                <span class="sr-only" x-text="selectedOption == item.label ? 'selected' : null"></span>
                             </div>
                             <svg 
                                 x-cloak
-                                x-show="selectedOption == item"
+                                x-show="selectedOption == item.label"
                                 class="size-4"
                                 xmlns="http://www.w3.org/2000/svg"
                                 viewBox="0 0 24 24"
