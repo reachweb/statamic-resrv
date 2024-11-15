@@ -58,6 +58,10 @@ class ResrvProvider extends AddonServiceProvider
         \Reach\StatamicResrv\Console\Commands\InstallResrv::class,
     ];
 
+    protected $dictionaries = [
+        \Reach\StatamicResrv\Dictionaries\CountryPhoneCodes::class,
+    ];
+
     protected $fieldtypes = [
         \Reach\StatamicResrv\Fieldtypes\ResrvAvailability::class,
         \Reach\StatamicResrv\Fieldtypes\ResrvOptions::class,

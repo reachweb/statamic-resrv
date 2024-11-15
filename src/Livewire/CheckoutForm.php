@@ -63,6 +63,13 @@ class CheckoutForm extends Component
         return collect($this->checkoutForm)->mapWithKeys(fn ($field) => ['form.'.$field['handle'] => $field['display']])->all();
     }
 
+    public function isPhoneDictionary(string $handle): bool
+    {
+        return $this->reservation->getCheckoutForm()->firstOrFail(function ($field) use ($handle) {
+            return $field->handle() === $handle;
+        })->config()['dictionary'] === 'country_phone_codes';
+    }
+
     public function getDictionaryItems(string $handle): Collection
     {
         $dictionary = $this->reservation->getCheckoutForm()->firstOrFail(function ($field) use ($handle) {
