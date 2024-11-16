@@ -170,6 +170,9 @@ class AvailabilityResults extends Component
         if ($this->extraDays !== 0 && $this->availability->count() > 1) {
             $this->availability = collect($this->availability->get(0));
         }
+        if ($this->data->advanced === 'any') {
+            $this->data->advanced = data_get($this->availability, 'data.property');
+        }
         try {
             $this->validateAvailabilityAndPrice();
             $this->createReservation();
