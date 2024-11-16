@@ -16,6 +16,8 @@ trait HandlesPricing
 
         $reservationTotal = $this->reservation->price;
 
+        $originalPrice = Price::create($this->getUpdatedPrices()['original_price']) ?? null;
+
         // Calculate totals
         $extrasTotal = $this->calculateExtraTotals();
         $optionsTotal = $this->calculateOptionTotals();
@@ -24,7 +26,7 @@ trait HandlesPricing
 
         $payment = $this->reservation->payment;
 
-        return collect(compact('total', 'reservationTotal', 'extrasTotal', 'optionsTotal', 'payment'));
+        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'payment'));
     }
 
     public function calculateAvailabilityTotals($availabilityTotal): PriceClass
