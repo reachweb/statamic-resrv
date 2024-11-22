@@ -5,8 +5,8 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
-use Statamic\Facades\Entry;
 
 class ExtraCpController extends Controller
 {
@@ -31,13 +31,8 @@ class ExtraCpController extends Controller
 
     public function entryIndex($statamic_id)
     {
-        $extras = $this->extra->entry($statamic_id)->get();
-
-        $extras->transform(function ($extra) {
-            $extra->conditions = $this->extra->find($extra->id)->conditions()->get();
-
-            return $extra;
-        });
+        $entry = Entry::itemId($statamic_id)->firstOrFail();
+        $extras = $entry->extras()->with('conditions')->get();
 
         return response()->json($extras);
     }
@@ -90,10 +85,9 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'id' => 'required|integer',
         ]);
-        DB::table('resrv_statamicentry_extra')
-            ->insert(
-                ['extra_id' => $data['id'], 'statamicentry_id' => $statamic_id],
-            );
+        
+        $entry = Entry::itemId($statamic_id)->firstOrFail();
+        $entry->extras()->attach($data['id']);
 
         return response(200);
     }
@@ -103,10 +97,9 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'id' => 'required|integer',
         ]);
-        DB::table('resrv_statamicentry_extra')
-            ->where('extra_id', $data['id'])
-            ->where('statamicentry_id', $statamic_id)
-            ->delete();
+        
+        $entry = Entry::itemId($statamic_id)->firstOrFail();
+        $entry->extras()->detach($data['id']);
 
         return response(200);
     }
@@ -117,16 +110,8 @@ class ExtraCpController extends Controller
             'entries' => 'sometimes|array',
         ]);
 
-        $toAdd = collect($data['entries'])->transform(function ($entry) use ($extra_id) {
-            return ['extra_id' => $extra_id, 'statamicentry_id' => $entry];
-        })->toArray();
-
-        DB::table('resrv_statamicentry_extra')
-            ->where('extra_id', $extra_id)
-            ->delete();
-
-        DB::table('resrv_statamicentry_extra')
-            ->insert($toAdd);
+        $extra = $this->extra->findOrFail($extra_id);
+        $extra->entries()->sync($data['entries'] ?? []);
 
         return response(200);
     }
@@ -199,14 +184,9 @@ class ExtraCpController extends Controller
 
     public function entries($extra_id)
     {
-        $entryIds = $this->extra->find($extra_id)
-            ->entries()
-            ->get()
-            ->map(fn ($item) => $item->statamicentry_id);
-
-        $entries = Entry::query()
-            ->whereIn('id', $entryIds->toArray())
-            ->get(['id', 'title']);
+        $extra = $this->extra->findOrFail($extra_id);
+        $entries = $extra->entries()
+            ->get(['item_id as id', 'title']);
 
         return response()->json($entries);
     }
