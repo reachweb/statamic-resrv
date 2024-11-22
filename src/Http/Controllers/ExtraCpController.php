@@ -184,10 +184,6 @@ class ExtraCpController extends Controller
 
     public function entries($extra_id)
     {
-        $extra = $this->extra->findOrFail($extra_id);
-        $entries = $extra->entries()
-            ->get(['item_id as id', 'title']);
-
-        return response()->json($entries);
+        return response()->json($this->extra->findOrFail($extra_id)->entries);
     }
 }
