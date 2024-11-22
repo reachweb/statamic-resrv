@@ -9,6 +9,6 @@ class AddResrvEntryToDatabase
 {
     public function handle(EntrySaved $event)
     {
-        return (new Entry)->syncToDatabase($event->entry);
+        return app(Entry::class)->syncToDatabase($event->entry);
     }
 }
