@@ -196,7 +196,7 @@ class Extra extends Model
         $extras = $entry->extras()
             ->where('published', true)
             ->orderBy('order')
-            ->get(['resrv_extras.id', 'name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'order']);
+            ->get(['resrv_extras.id', 'name', 'slug', 'price', 'price_type', 'allow_multiple', 'custom', 'maximum', 'description', 'order']);
 
         $extras->transform(function ($extra) use ($data) {
             $extra->original_price = $extra->price->format();

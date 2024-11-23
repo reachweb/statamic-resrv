@@ -3,9 +3,9 @@
 namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Reservation;
@@ -25,7 +25,7 @@ class CheckoutExtrasTest extends TestCase
 
     public $extras;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
@@ -40,10 +40,9 @@ class CheckoutExtrasTest extends TestCase
 
         $extra = ResrvExtra::factory()->create();
 
-        DB::table('resrv_statamicentry_extra')->insert([
-            'statamicentry_id' => $this->entries->first()->id,
-            'extra_id' => $extra->id,
-        ]);
+        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+
+        $entry->extras()->attach($extra->id);
 
         $this->extras = ResrvExtra::getPriceForDates($this->reservation);
     }
@@ -102,7 +101,7 @@ class CheckoutExtrasTest extends TestCase
             ->set('enabledExtras.extras', [[
                 'id' => $this->extras->first()->id,
                 'quantity' => 1,
-                'price' => $this->extras->first()->price,
+                'price' => $this->extras->first()->price->format(),
             ]])
             ->assertSee('€ 9.3')
             ->assertSee('109.30');
@@ -120,12 +119,9 @@ class CheckoutExtrasTest extends TestCase
 
         $extra = ResrvExtra::factory()->custom()->create();
 
-        DB::table('resrv_statamicentry_extra')->insert([
-            'statamicentry_id' => $this->entries->first()->id,
-            'extra_id' => $extra->id,
-        ]);
+        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
 
-        $extras = ResrvExtra::getPriceForDates($reservation);
+        $entry->extras()->attach($extra->id);
 
         Livewire::test(Checkout::class)
             ->set('enabledExtras.extras', [[
@@ -148,10 +144,9 @@ class CheckoutExtrasTest extends TestCase
 
         $extra = ResrvExtra::factory()->relative()->create();
 
-        DB::table('resrv_statamicentry_extra')->insert([
-            'statamicentry_id' => $this->entries->first()->id,
-            'extra_id' => $extra->id,
-        ]);
+        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+
+        $entry->extras()->attach($extra->id);
 
         $this->travelTo(today()->subDay()->setHour(12));
 
@@ -183,7 +178,7 @@ class CheckoutExtrasTest extends TestCase
             ->set('enabledExtras.extras', [
                 ['id' => $extra->id,
                     'quantity' => 1,
-                    'price' => $extra->price],
+                    'price' => $extra->price->format(), ],
             ])
             ->call('handleFirstStep')
             ->assertHasNoErrors(['reservation'])
@@ -210,9 +205,9 @@ class CheckoutExtrasTest extends TestCase
         $extra = $this->extras->first();
         $extra2 = ResrvExtra::factory()->fixed()->create();
 
-        DB::table('resrv_statamicentry_extra')->insert([
-            ['statamicentry_id' => $item->id(), 'extra_id' => $extra2->id],
-        ]);
+        $entry = ResrvEntry::itemId($item->id())->first();
+
+        $entry->extras()->attach($extra2->id);
 
         ExtraCondition::factory()->requiredExtraSelected()->create([
             'extra_id' => $extra2->id,
@@ -223,7 +218,7 @@ class CheckoutExtrasTest extends TestCase
         // Test with only the first extra (should faiil because extra2 is required when extra1 is selected)
         $component = Livewire::test(Checkout::class)
             ->set('enabledExtras.extras', [
-                ['id' => $extra->id, 'quantity' => 1, 'price' => $extra->price],
+                ['id' => $extra->id, 'quantity' => 1, 'price' => $extra->price->format()],
             ])
             ->call('handleFirstStep')
             ->assertHasErrors(['reservation']);
@@ -231,7 +226,7 @@ class CheckoutExtrasTest extends TestCase
         // Test with required extra (should pass)
         $component = Livewire::test(Checkout::class)
             ->set('enabledExtras.extras', [
-                ['id' => $extra->id, 'quantity' => 1, 'price' => $extra->price],
+                ['id' => $extra->id, 'quantity' => 1, 'price' => $extra->price->format()],
                 ['id' => $extra2->id, 'quantity' => 1, 'price' => $extra2->price->format()],
             ])
             ->call('handleFirstStep')
@@ -284,9 +279,9 @@ class CheckoutExtrasTest extends TestCase
 
         $extra2 = ResrvExtra::factory()->fixed()->create();
 
-        DB::table('resrv_statamicentry_extra')->insert([
-            ['statamicentry_id' => $item->id(), 'extra_id' => $extra2->id],
-        ]);
+        $entry = ResrvEntry::itemId($item->id())->first();
+
+        $entry->extras()->attach($extra2->id);
 
         ExtraCondition::factory()->showExtraSelected()->create([
             'extra_id' => $extra2->id,
@@ -299,7 +294,7 @@ class CheckoutExtrasTest extends TestCase
         $this->assertTrue($component->extraConditions->get('hide')->contains($extra2->id));
 
         $component->set('enabledExtras.extras', [
-            $extra->id => ['id' => $extra->id, 'quantity' => 1, 'price' => $extra->price],
+            $extra->id => ['id' => $extra->id, 'quantity' => 1, 'price' => $extra->price->format()],
         ])->assertDispatched('extra-conditions-changed');
 
         $this->assertFalse($component->extraConditions->get('hide')->contains($extra2->id));
