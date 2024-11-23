@@ -6,6 +6,7 @@ use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Models\Availability;
 use Statamic\Entries\Entry;
+use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 
 trait CreatesEntries
@@ -24,7 +25,9 @@ trait CreatesEntries
 
         $slug = Str::slug($entryData['title']);
 
-        Collection::make($collection)->routes('/{slug}')->save();
+        $collection = Collection::make($collection)->routes('/{slug}')->save();
+
+        $this->makeBlueprint($collection);
 
         $entry = Entry::make()
             ->collection($collection)
@@ -112,5 +115,40 @@ trait CreatesEntries
                 'property' => $property,
             ])
             ->create();
+    }
+
+    protected function makeBlueprint($collection)
+    {
+        $blueprint = Blueprint::make()->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'title',
+                            'field' => [
+                                'type' => 'text',
+                                'display' => 'Title',
+                            ],
+                        ],
+                        [
+                            'handle' => 'slug',
+                            'field' => [
+                                'type' => 'text',
+                                'display' => 'Slug',
+                            ],
+                        ],
+                        [
+
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+        $blueprint->setHandle('pages')->setNamespace('collections.'.$collection->handle())->save();
     }
 }

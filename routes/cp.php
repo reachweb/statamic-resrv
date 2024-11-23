@@ -62,7 +62,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/dataimport', 'DataImportCpController@confirm')->name('dataimport.confirm');
         Route::get('/resrv/dataimport/store', 'DataImportCpController@store')->name('dataimport.store');
 
-        Route::get('/resrv/utility/entries', 'ResrvUtilityController@entries')->name('utilities.entries');
+        Route::get('/resrv/utility/entries', 'UtilityCpController@entries')->name('utilities.entries');
 
         Route::get('/resrv/affiliates', 'AffiliateCpController@indexCp')->name('affiliates.index');
         Route::get('/resrv/affiliate', 'AffiliateCpController@index')->name('affiliate.index');

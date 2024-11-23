@@ -52,6 +52,11 @@ class Extra extends Model
         return $this->hasOne(ExtraCondition::class);
     }
 
+    public function entries()
+    {
+        return $this->belongsToMany(Entry::class, 'resrv_entry_extra');
+    }
+
     public function getPriceAttribute($value)
     {
         return Price::create($value);
@@ -168,32 +173,15 @@ class Extra extends Model
         return Price::create($this->pivot->price)->multiply($this->pivot->quantity)->format();
     }
 
-    public function scopeEntry($query, $entry)
-    {
-        $entry = $this->getDefaultSiteEntry($entry);
-
-        return DB::table('resrv_extras')
-            ->join('resrv_statamicentry_extra', function ($join) use ($entry) {
-                $join->on('resrv_extras.id', '=', 'resrv_statamicentry_extra.extra_id')
-                    ->where('resrv_statamicentry_extra.statamicentry_id', '=', $entry->id());
-            })
-            ->select('resrv_extras.*');
-    }
-
-    public function scopeEntries($query)
-    {
-        return DB::table('resrv_statamicentry_extra')
-            ->where('extra_id', $this->id);
-    }
-
     public function scopeEntriesWithConditions($query, $entry)
     {
-        $entry = $this->getDefaultSiteEntry($entry);
+        $statamicEntry = $this->getDefaultSiteEntry($entry);
+        $entry = Entry::itemId($statamicEntry->id())->first();
 
         return DB::table('resrv_extras')
-            ->join('resrv_statamicentry_extra', function ($join) use ($entry) {
-                $join->on('resrv_extras.id', '=', 'resrv_statamicentry_extra.extra_id')
-                    ->where('resrv_statamicentry_extra.statamicentry_id', '=', $entry->id());
+            ->join('resrv_entry_extra', function ($join) use ($entry) {
+                $join->on('resrv_extras.id', '=', 'resrv_entry_extra.extra_id')
+                    ->where('resrv_entry_extra.entry_id', '=', $entry->id);
             })
             ->join('resrv_extra_conditions', function ($join) {
                 $join->on('resrv_extras.id', '=', 'resrv_extra_conditions.extra_id');
@@ -203,14 +191,16 @@ class Extra extends Model
 
     public function scopeGetPriceForDates($query, $data)
     {
-        $extras = $this->scopeEntry($query, $data['item_id'])
+        $entry = Entry::itemId($data['item_id'])->first();
+
+        $extras = $entry->extras()
             ->where('published', true)
             ->orderBy('order')
-            ->get(['id', 'name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'order']);
+            ->get(['resrv_extras.id', 'name', 'slug', 'price', 'price_type', 'allow_multiple', 'custom', 'maximum', 'description', 'order']);
 
         $extras->transform(function ($extra) use ($data) {
-            $extra->original_price = $extra->price;
-            $extra->price = $this->find($extra->id)->priceForDates($data);
+            $extra->original_price = $extra->price->format();
+            $extra->price = $extra->priceForDates($data);
 
             return $extra;
         });

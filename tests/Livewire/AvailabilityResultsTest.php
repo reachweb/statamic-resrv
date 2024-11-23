@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
@@ -44,10 +45,9 @@ class AvailabilityResultsTest extends TestCase
 
         $extra = Extra::factory()->create();
 
-        DB::table('resrv_statamicentry_extra')->insert([
-            'statamicentry_id' => $this->entries->first()->id,
-            'extra_id' => $extra->id,
-        ]);
+        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+
+        $entry->extras()->attach($extra->id);
     }
 
     // Test that the component renders successfully
