@@ -85,7 +85,7 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'id' => 'required|integer',
         ]);
-        
+
         $entry = Entry::itemId($statamic_id)->firstOrFail();
         $entry->extras()->attach($data['id']);
 
@@ -97,7 +97,7 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'id' => 'required|integer',
         ]);
-        
+
         $entry = Entry::itemId($statamic_id)->firstOrFail();
         $entry->extras()->detach($data['id']);
 
@@ -165,10 +165,6 @@ class ExtraCpController extends Controller
             'id' => 'required|integer',
         ]);
         $extra = $this->extra->destroy($data['id']);
-
-        DB::table('resrv_statamicentry_extra')
-            ->where('extra_id', $data['id'])
-            ->delete();
 
         DB::table('resrv_extra_conditions')
             ->where('extra_id', $data['id'])
