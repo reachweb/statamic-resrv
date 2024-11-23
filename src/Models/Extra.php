@@ -175,27 +175,33 @@ class Extra extends Model
 
     public function scopeEntriesWithConditions($query, $entry)
     {
-        $entry = $this->getDefaultSiteEntry($entry);
-        
-        return $query->whereHas('entries', function($q) use ($entry) {
-            $q->where('item_id', $entry->id());
-        })
-        ->with('conditions')
-        ->select('resrv_extras.*');
+        $statamicEntry = $this->getDefaultSiteEntry($entry);
+        $entry = Entry::itemId($statamicEntry->id())->first();
+
+        return DB::table('resrv_extras')
+            ->join('resrv_entry_extra', function ($join) use ($entry) {
+                $join->on('resrv_extras.id', '=', 'resrv_entry_extra.extra_id')
+                    ->where('resrv_entry_extra.entry_id', '=', $entry->id);
+            })
+            ->join('resrv_extra_conditions', function ($join) {
+                $join->on('resrv_extras.id', '=', 'resrv_extra_conditions.extra_id');
+            })
+            ->select('resrv_extras.*', 'resrv_extra_conditions.*');
     }
 
     public function scopeGetPriceForDates($query, $data)
     {
-        $extras = $this->whereHas('entries', function ($query) use ($data) {
-            $query->where('item_id', $data['item_id']);
-        })
-        ->where('published', true)
-        ->orderBy('order')
-        ->get(['id', 'name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'order']);
+        $entry = Entry::itemId($data['item_id'])->first();
+
+        $extras = $entry->extras()
+            ->where('published', true)
+            ->orderBy('order')
+            ->get(['resrv_extras.id', 'name', 'slug', 'price', 'price_type', 'allow_multiple', 'maximum', 'description', 'order']);
 
         $extras->transform(function ($extra) use ($data) {
-            $extra->original_price = $extra->price;
-            $extra->price = $this->find($extra->id)->priceForDates($data);
+            $extra->original_price = $extra->price->format();
+            $extra->price = $extra->priceForDates($data);
+
             return $extra;
         });
 
