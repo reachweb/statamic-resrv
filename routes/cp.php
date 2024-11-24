@@ -19,6 +19,11 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/extra/order', 'ExtraCpController@order')->name('extra.order');
         Route::delete('/resrv/extra', 'ExtraCpController@delete')->name('extra.delete');
         Route::post('/resrv/extra/conditions/{extra_id}', 'ExtraCpController@conditions')->name('extra.conditions');
+        Route::patch('/resrv/extra/categories/update', 'ExtraCpController@updateCategories')->name('extra.updateCategories');
+
+        Route::post('/resrv/extra/category', 'ExtraCpCategoryController@store')->name('extraCategory.create');
+        Route::patch('/resrv/extra/category/{id}', 'ExtraCpCategoryController@update')->name('extraCategory.update');
+        Route::delete('/resrv/extra/category/{id}', 'ExtraCpCategoryController@delete')->name('extraCategory.delete');
 
         Route::get('/resrv/option/{statamic_id}', 'OptionCpController@entryIndex')->name('option.entryindex');
         Route::post('/resrv/option', 'OptionCpController@create')->name('option.create');
@@ -29,13 +34,6 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/option/{id}', 'OptionCpController@updateValue')->name('option.value.update');
         Route::patch('/resrv/option/value/order', 'OptionCpController@orderValue')->name('option.value.order');
         Route::delete('/resrv/option/value', 'OptionCpController@deleteValue')->name('option.value.delete');
-
-        Route::get('/resrv/locations', 'LocationCpController@indexCp')->name('locations.index');
-        Route::get('/resrv/location', 'LocationCpController@index')->name('location.index');
-        Route::post('/resrv/location', 'LocationCpController@create')->name('location.create');
-        Route::patch('/resrv/location', 'LocationCpController@update')->name('location.update');
-        Route::patch('/resrv/location/order', 'LocationCpController@order')->name('location.order');
-        Route::delete('/resrv/location', 'LocationCpController@delete')->name('location.delete');
 
         Route::get('/resrv/reservation', 'ReservationCpController@index')->name('reservation.index');
         Route::get('/resrv/reservations', 'ReservationCpController@indexCp')->name('reservations.index');
