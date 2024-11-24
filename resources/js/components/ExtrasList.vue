@@ -14,15 +14,15 @@
                 bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"
             >
                 <div class="flex items-center space-x-2">
-                    <div class="little-dot" :class="greenDot(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
+                    <div class="little-dot" :class="extraEnabled(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
                     <span class="font-medium cursor-pointer" v-html="extra.name" @click="editExtra(extra)"></span>
                     <span>{{ extra.price }} <span class="text-xs text-gray-700 dark:text-dark-100" v-html="priceLabel(extra.price_type)"></span></span>
                 </div>
                 <div class="flex space-x-2">
                     <span 
                         class="text-gray-700 dark:text-dark-100 text-sm uppercase cursor-pointer" 
-                        v-html="extraEnabled(extra.id) ? 'Enabled' : 'Disabled'"
-                        @click="associateEntryExtra(extra.id)"
+                        v-html="extraEnabled(extra) ? 'Enabled' : 'Disabled'"
+                        @click="associateEntryExtra(extra)"
                         v-if="insideEntry"
                     ></span>
                     <dropdown-list>
@@ -94,8 +94,6 @@ export default {
             showConditionsPanel: false,
             showMassAssignPanel: false,
             extras: '',
-            entryExtras: '',
-            activeExtras: [],
             extrasLoaded: false,
             allowEntryExtraEdit: true,
             deleteId: false,
@@ -142,14 +140,7 @@ export default {
     },
 
     watch: {
-        extrasLoaded() {
-            if (this.insideEntry) {
-                this.createEnabledExtrasArray()
-            }            
-        },
-        entryExtras() {
-            this.createEnabledExtrasArray()
-        }
+
     },
 
     methods: {
@@ -162,16 +153,16 @@ export default {
         toggleMassAssignPanel() {
             this.showMassAssignPanel = !this.showMassAssignPanel
         },
-        associateEntryExtra(extraId) {
+        associateEntryExtra(extra) {
             this.toggleEntryExtraEditing()
-            if (this.extraEnabled(extraId)) {
-                this.disableExtra(extraId)
+            if (this.extraEnabled(extra)) {
+                this.disableExtra(extra.id)
             } else {
-                this.enableExtra(extraId)
+                this.enableExtra(extra.id)
             }
         },
         toggleEntryExtraEditing() {
-            this.allowEntryExtraEdit = !this.allowEntryExtraEdit
+            this.allowEntryExtraEdit = ! this.allowEntryExtraEdit
         },
         addExtra() {
             this.extra = this.emptyExtra
@@ -197,20 +188,9 @@ export default {
             this.toggleConditionsPanel()
             this.getAllExtras()
         },
-        createEnabledExtrasArray() {
-            this.activeExtras = []
-            this.entryExtras.forEach((item) => {
-                this.activeExtras.push(parseInt(item.id))
-            })
-        },
-        extraEnabled(extraId) {
-            return this.activeExtras.includes(extraId)
-        },
-        greenDot(extra) {
+        extraEnabled(extra) {
             if (this.insideEntry) {
-                if (this.extraEnabled(extra.id)) {
-                    return true;
-                }
+                return extra.enabled
             } else {
                 if (extra.published == true) {
                     return true;
@@ -230,28 +210,17 @@ export default {
             }
         },
         getAllExtras() {
-            axios.get('/cp/resrv/extra')
+            let url = '/cp/resrv/extra/'
+            if (this.insideEntry) {
+                url += this.parent
+            }
+            axios.get(url)
             .then(response => {
-                this.extras = response.data
-                if (this.insideEntry) {
-                    this.getEntryExtras()
-                } else {
-                    this.extrasLoaded = true
-                }
-                
-            })
-            .catch(error => {
-                this.$toast.error('Cannot retrieve extras')
-            })
-        },
-        getEntryExtras() {
-            axios.get('/cp/resrv/extra/'+this.parent)
-            .then(response => {
-                this.entryExtras = response.data
+                this.extras = response.data              
                 this.extrasLoaded = true
             })
             .catch(error => {
-                this.$toast.error('Cannot retrieve entry extras')
+                this.$toast.error('Cannot retrieve extras')
             })
         },
         enableExtra(extraId) {
@@ -298,7 +267,9 @@ export default {
                     this.$toast.success('Extras order changed')
                     this.getAllExtras()
                 })
-                .catch(() => {this.$toast.error('Extras ordering failed')})
+                .catch(() => {
+                    this.$toast.error('Extras ordering failed')
+                })
         }        
     }
 }
