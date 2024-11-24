@@ -138,10 +138,6 @@ export default {
             type: Object,
             required: true
         },
-        openPanel: {
-            type: Boolean,
-            default: false
-        },
         url: {
             type: String,
             default: '/cp/resrv/extra'
