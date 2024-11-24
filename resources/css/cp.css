@@ -40,3 +40,47 @@
         height: auto;
     }
 }
+
+.\@container {
+    container-type: inline-size !important;
+}
+
+.category-section {
+    @apply p-2 min-h-40 outline-none w-full;
+
+    &.draggable-source--is-dragging {
+        opacity: 0.5;
+    }
+
+    &.draggable-mirror .category-section-card {
+        @apply shadow-lg;
+    }
+}
+
+.category-drag-handle {
+    @apply flex justify-center items-center w-4 ltr:border-r rtl:border-l cursor-move;
+}
+
+.category-add-section-container {
+    @apply flex min-h-40;
+
+    .draggable-container--is-dragging & {
+        display: none;
+    }
+}
+
+.category-add-section-button {
+    @apply relative w-full border border-gray-500 border-dashed rounded-lg flex justify-center items-center text-gray-700;
+
+    &:hover {
+        @apply border-gray-500 text-gray-950;
+    }
+
+    .blueprint-section-draggable-zone {
+        @apply absolute inset-0 p-4;
+    }
+
+    .blueprint-section-field {
+        @apply bg-white;
+    }
+}

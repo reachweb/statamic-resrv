@@ -1,79 +1,74 @@
 <template>
-    <div>
-    <div class="w-full flex justify-end mb-4">
-        <button class="btn-primary" @click="addExtra">
-            Add extra
-        </button>
-    </div>
-    <div class="w-full h-full" v-if="extrasLoaded">
-        <vue-draggable class="mt-4 space-y-2" v-model="extras" @start="drag=true" @end="drag=false" @change="order">
-            <div
-                v-for="extra in extras"
-                :key="extra.id"
-                class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
-                bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"
-            >
-                <div class="flex items-center space-x-2">
-                    <div class="little-dot" :class="extraEnabled(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
-                    <span class="font-medium cursor-pointer" v-html="extra.name" @click="editExtra(extra)"></span>
-                    <span>{{ extra.price }} <span class="text-xs text-gray-700 dark:text-dark-100" v-html="priceLabel(extra.price_type)"></span></span>
+<div v-if="categoriesLoaded" ref="sections">
+    <div
+        class="extra-category-sections flex flex-wrap -mx-2 outline-none"
+        v-for="category in categories"
+    >
+        <div class="category-section" >
+            <div class="category-section-card card dark:bg-dark-800 p-0 h-full flex rounded-t flex-col">
+                <div class="bg-gray-200 dark:bg-dark-600 border-b dark:border-none text-sm flex rounded-t">
+                    <div class="category-drag-handle category-section-drag-handle w-4 border-r dark:border-dark-900">
+                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 17"><g fill="#B6B6B6" fill-rule="evenodd"><rect width="2" height="2" rx="1"/><rect width="2" height="2" y="5" rx="1"/><rect width="2" height="2" y="10" rx="1"/><rect width="2" height="2" y="15" rx="1"/><rect width="2" height="2" x="5" rx="1"/><rect width="2" height="2" x="5" y="5" rx="1"/><rect width="2" height="2" x="5" y="10" rx="1"/><rect width="2" height="2" x="5" y="15" rx="1"/></g></svg>
+                    </div>
+                    <div class="p-2 flex-1 flex items-center" v-if="category.id !== 0">
+                        <a class="flex items-center flex-1 group" @click="editCategory(category)">
+                            <div v-text="__(category.name)" />
+                        </a>
+                        <button class="flex items-center text-gray-700 dark:text-dark-175 hover:text-gray-950 dark:hover:text-dark-100 mr-3" @click="editCategory(category)">
+                            <svg-icon class="h-4 w-4" name="pencil" />
+                        </button>
+                        <button @click.prevent="$emit('deleted')" class="flex items-center text-gray-700 dark:text-dark-175 hover:text-gray-950 dark:hover:text-dark-100">
+                            <svg-icon class="h-4 w-4" name="micro/trash" />
+                        </button>
+                    </div>
+                     <div class="p-2 flex-1 flex items-center" v-else>
+                        <span class="flex items-center flex-1 group">
+                            <div class="ml-3 text-gray-800 dark:text-dark-150" v-text="__(category.name)" />
+                        </span>
+                    </div>
                 </div>
-                <div class="flex space-x-2">
-                    <span 
-                        class="text-gray-700 dark:text-dark-100 text-sm uppercase cursor-pointer" 
-                        v-html="extraEnabled(extra) ? 'Enabled' : 'Disabled'"
-                        @click="associateEntryExtra(extra)"
-                        v-if="insideEntry"
-                    ></span>
-                    <dropdown-list>
-                        <dropdown-item :text="__('Edit')" @click="editExtra(extra)" />
-                        <dropdown-item :text="__('Mass assign')" @click="massAssign(extra)" />
-                        <dropdown-item :text="__('Conditions')" @click="editConditions(extra)" />
-                        <dropdown-item :text="__('Delete')" @click="confirmDelete(extra)" />         
-                    </dropdown-list>
+                <div class="p-2">
+                    <extras
+                        :key="category.id"
+                        :extras="category.extras"
+                        :inside-entry="insideEntry"
+                    />
                 </div>
             </div>
-        </vue-draggable>
+        </div>
     </div>
-    <extras-panel            
+    <div class="category-add-section-container w-full mx-0 mt-4">
+        <button class="category-add-section-button dark:border-dark-200 dark:text-dark-150 dark:hover:border-dark-175 dark:hover:text-dark-100 outline-none" @click="addCategory">
+            <div class="text-center flex items-center leading-none">
+                <svg-icon name="micro/plus" class="h-3 w-3 mr-2" />
+                <div v-text="__('Add a new category')" />
+            </div>
+
+            <div class="category-section-draggable-zone outline-none" />
+        </button>
+    </div>
+    <extras-category-panel            
         v-if="showPanel"
-        :data="extra"
+        :data="category"
         @closed="togglePanel"
-        @saved="extraSaved"
+        @saved="categorySaved"
     >
-    </extras-panel>
-    <extra-conditions-panel            
-        v-if="showConditionsPanel"
-        :data="extra"
-        :extras="extras"
-        @closed="toggleConditionsPanel"
-        @saved="extraConditionsSaved"
-    >
-    </extra-conditions-panel>
-    <extra-mass-assign-panel            
-        v-if="showMassAssignPanel"
-        :data="extra"
-        @closed="toggleMassAssignPanel"
-        @saved="toggleMassAssignPanel"
-    >
-    </extra-mass-assign-panel>
+    </extras-category-panel>
     <confirmation-modal
         v-if="deleteId"
-        title="Delete extra"
+        title="Delete category"
         :danger="true"
-        @confirm="deleteExtra"
+        @confirm="deleteCategory"
         @cancel="deleteId = false"
     >
-        Are you sure you want to delete this extra? <strong>This cannot be undone.</strong>
+        {{ __('Are you sure you want to delete this category?') }} <strong>{{ __('This cannot be undone.') }}'</strong>
     </confirmation-modal>
-    </div>
+</div>
 </template>
 <script>
 import axios from 'axios'
-import ExtrasPanel from './ExtrasPanel.vue'
-import ExtraConditionsPanel from './ExtraConditionsPanel.vue'
-import ExtraMassAssignPanel from './ExtraMassAssignPanel.vue'
-import VueDraggable from 'vuedraggable'
+import Extras from './Extras.vue'
+import ExtrasCategoryPanel from './ExtrasCategoryPanel.vue'
 
 export default {
     props: {
@@ -91,33 +86,25 @@ export default {
         return {
             containerWidth: null,
             showPanel: false,
-            showConditionsPanel: false,
-            showMassAssignPanel: false,
-            extras: '',
-            extrasLoaded: false,
-            allowEntryExtraEdit: true,
+            categories: '',
+            categoriesLoaded: false,
             deleteId: false,
-            drag: false,
-            extra: '',
-            emptyExtra: {
+            sortableCategories: null,
+            currentCategory: '',
+            lastInteractedCategory: null,
+            category: '',
+            emptyCategory: {
                 name: '',
+                description: '',
                 slug: '',
-                price: '',
-                price_type: '',
-                allow_multiple : 0,
-                custom: '',
-                override_label: '',
-                maximum: 0,
-                published : 1
+                published: 1
             }
         }
     },
 
     components: {
-        ExtrasPanel,
-        ExtraConditionsPanel,
-        ExtraMassAssignPanel,
-        VueDraggable
+        Extras,
+        ExtrasCategoryPanel,
     },
 
     computed: {
@@ -130,7 +117,7 @@ export default {
     },
 
     mounted() {
-        this.getAllExtras()        
+        this.getAllCategories()
     },
 
     updated() {
@@ -147,130 +134,33 @@ export default {
         togglePanel() {
             this.showPanel = !this.showPanel
         },
-        toggleConditionsPanel() {
-            this.showConditionsPanel = !this.showConditionsPanel
-        },
-        toggleMassAssignPanel() {
-            this.showMassAssignPanel = !this.showMassAssignPanel
-        },
-        associateEntryExtra(extra) {
-            this.toggleEntryExtraEditing()
-            if (this.extraEnabled(extra)) {
-                this.disableExtra(extra.id)
-            } else {
-                this.enableExtra(extra.id)
-            }
-        },
-        toggleEntryExtraEditing() {
-            this.allowEntryExtraEdit = ! this.allowEntryExtraEdit
-        },
-        addExtra() {
-            this.extra = this.emptyExtra
+        addCategory() {
+            this.category = this.emptyCategory
             this.togglePanel()
         },
-        editExtra(extra) {
-            this.extra = extra
+        editCategory(category) {
+            this.category = category
             this.togglePanel()
         },
-        editConditions(extra) {
-            this.extra = extra
-            this.toggleConditionsPanel()
-        },
-        massAssign(extra) {
-            this.extra = extra
-            this.toggleMassAssignPanel()
-        },
-        extraSaved() {
+        categorySaved() {
             this.togglePanel()
-            this.getAllExtras()
+            this.getAllCategories()
         },
-        extraConditionsSaved() {
-            this.toggleConditionsPanel()
-            this.getAllExtras()
-        },
-        extraEnabled(extra) {
-            if (this.insideEntry) {
-                return extra.enabled
-            } else {
-                if (extra.published == true) {
-                    return true;
-                }
-            }
-            return false
-        },
-        priceLabel(code) {
-            if (code == 'perday') {
-                return '/ day'
-            } else if (code == 'fixed') {
-                return '/ reservation'
-            } else if (code == 'relative') {
-                return 'relative'
-            } else if (code == 'custom') {
-                return 'custom'
-            }
-        },
-        getAllExtras() {
-            let url = '/cp/resrv/extra/'
-            if (this.insideEntry) {
-                url += this.parent
-            }
+        getAllCategories() {
+            let url = '/cp/resrv/extra-category'
             axios.get(url)
-            .then(response => {
-                this.extras = response.data              
-                this.extrasLoaded = true
-            })
-            .catch(error => {
-                this.$toast.error('Cannot retrieve extras')
-            })
-        },
-        enableExtra(extraId) {
-            axios.post('/cp/resrv/extra/add/'+this.parent, {'id': extraId})
-            .then(response => {
-                this.$toast.success('Extra added to this entry')
-                this.toggleEntryExtraEditing()
-                this.getAllExtras()
-            })
-            .catch(error => {
-                this.$toast.error('Cannot add extra to entry')
-            })
-        },
-        disableExtra(extraId) {
-            axios.post('/cp/resrv/extra/remove/'+this.parent, {'id': extraId})
-            .then(response => {
-                this.$toast.success('Extra removed from this entry')
-                this.toggleEntryExtraEditing()
-                this.getAllExtras()
-            })
-            .catch(error => {
-                this.$toast.error('Cannot remove extra to entry')
-            })
-        },
-        confirmDelete(extra) {
-            this.deleteId = extra.id
-        },
-        deleteExtra() {
-            axios.delete('/cp/resrv/extra', {data: {'id': this.deleteId}})
                 .then(response => {
-                    this.$toast.success('Extra deleted')
-                    this.deleteId = false
-                    this.getAllExtras()
+                    this.categories = response.data              
+                    this.categoriesLoaded = true                    
                 })
                 .catch(error => {
-                    this.$toast.error('Cannot delete extra')
+                    this.$toast.error('Cannot retrieve categories')
+                })
+                .finally(() => {
+                    
                 })
         },
-        order(event){
-            let item = event.moved.element
-            let order = event.moved.newIndex + 1
-            axios.patch('/cp/resrv/extra/order', {id: item.id, order: order})
-                .then(() => {
-                    this.$toast.success('Extras order changed')
-                    this.getAllExtras()
-                })
-                .catch(() => {
-                    this.$toast.error('Extras ordering failed')
-                })
-        }        
+      
     }
 }
 </script>
