@@ -13,7 +13,7 @@ class ExtraCategory extends Model
 
     protected $table = 'resrv_extra_categories';
 
-    protected $fillable = ['title', 'description', 'order', 'published'];
+    protected $fillable = ['name', 'slug', 'description', 'order', 'published'];
 
     protected static function newFactory()
     {

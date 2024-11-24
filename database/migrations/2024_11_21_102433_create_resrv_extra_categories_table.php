@@ -10,7 +10,8 @@ return new class extends Migration
     {
         Schema::create('resrv_extra_categories', function (Blueprint $table) {
             $table->id();
-            $table->string('title');
+            $table->string('name');
+            $table->string('slug')->index();
             $table->text('description')->nullable();
             $table->integer('order');
             $table->boolean('published');

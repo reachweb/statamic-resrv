@@ -12,7 +12,8 @@ class ExtraCategoryFactory extends Factory
     public function definition()
     {
         return [
-            'title' => $this->faker->words(3, true),
+            'name' => 'This is an extra category',
+            'slug' => 'this-is-an-extra-category',
             'description' => $this->faker->optional()->paragraph(),
             'order' => 1,
             'published' => true,

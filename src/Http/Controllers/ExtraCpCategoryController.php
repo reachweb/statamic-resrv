@@ -18,7 +18,8 @@ class ExtraCpCategoryController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'title' => 'required|string',
+            'name' => 'required|string',
+            'slug' => 'required|string',
             'description' => 'nullable|string',
             'published' => 'required|boolean',
         ]);
@@ -33,7 +34,8 @@ class ExtraCpCategoryController extends Controller
     public function update(Request $request, $id)
     {
         $data = $request->validate([
-            'title' => 'required|string',
+            'name' => 'required|string',
+            'slug' => 'required|string',
             'description' => 'nullable|string',
             'published' => 'required|boolean',
             'order' => 'required|integer',
