@@ -8,16 +8,18 @@ return new class extends Migration
 {
     public function up()
     {
-        Schema::create('resrv_entry_extra', function (Blueprint $table) {
+        Schema::create('resrv_extra_categories', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('entry_id')->constrained('resrv_entries')->cascadeOnDelete();
-            $table->foreignId('extra_id')->constrained('resrv_extras')->cascadeOnDelete();
+            $table->string('title');
+            $table->text('description')->nullable();
+            $table->integer('order');
+            $table->boolean('published');
             $table->timestamps();
         });
     }
 
     public function down()
     {
-        Schema::dropIfExists('resrv_entry_extra');
+        Schema::dropIfExists('resrv_extra_categories');
     }
 };

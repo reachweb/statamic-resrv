@@ -52,6 +52,11 @@ class Extra extends Model
         return $this->hasOne(ExtraCondition::class);
     }
 
+    public function category()
+    {
+        return $this->hasOne(ExtraCategory::class);
+    }
+
     public function entries()
     {
         return $this->belongsToMany(Entry::class, 'resrv_entry_extra');

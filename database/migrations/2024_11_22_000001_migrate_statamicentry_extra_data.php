@@ -15,7 +15,7 @@ return new class extends Migration
                     'entry_id' => $row->id,
                     'extra_id' => $row->extra_id,
                     'created_at' => now(),
-                    'updated_at' => now()
+                    'updated_at' => now(),
                 ]);
             });
     }
