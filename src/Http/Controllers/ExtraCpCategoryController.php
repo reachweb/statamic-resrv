@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCategory;
 
@@ -24,6 +25,45 @@ class ExtraCpCategoryController extends Controller
         $categories = $this->category->with('extras')->orderBy('order', 'asc')->get();
 
         $uncategorizedExtras = $this->extra->whereNull('category_id')->orderBy('order', 'asc')->get();
+
+        $categories->push([
+            'id' => null,
+            'name' => 'Uncategorized',
+            'slug' => 'uncategorized',
+            'description' => null,
+            'order' => 9999,
+            'published' => true,
+            'extras' => $uncategorizedExtras,
+        ]);
+
+        return response()->json($categories);
+    }
+
+    public function entryIndex($statamic_id)
+    {
+        $entry = Entry::itemId($statamic_id)->firstOrFail();
+
+        $categories = $this->category
+            ->with('extras', 'extras.entries')
+            ->orderBy('order', 'asc')
+            ->get()
+            ->transform(function ($category) use ($entry) {
+                $category->extras->each(function ($extra) use ($entry) {
+                    $extra->setAttribute('enabled', $extra->entries->contains($entry));
+                });
+
+                return $category;
+            });
+        $uncategorizedExtras = $this->extra
+            ->whereNull('category_id')
+            ->with('entries')
+            ->orderBy('order', 'asc')
+            ->get()
+            ->transform(function ($extra) use ($entry) {
+                $extra->setAttribute('enabled', $extra->entries->contains($entry));
+
+                return $extra;
+            });
 
         $categories->push([
             'id' => null,

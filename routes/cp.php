@@ -22,6 +22,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/extra/conditions/{extra_id}', 'ExtraCpController@conditions')->name('extra.conditions');
 
         Route::get('/resrv/extra-category', 'ExtraCpCategoryController@index')->name('extraCategory.index');
+        Route::get('/resrv/extra-category/{statamic_id}', 'ExtraCpCategoryController@entryindex')->name('extraCategory.entryindex');
         Route::post('/resrv/extra-category', 'ExtraCpCategoryController@store')->name('extraCategory.create');
         Route::patch('/resrv/extra-category/order', 'ExtraCpCategoryController@order')->name('extraCategory.order');
         Route::patch('/resrv/extra-category/{category}', 'ExtraCpCategoryController@update')->name('extraCategory.update');

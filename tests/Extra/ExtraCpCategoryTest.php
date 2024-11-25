@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Extra;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCategory;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -39,6 +40,21 @@ class ExtraCpCategoryTest extends TestCase
 
         $response->assertJsonFragment($category->toArray());
         $response->assertJsonFragment($uncategorizedExtra->toArray());
+    }
+
+    public function test_can_index_a_categories_and_extras_inside_an_entry_extras()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $category = ExtraCategory::factory()->create();
+        $extra = Extra::factory()->withCategory()->create();
+        $uncategorizedExtra = Extra::factory()->create();
+        $entry = Entry::itemId($item->id())->first();
+
+        $entry->extras()->attach($extra);
+        $entry->extras()->attach($uncategorizedExtra);
+
+        $response = $this->get(cp_route('resrv.extraCategory.entryindex', $item->id()));
+        $response->assertStatus(200)->assertSee($extra->slug)->assertSee($uncategorizedExtra->slug)->assertJsonFragment(['enabled' => true]);
     }
 
     public function it_can_update_a_category()
