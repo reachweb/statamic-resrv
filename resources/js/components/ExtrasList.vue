@@ -14,15 +14,15 @@
             v-for="category in categories"
             :key="category.id"
         >
-            <div class="category-section w-full">
+            <div class="category-section w-full" v-if="!( insideEntry && category.extras.length === 0)">
                 <div class="category-section-card card dark:bg-dark-800 p-0 h-full flex rounded-t flex-col">
                     <div class="bg-gray-200 dark:bg-dark-600 border-b dark:border-none text-sm flex rounded-t">
-                        <div class="category-drag-handle w-4 border-r dark:border-dark-900" v-if="category.id !== null">
+                        <div class="category-drag-handle w-4 border-r dark:border-dark-900" v-if="category.id !== null && ! insideEntry">
                             <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 17"><g fill="#B6B6B6" fill-rule="evenodd"><rect width="2" height="2" rx="1"/><rect width="2" height="2" y="5" rx="1"/><rect width="2" height="2" y="10" rx="1"/><rect width="2" height="2" y="15" rx="1"/><rect width="2" height="2" x="5" rx="1"/><rect width="2" height="2" x="5" y="5" rx="1"/><rect width="2" height="2" x="5" y="10" rx="1"/><rect width="2" height="2" x="5" y="15" rx="1"/></g></svg>
                         </div>
-                        <div class="p-2 flex-1 flex items-center" v-if="category.id !== null">
-                            
-                            <a class="flex items-center flex-1 group" @click.prevent="editCategory(category)">
+                        <div class="p-2 flex-1 flex items-center" v-if="category.id !== null && ! insideEntry">
+                            <div class="little-dot" :class="categoryEnabled(category) ? 'bg-green-600' : 'bg-gray-400'"></div>
+                            <a class="flex items-center flex-1 group ml-2" @click.prevent="editCategory(category)">
                                 <div v-text="__(category.name)" />
                             </a>
                             <button @click.prevent="editCategory(category)" class="flex items-center text-gray-700 dark:text-dark-175 hover:text-gray-950 dark:hover:text-dark-100 mr-3">
@@ -44,6 +44,7 @@
                             :extras="category.extras"
                             :inside-entry="insideEntry"
                             :category-id="category.id"
+                            :parent="parent"
                             @reload-categories="getAllCategories"
                         />            
                     </div>
@@ -51,14 +52,12 @@
             </div>
         </div>
     </vue-draggable>
-    <div class="category-add-section-container w-full mx-0 mt-4 min-h-24">
-        <button class="category-add-section-button dark:border-dark-200 dark:text-dark-150 dark:hover:border-dark-175 dark:hover:text-dark-100 outline-none" @click="addCategory">
+    <div class="category-add-section-container w-full mx-0 mt-4 min-h-24" v-if="! insideEntry">
+        <button @click.prevent="addCategory" class="category-add-section-button dark:border-dark-200 dark:text-dark-150 dark:hover:border-dark-175 dark:hover:text-dark-100 outline-none">
             <div class="text-center flex items-center leading-none">
                 <svg-icon name="micro/plus" class="h-3 w-3 mr-2" />
                 <div v-text="__('Add a new category')" />
             </div>
-
-            <div class="category-section-draggable-zone outline-none" />
         </button>
     </div>
     <extras-category-panel            
@@ -94,7 +93,8 @@ export default {
         },
         parent: {
             type: String,
-            required: false
+            required: false,
+            default: null
         }
     },
 
@@ -105,7 +105,7 @@ export default {
             categoryToAdd: null,
             categoriesLoaded: false,
             deleteId: false,
-            disableDrag: false,
+            disableDrag: this.insideEntry,
             category: '',
             emptyCategory: {
                 name: '',
@@ -160,8 +160,14 @@ export default {
             this.togglePanel()
             this.getAllCategories()
         },
+        categoryEnabled(category) {
+            return category.published
+        },
         getAllCategories() {
             let url = '/cp/resrv/extra-category'
+            if (this.insideEntry) {
+                url = `/cp/resrv/extra-category/${this.parent}`
+            }
             axios.get(url)
                 .then(response => {
                     this.categories = response.data              

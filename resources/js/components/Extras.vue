@@ -25,17 +25,20 @@
             >
                 <div class="flex items-center space-x-2">
                     <div class="little-dot" :class="extraEnabled(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
-                    <span class="font-medium cursor-pointer" v-html="extra.name" @click="editExtra(extra)"></span>
+                    <span class="font-medium" :class="{'cursor-pointer' : ! insideEntry}" v-html="extra.name" @click="editExtra(extra)"></span>
                     <span>{{ extra.price }} <span class="text-xs text-gray-700 dark:text-dark-100" v-html="priceLabel(extra.price_type)"></span></span>
                 </div>
-                <div class="flex space-x-2">
+                <div class="flex items-center space-x-2">
+                    <div class="flex items-center" v-if="extraHasConditions(extra)">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"><path d="M7 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M7 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M17 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M7 8l0 8"></path> <path d="M9 18h6a2 2 0 0 0 2 -2v-5"></path> <path d="M14 14l3 -3l3 3"></path></svg> 
+                    </div>
                     <span 
                         class="text-gray-700 dark:text-dark-100 text-sm uppercase cursor-pointer" 
                         v-html="extraEnabled(extra) ? 'Enabled' : 'Disabled'"
                         @click="associateEntryExtra(extra)"
                         v-if="insideEntry"
                     ></span>
-                    <dropdown-list>
+                    <dropdown-list v-if="! insideEntry">
                         <dropdown-item :text="__('Edit')" @click="editExtra(extra)" />
                         <dropdown-item :text="__('Mass assign')" @click="massAssign(extra)" />
                         <dropdown-item :text="__('Conditions')" @click="editConditions(extra)" />
@@ -45,7 +48,7 @@
             </div>
         </template>
     </vue-draggable>
-    <div class="category-section-field-actions flex mt-2 -mx-1">
+    <div class="category-section-field-actions flex mt-2 -mx-1" v-if="! insideEntry">
         <div class="px-1">
             <button class="btn w-full flex justify-center items-center" @click="addExtra">
                 <svg-icon name="light/toggle" class="mr-2 w-4 h-4" />
@@ -106,7 +109,7 @@ export default {
         },
         parent: {
             type: String,
-            required: false
+            required: true
         },
         categoryId: {
             type: Number,
@@ -123,10 +126,9 @@ export default {
             showConditionsPanel: false,
             showMassAssignPanel: false,
             extras: '',
-            extrasLoaded: true,
             allowEntryExtraEdit: true,
             deleteId: false,
-            disableDrag: false,
+            disableDrag: this.insideEntry,
             extra: '',
             category: '',
             emptyExtra: {
@@ -200,6 +202,9 @@ export default {
             this.togglePanel()
         },
         editExtra(extra) {
+            if (this.insideEntry) {
+                return
+            }
             this.extra = extra
             this.togglePanel()
         },
@@ -228,6 +233,9 @@ export default {
                 }
             }
             return false
+        },
+        extraHasConditions(extra) {
+            return extra.conditions?.conditions.length > 0
         },
         priceLabel(code) {
             if (code == 'perday') {
@@ -280,7 +288,6 @@ export default {
                 })
         },
         handleChange(event) {
-            console.log(event)
             if (event.added) {
                 // Handle moving between categories
                 this.disableDrag = true
