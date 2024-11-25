@@ -1,43 +1,57 @@
 <template>
 <div v-if="categoriesLoaded" ref="sections">
-    <div
-        class="extra-category-sections flex flex-wrap -mx-2 outline-none"
-        v-for="category in categories"
+    <vue-draggable 
+        v-model="categories"
+        @change="orderCategories"
+        handle=".category-drag-handle"
+        filter=".ignore-element"
+        :disabled="disableDrag"
+        :animation="200"
     >
-        <div class="category-section" >
-            <div class="category-section-card card dark:bg-dark-800 p-0 h-full flex rounded-t flex-col">
-                <div class="bg-gray-200 dark:bg-dark-600 border-b dark:border-none text-sm flex rounded-t">
-                    <div class="category-drag-handle category-section-drag-handle w-4 border-r dark:border-dark-900">
-                        <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 17"><g fill="#B6B6B6" fill-rule="evenodd"><rect width="2" height="2" rx="1"/><rect width="2" height="2" y="5" rx="1"/><rect width="2" height="2" y="10" rx="1"/><rect width="2" height="2" y="15" rx="1"/><rect width="2" height="2" x="5" rx="1"/><rect width="2" height="2" x="5" y="5" rx="1"/><rect width="2" height="2" x="5" y="10" rx="1"/><rect width="2" height="2" x="5" y="15" rx="1"/></g></svg>
+        <div
+            class="extra-category-sections flex flex-wrap -mx-2 outline-none"
+            :class="{ 'ignore-element': category.id === null }"
+            v-for="category in categories"
+            :key="category.id"
+        >
+            <div class="category-section w-full">
+                <div class="category-section-card card dark:bg-dark-800 p-0 h-full flex rounded-t flex-col">
+                    <div class="bg-gray-200 dark:bg-dark-600 border-b dark:border-none text-sm flex rounded-t">
+                        <div class="category-drag-handle w-4 border-r dark:border-dark-900" v-if="category.id !== null">
+                            <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 17"><g fill="#B6B6B6" fill-rule="evenodd"><rect width="2" height="2" rx="1"/><rect width="2" height="2" y="5" rx="1"/><rect width="2" height="2" y="10" rx="1"/><rect width="2" height="2" y="15" rx="1"/><rect width="2" height="2" x="5" rx="1"/><rect width="2" height="2" x="5" y="5" rx="1"/><rect width="2" height="2" x="5" y="10" rx="1"/><rect width="2" height="2" x="5" y="15" rx="1"/></g></svg>
+                        </div>
+                        <div class="p-2 flex-1 flex items-center" v-if="category.id !== null">
+                            
+                            <a class="flex items-center flex-1 group" @click.prevent="editCategory(category)">
+                                <div v-text="__(category.name)" />
+                            </a>
+                            <button @click.prevent="editCategory(category)" class="flex items-center text-gray-700 dark:text-dark-175 hover:text-gray-950 dark:hover:text-dark-100 mr-3">
+                                <svg-icon class="h-4 w-4" name="pencil" />
+                            </button>
+                            <button @click.prevent="confirmDelete(category)" class="flex items-center text-gray-700 dark:text-dark-175 hover:text-gray-950 dark:hover:text-dark-100">
+                                <svg-icon class="h-4 w-4" name="micro/trash" />
+                            </button>
+                        </div>
+                         <div class="p-2 flex-1 flex items-center" v-else>
+                            <span class="flex items-center flex-1 group">
+                                <div class="ml-3 text-gray-800 dark:text-dark-150" v-text="__(category.name)" />
+                            </span>
+                        </div>
                     </div>
-                    <div class="p-2 flex-1 flex items-center" v-if="category.id !== 0">
-                        <a class="flex items-center flex-1 group" @click="editCategory(category)">
-                            <div v-text="__(category.name)" />
-                        </a>
-                        <button class="flex items-center text-gray-700 dark:text-dark-175 hover:text-gray-950 dark:hover:text-dark-100 mr-3" @click="editCategory(category)">
-                            <svg-icon class="h-4 w-4" name="pencil" />
-                        </button>
-                        <button @click.prevent="$emit('deleted')" class="flex items-center text-gray-700 dark:text-dark-175 hover:text-gray-950 dark:hover:text-dark-100">
-                            <svg-icon class="h-4 w-4" name="micro/trash" />
-                        </button>
+                    <div class="p-3 flex-grow">
+                        <extras
+                            :key="category.id"
+                            :extras="category.extras"
+                            :inside-entry="insideEntry"
+                            :category-id="category.id"
+                            @reload-categories="getAllCategories"
+                        />            
                     </div>
-                     <div class="p-2 flex-1 flex items-center" v-else>
-                        <span class="flex items-center flex-1 group">
-                            <div class="ml-3 text-gray-800 dark:text-dark-150" v-text="__(category.name)" />
-                        </span>
-                    </div>
-                </div>
-                <div class="p-2">
-                    <extras
-                        :key="category.id"
-                        :extras="category.extras"
-                        :inside-entry="insideEntry"
-                    />
                 </div>
             </div>
         </div>
-    </div>
-    <div class="category-add-section-container w-full mx-0 mt-4">
+    </vue-draggable>
+    <div class="category-add-section-container w-full mx-0 mt-4 min-h-24">
         <button class="category-add-section-button dark:border-dark-200 dark:text-dark-150 dark:hover:border-dark-175 dark:hover:text-dark-100 outline-none" @click="addCategory">
             <div class="text-center flex items-center leading-none">
                 <svg-icon name="micro/plus" class="h-3 w-3 mr-2" />
@@ -61,7 +75,8 @@
         @confirm="deleteCategory"
         @cancel="deleteId = false"
     >
-        {{ __('Are you sure you want to delete this category?') }} <strong>{{ __('This cannot be undone.') }}'</strong>
+        {{ __('Are you sure you want to delete this category?') }} <strong>{{ __('This cannot be undone.') }}</strong><br />
+        {{  __('Any extras in this category will be moved to the uncategorized section.') }}
     </confirmation-modal>
 </div>
 </template>
@@ -69,6 +84,7 @@
 import axios from 'axios'
 import Extras from './Extras.vue'
 import ExtrasCategoryPanel from './ExtrasCategoryPanel.vue'
+import VueDraggable from 'vuedraggable'
 
 export default {
     props: {
@@ -84,14 +100,12 @@ export default {
 
     data() {
         return {
-            containerWidth: null,
             showPanel: false,
             categories: '',
+            categoryToAdd: null,
             categoriesLoaded: false,
             deleteId: false,
-            sortableCategories: null,
-            currentCategory: '',
-            lastInteractedCategory: null,
+            disableDrag: false,
             category: '',
             emptyCategory: {
                 name: '',
@@ -105,6 +119,7 @@ export default {
     components: {
         Extras,
         ExtrasCategoryPanel,
+        VueDraggable
     },
 
     computed: {
@@ -126,10 +141,6 @@ export default {
         }
     },
 
-    watch: {
-
-    },
-
     methods: {
         togglePanel() {
             this.showPanel = !this.showPanel
@@ -137,6 +148,9 @@ export default {
         addCategory() {
             this.category = this.emptyCategory
             this.togglePanel()
+        },
+        addExtra(categoryId) {
+            this.categoryToAdd = categoryId
         },
         editCategory(category) {
             this.category = category
@@ -156,11 +170,46 @@ export default {
                 .catch(error => {
                     this.$toast.error('Cannot retrieve categories')
                 })
+        },
+        confirmDelete(category) {
+            this.deleteId = category.id
+        },
+        deleteCategory() {
+            axios.delete(`/cp/resrv/extra-category/${this.deleteId}`)
+                .then(response => {
+                    this.$toast.success('Category deleted')
+                    this.deleteId = false
+                })
+                .catch(error => {
+                    this.$toast.error('Cannot delete category')
+                })
                 .finally(() => {
-                    
+                    this.getAllCategories()
                 })
         },
-      
+        orderCategories(event) {
+            if (! event.moved) return;
+
+            this.disableDrag = true
+
+            let item = event.moved.element;
+            let order = event.moved.newIndex + 1;
+            
+            axios.patch('/cp/resrv/extra-category/order', {
+                id: item.id, 
+                order: order
+            })
+            .then(() => {
+                this.$toast.success('Categories order changed')
+            })
+            .catch(() => {
+                this.$toast.error('Categories ordering failed')
+            })
+            .finally(() => {
+                this.getAllCategories()
+                this.disableDrag = false
+            })
+        }
     }
 }
 </script>

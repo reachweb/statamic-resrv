@@ -46,7 +46,7 @@
 }
 
 .category-section {
-    @apply p-2 min-h-40 outline-none w-full;
+    @apply p-2 outline-none w-full;
 
     &.draggable-source--is-dragging {
         opacity: 0.5;
@@ -62,7 +62,7 @@
 }
 
 .category-add-section-container {
-    @apply flex min-h-40;
+    @apply flex;
 
     .draggable-container--is-dragging & {
         display: none;

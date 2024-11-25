@@ -1,31 +1,58 @@
 <template>
-    <div>
+<div>
+    <vue-draggable 
+        v-model="localExtras"
+        group="extras"
+        @change="handleChange"
+        class="space-y-2"
+        :ghost-class="'ghost'"
+        filter=".ignore-element"
+        :animation="200"
+        :disabled="disableDrag"
+    >
         <div
-            v-for="extra in extras"
-            :key="extra.id"
-            class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
-            bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"
+            v-text="__('Add or drag extras here')"
+            v-if="localExtras.length == 0"
+            class="ignore-element text-2xs text-gray-600 dark:text-dark-150 text-center border dark:border-dark-200 border-dashed rounded mb-2 p-2"
         >
-            <div class="flex items-center space-x-2">
-                <div class="little-dot" :class="extraEnabled(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
-                <span class="font-medium cursor-pointer" v-html="extra.name" @click="editExtra(extra)"></span>
-                <span>{{ extra.price }} <span class="text-xs text-gray-700 dark:text-dark-100" v-html="priceLabel(extra.price_type)"></span></span>
-            </div>
-            <div class="flex space-x-2">
-                <span 
-                    class="text-gray-700 dark:text-dark-100 text-sm uppercase cursor-pointer" 
-                    v-html="extraEnabled(extra) ? 'Enabled' : 'Disabled'"
-                    @click="associateEntryExtra(extra)"
-                    v-if="insideEntry"
-                ></span>
-                <dropdown-list>
-                    <dropdown-item :text="__('Edit')" @click="editExtra(extra)" />
-                    <dropdown-item :text="__('Mass assign')" @click="massAssign(extra)" />
-                    <dropdown-item :text="__('Conditions')" @click="editConditions(extra)" />
-                    <dropdown-item :text="__('Delete')" @click="confirmDelete(extra)" />         
-                </dropdown-list>
-            </div>
         </div>
+        <template v-else class="w-full">
+            <div 
+                class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
+                bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm" 
+                v-for="extra in localExtras" 
+                :key="extra.id"
+            >
+                <div class="flex items-center space-x-2">
+                    <div class="little-dot" :class="extraEnabled(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
+                    <span class="font-medium cursor-pointer" v-html="extra.name" @click="editExtra(extra)"></span>
+                    <span>{{ extra.price }} <span class="text-xs text-gray-700 dark:text-dark-100" v-html="priceLabel(extra.price_type)"></span></span>
+                </div>
+                <div class="flex space-x-2">
+                    <span 
+                        class="text-gray-700 dark:text-dark-100 text-sm uppercase cursor-pointer" 
+                        v-html="extraEnabled(extra) ? 'Enabled' : 'Disabled'"
+                        @click="associateEntryExtra(extra)"
+                        v-if="insideEntry"
+                    ></span>
+                    <dropdown-list>
+                        <dropdown-item :text="__('Edit')" @click="editExtra(extra)" />
+                        <dropdown-item :text="__('Mass assign')" @click="massAssign(extra)" />
+                        <dropdown-item :text="__('Conditions')" @click="editConditions(extra)" />
+                        <dropdown-item :text="__('Delete')" @click="confirmDelete(extra)" />         
+                    </dropdown-list>
+                </div>
+            </div>
+        </template>
+    </vue-draggable>
+    <div class="category-section-field-actions flex mt-2 -mx-1">
+        <div class="px-1">
+            <button class="btn w-full flex justify-center items-center" @click="addExtra">
+                <svg-icon name="light/toggle" class="mr-2 w-4 h-4" />
+                {{ __('Add extra') }}
+            </button>
+        </div>
+    </div>  
     <extras-panel            
         v-if="showPanel"
         :data="extra"
@@ -57,8 +84,9 @@
     >
         Are you sure you want to delete this extra? <strong>This cannot be undone.</strong>
     </confirmation-modal>
-    </div>
+</div>
 </template>
+
 <script>
 import axios from 'axios'
 import ExtrasPanel from './ExtrasPanel.vue'
@@ -79,11 +107,17 @@ export default {
         parent: {
             type: String,
             required: false
+        },
+        categoryId: {
+            type: Number,
+            required: false,
+            default: null
         }
     },
 
     data() {
         return {
+            localExtras: this.extras,
             containerWidth: null,
             showPanel: false,
             showConditionsPanel: false,
@@ -92,15 +126,16 @@ export default {
             extrasLoaded: true,
             allowEntryExtraEdit: true,
             deleteId: false,
-            drag: false,
+            disableDrag: false,
             extra: '',
             category: '',
             emptyExtra: {
                 name: '',
                 slug: '',
+                category_id: null,
                 price: '',
                 price_type: '',
-                allow_multiple : 0,
+                allow_multiple : 0,                
                 custom: '',
                 override_label: '',
                 maximum: 0,
@@ -125,19 +160,16 @@ export default {
         }
     },
 
-    mounted() {
-        // this.getAllExtras()        
-    },
-
-    updated() {
-        if (! this.newItem) {
-            this.$emit('input', this.parent)
+    watch: {
+        extras: {
+            handler(value) {
+                this.localExtras = value;
+            },
+            deep: true
         }
     },
 
-    watch: {
-
-    },
+    emits: ['reload-categories'],
 
     methods: {
         togglePanel() {
@@ -161,6 +193,9 @@ export default {
             this.allowEntryExtraEdit = ! this.allowEntryExtraEdit
         },
         addExtra() {
+            if (this.categoryId) {
+                this.emptyExtra.category_id = this.categoryId
+            }
             this.extra = this.emptyExtra
             this.togglePanel()
         },
@@ -205,20 +240,9 @@ export default {
                 return 'custom'
             }
         },
-        // getAllExtras() {
-        //     let url = '/cp/resrv/extra/'
-        //     if (this.insideEntry) {
-        //         url += this.parent
-        //     }
-        //     axios.get(url)
-        //     .then(response => {
-        //         this.extras = response.data              
-        //         this.extrasLoaded = true
-        //     })
-        //     .catch(error => {
-        //         this.$toast.error('Cannot retrieve extras')
-        //     })
-        // },
+        getAllExtras() {
+            this.$emit('reload-categories')
+        },
         enableExtra(extraId) {
             axios.post('/cp/resrv/extra/add/'+this.parent, {'id': extraId})
             .then(response => {
@@ -255,18 +279,55 @@ export default {
                     this.$toast.error('Cannot delete extra')
                 })
         },
-        order(event){
-            let item = event.moved.element
-            let order = event.moved.newIndex + 1
-            axios.patch('/cp/resrv/extra/order', {id: item.id, order: order})
+        handleChange(event) {
+            console.log(event)
+            if (event.added) {
+                // Handle moving between categories
+                this.disableDrag = true
+                let item = event.added.element
+                
+                axios.patch(`/cp/resrv/extra/move/${item.id}`, {
+                    category_id: this.categoryId,
+                    order: event.added.newIndex + 1
+                })
+                .then(() => {
+                    this.$toast.success('Extra moved successfully')
+                })
+                .catch(() => {
+                    this.$toast.error('Failed to move extra')
+                })
+                .finally(() => {
+                    this.getAllExtras()
+                    this.disableDrag = false
+                })
+            } else if (event.moved) {
+                // Handle reordering within same category
+                this.disableDrag = true
+                let item = event.moved.element;
+                let order = event.moved.newIndex + 1;
+                
+                axios.patch(`/cp/resrv/extra/order/${item.id}`, {
+                    order: order
+                })
                 .then(() => {
                     this.$toast.success('Extras order changed')
-                    this.getAllExtras()
                 })
                 .catch(() => {
                     this.$toast.error('Extras ordering failed')
                 })
+                .finally(() => {
+                    this.getAllExtras()
+                    this.disableDrag = false
+                })
+            }
         }        
     }
 }
 </script>
+
+<style>
+.ghost {
+    opacity: 0.5;
+    background: #c8ebfb;
+}
+</style>

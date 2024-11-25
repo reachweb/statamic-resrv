@@ -80,13 +80,16 @@ export default {
             type: Object,
             required: true
         },
+        url: {
+            type: String,
+            default: '/cp/resrv/extra-category'
+        }
     },
 
     data() {
         return {
             submit: {},
             successMessage: 'Category successfully saved',
-            postUrl: '/cp/resrv/extra-category',
         }
     },
 
@@ -97,6 +100,12 @@ export default {
         method() {
             return this.isEditing ? 'patch' : 'post'
         },
+        computedPostUrl() {
+            if (_.has(this.data, 'id')) {
+                return `${this.url}/${this.data.id}`
+            }
+            return this.url
+        }
     },
 
     watch: {

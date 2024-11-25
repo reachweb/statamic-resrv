@@ -150,7 +150,7 @@ export default {
                 return 'patch'
             }
             return 'post'
-        }
+        },
     },
 
     watch: {
