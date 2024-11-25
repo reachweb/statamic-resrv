@@ -33,6 +33,7 @@
                             </button>
                         </div>
                          <div class="p-2 flex-1 flex items-center" v-else>
+                            <div class="little-dot" :class="categoryEnabled(category) ? 'bg-green-600' : 'bg-gray-400'" v-if="category.id !== null"></div>
                             <span class="flex items-center flex-1 group">
                                 <div class="ml-3 text-gray-800 dark:text-dark-150" v-text="__(category.name)" />
                             </span>
