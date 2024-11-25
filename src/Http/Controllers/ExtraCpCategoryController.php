@@ -104,11 +104,7 @@ class ExtraCpCategoryController extends Controller
             'order' => 'required|integer',
         ]);
 
-        ray($category);
-
         $category->update($data);
-
-        ray($category);
 
         return response()->json($category);
     }
