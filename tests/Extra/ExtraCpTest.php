@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Extra;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\ExtraCategory;
 use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -54,6 +55,42 @@ class ExtraCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_extras', [
             'slug' => 'this-is-an-extra',
+        ]);
+    }
+
+    public function test_can_add_extra_with_a_category()
+    {
+        ExtraCategory::factory()->create();
+        $extra = Extra::factory()->withCategory()->make();
+
+        $response = $this->post(cp_route('resrv.extra.create'), $extra->toArray());
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_extras', [
+            'slug' => $extra->slug,
+            'category_id' => $extra->category_id,
+        ]);
+    }
+
+    public function test_can_move_extra_between_categories()
+    {
+        ExtraCategory::factory()->create();
+        ExtraCategory::factory()->create([
+            'name' => 'Another category',
+            'slug' => 'another-category',
+        ]);
+        $extra = Extra::factory()->withCategory()->create();
+
+        $response = $this->patch(cp_route('resrv.extra.move', $extra->id), [
+            'category_id' => 2,
+            'order' => 1,
+        ]);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_extras', [
+            'slug' => $extra->slug,
+            'category_id' => 2,
+            'order' => 1,
         ]);
     }
 
@@ -240,12 +277,9 @@ class ExtraCpTest extends TestCase
         $extra2 = Extra::factory()->create(['id' => 2, 'order' => 2]);
         $extra3 = Extra::factory()->create(['id' => 3, 'order' => 3]);
 
-        $payload = [
-            'id' => 1,
+        $response = $this->patch(cp_route('resrv.extra.order', $extra->id), [
             'order' => 3,
-        ];
-
-        $response = $this->patch(cp_route('resrv.extra.order'), $payload);
+        ]);
         $response->assertStatus(200);
         $this->assertDatabaseHas('resrv_extras', [
             'id' => $extra['id'],

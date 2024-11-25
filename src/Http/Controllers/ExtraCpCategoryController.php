@@ -4,15 +4,38 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCategory;
 
 class ExtraCpCategoryController extends Controller
 {
     protected $category;
 
-    public function __construct(ExtraCategory $category)
+    protected $extra;
+
+    public function __construct(ExtraCategory $category, Extra $extra)
     {
         $this->category = $category;
+        $this->extra = $extra;
+    }
+
+    public function index()
+    {
+        $categories = $this->category->with('extras')->orderBy('order', 'asc')->get();
+
+        $uncategorizedExtras = $this->extra->whereNull('category_id')->orderBy('order', 'asc')->get();
+
+        $categories->push([
+            'id' => null,
+            'name' => 'Uncategorized',
+            'slug' => 'uncategorized',
+            'description' => null,
+            'order' => 9999,
+            'published' => true,
+            'extras' => $uncategorizedExtras,
+        ]);
+
+        return response()->json($categories);
     }
 
     public function store(Request $request)
@@ -31,7 +54,7 @@ class ExtraCpCategoryController extends Controller
         return response()->json($category);
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, ExtraCategory $category)
     {
         $data = $request->validate([
             'name' => 'required|string',
@@ -41,15 +64,29 @@ class ExtraCpCategoryController extends Controller
             'order' => 'required|integer',
         ]);
 
-        $category = $this->category->findOrFail($id);
+        ray($category);
+
         $category->update($data);
+
+        ray($category);
 
         return response()->json($category);
     }
 
-    public function delete($id)
+    public function order(Request $request)
     {
-        $category = $this->category->findOrFail($id);
+        $data = $request->validate([
+            'id' => 'required',
+            'order' => 'required|integer',
+        ]);
+
+        $category = $this->category->find($data['id'])->changeOrder($data['order']);
+
+        return response(200);
+    }
+
+    public function delete(ExtraCategory $category)
+    {
         $category->extras()->update(['category_id' => null]);
         $category->delete();
 

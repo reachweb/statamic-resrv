@@ -12,17 +12,17 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
-use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Extra extends Model
 {
-    use HandlesAvailabilityDates, HandlesMultisiteIds, HandlesOrdering, HasFactory, SoftDeletes;
+    use HandlesAvailabilityDates, HandlesMultisiteIds, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_extras';
 
     protected $fillable = [
         'name',
         'slug',
+        'category_id',
         'price',
         'price_type',
         'allow_multiple',
@@ -70,6 +70,29 @@ class Extra extends Model
     protected static function booted()
     {
         static::addGlobalScope(new OrderScope);
+    }
+
+    public function changeOrder($order)
+    {
+        if ($this->order === $order) {
+            return;
+        }
+
+        $items = $this->where('category_id', $this->category_id)->orderBy('order')->get()->keyBy('id');
+
+        $movingItem = $items->pull($this->id);
+        $count = ($order == 1 ? 2 : 1);
+
+        foreach ($items as $item) {
+            if ($count == $order) {
+                $count++;
+            }
+            $item->order = $count;
+            $item->saveOrFail();
+            $count++;
+        }
+        $movingItem->order = $order;
+        $movingItem->saveOrFail();
     }
 
     public function priceForDates($data)

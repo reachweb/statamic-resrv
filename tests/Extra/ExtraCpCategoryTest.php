@@ -27,6 +27,20 @@ class ExtraCpCategoryTest extends TestCase
         $this->assertDatabaseHas('resrv_extra_categories', $category->toArray());
     }
 
+    public function test_it_can_index_categories_and_extras()
+    {
+        $category = ExtraCategory::factory()->create();
+        $extra = Extra::factory()->withCategory()->create();
+        $uncategorizedExtra = Extra::factory()->create();
+
+        $response = $this->getJson(cp_route('resrv.extraCategory.index'));
+
+        $response->assertStatus(200);
+
+        $response->assertJsonFragment($category->toArray());
+        $response->assertJsonFragment($uncategorizedExtra->toArray());
+    }
+
     public function it_can_update_a_category()
     {
         $category = ExtraCategory::factory()->create();
@@ -41,6 +55,32 @@ class ExtraCpCategoryTest extends TestCase
             'id' => $category->id,
             'title' => 'Updated Category',
             'description' => 'Updated Description',
+        ]);
+    }
+
+    public function test_can_reorder_extra_categories()
+    {
+        $category = ExtraCategory::factory()->create();
+        $category2 = ExtraCategory::factory()->create(['id' => 2, 'order' => 2]);
+        $category3 = ExtraCategory::factory()->create(['id' => 3, 'order' => 3]);
+
+        $response = $this->patch(cp_route('resrv.extraCategory.order'), [
+            'id' => 1,
+            'order' => 3,
+        ]);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_extra_categories', [
+            'id' => $category['id'],
+            'order' => 3,
+        ]);
+        $this->assertDatabaseHas('resrv_extra_categories', [
+            'id' => $category2['id'],
+            'order' => 1,
+        ]);
+        $this->assertDatabaseHas('resrv_extra_categories', [
+            'id' => $category3['id'],
+            'order' => 2,
         ]);
     }
 

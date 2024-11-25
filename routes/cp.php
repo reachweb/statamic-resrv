@@ -16,14 +16,16 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/extra/entries/{extra}', 'ExtraCpController@entries')->name('extra.entries');
         Route::post('/resrv/extra/massadd/{extra}', 'ExtraCpController@massAssociate')->name('extra.massadd');
         Route::patch('/resrv/extra', 'ExtraCpController@update')->name('extra.update');
-        Route::patch('/resrv/extra/order', 'ExtraCpController@order')->name('extra.order');
+        Route::patch('/resrv/extra/order/{extra}', 'ExtraCpController@order')->name('extra.order');
+        Route::patch('/resrv/extra/move/{extra}', 'ExtraCpController@move')->name('extra.move');
         Route::delete('/resrv/extra', 'ExtraCpController@delete')->name('extra.delete');
         Route::post('/resrv/extra/conditions/{extra_id}', 'ExtraCpController@conditions')->name('extra.conditions');
-        Route::patch('/resrv/extra/categories/update', 'ExtraCpController@updateCategories')->name('extra.updateCategories');
 
-        Route::post('/resrv/extra/category', 'ExtraCpCategoryController@store')->name('extraCategory.create');
-        Route::patch('/resrv/extra/category/{id}', 'ExtraCpCategoryController@update')->name('extraCategory.update');
-        Route::delete('/resrv/extra/category/{id}', 'ExtraCpCategoryController@delete')->name('extraCategory.delete');
+        Route::get('/resrv/extra-category', 'ExtraCpCategoryController@index')->name('extraCategory.index');
+        Route::post('/resrv/extra-category', 'ExtraCpCategoryController@store')->name('extraCategory.create');
+        Route::patch('/resrv/extra-category/order', 'ExtraCpCategoryController@order')->name('extraCategory.order');
+        Route::patch('/resrv/extra-category/{category}', 'ExtraCpCategoryController@update')->name('extraCategory.update');
+        Route::delete('/resrv/extra-category/{category}', 'ExtraCpCategoryController@delete')->name('extraCategory.delete');
 
         Route::get('/resrv/option/{statamic_id}', 'OptionCpController@entryIndex')->name('option.entryindex');
         Route::post('/resrv/option', 'OptionCpController@create')->name('option.create');

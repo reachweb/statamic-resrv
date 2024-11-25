@@ -46,6 +46,7 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'name' => 'required',
             'slug' => 'required',
+            'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
             'price' => 'required|numeric',
             'price_type' => 'required',
             'custom' => 'required_if:price_type,custom',
@@ -68,6 +69,7 @@ class ExtraCpController extends Controller
             'id' => 'required|integer',
             'name' => 'required',
             'slug' => 'required',
+            'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
             'description' => 'sometimes',
             'price' => 'required|numeric',
             'price_type' => 'required',
@@ -89,14 +91,14 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             '*.id' => 'required|integer',
             '*.category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
-            '*.order' => 'required|integer'
+            '*.order' => 'required|integer',
         ]);
 
         foreach ($data as $item) {
             $extra = $this->extra->find($item['id']);
             $extra->update([
                 'category_id' => $item['category_id'],
-                'order' => $item['order']
+                'order' => $item['order'],
             ]);
         }
 
@@ -170,14 +172,28 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
-    public function order(Request $request)
+    public function move(Request $request, Extra $extra)
     {
         $data = $request->validate([
-            'id' => 'required',
+            'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
             'order' => 'required|integer',
         ]);
 
-        $extra = $this->extra->find($data['id'])->changeOrder($data['order']);
+        $extra->category_id = $data['category_id'];
+        $extra->save();
+
+        $extra->changeOrder($data['order']);
+
+        return response(200);
+    }
+
+    public function order(Request $request, Extra $extra)
+    {
+        $data = $request->validate([
+            'order' => 'required|integer',
+        ]);
+
+        $extra->changeOrder($data['order']);
 
         return response(200);
     }
@@ -201,8 +217,8 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
-    public function entries($extra_id)
+    public function entries(Extra $extra)
     {
-        return response()->json($this->extra->findOrFail($extra_id)->entries);
+        return response()->json($extra->entries);
     }
 }
