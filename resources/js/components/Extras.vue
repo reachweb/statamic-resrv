@@ -66,7 +66,6 @@
     <extra-conditions-panel            
         v-if="showConditionsPanel"
         :data="extra"
-        :extras="extras"
         @closed="toggleConditionsPanel"
         @saved="extraConditionsSaved"
     >
