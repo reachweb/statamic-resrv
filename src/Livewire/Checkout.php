@@ -105,10 +105,17 @@ class Checkout extends Component
                 $category->name = $items->first()->category?->name ?? 'Uncategorized';
                 $category->slug = $items->first()->category?->slug ?? 'uncategorized';
                 $category->description = $items->first()->category?->description ?? null;
+                $category->order = $items->first()->category?->order ?? 9999;
+                $category->published = $items->first()->category?->published ?? true;
                 $category->extras = $items;
 
                 return $category;
-            })->values();
+            })
+            ->reject(function ($category) {
+                return $category->published == false;
+            })
+            ->sortBy('order')
+            ->values();
     }
 
     #[Computed(persist: true)]
