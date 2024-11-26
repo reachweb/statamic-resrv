@@ -45,7 +45,6 @@ class ExtraCpCategoryController extends Controller
 
         $categories = $this->category
             ->with('extras', 'extras.entries')
-            ->orderBy('order', 'asc')
             ->get()
             ->transform(function ($category) use ($entry) {
                 $category->extras->each(function ($extra) use ($entry) {
@@ -57,7 +56,6 @@ class ExtraCpCategoryController extends Controller
         $uncategorizedExtras = $this->extra
             ->whereNull('category_id')
             ->with('entries')
-            ->orderBy('order', 'asc')
             ->get()
             ->transform(function ($extra) use ($entry) {
                 $extra->setAttribute('enabled', $extra->entries->contains($entry));
