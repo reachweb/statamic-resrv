@@ -17,6 +17,7 @@
     <hr class="h-px my-4 bg-gray-200 border-0">
     <div>
         @foreach ($extras as $category)
+        <div>
             @if ($category->id)
             <div class="my-3 lg:my-4">
                 <div class="text-lg xl:text-xl font-medium">
@@ -43,6 +44,7 @@
                 @endforeach
             </div>
             <hr class="h-px my-4 bg-gray-100 border-0">
+        </div>
         @endforeach
     </div>
 </div>
