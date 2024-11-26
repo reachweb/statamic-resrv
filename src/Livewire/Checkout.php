@@ -99,17 +99,8 @@ class Checkout extends Component
     {
         return $this->extras->groupBy('category_id')
             ->sortBy('order')
-            ->map(function ($items, $categoryId) {
-                $category = new \stdClass;
-                $category->id = $categoryId ?? null;
-                $category->name = $items->first()->category?->name ?? 'Uncategorized';
-                $category->slug = $items->first()->category?->slug ?? 'uncategorized';
-                $category->description = $items->first()->category?->description ?? null;
-                $category->order = $items->first()->category?->order ?? 9999;
-                $category->published = $items->first()->category?->published ?? true;
-                $category->extras = $items;
-
-                return $category;
+            ->map(function ($items) {
+                return $this->createExtraCategoryObject($items);
             })
             ->reject(function ($category) {
                 return $category->published == false;
