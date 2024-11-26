@@ -54,7 +54,7 @@ class Extra extends Model
 
     public function category()
     {
-        return $this->hasOne(ExtraCategory::class);
+        return $this->belongsTo(ExtraCategory::class, 'category_id');
     }
 
     public function entries()
@@ -223,8 +223,9 @@ class Extra extends Model
 
         $extras = $entry->extras()
             ->where('published', true)
+            ->with('category')
             ->orderBy('order')
-            ->get(['resrv_extras.id', 'name', 'slug', 'price', 'price_type', 'allow_multiple', 'custom', 'maximum', 'description', 'order']);
+            ->get();
 
         $extras->transform(function ($extra) use ($data) {
             $extra->original_price = $extra->price->format();

@@ -81,37 +81,39 @@
         x-transition:leave-end="opacity-0 translate-y-2"
         @class([
             'grid grid-cols-4 items-center',
-            'py-3 lg:py-5 xl:py-8' => ! $compact, 
-            'py-2 lg:py-3 xl:py-6' => $compact
+            'my-3 lg:my-5' => ! $compact, 
+            'my-2 lg:my-3' => $compact
         ])
     >
         <div @class([
-            'grid items-center order-0', 
+            'order-0', 
             'col-span-3' => ! $extra->allow_multiple || ($extra->allow_multiple && $compact), 
             'col-span-2' => $extra->allow_multiple && ! $compact
         ])>
-            <label class="inline-flex items-center cursor-pointer">
-                <input 
-                    type="checkbox" 
-                    class="sr-only peer" 
-                    x-model="selected"
-                    x-on:change="selected === true ? dispatchEvent() : dispatchRemovedEvent()"
-                    x-bind:disabled="required"
-                >
-                <div 
-                    class="relative flex-shrink-0 w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 
-                    rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
-                    after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 
-                    after:border after:rounded-full after:w-5 after:h-5 after:transition-all peer-checked:bg-blue-600"
-                    x-bind:class="{'cursor-not-allowed': required}"
-                >
-                </div>
+            <div>
+                <label class="inline-flex items-center cursor-pointer">
+                    <input 
+                        type="checkbox" 
+                        class="sr-only peer" 
+                        x-model="selected"
+                        x-on:change="selected === true ? dispatchEvent() : dispatchRemovedEvent()"
+                        x-bind:disabled="required"
+                    >
+                    <div 
+                        class="relative flex-shrink-0 w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 
+                        rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 
+                        after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 
+                        after:border after:rounded-full after:w-5 after:h-5 after:transition-all peer-checked:bg-blue-600"
+                        x-bind:class="{'cursor-not-allowed': required}"
+                    >
+                    </div>
                     <span class="ms-3 font-medium text-gray-900">{{ $extra->name }}</span> 
-                    <span class="ml-2 text-xs text-gray-600 uppercase" x-show="required">{{ trans('statamic-resrv::frontend.required') }}</span>
-            </label>
-            @if ($extra->description)
-            <div class="text-sm text-gray-500 mt-2 lg:mt-3">{{ $extra->description }}</div>
-            @endif
+                    <span class="ml-2 text-xs text-gray-600 uppercase" x-show="required" x-cloak>{{ trans('statamic-resrv::frontend.required') }}</span>
+                </label>
+                @if ($extra->description)
+                <div class="text-sm text-gray-500 mt-1">{{ $extra->description }}</div>
+                @endif
+            </div>           
         </div>
         @if ($extra->allow_multiple)
             <div @class(['order-2 col-span-4 justify-start' => $compact])>
@@ -123,6 +125,6 @@
             'order-1' => $compact,
         ])>
             <span>{{ config('resrv-config.currency_symbol') }} {{ $extra->price }}</span>
-        </div>  
+        </div>
     </div>
 </div>
