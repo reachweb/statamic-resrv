@@ -66,4 +66,19 @@ trait HandlesExtrasQueries
             }
         }
     }
+
+    private function createExtraCategoryObject(Collection $items): \stdClass
+    {
+        $extra = $items->first();
+        $category = new \stdClass;
+        $category->id = $extra->category?->id ?? null;
+        $category->name = $extra->category?->name ?? 'Uncategorized';
+        $category->slug = $extra->category?->slug ?? 'uncategorized';
+        $category->description = $extra->category?->description ?? null;
+        $category->order = $extra->category?->order ?? 9999;
+        $category->published = $extra->category?->published ?? true;
+        $category->extras = $items;
+
+        return $category;
+    }
 }

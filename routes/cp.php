@@ -16,9 +16,17 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/extra/entries/{extra}', 'ExtraCpController@entries')->name('extra.entries');
         Route::post('/resrv/extra/massadd/{extra}', 'ExtraCpController@massAssociate')->name('extra.massadd');
         Route::patch('/resrv/extra', 'ExtraCpController@update')->name('extra.update');
-        Route::patch('/resrv/extra/order', 'ExtraCpController@order')->name('extra.order');
+        Route::patch('/resrv/extra/order/{extra}', 'ExtraCpController@order')->name('extra.order');
+        Route::patch('/resrv/extra/move/{extra}', 'ExtraCpController@move')->name('extra.move');
         Route::delete('/resrv/extra', 'ExtraCpController@delete')->name('extra.delete');
         Route::post('/resrv/extra/conditions/{extra_id}', 'ExtraCpController@conditions')->name('extra.conditions');
+
+        Route::get('/resrv/extra-category', 'ExtraCpCategoryController@index')->name('extraCategory.index');
+        Route::get('/resrv/extra-category/{statamic_id}', 'ExtraCpCategoryController@entryindex')->name('extraCategory.entryindex');
+        Route::post('/resrv/extra-category', 'ExtraCpCategoryController@store')->name('extraCategory.create');
+        Route::patch('/resrv/extra-category/order', 'ExtraCpCategoryController@order')->name('extraCategory.order');
+        Route::patch('/resrv/extra-category/{category}', 'ExtraCpCategoryController@update')->name('extraCategory.update');
+        Route::delete('/resrv/extra-category/{category}', 'ExtraCpCategoryController@delete')->name('extraCategory.delete');
 
         Route::get('/resrv/option/{statamic_id}', 'OptionCpController@entryIndex')->name('option.entryindex');
         Route::post('/resrv/option', 'OptionCpController@create')->name('option.create');
@@ -29,13 +37,6 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/option/{id}', 'OptionCpController@updateValue')->name('option.value.update');
         Route::patch('/resrv/option/value/order', 'OptionCpController@orderValue')->name('option.value.order');
         Route::delete('/resrv/option/value', 'OptionCpController@deleteValue')->name('option.value.delete');
-
-        Route::get('/resrv/locations', 'LocationCpController@indexCp')->name('locations.index');
-        Route::get('/resrv/location', 'LocationCpController@index')->name('location.index');
-        Route::post('/resrv/location', 'LocationCpController@create')->name('location.create');
-        Route::patch('/resrv/location', 'LocationCpController@update')->name('location.update');
-        Route::patch('/resrv/location/order', 'LocationCpController@order')->name('location.order');
-        Route::delete('/resrv/location', 'LocationCpController@delete')->name('location.delete');
 
         Route::get('/resrv/reservation', 'ReservationCpController@index')->name('reservation.index');
         Route::get('/resrv/reservations', 'ReservationCpController@indexCp')->name('reservations.index');

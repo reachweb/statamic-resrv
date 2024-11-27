@@ -95,6 +95,21 @@ class Checkout extends Component
     }
 
     #[Computed(persist: true)]
+    public function frontendExtras(): Collection
+    {
+        return $this->extras->groupBy('category_id')
+            ->sortBy('order')
+            ->map(function ($items) {
+                return $this->createExtraCategoryObject($items);
+            })
+            ->reject(function ($category) {
+                return $category->published == false;
+            })
+            ->sortBy('order')
+            ->values();
+    }
+
+    #[Computed(persist: true)]
     public function options(): Collection
     {
         return $this->getOptionsForReservation();

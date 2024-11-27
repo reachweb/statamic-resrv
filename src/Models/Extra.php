@@ -12,17 +12,17 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
-use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Extra extends Model
 {
-    use HandlesAvailabilityDates, HandlesMultisiteIds, HandlesOrdering, HasFactory, SoftDeletes;
+    use HandlesAvailabilityDates, HandlesMultisiteIds, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_extras';
 
     protected $fillable = [
         'name',
         'slug',
+        'category_id',
         'price',
         'price_type',
         'allow_multiple',
@@ -52,6 +52,11 @@ class Extra extends Model
         return $this->hasOne(ExtraCondition::class);
     }
 
+    public function category()
+    {
+        return $this->belongsTo(ExtraCategory::class, 'category_id');
+    }
+
     public function entries()
     {
         return $this->belongsToMany(Entry::class, 'resrv_entry_extra');
@@ -65,6 +70,29 @@ class Extra extends Model
     protected static function booted()
     {
         static::addGlobalScope(new OrderScope);
+    }
+
+    public function changeOrder($order)
+    {
+        if ($this->order === $order) {
+            return;
+        }
+
+        $items = $this->where('category_id', $this->category_id)->orderBy('order')->get()->keyBy('id');
+
+        $movingItem = $items->pull($this->id);
+        $count = ($order == 1 ? 2 : 1);
+
+        foreach ($items as $item) {
+            if ($count == $order) {
+                $count++;
+            }
+            $item->order = $count;
+            $item->saveOrFail();
+            $count++;
+        }
+        $movingItem->order = $order;
+        $movingItem->saveOrFail();
     }
 
     public function priceForDates($data)
@@ -195,8 +223,9 @@ class Extra extends Model
 
         $extras = $entry->extras()
             ->where('published', true)
+            ->with('category')
             ->orderBy('order')
-            ->get(['resrv_extras.id', 'name', 'slug', 'price', 'price_type', 'allow_multiple', 'custom', 'maximum', 'description', 'order']);
+            ->get();
 
         $extras->transform(function ($extra) use ($data) {
             $extra->original_price = $extra->price->format();

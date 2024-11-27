@@ -75,4 +75,16 @@ class ExtraFactory extends Factory
             ];
         });
     }
+
+    public function withCategory()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'id' => '2',
+                'name' => 'This extra belongs to a category',
+                'slug' => 'this-extra-belongs-to-a-category',
+                'category_id' => '1',
+            ];
+        });
+    }
 }

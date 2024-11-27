@@ -32,7 +32,11 @@ class ExtraCpController extends Controller
     public function entryIndex($statamic_id)
     {
         $entry = Entry::itemId($statamic_id)->firstOrFail();
-        $extras = $entry->extras()->with('conditions')->get();
+        $extras = $this->extra->with('entries')->get();
+
+        $extras->each(function ($extra) use ($entry) {
+            $extra->setAttribute('enabled', $extra->entries->contains($entry));
+        });
 
         return response()->json($extras);
     }
@@ -42,6 +46,7 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'name' => 'required',
             'slug' => 'required',
+            'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
             'price' => 'required|numeric',
             'price_type' => 'required',
             'custom' => 'required_if:price_type,custom',
@@ -64,6 +69,7 @@ class ExtraCpController extends Controller
             'id' => 'required|integer',
             'name' => 'required',
             'slug' => 'required',
+            'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
             'description' => 'sometimes',
             'price' => 'required|numeric',
             'price_type' => 'required',
@@ -78,6 +84,25 @@ class ExtraCpController extends Controller
         $extra = $this->extra->find($data['id'])->update($data);
 
         return response()->json(['id' => $data['id']]);
+    }
+
+    public function updateCategories(Request $request)
+    {
+        $data = $request->validate([
+            '*.id' => 'required|integer',
+            '*.category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
+            '*.order' => 'required|integer',
+        ]);
+
+        foreach ($data as $item) {
+            $extra = $this->extra->find($item['id']);
+            $extra->update([
+                'category_id' => $item['category_id'],
+                'order' => $item['order'],
+            ]);
+        }
+
+        return response()->json(['success' => true]);
     }
 
     public function associate(Request $request, $statamic_id)
@@ -147,14 +172,28 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
-    public function order(Request $request)
+    public function move(Request $request, Extra $extra)
     {
         $data = $request->validate([
-            'id' => 'required',
+            'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
             'order' => 'required|integer',
         ]);
 
-        $extra = $this->extra->find($data['id'])->changeOrder($data['order']);
+        $extra->category_id = $data['category_id'];
+        $extra->save();
+
+        $extra->changeOrder($data['order']);
+
+        return response(200);
+    }
+
+    public function order(Request $request, Extra $extra)
+    {
+        $data = $request->validate([
+            'order' => 'required|integer',
+        ]);
+
+        $extra->changeOrder($data['order']);
 
         return response(200);
     }
@@ -178,8 +217,8 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
-    public function entries($extra_id)
+    public function entries(Extra $extra)
     {
-        return response()->json($this->extra->findOrFail($extra_id)->entries);
+        return response()->json($extra->entries);
     }
 }

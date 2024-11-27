@@ -7,6 +7,7 @@ use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
+use Reach\StatamicResrv\Models\ExtraCategory;
 use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
@@ -58,6 +59,35 @@ class CheckoutExtrasTest extends TestCase
 
         $this->assertEquals('This is an extra', $component->extras->first()->name);
         $this->assertEquals('9.30', $component->extras->first()->price);
+    }
+
+    // Test that extra categories are correctly loaded for the Reservation
+    public function test_it_loads_the_extra_categories_for_the_entry_and_reservation()
+    {
+        $extraCategory = ExtraCategory::factory()->create();
+        $extra = ResrvExtra::factory()->withCategory()->create();
+
+        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+
+        $entry->extras()->attach($extra->id);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $this->assertCount(2, $component->frontendExtras);
+
+        // Test categorized extra
+        $this->assertEquals('This is an extra category', $component->frontendExtras[0]->name);
+
+        // Test categorized extra's child extra
+        $this->assertEquals('This extra belongs to a category', $component->frontendExtras[0]->extras[0]->name);
+        $this->assertEquals('9.30', $component->frontendExtras[0]->extras[0]->price);
+
+        // Test uncategorized section
+        $this->assertNull($component->frontendExtras[1]->id);
+        $this->assertEquals('Uncategorized', $component->frontendExtras[1]->name);
+        $this->assertEquals(9999, $component->frontendExtras[1]->order);
     }
 
     // Test that extras prices are correctly calculated when Reservation quantity is greater than 1

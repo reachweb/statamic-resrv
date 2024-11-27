@@ -12,7 +12,7 @@
                     @endif
 
                     @if ($this->extras->count() > 0)
-                    <x-resrv::checkout-extras :$enabledExtras :extras="$this->extras" />
+                    <x-resrv::checkout-extras :$enabledExtras :extras="$this->frontendExtras" />
                     @endif
 
                     <div class="mt-8 xl:mt-10">
