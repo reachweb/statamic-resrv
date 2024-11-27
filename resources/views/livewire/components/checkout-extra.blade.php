@@ -27,7 +27,7 @@
         },
 
         setupWatchers() {
-            this.$watch('quantity', () => this.dispatchEvent());
+            this.$watch('quantity', () => this.selected === true ? this.dispatchEvent() : null);
             this.$watch('hide', () => this.handleHideChange());
             this.$watch('required', () => this.handleRequiredChange());
         },
@@ -64,6 +64,7 @@
         },
 
         dispatchRemovedEvent() {
+            this.quantity = 1;
             this.$dispatch('extra-removed', {
                 id: {{ $extra->id }}, 
             });
