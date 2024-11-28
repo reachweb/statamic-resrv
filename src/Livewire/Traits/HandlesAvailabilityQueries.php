@@ -8,9 +8,12 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 
 trait HandlesAvailabilityQueries
 {
+    use HandlesMultisiteIds;
+
     public function getAvailability(Collection $data): array
     {
         try {
@@ -111,5 +114,25 @@ trait HandlesAvailabilityQueries
             'quantity' => $search['quantity'] ?? 1,
             'advanced' => $search['advanced'] ?? '',
         ];
+    }
+
+    public function getAvailabilityCalendar(): array
+    {
+        if (! $this->entry) {
+            throw new AvailabilityException(__('You need to provide an entry ID to enable the availability calendar.'));
+        }
+
+        $entry = $this->getDefaultSiteEntry($this->entry)->id();
+
+        return app(Availability::class)
+            ->where('statamic_id', $entry)
+            ->where('date', '>=', now()->startOfDay())
+            ->when($this->advanced && $this->data->advanced, function ($query) {
+                return $query->where('property', $this->data->advanced);
+            })
+            ->get(['date', 'available', 'price', 'property'])
+            ->groupBy('date')
+            ->map(fn ($item) => $item->first())
+            ->toArray();
     }
 }
