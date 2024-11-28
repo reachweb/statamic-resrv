@@ -3,13 +3,14 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 
 class AvailabilitySearch extends Component
 {
-    use Traits\HandlesStatamicQueries;
+    use Traits\HandlesAvailabilityQueries, Traits\HandlesStatamicQueries;
 
     public string $view = 'availability-search';
 
@@ -29,6 +30,12 @@ class AvailabilitySearch extends Component
     public bool $enableQuantity = false;
 
     public ?string $redirectTo = null;
+
+    #[Locked]
+    public ?string $entry = null;
+
+    #[Locked]
+    public bool $showAvailaiblityOnCalendar = false;
 
     public array $overrideProperties;
 
@@ -54,6 +61,15 @@ class AvailabilitySearch extends Component
     public function maxQuantity(): int
     {
         return config('resrv-config.maximum_quantity');
+    }
+
+    public function availabilityCalendar(): array
+    {
+        if ($this->showAvailaiblityOnCalendar === false) {
+            return [];
+        }
+
+        return $this->getAvailabilityCalendar();
     }
 
     public function updatedData(): void

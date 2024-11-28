@@ -1,4 +1,4 @@
-@props(['calendar', 'disabledDays' => false, 'pricesCalendar' => false, 'errors'])
+@props(['calendar', 'disabledDays' => false, 'errors'])
 
 <div class="{{ $attributes->get('class') }}">
     <div 
@@ -56,14 +56,19 @@ Alpine.data('datepicker', () => ({
     minPeriod: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
     maxPeriod: {{ config('resrv-config.maximum_reservation_period_in_days', 30) }},
     disabledDays: @json($disabledDays),
-    pricesCalendar: @json($pricesCalendar),
+    showAvailaiblityOnCalendar: $wire.showAvailaiblityOnCalendar,
+    availabilityCalendar: [],
     
     get isDatesEmpty() {
         return $wire.data.dates.length === 0;
     },
 
-    init() {
+    async init() {
         const minDate = dayjs().add({{ config('resrv-config.minimum_days_before') }}, 'day').format('YYYY-MM-DD');
+
+        if (this.showAvailaiblityOnCalendar !== false) {
+            this.availabilityCalendar = await $wire.availabilityCalendar();
+        }
         
         this.calendar = new window.calendar(this.$refs.dateInput, {
             type: this.mode === 'range' ? 'multiple' : 'default',
@@ -77,8 +82,8 @@ Alpine.data('datepicker', () => ({
             positionToInput: 'auto',
 
             onCreateDateEls: (self, dateEl) => {
-                if (this.pricesCalendar !== false) {
-                    this.addPriceToEachDate(dateEl);
+                if (this.showAvailaiblityOnCalendar !== false) {
+                    this.addPriceToEachDate(self, dateEl);
                 }
                 if (this.disabledDays !== false) {
                     this.disableDays(dateEl);
@@ -149,10 +154,20 @@ Alpine.data('datepicker', () => ({
         }
     },
 
-    addPriceToEachDate(dateEl) {
+    addPriceToEachDate(self, dateEl) {
         const button = dateEl.querySelector('button');
+        const date = dateEl.dataset.vcDate;
 
-        button.insertAdjacentHTML('beforeend', `<span class="text-[12px]">€ 180</span>`);
+        if (this.availabilityCalendar[date] === undefined) return;
+        if (this.availabilityCalendar[date]?.available === 0) {
+            button.style.cssText = 'cursor: default; opacity: 0.5; text-decoration: line-through;';
+            button.onclick = (event) => event.stopPropagation();
+            return;
+        }
+        button.insertAdjacentHTML(
+            'beforeend', 
+            `<span class="vc-price">{{ config('resrv-config.currency_symbol') }}${Math.round(this.availabilityCalendar[date]?.price)}</span>`
+        );
     },
 
     disableDays(dateEl) {
