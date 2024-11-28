@@ -126,9 +126,9 @@ trait HandlesAvailabilityQueries
 
         return app(Availability::class)
             ->where('statamic_id', $entry)
-            ->where('date', '>=', now())
+            ->where('date', '>=', now()->startOfDay())
             ->when($this->advanced && $this->data->advanced, function ($query) {
-                return $query->where('advanced', $this->data->advanced);
+                return $query->where('property', $this->data->advanced);
             })
             ->get(['date', 'available', 'price', 'property'])
             ->groupBy('date')

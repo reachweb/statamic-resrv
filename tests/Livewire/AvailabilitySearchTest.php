@@ -5,17 +5,27 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades;
 
 class AvailabilitySearchTest extends TestCase
 {
+    use CreatesEntries;
+
     public $date;
 
-    public function setUp(): void
+    public $entries;
+
+    public $advancedEntries;
+
+    protected function setUp(): void
     {
         parent::setUp();
         $this->date = now()->setTime(12, 0, 0);
+        $this->entries = $this->createEntries();
+        $this->advancedEntries = $this->createAdvancedEntries();
+        $this->travelTo(today()->setHour(12));
     }
 
     public function test_renders_successfully()
@@ -345,5 +355,50 @@ class AvailabilitySearchTest extends TestCase
         Livewire::test(AvailabilitySearch::class)
             ->set('data.customer.adults', 2)
             ->assertSet('data.customer', ['adults' => 2]);
+    }
+
+    // Test availability calendar returns data when enabled
+    public function test_availability_calendar_returns_data_when_enabled()
+    {
+        $component = Livewire::test(AvailabilitySearch::class, [
+            'entry' => $this->entries->first()->id(),
+            'showAvailaiblityOnCalendar' => true,
+        ])
+            ->assertSet('showAvailaiblityOnCalendar', true)
+            ->call('availabilityCalendar');
+
+        $calendar = $component->effects['returns'][0];
+
+        $key = $this->date->format('Y-m-d').' 00:00:00';
+
+        $this->assertIsArray($calendar);
+        $this->assertArrayHasKey($key, $calendar);
+        $this->assertEquals(50, $calendar[$key]['price']);
+        $this->assertEquals(1, $calendar[$key]['available']);
+    }
+
+    // Test availability calendar returns data when enabled with advanced availability
+    public function test_availability_calendar_with_advanced_availability()
+    {
+        $component = Livewire::test(AvailabilitySearch::class, [
+            'entry' => $this->advancedEntries->first()->id(),
+            'showAvailaiblityOnCalendar' => true,
+        ])
+            ->assertSet('showAvailaiblityOnCalendar', true)
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->set('data.advanced', 'test')
+            ->call('availabilityCalendar');
+
+        $calendar = $component->effects['returns'][0];
+
+        $key = $this->date->format('Y-m-d').' 00:00:00';
+
+        $this->assertIsArray($calendar);
+        $this->assertArrayHasKey($key, $calendar);
+        $this->assertEquals(50, $calendar[$key]['price']);
+        $this->assertEquals(1, $calendar[$key]['available']);
     }
 }

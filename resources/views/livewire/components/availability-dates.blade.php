@@ -52,6 +52,8 @@
 Alpine.data('datepicker', () => ({
     mode: $wire.calendar,
     dates: $wire.data.dates,
+    advanced: $wire.advanced,
+    advancedSelected: $wire.entangle('data.advanced'),
     calendar: null,
     minPeriod: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
     maxPeriod: {{ config('resrv-config.maximum_reservation_period_in_days', 30) }},
@@ -67,8 +69,23 @@ Alpine.data('datepicker', () => ({
         const minDate = dayjs().add({{ config('resrv-config.minimum_days_before') }}, 'day').format('YYYY-MM-DD');
 
         if (this.showAvailaiblityOnCalendar !== false) {
-            this.availabilityCalendar = await $wire.availabilityCalendar();
+            if (this.advanced !== false && this.advancedSelected === null) {
+                this.availabilityCalendar = [];
+            } else {
+                this.availabilityCalendar = await $wire.availabilityCalendar();
+            }            
         }
+
+        this.$watch('advancedSelected', async (value, oldValue) => {
+            if (this.showAvailaiblityOnCalendar !== false && value !== null) {
+                this.availabilityCalendar = await $wire.availabilityCalendar();    
+            } else if (this.showAvailaiblityOnCalendar !== false && value === null) {
+                this.availabilityCalendar = [];
+            }
+            this.calendar.update({
+                dates: false,
+            });
+        });
         
         this.calendar = new window.calendar(this.$refs.dateInput, {
             type: this.mode === 'range' ? 'multiple' : 'default',
@@ -83,7 +100,7 @@ Alpine.data('datepicker', () => ({
 
             onCreateDateEls: (self, dateEl) => {
                 if (this.showAvailaiblityOnCalendar !== false) {
-                    this.addPriceToEachDate(self, dateEl);
+                    this.addPriceToEachDate(dateEl);
                 }
                 if (this.disabledDays !== false) {
                     this.disableDays(dateEl);
@@ -111,8 +128,8 @@ Alpine.data('datepicker', () => ({
                 this.dateChanged(self.context.selectedDates);
             },
 
-            onUpdate(self, event) {
-                self.set({ selectedDates: [] });
+            onUpdate(self) {
+                //self.set({ selectedDates: [] });
             }
         });
 
@@ -154,20 +171,21 @@ Alpine.data('datepicker', () => ({
         }
     },
 
-    addPriceToEachDate(self, dateEl) {
+    addPriceToEachDate(dateEl) {
         const button = dateEl.querySelector('button');
         const date = dateEl.dataset.vcDate;
 
-        if (this.availabilityCalendar[date] === undefined) return;
-        if (this.availabilityCalendar[date]?.available === 0) {
-            button.style.cssText = 'cursor: default; opacity: 0.5; text-decoration: line-through;';
-            button.onclick = (event) => event.stopPropagation();
-            return;
-        }
-        button.insertAdjacentHTML(
-            'beforeend', 
-            `<span class="vc-price">{{ config('resrv-config.currency_symbol') }}${Math.round(this.availabilityCalendar[date]?.price)}</span>`
-        );
+        if (Object.values(this.availabilityCalendar).length > 0) {
+            if (this.availabilityCalendar[date] === undefined || this.availabilityCalendar[date]?.available === 0) {
+                button.style.cssText = 'cursor: default; opacity: 0.5; text-decoration: line-through;';
+                button.onclick = (event) => event.stopPropagation();
+                return;
+            }
+            button.insertAdjacentHTML(
+                'beforeend', 
+                `<span class="vc-price">{{ config('resrv-config.currency_symbol') }}${Math.round(this.availabilityCalendar[date]?.price)}</span>`
+            );
+        } 
     },
 
     disableDays(dateEl) {
@@ -205,6 +223,7 @@ Alpine.data('datepicker', () => ({
     },
 
     resetDates() {
+        this.calendar.set({ selectedDates: [] });
         this.calendar.update({
             dates: true,
         });
@@ -212,7 +231,6 @@ Alpine.data('datepicker', () => ({
         $wire.clearDates();
         $dispatch('availability-search-cleared');
     },
-
 }));
 </script>
 @endscript
