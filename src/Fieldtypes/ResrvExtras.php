@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Fieldtypes;
 
-use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Entry;
 use Statamic\Fields\Fieldtype;
 
