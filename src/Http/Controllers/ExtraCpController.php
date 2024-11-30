@@ -31,7 +31,7 @@ class ExtraCpController extends Controller
 
     public function entryIndex($statamic_id)
     {
-        $entry = Entry::itemId($statamic_id)->firstOrFail();
+        $entry = Entry::whereItemId($statamic_id);
         $extras = $this->extra->with('entries')->get();
 
         $extras->each(function ($extra) use ($entry) {
@@ -111,7 +111,7 @@ class ExtraCpController extends Controller
             'id' => 'required|integer',
         ]);
 
-        $entry = Entry::itemId($statamic_id)->firstOrFail();
+        $entry = Entry::whereItemId($statamic_id);
         $entry->extras()->attach($data['id']);
 
         return response(200);
@@ -123,7 +123,7 @@ class ExtraCpController extends Controller
             'id' => 'required|integer',
         ]);
 
-        $entry = Entry::itemId($statamic_id)->firstOrFail();
+        $entry = Entry::whereItemId($statamic_id);
         $entry->extras()->detach($data['id']);
 
         return response(200);

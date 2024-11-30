@@ -48,7 +48,7 @@ class ExtraCpCategoryTest extends TestCase
         $category = ExtraCategory::factory()->create();
         $extra = Extra::factory()->withCategory()->create();
         $uncategorizedExtra = Extra::factory()->create();
-        $entry = Entry::itemId($item->id())->first();
+        $entry = Entry::whereItemId($item->id());
 
         $entry->extras()->attach($extra);
         $entry->extras()->attach($uncategorizedExtra);

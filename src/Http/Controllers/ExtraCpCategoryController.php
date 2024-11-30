@@ -41,7 +41,7 @@ class ExtraCpCategoryController extends Controller
 
     public function entryIndex($statamic_id)
     {
-        $entry = Entry::itemId($statamic_id)->firstOrFail();
+        $entry = Entry::whereItemId($statamic_id);
 
         $categories = $this->category
             ->with('extras', 'extras.entries')

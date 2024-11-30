@@ -41,7 +41,7 @@ class CheckoutExtrasTest extends TestCase
 
         $extra = ResrvExtra::factory()->create();
 
-        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+        $entry = ResrvEntry::whereItemId($this->entries->first()->id);
 
         $entry->extras()->attach($extra->id);
 
@@ -67,7 +67,7 @@ class CheckoutExtrasTest extends TestCase
         $extraCategory = ExtraCategory::factory()->create();
         $extra = ResrvExtra::factory()->withCategory()->create();
 
-        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+        $entry = ResrvEntry::whereItemId($this->entries->first()->id);
 
         $entry->extras()->attach($extra->id);
 
@@ -149,7 +149,7 @@ class CheckoutExtrasTest extends TestCase
 
         $extra = ResrvExtra::factory()->custom()->create();
 
-        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+        $entry = ResrvEntry::whereItemId($this->entries->first()->id);
 
         $entry->extras()->attach($extra->id);
 
@@ -174,7 +174,7 @@ class CheckoutExtrasTest extends TestCase
 
         $extra = ResrvExtra::factory()->relative()->create();
 
-        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+        $entry = ResrvEntry::whereItemId($this->entries->first()->id);
 
         $entry->extras()->attach($extra->id);
 
@@ -235,7 +235,7 @@ class CheckoutExtrasTest extends TestCase
         $extra = $this->extras->first();
         $extra2 = ResrvExtra::factory()->fixed()->create();
 
-        $entry = ResrvEntry::itemId($item->id())->first();
+        $entry = ResrvEntry::whereItemId($item->id());
 
         $entry->extras()->attach($extra2->id);
 
@@ -309,7 +309,7 @@ class CheckoutExtrasTest extends TestCase
 
         $extra2 = ResrvExtra::factory()->fixed()->create();
 
-        $entry = ResrvEntry::itemId($item->id())->first();
+        $entry = ResrvEntry::whereItemId($item->id());
 
         $entry->extras()->attach($extra2->id);
 

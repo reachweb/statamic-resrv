@@ -204,7 +204,7 @@ class Extra extends Model
     public function scopeEntriesWithConditions($query, $entry)
     {
         $statamicEntry = $this->getDefaultSiteEntry($entry);
-        $entry = Entry::itemId($statamicEntry->id())->first();
+        $entry = Entry::whereItemId($statamicEntry->id());
 
         return DB::table('resrv_extras')
             ->join('resrv_entry_extra', function ($join) use ($entry) {
@@ -219,7 +219,7 @@ class Extra extends Model
 
     public function scopeGetPriceForDates($query, $data)
     {
-        $entry = Entry::itemId($data['item_id'])->first();
+        $entry = Entry::whereItemId($data['item_id']);
 
         $extras = $entry->extras()
             ->where('published', true)

@@ -307,7 +307,7 @@ class DynamicPricingApplyTest extends TestCase
 
         $extra = Extra::factory()->fixed()->create();
 
-        $entry = ResrvEntry::itemId($this->entry->id())->first();
+        $entry = ResrvEntry::whereItemId($this->entry->id());
 
         $entry->extras()->attach($extra->id);
 

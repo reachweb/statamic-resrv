@@ -31,7 +31,7 @@ class ExtraCpTest extends TestCase
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $extra = Extra::factory()->create();
-        $entry = Entry::itemId($item->id())->first();
+        $entry = Entry::whereItemId($item->id());
 
         $entry->extras()->attach($extra);
 
@@ -160,7 +160,7 @@ class ExtraCpTest extends TestCase
     {
         $extra = Extra::factory()->create();
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
-        $entry = Entry::itemId($item->id())->first();
+        $entry = Entry::whereItemId($item->id());
 
         $entry->extras()->attach($extra);
 
@@ -174,7 +174,7 @@ class ExtraCpTest extends TestCase
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $extra = Extra::factory()->create();
-        $entry = Entry::itemId($item->id())->first();
+        $entry = Entry::whereItemId($item->id());
 
         $response = $this->post(cp_route('resrv.extra.add', $item->id()), [
             'id' => $extra->id,
@@ -193,9 +193,9 @@ class ExtraCpTest extends TestCase
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $item2 = $this->makeStatamicItemWithResrvAvailabilityField();
         $item3 = $this->makeStatamicItemWithResrvAvailabilityField();
-        $entry = Entry::itemId($item->id())->first();
-        $entry2 = Entry::itemId($item2->id())->first();
-        $entry3 = Entry::itemId($item3->id())->first();
+        $entry = Entry::whereItemId($item->id());
+        $entry2 = Entry::whereItemId($item2->id());
+        $entry3 = Entry::whereItemId($item3->id());
         $extra = Extra::factory()->create();
 
         $payload = [
@@ -239,8 +239,8 @@ class ExtraCpTest extends TestCase
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $item2 = $this->makeStatamicItemWithResrvAvailabilityField();
-        $entry = Entry::itemId($item->id())->first();
-        $entry2 = Entry::itemId($item2->id())->first();
+        $entry = Entry::whereItemId($item->id());
+        $entry2 = Entry::whereItemId($item2->id());
         $extra = Extra::factory()->create();
 
         $extra->entries()->sync([
@@ -256,7 +256,7 @@ class ExtraCpTest extends TestCase
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $extra = Extra::factory()->create();
-        $entry = Entry::itemId($item->id())->first();
+        $entry = Entry::whereItemId($item->id());
 
         $entry->extras()->attach($extra);
 

@@ -61,7 +61,7 @@ class CheckoutTest extends TestCase
 
         $this->extra = ResrvExtra::factory()->create();
 
-        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+        $entry = ResrvEntry::whereItemId($this->entries->first()->id);
 
         $entry->extras()->attach($this->extra->id);
 

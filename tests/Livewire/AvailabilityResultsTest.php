@@ -45,7 +45,7 @@ class AvailabilityResultsTest extends TestCase
 
         $extra = Extra::factory()->create();
 
-        $entry = ResrvEntry::itemId($this->entries->first()->id)->first();
+        $entry = ResrvEntry::whereItemId($this->entries->first()->id);
 
         $entry->extras()->attach($extra->id);
     }

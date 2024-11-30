@@ -39,6 +39,11 @@ class Entry extends Model
         $query->where('item_id', $id);
     }
 
+    public static function whereItemId(string $id): ?static
+    {
+        return static::query()->itemId($id)->firstOrFail();
+    }
+
     public function syncToDatabase(StatamicEntry $entry): void
     {
         if (! $entry->blueprint()->hasField('resrv_availability')) {
