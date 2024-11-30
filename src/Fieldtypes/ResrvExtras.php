@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Fieldtypes;
 
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\Entry;
 use Statamic\Fields\Fieldtype;
 
 class ResrvExtras extends Fieldtype
@@ -11,12 +12,12 @@ class ResrvExtras extends Fieldtype
 
     public function augment($value)
     {
-        return Extra::entry($this->field->parent()->id())
+        return Entry::whereItemId($this->field->parent()->id())
+            ->extras()
             ->where('published', true)
-            ->orderBy('order')
             ->get()
             ->keyBy('slug')
-            ->toArray();
+            ->toArray();;
     }
 
     public function preload()
