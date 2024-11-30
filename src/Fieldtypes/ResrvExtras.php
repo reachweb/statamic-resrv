@@ -17,7 +17,7 @@ class ResrvExtras extends Fieldtype
             ->where('published', true)
             ->get()
             ->keyBy('slug')
-            ->toArray();;
+            ->toArray();
     }
 
     public function preload()
