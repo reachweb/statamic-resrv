@@ -1,200 +1,341 @@
-general_information:
-  display: 'General information'
-  instructions: 'Put your business information here. Those information will be used for the emails.'
-  type: section
-name:
-  display: 'Business name'
-  type: text
-  width: 50
-  required: true
-address1:
-  display: 'Business address'
-  type: text
-  width: 50
-  required: true
-zip_city:
-  display: 'ZIP & City'
-  type: text
-  width: 50
-  required: true
-country:
-  display: 'Country'
-  type: text
-  width: 50
-  required: true
-phone:
-  display: 'Phone'
-  type: text
-  width: 50
-  required: true
-mail:
-  display: 'Email'
-  type: text
-  width: 50
-  required: true
-logo:
-  display: 'Logo (type "false" to use business name)'
-  type: text
-  required: true
-
-reservation_settings:
-  display: 'Reservation settings'
-  instructions: 'Change how the reservation engine behaves'
-  type: section
-enable_advanced_availability:
-  display: 'Enable advanced availability'
-  instructions: 'Enable multiple availability per item. YOU CANNOT SIMPLY CHANGE THIS OPTION IN PRODUCTION, WITHOUT MIGRATING YOUR DATA.'
-  type: toggle
-  required: true
-enable_connected_availabilities:
-  display: 'Enable connected advanced availabilities'
-  instructions: 'Enable the ability to "connect" advanced availabilities so that any operations on one of them will be reflected on the others.'
-  type: toggle
-  required: true
-enable_time:
-  display: 'Enable time'
-  instructions: 'The reservation will have an explicit pickup and drop-off time'
-  type: toggle
-  required: true
-enable_affiliates:
-  display: 'Enable affiliates'
-  instructions: 'Enable the affiliate system that lets you generate affiliate code and track reservations by partners'
-  type: toggle
-  required: true
-minimum_days_before:
-  display: 'Minimum days before'
-  instructions: 'set this to the number of days allowed between booking date and pickup time (calendar days count not 24 hour difference)'
-  type: integer
-  required: true
-minimum_reservation_period_in_days:
-  display: 'Minimum reservation period (in days)'
-  instructions: 'The minimum reservation period allowed'
-  width: 50
-  type: integer
-  required: true
-maximum_reservation_period_in_days:
-  display: 'Maximum reservation period (in days)'
-  instructions: 'The maximum reservation period allowed'
-  width: 50
-  type: integer
-  required: true
-free_cancellation_period:
-  display: 'Free cancellation (in days)'
-  instructions: 'The period that you allow a user to cancel his reservation for free, used only for payment'
-  width: 50
-  type: integer
-  required: true
-full_payment_after_free_cancellation:
-  display: 'Require full payment if free cancellation has passed'
-  instructions: 'If the reservation creation after is after free cancellation has passed, require the full amount'
-  width: 50
-  type: toggle
-  required: true
-maximum_quantity:
-  display: 'Maximum quantity'
-  instructions: 'The maximum items a user can book in one reservation'
-  width: 50
-  type: integer
-  required: true
-ignore_quantity_for_prices:
-  display: 'Ignore quantity for prices'
-  instructions: 'Use quantity for availability calculations but ignore it for pricing'
-  width: 50
-  type: toggle
-  required: true
-calculate_days_using_time:
-  display: 'Calculate days using time'
-  instructions: 'If enabled every reservation will charge an extra day for a drop off time after the pick up time' 
-  width: 50
-  type: toggle
-  required: true
-decrease_availability_for_extra_time:
-  display: 'Decrease availability for extra time'
-  instructions: 'If enabled, the extra day charged will behave as a normal reservation day and decrease availability'
-  width: 50
-  type: toggle
-  required: true
-admin_email:
-  display: 'Admin email'
-  instructions: 'Comma separated list of the emails that should be notified for reservations'
-  type: text
-  required: true
-
-checkout_settings:
-  display: 'Checkout settings'
-  instructions: 'Important settings that change how the checkout behaves'
-  type: section
-form_name:
-  display: 'Form name'
-  instructions: 'The Statamic handle of the checkout form (needed to work correctly!)'
-  type: text
-  required: true
-payment:
-  display: 'Payment type'
-  instructions: 'Select if it charges the full amount, a fixed deposit or a percentage'
-  type: select
-  required: true
-  options:
-    full: 'Charge the whole amount'
-    everything: 'Charge the whole amount plus any options and extras'
-    fixed: 'Charge a fixed amount' 
-    percent: 'Charge a percentage of the base price'
-fixed_amount:
-  display: 'Fixed amount'
-  instructions: 'The amount to charge for a reservation'
-  type: integer
-  required: true
-  if:
-    payment: fixed
-percent_amount:
-  display: 'Percentage'
-  instructions: 'The percentage to charge for a reservation (without %)'
-  type: integer
-  required: true
-  if:
-    payment: percent
-minutes_to_hold:
-  display: 'Minutes to hold'
-  instructions: 'How much time the user has the complete the checkout until availability is reset'
-  type: integer
-  required: true
-  
-checkout_livewire_settings:
-  display: 'Livewire checkout settings'
-  instructions: 'These settings configure the checkout Livewire component.'
-  type: section
-checkout_entry:
-  display: 'Checkout Entry'
-  instructions: 'The entry that contains the Livewire checkout component.'
-  type: entries
-  max_items: 1
-  required: true
-checkout_completed_entry:
-  display: 'Checkout Redirect Entry'
-  instructions: 'The entry will load after redirection from the payment provider, should contain the {{ {{ resrv_checkout_redirect }} tag.'
-  type: entries
-  max_items: 1
-  required: true
-
-currency_settings:
-  display: 'Currency settings'
-  instructions: 'Change what currency the engine uses (limited functionality for now)'
-  type: section
-currency_name:
-  display: 'Currency name'
-  instructions: 'For example: Euro'
-  type: text
-  required: true
-currency_isoCode:
-  display: 'Currency ISO code'
-  instructions: 'Make sure to use ISO_4217 https://en.wikipedia.org/wiki/ISO_4217'
-  type: text
-  required: true
-currency_symbol:
-  display: 'Currency symbol'
-  type: text
-  required: true
-currency_delimiter:
-  display: 'Currency delimited'
-  type: text
-  required: true
+hide: true
+tabs:
+  general_information:
+    display: General
+    sections:
+      -
+        display: 'Business information'
+        instructions: 'This information will be used in the email templates.'
+        fields:
+          -
+            handle: name
+            field:
+              display: 'Business name'
+              type: text
+              width: 50
+              localizable: false
+              validate:
+                - required
+          -
+            handle: address1
+            field:
+              display: 'Business address'
+              type: text
+              width: 50
+              localizable: false
+              validate:
+                - required
+          -
+            handle: zip_city
+            field:
+              display: 'ZIP & City'
+              type: text
+              width: 50
+              localizable: false
+              validate:
+                - required
+          -
+            handle: country
+            field:
+              display: Country
+              type: text
+              width: 50
+              localizable: false
+              validate:
+                - required
+          -
+            handle: phone
+            field:
+              display: Phone
+              type: text
+              width: 50
+              localizable: false
+              validate:
+                - required
+          -
+            handle: mail
+            field:
+              display: Email
+              type: text
+              width: 50
+              localizable: false
+              validate:
+                - required
+          -
+            handle: logo
+            field:
+              display: Logo
+              type: text
+              localizable: false
+              validate:
+                - required
+              instructions: 'Type "false" to use business name or an absolute URL (including https://)'
+  engine_settings:
+    display: Engine
+    sections:
+      -
+        display: 'Engine settings'
+        instructions: 'Change how the reservation engine behaves.'
+        fields:
+          -
+            handle: enable_advanced_availability
+            field:
+              display: 'Enable advanced availability'
+              type: toggle
+              localizable: false
+              validate:
+                - required
+              instructions: 'Enables the [advanced availability](https://resrv.dev/availability#advanced-availability) feature.'
+          -
+            handle: enable_connected_availabilities
+            field:
+              display: 'Enable connected advanced availabilities'
+              type: toggle
+              localizable: false
+              validate:
+                - required
+              instructions: 'Enables the [connected availabilities](https://resrv.dev/availability#connected-availabilities) feature.'
+          -
+            handle: enable_time
+            field:
+              display: 'Enable time'
+              type: toggle
+              localizable: false
+              validate:
+                - required
+              instructions: 'Require an explicit pick-up and drop-off time for each reservation. Not yet implemented in the frontend.'
+          -
+            handle: enable_affiliates
+            field:
+              display: 'Enable affiliates'
+              type: toggle
+              localizable: false
+              validate:
+                - required
+              instructions: 'Enable the [affiliate system](https://resrv.dev/affiliates).'
+          -
+            handle: minimum_days_before
+            field:
+              display: 'Minimum days before'
+              type: integer
+              localizable: false
+              validate:
+                - required
+              instructions: "The minimum number of days allowed between the current date and the reservation start date. Useful if you don't want to allow last-minute reservations."
+          -
+            handle: minimum_reservation_period_in_days
+            field:
+              display: 'Minimum reservation period (in days)'
+              type: integer
+              width: 50
+              localizable: false
+              validate:
+                - required
+              instructions: 'In scenarios like a hotel where reservations span multiple dates, you can set here the minimum required number of days.'
+          -
+            handle: maximum_reservation_period_in_days
+            field:
+              display: 'Maximum reservation period (in days)'
+              type: integer
+              width: 50
+              localizable: false
+              validate:
+                - required
+              instructions: 'The same for maximum reservation period.'
+          -
+            handle: free_cancellation_period
+            field:
+              display: 'Free cancellation (in days)'
+              type: integer
+              width: 50
+              localizable: false
+              validate:
+                - required
+              instructions: 'The number of days before the reservation start date that the user can cancel the reservation. Please note that cancellations are manual; this is mainly used to display that info in the frontend.'
+          -
+            handle: full_payment_after_free_cancellation
+            field:
+              display: 'Require full payment if free cancellation has passed'
+              type: toggle
+              width: 50
+              localizable: false
+              validate:
+                - required
+              instructions: "If the free cancellation period has passed when the user makes the reservation, you can require full payment (in case you're not already doing that)."
+          -
+            handle: maximum_quantity
+            field:
+              display: 'Maximum quantity'
+              type: integer
+              width: 50
+              localizable: false
+              validate:
+                - required
+              instructions: 'The maximum quantity allowed in one reservation.'
+          -
+            handle: ignore_quantity_for_prices
+            field:
+              display: 'Ignore quantity for prices'
+              type: toggle
+              width: 50
+              localizable: false
+              validate:
+                - required
+              instructions: 'In case you want to keep track of the quantity but not charge extra for it, you can set this to true. For example, you might want to charge $20 for a reservation at a restaurant and allow 20 seats, but not charge extra for each seat.'
+          -
+            handle: calculate_days_using_time
+            field:
+              display: 'Calculate days using time'
+              type: toggle
+              width: 50
+              localizable: false
+              validate:
+                - required
+              instructions: 'If enable time is enabled, this will charge an extra day if the ending time is after the starting time. For example, if you give a car at 12:00 and it is returned at 18:00, you will charge an extra day. Not yet implemented in the frontend.'
+          -
+            handle: decrease_availability_for_extra_time
+            field:
+              display: 'Decrease availability for extra time'
+              type: toggle
+              width: 50
+              localizable: false
+              validate:
+                - required
+              instructions: 'Tied to the setting before, this will block availability for the final day if the return time is after the starting time.'
+          -
+            handle: admin_email
+            field:
+              display: 'Admin email'
+              type: text
+              localizable: false
+              validate:
+                - required
+              instructions: 'Comma-separated list of the emails that should be notified for new reservations or refunds.'
+  checkout_settings:
+    display: Checkout
+    sections:
+      -
+        display: 'Checkout Settings'
+        instructions: 'Modify the checkout process.'
+        fields:
+          -
+            handle: form_name
+            field:
+              max_items: 1
+              type: form
+              display: Form
+              instructions: 'The form you want to use during checkout. The default is "checkout" and should work out of the box.'
+              localizable: false
+          -
+            handle: checkout_entry
+            field:
+              display: 'Checkout Entry'
+              type: entries
+              max_items: 1
+              localizable: false
+              validate:
+                - required
+              instructions: 'The Statamic entry that loads the [Livewire checkout](https://resrv.dev/checkout#checkout-component) component.'
+          -
+            handle: checkout_completed_entry
+            field:
+              display: 'Checkout Redirect Entry'
+              type: entries
+              max_items: 1
+              localizable: false
+              validate:
+                - required
+              instructions: 'The [Checkout complete](https://resrv.dev/checkout#checkout-complete) page that includes the `resrv_checkout_redirect` tag.'
+          -
+            handle: payment
+            field:
+              display: 'Payment type'
+              type: select
+              options:
+                -
+                  key: full
+                  value: 'Charge the whole amount'
+                -
+                  key: everything
+                  value: 'Charge the whole amount plus any options and extras'
+                -
+                  key: fixed
+                  value: 'Charge a fixed amount'
+                -
+                  key: percent
+                  value: 'Charge a percentage of the base price'
+              localizable: false
+              validate:
+                - required
+              instructions: 'Payment required to complete the reservation. You can choose between paying everything (reservation plus any extras and options), the reservation price only, a percentage of the reservation price, or a fixed amount.'
+          -
+            handle: fixed_amount
+            field:
+              display: 'Fixed amount'
+              type: integer
+              localizable: false
+              validate:
+                - required
+              instructions: 'The amount that should be charged to complete a reservation.'
+              if:
+                payment: 'equals fixed'
+          -
+            handle: percent_amount
+            field:
+              display: Percentage
+              type: integer
+              localizable: false
+              validate:
+                - required
+              instructions: 'The percentage of the reservation price that should be charged.'
+              if:
+                payment: 'equals percent'
+          -
+            handle: minutes_to_hold
+            field:
+              display: 'Minutes to hold'
+              type: integer
+              localizable: false
+              validate:
+                - required
+              instructions: 'When a user initiates a checkout, the availability for their reservation is temporarily blocked for the given number of minutes. This helps to prevent double bookings, especially when availability is low.'
+  currency_settings:
+    display: Currency
+    sections:
+      -
+        display: 'Currency Settings'
+        instructions: 'Here you can set the currency that will be used site-wide.'
+        fields:
+          -
+            handle: currency_name
+            field:
+              display: 'Currency name'
+              type: text
+              localizable: false
+              validate:
+                - required
+          -
+            handle: currency_isoCode
+            field:
+              display: 'Currency ISO code'
+              type: text
+              localizable: false
+              validate:
+                - required
+          -
+            handle: currency_symbol
+            field:
+              display: 'Currency symbol'
+              type: text
+              localizable: false
+              validate:
+                - required
+          -
+            handle: currency_delimiter
+            field:
+              display: 'Currency delimited'
+              type: text
+              localizable: false
+              validate:
+                - required
+title: Config

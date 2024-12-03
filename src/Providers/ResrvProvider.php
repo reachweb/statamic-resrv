@@ -2,6 +2,8 @@
 
 namespace Reach\StatamicResrv\Providers;
 
+use Edalzell\Forma\ConfigController;
+use Edalzell\Forma\Forma;
 use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\CouponUpdated;
@@ -15,7 +17,6 @@ use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
-use Reach\StatamicResrv\Http\Controllers\ConfigController;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
@@ -181,7 +182,7 @@ class ResrvProvider extends AddonServiceProvider
 
         $this->createNavigation();
 
-        \Edalzell\Forma\Forma::add('reachweb/statamic-resrv', ConfigController::class);
+        Forma::add('reachweb/statamic-resrv', ConfigController::class, 'resrv-config');
 
         $this->bootPermissions();
 
