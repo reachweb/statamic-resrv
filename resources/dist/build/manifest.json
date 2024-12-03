@@ -1,18 +1,18 @@
 {
   "resources/css/resrv.css": {
-    "file": "assets/resrv-8b13e2d8.css",
+    "file": "assets/resrv-3f0f85a9.css",
     "isEntry": true,
     "src": "resources/css/resrv.css"
   },
   "resources/js/resrv.css": {
-    "file": "assets/resrv-253fab7e.css",
+    "file": "assets/resrv-7563e5e4.css",
     "src": "resources/js/resrv.css"
   },
   "resources/js/resrv.js": {
     "css": [
-      "assets/resrv-253fab7e.css"
+      "assets/resrv-7563e5e4.css"
     ],
-    "file": "assets/resrv-3f6ccb7d.js",
+    "file": "assets/resrv-d8d52783.js",
     "isEntry": true,
     "src": "resources/js/resrv.js"
   }

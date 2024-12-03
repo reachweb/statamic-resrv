@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -26,6 +27,21 @@ class Entry extends Model
     protected static function newFactory()
     {
         return EntryFactory::new();
+    }
+
+    public function extras()
+    {
+        return $this->belongsToMany(Extra::class, 'resrv_entry_extra');
+    }
+
+    public function scopeItemId(Builder $query, string $id): void
+    {
+        $query->where('item_id', $id);
+    }
+
+    public static function whereItemId(string $id): ?static
+    {
+        return static::query()->itemId($id)->firstOrFail();
     }
 
     public function syncToDatabase(StatamicEntry $entry): void

@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -24,7 +25,7 @@ class DynamicPricingApplyTest extends TestCase
 
     public $collectionTag;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
@@ -305,10 +306,10 @@ class DynamicPricingApplyTest extends TestCase
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
 
         $extra = Extra::factory()->fixed()->create();
-        DB::table('resrv_statamicentry_extra')->insert([
-            'statamicentry_id' => $this->entry->id,
-            'extra_id' => $extra->id,
-        ]);
+
+        $entry = ResrvEntry::whereItemId($this->entry->id());
+
+        $entry->extras()->attach($extra->id);
 
         $dynamic = DynamicPricing::factory()->extra()->create();
 

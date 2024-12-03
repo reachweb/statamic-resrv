@@ -14,13 +14,19 @@ export default {
 
     emits: ['saved'],
 
+    computed: {
+        finalPostUrl() {
+           return this.computedPostUrl || this.postUrl;
+        },
+    },
+
     methods: {
         save() {
             this.toggleDisableSave()
             this.clearErrors()
             axios({
                 method: this.method,
-                url: this.postUrl,
+                url: this.finalPostUrl,
                 data: this.submit
             })
             .then(response => {

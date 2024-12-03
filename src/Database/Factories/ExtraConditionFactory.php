@@ -32,8 +32,8 @@ class ExtraConditionFactory extends Factory
             return [
                 'conditions' => [[
                     'operation' => 'show',
-                    'condition' => 'extra_selected',
-                    'value' => 2,
+                    'type' => 'extra_selected',
+                    'value' => 1,
                 ]],
             ];
         });
@@ -44,7 +44,7 @@ class ExtraConditionFactory extends Factory
         return $this->state(function (array $attributes) {
             return [
                 'conditions' => [[
-                    'operation' => 'hide',
+                    'operation' => 'hidden',
                     'type' => 'extra_selected',
                     'value' => 2,
                 ]],
@@ -97,6 +97,20 @@ class ExtraConditionFactory extends Factory
                         'time_end' => '08:00',
                     ],
                 ],
+            ];
+        });
+    }
+
+    public function hideReservationDates()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'conditions' => [[
+                    'operation' => 'hidden',
+                    'type' => 'reservation_dates',
+                    'date_start' => today()->toIso8601String(),
+                    'date_end' => today()->add(10, 'day')->toIso8601String(),
+                ]],
             ];
         });
     }

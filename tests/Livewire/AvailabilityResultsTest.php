@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
@@ -28,7 +29,7 @@ class AvailabilityResultsTest extends TestCase
 
     public $option;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
@@ -44,10 +45,9 @@ class AvailabilityResultsTest extends TestCase
 
         $extra = Extra::factory()->create();
 
-        DB::table('resrv_statamicentry_extra')->insert([
-            'statamicentry_id' => $this->entries->first()->id,
-            'extra_id' => $extra->id,
-        ]);
+        $entry = ResrvEntry::whereItemId($this->entries->first()->id);
+
+        $entry->extras()->attach($extra->id);
     }
 
     // Test that the component renders successfully
@@ -790,6 +790,52 @@ class AvailabilityResultsTest extends TestCase
                 'property' => 'test',
                 'payment' => data_get($availability, 'data.payment'),
                 'price' => data_get($availability, 'data.price'),
+                'customer' => json_encode(['adults' => 2, 'children' => 1]),
+            ]
+        );
+    }
+
+    // Test that it creates a reservation when multiple days results are enabled
+    public function test_checkout_works_for_multiple_days()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'extraDays' => 1, 'extraDaysOffset' => 1])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'test',
+                    'customer' => [
+                        'adults' => 2,
+                        'children' => 1,
+                    ],
+                ]
+            );
+
+        $availability = $component->viewData('availability');
+
+        $component->call('checkout');
+
+        $this->assertDatabaseHas('resrv_reservations',
+            [
+                'item_id' => $this->advancedEntries->first()->id(),
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(2, 'day'),
+                'quantity' => 1,
+                'property' => 'test',
+                'payment' => data_get($availability[0], 'data.payment'),
+                'price' => data_get($availability[0], 'data.price'),
                 'customer' => json_encode(['adults' => 2, 'children' => 1]),
             ]
         );

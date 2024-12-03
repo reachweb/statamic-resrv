@@ -53,6 +53,9 @@ class AvailabilityResults extends Component
     #[Session('resrv-extras')]
     public EnabledExtras $enabledExtras;
 
+    #[Locked]
+    public Collection $extraConditions;
+
     #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
@@ -61,6 +64,7 @@ class AvailabilityResults extends Component
         $this->entryId = $this->getDefaultSiteEntry($entry)->id();
         $this->availability = collect();
         $this->enabledExtras->extras = collect();
+        $this->extraConditions = collect();
         $this->enabledOptions->options = collect();
         if (session()->has('resrv-search')) {
             $this->availabilitySearchChanged(session('resrv-search'));
@@ -156,8 +160,19 @@ class AvailabilityResults extends Component
         }
     }
 
+    public function updatedEnabledExtras()
+    {
+        $this->handleExtrasConditions($this->extras);
+    }
+
     public function checkout(): void
     {
+        if ($this->extraDays !== 0 && $this->availability->count() > 1) {
+            $this->availability = collect($this->availability->get(0));
+        }
+        if ($this->data->advanced === 'any') {
+            $this->data->advanced = data_get($this->availability, 'data.property');
+        }
         try {
             $this->validateAvailabilityAndPrice();
             $this->createReservation();

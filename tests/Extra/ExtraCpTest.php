@@ -3,7 +3,9 @@
 namespace Reach\StatamicResrv\Tests\Extra;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\ExtraCategory;
 use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -11,7 +13,7 @@ class ExtraCpTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
         $this->signInAdmin();
@@ -27,18 +29,11 @@ class ExtraCpTest extends TestCase
 
     public function test_can_index_a_statamic_entry_extras()
     {
-        $item = $this->makeStatamicItem();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $extra = Extra::factory()->create();
+        $entry = Entry::whereItemId($item->id());
 
-        $payload = [
-            'id' => $extra->id,
-        ];
-
-        $response = $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
-        $response->assertStatus(200);
-        $this->assertDatabaseHas('resrv_statamicentry_extra', [
-            'statamicentry_id' => $item->id(),
-        ]);
+        $entry->extras()->attach($extra);
 
         $response = $this->get(cp_route('resrv.extra.entryindex', $item->id()));
         $response->assertStatus(200)->assertSee($extra->slug);
@@ -60,6 +55,42 @@ class ExtraCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_extras', [
             'slug' => 'this-is-an-extra',
+        ]);
+    }
+
+    public function test_can_add_extra_with_a_category()
+    {
+        ExtraCategory::factory()->create();
+        $extra = Extra::factory()->withCategory()->make();
+
+        $response = $this->post(cp_route('resrv.extra.create'), $extra->toArray());
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_extras', [
+            'slug' => $extra->slug,
+            'category_id' => $extra->category_id,
+        ]);
+    }
+
+    public function test_can_move_extra_between_categories()
+    {
+        ExtraCategory::factory()->create();
+        ExtraCategory::factory()->create([
+            'name' => 'Another category',
+            'slug' => 'another-category',
+        ]);
+        $extra = Extra::factory()->withCategory()->create();
+
+        $response = $this->patch(cp_route('resrv.extra.move', $extra->id), [
+            'category_id' => 2,
+            'order' => 1,
+        ]);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_extras', [
+            'slug' => $extra->slug,
+            'category_id' => 2,
+            'order' => 1,
         ]);
     }
 
@@ -128,117 +159,115 @@ class ExtraCpTest extends TestCase
     public function test_can_delete_extra()
     {
         $extra = Extra::factory()->create();
-        $item = $this->makeStatamicItem();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $entry = Entry::whereItemId($item->id());
 
-        $payload = [
-            'id' => $extra->id,
-        ];
+        $entry->extras()->attach($extra);
 
-        $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
+        $this->delete(cp_route('resrv.extra.delete'), ['id' => $extra->id]);
 
-        $response = $this->delete(cp_route('resrv.extra.delete'), $payload);
-        $response->assertStatus(200);
-        $this->assertDatabaseMissing('resrv_statamicentry_extra', [
-            'statamicentry_id' => $item->id(),
-        ]);
+        $this->assertFalse($entry->extras()->exists());
         $this->assertSoftDeleted($extra);
     }
 
     public function test_can_add_extra_to_statamic_entry()
     {
-        $item = $this->makeStatamicItem();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $extra = Extra::factory()->create();
+        $entry = Entry::whereItemId($item->id());
 
-        $payload = [
+        $response = $this->post(cp_route('resrv.extra.add', $item->id()), [
             'id' => $extra->id,
-        ];
+        ]);
 
-        $response = $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
         $response->assertStatus(200);
-        $this->assertDatabaseHas('resrv_statamicentry_extra', [
-            'statamicentry_id' => $item->id(),
+
+        $this->assertDatabaseHas('resrv_entry_extra', [
+            'entry_id' => $entry->id,
+            'extra_id' => $extra->id,
         ]);
     }
 
-    public function test_can_add_and_remove_extra_to_multiple_extras()
+    public function test_can_add_and_remove_extra_to_multiple_entries()
     {
-        $item = $this->makeStatamicItem();
-        $item2 = $this->makeStatamicItem();
-        $item3 = $this->makeStatamicItem();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $item2 = $this->makeStatamicItemWithResrvAvailabilityField();
+        $item3 = $this->makeStatamicItemWithResrvAvailabilityField();
+        $entry = Entry::whereItemId($item->id());
+        $entry2 = Entry::whereItemId($item2->id());
+        $entry3 = Entry::whereItemId($item3->id());
         $extra = Extra::factory()->create();
 
         $payload = [
             'entries' => [
-                $item->id(),
-                $item2->id(),
-                $item3->id(),
+                $entry->id,
+                $entry2->id,
+                $entry3->id,
             ],
         ];
 
         $response = $this->post(cp_route('resrv.extra.massadd', $extra->id), $payload);
+
         $response->assertStatus(200);
-        $this->assertDatabaseHas('resrv_statamicentry_extra', [
-            'statamicentry_id' => $item->id(),
-            'statamicentry_id' => $item2->id(),
-            'statamicentry_id' => $item3->id(),
+
+        $this->assertDatabaseHas('resrv_entry_extra', [
+            'entry_id' => $entry->id,
+            'entry_id' => $entry2->id,
+            'entry_id' => $entry3->id,
         ]);
 
+        // Remove one entry
         $payload = [
             'entries' => [
-                $item2->id(),
-                $item3->id(),
+                $entry2->id,
+                $entry3->id,
             ],
         ];
 
         $response = $this->post(cp_route('resrv.extra.massadd', $extra->id), $payload);
-        $response->assertStatus(200);
-        $this->assertDatabaseHas('resrv_statamicentry_extra', [
-            'statamicentry_id' => $item2->id(),
-            'statamicentry_id' => $item3->id(),
+
+        $this->assertDatabaseHas('resrv_entry_extra', [
+            'entry_id' => $entry2->id,
+            'entry_id' => $entry3->id,
         ]);
-        $this->assertDatabaseMissing('resrv_statamicentry_extra', [
-            'statamicentry_id' => $item->id(),
+        $this->assertDatabaseMissing('resrv_entry_extra', [
+            'entry_id' => $entry->id,
         ]);
     }
 
     public function test_can_get_all_entries_for_extra()
     {
-        $item = $this->makeStatamicItem();
-        $item2 = $this->makeStatamicItem();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $item2 = $this->makeStatamicItemWithResrvAvailabilityField();
+        $entry = Entry::whereItemId($item->id());
+        $entry2 = Entry::whereItemId($item2->id());
         $extra = Extra::factory()->create();
 
-        $payload = [
-            'entries' => [
-                $item->id(),
-                $item2->id(),
-            ],
-        ];
-
-        $this->post(cp_route('resrv.extra.massadd', $extra->id), $payload);
+        $extra->entries()->sync([
+            $entry->id,
+            $entry2->id,
+        ]);
 
         $response = $this->get(cp_route('resrv.extra.entries', $extra->id));
-        $response->assertStatus(200)->assertSee($item->id())->assertSee($item2->id())->assertSee($item->title);
+        $response->assertStatus(200)->assertSee($entry->title)->assertSee($entry2->title);
     }
 
     public function test_can_remove_extra_from_statamic_entry()
     {
-        $item = $this->makeStatamicItem();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $extra = Extra::factory()->create();
+        $entry = Entry::whereItemId($item->id());
 
-        $payload = [
+        $entry->extras()->attach($extra);
+
+        $response = $this->post(cp_route('resrv.extra.remove', $item->id()), [
             'id' => $extra->id,
-        ];
-
-        $response = $this->post(cp_route('resrv.extra.add', $item->id()), $payload);
-        $response->assertStatus(200);
-        $this->assertDatabaseHas('resrv_statamicentry_extra', [
-            'statamicentry_id' => $item->id(),
         ]);
 
-        $response = $this->post(cp_route('resrv.extra.remove', $item->id()), $payload);
         $response->assertStatus(200);
-        $this->assertDatabaseMissing('resrv_statamicentry_extra', [
-            'statamicentry_id' => $item->id(),
+        $this->assertDatabaseMissing('resrv_entry_extra', [
+            'entry_id' => $entry->id,
+            'extra_id' => $extra->id,
         ]);
     }
 
@@ -248,12 +277,9 @@ class ExtraCpTest extends TestCase
         $extra2 = Extra::factory()->create(['id' => 2, 'order' => 2]);
         $extra3 = Extra::factory()->create(['id' => 3, 'order' => 3]);
 
-        $payload = [
-            'id' => 1,
+        $response = $this->patch(cp_route('resrv.extra.order', $extra->id), [
             'order' => 3,
-        ];
-
-        $response = $this->patch(cp_route('resrv.extra.order'), $payload);
+        ]);
         $response->assertStatus(200);
         $this->assertDatabaseHas('resrv_extras', [
             'id' => $extra['id'],
@@ -282,7 +308,7 @@ class ExtraCpTest extends TestCase
 
     public function test_can_index_a_statamic_entry_extras_and_conditions()
     {
-        $item = $this->makeStatamicItem();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $extra = Extra::factory()->create();
         $condition = ExtraCondition::factory()->showExtraSelected()->create([
             'extra_id' => $extra->id,

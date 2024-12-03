@@ -6,11 +6,16 @@
     x-on:extra-removed="delete selectedExtras[$event.detail.id.toString()]; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
     x-init="selectedExtras = @js($enabledExtras->extras)"
 >
-    <div class="flex flex-col gap-y-6">
-        @foreach ($this->extras as $id => $extra)
+    <div class="flex flex-col">
+        @foreach ($extras as $id => $extra)
             <div wire:key="{{ $extra->id }}.{{ $extra->price }}">
-                <div class="font-medium mb-2">{{ $extra->name }}</div>
-                <x-resrv::checkout-extra :extra="$extra" x-bind:key="{{ $extra->id }}" compact="true" />
+                <x-resrv::checkout-extra 
+                    :extra="$extra"
+                    :required="$this->extraConditions->get('required', collect())->contains($extra->id)"
+                    :hide="$this->extraConditions->get('hide', collect())->contains($extra->id)"
+                    x-bind:key="{{ $extra->id }}"
+                    compact="true" 
+                />
             </div>            
         @endforeach
     </div>

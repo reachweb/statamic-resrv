@@ -31,6 +31,9 @@ class Checkout extends Component
     #[Session('resrv-extras')]
     public EnabledExtras $enabledExtras;
 
+    #[Locked]
+    public Collection $extraConditions;
+
     #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
@@ -69,6 +72,7 @@ class Checkout extends Component
         } else {
             $this->enabledOptions->options = collect();
         }
+        $this->extraConditions = collect();
         $this->coupon = session('resrv_coupon') ?? null;
     }
 
@@ -88,6 +92,21 @@ class Checkout extends Component
     public function extras(): Collection
     {
         return $this->getExtrasForReservation();
+    }
+
+    #[Computed(persist: true)]
+    public function frontendExtras(): Collection
+    {
+        return $this->extras->groupBy('category_id')
+            ->sortBy('order')
+            ->map(function ($items) {
+                return $this->createExtraCategoryObject($items);
+            })
+            ->reject(function ($category) {
+                return $category->published == false;
+            })
+            ->sortBy('order')
+            ->values();
     }
 
     #[Computed(persist: true)]
@@ -258,6 +277,11 @@ class Checkout extends Component
         if ($this->enabledOptions->options->count() > 0) {
             $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
         }
+    }
+
+    public function updatedEnabledExtras()
+    {
+        $this->handleExtrasConditions($this->extras);
     }
 
     public function addCoupon(string $coupon)

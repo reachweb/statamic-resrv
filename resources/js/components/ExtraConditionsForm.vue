@@ -128,7 +128,7 @@
                                 {{ __('Comparison') }}
                             </div>
                             <div class="w-full">
-                                <v-select v-model="conditionsForm[index].comparison" :options="comparison" :reduce="type => type.value" />
+                                <v-select class="min-w-40" v-model="conditionsForm[index].comparison" :options="comparison" :reduce="type => type.value" />
                             </div>
                             <div v-if="errors['conditions.'+index+'.comparison']" class="w-full mt-1 text-sm text-red-400">
                                 {{ errors['conditions.'+index+'.comparison'][0] }}
@@ -139,7 +139,7 @@
                                 {{ __('Value') }}
                             </div>
                             <div class="w-full">
-                                <input class="w-full border border-gray-700 rounded p-1" type="text" v-model="conditionsForm[index].value">
+                                <input class="input-text" type="text" v-model="conditionsForm[index].value">
                             </div>
                             <div v-if="errors['conditions.'+index+'.value']" class="w-full mt-1 text-sm text-red-400">
                                 {{ errors['conditions.'+index+'.value'][0] }}
@@ -154,7 +154,7 @@
                                 {{ __('Extra') }}
                             </div>
                             <div class="w-full">
-                                <v-select v-model="conditionsForm[index].value" :options="extrasWithoutCurrent" :reduce="type => type.value" />
+                                <v-select class="min-w-40" v-model="conditionsForm[index].value" :options="extrasWithoutCurrent" :reduce="type => type.value" />
                             </div>
                             <div v-if="errors['conditions.'+index+'.value']" class="w-full mt-1 text-sm text-red-400">
                                 {{ errors['conditions.'+index+'.value'][0] }}

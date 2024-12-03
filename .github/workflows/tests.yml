@@ -78,5 +78,7 @@ jobs:
         run: |
           composer require "laravel/framework:${{ matrix.framework }}" --no-interaction --no-update
           composer update --${{ matrix.stability }} --prefer-dist --no-interaction
+      - name: Composer dump-autoload
+        run: composer dump-autoload
       - name: Execute tests
         run: vendor/bin/phpunit

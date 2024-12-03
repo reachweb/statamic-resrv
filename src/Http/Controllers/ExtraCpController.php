@@ -5,8 +5,8 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
-use Statamic\Facades\Entry;
 
 class ExtraCpController extends Controller
 {
@@ -31,12 +31,11 @@ class ExtraCpController extends Controller
 
     public function entryIndex($statamic_id)
     {
-        $extras = $this->extra->entry($statamic_id)->get();
+        $entry = Entry::whereItemId($statamic_id);
+        $extras = $this->extra->with('entries')->get();
 
-        $extras->transform(function ($extra) {
-            $extra->conditions = $this->extra->find($extra->id)->conditions()->get();
-
-            return $extra;
+        $extras->each(function ($extra) use ($entry) {
+            $extra->setAttribute('enabled', $extra->entries->contains($entry));
         });
 
         return response()->json($extras);
@@ -47,6 +46,7 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'name' => 'required',
             'slug' => 'required',
+            'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
             'price' => 'required|numeric',
             'price_type' => 'required',
             'custom' => 'required_if:price_type,custom',
@@ -69,6 +69,7 @@ class ExtraCpController extends Controller
             'id' => 'required|integer',
             'name' => 'required',
             'slug' => 'required',
+            'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
             'description' => 'sometimes',
             'price' => 'required|numeric',
             'price_type' => 'required',
@@ -85,15 +86,33 @@ class ExtraCpController extends Controller
         return response()->json(['id' => $data['id']]);
     }
 
+    public function updateCategories(Request $request)
+    {
+        $data = $request->validate([
+            '*.id' => 'required|integer',
+            '*.category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
+            '*.order' => 'required|integer',
+        ]);
+
+        foreach ($data as $item) {
+            $extra = $this->extra->find($item['id']);
+            $extra->update([
+                'category_id' => $item['category_id'],
+                'order' => $item['order'],
+            ]);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
     public function associate(Request $request, $statamic_id)
     {
         $data = $request->validate([
             'id' => 'required|integer',
         ]);
-        DB::table('resrv_statamicentry_extra')
-            ->insert(
-                ['extra_id' => $data['id'], 'statamicentry_id' => $statamic_id],
-            );
+
+        $entry = Entry::whereItemId($statamic_id);
+        $entry->extras()->attach($data['id']);
 
         return response(200);
     }
@@ -103,10 +122,9 @@ class ExtraCpController extends Controller
         $data = $request->validate([
             'id' => 'required|integer',
         ]);
-        DB::table('resrv_statamicentry_extra')
-            ->where('extra_id', $data['id'])
-            ->where('statamicentry_id', $statamic_id)
-            ->delete();
+
+        $entry = Entry::whereItemId($statamic_id);
+        $entry->extras()->detach($data['id']);
 
         return response(200);
     }
@@ -117,16 +135,8 @@ class ExtraCpController extends Controller
             'entries' => 'sometimes|array',
         ]);
 
-        $toAdd = collect($data['entries'])->transform(function ($entry) use ($extra_id) {
-            return ['extra_id' => $extra_id, 'statamicentry_id' => $entry];
-        })->toArray();
-
-        DB::table('resrv_statamicentry_extra')
-            ->where('extra_id', $extra_id)
-            ->delete();
-
-        DB::table('resrv_statamicentry_extra')
-            ->insert($toAdd);
+        $extra = $this->extra->findOrFail($extra_id);
+        $extra->entries()->sync($data['entries'] ?? []);
 
         return response(200);
     }
@@ -162,14 +172,28 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
-    public function order(Request $request)
+    public function move(Request $request, Extra $extra)
     {
         $data = $request->validate([
-            'id' => 'required',
+            'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
             'order' => 'required|integer',
         ]);
 
-        $extra = $this->extra->find($data['id'])->changeOrder($data['order']);
+        $extra->category_id = $data['category_id'];
+        $extra->save();
+
+        $extra->changeOrder($data['order']);
+
+        return response(200);
+    }
+
+    public function order(Request $request, Extra $extra)
+    {
+        $data = $request->validate([
+            'order' => 'required|integer',
+        ]);
+
+        $extra->changeOrder($data['order']);
 
         return response(200);
     }
@@ -180,10 +204,6 @@ class ExtraCpController extends Controller
             'id' => 'required|integer',
         ]);
         $extra = $this->extra->destroy($data['id']);
-
-        DB::table('resrv_statamicentry_extra')
-            ->where('extra_id', $data['id'])
-            ->delete();
 
         DB::table('resrv_extra_conditions')
             ->where('extra_id', $data['id'])
@@ -197,17 +217,8 @@ class ExtraCpController extends Controller
         return response(200);
     }
 
-    public function entries($extra_id)
+    public function entries(Extra $extra)
     {
-        $entryIds = $this->extra->find($extra_id)
-            ->entries()
-            ->get()
-            ->map(fn ($item) => $item->statamicentry_id);
-
-        $entries = Entry::query()
-            ->whereIn('id', $entryIds->toArray())
-            ->get(['id', 'title']);
-
-        return response()->json($entries);
+        return response()->json($extra->entries);
     }
 }

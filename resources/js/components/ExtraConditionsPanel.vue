@@ -31,6 +31,7 @@
 </template>
 
 <script>
+import axios from 'axios'
 import FormHandler from '../mixins/FormHandler.vue'
 import ExtraConditionsForm from './ExtraConditionsForm.vue'
 
@@ -38,10 +39,6 @@ export default {
 
     props: {
         data: {
-            type: Object,
-            required: true
-        },
-        extras: {
             type: Object,
             required: true
         },
@@ -69,6 +66,7 @@ export default {
     data() {
         return {
             submit: {},
+            extras: [],
             method: 'post',
             successMessage: 'Conditions successfully saved',
             postUrl: '/cp/resrv/extra/conditions/'+this.data.id,
@@ -80,6 +78,10 @@ export default {
 
     components: {
         ExtraConditionsForm
+    },
+
+    mounted() {
+        this.getAllExtras()
     },
 
     methods: {
@@ -96,6 +98,15 @@ export default {
                 return this.data.conditions.conditions
             }
             return []
+        },
+        getAllExtras() {
+            axios.get('/cp/resrv/extra')
+                .then(response => {
+                    this.extras = response.data
+                })
+                .catch(error => {
+                    console.log(error)
+                })
         }
     }
 }

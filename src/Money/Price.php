@@ -12,6 +12,11 @@ class Price implements CastsAttributes
 {
     public $money;
 
+    public function __toString(): string
+    {
+        return $this->format();
+    }
+
     public function create($price): Price
     {
         $class = new self;

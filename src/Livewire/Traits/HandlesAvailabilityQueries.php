@@ -8,13 +8,16 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 
 trait HandlesAvailabilityQueries
 {
+    use HandlesMultisiteIds;
+
     public function getAvailability(Collection $data): array
     {
         try {
-            return (new Availability)->getAvailable($this->toResrvArray($data->first()));
+            return app(Availability::class)->getAvailable($this->toResrvArray($data->first()));
         } catch (AvailabilityException $exception) {
             return [
                 'message' => [
@@ -28,7 +31,7 @@ trait HandlesAvailabilityQueries
     public function queryBaseAvailabilityForEntry(): array
     {
         try {
-            return (new Availability)->getAvailabilityForEntry($this->data->toResrvArray(), $this->entryId);
+            return app(Availability::class)->getAvailabilityForEntry($this->data->toResrvArray(), $this->entryId);
         } catch (AvailabilityException $exception) {
             $this->addError('availability', $exception->getMessage());
 
@@ -43,7 +46,7 @@ trait HandlesAvailabilityQueries
         $periods->transform(function ($period) {
             $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'advanced']));
             try {
-                return (new Availability)->getAvailabilityForEntry($searchData, $this->entryId);
+                return app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId);
             } catch (AvailabilityException $exception) {
                 return [
                     'message' => [
@@ -60,7 +63,7 @@ trait HandlesAvailabilityQueries
     public function validateAvailabilityAndPrice()
     {
         $searchData = array_merge(['price' => data_get($this->availability, 'data.price')], $this->data->toResrvArray());
-        if ((new Availability)->confirmAvailabilityAndPrice($searchData, $this->entryId) === false) {
+        if (app(Availability::class)->confirmAvailabilityAndPrice($searchData, $this->entryId) === false) {
             throw new AvailabilityException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
     }
@@ -111,5 +114,25 @@ trait HandlesAvailabilityQueries
             'quantity' => $search['quantity'] ?? 1,
             'advanced' => $search['advanced'] ?? '',
         ];
+    }
+
+    public function getAvailabilityCalendar(): array
+    {
+        if (! $this->entry) {
+            throw new AvailabilityException(__('You need to provide an entry ID to enable the availability calendar.'));
+        }
+
+        $entry = $this->getDefaultSiteEntry($this->entry)->id();
+
+        return app(Availability::class)
+            ->where('statamic_id', $entry)
+            ->where('date', '>=', now()->startOfDay())
+            ->when($this->advanced && $this->data->advanced, function ($query) {
+                return $query->where('property', $this->data->advanced);
+            })
+            ->get(['date', 'available', 'price', 'property'])
+            ->groupBy('date')
+            ->map(fn ($item) => $item->first())
+            ->toArray();
     }
 }

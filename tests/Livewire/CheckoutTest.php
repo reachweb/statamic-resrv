@@ -9,6 +9,7 @@ use Livewire\Livewire;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
@@ -34,7 +35,7 @@ class CheckoutTest extends TestCase
 
     public $options;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
@@ -60,10 +61,9 @@ class CheckoutTest extends TestCase
 
         $this->extra = ResrvExtra::factory()->create();
 
-        DB::table('resrv_statamicentry_extra')->insert([
-            'statamicentry_id' => $this->entries->first()->id,
-            'extra_id' => $this->extra->id,
-        ]);
+        $entry = ResrvEntry::whereItemId($this->entries->first()->id);
+
+        $entry->extras()->attach($this->extra->id);
 
         $this->options = Option::factory()
             ->notRequired()
@@ -107,7 +107,7 @@ class CheckoutTest extends TestCase
         $component = Livewire::test(Checkout::class)
             ->set('enabledExtras.extras', collect([0 => [
                 'id' => $this->extra->id,
-                'price' => $extras->first()->price,
+                'price' => $extras->first()->price->format(),
                 'quantity' => 1,
             ]]))
             ->call('handleFirstStep')
@@ -335,7 +335,7 @@ class CheckoutTest extends TestCase
         $component = Livewire::test(Checkout::class)
             ->set('enabledExtras.extras', collect([0 => [
                 'id' => $this->extra->id,
-                'price' => $extras->first()->price,
+                'price' => $extras->first()->price->format(),
                 'quantity' => 1,
             ]]))
             ->set('enabledOptions.options', [[
@@ -365,7 +365,7 @@ class CheckoutTest extends TestCase
         $component = Livewire::test(Checkout::class)
             ->set('enabledExtras.extras', collect([0 => [
                 'id' => $this->extra->id,
-                'price' => $extras->first()->price,
+                'price' => $extras->first()->price->format(),
                 'quantity' => 1,
             ]]))
             ->set('enabledOptions.options', [[
@@ -404,7 +404,7 @@ class CheckoutTest extends TestCase
         $component = Livewire::test(Checkout::class)
             ->set('enabledExtras.extras', collect([0 => [
                 'id' => $this->extra->id,
-                'price' => $extras->first()->price,
+                'price' => $extras->first()->price->format(),
                 'quantity' => 1,
             ]]))
             ->set('enabledOptions.options', [[
