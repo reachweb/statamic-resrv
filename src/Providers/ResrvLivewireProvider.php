@@ -33,6 +33,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
     {
         Livewire::component('availability-search', \Reach\StatamicResrv\Livewire\AvailabilitySearch::class);
         Livewire::component('availability-results', \Reach\StatamicResrv\Livewire\AvailabilityResults::class);
+        Livewire::component('availability-control', \Reach\StatamicResrv\Livewire\AvailabilityControl::class);
         Livewire::component('checkout', \Reach\StatamicResrv\Livewire\Checkout::class);
         Livewire::component('checkout-form', \Reach\StatamicResrv\Livewire\CheckoutForm::class);
         Livewire::component('checkout-payment', \Reach\StatamicResrv\Livewire\CheckoutPayment::class);
