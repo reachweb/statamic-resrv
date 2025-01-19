@@ -96,6 +96,7 @@ Alpine.data('datepicker', () => ({
             selectedWeekends: [],
             selectedTheme: 'light',
             displayDatesOutside: true,
+            enableJumpToSelectedDate: true,
             positionToInput: 'auto',
 
             onCreateDateEls: (self, dateEl) => {
