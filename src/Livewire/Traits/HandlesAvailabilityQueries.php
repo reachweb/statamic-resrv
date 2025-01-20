@@ -16,14 +16,16 @@ trait HandlesAvailabilityQueries
 
     public function getAvailability(Collection $data): array
     {
+        $searchData = $this->toResrvArray($data->first());
         try {
-            return app(Availability::class)->getAvailable($this->toResrvArray($data->first()));
+            return app(Availability::class)->getAvailable($searchData);
         } catch (AvailabilityException $exception) {
             return [
                 'message' => [
                     'status' => false,
                     'error' => $exception->getMessage(),
                 ],
+                'request' => $searchData,
             ];
         }
     }
@@ -53,6 +55,7 @@ trait HandlesAvailabilityQueries
                         'status' => false,
                         'error' => $exception->getMessage(),
                     ],
+                    'request' => $searchData,
                 ];
             }
         });
