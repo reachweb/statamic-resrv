@@ -109,6 +109,14 @@
             />
         </div>        
     </div>
+    @if (array_key_exists('instructions', $field))
+    <p id="{{ $field['handle'] }}-explanation" class="mt-2 text-gray-500">
+        {{ __($field['instructions']) }}
+    </p>
+    @endif
+    @if ($errors->has('form.' . $field['handle']))
+    <p class="mt-2 text-red-600">{{ implode(', ', $errors->get('form.' . $field['handle'])) }}</p>
+    @endif
 </div>
 
 @script
