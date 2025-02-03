@@ -240,17 +240,14 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getAvailabilityCollection()
     {
-        $availableWithPricing = collect();
-        $available = $this->availableForDates()->groupBy('statamic_id');
         $request = $this->requestCollection();
 
-        foreach ($available as $id => $items) {
-            $availabilities = collect();
-            foreach ($items as $item) {
-                $availabilities->push($this->populateAvailability($item));
-            }
-            $availableWithPricing->put($id, $availabilities->sortBy('price'));
-        }
+        $availableWithPricing = $this->availableForDates()
+            ->groupBy('statamic_id')
+            ->map(function ($items) {
+                return $items->map(fn($item) => $this->populateAvailability($item))
+                            ->sortBy('price', SORT_NUMERIC);
+            });
 
         return new AvailabilityResource($availableWithPricing, $request);
     }
@@ -333,13 +330,11 @@ class Availability extends Model implements AvailabilityContract
             return collect([]);
         }
 
-        $disabled = $this->getDisabledIds();
+        $disabled = array_flip($this->getDisabledIds());
 
-        $results = $results->reject(function ($item) use ($disabled) {
-            return in_array($item->statamic_id, $disabled);
+        return $results->reject(function ($item) use ($disabled) {
+            return isset($disabled[$item->statamic_id]);
         });
-
-        return $results;
     }
 
     public function getPriceForDates($item, $id)
