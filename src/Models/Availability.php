@@ -245,8 +245,8 @@ class Availability extends Model implements AvailabilityContract
         $availableWithPricing = $this->availableForDates()
             ->groupBy('statamic_id')
             ->map(function ($items) {
-                return $items->map(fn($item) => $this->populateAvailability($item))
-                            ->sortBy('price', SORT_NUMERIC);
+                return $items->map(fn ($item) => $this->populateAvailability($item))
+                    ->sortBy('price', SORT_NUMERIC);
             });
 
         return new AvailabilityResource($availableWithPricing, $request);
