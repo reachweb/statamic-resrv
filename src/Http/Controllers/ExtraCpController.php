@@ -47,6 +47,7 @@ class ExtraCpController extends Controller
             'name' => 'required',
             'slug' => 'required',
             'category_id' => 'nullable|integer|exists:resrv_extra_categories,id',
+            'description' => 'sometimes',
             'price' => 'required|numeric',
             'price_type' => 'required',
             'custom' => 'required_if:price_type,custom',
