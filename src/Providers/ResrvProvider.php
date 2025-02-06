@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Providers;
 
+use Illuminate\Console\Application as Artisan;
 use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\CouponUpdated;
@@ -186,6 +187,11 @@ class ResrvProvider extends AddonServiceProvider
         $this->bootPermissions();
 
         $this->bootHooks();
+
+        // Register commands if running in console
+        Artisan::starting(function ($artisan) {
+            $artisan->resolveCommands($this->commands);
+        });
     }
 
     private function createNavigation(): void
