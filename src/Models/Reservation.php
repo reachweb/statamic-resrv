@@ -105,7 +105,7 @@ class Reservation extends Model
     {
         $entry = Entry::find($this->item_id);
 
-        return $entry ? $entry->toAugmentedArray(['title', 'permalink', 'api_url']) : $this->emptyEntry();
+        return $entry ? $entry->toAugmentedArray(['id', 'title', 'slug', 'url']) : $this->emptyEntry();
     }
 
     public function options()
