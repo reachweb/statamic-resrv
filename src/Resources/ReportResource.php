@@ -21,7 +21,6 @@ class ReportResource extends ResourceCollection
             'avg_revenue' => Price::create($this->report->avgConfirmedReservations())->format(),
             'top_seller_items' => $this->report->topSellerItems(),
             'top_seller_extras' => $this->report->topSellerExtras(),
-            'top_seller_starting_locations' => $this->report->topStartLocations(),
         ];
 
         return $data;

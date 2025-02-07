@@ -47,7 +47,7 @@ class Report
         $items->transform(function ($item) {
             return [
                 'title' => $item->entry['title'],
-                'api_url' => $item->entry['api_url'],
+                'api_url' => $item->entry['url'],
                 'reservations' => (int) $item->occurrences,
                 'total_revenue' => round($this->reservations->where('item_id', $item->item_id)->sum(function ($reservation) {
                     return $reservation->price->format();
@@ -78,23 +78,6 @@ class Report
         return $extras;
     }
 
-    public function topStartLocations()
-    {
-        if (config('resrv-config.enable_locations') == false) {
-            return null;
-        }
-        $locations = $this->getTopLocations();
-        $locations->transform(function ($item) {
-            return [
-                'title' => $item->location_start_data->name ?? '## Location deleted ##',
-                'reservations' => (int) $item->occurrences,
-                'percentage' => round($item->occurrences / $this->countConfirmedReservations(), 2),
-            ];
-        });
-
-        return $locations;
-    }
-
     protected function getTopItems()
     {
         return Reservation::select('item_id')
@@ -115,18 +98,6 @@ class Report
             ->addSelect(DB::raw('COUNT(reservation_id) AS occurrences'))
             ->whereIn('reservation_id', $this->reservations->pluck('id'))
             ->groupBy('extra_id')
-            ->orderBy('occurrences', 'DESC')
-            ->limit(10)
-            ->get('occurrences');
-    }
-
-    protected function getTopLocations()
-    {
-        return Reservation::select(DB::raw('COUNT(location_start) AS occurrences', 'location_start'))
-            ->whereDate('date_start', '>=', $this->date_start)
-            ->whereDate('date_start', '<=', $this->date_end)
-            ->where('status', 'confirmed')
-            ->groupBy('location_start')
             ->orderBy('occurrences', 'DESC')
             ->limit(10)
             ->get('occurrences');
