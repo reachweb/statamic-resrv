@@ -127,15 +127,6 @@ trait HandlesAvailabilityQueries
 
         $entry = $this->getDefaultSiteEntry($this->entry)->id();
 
-        return app(Availability::class)
-            ->where('statamic_id', $entry)
-            ->where('date', '>=', now()->startOfDay())
-            ->when($this->advanced && $this->data->advanced, function ($query) {
-                return $query->where('property', $this->data->advanced);
-            })
-            ->get(['date', 'available', 'price', 'property'])
-            ->groupBy('date')
-            ->map(fn ($item) => $item->first())
-            ->toArray();
+        return app(Availability::class)->getAvailabilityCalendar($entry, $this->advanced && $this->data->advanced ? $this->data->advanced : null);
     }
 }

@@ -428,4 +428,17 @@ class Availability extends Model implements AvailabilityContract
             $this->duration
         );
     }
+
+    public function getAvailabilityCalendar(string $id, ?string $advanced): array
+    {
+        return $this->where('statamic_id', $id)
+            ->where('date', '>=', now()->startOfDay())
+            ->when($advanced, function ($query) use ($advanced) {
+                return $query->where('property', $advanced);
+            })
+            ->get(['date', 'available', 'price', 'property'])
+            ->groupBy('date')
+            ->map(fn ($item) => $item->first())
+            ->toArray();
+    }
 }
