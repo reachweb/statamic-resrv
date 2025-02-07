@@ -22,7 +22,6 @@ use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
 use Statamic\Facades\Blueprint;
-use Statamic\Facades\Entry as StatamicEntry;
 
 class Availability extends Model implements AvailabilityContract
 {
@@ -366,10 +365,8 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getDisabledIds()
     {
-        $results = StatamicEntry::query()
-            ->where('resrv_availability', 'disabled')
-            ->where('published', true)
-            ->get('id')
+        $results = Entry::where('enabled', 0)
+            ->get('item_id')
             ->toArray();
 
         return Arr::flatten($results);
