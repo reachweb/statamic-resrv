@@ -45,7 +45,7 @@ trait HandlesExtrasQueries
     public function updateEnabledExtraPrices()
     {
         $this->enabledExtras->extras->transform(function ($extra) {
-            $extra['price'] = $this->extras->where('id', $extra['id'])->first()->price;
+            $extra['price'] = $this->extras->where('id', $extra['id'])->first()->price->format();
 
             return $extra;
         });
