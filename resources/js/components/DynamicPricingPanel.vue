@@ -183,24 +183,30 @@
                                     </div>
                                     <div class="w-full">
                                         <v-select 
-                                            v-model="submit.entries" 
+                                            v-model="submit.entries"
                                             label="title"
                                             multiple="multiple"
                                             :close-on-select="false"
+                                            :deselectFromDropdown="true"
                                             :options="entries" 
                                             :searchable="true"
-                                            :reduce="type => type.id" 
+                                            :reduce="type => type.item_id" 
                                         >
                                             <template #selected-option-container><i class="hidden"></i></template>
                                             <template #footer="{ deselect }" v-if="entriesLoaded">
                                                 <div class="vs__selected-options-outside flex flex-wrap">
                                                     <span v-for="id in submit.entries" :key="id" class="vs__selected mt-1">
                                                         {{ getEntryTitle(id) }}
-                                                        <button @click="deselect(id)" type="button" :aria-label="__('Deselect option')" class="vs__deselect">
+                                                        <button 
+                                                            @click="() => submit.entries = submit.entries.filter(entry => entry !== id)" 
+                                                            type="button" 
+                                                            :aria-label="__('Deselect option')" 
+                                                            class="vs__deselect"
+                                                        >
                                                             <span>×</span>
-                                                        </button>                 
+                                                        </button>
                                                     </span>
-                                                </div>                                        
+                                                </div>
                                             </template>
                                         </v-select>
                                     </div>
@@ -227,6 +233,7 @@
                                             label="name"
                                             multiple="multiple"
                                             :close-on-select="false"
+                                            :deselectFromDropdown="true"
                                             :options="extras" 
                                             :searchable="true"
                                             :reduce="type => type.id" 
@@ -510,7 +517,7 @@ export default {
             this.submit.extras = _.map(this.extras, (item) => item.id)
         },
         selectAllEntries() {
-            this.submit.entries = _.map(this.entries, (item) => item.id)
+            this.submit.entries = _.map(this.entries, (item) => item.item_id)
         },
         clearAllExtras() {
             this.submit.extras = []
@@ -519,7 +526,7 @@ export default {
             this.submit.entries = []
         },
         getEntryTitle(id) {
-            return this.entries.find(item => item.id == id).title
+            return this.entries.find(item => item.item_id == id).title
         },
         getExtraTitle(id) {
             return this.extras.find(item => item.id == id).name
