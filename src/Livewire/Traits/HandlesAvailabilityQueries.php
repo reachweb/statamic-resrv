@@ -9,16 +9,21 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
+use Statamic\Entries\EntryCollection;
+use Statamic\Extensions\Pagination\LengthAwarePaginator;
 
 trait HandlesAvailabilityQueries
 {
     use HandlesMultisiteIds;
 
-    public function getAvailability(Collection $data): array
+    public function getAvailability(Collection $data, EntryCollection|LengthAwarePaginator|null $entries = null): array
     {
         $searchData = $this->toResrvArray($data->first());
+
         try {
-            return app(Availability::class)->getAvailable($searchData);
+            $entryIds = $entries ? $this->getEntryIds($entries) : null;
+
+            return app(Availability::class)->getAvailable($searchData, $entryIds);
         } catch (AvailabilityException $exception) {
             return [
                 'message' => [
@@ -28,6 +33,15 @@ trait HandlesAvailabilityQueries
                 'request' => $searchData,
             ];
         }
+    }
+
+    protected function getEntryIds(EntryCollection|LengthAwarePaginator $entries): array
+    {
+        if ($entries instanceof LengthAwarePaginator) {
+            return collect($entries->items())->pluck('id')->toArray();
+        }
+
+        return $entries->pluck('id')->toArray();
     }
 
     public function queryBaseAvailabilityForEntry(): array

@@ -18,14 +18,20 @@ trait HandlesAvailabilityHooks
                 return $next($entries);
             }
 
-            $result = $instance->getAvailability($searchData);
+            // For some reason if we don't clone the entries, the live_availability
+            // will be not be set on the original entries
+            $clonedEntries = $entries->map(function ($entry) {
+                return clone $entry;
+            });
 
+            $result = $instance->getAvailability($searchData, $clonedEntries);
             if (data_get($result, 'message.status') === false) {
                 return $next($entries);
             }
 
             $entries->each(function ($entry) use ($result) {
                 if ($data = data_get($result, 'data.'.$entry->id(), false)) {
+
                     if ($data->count() === 1) {
                         $data = $data->first();
                     }

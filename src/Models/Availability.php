@@ -99,13 +99,13 @@ class Availability extends Model implements AvailabilityContract
         });
     }
 
-    public function getAvailable($data)
+    public function getAvailable($data, $entries = null)
     {
         ExpireReservations::dispatchSync();
 
         $this->initiateAvailability($data);
 
-        return $this->getAvailabilityCollection()->resolve();
+        return $this->getAvailabilityCollection($entries)->resolve();
     }
 
     public function getAvailabilityForEntry($data, $statamic_id)
@@ -237,11 +237,13 @@ class Availability extends Model implements AvailabilityContract
         );
     }
 
-    protected function getAvailabilityCollection()
+    protected function getAvailabilityCollection(?array $entries = null)
     {
         $request = $this->requestCollection();
+        $available = $this->availableForDates();
 
-        $availableWithPricing = $this->availableForDates()
+        $availableWithPricing = $available
+            ->when($entries, fn ($query) => $query->whereIn('statamic_id', $entries))
             ->groupBy('statamic_id')
             ->map(function ($items) {
                 return $items->map(fn ($item) => $this->populateAvailability($item))
