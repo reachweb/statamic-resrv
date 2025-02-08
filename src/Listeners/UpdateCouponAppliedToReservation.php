@@ -23,7 +23,7 @@ class UpdateCouponAppliedToReservation
             ->select('resrv_reservation_dynamic_pricing.order')
             ->max('resrv_reservation_dynamic_pricing.order') ?? 0;
 
-        if ($event->reservation->dynamicPricings()->where('id', $coupon->id)->exists()) {
+        if ($event->reservation->dynamicPricings()->where('id', $coupon->id)->count() > 0) {
             $event->reservation->dynamicPricings()->updateExistingPivot($coupon->id, [
                 'data' => json_encode($coupon),
                 'order' => $order + 1,
