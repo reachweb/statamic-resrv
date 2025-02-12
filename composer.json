@@ -28,7 +28,7 @@
         "laravel/framework": "^10.0 || ^11.00",
         "illuminate/support": "^10.0 || ^11.0",
         "statamic/cms": "^5.0.0",
-        "stripe/stripe-php": "^7.77",
+        "stripe/stripe-php": "^16.0",
         "moneyphp/money": "^4.0",
         "spatie/simple-excel": "^3.2",
         "edalzell/forma": "^3.0",
