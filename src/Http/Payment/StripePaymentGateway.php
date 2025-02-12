@@ -10,6 +10,8 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Models\Reservation;
 use Stripe\Event;
+use Stripe\Exception\SignatureVerificationException;
+use Stripe\Exception\UnexpectedValueException;
 use Stripe\PaymentIntent;
 use Stripe\Refund;
 use Stripe\Stripe;
@@ -25,6 +27,9 @@ class StripePaymentGateway implements PaymentInterface
             'amount' => $payment->raw(),
             'currency' => Str::lower(config('resrv-config.currency_isoCode')),
             'metadata' => array_merge(['reservation_id' => $reservation->id], $this->filterCustomerData($data)),
+            'automatic_payment_methods' => [
+                'enabled' => true,
+            ],
         ]);
 
         return $paymentIntent;
@@ -36,6 +41,7 @@ class StripePaymentGateway implements PaymentInterface
         try {
             $attemptRefund = Refund::create([
                 'payment_intent' => $reservation->payment_id,
+                'reverse_transfer' => false,
             ]);
         } catch (\Stripe\Exception\InvalidRequestException $exception) {
             throw new RefundFailedException($exception->getMessage());
@@ -148,10 +154,17 @@ class StripePaymentGateway implements PaymentInterface
 
         try {
             $event = Webhook::constructEvent(
-                $request->getContent(), $sig_header, config('resrv-config.stripe_webhook_secret')
+                $request->getContent(),
+                $sig_header,
+                config('resrv-config.stripe_webhook_secret'),
+                null,
+                false
             );
-        } catch (\Stripe\Exception\SignatureVerificationException $e) {
+        } catch (SignatureVerificationException $e) {
             // Invalid signature
+            abort(403);
+        } catch (UnexpectedValueException $e) {
+            // Invalid payload
             abort(403);
         }
 
