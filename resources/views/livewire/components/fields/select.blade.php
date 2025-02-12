@@ -13,9 +13,11 @@
         @endif
     >
         <option selected>{{ __('Please select') }}</option>
+        @if (array_key_exists('options', $field))
         @foreach ($field['options'] as $option)
         <option value="{{ $option['key'] }}">{{ __($option['value']) }}</option>
         @endforeach
+        @endif
     </select>
     @if (array_key_exists('instructions', $field))
     <p id="{{ $field['handle'] }}-explanation" class="mt-2 text-gray-500">

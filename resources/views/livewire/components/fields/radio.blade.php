@@ -4,12 +4,14 @@
     <label for="{{ $field['handle'] }}" class="block mb-2 font-medium text-gray-900">
         {{ __($field['display']) }}
     </label>
-    @foreach ($field['options'] as $key => $label)
-    <div class="flex items-center mb-4">
-        <input type="radio" wire:model="form.{{ $field['handle'] }}" id="{{ $key }}" value="{{ $key }}" class="form-radio w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 ">
-        <label for="{{ $key }}" class="ms-2 font-medium text-gray-900">{{ $label }}</label>
-    </div>
-    @endforeach
+    @if (array_key_exists('options', $field))
+        @foreach ($field['options'] as $key => $label)
+        <div class="flex items-center mb-4">
+            <input type="radio" wire:model="form.{{ $field['handle'] }}" id="{{ $key }}" value="{{ $key }}" class="form-radio w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500 ">
+            <label for="{{ $key }}" class="ms-2 font-medium text-gray-900">{{ $label }}</label>
+        </div>
+        @endforeach
+    @endif
     @if (array_key_exists('instructions', $field))
     <p id="{{ $field['handle'] }}-explanation" class="mt-2 text-gray-500">
         {{ __($field['instructions']) }}
