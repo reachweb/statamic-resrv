@@ -58,7 +58,7 @@ Alpine.data('datepicker', () => ({
     minPeriod: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
     maxPeriod: {{ config('resrv-config.maximum_reservation_period_in_days', 30) }},
     disabledDays: @json($disabledDays),
-    showAvailaiblityOnCalendar: $wire.showAvailaiblityOnCalendar,
+    showAvailabilityOnCalendar: $wire.showAvailabilityOnCalendar,
     availabilityCalendar: [],
     
     get isDatesEmpty() {
@@ -68,7 +68,7 @@ Alpine.data('datepicker', () => ({
     async init() {
         const minDate = dayjs().add({{ config('resrv-config.minimum_days_before') }}, 'day').format('YYYY-MM-DD');
 
-        if (this.showAvailaiblityOnCalendar !== false) {
+        if (this.showAvailabilityOnCalendar !== false) {
             if (this.advanced !== false && this.advancedSelected === null) {
                 this.availabilityCalendar = [];
             } else {
@@ -77,9 +77,9 @@ Alpine.data('datepicker', () => ({
         }
 
         this.$watch('advancedSelected', async (value, oldValue) => {
-            if (this.showAvailaiblityOnCalendar !== false && value !== null) {
+            if (this.showAvailabilityOnCalendar !== false && value !== null) {
                 this.availabilityCalendar = await $wire.availabilityCalendar();    
-            } else if (this.showAvailaiblityOnCalendar !== false && value === null) {
+            } else if (this.showAvailabilityOnCalendar !== false && value === null) {
                 this.availabilityCalendar = [];
             }
             this.calendar.update({
@@ -100,7 +100,7 @@ Alpine.data('datepicker', () => ({
             positionToInput: 'auto',
 
             onCreateDateEls: (self, dateEl) => {
-                if (this.showAvailaiblityOnCalendar !== false) {
+                if (this.showAvailabilityOnCalendar !== false) {
                     this.addPriceToEachDate(dateEl);
                 }
                 if (this.disabledDays !== false) {

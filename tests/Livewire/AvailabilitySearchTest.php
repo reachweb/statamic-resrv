@@ -362,9 +362,9 @@ class AvailabilitySearchTest extends TestCase
     {
         $component = Livewire::test(AvailabilitySearch::class, [
             'entry' => $this->entries->first()->id(),
-            'showAvailaiblityOnCalendar' => true,
+            'showAvailabilityOnCalendar' => true,
         ])
-            ->assertSet('showAvailaiblityOnCalendar', true)
+            ->assertSet('showAvailabilityOnCalendar', true)
             ->call('availabilityCalendar');
 
         $calendar = $component->effects['returns'][0];
@@ -382,9 +382,9 @@ class AvailabilitySearchTest extends TestCase
     {
         $component = Livewire::test(AvailabilitySearch::class, [
             'entry' => $this->advancedEntries->first()->id(),
-            'showAvailaiblityOnCalendar' => true,
+            'showAvailabilityOnCalendar' => true,
         ])
-            ->assertSet('showAvailaiblityOnCalendar', true)
+            ->assertSet('showAvailabilityOnCalendar', true)
             ->set('data.dates', [
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
