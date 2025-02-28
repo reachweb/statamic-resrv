@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "40d5bd65b5ac0c99d0c3171677692f44",
+    "content-hash": "3810e3538a635276522c18130dd6b82a",
     "packages": [
         {
             "name": "ajthinking/archetype",
@@ -1563,73 +1563,6 @@
             "time": "2023-10-19T13:18:49+00:00"
         },
         {
-            "name": "jonassiewertsen/statamic-livewire",
-            "version": "v3.6.0",
-            "source": {
-                "type": "git",
-                "url": "https://github.com/jonassiewertsen/statamic-livewire.git",
-                "reference": "580f26d675def04555bb1d0705f7cd163c68200a"
-            },
-            "dist": {
-                "type": "zip",
-                "url": "https://api.github.com/repos/jonassiewertsen/statamic-livewire/zipball/580f26d675def04555bb1d0705f7cd163c68200a",
-                "reference": "580f26d675def04555bb1d0705f7cd163c68200a",
-                "shasum": ""
-            },
-            "require": {
-                "illuminate/support": "^10.0|^11.0",
-                "livewire/livewire": "^3.0",
-                "php": "^8.1",
-                "statamic/cms": "^4.23.2|^5.0"
-            },
-            "type": "statamic-addon",
-            "extra": {
-                "statamic": {
-                    "name": "Livewire",
-                    "description": "A Laravel Livewire integration for Statamics Antlers engine"
-                },
-                "laravel": {
-                    "providers": [
-                        "Jonassiewertsen\\Livewire\\ServiceProvider"
-                    ]
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "Jonassiewertsen\\Livewire\\": "src"
-                }
-            },
-            "notification-url": "https://packagist.org/downloads/",
-            "license": [
-                "MIT"
-            ],
-            "authors": [
-                {
-                    "name": "Jonas Siewertsen",
-                    "homepage": "https://jonassiewertsen.com"
-                }
-            ],
-            "description": "A Laravel Livewire integration for Statamics Antlers engine.",
-            "keywords": [
-                "addon",
-                "laravel",
-                "livewire",
-                "statamic"
-            ],
-            "support": {
-                "docs": "https://github.com/jonassiewertsen/statamic-livewire",
-                "issues": "https://github.com/jonassiewertsen/statamic-livewire/issues",
-                "source": "https://github.com/jonassiewertsen/statamic-livewire/tree/v3.6.0"
-            },
-            "funding": [
-                {
-                    "url": "https://github.com/jonassiewertsen",
-                    "type": "github"
-                }
-            ],
-            "time": "2024-06-26T18:52:19+00:00"
-        },
-        {
             "name": "laragraph/utils",
             "version": "v2.1.0",
             "source": {
@@ -2543,24 +2476,24 @@
         },
         {
             "name": "livewire/livewire",
-            "version": "v3.5.6",
+            "version": "v3.6.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/livewire/livewire.git",
-                "reference": "597a2808d8d3001cc3ed5ce89a6ebab00f83b80f"
+                "reference": "4c66b569cb729ba9b2f4a3c4e79f50fd8f2b71d1"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/livewire/livewire/zipball/597a2808d8d3001cc3ed5ce89a6ebab00f83b80f",
-                "reference": "597a2808d8d3001cc3ed5ce89a6ebab00f83b80f",
+                "url": "https://api.github.com/repos/livewire/livewire/zipball/4c66b569cb729ba9b2f4a3c4e79f50fd8f2b71d1",
+                "reference": "4c66b569cb729ba9b2f4a3c4e79f50fd8f2b71d1",
                 "shasum": ""
             },
             "require": {
-                "illuminate/database": "^10.0|^11.0",
-                "illuminate/routing": "^10.0|^11.0",
-                "illuminate/support": "^10.0|^11.0",
-                "illuminate/validation": "^10.0|^11.0",
-                "laravel/prompts": "^0.1.24",
+                "illuminate/database": "^10.0|^11.0|^12.0",
+                "illuminate/routing": "^10.0|^11.0|^12.0",
+                "illuminate/support": "^10.0|^11.0|^12.0",
+                "illuminate/validation": "^10.0|^11.0|^12.0",
+                "laravel/prompts": "^0.1.24|^0.2|^0.3",
                 "league/mime-type-detection": "^1.9",
                 "php": "^8.1",
                 "symfony/console": "^6.0|^7.0",
@@ -2568,22 +2501,22 @@
             },
             "require-dev": {
                 "calebporzio/sushi": "^2.1",
-                "laravel/framework": "^10.15.0|^11.0",
+                "laravel/framework": "^10.15.0|^11.0|^12.0",
                 "mockery/mockery": "^1.3.1",
-                "orchestra/testbench": "^8.21.0|^9.0",
-                "orchestra/testbench-dusk": "^8.24|^9.1",
-                "phpunit/phpunit": "^10.4",
+                "orchestra/testbench": "^8.21.0|^9.0|^10.0",
+                "orchestra/testbench-dusk": "^8.24|^9.1|^10.0",
+                "phpunit/phpunit": "^10.4|^11.5",
                 "psy/psysh": "^0.11.22|^0.12"
             },
             "type": "library",
             "extra": {
                 "laravel": {
-                    "providers": [
-                        "Livewire\\LivewireServiceProvider"
-                    ],
                     "aliases": {
                         "Livewire": "Livewire\\Livewire"
-                    }
+                    },
+                    "providers": [
+                        "Livewire\\LivewireServiceProvider"
+                    ]
                 }
             },
             "autoload": {
@@ -2607,7 +2540,7 @@
             "description": "A front-end framework for Laravel.",
             "support": {
                 "issues": "https://github.com/livewire/livewire/issues",
-                "source": "https://github.com/livewire/livewire/tree/v3.5.6"
+                "source": "https://github.com/livewire/livewire/tree/v3.6.0"
             },
             "funding": [
                 {
@@ -2615,7 +2548,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2024-08-19T11:52:18+00:00"
+            "time": "2025-02-26T00:57:32+00:00"
         },
         {
             "name": "maennchen/zipstream-php",
@@ -2697,6 +2630,80 @@
                 }
             ],
             "time": "2023-06-21T14:59:35+00:00"
+        },
+        {
+            "name": "marcorieser/statamic-livewire",
+            "version": "v4.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/marcorieser/statamic-livewire.git",
+                "reference": "ffc2728adada9e2ae1f2791510e8737157ec4b15"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/marcorieser/statamic-livewire/zipball/ffc2728adada9e2ae1f2791510e8737157ec4b15",
+                "reference": "ffc2728adada9e2ae1f2791510e8737157ec4b15",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/support": "^10.0|^11.0|^12.0",
+                "livewire/livewire": "^3.0",
+                "php": "^8.1",
+                "statamic/cms": "^4.23.2|^5.0"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.21"
+            },
+            "type": "statamic-addon",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "MarcoRieser\\Livewire\\ServiceProvider"
+                    ]
+                },
+                "statamic": {
+                    "name": "Livewire",
+                    "description": "A Laravel Livewire integration for Statamics Antlers engine"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "MarcoRieser\\Livewire\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Marco Rieser",
+                    "homepage": "https://rieser.dev"
+                },
+                {
+                    "name": "Jonas Siewertsen",
+                    "homepage": "https://jonassiewertsen.com"
+                }
+            ],
+            "description": "A Laravel Livewire integration for Statamics Antlers engine.",
+            "keywords": [
+                "addon",
+                "laravel",
+                "livewire",
+                "statamic"
+            ],
+            "support": {
+                "docs": "https://github.com/marcorieser/statamic-livewire",
+                "issues": "https://github.com/marcorieser/statamic-livewire/issues",
+                "source": "https://github.com/marcorieser/statamic-livewire/tree/v4.1.0"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/marcorieser",
+                    "type": "github"
+                }
+            ],
+            "time": "2025-02-26T12:41:49+00:00"
         },
         {
             "name": "michelf/php-smartypants",
