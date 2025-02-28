@@ -35,7 +35,7 @@ class AvailabilitySearch extends Component
     public ?string $entry = null;
 
     #[Locked]
-    public bool $showAvailaiblityOnCalendar = false;
+    public bool $showAvailabilityOnCalendar = false;
 
     public array $overrideProperties;
 
@@ -65,7 +65,7 @@ class AvailabilitySearch extends Component
 
     public function availabilityCalendar(): array
     {
-        if ($this->showAvailaiblityOnCalendar === false) {
+        if ($this->showAvailabilityOnCalendar === false) {
             return [];
         }
 
