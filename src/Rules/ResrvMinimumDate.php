@@ -20,7 +20,7 @@ class ResrvMinimumDate implements ValidationRule
             $value = Carbon::create($value);
             $date = Carbon::create($value->year, $value->month, $value->day, 0, 0, 0);
 
-            if ((int) abs($date->diffInDays(Carbon::now()->startOfDay())) < config('resrv-config.minimum_days_before')) {
+            if ((int) $date->diffInDays(Carbon::now()->startOfDay(), true) < config('resrv-config.minimum_days_before')) {
                 $fail('The :attribute is closer than allowed.');
             }
         }

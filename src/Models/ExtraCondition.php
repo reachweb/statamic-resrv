@@ -255,7 +255,7 @@ class ExtraCondition extends Model
     {
         $date_start = new Carbon($data['date_start']);
         $date_end = new Carbon($data['date_end']);
-        $duration = $date_start->startOfDay()->diffInDays($date_end->startOfDay());
+        $duration = (int) $date_start->startOfDay()->diffInDays($date_end->startOfDay(), true);
 
         return $this->compare($duration, $condition->comparison, $condition->value);
     }

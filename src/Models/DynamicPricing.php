@@ -319,7 +319,7 @@ class DynamicPricing extends Model
             }
         }
         if ($pricing->condition_type == 'days_to_reservation') {
-            if ($this->compare(Carbon::parse($date_start)->diffInDays(now()->setHour(0)), $pricing->condition_comparison, $pricing->condition_value)) {
+            if ($this->compare((int) Carbon::parse($date_start)->diffInDays(now()->setHour(0), true), $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }
         }
@@ -354,7 +354,7 @@ class DynamicPricing extends Model
         }
 
         if ($pricing->date_include == 'most') {
-            $duration = $date_start->startOfDay()->diffInDays($date_end->startOfDay());
+            $duration = (int) $date_start->startOfDay()->diffInDays($date_end->startOfDay(), true);
             $reservationPeriod = CarbonPeriod::create($date_start, $date_end, CarbonPeriod::EXCLUDE_END_DATE);
             $dynamicPricingPeriod = CarbonPeriod::create($pricing->date_start, $pricing->date_end);
             $daysIncluded = 0;

@@ -74,11 +74,11 @@ trait HandlesPricing
 
         if ($this instanceof \Reach\StatamicResrv\Livewire\AvailabilityResults) {
             $dateStart = Carbon::parse($this->data->dates['date_start']);
-            $freeCancellationDays = Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay());
+            $freeCancellationDays = (int) Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay(), true);
         }
         if ($this instanceof \Reach\StatamicResrv\Livewire\Checkout) {
             $dateStart = Carbon::parse($this->reservation->date_start);
-            $freeCancellationDays = Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay());
+            $freeCancellationDays = (int) Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay(), true);
         }
         if ($freeCancellationDays !== false && $freeCancellationDays <= $freeCancellation) {
             return false;

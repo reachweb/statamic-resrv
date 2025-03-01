@@ -69,7 +69,7 @@ class AvailabilityRepository
         $totalDays = $query->count();
         $daysWithPrices = $query->whereNotNull('price')->count();
 
-        $expectedDays = (int) Carbon::parse($date_start)->diffInDays(Carbon::parse($date_end)->addDay());
+        $expectedDays = (int) Carbon::parse($date_start)->diffInDays(Carbon::parse($date_end)->addDay(), true);
 
         return $totalDays > 0 && $totalDays === $daysWithPrices && $totalDays === $expectedDays;
     }

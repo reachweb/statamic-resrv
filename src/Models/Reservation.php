@@ -144,7 +144,7 @@ class Reservation extends Model
 
     public function duration()
     {
-        return $this->date_start->startOfDay()->diffInDays($this->date_end->startOfDay());
+        return (int) $this->date_start->startOfDay()->diffInDays($this->date_end->startOfDay(), true);
     }
 
     public function extraCharges()
