@@ -64,12 +64,24 @@ class AvailabilitySearchTest extends TestCase
 
     public function test_cannot_set_dates_closer_than_allowed()
     {
-        Config::set('resrv-config.minimum_days_before', 1);
+        Config::set('resrv-config.minimum_days_before', 7);
 
         Livewire::test(AvailabilitySearch::class)
             ->set('data.dates', [
-                'date_start' => $this->date,
-                'date_end' => $this->date->copy()->add(1, 'day'),
+                'date_start' => $this->date->copy()->add(4, 'day'),
+                'date_end' => $this->date->copy()->add(5, 'day'),
+            ])
+            ->assertHasErrors(['data.dates.date_start'])
+            ->assertNotDispatched('availability-search-updated')
+            ->assertStatus(200);
+    }
+
+    public function test_cannot_set_dates_before_now()
+    {
+        Livewire::test(AvailabilitySearch::class)
+            ->set('data.dates', [
+                'date_start' => $this->date->copy()->sub(4, 'day'),
+                'date_end' => $this->date->copy()->sub(5, 'day'),
             ])
             ->assertHasErrors(['data.dates.date_start'])
             ->assertNotDispatched('availability-search-updated')
