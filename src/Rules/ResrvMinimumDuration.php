@@ -15,7 +15,7 @@ class ResrvMinimumDuration implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $duration = Carbon::parse($value['date_start'])->startOfDay()->diffInDays(Carbon::parse($value['date_end'])->startOfDay());
+        $duration = (int) abs(Carbon::parse($value['date_start'])->startOfDay()->diffInDays(Carbon::parse($value['date_end'])->startOfDay()));
 
         if ($duration > config('resrv-config.maximum_reservation_period_in_days')) {
             $fail(__('The period you selected exceeds the maximum allowed reservation period.'));
