@@ -18,15 +18,15 @@
             <div class="mb-1">
                 <div class="mb-1">
                     <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.from')) }}:</span> 
-                    <span class=font-medium>{{ Carbon::parse($data->dates['date_start'])->format('D d M Y') }}</span>
+                    <span class="font-medium">{{ Carbon::parse($data->dates['date_start'])->format('D d M Y') }}</span>
                 </div>
                 <div class="mb-1">
                     <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.to')) }}:</span> 
-                    <span class=font-medium>{{ Carbon::parse($data->dates['date_end'])->format('D d M Y') }}</span>
+                    <span class="font-medium">{{ Carbon::parse($data->dates['date_end'])->format('D d M Y') }}</span>
                 </div>
                 <div class="mb-1">
                     <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.duration')) }}:</span> 
-                    <span class=font-medium>{{ data_get($availability, 'request.days') }} {{ trans('statamic-resrv::frontend.days') }}</span>
+                    <span class="font-medium">{{ data_get($availability, 'request.days') }} {{ trans('statamic-resrv::frontend.days') }}</span>
                 </div>
             </div>
         </div>
@@ -34,13 +34,20 @@
             @include('statamic-resrv::livewire.components.partials.availability-results-pricing')
         </div>
     </div>
-    <div class="mt-6 xl:mt-8">
+    <div class="mt-6 xl:mt-8 flex gap-x-2">
         <button 
             type="button" 
-            class="w-full px-6 py-3.5 text-base font-medium text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg text-center"
+            class="flex-1 px-6 py-3.5 text-base font-medium text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg text-center"
             wire:click="checkout()"
         >
             {{ trans('statamic-resrv::frontend.bookNow') }}
+        </button>
+        <button 
+            type="button" 
+            class="px-6 py-3.5 text-base font-medium text-blue-700 bg-white border border-blue-700 hover:bg-blue-50 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg text-center"
+            wire:click="addToCart()"
+        >
+            {{ trans('statamic-resrv::frontend.addToCart') }}
         </button>
     </div>
     @elseif (data_get($availability, 'request.property') === 'any')

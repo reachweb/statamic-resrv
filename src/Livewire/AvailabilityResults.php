@@ -183,6 +183,21 @@ class AvailabilityResults extends Component
         }
     }
 
+    public function addToCart(): void
+    {
+        try {
+            $this->validateAvailabilityAndPrice();
+            
+            $this->dispatch('add-to-cart', 
+                entryId: $this->entry->id(), 
+                availabilityData: $this->data,
+                results: $this->availability
+            );
+        } catch (AvailabilityException $exception) {
+            $this->addError('availability', $exception->getMessage());
+        }
+    }
+
     public function render()
     {
         return view('statamic-resrv::livewire.'.$this->view);
