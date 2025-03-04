@@ -43,6 +43,11 @@ class Reservation extends Model
 
     public function entry()
     {
+        // If this is a parent reservation with children, handle it specially
+        if ($this->type === 'parent' && $this->childs()->count() > 0) {
+
+        }
+
         return Entry::find($this->item_id) ?? $this->emptyEntry();
     }
 
@@ -103,6 +108,11 @@ class Reservation extends Model
 
     public function getEntryAttribute()
     {
+        // If this is a parent reservation with children, return a special entry
+        if ($this->type === 'parent' && $this->childs()->count() > 0) {
+            return $this->parentFakeEntry();
+        }
+
         $entry = Entry::find($this->item_id);
 
         return $entry ? $entry->toAugmentedArray(['id', 'title', 'slug', 'url']) : $this->emptyEntry();
@@ -403,5 +413,30 @@ class Reservation extends Model
             'api_url' => '## Entry deleted ##',
             'permalink' => '#',
         ];
+    }
+
+    protected function parentFakeEntry()
+    {
+        return [
+            'id' => 'parent',
+            'title' => 'Multiple Items',
+            'url' => '#',
+            'get' => null,
+            'blueprint' => null,
+            'collection' => [
+                'handle' => 'parent',
+            ],
+        ];
+    }
+
+    public function getAllItems()
+    {
+        if ($this->type !== 'parent') {
+            return collect([$this]);
+        }
+
+        return $this->childs()->with('reservation')->get()->map(function ($child) {
+            return $child->reservation;
+        });
     }
 }

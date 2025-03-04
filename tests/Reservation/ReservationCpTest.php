@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
 use Reach\StatamicResrv\Models\ChildReservation;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -50,15 +51,16 @@ class ReservationCpTest extends TestCase
     public function test_can_show_child_reservations()
     {
         $item = $this->makeStatamicItem();
+        $entry = Entry::whereItemId($item->id());
 
         $reservation = Reservation::factory([
             'type' => 'parent',
             'customer' => ['email' => 'test@test.com'],
-            'item_id' => $item->id(),
         ])->create();
 
         $child = ChildReservation::factory([
             'reservation_id' => $reservation->id,
+            'item_id' => $entry->id,
         ])->create();
 
         $response = $this->get(cp_route('resrv.reservation.show', $reservation->id));

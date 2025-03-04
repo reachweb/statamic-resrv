@@ -23,9 +23,14 @@ class ChildReservationFactory extends Factory
     {
         return [
             'reservation_id' => '',
+            'item_id' => '',
             'date_start' => today()->toIso8601String(),
             'date_end' => today()->add(3, 'day')->toIso8601String(),
             'quantity' => 1,
+            'property' => '',
+            'price' => 100.00,
+            'payment' => 30.00,
+            'total' => 100.00,
         ];
     }
 }

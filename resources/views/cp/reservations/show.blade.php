@@ -77,6 +77,9 @@
         </div>
         @foreach ($reservation->childs as $child)
         <div class="card px-6 py-4 mb-6 divide-y">            
+            <div class="my-2">
+                {{ $child->entry->title }}
+            </div>
             <div class="grid grid-cols-2 my-2">
                 <div>
                     <div class="font-bold mb-2">{{ __("Start date") }}</div>
