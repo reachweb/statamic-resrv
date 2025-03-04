@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -45,7 +46,7 @@ class Reservation extends Model
     {
         // If this is a parent reservation with children, handle it specially
         if ($this->type === 'parent' && $this->childs()->count() > 0) {
-
+            return $this->parentFakeEntry();
         }
 
         return Entry::find($this->item_id) ?? $this->emptyEntry();
@@ -56,14 +57,24 @@ class Reservation extends Model
         return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee');
     }
 
-    public function childs()
+    public function childs(): HasMany
     {
         return $this->hasMany(ChildReservation::class);
     }
 
-    public function dynamicPricings()
+    public function dynamicPricings(): BelongsToMany
     {
         return $this->belongsToMany(DynamicPricing::class, 'resrv_reservation_dynamic_pricing')->withPivot('data');
+    }
+
+    public function options(): BelongsToMany
+    {
+        return $this->belongsToMany(Option::class, 'resrv_reservation_option')->withPivot('value')->withTrashed();
+    }
+
+    public function extras(): BelongsToMany
+    {
+        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot(['quantity', 'price'])->withTrashed();
     }
 
     public function getPriceAttribute($value)
@@ -116,16 +127,6 @@ class Reservation extends Model
         $entry = Entry::find($this->item_id);
 
         return $entry ? $entry->toAugmentedArray(['id', 'title', 'slug', 'url']) : $this->emptyEntry();
-    }
-
-    public function options()
-    {
-        return $this->belongsToMany(Option::class, 'resrv_reservation_option')->withPivot('value')->withTrashed();
-    }
-
-    public function extras()
-    {
-        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot(['quantity', 'price'])->withTrashed();
     }
 
     public function scopeFindByPaymentId($query, $id)
@@ -341,20 +342,20 @@ class Reservation extends Model
         return Form::find($formHandle)->fields()->values();
     }
 
-    public function checkoutForm($entry = null)
-    {
-        $form = $this->getForm($entry);
-        // If we have a country field add the names automatically
-        foreach ($form as $index => $field) {
-            if ($field->handle() == 'country') {
-                $config = $field->config();
-                $config['options'] = trans('statamic-resrv::countries');
-                $field->setConfig($config);
-            }
-        }
+    // public function checkoutForm($entry = null)
+    // {
+    //     $form = $this->getForm($entry);
+    //     // If we have a country field add the names automatically
+    //     foreach ($form as $index => $field) {
+    //         if ($field->handle() == 'country') {
+    //             $config = $field->config();
+    //             $config['options'] = trans('statamic-resrv::countries');
+    //             $field->setConfig($config);
+    //         }
+    //     }
 
-        return $form;
-    }
+    //     return $form;
+    // }
 
     public function checkoutFormFieldsArray($entry = null)
     {
