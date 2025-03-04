@@ -86,4 +86,32 @@ trait HandlesPricing
 
         return true;
     }
+
+    protected function calculateCartTotalPrice()
+    {
+        $total = Price::create(0);
+
+        foreach ($this->cart->items as $item) {
+            if (isset($item->results['data']['price'])) {
+                $itemPrice = Price::create($item->results['data']['price']);
+                $total = $total->add($itemPrice);
+            }
+        }
+
+        return $total->format();
+    }
+
+    protected function calculateCartPaymentAmount()
+    {
+        $total = Price::create(0);
+
+        foreach ($this->cart->items as $item) {
+            if (isset($item->results['data']['payment'])) {
+                $itemPayment = Price::create($item->results['data']['payment']);
+                $total = $total->add($itemPayment);
+            }
+        }
+
+        return $total->format();
+    }
 }

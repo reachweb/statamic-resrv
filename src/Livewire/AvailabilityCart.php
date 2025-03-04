@@ -14,7 +14,7 @@ use Reach\StatamicResrv\Models\Reservation;
 
 class AvailabilityCart extends Component
 {
-    use Traits\HandlesAvailabilityQueries, Traits\HandlesStatamicQueries;
+    use Traits\HandlesAvailabilityQueries, Traits\HandlesPricing, Traits\HandlesStatamicQueries;
 
     #[Session('resrv-cart')]
     public AvailabilityCartData $cart;
@@ -189,32 +189,6 @@ class AvailabilityCart extends Component
     protected function getCheckoutEntry()
     {
         return $this->getEntryById(config('resrv-config.checkout_entry'));
-    }
-
-    protected function calculateTotalPrice()
-    {
-        $total = 0;
-
-        foreach ($this->cart->items as $item) {
-            if (isset($item->results['data']['price'])) {
-                $total += (float) str_replace(',', '', $item->results['data']['price']);
-            }
-        }
-
-        return number_format($total, 2, '.', '');
-    }
-
-    protected function calculatePaymentAmount()
-    {
-        $total = 0;
-
-        foreach ($this->cart->items as $item) {
-            if (isset($item->results['data']['payment'])) {
-                $total += (float) str_replace(',', '', $item->results['data']['payment']);
-            }
-        }
-
-        return number_format($total, 2, '.', '');
     }
 
     public function render()

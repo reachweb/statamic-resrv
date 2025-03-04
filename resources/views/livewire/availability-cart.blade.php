@@ -27,10 +27,10 @@
         <div class="flex justify-between items-center mt-8 p-4 bg-gray-100 rounded-lg">
             <div>
                 <p class="text-lg font-bold">
-                    {{ trans('statamic-resrv::frontend.total') }}: {{ config('resrv-config.currency_symbol') . $this->calculateTotalPrice() }}
+                    {{ trans('statamic-resrv::frontend.total') }}: {{ config('resrv-config.currency_symbol') . $this->calculateCartTotalPrice() }}
                 </p>
                 <p class="text-sm text-gray-600">
-                    {{ trans('statamic-resrv::frontend.payableNow') }}: {{ config('resrv-config.currency_symbol') . $this->calculatePaymentAmount() }}
+                    {{ trans('statamic-resrv::frontend.payableNow') }}: {{ config('resrv-config.currency_symbol') . $this->calculateCartPaymentAmount() }}
                 </p>
             </div>
             <button 
