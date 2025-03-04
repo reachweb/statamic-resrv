@@ -30,7 +30,7 @@
                     {{ trans('statamic-resrv::frontend.total') }}: {{ config('resrv-config.currency_symbol') . $this->calculateTotalPrice() }}
                 </p>
                 <p class="text-sm text-gray-600">
-                    {{ trans('statamic-resrv::frontend.dueNow') }}: {{ config('resrv-config.currency_symbol') . $this->calculatePaymentAmount() }}
+                    {{ trans('statamic-resrv::frontend.payableNow') }}: {{ config('resrv-config.currency_symbol') . $this->calculatePaymentAmount() }}
                 </p>
             </div>
             <button 
