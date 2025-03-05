@@ -105,32 +105,6 @@ class AvailabilityCart extends Component
         return $this->getEntryById(config('resrv-config.checkout_entry'));
     }
 
-    protected function calculateCartTotalPrice()
-    {
-        $total = 0;
-
-        foreach ($this->cart->items as $item) {
-            if (isset($item->results['data']['price'])) {
-                $total += (float) str_replace(',', '', $item->results['data']['price']);
-            }
-        }
-
-        return number_format($total, 2, '.', '');
-    }
-
-    protected function calculateCartPaymentAmount()
-    {
-        $total = 0;
-
-        foreach ($this->cart->items as $item) {
-            if (isset($item->results['data']['payment'])) {
-                $total += (float) str_replace(',', '', $item->results['data']['payment']);
-            }
-        }
-
-        return number_format($total, 2, '.', '');
-    }
-
     public function render()
     {
         return view('statamic-resrv::livewire.availability-cart', [
