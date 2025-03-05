@@ -8,6 +8,7 @@ use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesReservationQueries
@@ -60,6 +61,42 @@ trait HandlesReservationQueries
             affiliate: $this->getAffiliateIfCookieExists(),
             coupon: session('resrv_coupon') ?? null,
         ));
+    }
+
+    public function createMultipleReservations(): void
+    {
+        $justDates = $this->cart->items->map(fn ($item) => $item->availabilityData['dates'])->flatten();
+
+        $mainReservation = Reservation::create(
+            [
+                'status' => ReservationStatus::PENDING,
+                'type' => ReservationTypes::PARENT,
+                'reference' => (new Reservation)->createRandomReference(),
+                'item_id' => 'parent',
+                'date_start' => $justDates->min(),
+                'date_end' => $justDates->max(),
+                'quantity' => $this->cart->items->reduce(fn ($carry, $item) => $carry + $item->availabilityData['quantity'], 0),
+                'property' => null,
+                'price' => $this->calculateCartTotalPrice(),
+                'payment' => $this->calculateCartPaymentAmount(),
+                'payment_id' => '',
+                'customer' => [],
+            ]
+        );
+
+        $childs = $this->cart->items->map(function ($item) {
+            return [
+                'item_id' => Entry::whereItemId($item->entryId)->id,
+                'date_start' => $item->availabilityData['dates']['date_start'],
+                'date_end' => $item->availabilityData['dates']['date_end'],
+                'quantity' => $item->availabilityData['quantity'],
+                'property' => $item->availabilityData['advanced'],
+                'price' => data_get($item->results, 'data.price'),
+                'payment' => data_get($item->results, 'data.payment'),
+            ];
+        });
+
+        $mainReservation->childs()->createMany($childs->toArray());
     }
 
     public function getAvailabilityDataFromReservation(): array

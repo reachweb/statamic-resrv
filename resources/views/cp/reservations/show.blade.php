@@ -77,10 +77,10 @@
         </div>
         @foreach ($reservation->childs as $child)
         <div class="card px-6 py-4 mb-6 divide-y">            
-            <div class="my-2">
+            <a class="my-4 text-xl" href="{{ $child->entry->getStatamicEntry()->url() }}" target="_blank">
                 {{ $child->entry->title }}
-            </div>
-            <div class="grid grid-cols-2 my-2">
+            </a>
+            <div class="grid grid-cols-2 my-4 pt-4">
                 <div>
                     <div class="font-bold mb-2">{{ __("Start date") }}</div>
                     <div>{{ $child->date_start->format('d-m-Y H:i') }}</div>
@@ -90,7 +90,7 @@
                     <div>{{ $child->date_end->format('d-m-Y H:i') }}</div>
                 </div>      
             </div>
-            <div class="grid grid-cols-2 my-2 pt-2">
+            <div class="grid grid-cols-2 my-4 pt-4">
                 @if (config('resrv-config.maximum_quantity') > 1)
                 <div>
                     <div class="font-bold mb-2">{{ __("Quantity") }}</div>
@@ -103,7 +103,17 @@
                     <div>{{ $child->getPropertyAttributeLabel() }}</div>
                 </div>
                 @endif
-            </div>          
+            </div>
+            <div class="grid grid-cols-2 my-4 pt-4">
+                <div>
+                    <div class="font-bold mb-2">{{ __("Payment") }}</div>
+                    <div>{{ config('resrv-config.currency_symbol') }} {{ $child->payment->format() }}</div>
+                </div>
+                <div>
+                    <div class="font-bold mb-2">{{ __("Reservation price") }}</div>
+                    <div>{{ config('resrv-config.currency_symbol') }} {{ $child->payment->format() }}</div>
+                </div>      
+            </div>      
         </div>
         @endforeach
     </div>

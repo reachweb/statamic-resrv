@@ -85,6 +85,14 @@ trait HandlesAvailabilityQueries
         }
     }
 
+    // Probably unneeded duplicate code but bear with me
+    public function validateMultipleAvailabilityAndPrice(array $searchData, string $entryId)
+    {
+        if (app(Availability::class)->confirmAvailabilityAndPrice($searchData, $entryId) === false) {
+            throw new AvailabilityException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
+        }
+    }
+
     protected function generateDatePeriods(): Collection
     {
         $dateStart = Carbon::parse($this->data->dates['date_start']);

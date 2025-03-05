@@ -5,6 +5,8 @@ namespace Reach\StatamicResrv\Livewire;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
 use Livewire\Component;
+use Reach\StatamicResrv\Exceptions\AvailabilityException;
+use Reach\StatamicResrv\Facades\ResrvHelper;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityCartData;
 use Reach\StatamicResrv\Livewire\Forms\CartItemData;
 
@@ -97,7 +99,20 @@ class AvailabilityCart extends Component
 
     public function checkout(): void
     {
-        //
+        // Validate all items exist
+        $this->cart->items->each(function ($item) {
+            $searchData = array_merge(ResrvHelper::toAvailabilityArray($item->availabilityData), ['price' => data_get($item->results, 'data.price')]);
+            if ($searchData['advanced'] === 'any') {
+                $searchData['advanced'] = data_get($item->results, 'data.property');
+            }
+            try {
+                $this->validateMultipleAvailabilityAndPrice($searchData, $item->entryId);
+            } catch (AvailabilityException $exception) {
+                $this->addError('availability', $exception->getMessage());
+            }
+        });
+
+        $this->createMultipleReservations();
     }
 
     protected function getCheckoutEntry()

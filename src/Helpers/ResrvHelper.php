@@ -39,4 +39,14 @@ class ResrvHelper
 
         return false;
     }
+
+    public function toAvailabilityArray(array $data): array
+    {
+        return [
+            'date_start' => $data['dates']['date_start'],
+            'date_end' => $data['dates']['date_end'],
+            'quantity' => $data['quantity'],
+            'advanced' => $data['advanced'],
+        ];
+    }
 }

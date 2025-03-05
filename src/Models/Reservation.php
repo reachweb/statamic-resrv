@@ -92,21 +92,12 @@ class Reservation extends Model
         return Price::create($value);
     }
 
-    public function getPropertyAttribute($value)
-    {
-        if ($this->type === 'parent') {
-            return $this->childs()->get()->unique(fn ($item) => $item->property);
-        }
-
-        return $value;
-    }
-
     public function getPropertyAttributeLabel()
     {
         if ($this->property == null) {
             return '';
         }
-        $availability = new Availability;
+        $availability = app(Availability::class);
 
         if ($this->property instanceof Collection) {
             return $this->property->map(function ($item) use ($availability) {
@@ -410,8 +401,9 @@ class Reservation extends Model
     {
         return [
             'id' => null,
-            'title' => '## Entry deleted ##',
-            'api_url' => '## Entry deleted ##',
+            'title' => 'Entry missing',
+            'api_url' => '#',
+            'url' => '#',
             'permalink' => '#',
         ];
     }
@@ -422,11 +414,7 @@ class Reservation extends Model
             'id' => 'parent',
             'title' => 'Multiple Items',
             'url' => '#',
-            'get' => null,
-            'blueprint' => null,
-            'collection' => [
-                'handle' => 'parent',
-            ],
+            'permalink' => '#',
         ];
     }
 

@@ -16,6 +16,7 @@ use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
+use Reach\StatamicResrv\Helpers\ResrvHelper;
 use Reach\StatamicResrv\Http\Controllers\ConfigController;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -173,6 +174,10 @@ class ResrvProvider extends AddonServiceProvider
         ], 'resrv-emails');
 
         $this->mergeConfigFrom(__DIR__.'/../../config/config.php', 'resrv-config');
+
+        $this->app->bind('resrvhelper', function () {
+            return new ResrvHelper;
+        });
 
         $this->app->bind(PaymentInterface::class, config('resrv-config.payment_gateway'));
 

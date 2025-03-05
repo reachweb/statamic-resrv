@@ -24,8 +24,6 @@ class ChildReservation extends Model
         'total' => PriceClass::class,
     ];
 
-    protected $appends = ['entry'];
-
     protected static function newFactory()
     {
         return ChildReservationFactory::new();
@@ -79,8 +77,9 @@ class ChildReservation extends Model
     {
         return [
             'id' => null,
-            'title' => '## Entry deleted ##',
-            'api_url' => '## Entry deleted ##',
+            'title' => 'Entry missing',
+            'api_url' => '#',
+            'url' => '#',
             'permalink' => '#',
         ];
     }
