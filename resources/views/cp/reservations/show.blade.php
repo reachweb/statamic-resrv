@@ -70,7 +70,7 @@
         </div>
     </div>
 
-    @if ($reservation->type === 'parent')
+    @if ($reservation->isParent())
     <div>
         <div class="mb-2 content flex">
             <h2 class="text-base">{{ __("Related reservations") }}</h2>

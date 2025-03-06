@@ -97,6 +97,11 @@ trait HandlesReservationQueries
         });
 
         $mainReservation->childs()->createMany($childs->toArray());
+
+        ReservationCreated::dispatch($mainReservation, new ReservationData(
+            affiliate: $this->getAffiliateIfCookieExists(),
+            coupon: session('resrv_coupon') ?? null,
+        ));
     }
 
     public function getAvailabilityDataFromReservation(): array

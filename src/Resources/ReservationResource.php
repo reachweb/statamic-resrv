@@ -39,7 +39,7 @@ class ReservationResource extends ResourceCollection
                 return [
                     'id' => $reservation->id,
                     'reference' => $reservation->reference,
-                    'type' => Str::ucfirst($reservation->type),
+                    'type' => Str::ucfirst($reservation->type->value),
                     'status' => $reservation->status,
                     'entry' => $reservation->entry,
                     'quantity' => $reservation->quantity,

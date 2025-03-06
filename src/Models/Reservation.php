@@ -11,6 +11,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
+use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
@@ -33,6 +34,7 @@ class Reservation extends Model
         'price' => PriceClass::class,
         'payment' => PriceClass::class,
         'total' => PriceClass::class,
+        'type' => ReservationTypes::class,
     ];
 
     protected $appends = ['entry'];
@@ -45,7 +47,7 @@ class Reservation extends Model
     public function entry()
     {
         // If this is a parent reservation with children, handle it specially
-        if ($this->type === 'parent' && $this->childs()->count() > 0) {
+        if ($this->isParent() && $this->childs()->count() > 0) {
             return $this->parentFakeEntry();
         }
 
@@ -111,7 +113,7 @@ class Reservation extends Model
     public function getEntryAttribute()
     {
         // If this is a parent reservation with children, return a special entry
-        if ($this->type === 'parent' && $this->childs()->count() > 0) {
+        if ($this->isParent() && $this->childs()->count() > 0) {
             return $this->parentFakeEntry();
         }
 
@@ -127,7 +129,7 @@ class Reservation extends Model
 
     public function isParent()
     {
-        if ($this->type == 'parent') {
+        if ($this->type == ReservationTypes::PARENT) {
             return true;
         }
 
@@ -420,7 +422,7 @@ class Reservation extends Model
 
     public function getAllItems()
     {
-        if ($this->type !== 'parent') {
+        if (! $this->isParent()) {
             return collect([$this]);
         }
 

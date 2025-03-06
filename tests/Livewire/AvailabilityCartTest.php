@@ -5,7 +5,10 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityCart;
+use Reach\StatamicResrv\Livewire\AvailabilityResults;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -69,7 +72,7 @@ class AvailabilityCartTest extends TestCase
         $component
             ->assertViewHas('itemCount', 1)
             ->assertViewHas('allValid', true)
-            ->assertSee($this->calculateTotalPrice($results))
+            ->assertSee($results['data']['price'])
             ->assertSee(trans('statamic-resrv::frontend.bookNow'));
     }
 
@@ -274,276 +277,236 @@ class AvailabilityCartTest extends TestCase
             ->assertSee($expectedTotal);
     }
 
-    // // Test that it creates parent reservation with child reservations on checkout
-    // public function test_creates_parent_and_child_reservations_on_checkout()
-    // {
-    //     $entry = Entry::make()
-    //         ->collection('pages')
-    //         ->slug('checkout')
-    //         ->data(['title' => 'Checkout']);
-
-    //     $entry->save();
-
-    //     Config::set('resrv-config.checkout_entry', $entry->id());
-
-    //     $availabilityData = [
-    //         'dates' => [
-    //             'date_start' => $this->date->toISOString(),
-    //             'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
-    //         ],
-    //         'quantity' => 1,
-    //         'advanced' => null,
-    //     ];
-
-    //     $results = app(Availability::class)->getAvailabilityForEntry($availabilityData, $this->entries->first()->id());
-
-    //     // Add item to cart and checkout
-    //     $component = Livewire::test(AvailabilityCart::class)
-    //         ->dispatch('add-to-cart',
-    //             entryId: $this->entries->first()->id(),
-    //             availabilityData: $availabilityData,
-    //             results: $results
-    //         )
-    //         ->call('checkout')
-    //         ->assertSessionHas('resrv_reservation', 1)
-    //         ->assertRedirect($entry->url());
-
-    //     // Check that a parent reservation was created
-    //     $this->assertDatabaseHas('resrv_reservations', [
-    //         'id' => 1,
-    //         'type' => 'parent',
-    //         'status' => 'pending',
-    //         'price' => $results['data']['price'],
-    //     ]);
-
-    //     // Check that a child reservation was created and linked to the parent
-    //     $this->assertDatabaseHas('resrv_reservations', [
-    //         'id' => 2,
-    //         'item_id' => $this->entries->first()->id(),
-    //         'date_start' => $this->date,
-    //         'date_end' => $this->date->copy()->add(2, 'day'),
-    //         'quantity' => 1,
-    //         'status' => 'pending',
-    //     ]);
-
-    //     // Check that the child reservation is linked in child reservations table
-    //     $this->assertDatabaseHas('resrv_child_reservations', [
-    //         'reservation_id' => 1,
-    //         'child_reservation_id' => 2,
-    //     ]);
-    // }
-
-    // // Test that it handles multiple items in checkout
-    // public function test_handles_multiple_items_in_checkout()
-    // {
-    //     $entry = Entry::make()
-    //         ->collection('pages')
-    //         ->slug('checkout')
-    //         ->data(['title' => 'Checkout']);
-
-    //     $entry->save();
-
-    //     Config::set('resrv-config.checkout_entry', $entry->id());
-
-    //     // Create additional availability for a different date range
-    //     Availability::factory()
-    //         ->count(4)
-    //         ->sequence(
-    //             ['date' => $this->date->copy()->addDays(5)->startOfDay()],
-    //             ['date' => $this->date->copy()->addDays(6)->startOfDay()],
-    //             ['date' => $this->date->copy()->addDays(7)->startOfDay()],
-    //             ['date' => $this->date->copy()->addDays(8)->startOfDay()],
-    //         )
-    //         ->create([
-    //             'statamic_id' => $this->entries->first()->id(),
-    //             'price' => 75,
-    //             'available' => 2,
-    //         ]);
-
-    //     $availabilityData1 = [
-    //         'dates' => [
-    //             'date_start' => $this->date->toISOString(),
-    //             'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
-    //         ],
-    //         'quantity' => 1,
-    //         'advanced' => null,
-    //     ];
-
-    //     $availabilityData2 = [
-    //         'dates' => [
-    //             'date_start' => $this->date->copy()->addDays(5)->toISOString(),
-    //             'date_end' => $this->date->copy()->addDays(7)->toISOString(),
-    //         ],
-    //         'quantity' => 2,
-    //         'advanced' => null,
-    //     ];
-
-    //     $results1 = app(Availability::class)->getAvailabilityForEntry($availabilityData1, $this->entries->first()->id());
-    //     $results2 = app(Availability::class)->getAvailabilityForEntry($availabilityData2, $this->entries->first()->id());
-
-    //     // Add items to cart
-    //     $component = Livewire::test(AvailabilityCart::class)
-    //         ->dispatch('add-to-cart',
-    //             entryId: $this->entries->first()->id(),
-    //             availabilityData: $availabilityData1,
-    //             results: $results1
-    //         )
-    //         ->dispatch('add-to-cart',
-    //             entryId: $this->entries->first()->id(),
-    //             availabilityData: $availabilityData2,
-    //             results: $results2
-    //         )
-    //         ->call('checkout');
-
-    //     // Check that we have 1 parent and 2 child reservations
-    //     $this->assertDatabaseCount('resrv_reservations', 3);
-    //     $this->assertDatabaseCount('resrv_child_reservations', 2);
-
-    //     // Check that both child reservations point to the parent
-    //     $this->assertDatabaseHas('resrv_child_reservations', [
-    //         'reservation_id' => 1,
-    //         'child_reservation_id' => 2,
-    //     ]);
-
-    //     $this->assertDatabaseHas('resrv_child_reservations', [
-    //         'reservation_id' => 1,
-    //         'child_reservation_id' => 3,
-    //     ]);
-    // }
-
-    // // Test that it prevents checkout if an item is invalid
-    // public function test_prevents_checkout_if_item_is_invalid()
-    // {
-    //     $entry = Entry::make()
-    //         ->collection('pages')
-    //         ->slug('checkout')
-    //         ->data(['title' => 'Checkout']);
-
-    //     $entry->save();
-
-    //     Config::set('resrv-config.checkout_entry', $entry->id());
-
-    //     $availabilityData = [
-    //         'dates' => [
-    //             'date_start' => $this->date->toISOString(),
-    //             'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
-    //         ],
-    //         'quantity' => 1,
-    //         'advanced' => null,
-    //     ];
-
-    //     $results = app(Availability::class)->getAvailabilityForEntry($availabilityData, $this->entries->first()->id());
-
-    //     // Create component with a valid item
-    //     $component = Livewire::test(AvailabilityCart::class)
-    //         ->dispatch('add-to-cart',
-    //             entryId: $this->entries->first()->id(),
-    //             availabilityData: $availabilityData,
-    //             results: $results
-    //         );
-
-    //     // Get the item ID
-    //     $itemId = $component->get('cart.items')->keys()->first();
-
-    //     // Invalidate the item
-    //     $component->dispatch('invalidate-cart-item', itemId: $itemId);
-
-    //     // Try to checkout
-    //     $component->call('checkout')
-    //         ->assertSessionHas('error')
-    //         ->assertSessionMissing('resrv_reservation');
-    // }
-
-    // // Test that availability is decremented after checkout
-    // public function test_availability_is_decremented_after_checkout()
-    // {
-    //     $entry = Entry::make()
-    //         ->collection('pages')
-    //         ->slug('checkout')
-    //         ->data(['title' => 'Checkout']);
-
-    //     $entry->save();
-
-    //     Config::set('resrv-config.checkout_entry', $entry->id());
-
-    //     // Before checkout, availability should be 1
-    //     $this->assertDatabaseHas('resrv_availabilities', [
-    //         'statamic_id' => $this->entries->first()->id(),
-    //         'date' => $this->date->startOfDay(),
-    //         'available' => 1,
-    //     ]);
-
-    //     $availabilityData = [
-    //         'dates' => [
-    //             'date_start' => $this->date->toISOString(),
-    //             'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
-    //         ],
-    //         'quantity' => 1,
-    //         'advanced' => null,
-    //     ];
-
-    //     $results = app(Availability::class)->getAvailabilityForEntry($availabilityData, $this->entries->first()->id());
-
-    //     // Add item to cart and checkout
-    //     $component = Livewire::test(AvailabilityCart::class)
-    //         ->dispatch('add-to-cart',
-    //             entryId: $this->entries->first()->id(),
-    //             availabilityData: $availabilityData,
-    //             results: $results
-    //         )
-    //         ->call('checkout');
-
-    //     // After checkout, availability should be 0
-    //     $this->assertDatabaseHas('resrv_availabilities', [
-    //         'statamic_id' => $this->entries->first()->id(),
-    //         'date' => $this->date->startOfDay(),
-    //         'available' => 0,
-    //     ]);
-    // }
-
-    // // Test that cart is cleared after successful checkout
-    // public function test_cart_is_cleared_after_successful_checkout()
-    // {
-    //     $entry = Entry::make()
-    //         ->collection('pages')
-    //         ->slug('checkout')
-    //         ->data(['title' => 'Checkout']);
-
-    //     $entry->save();
-
-    //     Config::set('resrv-config.checkout_entry', $entry->id());
-
-    //     $availabilityData = [
-    //         'dates' => [
-    //             'date_start' => $this->date->toISOString(),
-    //             'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
-    //         ],
-    //         'quantity' => 1,
-    //         'advanced' => null,
-    //     ];
-
-    //     $results = app(Availability::class)->getAvailabilityForEntry($availabilityData, $this->entries->first()->id());
-
-    //     // Create fresh component with persistent state
-    //     $component = Livewire::test(AvailabilityCart::class, [], ['resrv-cart'])
-    //         ->dispatch('add-to-cart',
-    //             entryId: $this->entries->first()->id(),
-    //             availabilityData: $availabilityData,
-    //             results: $results
-    //         )
-    //         ->assertViewHas('itemCount', 1)
-    //         ->call('checkout');
-
-    //     // Create another component instance, cart should be empty
-    //     Livewire::test(AvailabilityCart::class, [], ['resrv-cart'])
-    //         ->assertViewHas('itemCount', 0)
-    //         ->assertSee(trans('statamic-resrv::frontend.reservationsEmpty'));
-    // }
-
-    // Helper function to calculate expected price
-    private function calculateTotalPrice($results)
+    // Test that it creates parent reservation with multiple child reservations on checkout
+    public function test_creates_reservations_when_checkout_is_called()
     {
-        return number_format((float) str_replace(',', '', $results['data']['price']), 2, '.', '');
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        // First item data
+        $availabilityData1 = [
+            'dates' => [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+            ],
+            'quantity' => 1,
+            'advanced' => null,
+        ];
+
+        $results1 = app(Availability::class)->getAvailabilityForEntry($this->availabilityArray($availabilityData1), $this->entries->first()->id());
+
+        // Second item data
+        $availabilityData2 = [
+            'dates' => [
+                'date_start' => $this->date->copy()->toISOString(),
+                'date_end' => $this->date->copy()->addDays(3)->toISOString(),
+            ],
+            'quantity' => 1,
+            'advanced' => null,
+        ];
+
+        $results2 = app(Availability::class)->getAvailabilityForEntry($this->availabilityArray($availabilityData2), $this->entries->first()->id());
+
+        // Add both items to cart and checkout
+        $component = Livewire::test(AvailabilityCart::class)
+            ->dispatch('add-to-cart',
+                entryId: $this->entries->first()->id(),
+                availabilityData: $availabilityData1,
+                results: $results1
+            )
+            ->dispatch('add-to-cart',
+                entryId: $this->entries->first()->id(),
+                availabilityData: $availabilityData2,
+                results: $results2
+            )
+            ->call('checkout')
+            ->assertSessionHas('resrv_reservation', 1);
+
+        // Expected total price (sum of both reservations)
+        $expectedTotalPrice = $results1['data']['price'] + $results2['data']['price'];
+
+        // Check that a parent reservation was created with the combined price
+        $this->assertDatabaseHas('resrv_reservations',
+            [
+                'type' => 'parent',
+                'status' => 'pending',
+                'price' => $expectedTotalPrice,
+            ]
+        );
+
+        // Check that the first child reservation was created and linked to the parent
+        $this->assertDatabaseHas('resrv_child_reservations',
+            [
+                'item_id' => ResrvEntry::whereItemId($this->entries->first()->id())->id,
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(2, 'day'),
+                'quantity' => 1,
+                'price' => (float) $results1['data']['price'],
+            ]
+        );
+
+        // Check that the second child reservation was created and linked to the parent
+        $this->assertDatabaseHas('resrv_child_reservations',
+            [
+                'item_id' => ResrvEntry::whereItemId($this->entries->first()->id())->id,
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->addDays(3),
+                'quantity' => 1,
+                'price' => (float) $results2['data']['price'],
+            ]
+        );
+
+        // Check that availability gets decreased for both date ranges
+        $this->assertDatabaseHas('resrv_availabilities',
+            [
+                'statamic_id' => $this->entries->first()->id(),
+                'date' => $this->date->startOfDay(),
+                'available' => 0,
+            ]
+        );
+
+        $this->assertDatabaseHas('resrv_availabilities',
+            [
+                'statamic_id' => $this->entries->first()->id(),
+                'date' => $this->date->copy()->addDays(2)->startOfDay(),
+                'available' => 0,
+            ]
+        );
+
+        // Check that the reservation expires and availability is back
+        $this->travel(15)->minutes();
+
+        // Call availability to run the jobs
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            );
+
+        // Check that the reservation expires and availability gets decreased for both date ranges
+        $this->assertDatabaseHas('resrv_reservations',
+            [
+                'type' => 'parent',
+                'status' => 'expired',
+            ]
+        );
+        $this->assertDatabaseHas('resrv_availabilities',
+            [
+                'statamic_id' => $this->entries->first()->id(),
+                'date' => $this->date->startOfDay(),
+                'available' => 1,
+            ]
+        );
+        $this->assertDatabaseHas('resrv_availabilities',
+            [
+                'statamic_id' => $this->entries->first()->id(),
+                'date' => $this->date->copy()->addDays(2)->startOfDay(),
+                'available' => 1,
+            ]
+        );
+    }
+
+    // Test that it doesn't create a reservation if the availability has changed
+    public function test_does_not_create_reservation_if_availability_changed()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        $availabilityData = [
+            'dates' => [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+            ],
+            'quantity' => 1,
+            'advanced' => null,
+        ];
+
+        $results = app(Availability::class)->getAvailabilityForEntry($this->availabilityArray($availabilityData), $this->entries->first()->id());
+
+        // Add item to cart
+        $component = Livewire::test(AvailabilityCart::class)
+            ->dispatch('add-to-cart',
+                entryId: $this->entries->first()->id(),
+                availabilityData: $availabilityData,
+                results: $results
+            );
+
+        // Change availability manually
+        Availability::where('statamic_id', $this->entries->first()->id())
+            ->where('date', $this->date->startOfDay())
+            ->update(['available' => 0]);
+
+        // Try checkout and get validation error
+        $component->call('checkout')
+            ->assertHasErrors('availability');
+
+        // Verify no reservation was created
+        $this->assertDatabaseMissing('resrv_reservations', [
+            'item_id' => $this->entries->first()->id(),
+            'date_start' => $this->date,
+        ]);
+    }
+
+    // Test that it creates a reservation and saves affiliate when the cookie is in the session
+    public function test_creates_reservation_and_saves_affiliate_when_cookie_is_in_session()
+    {
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        $affiliate = Affiliate::factory()->create();
+
+        Config::set('resrv-config.checkout_entry', $entry->id());
+
+        $availabilityData = [
+            'dates' => [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+            ],
+            'quantity' => 1,
+            'advanced' => null,
+        ];
+
+        $results = app(Availability::class)->getAvailabilityForEntry($this->availabilityArray($availabilityData), $this->entries->first()->id());
+
+        // Add item to cart with affiliate cookie
+        $component = Livewire::withCookies(['resrv_afid' => $affiliate->code])
+            ->test(AvailabilityCart::class)
+            ->dispatch('add-to-cart',
+                entryId: $this->entries->first()->id(),
+                availabilityData: $availabilityData,
+                results: $results
+            );
+
+        $component->call('checkout');
+
+        // Verify the affiliate was linked to the reservation
+        $this->assertDatabaseHas('resrv_reservation_affiliate', [
+            'reservation_id' => 1, // Parent reservation ID
+            'affiliate_id' => $affiliate->id,
+            'fee' => $affiliate->fee,
+        ]);
     }
 
     // Helper function to create the availability array

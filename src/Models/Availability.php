@@ -395,9 +395,13 @@ class Availability extends Model implements AvailabilityContract
         ]);
     }
 
-    public function getDynamicPricingsForReservation(Reservation $reservation)
+    public function getDynamicPricingsForReservation(Reservation|ChildReservation $reservation)
     {
-        $entry = $this->getDefaultSiteEntry($reservation->item_id);
+        if ($reservation instanceof ChildReservation) {
+            $entry = $reservation->entry->getStatamicEntry();
+        } else {
+            $entry = $this->getDefaultSiteEntry($reservation->item_id);
+        }
 
         $data = [
             'date_start' => $reservation->date_start,

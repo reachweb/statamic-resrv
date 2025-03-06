@@ -15,7 +15,7 @@ class IncreaseAvailability
 
     public function handle($event)
     {
-        if ($event->reservation->type === 'parent') {
+        if ($event->reservation->isParent()) {
             $this->incrementMultiple($event);
         } else {
             $this->availability->incrementAvailability(
@@ -37,8 +37,8 @@ class IncreaseAvailability
                 date_start: $child->date_start,
                 date_end: $child->date_end,
                 quantity: $child->quantity,
-                statamic_id: $event->reservation->item_id,
-                reservationId: $child->id,
+                statamic_id: $child->entry->item_id,
+                reservationId: $event->reservation->id,
                 advanced: $child->property
             );
         });
