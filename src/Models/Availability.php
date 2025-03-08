@@ -190,41 +190,28 @@ class Availability extends Model implements AvailabilityContract
             ->get();
     }
 
-    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced)
+    public function decrementAvailability(Reservation $reservation): void
     {
-        $this->initiateAvailabilityUnsafe([
-            'date_start' => $date_start,
-            'date_end' => $date_end,
-            'quantity' => $quantity,
-            'advanced' => $advanced,
-        ]);
-
-        AvailabilityRepository::decrement(
-            date_start: $this->date_start,
-            date_end: $this->date_end,
-            quantity: $this->quantity,
-            statamic_id: $statamic_id,
-            advanced: $this->advanced,
-            reservationId: $reservationId
-        );
+        if ($reservation->isParent()) {
+            $childs = $reservation->childs()->get();
+            $childs->each(function ($child) {
+                AvailabilityRepository::decrement($child);
+            });
+        } else {
+            AvailabilityRepository::decrement($reservation);
+        }
     }
 
-    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced)
+    public function incrementAvailability(Reservation $reservation): void
     {
-        $this->initiateAvailabilityUnsafe([
-            'date_start' => $date_start,
-            'date_end' => $date_end,
-            'quantity' => $quantity,
-            'advanced' => $advanced,
-        ]);
-
-        AvailabilityRepository::increment(date_start: $this->date_start,
-            date_end: $this->date_end,
-            quantity: $this->quantity,
-            statamic_id: $statamic_id,
-            advanced: $this->advanced,
-            reservationId: $reservationId
-        );
+        if ($reservation->isParent()) {
+            $childs = $reservation->childs()->get();
+            $childs->each(function ($child) {
+                AvailabilityRepository::increment($child);
+            });
+        } else {
+            AvailabilityRepository::increment($reservation);
+        }
     }
 
     public function deleteForDates(string $date_start, string $date_end, string $statamic_id, ?array $advanced)

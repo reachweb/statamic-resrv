@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
+use Reach\StatamicResrv\Models\Reservation;
 
 class AvailabilityRepository
 {
@@ -82,13 +84,17 @@ class AvailabilityRepository
             ->get();
     }
 
-    public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced, int $reservationId)
+    public function decrement(Reservation|ChildReservation $reservation)
     {
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $advanced, $reservationId) {
-            $availabilities = Availability::where('date', '>=', $date_start)
-                ->where('date', '<', $date_end)
-                ->where('statamic_id', $statamic_id)
-                ->when($advanced, function (Builder $query, array $advanced) {
+        if ($reservation instanceof ChildReservation) {
+            $reservation->item_id = $reservation->entry->item_id;
+        }
+
+        DB::transaction(function () use ($reservation) {
+            $availabilities = Availability::where('date', '>=', $reservation->date_start->isoFormat('YYYY-MM-DD'))
+                ->where('date', '<', $reservation->date_end->isoFormat('YYYY-MM-DD'))
+                ->where('statamic_id', $reservation->item_id)
+                ->when($this->createAdvanced($reservation->property), function (Builder $query, array $advanced) {
                     if (! in_array('any', $advanced)) {
                         $query->whereIn('property', $advanced);
                     }
@@ -98,14 +104,15 @@ class AvailabilityRepository
 
             foreach ($availabilities as $availability) {
                 $pending = $availability->pending ?? [];
+                $reservationId = $reservation instanceof ChildReservation ? 'child-'.$reservation->id : $reservation->id;
 
                 if (in_array($reservationId, $pending)) {
-                    Log::error("Reservation ID $reservationId was already found in pending list for availability ID {$availability->id}");
+                    Log::error("Reservation ID {$reservationId} was already found in pending list for availability ID {$availability->id}");
 
                     continue;
                 }
 
-                $available = $availability->available - $quantity;
+                $available = $availability->available - $reservation->quantity;
                 $availability->update([
                     'available' => $available,
                     'pending' => array_merge($pending, [$reservationId]),
@@ -114,13 +121,17 @@ class AvailabilityRepository
         });
     }
 
-    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced, int $reservationId): void
+    public function increment(Reservation|ChildReservation $reservation): void
     {
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $advanced, $reservationId) {
-            $availabilities = Availability::where('date', '>=', $date_start)
-                ->where('date', '<', $date_end)
-                ->where('statamic_id', $statamic_id)
-                ->when($advanced, function (Builder $query, array $advanced) {
+        if ($reservation instanceof ChildReservation) {
+            $reservation->item_id = $reservation->entry->item_id;
+        }
+
+        DB::transaction(function () use ($reservation) {
+            $availabilities = Availability::where('date', '>=', $reservation->date_start->isoFormat('YYYY-MM-DD'))
+                ->where('date', '<', $reservation->date_end->isoFormat('YYYY-MM-DD'))
+                ->where('statamic_id', $reservation->item_id)
+                ->when($this->createAdvanced($reservation->property), function (Builder $query, array $advanced) {
                     if (! in_array('any', $advanced)) {
                         $query->whereIn('property', $advanced);
                     }
@@ -130,14 +141,15 @@ class AvailabilityRepository
 
             foreach ($availabilities as $availability) {
                 $pending = $availability->pending ?? [];
+                $reservationId = $reservation instanceof ChildReservation ? 'child-'.$reservation->id : $reservation->id;
 
-                if (! in_array($reservationId, $pending)) {
-                    Log::error("Reservation ID $reservationId not found in pending list for availability ID {$availability->id}");
+                if (! in_array($reservationId, $pending) && ! $reservation->isParent()) {
+                    Log::error("Reservation ID {$reservationId} not found in pending list for availability ID {$availability->id}");
 
                     continue;
                 }
 
-                $available = $availability->available + $quantity;
+                $available = $availability->available + $reservation->quantity;
                 $availability->update([
                     'available' => $available,
                     'pending' => array_values(array_diff($pending, [$reservationId])),
@@ -157,5 +169,14 @@ class AvailabilityRepository
                 }
             })
             ->delete();
+    }
+
+    private function createAdvanced($advanced): array
+    {
+        if ($advanced == null) {
+            return ['none'];
+        }
+
+        return explode('|', $advanced);
     }
 }

@@ -287,6 +287,8 @@ class AvailabilityCartTest extends TestCase
 
         $entry->save();
 
+        $resrvEntry = $this->entries->get('two-available')->id();
+
         Config::set('resrv-config.checkout_entry', $entry->id());
 
         // First item data
@@ -299,7 +301,7 @@ class AvailabilityCartTest extends TestCase
             'advanced' => null,
         ];
 
-        $results1 = app(Availability::class)->getAvailabilityForEntry($this->availabilityArray($availabilityData1), $this->entries->first()->id());
+        $results1 = app(Availability::class)->getAvailabilityForEntry($this->availabilityArray($availabilityData1), $resrvEntry);
 
         // Second item data
         $availabilityData2 = [
@@ -311,17 +313,17 @@ class AvailabilityCartTest extends TestCase
             'advanced' => null,
         ];
 
-        $results2 = app(Availability::class)->getAvailabilityForEntry($this->availabilityArray($availabilityData2), $this->entries->first()->id());
+        $results2 = app(Availability::class)->getAvailabilityForEntry($this->availabilityArray($availabilityData2), $resrvEntry);
 
         // Add both items to cart and checkout
         $component = Livewire::test(AvailabilityCart::class)
             ->dispatch('add-to-cart',
-                entryId: $this->entries->first()->id(),
+                entryId: $resrvEntry,
                 availabilityData: $availabilityData1,
                 results: $results1
             )
             ->dispatch('add-to-cart',
-                entryId: $this->entries->first()->id(),
+                entryId: $resrvEntry,
                 availabilityData: $availabilityData2,
                 results: $results2
             )
@@ -343,7 +345,7 @@ class AvailabilityCartTest extends TestCase
         // Check that the first child reservation was created and linked to the parent
         $this->assertDatabaseHas('resrv_child_reservations',
             [
-                'item_id' => ResrvEntry::whereItemId($this->entries->first()->id())->id,
+                'item_id' => ResrvEntry::whereItemId($resrvEntry)->id,
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(2, 'day'),
                 'quantity' => 1,
@@ -354,7 +356,7 @@ class AvailabilityCartTest extends TestCase
         // Check that the second child reservation was created and linked to the parent
         $this->assertDatabaseHas('resrv_child_reservations',
             [
-                'item_id' => ResrvEntry::whereItemId($this->entries->first()->id())->id,
+                'item_id' => ResrvEntry::whereItemId($resrvEntry)->id,
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->addDays(3),
                 'quantity' => 1,
@@ -365,7 +367,7 @@ class AvailabilityCartTest extends TestCase
         // Check that availability gets decreased for both date ranges
         $this->assertDatabaseHas('resrv_availabilities',
             [
-                'statamic_id' => $this->entries->first()->id(),
+                'statamic_id' => $resrvEntry,
                 'date' => $this->date->startOfDay(),
                 'available' => 0,
             ]
@@ -373,9 +375,9 @@ class AvailabilityCartTest extends TestCase
 
         $this->assertDatabaseHas('resrv_availabilities',
             [
-                'statamic_id' => $this->entries->first()->id(),
+                'statamic_id' => $resrvEntry,
                 'date' => $this->date->copy()->addDays(2)->startOfDay(),
-                'available' => 0,
+                'available' => 1,
             ]
         );
 
@@ -404,16 +406,16 @@ class AvailabilityCartTest extends TestCase
         );
         $this->assertDatabaseHas('resrv_availabilities',
             [
-                'statamic_id' => $this->entries->first()->id(),
+                'statamic_id' => $resrvEntry,
                 'date' => $this->date->startOfDay(),
-                'available' => 1,
+                'available' => 2,
             ]
         );
         $this->assertDatabaseHas('resrv_availabilities',
             [
-                'statamic_id' => $this->entries->first()->id(),
+                'statamic_id' => $resrvEntry,
                 'date' => $this->date->copy()->addDays(2)->startOfDay(),
-                'available' => 1,
+                'available' => 2,
             ]
         );
     }

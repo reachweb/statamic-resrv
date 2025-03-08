@@ -2,9 +2,9 @@
 
 namespace Reach\StatamicResrv\Listeners;
 
-use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
 
 class AddDynamicPricingsToReservation
 {
@@ -33,7 +33,7 @@ class AddDynamicPricingsToReservation
         }
 
         $dynamicPricingData->getToApply()->each(function ($pricing, $key) use ($reservation) {
-            if ($reservation->type === ReservationTypes::CHILD->value) {
+            if ($reservation instanceof ChildReservation) {
                 $reservation = $reservation->parent;
             }
             $reservation->dynamicPricings()->attach($pricing->id, ['data' => json_encode($pricing), 'order' => $key]);
