@@ -41,6 +41,7 @@ return [
     'decrease_availability_for_extra_time' => false,
     'admin_email' => false,
     'checkout_entry' => null,
+    'checkout_cart_entry' => null,
     'checkout_completed_entry' => null,
 
     /**

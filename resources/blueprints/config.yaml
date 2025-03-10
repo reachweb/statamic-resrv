@@ -237,6 +237,14 @@ tabs:
                 - required
               instructions: 'The Statamic entry that loads the [Livewire checkout](https://resrv.dev/checkout#checkout-component) component.'
           -
+            handle: checkout_cart_entry
+            field:
+              display: 'Checkout Cart Entry'
+              type: entries
+              max_items: 1
+              localizable: false
+              instructions: 'The Statamic entry that loads the [Livewire cart checkout](https://resrv.dev/cart-checkout#checkout-component) component. Only needed if you use the cart feature.'
+          -
             handle: checkout_completed_entry
             field:
               display: 'Checkout Redirect Entry'
