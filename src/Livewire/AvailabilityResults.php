@@ -162,7 +162,7 @@ class AvailabilityResults extends Component
 
     public function updatedEnabledExtras()
     {
-        $this->handleExtrasConditions($this->extras);
+        $this->extraConditions = $this->handleExtrasConditions($this->extras, $this->extraConditions, $this->enabledExtras);
     }
 
     public function checkout(): void

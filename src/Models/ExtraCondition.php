@@ -115,7 +115,7 @@ class ExtraCondition extends Model
         return $extrasThatApply;
     }
 
-    public function calculateConditionArrays(Collection $extras, EnabledExtras $enabledExtras, AvailabilityData|Reservation $data): Collection
+    public function calculateConditionArrays(Collection $extras, EnabledExtras $enabledExtras, AvailabilityData|Reservation|array $data): Collection
     {
         $required = collect();
         $hide = collect();
@@ -138,10 +138,10 @@ class ExtraCondition extends Model
         ]);
     }
 
-    private function mergeData(AvailabilityData|Reservation $data, EnabledExtras $enabledExtras): array
+    private function mergeData(AvailabilityData|Reservation|array $data, EnabledExtras $enabledExtras): array
     {
         return array_merge(
-            $data instanceof Reservation ? $data->toArray() : $data->toResrvArray(),
+            is_array($data) ? $data : ($data instanceof Reservation ? $data->toArray() : $data->toResrvArray()),
             ['extras' => $enabledExtras->extras->keys()]
         );
     }

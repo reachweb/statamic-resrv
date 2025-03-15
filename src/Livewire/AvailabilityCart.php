@@ -113,11 +113,13 @@ class AvailabilityCart extends Component
         });
 
         $this->createMultipleReservations();
+        
+        $this->redirect($this->getCheckoutEntry()->url());
     }
 
     protected function getCheckoutEntry()
     {
-        return $this->getEntryById(config('resrv-config.checkout_entry'));
+        return $this->getCheckoutCartEntry();
     }
 
     public function render()

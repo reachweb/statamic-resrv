@@ -283,13 +283,13 @@ class AvailabilityCartTest extends TestCase
         $entry = Entry::make()
             ->collection('pages')
             ->slug('checkout')
-            ->data(['title' => 'Checkout']);
+            ->data(['title' => 'Checkout Cart']);
 
         $entry->save();
 
         $resrvEntry = $this->entries->get('two-available')->id();
 
-        Config::set('resrv-config.checkout_entry', $entry->id());
+        Config::set('resrv-config.checkout_cart_entry', $entry->id());
 
         // First item data
         $availabilityData1 = [
@@ -430,7 +430,7 @@ class AvailabilityCartTest extends TestCase
 
         $entry->save();
 
-        Config::set('resrv-config.checkout_entry', $entry->id());
+        Config::set('resrv-config.checkout_cart_entry', $entry->id());
 
         $availabilityData = [
             'dates' => [
@@ -479,7 +479,7 @@ class AvailabilityCartTest extends TestCase
 
         $affiliate = Affiliate::factory()->create();
 
-        Config::set('resrv-config.checkout_entry', $entry->id());
+        Config::set('resrv-config.checkout_cart_entry', $entry->id());
 
         $availabilityData = [
             'dates' => [

@@ -61,6 +61,18 @@ trait HandlesStatamicQueries
         throw new CheckoutEntryNotFound;
     }
 
+    public function getCheckoutCartEntry()
+    {
+        if ($entry = Entry::find(config('resrv-config.checkout_cart_entry'))) {
+            if ($localizedCheckout = $this->getLocalizedEntry($entry)) {
+                return $localizedCheckout;
+            }
+
+            return $entry;
+        }
+        throw new CheckoutEntryNotFound;
+    }
+
     public function getCheckoutCompleteEntry()
     {
         if ($entry = Entry::find(config('resrv-config.checkout_completed_entry'))) {

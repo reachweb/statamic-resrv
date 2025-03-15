@@ -37,6 +37,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
         Livewire::component('availability-cart', \Reach\StatamicResrv\Livewire\AvailabilityCart::class);
         Livewire::component('cart-item-results', \Reach\StatamicResrv\Livewire\CartItemResults::class);
         Livewire::component('checkout', \Reach\StatamicResrv\Livewire\Checkout::class);
+        Livewire::component('checkout-cart', \Reach\StatamicResrv\Livewire\CheckoutCart::class);
         Livewire::component('checkout-form', \Reach\StatamicResrv\Livewire\CheckoutForm::class);
         Livewire::component('checkout-payment', \Reach\StatamicResrv\Livewire\CheckoutPayment::class);
         if (class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {
