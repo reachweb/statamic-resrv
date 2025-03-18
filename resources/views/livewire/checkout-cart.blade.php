@@ -9,9 +9,12 @@
             <div class="mt-4">
                 @if ($step === 1)
                     @foreach($this->reservation->childs as $child)
-                        @if ($this->extras->get($child->id)->count() > 0)
-                        <x-resrv::checkout-cart-extras :enabledExtras="$this->data->getEnabledExtras($child->id)" :extras="$this->frontendExtras->get($child->id)" />
-                        @endif
+                       <x-resrv::checkout-cart-extras 
+                            :reservation_id="$child->id" 
+                            :extras="$this->frontendExtras->get($child->id)" 
+                            :enabledExtras="$this->data->getEnabledExtras($child->id)"
+                            :extraConditions="$this->data->getExtraConditions($child->id)"
+                        />
                     @endforeach
                     <div class="mt-8 xl:mt-10">
                         <x-resrv::checkout-step-button wire:click="handleFirstStep()">

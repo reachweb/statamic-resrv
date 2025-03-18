@@ -10,7 +10,7 @@ class EnabledExtras extends Form
 {
     #[Validate]
     public Collection $extras;
-
+    
     public function extrasToSync(): Collection
     {
         return $this->extras->mapWithKeys(function ($extra) {

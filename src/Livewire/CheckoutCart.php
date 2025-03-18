@@ -36,13 +36,6 @@ class CheckoutCart extends Component
 
     public CartReservations $data;
 
-    // public Collection $enabledExtras;
-
-    // #[Locked]
-    // public Collection $extraConditions;
-
-    // public Collection $enabledOptions;
-
     #[Locked]
     public string $clientSecret;
 
@@ -78,19 +71,6 @@ class CheckoutCart extends Component
 
         $this->populateReservations();
         
-        // Handle the enabled extras and options
-        // if (session()->has('resrv-cart-extras')) {
-        //     $this->enabledExtras = session('resrv-cart-extras');
-        // } else {
-        //     $this->enabledExtras = $this->reservation->childs->mapWithKeys(fn ($child) => [$child->id => new EnabledExtras($this, 'enabledExtras')]);
-        // }
-        // if (session()->has('resrv-cart-options')) {
-        //     $this->enabledOptions = session('resrv-cart-options');
-        // } else {
-        //     $this->enabledOptions = $this->reservation->childs->mapWithKeys(fn ($child) => [$child->id => new EnabledOptions($this, 'enabledOptions')]);
-        // }
-
-        // $this->extraConditions = collect();
         $this->coupon = session('resrv_coupon') ?? null;
     }
 

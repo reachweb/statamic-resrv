@@ -120,6 +120,7 @@ class ExtraCondition extends Model
         $required = collect();
         $hide = collect();
         $data = $this->mergeData($data, $enabledExtras);
+        
         $extras->each(function ($extra) use ($data, $required, $hide) {
             $extra->conditions->each(function ($condition) use ($data, $required, $hide) {
                 [$requiredConditions, $hideConditions] = $condition->createConditionsArray($data);
@@ -142,7 +143,7 @@ class ExtraCondition extends Model
     {
         return array_merge(
             is_array($data) ? $data : ($data instanceof Reservation ? $data->toArray() : $data->toResrvArray()),
-            ['extras' => $enabledExtras->extras->keys()]
+            ['extras' => isset($enabledExtras->extras) ? $enabledExtras->extras->keys() : collect()]
         );
     }
 

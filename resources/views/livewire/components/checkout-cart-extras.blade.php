@@ -1,20 +1,10 @@
-@props(['extras', 'enabledExtras'])
-
+@props(['reservation_id', 'extras', 'enabledExtras', 'extraConditions'])
 <div
     x-data="{selectedExtras: {}}" 
-    x-on:extra-changed="selectedExtras[$event.detail.id.toString()] = $event.detail; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
-    x-on:extra-removed="delete selectedExtras[$event.detail.id.toString()]; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
+    x-on:extra-changed="selectedExtras[$event.detail.id.toString()] = $event.detail; $wire.data.setEnabledExtras({{ $reservation_id }}, Object.assign({}, selectedExtras));"
+    x-on:extra-removed="delete selectedExtras[$event.detail.id.toString()]; $wire.data.setEnabledExtras({{ $reservation_id }}, Object.assign({}, selectedExtras));"
     x-init="selectedExtras = @js($enabledExtras->extras)"
 >
-    <div class="mt-6 xl:mt-8">
-        <div class="text-lg xl:text-xl font-medium mb-2">
-            {{ trans('statamic-resrv::frontend.extras') }}
-        </div>
-        <div class="text-gray-700">
-            {{ trans('statamic-resrv::frontend.extrasDescription') }}
-        </div>
-    </div>
-    <hr class="h-px my-4 bg-gray-200 border-0">
     <div>
         @foreach ($extras as $category)
         <div>
@@ -36,8 +26,8 @@
                     <x-resrv::checkout-extra 
                         :extra="$extra" 
                         :selectedValue="data_get($enabledExtras->extras, $extra->id)"
-                        :required="$this->extraConditions->get('required', collect())->contains($extra->id)"
-                        :hide="$this->extraConditions->get('hide', collect())->contains($extra->id)"
+                        :required="$extraConditions->get('required', collect())->contains($extra->id)"
+                        :hide="$extraConditions->get('hide', collect())->contains($extra->id)"
                         x-bind:key="{{ $extra->id }}" 
                     />
                 </div>
@@ -47,4 +37,5 @@
         </div>
         @endforeach
     </div>
+    <hr class="h-px my-4 bg-gray-200 border-0">
 </div>

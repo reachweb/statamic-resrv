@@ -39,8 +39,10 @@ class CartReservations extends Form
     public function addReservations(ChildReservation $reservation, $component): self
     {
         $this->reservations->put($reservation->id, $reservation);
-        $this->enabledExtrasCollection->put($reservation->id, new EnabledExtras($component, 'enabledExtras'));
-        $this->enabledOptionsCollection->put($reservation->id, new EnabledOptions($component, 'enabledOptions'));
+        $this->setEnabledExtras($reservation->id, new EnabledExtras($component, 'enabledExtras'));
+        $this->enabledExtrasCollection[$reservation->id]->extras = collect();
+        $this->setEnabledOptions($reservation->id, new EnabledOptions($component, 'enabledOptions'));
+        $this->enabledOptionsCollection[$reservation->id]->options = collect();
         $this->extraConditionsCollection->put($reservation->id, collect());
         
         return $this;
