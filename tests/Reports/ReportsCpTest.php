@@ -28,13 +28,11 @@ class ReportsCpTest extends TestCase
         $item2 = $this->makeStatamicItem();
 
         $reservation = Reservation::factory([
-            'customer' => ['email' => 'test@test.com'],
             'item_id' => $item->id(),
             'status' => 'confirmed',
         ])->count(4)->create();
 
         $reservation2 = Reservation::factory([
-            'customer' => ['email' => 'test@test.com'],
             'item_id' => $item2->id(),
             'status' => 'confirmed',
         ])->count(2)->create();

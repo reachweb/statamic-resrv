@@ -29,9 +29,8 @@ class CheckoutFormTest extends TestCase
         $this->entries = $this->createEntries();
 
         $this->travelTo(today()->setHour(12));
-        $this->reservation = Reservation::factory()->create([
+        $this->reservation = Reservation::factory()->withCustomer()->create([
             'item_id' => $this->entries->first()->id(),
-            'customer' => ['email' => 'larry@david.com'],
         ]);
 
         $entry = Entry::make()
@@ -58,19 +57,12 @@ class CheckoutFormTest extends TestCase
 
     public function test_renders_successfully_and_preloads_custom_data()
     {
-        // Fake the AvailabilityForm data
-        $availabilityForm = new \stdClass;
-        $availabilityForm->dates = [];
-        $availabilityForm->quantity = 1;
-        $availabilityForm->advanced = null;
-        $availabilityForm->custom = ['email' => 'larry@david.com'];
-
         session(['resrv_reservation' => $this->reservation->id]);
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
 
         $component = Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])
             ->assertViewIs('statamic-resrv::livewire.checkout-form')
-            ->assertViewHas('form', fn ($data) => $data['email'] === 'larry@david.com');
+            ->assertViewHas('form', fn ($data) => $data['email'] === $this->reservation->customer->email);
 
         $this->assertNotNull($component->checkoutForm);
     }
@@ -104,9 +96,9 @@ class CheckoutFormTest extends TestCase
             ->assertDispatchedTo(Checkout::class, 'checkout-form-submitted')
             ->assertHasNoErrors('form.last_name');
 
-        $this->assertDatabaseHas('resrv_reservations', [
-            'customer->first_name' => 'Jerry',
-            'customer->last_name' => 'Seinfeld',
+        $this->assertDatabaseHas('resrv_customers', [
+            'data->first_name' => 'Jerry',
+            'data->last_name' => 'Seinfeld',
         ]);
     }
 }

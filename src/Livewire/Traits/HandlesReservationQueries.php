@@ -8,6 +8,7 @@ use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesReservationQueries
@@ -39,6 +40,15 @@ trait HandlesReservationQueries
 
     public function createReservation(): void
     {
+        $customer = null;
+
+        if (! empty($this->data->customer)) {
+            $customer = Customer::create([
+                'email' => $this->data->customer['email'] ?? 'pending',
+                'data' => collect($this->data->customer)->except('email'),
+            ]);
+        }
+
         $reservation = Reservation::create(
             [
                 'status' => ReservationStatus::PENDING,
@@ -52,7 +62,7 @@ trait HandlesReservationQueries
                 'price' => data_get($this->availability, 'data.price'),
                 'payment' => data_get($this->availability, 'data.payment'),
                 'payment_id' => '',
-                'customer' => $this->data->customer ?? '',
+                'customer_id' => $customer->id ?? null,
             ]
         );
 

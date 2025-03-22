@@ -24,9 +24,8 @@ class ReservationCpTest extends TestCase
         $item = $this->makeStatamicItem();
 
         $reservation = Reservation::factory([
-            'customer' => ['email' => 'test@test.com'],
             'item_id' => $item->id(),
-        ])->create();
+        ])->withCustomer()->create();
 
         $response = $this->get(cp_route('resrv.reservation.index'));
 
@@ -38,13 +37,12 @@ class ReservationCpTest extends TestCase
         $item = $this->makeStatamicItem();
 
         $reservation = Reservation::factory([
-            'customer' => ['email' => 'test@test.com'],
             'item_id' => $item->id(),
-        ])->create();
+        ])->withCustomer()->create();
 
         $response = $this->get(cp_route('resrv.reservation.show', $reservation->id));
 
-        $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title);
+        $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title)->assertSee($reservation->customer->email);
     }
 
     public function test_can_show_child_reservations()
@@ -53,9 +51,8 @@ class ReservationCpTest extends TestCase
 
         $reservation = Reservation::factory([
             'type' => 'parent',
-            'customer' => ['email' => 'test@test.com'],
             'item_id' => $item->id(),
-        ])->create();
+        ])->withCustomer()->create();
 
         $child = ChildReservation::factory([
             'reservation_id' => $reservation->id,
@@ -72,10 +69,9 @@ class ReservationCpTest extends TestCase
         $item = $this->makeStatamicItem();
 
         $reservation = Reservation::factory([
-            'customer' => ['email' => 'test@test.com'],
             'item_id' => $item->id(),
             'payment_id' => 'abcedf',
-        ])->create();
+        ])->withCustomer()->create();
 
         $payload = [
             'id' => $reservation->id,
@@ -92,10 +88,9 @@ class ReservationCpTest extends TestCase
         $item = $this->makeStatamicItem();
 
         $reservation = Reservation::factory([
-            'customer' => ['email' => 'test@test.com'],
             'item_id' => $item->id(),
             'status' => 'confirmed',
-        ])->create();
+        ])->withCustomer()->create();
 
         $response = $this->get(cp_route('resrv.reservations.calendar.list').'?start="'.now()->toIso8601String().'&end='.now()->addMonth()->toIso8601String());
 

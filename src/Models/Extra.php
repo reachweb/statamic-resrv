@@ -259,25 +259,26 @@ class Extra extends Model
                 ) {
                     return session('resrv-search')->customer[$this->custom];
                 } else {
-                    // Fail gracefull if not found
+                    // Fail gracefully if not found
                     return 1;
                 }
             }
         } else {
-            if (! $reservation->customer || ! $reservation->customer->has($this->custom)) {
+            // Use customerData accessor instead of customer property
+            if (! $reservation->customerData || ! $reservation->customerData->has($this->custom)) {
                 return 1;
             }
-            $customer = $reservation->customer;
+            $customer = $reservation->customerData;
         }
 
         if (! $customer->has($this->custom)) {
-            throw new \Exception('The custom price data is missing for extra'.$this->name);
+            throw new \Exception('The custom price data is missing for extra '.$this->name);
         }
 
         $value = $customer->get($this->custom);
 
         if (! is_numeric($value)) {
-            throw new \Exception('The custom price data is not a number for extra'.$this->name);
+            throw new \Exception('The custom price data is not a number for extra '.$this->name);
         }
 
         return $value;

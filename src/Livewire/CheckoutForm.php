@@ -7,6 +7,7 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Facades\Dictionary;
 
@@ -40,9 +41,10 @@ class CheckoutForm extends Component
         $this->form = collect($this->checkoutForm)->mapWithKeys(function ($field) {
             // Default to an empty string or an empty array based on the field type
             $value = $field['type'] === 'checkboxes' ? [] : '';
-            // If the field is in the customer form, prepopulate that value
-            if ($this->reservation->customer && $this->reservation->customer->has($field['handle'])) {
-                $value = $this->reservation->customer->get($field['handle']);
+
+            // If the field is in the customer data, prepopulate that value
+            if ($this->reservation->customerData && $this->reservation->customerData->has($field['handle'])) {
+                $value = $this->reservation->customerData->get($field['handle']);
             }
 
             return [
@@ -81,7 +83,20 @@ class CheckoutForm extends Component
 
     public function saveCustomer()
     {
-        $this->reservation->update(['customer' => $this->form]);
+        $email = $this->form['email'] ?? null;
+
+        if (! $email) {
+            return;
+        }
+
+        $customer = Customer::create([
+            'email' => $email,
+            'data' => collect($this->form)->except('email'),
+        ]);
+
+        $this->reservation->update([
+            'customer_id' => $customer->id,
+        ]);
     }
 
     public function submit(): void

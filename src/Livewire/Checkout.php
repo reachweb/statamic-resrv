@@ -179,7 +179,7 @@ class Checkout extends Component
         $payment = app(PaymentInterface::class);
 
         // Create a payment intent
-        $paymentIndent = $payment->paymentIntent($reservation->payment, $reservation, $reservation->customer);
+        $paymentIndent = $payment->paymentIntent($reservation->payment, $reservation, $reservation->customerData);
 
         // Save it in the database
         $reservation->update(['payment_id' => $paymentIndent->id]);
@@ -252,7 +252,7 @@ class Checkout extends Component
                 'total' => $totals->get('total'),
                 'extras' => $this->enabledExtras->extras,
                 'options' => $this->enabledOptions->options,
-                'customer' => $this->reservation->customer ?? collect(),
+                'customer' => $this->reservation->customerData ?? collect(),
             ],
         ), $this->entry->id());
     }
