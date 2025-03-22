@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\ExtraCategory;
@@ -140,9 +141,8 @@ class CheckoutExtrasTest extends TestCase
     // Test that extras relative to a checkout form item are correctly calculated
     public function test_gets_correct_price_for_custom_price_extra()
     {
-        $reservation = Reservation::factory()->create([
+        $reservation = Reservation::factory()->for(Customer::factory()->withGuests(3))->create([
             'item_id' => $this->entries->first()->id(),
-            'customer' => ['adults' => 3],
         ]);
 
         session(['resrv_reservation' => $reservation->id]);
@@ -165,9 +165,8 @@ class CheckoutExtrasTest extends TestCase
     // Test that relative price extras are correctly calculated based on the Reservation price
     public function test_gets_correct_price_for_relative_price_extra()
     {
-        $reservation = Reservation::factory()->create([
+        $reservation = Reservation::factory()->for(Customer::factory()->withGuests(3))->create([
             'item_id' => $this->entries->first()->id(),
-            'customer' => ['adults' => 3],
         ]);
 
         session(['resrv_reservation' => $reservation->id]);

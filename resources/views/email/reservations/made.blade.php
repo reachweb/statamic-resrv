@@ -6,7 +6,7 @@
 {{ __("Reservation code") }} **{{ $reservation->id }}**<br>
 {{ __("Date") }}: **{{ $reservation->updated_at->format('d-m-Y H:i') }}**<br>
 {{ __("Booking reference") }}: **{{ $reservation->reference }}**<br>
-{{ __("Email") }}: **{{ $reservation->customer->get('email') }}** 
+{{ __("Email") }}: **{{ $reservation->customer->email }}** 
 @endcomponent
 
 @component('mail::table')
@@ -44,11 +44,11 @@
 @endforeach
 @endif
 
-@if ($reservation->customer->count() > 1)
+@if ($reservation->has('customer'))
 @component('mail::table')
 |{{ __("Checkout data") }} ||
 | :---------------------------------------- |:------------------------------------------|
-@foreach ($reservation->customer as $field => $value)
+@foreach ($reservation->customerData as $field => $value)
 @if (is_array($value) || $value == null)
     @continue
 @endif

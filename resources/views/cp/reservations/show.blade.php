@@ -106,14 +106,14 @@
     </div>
     @endif
     
-    @if ($reservation->customer && $reservation->customer->count() > 1)
+    @if ($reservation->has('customer'))
     <div>
         <div class="mb-2 content">
             <h2 class="text-base">{{ __("Checkout data") }}</h2>
         </div>
         <div class="card px-6 py-4 mb-6">
             <div class="grid grid-cols-2 xl:grid-cols-3 mt-2">
-            @foreach ($reservation->customer as $field => $value)
+            @foreach ($reservation->customerData as $field => $value)
                 @if (is_array($value) || $value == null)
                     @continue
                 @endif

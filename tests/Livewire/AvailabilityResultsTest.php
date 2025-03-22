@@ -790,7 +790,13 @@ class AvailabilityResultsTest extends TestCase
                 'property' => 'test',
                 'payment' => data_get($availability, 'data.payment'),
                 'price' => data_get($availability, 'data.price'),
-                'customer' => json_encode(['adults' => 2, 'children' => 1]),
+                'customer_id' => 1,
+            ]
+        );
+
+        $this->assertDatabaseHas('resrv_customers',
+            [
+                'data' => json_encode(['adults' => 2, 'children' => 1]),
             ]
         );
     }
@@ -836,7 +842,13 @@ class AvailabilityResultsTest extends TestCase
                 'property' => 'test',
                 'payment' => data_get($availability[0], 'data.payment'),
                 'price' => data_get($availability[0], 'data.price'),
-                'customer' => json_encode(['adults' => 2, 'children' => 1]),
+                'customer_id' => 1,
+            ]
+        );
+
+        $this->assertDatabaseHas('resrv_customers',
+            [
+                'data' => json_encode(['adults' => 2, 'children' => 1]),
             ]
         );
     }

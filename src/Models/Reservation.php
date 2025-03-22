@@ -2,9 +2,9 @@
 
 namespace Reach\StatamicResrv\Models;
 
-use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -26,7 +26,6 @@ class Reservation extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'customer' => AsCollection::class,
         'date_start' => 'datetime',
         'date_end' => 'datetime',
         'price' => PriceClass::class,
@@ -44,6 +43,11 @@ class Reservation extends Model
     public function entry()
     {
         return Entry::find($this->item_id) ?? $this->emptyEntry();
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 
     public function affiliate(): BelongsToMany
@@ -83,6 +87,18 @@ class Reservation extends Model
         }
 
         return $value;
+    }
+
+    public function getCustomerDataAttribute(): Collection
+    {
+        if (! $this->customer_id || ! $this->customer()->exists()) {
+            return collect();
+        }
+
+        $data = $this->customer->data;
+        $data->put('email', $this->customer->email);
+
+        return $data;
     }
 
     public function getPropertyAttributeLabel()

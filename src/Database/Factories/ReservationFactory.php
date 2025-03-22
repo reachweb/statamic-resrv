@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationFactory extends Factory
@@ -30,8 +31,19 @@ class ReservationFactory extends Factory
             'price' => 200,
             'payment' => 50,
             'payment_id' => '',
-            'customer' => '',
         ];
+    }
+
+    /**
+     * Configure the model factory to use a real Customer model.
+     */
+    public function withCustomer(): Factory
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'customer_id' => Customer::factory(),
+            ];
+        });
     }
 
     public function expired(): Factory

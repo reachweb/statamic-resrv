@@ -42,13 +42,8 @@ class ReservationCheckoutTest extends TestCase
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
         $this->entries = $this->createEntries();
         $this->travelTo(today()->setHour(12));
-        $this->reservation = Reservation::factory()->create([
+        $this->reservation = Reservation::factory()->withCustomer()->create([
             'item_id' => $this->entries->first()->id(),
-            'customer' => [
-                'first_name' => 'John',
-                'last_name' => 'Doe',
-                'email' => 'test@test.com',
-            ],
         ]);
 
         $this->entry = Entry::make()
@@ -180,12 +175,12 @@ class ReservationCheckoutTest extends TestCase
         $htmlMade = $mailMade->render();
 
         $this->assertStringContainsString($this->entries->first()->title, $html);
-        $this->assertStringContainsString($this->reservation->customer->get('email'), $html);
-        $this->assertStringContainsString($this->reservation->customer->get('first_name'), $html);
+        $this->assertStringContainsString($this->reservation->customer->email, $html);
+        $this->assertStringContainsString($this->reservation->customer->data->get('first_name'), $html);
         $this->assertStringContainsString('500', $html);
         $this->assertStringContainsString($this->entries->first()->title, $htmlMade);
-        $this->assertStringContainsString($this->reservation->customer->get('email'), $htmlMade);
-        $this->assertStringContainsString($this->reservation->customer->get('first_name'), $htmlMade);
+        $this->assertStringContainsString($this->reservation->customer->email, $htmlMade);
+        $this->assertStringContainsString($this->reservation->customer->data->get('first_name'), $htmlMade);
         $this->assertStringContainsString('500', $htmlMade);
     }
 
