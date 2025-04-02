@@ -65,6 +65,19 @@ class ExtraConditionFactory extends Factory
         });
     }
 
+    public function requiredExtraNotSelected()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'conditions' => [[
+                    'operation' => 'required',
+                    'type' => 'extra_not_selected',
+                    'value' => 1,
+                ]],
+            ];
+        });
+    }
+
     public function requiredReservationTime()
     {
         return $this->state(function (array $attributes) {

@@ -175,6 +175,7 @@ class ExtraCondition extends Model
             'reservation_dates' => $this->checkDates($condition, $data),
             'reservation_duration' => $this->checkDuration($condition, $data),
             'extra_selected' => $this->checkInSelectedExtras($condition, $data),
+            'extra_not_selected' => $this->checkNotInSelectedExtras($condition, $data),
             default => false
         };
     }
@@ -195,6 +196,7 @@ class ExtraCondition extends Model
         }
     }
 
+    // TODO: Why is this also here since we have shouldApplyCondition?
     protected function checkAllParameters($condition, $extra_id, $data)
     {
         switch ($condition->type) {
@@ -224,6 +226,11 @@ class ExtraCondition extends Model
             case 'extra_selected':
                 if ($this->checkSelected($condition, $data)) {
                     return 'Extra required because extra with ID '.$condition->value.' is selected';
+                }
+                break;
+            case 'extra_not_selected':
+                if ($this->checkNotSelected($condition, $data)) {
+                    return 'Extra required because extra with ID '.$condition->value.' is not selected';
                 }
                 break;
         }
@@ -272,6 +279,18 @@ class ExtraCondition extends Model
         return false;
     }
 
+    protected function checkNotSelected($condition, $data)
+    {
+        if (! Arr::exists($data, 'extras')) {
+            return false;
+        }
+        if ($data['extras']->doesntContain('id', $condition->value)) {
+            return true;
+        }
+
+        return false;
+    }
+
     protected function checkInSelectedExtras($condition, $data)
     {
         if (! Arr::exists($data, 'extras') || $data['extras']->count() == 0) {
@@ -279,6 +298,19 @@ class ExtraCondition extends Model
         }
 
         if ($data['extras']->contains($condition->value)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    protected function checkNotInSelectedExtras($condition, $data)
+    {
+        if (! Arr::exists($data, 'extras') || $data['extras']->count() == 0) {
+            return false;
+        }
+
+        if ($data['extras']->doesntContain($condition->value)) {
             return true;
         }
 
