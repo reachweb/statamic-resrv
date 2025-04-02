@@ -306,7 +306,7 @@ class ExtraCondition extends Model
 
     protected function checkNotInSelectedExtras($condition, $data)
     {
-        if (! Arr::exists($data, 'extras') || $data['extras']->count() == 0) {
+        if (! Arr::exists($data, 'extras')) {
             return false;
         }
 
