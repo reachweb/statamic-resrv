@@ -6,6 +6,7 @@
     x-on:extra-removed="delete selectedExtras[$event.detail.id.toString()]; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
     x-init="selectedExtras = @js($enabledExtras->extras)"
 >
+    @ray($this->extraConditions)
     <div class="mt-6 xl:mt-8">
         <div class="text-lg xl:text-xl font-medium mb-2">
             {{ trans('statamic-resrv::frontend.extras') }}
