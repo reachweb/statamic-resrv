@@ -60,8 +60,8 @@ trait HandlesExtrasQueries
         if ($extras->count() > 0) {
             $this->extraConditions = app(ExtraCondition::class)->calculateConditionArrays($extras, $this->enabledExtras, $data);
             // Only fire the event if the conditions changed
-            if ($this->extraConditions->get('hide') !== $current->get('hide', collect()
-                && $this->extraConditions->get('required') !== $current->get('required', collect()))) {
+            if ($this->extraConditions->get('hide') !== $current->get('hide', collect()) && 
+                $this->extraConditions->get('required') !== $current->get('required', collect())) {
                 $this->dispatch('extra-conditions-changed', $this->extraConditions);
             }
         }
