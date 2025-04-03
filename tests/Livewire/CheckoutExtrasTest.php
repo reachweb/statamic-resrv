@@ -244,7 +244,7 @@ class CheckoutExtrasTest extends TestCase
 
         session(['resrv_reservation' => $this->reservation->id]);
 
-        // Test with only the first extra (should faiil because extra2 is required when extra1 is selected)
+        // Test with only the first extra (should fail because extra2 is required when extra1 is selected)
         $component = Livewire::test(Checkout::class)
             ->set('enabledExtras.extras', [
                 ['id' => $extra->id, 'quantity' => 1, 'price' => $extra->price->format()],
@@ -270,6 +270,51 @@ class CheckoutExtrasTest extends TestCase
         $this->assertDatabaseHas('resrv_reservation_extra', [
             'reservation_id' => $this->reservation->id,
             'extra_id' => $extra->id,
+        ]);
+
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra2->id,
+        ]);
+    }
+
+    // Test that it handles extras that are required when a specific other extra is selected
+    public function test_it_handles_extra_that_is_required_when_another_is_not_selected()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $item = $this->entries->first();
+
+        $extra = $this->extras->first();
+        $extra2 = ResrvExtra::factory()->fixed()->create();
+
+        $entry = ResrvEntry::whereItemId($item->id());
+
+        $entry->extras()->attach($extra2->id);
+
+        ExtraCondition::factory()->requiredExtraNotSelected()->create([
+            'extra_id' => $extra2->id,
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // Test without enabled extras (should fail because extra2 is required when extra1 is NOT selected)
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertHasErrors(['reservation']);
+
+        // Test with required extra since extra 1 is not selected (should pass)
+        $component = Livewire::test(Checkout::class)
+            ->set('enabledExtras.extras', [
+                ['id' => $extra2->id, 'quantity' => 1, 'price' => $extra2->price->format()],
+            ])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors(['reservation'])
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'status' => 'pending',
         ]);
 
         $this->assertDatabaseHas('resrv_reservation_extra', [

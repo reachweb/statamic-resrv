@@ -215,6 +215,7 @@ export default {
                 reservation_duration: __('Reservation duration'),
                 reservation_dates: __('Reservation dates included'),
                 extra_selected: __('Extra is selected'),
+                extra_not_selected: __('Extra is not selected'),
             });
         },
         comparison() {
@@ -309,7 +310,7 @@ export default {
             return false
         },
         typeIsExtra(index) {
-            if (this.conditionsForm[index].type == 'extra_selected') {
+            if (this.conditionsForm[index].type == 'extra_selected' || this.conditionsForm[index].type == 'extra_not_selected') {
                 return true
             }
             return false

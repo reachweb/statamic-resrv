@@ -43,6 +43,10 @@
             if (this.required) {
                 this.selectAndDispatch();
             }
+            else if (! this.required && this.selected) {
+                this.selected = false;
+                this.dispatchRemovedEvent();
+            }
         },
 
         selectAndDispatch() {
