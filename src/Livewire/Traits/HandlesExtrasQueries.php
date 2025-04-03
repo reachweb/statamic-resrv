@@ -59,12 +59,38 @@ trait HandlesExtrasQueries
 
         if ($extras->count() > 0) {
             $this->extraConditions = app(ExtraCondition::class)->calculateConditionArrays($extras, $this->enabledExtras, $data);
-            // Only fire the event if the conditions changed
-            if ($this->extraConditions->get('hide') !== $current->get('hide', collect()) && 
-                $this->extraConditions->get('required') !== $current->get('required', collect())) {
+
+            // Check if either hide or required conditions changed
+            if ($this->conditionsHaveChanged($this->extraConditions->get('hide'), $current->get('hide')) ||
+                $this->conditionsHaveChanged($this->extraConditions->get('required'), $current->get('required'))) {
                 $this->dispatch('extra-conditions-changed', $this->extraConditions);
             }
         }
+    }
+
+    private function conditionsHaveChanged($new, $old)
+    {
+        $new = $new ?? collect();
+        $old = $old ?? collect();
+
+        // If counts differ, they're definitely different
+        if ($new->count() !== $old->count()) {
+            return true;
+        }
+
+        // If both empty, they're the same
+        if ($new->isEmpty() && $old->isEmpty()) {
+            return false;
+        }
+
+        // Compare keys and values
+        foreach ($new as $key => $value) {
+            if (! $old->has($key) || $old[$key] !== $value) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function createExtraCategoryObject(Collection $items): \stdClass
