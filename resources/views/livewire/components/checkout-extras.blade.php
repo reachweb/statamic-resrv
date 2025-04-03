@@ -2,8 +2,8 @@
 
 <div
     x-data="{selectedExtras: {}}" 
-    x-on:extra-changed="selectedExtras[$event.detail.id.toString()] = $event.detail; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
-    x-on:extra-removed="delete selectedExtras[$event.detail.id.toString()]; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
+    x-on:extra-changed.debounce="selectedExtras[$event.detail.id.toString()] = $event.detail; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
+    x-on:extra-removed.debounce="delete selectedExtras[$event.detail.id.toString()]; $wire.set('enabledExtras.extras', Object.assign({}, selectedExtras));"
     x-init="selectedExtras = @js($enabledExtras->extras)"
 >
     <div class="mt-6 xl:mt-8">

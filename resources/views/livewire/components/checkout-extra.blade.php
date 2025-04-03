@@ -28,8 +28,6 @@
 
         setupWatchers() {
             this.$watch('quantity', () => this.selected === true ? this.dispatchEvent() : null);
-            this.$watch('hide', () => this.handleHideChange());
-            this.$watch('required', () => this.handleRequiredChange());
         },
 
         handleHideChange() {
@@ -55,8 +53,18 @@
         },
 
         handleConditionsChange(event) {
+            const wasRequired = this.required;
+            const wasHidden = this.hide;           
             this.required = event.detail[0].required.includes({{ $extra->id }});
             this.hide = event.detail[0].hide.includes({{ $extra->id }});
+
+            // Only call handler methods if values changed
+            if (wasRequired !== this.required) {
+                this.handleRequiredChange();
+            }
+            if (wasHidden !== this.hide) {
+                this.handleHideChange();
+            }
         },
 
         dispatchEvent() {
