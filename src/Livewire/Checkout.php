@@ -62,17 +62,7 @@ class Checkout extends Component
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
         }
-        if (session()->has('resrv-extras')) {
-            $this->enabledExtras->fill(session('resrv-extras'));
-        } else {
-            $this->enabledExtras->extras = collect();
-        }
-        if (session()->has('resrv-options')) {
-            $this->enabledOptions->fill(session('resrv-options'));
-        } else {
-            $this->enabledOptions->options = collect();
-        }
-        $this->extraConditions = collect();
+
         $this->coupon = session('resrv_coupon') ?? null;
     }
 
@@ -86,38 +76,6 @@ class Checkout extends Component
     public function entry()
     {
         return $this->getEntry($this->reservation->item_id);
-    }
-
-    #[Computed(persist: true)]
-    public function extras(): Collection
-    {
-        return $this->getExtrasForReservation();
-    }
-
-    #[Computed(persist: true)]
-    public function frontendExtras(): Collection
-    {
-        return $this->extras->groupBy('category_id')
-            ->sortBy('order')
-            ->map(function ($items) {
-                return $this->createExtraCategoryObject($items);
-            })
-            ->reject(function ($category) {
-                return $category->published == false;
-            })
-            ->sortBy('order')
-            ->values();
-    }
-
-    #[Computed(persist: true)]
-    public function options(): Collection
-    {
-        return $this->getOptionsForReservation();
-    }
-
-    public function goToStep(int $step): void
-    {
-        $this->step = $step;
     }
 
     public function handleFirstStep(): void
@@ -265,25 +223,6 @@ class Checkout extends Component
         }
     }
 
-    protected function assignExtras(): void
-    {
-        if ($this->enabledExtras->extras->count() > 0) {
-            $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
-        }
-    }
-
-    protected function assignOptions(): void
-    {
-        if ($this->enabledOptions->options->count() > 0) {
-            $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
-        }
-    }
-
-    public function updatedEnabledExtras()
-    {
-        $this->handleExtrasConditions($this->extras);
-    }
-
     public function addCoupon(string $coupon)
     {
         $data = validator(['coupon' => $coupon], ['coupon' => 'required|alpha_dash'], ['coupon' => 'The coupon code is invalid.'])->validate();
@@ -317,8 +256,7 @@ class Checkout extends Component
         $this->reservation->update(['price' => $prices['price'], 'payment' => $prices['payment']]);
         // Remove the caches
         unset($this->reservation);
-        unset($this->extras);
-        unset($this->options);
+
         // Update pricing
         $this->updateEnabledExtraPrices();
         $this->calculateReservationTotals();

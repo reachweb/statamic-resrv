@@ -7,13 +7,10 @@
             </div>
             <div class="mt-4">
                 @if ($step === 1)
-                    @if ($this->options->count() > 0)
-                    <x-resrv::checkout-options :$enabledOptions :options="$this->options" />
-                    @endif
-
-                    @if ($this->extras->count() > 0)
-                    <x-resrv::checkout-extras :$enabledExtras :extras="$this->frontendExtras" />
-                    @endif
+                    <livewire:checkout-extras-options 
+                        :reservation="$this->reservation"
+                        :entryId="$this->entry->id"
+                    />
 
                     <div class="mt-8 xl:mt-10">
                         <x-resrv::checkout-step-button wire:click="handleFirstStep()">
@@ -57,14 +54,7 @@
                     @if ($this->enableCoupon)
                     <x-resrv::checkout-coupon />
                     @endif
-                    <x-resrv::checkout-payment-table 
-                        :extras="$this->extras"
-                        :$enabledExtras
-                        :options="$this->options"
-                        :$enabledOptions
-                        :totals="$this->calculateReservationTotals()"
-                        :key="'pt-'.$enabledExtras->extras->pluck('id')->join('-').$enabledOptions->options->pluck('id')->join('-')"
-                    />
+
                 </div>
             </div>
         </div>
