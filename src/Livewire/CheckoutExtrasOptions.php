@@ -197,8 +197,17 @@ class CheckoutExtrasOptions extends Component
     }
 
     #[On('extra-conditions-changed')]
-    public function enableRequiredExtras($old)
+    public function handleExtrasConditionChange($old)
     {
+        // Disable any enabled extras that got hidden
+        if ($this->hiddenExtras->count() > 0) {
+            $this->hiddenExtras->each(function ($extraId) {
+                if ($this->isExtraSelected($extraId)) {
+                    $this->toggleExtra($extraId);
+                }
+            });
+        }
+        
         $oldRequired = collect($old['required']);
 
         if ($this->conditionsHaveChanged($this->requiredExtras, $oldRequired)) {
