@@ -8,10 +8,10 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
-use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Livewire\Traits\HandlesExtrasQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesOptionsQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesStatamicQueries;
+use Reach\StatamicResrv\Models\Reservation;
 
 class CheckoutExtrasOptions extends Component
 {
@@ -32,6 +32,7 @@ class CheckoutExtrasOptions extends Component
     public string $entryId;
 
     public $searchData;
+
     public $extraSelections = [];
 
     public function mount()
@@ -57,7 +58,7 @@ class CheckoutExtrasOptions extends Component
     protected function initExtraSelections()
     {
         $this->extraSelections = [];
-        
+
         // Check existing selections from enabledExtras
         if ($this->enabledExtras->extras && $this->enabledExtras->extras->count() > 0) {
             foreach ($this->enabledExtras->extras as $extra) {
@@ -107,7 +108,7 @@ class CheckoutExtrasOptions extends Component
 
     public function toggleExtra($extraId)
     {
-        $extraId = (int)$extraId;
+        $extraId = (int) $extraId;
 
         $isSelected = $this->isExtraSelected($extraId);
 
@@ -122,10 +123,8 @@ class CheckoutExtrasOptions extends Component
         }
 
         $this->updateExtraConditions();
-        
-        $this->dispatchExtrasUpdated();
 
-        ray($this->enabledExtras->extras)->label('Updated extras');
+        $this->dispatchExtrasUpdated();
     }
 
     public function updateExtraQuantity($extraId, $quantity)
@@ -134,21 +133,19 @@ class CheckoutExtrasOptions extends Component
         $quantity = (int) $quantity;
 
         // If the extra is not selected, return
-        if (!$this->isExtraSelected($extraId)) {
+        if (! $this->isExtraSelected($extraId)) {
             return;
         }
-        
+
         $extra = $this->enabledExtras->extras->get($extraId);
         $originalExtra = $this->extras->firstWhere('id', $extraId);
 
-        if ($quantity > 0 && $quantity > $originalExtra->minimum && $quantity < $originalExtra->maximum) {
+        if ($quantity > 0 && ($originalExtra->maximum == 0 || $quantity <= $originalExtra->maximum)) {
             $extra['quantity'] = $quantity;
             $this->enabledExtras->extras->put($extraId, $extra);
         }
 
         $this->dispatchExtrasUpdated();
-
-        ray($this->enabledExtras->extras)->label('Updated quantity');
     }
 
     public function dispatchExtrasUpdated()
@@ -158,16 +155,16 @@ class CheckoutExtrasOptions extends Component
 
     public function updateOption($optionId, $valueId, $price)
     {
-        $optionId = (int)$optionId;
-        $valueId = (int)$valueId;
-        
+        $optionId = (int) $optionId;
+        $valueId = (int) $valueId;
+
         // Create option data
         $option = [
             'id' => $optionId,
             'value' => $valueId,
-            'price' => $price
+            'price' => $price,
         ];
-        
+
         // Save the option with its ID as the key
         $this->enabledOptions->options->put($optionId, $option);
 
@@ -179,15 +176,17 @@ class CheckoutExtrasOptions extends Component
         return $this->enabledExtras->extras->has((int) $extraId);
     }
 
-    public function getSelectedExtraQuantity($extraId)
+    public function getExtraQuantity($extraId)
     {
         $extra = $this->enabledExtras->extras->get((int) $extraId);
+
         return $extra ? $extra['quantity'] : 1;
     }
 
     public function getSelectedOptionValue($optionId)
     {
         $option = $this->enabledOptions->options->get((int) $optionId);
+
         return $option ? $option['value'] : null;
     }
 
@@ -207,7 +206,7 @@ class CheckoutExtrasOptions extends Component
                 }
             });
         }
-        
+
         $oldRequired = collect($old['required']);
 
         if ($this->conditionsHaveChanged($this->requiredExtras, $oldRequired)) {
