@@ -4,7 +4,7 @@ namespace Reach\StatamicResrv\Livewire;
 
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\Session;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
@@ -47,7 +47,10 @@ class CheckoutExtrasOptions extends Component
             $this->enabledOptions->options = collect();
         }
 
-        $this->extraConditions = collect();
+        $this->extraConditions = collect([
+            'hide' => collect(),
+            'required' => collect(),
+        ]);
         $this->updateExtraConditions();
     }
 
@@ -93,11 +96,16 @@ class CheckoutExtrasOptions extends Component
     #[Computed]
     public function hiddenExtras(): Collection
     {
-        //ray($this->extraConditions->get('hide'))->label('Hidden extras');
         return $this->extraConditions->get('hide');
     }
 
-    public function toggleExtra($extraId, $price, $quantity = 1)
+    #[Computed]
+    public function requiredExtras(): Collection
+    {
+        return $this->extraConditions->get('required');
+    }
+
+    public function toggleExtra($extraId)
     {
         $extraId = (int)$extraId;
 
@@ -108,14 +116,16 @@ class CheckoutExtrasOptions extends Component
         } else {
             $this->enabledExtras->extras->put($extraId, [
                 'id' => $extraId,
-                'price' => $price,
-                'quantity' => $quantity
+                'price' => $this->extras->firstWhere('id', $extraId)->price->format(),
+                'quantity' => 1,
             ]);
         }
 
         $this->updateExtraConditions();
         
         $this->dispatchExtrasUpdated();
+
+        ray($this->enabledExtras->extras)->label('Updated extras');
     }
 
     public function updateExtraQuantity($extraId, $quantity)
@@ -128,7 +138,6 @@ class CheckoutExtrasOptions extends Component
             return;
         }
         
-        // Get the extra from the collection directly by key
         $extra = $this->enabledExtras->extras->get($extraId);
         $originalExtra = $this->extras->firstWhere('id', $extraId);
 
@@ -152,88 +161,60 @@ class CheckoutExtrasOptions extends Component
         $optionId = (int)$optionId;
         $valueId = (int)$valueId;
         
-        // Check if the option exists in the collection
-        $existingIndex = $this->enabledOptions->options->search(function ($item) use ($optionId) {
-            return $item['id'] === $optionId;
-        });
-
-        if ($existingIndex !== false) {
-            // Update the option value
-            $option = $this->enabledOptions->options[$existingIndex];
-            $option['value'] = $valueId;
-            $option['price'] = $price;
-            $this->enabledOptions->options[$existingIndex] = $option;
-        } else {
-            // Add the option
-            $this->enabledOptions->options->push([
-                'id' => $optionId,
-                'value' => $valueId,
-                'price' => $price
-            ]);
-        }
+        // Create option data
+        $option = [
+            'id' => $optionId,
+            'value' => $valueId,
+            'price' => $price
+        ];
+        
+        // Save the option with its ID as the key
+        $this->enabledOptions->options->put($optionId, $option);
 
         $this->dispatch('optionsUpdated', $this->enabledOptions->options);
     }
 
     public function isExtraSelected($extraId)
     {
-        return $this->enabledExtras->extras->has((int)$extraId);
+        return $this->enabledExtras->extras->has((int) $extraId);
     }
 
     public function getSelectedExtraQuantity($extraId)
     {
-        $extra = $this->enabledExtras->extras->firstWhere('id', (int)$extraId);
+        $extra = $this->enabledExtras->extras->get((int) $extraId);
         return $extra ? $extra['quantity'] : 1;
     }
 
     public function getSelectedOptionValue($optionId)
     {
-        $option = $this->enabledOptions->options->firstWhere('id', (int)$optionId);
+        $option = $this->enabledOptions->options->get((int) $optionId);
         return $option ? $option['value'] : null;
-    }
-
-    public function isExtraVisible($extraId): bool
-    {
-        return $this->extraConditions->get('hide')->contains((int) $extraId) === false;
-    }
-
-    public function setExtraRequired($extraId, $required)
-    {
-        $extraId = (int)$extraId;
-        
-        if ($required) {
-            $this->dispatchBrowserEvent('set-extra-required', [
-                'id' => $extraId,
-                'required' => true
-            ]);
-        } else {
-            $this->dispatchBrowserEvent('set-extra-required', [
-                'id' => $extraId,
-                'required' => false
-            ]);
-        }
-    }
-
-    public function setExtraHidden($extraId, $hidden)
-    {
-        $extraId = (int)$extraId;
-        
-        if ($hidden) {
-            $this->dispatchBrowserEvent('set-extra-hidden', [
-                'id' => $extraId,
-                'hidden' => true
-            ]);
-        } else {
-            $this->dispatchBrowserEvent('set-extra-hidden', [
-                'id' => $extraId,
-                'hidden' => false
-            ]);
-        }
     }
 
     public function updateExtraConditions()
     {
         $this->handleExtrasConditions($this->extras);
+    }
+
+    #[On('extra-conditions-changed')]
+    public function enableRequiredExtras($old)
+    {
+        $oldRequired = collect($old['required']);
+
+        if ($this->conditionsHaveChanged($this->requiredExtras, $oldRequired)) {
+            // Enable new required extras
+            $this->requiredExtras->each(function ($extraId) {
+                if (! $this->isExtraSelected($extraId)) {
+                    $this->toggleExtra($extraId);
+                }
+            });
+            // Disable old required extras
+            $oldRequired->each(function ($extraId) {
+                if ($this->isExtraSelected($extraId) && ! $this->requiredExtras->contains($extraId)) {
+                    $this->toggleExtra($extraId);
+                }
+            });
+        }
     }
 
     public function render()

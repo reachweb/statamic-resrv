@@ -62,7 +62,7 @@ trait HandlesExtrasQueries
             // Check if either hide or required conditions changed
             if ($this->conditionsHaveChanged($this->extraConditions->get('hide'), $current->get('hide')) ||
                 $this->conditionsHaveChanged($this->extraConditions->get('required'), $current->get('required'))) {
-                $this->dispatch('extra-conditions-changed', $this->extraConditions);
+                $this->dispatch('extra-conditions-changed', $current);
             }
         }
     }
