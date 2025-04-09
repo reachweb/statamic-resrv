@@ -11,6 +11,7 @@ use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Livewire\Traits\HandlesExtrasQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesOptionsQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesStatamicQueries;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 
 class CheckoutExtrasOptions extends Component
@@ -153,7 +154,7 @@ class CheckoutExtrasOptions extends Component
         $this->dispatch('extrasUpdated', $this->enabledExtras->extras);
     }
 
-    public function updateOption($optionId, $valueId, $price)
+    public function selectOption($optionId, $valueId)
     {
         $optionId = (int) $optionId;
         $valueId = (int) $valueId;
@@ -162,7 +163,7 @@ class CheckoutExtrasOptions extends Component
         $option = [
             'id' => $optionId,
             'value' => $valueId,
-            'price' => $price,
+            'price' => OptionValue::firstWhere('id', $valueId)->price->format(),
         ];
 
         // Save the option with its ID as the key
