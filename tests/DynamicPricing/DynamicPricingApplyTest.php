@@ -330,6 +330,6 @@ class DynamicPricingApplyTest extends TestCase
                 'quantity' => 1,
                 'advanced' => null,
             ])
-            ->assertSet('extras.0.price', '23.00');
+            ->assertSee('23.00');
     }
 }

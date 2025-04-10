@@ -302,9 +302,15 @@ class Checkout extends Component
     #[On('coupon-applied'), On('coupon-removed')]
     public function updateTotals($coupon, $removeCoupon = false): void
     {
-        $couponModel = DynamicPricing::searchForCoupon($coupon, $this->reservation->id);
+        // This try-catch block is here to prevent an error if a user tries to remove a coupon that has been deleted
+        try {
+            $couponModel = DynamicPricing::searchForCoupon($coupon, $this->reservation->id);
 
-        if ($couponModel->appliesToExtras()) {
+            if ($couponModel->appliesToExtras()) {
+                $this->dispatch('extras-coupon-changed');
+            }
+        } catch (CouponNotFoundException $exception) {
+            // Dispatch the event anyway
             $this->dispatch('extras-coupon-changed');
         }
 
