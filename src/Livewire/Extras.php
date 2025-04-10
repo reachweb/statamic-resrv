@@ -31,7 +31,7 @@ class Extras extends Component
     #[Locked]
     public Reservation $reservation;
 
-    #[Reactive]
+    #[Locked]
     public AvailabilityData $data;
 
     #[Locked]
@@ -203,6 +203,8 @@ class Extras extends Component
     #[On('extras-coupon-changed'), On('availability-search-updated')]
     public function updateOnChange(): void
     {
+        $this->data = session('resrv-search');
+        
         // Clear the cache
         unset($this->extras);
         unset($this->frontendExtras);

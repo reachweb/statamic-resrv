@@ -28,7 +28,7 @@ class Options extends Component
     #[Locked]
     public Reservation $reservation;
 
-    #[Reactive]
+    #[Locked]
     public AvailabilityData $data;
 
     #[Locked]
@@ -105,6 +105,7 @@ class Options extends Component
     #[On('availability-search-updated')]
     public function updateOnChange(): void
     {
+        $this->data = session('resrv-search');
         // Clear the cache
         unset($this->options);
     }

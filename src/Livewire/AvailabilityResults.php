@@ -132,6 +132,18 @@ class AvailabilityResults extends Component
         }
     }
 
+    #[On('extras-updated')]
+    public function updateExtras($extras): void
+    {
+        $this->enabledExtras->extras = collect($extras);
+    }
+
+    #[On('options-updated')]
+    public function updateOptions($options): void
+    {
+        $this->enabledOptions->options = collect($options);
+    }
+
     public function render()
     {
         return view('statamic-resrv::livewire.'.$this->view);
