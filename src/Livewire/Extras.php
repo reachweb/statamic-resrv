@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Livewire;
 
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
 use Livewire\Attributes\Session;
@@ -24,13 +25,20 @@ class Extras extends Component
     #[Session('resrv-extras')]
     public EnabledExtras $enabledExtras;
 
+    #[Locked]
     public Collection $extraConditions;
 
+    #[Locked]
     public Reservation $reservation;
 
+    #[Locked]
     public AvailabilityData $data;
 
+    #[Locked]
     public string $entryId;
+
+    #[Locked]
+    public $filter = false;
 
     #[Reactive]
     public ?array $errors = null;
@@ -54,11 +62,19 @@ class Extras extends Component
     #[Computed(persist: true)]
     public function extras(): Collection
     {
-        if (isset($this->reservation)) {
-            return $this->getExtrasForReservation();
-        } else {
-            return $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
+        $extras = isset($this->reservation)
+            ? $this->getExtrasForReservation()
+            : $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
+
+        if ($this->filter) {
+            $extrasToShow = explode('|', $this->filter);
+
+            return $extras->filter(function ($extra) use ($extrasToShow) {
+                return in_array($extra->id, $extrasToShow);
+            });
         }
+
+        return $extras;
     }
 
     #[Computed(persist: true)]

@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Livewire;
 
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Reactive;
 use Livewire\Attributes\Session;
 use Livewire\Component;
@@ -23,11 +24,17 @@ class Options extends Component
     #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
+    #[Locked]
     public Reservation $reservation;
 
+    #[Locked]
     public AvailabilityData $data;
 
+    #[Locked]
     public string $entryId;
+
+    #[Locked]
+    public $filter = false;
 
     #[Reactive]
     public ?array $errors = null;
@@ -45,11 +52,19 @@ class Options extends Component
     #[Computed(persist: true)]
     public function options(): Collection
     {
-        if (isset($this->reservation)) {
-            return $this->getOptionsForReservation();
-        } else {
-            return $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
+        $options = isset($this->reservation)
+            ? $this->getOptionsForReservation()
+            : $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
+
+        if ($this->filter) {
+            $optionsToShow = explode('|', $this->filter);
+
+            return $options->filter(function ($option) use ($optionsToShow) {
+                return in_array($option->id, $optionsToShow);
+            });
         }
+
+        return $options;
     }
 
     public function selectOption($optionId, $valueId)
