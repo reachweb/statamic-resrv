@@ -45,7 +45,7 @@ class Extras extends Component
 
     public function mount()
     {
-        if (!isset($this->reservation) && !$this->entryId) {
+        if (! isset($this->reservation) && ! $this->entryId) {
             throw new \Exception('Entry ID is required when reservation is not provided');
         }
 

@@ -32,7 +32,7 @@ class Options extends Component
     public AvailabilityData $data;
 
     #[Locked]
-    public ?string $entryId= null;
+    public ?string $entryId = null;
 
     #[Locked]
     public $filter = false;
@@ -42,7 +42,7 @@ class Options extends Component
 
     public function mount()
     {
-        if (!isset($this->reservation) && !$this->entryId) {
+        if (! isset($this->reservation) && ! $this->entryId) {
             throw new \Exception('Entry ID is required when reservation is not provided');
         }
 
