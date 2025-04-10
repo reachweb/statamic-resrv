@@ -19,12 +19,10 @@
                 @if ($step === 1)
                     <livewire:options
                         :reservation="$this->reservation"
-                        :entryId="$this->entry->id"
                         :errors="$errors->get('options')"
                     />
                     <livewire:extras
                         :reservation="$this->reservation"
-                        :entryId="$this->entry->id"
                         :$coupon
                         :errors="$errors->get('extras')"
                     />
