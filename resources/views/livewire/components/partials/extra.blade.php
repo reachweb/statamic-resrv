@@ -1,23 +1,16 @@
-@php
-    $compact = $isCompact ?? false;
-@endphp
-
 <div 
     wire:key="extra-{{ $extra->id }}"
     wire:loading.class="opacity-50 pointer-events-none"
     @class([
-        'grid grid-cols-4 items-center transition-opacity duration-150',
-        'my-3 lg:my-5' => ! $compact, 
-        'my-2 lg:my-3' => $compact,
+        'grid grid-cols-4 my-3 lg:my-5 items-center transition-opacity duration-150',
         'hidden' => $this->hiddenExtras->contains($extra->id)
     ])
 >
     <div @class([
-        'order-0', 
-        'col-span-3' => ! $extra->allow_multiple || ($extra->allow_multiple && $compact), 
-        'col-span-2' => $extra->allow_multiple && ! $compact,
+        'col-span-3' => ! $extra->allow_multiple, 
+        'col-span-2' => $extra->allow_multiple ,
     ])>
-        <div>
+        <div class="flex flex-col justify-center items-start">
             <label class="inline-flex items-center cursor-pointer">
                 <input 
                     type="checkbox" 
@@ -47,7 +40,7 @@
         </div>
     </div>
     @if ($extra->allow_multiple)
-        <div @class(['order-2 col-span-4 justify-start' => $compact])>
+        <div>
         @include('statamic-resrv::livewire.components.partials.extra-quantity')
         </div>
     @endif

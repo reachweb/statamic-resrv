@@ -8,6 +8,8 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
 use Livewire\Attributes\Session;
 use Livewire\Component;
+use Reach\StatamicResrv\Facades\Availability;
+use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Livewire\Traits\HandlesExtrasQueries;
@@ -15,7 +17,7 @@ use Reach\StatamicResrv\Livewire\Traits\HandlesOptionsQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesStatamicQueries;
 use Reach\StatamicResrv\Models\Reservation;
 
-class CheckoutExtrasOptions extends Component
+class ExtrasOptions extends Component
 {
     use HandlesExtrasQueries,
         HandlesOptionsQueries,
@@ -33,15 +35,17 @@ class CheckoutExtrasOptions extends Component
 
     public Reservation $reservation;
 
+    public AvailabilityData $data;
+
     public string $entryId;
+
+    public bool $compact = false;
 
     #[Reactive]
     public ?array $optionsErrors = null;
 
     #[Reactive]
     public ?array $extrasErrors = null;
-
-    public $extraSelections = [];
 
     public function mount()
     {
@@ -68,7 +72,11 @@ class CheckoutExtrasOptions extends Component
     #[Computed(persist: true)]
     public function extras(): Collection
     {
-        return $this->getExtrasForReservation();
+        if (isset($this->reservation)) {
+            return $this->getExtrasForReservation();
+        } else {
+            return $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
+        }
     }
 
     #[Computed(persist: true)]
@@ -89,7 +97,11 @@ class CheckoutExtrasOptions extends Component
     #[Computed(persist: true)]
     public function options(): Collection
     {
-        return $this->getOptionsForReservation();
+        if (isset($this->reservation)) {
+            return $this->getOptionsForReservation();
+        } else {
+            return $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
+        }
     }
 
     #[Computed]

@@ -3,9 +3,7 @@
 @endphp
 
 <div @class([
-    'flex items-center',
-    'justify-center' => ! $compact,
-    'mt-2' => $compact,
+    'flex items-center justify-center',
     'hidden' => ! $this->isExtraSelected($extra->id),
 ])>
     <div class="max-w-xs mx-auto flex flex-col lg:flex-row items-center">

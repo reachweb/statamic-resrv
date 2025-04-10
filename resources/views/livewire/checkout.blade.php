@@ -17,14 +17,13 @@
             @endif
             <div class="mt-4">
                 @if ($step === 1)
-                    <livewire:checkout-extras-options 
+                    <livewire:extras-options
                         :reservation="$this->reservation"
                         :entryId="$this->entry->id"
                         :$coupon
                         :optionsErrors="$errors->get('options')"
                         :extrasErrors="$errors->get('extras')"
                     />
-
                     <div class="mt-8 xl:mt-10">
                         <x-resrv::checkout-step-button wire:click="handleFirstStep()">
                             {{ trans('statamic-resrv::frontend.continueToPersonalDetails') }}
