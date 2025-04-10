@@ -13,7 +13,7 @@
         @endif
     </div>
     
-    <div class="grid w-full gap-6 md:grid-cols-2">
+    <div class="grid w-full gap-6 lg:grid-cols-2">
         @foreach ($option->values as $value)
         <div wire:key="{{ $value->id }}" wire:loading.class="opacity-50 pointer-events-none">
             <label 

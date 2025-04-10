@@ -8,28 +8,21 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
 use Livewire\Attributes\Session;
 use Livewire\Component;
-use Reach\StatamicResrv\Facades\Availability;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
-use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Livewire\Traits\HandlesExtrasQueries;
-use Reach\StatamicResrv\Livewire\Traits\HandlesOptionsQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesStatamicQueries;
 use Reach\StatamicResrv\Models\Reservation;
 
-class ExtrasOptions extends Component
+class Extras extends Component
 {
     use HandlesExtrasQueries,
-        HandlesOptionsQueries,
         HandlesStatamicQueries;
 
-    public string $view = 'checkout-extras-options';
+    public string $view = 'extras';
 
     #[Session('resrv-extras')]
     public EnabledExtras $enabledExtras;
-
-    #[Session('resrv-options')]
-    public EnabledOptions $enabledOptions;
 
     public Collection $extraConditions;
 
@@ -39,13 +32,8 @@ class ExtrasOptions extends Component
 
     public string $entryId;
 
-    public bool $compact = false;
-
     #[Reactive]
-    public ?array $optionsErrors = null;
-
-    #[Reactive]
-    public ?array $extrasErrors = null;
+    public ?array $errors = null;
 
     public function mount()
     {
@@ -54,12 +42,6 @@ class ExtrasOptions extends Component
             $this->dispatchExtrasUpdated();
         } else {
             $this->enabledExtras->extras = collect();
-        }
-        if (session()->has('resrv-options')) {
-            $this->enabledOptions->fill(session('resrv-options'));
-            $this->dispatchOptionsUpdated();
-        } else {
-            $this->enabledOptions->options = collect();
         }
 
         $this->extraConditions = collect([
@@ -92,16 +74,6 @@ class ExtrasOptions extends Component
             })
             ->sortBy('order')
             ->values();
-    }
-
-    #[Computed(persist: true)]
-    public function options(): Collection
-    {
-        if (isset($this->reservation)) {
-            return $this->getOptionsForReservation();
-        } else {
-            return $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
-        }
     }
 
     #[Computed]
@@ -165,43 +137,9 @@ class ExtrasOptions extends Component
         $this->dispatch('extras-updated', $this->enabledExtras->extras);
     }
 
-    public function selectOption($optionId, $valueId)
-    {
-        $optionId = (int) $optionId;
-        $valueId = (int) $valueId;
-
-        $option = $this->options->firstWhere('id', $optionId);
-        $value = $option->values->firstWhere('id', $valueId);
-
-        // Create option data
-        $option = [
-            'id' => $optionId,
-            'value' => $valueId,
-            'price' => $value->price->format(),
-            'optionName' => $option->name,
-            'valueName' => $value->name,
-        ];
-
-        // Save the option with its ID as the key
-        $this->enabledOptions->options->put($optionId, $option);
-
-        $this->dispatchOptionsUpdated();
-    }
-
-    public function dispatchOptionsUpdated()
-    {
-        $this->dispatch('options-updated', $this->enabledOptions->options);
-    }
-
     public function isExtraSelected($extraId)
     {
         return $this->enabledExtras->extras->has((int) $extraId);
-    }
-
-    public function isOptionValueSelected($optionId, $valueId)
-    {
-        return $this->enabledOptions->options->has((int) $optionId) &&
-            $this->enabledOptions->options->get((int) $optionId)['value'] === (int) $valueId;
     }
 
     public function getExtraQuantity($extraId)
