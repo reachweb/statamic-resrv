@@ -3,15 +3,15 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
-use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
+use Reach\StatamicResrv\Exceptions\ExtrasException;
+use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
@@ -28,13 +28,10 @@ class Checkout extends Component
 
     public string $view = 'checkout';
 
-    #[Session('resrv-extras')]
+    #[Locked]
     public EnabledExtras $enabledExtras;
 
     #[Locked]
-    public Collection $extraConditions;
-
-    #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
     #[Locked]
@@ -63,6 +60,10 @@ class Checkout extends Component
             $this->handleFirstStep();
         }
 
+        // Initialize the extras and options
+        $this->enabledExtras->extras = collect();
+        $this->enabledOptions->options = collect();
+
         $this->coupon = session('resrv_coupon') ?? null;
     }
 
@@ -78,6 +79,11 @@ class Checkout extends Component
         return $this->getEntry($this->reservation->item_id);
     }
 
+    public function goToStep(int $step): void
+    {
+        $this->step = $step;
+    }
+
     public function handleFirstStep(): void
     {
         // Validate data
@@ -87,6 +93,14 @@ class Checkout extends Component
         try {
             $this->confirmReservationIsValid();
             $this->confirmReservationHasNotExpired();
+        } catch (OptionsException $e) {
+            $this->addError('options', $e->getMessage());
+
+            return;
+        } catch (ExtrasException $e) {
+            $this->addError('extras', $e->getMessage());
+
+            return;
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
 
@@ -247,9 +261,53 @@ class Checkout extends Component
         $this->coupon = null;
     }
 
+    #[On('extras-updated')]
+    public function updateExtras($extras): void
+    {
+        $this->enabledExtras->extras = collect($extras);
+    }
+
+    #[On('options-updated')]
+    public function updateOptions($options): void
+    {
+        $this->enabledOptions->options = collect($options);
+    }
+
+    protected function assignExtras(): void
+    {
+        if ($this->enabledExtras->extras->count() > 0) {
+            try {
+                $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
+            } catch (\Exception $e) {
+                $this->addError('extras', 'There was an error assigning the extras. Please try again.');
+
+                return;
+            }
+        }
+    }
+
+    protected function assignOptions(): void
+    {
+        if ($this->enabledOptions->options->count() > 0) {
+            try {
+                $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
+            } catch (\Exception $e) {
+                $this->addError('options', 'There was an error assigning the options. Please try again.');
+
+                return;
+            }
+        }
+    }
+
     #[On('coupon-applied'), On('coupon-removed')]
     public function updateTotals($coupon, $removeCoupon = false): void
     {
+        $couponModel = DynamicPricing::searchForCoupon($coupon, $this->reservation->id);
+
+        if ($couponModel->appliesToExtras()) {
+            $this->dispatch('extras-coupon-changed');
+        }
+
         // Get the prices after applying the coupon
         $prices = $this->getUpdatedPrices();
         // Update the reservation with the new prices
@@ -258,7 +316,6 @@ class Checkout extends Component
         unset($this->reservation);
 
         // Update pricing
-        $this->updateEnabledExtraPrices();
         $this->calculateReservationTotals();
         CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
     }

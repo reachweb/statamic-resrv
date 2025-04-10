@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Events\ReservationExpired;
+use Reach\StatamicResrv\Exceptions\ExtrasException;
+use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -199,13 +201,13 @@ class Reservation extends Model
         $this->checkMaxQuantity($data['quantity']);
 
         if ($checkOptions && ! $this->checkForRequiredOptions($statamic_id, $data)) {
-            throw new ReservationException(__('There are required options you did not select.'));
+            throw new OptionsException(__('There are required options you did not select.'));
         }
 
         if ($checkExtras) {
             $requiredExtras = $this->checkForRequiredExtras($statamic_id, $data);
             if ($requiredExtras) {
-                throw new ReservationException($requiredExtras);
+                throw new ExtrasException($requiredExtras);
             }
         }
 

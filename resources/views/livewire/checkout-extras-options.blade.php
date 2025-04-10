@@ -14,6 +14,15 @@
             @include('statamic-resrv::livewire.components.partials.option')
             @endforeach
         </div>
+        @if ($optionsErrors)
+        <div class="flex flex-col my-4 md:my-6 p-4 bg-red-50 border border-red-300 rounded">
+            <dd class="text-gray-700">
+                @foreach ($optionsErrors as $index => $error)
+                    <div wire:key="{{ $index }}">{{ $error }}</div>
+                @endforeach
+            </dd>
+        </div>
+        @endif
     @endif
 
     @if ($this->frontendExtras->count() > 0)
@@ -50,5 +59,14 @@
             </div>
             @endforeach
         </div>
+        @if ($extrasErrors)
+        <div class="flex flex-col my-4 md:my-6 p-4 bg-red-50 border border-red-300 rounded">
+            <dd class="text-gray-700">
+                @foreach ($extrasErrors as $index => $error)
+                    <div wire:key="{{ $index }}">{{ $error }}</div>
+                @endforeach
+            </dd>
+        </div>
+        @endif
     @endif
 </div>

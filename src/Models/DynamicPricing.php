@@ -383,4 +383,9 @@ class DynamicPricing extends Model
 
         return false;
     }
+
+    public function appliesToExtras(): bool
+    {
+        return $this->extras()->count() > 0;
+    }
 }

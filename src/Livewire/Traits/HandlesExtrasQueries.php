@@ -42,7 +42,7 @@ trait HandlesExtrasQueries
         return $extras;
     }
 
-    public function updateEnabledExtraPrices()
+    public function updateEnabledExtraPrices(): void
     {
         $this->enabledExtras->extras->transform(function ($extra) {
             $extra['price'] = $this->extras->where('id', $extra['id'])->first()->price->format();

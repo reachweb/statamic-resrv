@@ -5,13 +5,13 @@ namespace Reach\StatamicResrv\Livewire;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Reactive;
 use Livewire\Component;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Livewire\Traits\HandlesExtrasQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesOptionsQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesStatamicQueries;
-use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 
 class CheckoutExtrasOptions extends Component
@@ -32,7 +32,11 @@ class CheckoutExtrasOptions extends Component
 
     public string $entryId;
 
-    public $searchData;
+    #[Reactive]
+    public ?array $optionsErrors = null;
+
+    #[Reactive]
+    public ?array $extrasErrors = null;
 
     public $extraSelections = [];
 
@@ -116,9 +120,11 @@ class CheckoutExtrasOptions extends Component
         if ($isSelected) {
             $this->enabledExtras->extras->forget($extraId);
         } else {
+            $extra = $this->extras->firstWhere('id', $extraId);
             $this->enabledExtras->extras->put($extraId, [
                 'id' => $extraId,
-                'price' => $this->extras->firstWhere('id', $extraId)->price->format(),
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
                 'quantity' => 1,
             ]);
         }
@@ -151,7 +157,7 @@ class CheckoutExtrasOptions extends Component
 
     public function dispatchExtrasUpdated()
     {
-        $this->dispatch('extrasUpdated', $this->enabledExtras->extras);
+        $this->dispatch('extras-updated', $this->enabledExtras->extras);
     }
 
     public function selectOption($optionId, $valueId)
@@ -159,17 +165,22 @@ class CheckoutExtrasOptions extends Component
         $optionId = (int) $optionId;
         $valueId = (int) $valueId;
 
+        $option = $this->options->firstWhere('id', $optionId);
+        $value = $option->values->firstWhere('id', $valueId);
+
         // Create option data
         $option = [
             'id' => $optionId,
             'value' => $valueId,
-            'price' => OptionValue::firstWhere('id', $valueId)->price->format(),
+            'price' => $value->price->format(),
+            'optionName' => $option->name,
+            'valueName' => $value->name,
         ];
 
         // Save the option with its ID as the key
         $this->enabledOptions->options->put($optionId, $option);
 
-        $this->dispatch('optionsUpdated', $this->enabledOptions->options);
+        $this->dispatch('options-updated', $this->enabledOptions->options);
     }
 
     public function isExtraSelected($extraId)
@@ -223,6 +234,19 @@ class CheckoutExtrasOptions extends Component
                     $this->toggleExtra($extraId);
                 }
             });
+        }
+    }
+
+    #[On('extras-coupon-changed')]
+    public function updateOnCoupon(): void
+    {
+        // Clear the cache
+        unset($this->extras);
+        unset($this->frontendExtras);
+
+        if ($this->enabledExtras->extras->count() !== 0) {
+            $this->updateEnabledExtraPrices();
+            $this->dispatchExtrasUpdated();
         }
     }
 

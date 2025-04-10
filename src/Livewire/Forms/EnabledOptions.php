@@ -13,6 +13,8 @@ class EnabledOptions extends Form
 
     public function optionsToSync(): Collection
     {
+        $this->validate();
+
         return $this->options->mapWithKeys(function ($option) {
             return [
                 $option['id'] => ['value' => $option['value']],
@@ -35,6 +37,14 @@ class EnabledOptions extends Form
             'options.*.value' => [
                 'required',
                 'integer',
+            ],
+            'options.*.optionName' => [
+                'required',
+                'string',
+            ],
+            'options.*.valueName' => [
+                'required',
+                'string',
             ],
         ];
     }
