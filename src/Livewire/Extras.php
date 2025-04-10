@@ -204,7 +204,7 @@ class Extras extends Component
     public function updateOnChange(): void
     {
         $this->data = session('resrv-search');
-        
+
         // Clear the cache
         unset($this->extras);
         unset($this->frontendExtras);
