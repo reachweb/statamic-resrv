@@ -31,7 +31,7 @@ class Extras extends Component
     #[Locked]
     public Reservation $reservation;
 
-    #[Locked]
+    #[Reactive]
     public AvailabilityData $data;
 
     #[Locked]
@@ -66,7 +66,7 @@ class Extras extends Component
             ? $this->getExtrasForReservation()
             : $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
 
-        if ($this->filter) {
+        if (is_string($this->filter)) {
             $extrasToShow = explode('|', $this->filter);
 
             return $extras->filter(function ($extra) use ($extrasToShow) {
@@ -200,8 +200,8 @@ class Extras extends Component
         }
     }
 
-    #[On('extras-coupon-changed')]
-    public function updateOnCoupon(): void
+    #[On('extras-coupon-changed'), On('availability-search-updated')]
+    public function updateOnChange(): void
     {
         // Clear the cache
         unset($this->extras);

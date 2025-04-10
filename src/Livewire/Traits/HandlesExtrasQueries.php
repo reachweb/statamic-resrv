@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Livewire\Traits;
 
 use Illuminate\Support\Collection;
-use Reach\StatamicResrv\Livewire\CheckoutExtrasOptions;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Reservation;
@@ -55,7 +54,7 @@ trait HandlesExtrasQueries
     {
         $current = $this->extraConditions;
         $extras = collect($extras)->filter(fn ($extra) => count($extra->conditions) > 0);
-        $data = $this instanceof CheckoutExtrasOptions ? $this->reservation : $this->data;
+        $data = isset($this->reservation) ? $this->reservation : $this->data;
 
         if ($extras->count() > 0) {
             $this->extraConditions = app(ExtraCondition::class)->calculateConditionArrays($extras, $this->enabledExtras, $data);

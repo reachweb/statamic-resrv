@@ -21,8 +21,6 @@ class AvailabilityResults extends Component
     use HandlesMultisiteIds,
         Hookable,
         Traits\HandlesAvailabilityQueries,
-        Traits\HandlesExtrasQueries,
-        Traits\HandlesOptionsQueries,
         Traits\HandlesPricing,
         Traits\HandlesReservationQueries,
         Traits\HandlesStatamicQueries;
@@ -53,9 +51,6 @@ class AvailabilityResults extends Component
     #[Session('resrv-extras')]
     public EnabledExtras $enabledExtras;
 
-    #[Locked]
-    public Collection $extraConditions;
-
     #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
@@ -71,44 +66,6 @@ class AvailabilityResults extends Component
         }
 
         $this->runHooks('init');
-    }
-
-    #[Computed(persist: true)]
-    public function extras(): Collection
-    {
-        if ($this->showExtras) {
-            $extras = $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
-            if ($this->showExtras === true) {
-                return $extras;
-            } else {
-                $extrasToShow = explode('|', $this->showExtras);
-
-                return $extras->filter(function ($extra) use ($extrasToShow) {
-                    return in_array($extra->id, $extrasToShow);
-                });
-            }
-        }
-
-        return collect();
-    }
-
-    #[Computed(persist: true)]
-    public function options(): Collection
-    {
-        if ($this->showOptions) {
-            $options = $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
-            if ($this->showOptions === true) {
-                return $options;
-            } else {
-                $optionsToShow = explode('|', $this->showOptions);
-
-                return $options->filter(function ($option) use ($optionsToShow) {
-                    return in_array($option->id, $optionsToShow);
-                });
-            }
-        }
-
-        return collect();
     }
 
     #[Computed(persist: true)]
@@ -138,9 +95,6 @@ class AvailabilityResults extends Component
         }
         $this->getAvailability();
 
-        unset($this->extras);
-        unset($this->options);
-
         $this->runHooks('availability-results-updated', $this->availability);
 
         $this->dispatch('availability-results-updated');
@@ -158,11 +112,6 @@ class AvailabilityResults extends Component
 
             return;
         }
-    }
-
-    public function updatedEnabledExtras()
-    {
-        $this->handleExtrasConditions($this->extras);
     }
 
     public function checkout(): void

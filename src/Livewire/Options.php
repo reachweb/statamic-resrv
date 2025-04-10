@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Livewire;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
 use Livewire\Attributes\Session;
 use Livewire\Component;
@@ -27,7 +28,7 @@ class Options extends Component
     #[Locked]
     public Reservation $reservation;
 
-    #[Locked]
+    #[Reactive]
     public AvailabilityData $data;
 
     #[Locked]
@@ -56,7 +57,7 @@ class Options extends Component
             ? $this->getOptionsForReservation()
             : $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
 
-        if ($this->filter) {
+        if (is_string($this->filter)) {
             $optionsToShow = explode('|', $this->filter);
 
             return $options->filter(function ($option) use ($optionsToShow) {
@@ -99,6 +100,13 @@ class Options extends Component
     {
         return $this->enabledOptions->options->has((int) $optionId) &&
             $this->enabledOptions->options->get((int) $optionId)['value'] === (int) $valueId;
+    }
+
+    #[On('availability-search-updated')]
+    public function updateOnChange(): void
+    {
+        // Clear the cache
+        unset($this->options);
     }
 
     public function render()
