@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
+use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
@@ -22,8 +23,10 @@ class CheckoutExtrasOptions extends Component
 
     public string $view = 'checkout-extras-options';
 
+    #[Session('resrv-extras')]
     public EnabledExtras $enabledExtras;
 
+    #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
     public Collection $extraConditions;
@@ -44,11 +47,13 @@ class CheckoutExtrasOptions extends Component
     {
         if (session()->has('resrv-extras')) {
             $this->enabledExtras->fill(session('resrv-extras'));
+            $this->dispatchExtrasUpdated();
         } else {
             $this->enabledExtras->extras = collect();
         }
         if (session()->has('resrv-options')) {
             $this->enabledOptions->fill(session('resrv-options'));
+            $this->dispatchOptionsUpdated();
         } else {
             $this->enabledOptions->options = collect();
         }
@@ -58,18 +63,6 @@ class CheckoutExtrasOptions extends Component
             'required' => collect(),
         ]);
         $this->updateExtraConditions();
-    }
-
-    protected function initExtraSelections()
-    {
-        $this->extraSelections = [];
-
-        // Check existing selections from enabledExtras
-        if ($this->enabledExtras->extras && $this->enabledExtras->extras->count() > 0) {
-            foreach ($this->enabledExtras->extras as $extra) {
-                $this->extraSelections[$extra['id']] = true;
-            }
-        }
     }
 
     #[Computed(persist: true)]
@@ -180,6 +173,11 @@ class CheckoutExtrasOptions extends Component
         // Save the option with its ID as the key
         $this->enabledOptions->options->put($optionId, $option);
 
+        $this->dispatchOptionsUpdated();
+    }
+
+    public function dispatchOptionsUpdated()
+    {
         $this->dispatch('options-updated', $this->enabledOptions->options);
     }
 
@@ -188,18 +186,17 @@ class CheckoutExtrasOptions extends Component
         return $this->enabledExtras->extras->has((int) $extraId);
     }
 
+    public function isOptionValueSelected($optionId, $valueId)
+    {
+        return $this->enabledOptions->options->has((int) $optionId) &&
+            $this->enabledOptions->options->get((int) $optionId)['value'] === (int) $valueId;
+    }
+
     public function getExtraQuantity($extraId)
     {
         $extra = $this->enabledExtras->extras->get((int) $extraId);
 
         return $extra ? $extra['quantity'] : 1;
-    }
-
-    public function getSelectedOptionValue($optionId)
-    {
-        $option = $this->enabledOptions->options->get((int) $optionId);
-
-        return $option ? $option['value'] : null;
     }
 
     public function updateExtraConditions()

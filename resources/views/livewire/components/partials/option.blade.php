@@ -26,8 +26,9 @@
                     name="{{ $option->slug }}"
                     id="{{ $option->slug }}-{{ $value->id }}"
                     wire:change.throttle="selectOption({{ $option->id }}, {{ $value->id }})"
-                    value="{{ $value->id }}" 
+                    value="{{ $value->id }}"
                     class="form-radio w-5 h-5 text-blue-600 bg-gray-100 border-gray-300"
+                    @if ($this->isOptionValueSelected($option->id, $value->id)) checked @endif
                 />
                 <div class="flex flex-col md:flex-row justify-between md:items-center ml-3">
                     <div>
