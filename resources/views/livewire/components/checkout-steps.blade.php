@@ -40,7 +40,7 @@
             </svg>
             @else
             <div class="flex items-center justify-center rounded-full w-7 h-7 p-1 bg-gray-200 me-2">
-                <span class="font-bold text-md">2</span>
+                <span class="font-bold text-md">{{ $enableExtrasStep === false ? '1' : '2' }}</span>
             </div>
             @endif
             {{ trans('statamic-resrv::frontend.customerInfo') }}
@@ -55,7 +55,7 @@
             </svg>
             @else
             <div class="flex items-center justify-center rounded-full w-7 h-7 p-1 bg-gray-200 me-2">
-                <span class="font-bold text-md">3</span>
+            <span class="font-bold text-md">{{ $enableExtrasStep === false ? '2' : '3' }}</span>
             </div>
             @endif
             {{ trans('statamic-resrv::frontend.payment') }}
