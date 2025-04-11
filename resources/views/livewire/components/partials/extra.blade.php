@@ -27,7 +27,7 @@
                         {{ $this->requiredExtras->contains($extra->id) ? 'cursor-not-allowed' : '' }}"
                     >
                 </div>
-                <span class="ms-3 font-medium text-gray-900">{{ $extra->name }}</span>
+                <span class="ms-3 font-medium text-gray-900">{{ $extra->override_label ?? $extra->name }}</span>
                 @if ($this->requiredExtras->contains($extra->id))
                 <span class="ml-2 text-xs text-gray-600 uppercase">
                     {{ trans('statamic-resrv::frontend.required') }}
