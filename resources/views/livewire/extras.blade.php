@@ -1,6 +1,6 @@
 <div>
     @if ($this->frontendExtras->count() > 0)
-        <div class="mt-6 xl:mt-8">
+        <div class="mt-4 xl:mt-6">
             <div class="text-lg xl:text-xl font-medium mb-2">
                 {{ trans('statamic-resrv::frontend.extras') }}
             </div>
