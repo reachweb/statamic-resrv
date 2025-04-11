@@ -146,6 +146,24 @@ class CheckoutTest extends TestCase
         ]);
     }
 
+    public function test_it_can_skip_first_step()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $extras = ResrvExtra::getPriceForDates($this->reservation);
+
+        $component = Livewire::test(Checkout::class, ['enableExtrasStep' => false])
+            ->assertSet('step', 2)
+            ->call('handleSecondStep')
+            ->assertSet('step', 3);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'price' => '100',
+            'total' => '100.0',
+        ]);
+    }
+
     public function test_it_redirects_to_the_checkout_complete_page_if_the_reservation_payment_is_zero()
     {
         Event::fake();

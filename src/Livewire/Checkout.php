@@ -56,13 +56,12 @@ class Checkout extends Component
         } catch (ReservationException $e) {
             $this->reservationError = $e->getMessage();
         }
+
+        $this->initializeExtrasAndOptions();
+
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
         }
-
-        // Initialize the extras and options
-        $this->enabledExtras->extras = collect();
-        $this->enabledOptions->options = collect();
 
         $this->coupon = session('resrv_coupon') ?? null;
     }
@@ -82,6 +81,26 @@ class Checkout extends Component
     public function goToStep(int $step): void
     {
         $this->step = $step;
+    }
+
+    public function initializeExtrasAndOptions(): void
+    {
+        // When extras step is disabled, load from session if available
+        if ($this->enableExtrasStep === false) {
+            if (session()->has('resrv-extras')) {
+                $this->enabledExtras->fill(session('resrv-extras'));
+            } else {
+                $this->enabledExtras->extras = collect();
+            }
+            if (session()->has('resrv-options')) {
+                $this->enabledOptions->fill(session('resrv-options'));
+            } else {
+                $this->enabledOptions->options = collect();
+            }
+        } else {
+            $this->enabledExtras->extras = collect();
+            $this->enabledOptions->options = collect();
+        }
     }
 
     public function handleFirstStep(): void
@@ -275,6 +294,7 @@ class Checkout extends Component
 
     protected function assignExtras(): void
     {
+        ray($this->enabledExtras, $this->enabledExtras->extrasToSync());
         if ($this->enabledExtras->extras->count() > 0) {
             try {
                 $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
