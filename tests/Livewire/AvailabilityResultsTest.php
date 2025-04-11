@@ -510,10 +510,8 @@ class AvailabilityResultsTest extends TestCase
                     'advanced' => null,
                 ]
             )
-            ->assertSee('Reservation option');
-
-        $this->assertEquals('Reservation option', $component->options->first()->name);
-        $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
+            ->assertSee('Reservation option')
+            ->assertSee('45.50');
     }
 
     // Test that it gets extras if property is enabled
@@ -531,10 +529,8 @@ class AvailabilityResultsTest extends TestCase
                     'advanced' => null,
                 ]
             )
-            ->assertSee('This is an extra');
-
-        $this->assertEquals('This is an extra', $component->extras->first()->name);
-        $this->assertEquals('9.30', $component->extras->first()->price);
+            ->assertSee('This is an extra')
+            ->assertSee('9.30');
     }
 
     // Test that it applies dynamic pricing if conditions are met

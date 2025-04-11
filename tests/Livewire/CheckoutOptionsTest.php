@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Livewire\Options;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
@@ -45,9 +46,7 @@ class CheckoutOptionsTest extends TestCase
     // Test that it loads and displays options for the entry
     public function test_loads_options_for_the_entry()
     {
-        session(['resrv_reservation' => $this->reservation->id]);
-
-        $component = Livewire::test(Checkout::class);
+        $component = Livewire::test(Options::class, ['reservation' => $this->reservation]);
 
         $this->assertEquals('Reservation option', $component->options->first()->name);
         $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
@@ -56,9 +55,7 @@ class CheckoutOptionsTest extends TestCase
     // Test that it loads options list in the view
     public function test_loads_options_list_in_the_view()
     {
-        session(['resrv_reservation' => $this->reservation->id]);
-
-        Livewire::test(Checkout::class)
+        Livewire::test(Options::class, ['reservation' => $this->reservation])
             ->assertSee($this->options->first()->name)
             ->assertSee($this->options->first()->values->first()->name);
     }
@@ -70,9 +67,8 @@ class CheckoutOptionsTest extends TestCase
             'quantity' => 2,
             'item_id' => $this->entries->first()->id(),
         ]);
-        session(['resrv_reservation' => $reservation->id]);
 
-        $component = Livewire::test(Checkout::class);
+        $component = Livewire::test(Options::class, ['reservation' => $reservation]);
 
         $this->assertEquals('Reservation option', $component->options->first()->name);
         $this->assertEquals('91.00', $component->options->first()->values->first()->price->format());
@@ -87,9 +83,8 @@ class CheckoutOptionsTest extends TestCase
             'quantity' => 2,
             'item_id' => $this->entries->first()->id(),
         ]);
-        session(['resrv_reservation' => $reservation->id]);
 
-        $component = Livewire::test(Checkout::class);
+        $component = Livewire::test(Options::class, ['reservation' => $reservation]);
 
         $this->assertEquals('Reservation option', $component->options->first()->name);
         $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
@@ -100,14 +95,16 @@ class CheckoutOptionsTest extends TestCase
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        Livewire::test(Checkout::class)
-            ->set('enabledOptions.options', [$this->options->first()->id => [
+        Livewire::test(Checkout::class, ['reservation' => $this->reservation])
+            ->dispatch('options-updated', [$this->options->first()->id => [
                 'id' => $this->options->first()->id,
                 'value' => $this->options->first()->values->first()->id,
                 'price' => $this->options->first()->values->first()->price->format(),
+                'optionName' => $this->options->first()->name,
+                'valueName' => $this->options->first()->values->first()->name,
             ]])
             ->assertSee($this->options->first()->name.': <span class="font-medium">'.$this->options->first()->values->first()->name, false)
-            ->assertSee('222.75');
+            ->assertSee('22.75');
     }
 
     // Test that it gives an error at step 1 if a required option is not selected
@@ -120,17 +117,19 @@ class CheckoutOptionsTest extends TestCase
         // Test without any options (should fail)
         Livewire::test(Checkout::class)
             ->call('handleFirstStep')
-            ->assertHasErrors('reservation');
+            ->assertHasErrors('options');
 
         // Test with a value selected for the option
         Livewire::test(Checkout::class)
-            ->set('enabledOptions.options', [$option->id => [
+            ->dispatch('options-updated', [$option->id => [
                 'id' => $option->id,
                 'value' => $option->values->first()->id,
                 'price' => $option->values->first()->price->format(),
+                'optionName' => $option->name,
+                'valueName' => $option->values->first()->name,
             ]])
             ->call('handleFirstStep')
-            ->assertHasNoErrors('reservation')
+            ->assertHasNoErrors('options')
             ->assertSet('step', 2);
 
         $this->assertDatabaseHas('resrv_reservations', [

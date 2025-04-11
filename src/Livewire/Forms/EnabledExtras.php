@@ -13,6 +13,8 @@ class EnabledExtras extends Form
 
     public function extrasToSync(): Collection
     {
+        $this->validate();
+
         return $this->extras->mapWithKeys(function ($extra) {
             return [
                 $extra['id'] => [
@@ -38,6 +40,10 @@ class EnabledExtras extends Form
             'extras.*.quantity' => [
                 'required',
                 'integer',
+            ],
+            'extras.*.name' => [
+                'required',
+                'string',
             ],
         ];
     }

@@ -105,11 +105,12 @@ class CheckoutTest extends TestCase
         $extras = ResrvExtra::getPriceForDates($this->reservation);
 
         $component = Livewire::test(Checkout::class)
-            ->set('enabledExtras.extras', collect([0 => [
-                'id' => $this->extra->id,
-                'price' => $extras->first()->price->format(),
+            ->dispatch('extras-updated', [$extras->first()->id => [
+                'id' => $extras->first()->id,
                 'quantity' => 1,
-            ]]))
+                'price' => $extras->first()->price->format(),
+                'name' => $extras->first()->name,
+            ]])
             ->call('handleFirstStep')
             ->assertSet('step', 2);
 
@@ -142,6 +143,24 @@ class CheckoutTest extends TestCase
         $this->assertDatabaseMissing('resrv_reservations', [
             'id' => $this->reservation->id,
             'payment_id' => '',
+        ]);
+    }
+
+    public function test_it_can_skip_first_step()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $extras = ResrvExtra::getPriceForDates($this->reservation);
+
+        $component = Livewire::test(Checkout::class, ['enableExtrasStep' => false])
+            ->assertSet('step', 2)
+            ->call('handleSecondStep')
+            ->assertSet('step', 3);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'price' => '100',
+            'total' => '100.0',
         ]);
     }
 
@@ -333,15 +352,18 @@ class CheckoutTest extends TestCase
         $extras = ResrvExtra::getPriceForDates($this->reservation);
 
         $component = Livewire::test(Checkout::class)
-            ->set('enabledExtras.extras', collect([0 => [
-                'id' => $this->extra->id,
-                'price' => $extras->first()->price->format(),
+            ->dispatch('extras-updated', [$extras->first()->id => [
+                'id' => $extras->first()->id,
                 'quantity' => 1,
-            ]]))
-            ->set('enabledOptions.options', [[
+                'price' => $extras->first()->price->format(),
+                'name' => $extras->first()->name,
+            ]])
+            ->dispatch('options-updated', [$this->options->first()->id => [
                 'id' => $this->options->first()->id,
                 'value' => $this->options->first()->values->first()->id,
                 'price' => $this->options->first()->values->first()->price->format(),
+                'optionName' => $this->options->first()->name,
+                'valueName' => $this->options->first()->values->first()->name,
             ]])
             ->call('handleFirstStep')
             ->assertSet('step', 2);
@@ -363,15 +385,18 @@ class CheckoutTest extends TestCase
         $extras = ResrvExtra::getPriceForDates($this->reservation);
 
         $component = Livewire::test(Checkout::class)
-            ->set('enabledExtras.extras', collect([0 => [
-                'id' => $this->extra->id,
-                'price' => $extras->first()->price->format(),
+            ->dispatch('extras-updated', [$extras->first()->id => [
+                'id' => $extras->first()->id,
                 'quantity' => 1,
-            ]]))
-            ->set('enabledOptions.options', [[
+                'price' => $extras->first()->price->format(),
+                'name' => $extras->first()->name,
+            ]])
+            ->dispatch('options-updated', [$this->options->first()->id => [
                 'id' => $this->options->first()->id,
                 'value' => $this->options->first()->values->first()->id,
                 'price' => $this->options->first()->values->first()->price->format(),
+                'optionName' => $this->options->first()->name,
+                'valueName' => $this->options->first()->values->first()->name,
             ]])
             ->call('handleFirstStep')
             ->assertSet('step', 2);
@@ -402,15 +427,18 @@ class CheckoutTest extends TestCase
         $extras = ResrvExtra::getPriceForDates($reservation);
 
         $component = Livewire::test(Checkout::class)
-            ->set('enabledExtras.extras', collect([0 => [
-                'id' => $this->extra->id,
-                'price' => $extras->first()->price->format(),
+            ->dispatch('extras-updated', [$extras->first()->id => [
+                'id' => $extras->first()->id,
                 'quantity' => 1,
-            ]]))
-            ->set('enabledOptions.options', [[
+                'price' => $extras->first()->price->format(),
+                'name' => $extras->first()->name,
+            ]])
+            ->dispatch('options-updated', [$this->options->first()->id => [
                 'id' => $this->options->first()->id,
                 'value' => $this->options->first()->values->first()->id,
                 'price' => $this->options->first()->values->first()->price->format(),
+                'optionName' => $this->options->first()->name,
+                'valueName' => $this->options->first()->values->first()->name,
             ]])
             ->call('handleFirstStep')
             ->assertSet('step', 2);

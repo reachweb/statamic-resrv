@@ -3,15 +3,15 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
-use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
+use Reach\StatamicResrv\Exceptions\ExtrasException;
+use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
@@ -28,13 +28,10 @@ class Checkout extends Component
 
     public string $view = 'checkout';
 
-    #[Session('resrv-extras')]
+    #[Locked]
     public EnabledExtras $enabledExtras;
 
     #[Locked]
-    public Collection $extraConditions;
-
-    #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
     #[Locked]
@@ -59,20 +56,13 @@ class Checkout extends Component
         } catch (ReservationException $e) {
             $this->reservationError = $e->getMessage();
         }
+
+        $this->initializeExtrasAndOptions();
+
         if ($this->enableExtrasStep === false) {
             $this->handleFirstStep();
         }
-        if (session()->has('resrv-extras')) {
-            $this->enabledExtras->fill(session('resrv-extras'));
-        } else {
-            $this->enabledExtras->extras = collect();
-        }
-        if (session()->has('resrv-options')) {
-            $this->enabledOptions->fill(session('resrv-options'));
-        } else {
-            $this->enabledOptions->options = collect();
-        }
-        $this->extraConditions = collect();
+
         $this->coupon = session('resrv_coupon') ?? null;
     }
 
@@ -88,36 +78,29 @@ class Checkout extends Component
         return $this->getEntry($this->reservation->item_id);
     }
 
-    #[Computed(persist: true)]
-    public function extras(): Collection
-    {
-        return $this->getExtrasForReservation();
-    }
-
-    #[Computed(persist: true)]
-    public function frontendExtras(): Collection
-    {
-        return $this->extras->groupBy('category_id')
-            ->sortBy('order')
-            ->map(function ($items) {
-                return $this->createExtraCategoryObject($items);
-            })
-            ->reject(function ($category) {
-                return $category->published == false;
-            })
-            ->sortBy('order')
-            ->values();
-    }
-
-    #[Computed(persist: true)]
-    public function options(): Collection
-    {
-        return $this->getOptionsForReservation();
-    }
-
     public function goToStep(int $step): void
     {
         $this->step = $step;
+    }
+
+    public function initializeExtrasAndOptions(): void
+    {
+        // When extras step is disabled, load from session if available
+        if ($this->enableExtrasStep === false) {
+            if (session()->has('resrv-extras')) {
+                $this->enabledExtras->fill(session('resrv-extras'));
+            } else {
+                $this->enabledExtras->extras = collect();
+            }
+            if (session()->has('resrv-options')) {
+                $this->enabledOptions->fill(session('resrv-options'));
+            } else {
+                $this->enabledOptions->options = collect();
+            }
+        } else {
+            $this->enabledExtras->extras = collect();
+            $this->enabledOptions->options = collect();
+        }
     }
 
     public function handleFirstStep(): void
@@ -129,6 +112,14 @@ class Checkout extends Component
         try {
             $this->confirmReservationIsValid();
             $this->confirmReservationHasNotExpired();
+        } catch (OptionsException $e) {
+            $this->addError('options', $e->getMessage());
+
+            return;
+        } catch (ExtrasException $e) {
+            $this->addError('extras', $e->getMessage());
+
+            return;
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
 
@@ -265,25 +256,6 @@ class Checkout extends Component
         }
     }
 
-    protected function assignExtras(): void
-    {
-        if ($this->enabledExtras->extras->count() > 0) {
-            $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
-        }
-    }
-
-    protected function assignOptions(): void
-    {
-        if ($this->enabledOptions->options->count() > 0) {
-            $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
-        }
-    }
-
-    public function updatedEnabledExtras()
-    {
-        $this->handleExtrasConditions($this->extras);
-    }
-
     public function addCoupon(string $coupon)
     {
         $data = validator(['coupon' => $coupon], ['coupon' => 'required|alpha_dash'], ['coupon' => 'The coupon code is invalid.'])->validate();
@@ -308,19 +280,68 @@ class Checkout extends Component
         $this->coupon = null;
     }
 
+    #[On('extras-updated')]
+    public function updateExtras($extras): void
+    {
+        $this->enabledExtras->extras = collect($extras);
+    }
+
+    #[On('options-updated')]
+    public function updateOptions($options): void
+    {
+        $this->enabledOptions->options = collect($options);
+    }
+
+    protected function assignExtras(): void
+    {
+        ray($this->enabledExtras, $this->enabledExtras->extrasToSync());
+        if ($this->enabledExtras->extras->count() > 0) {
+            try {
+                $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
+            } catch (\Exception $e) {
+                $this->addError('extras', 'There was an error assigning the extras. Please try again.');
+
+                return;
+            }
+        }
+    }
+
+    protected function assignOptions(): void
+    {
+        if ($this->enabledOptions->options->count() > 0) {
+            try {
+                $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
+            } catch (\Exception $e) {
+                $this->addError('options', 'There was an error assigning the options. Please try again.');
+
+                return;
+            }
+        }
+    }
+
     #[On('coupon-applied'), On('coupon-removed')]
     public function updateTotals($coupon, $removeCoupon = false): void
     {
+        // This try-catch block is here to prevent an error if a user tries to remove a coupon that has been deleted
+        try {
+            $couponModel = DynamicPricing::searchForCoupon($coupon, $this->reservation->id);
+
+            if ($couponModel->appliesToExtras()) {
+                $this->dispatch('extras-coupon-changed');
+            }
+        } catch (CouponNotFoundException $exception) {
+            // Dispatch the event anyway
+            $this->dispatch('extras-coupon-changed');
+        }
+
         // Get the prices after applying the coupon
         $prices = $this->getUpdatedPrices();
         // Update the reservation with the new prices
         $this->reservation->update(['price' => $prices['price'], 'payment' => $prices['payment']]);
         // Remove the caches
         unset($this->reservation);
-        unset($this->extras);
-        unset($this->options);
+
         // Update pricing
-        $this->updateEnabledExtraPrices();
         $this->calculateReservationTotals();
         CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
     }

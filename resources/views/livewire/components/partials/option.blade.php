@@ -1,14 +1,7 @@
-@props(['option', 'selectedValue' => null])
-
-<div 
-    class="py-3 xl:my-5" 
-    x-data="{selected: ''}"
-    x-init="selected = '{{ $selectedValue ?? '' }}'"
-
->
+<div wire:key="option-{{ $option->id }}" class="my-3 lg:my-5">
     <div class="mb-3">
         <div class="flex items-center">
-            <span class="text-base xl:text-lg font-medium text-gray-900">{{ $option->name }}</span>
+            {{ $option->name }}</span>
             @if ($option->required)
             <span class="bg-blue-100 text-blue-800 text-xs font-medium px-1.5 py-0.5 rounded uppercase ms-4">
                 {{ trans('statamic-resrv::frontend.required') }}
@@ -19,9 +12,10 @@
         <div class="text-gray-500">{{ $option->description }}</div>
         @endif
     </div>
-    <ul class="grid w-full gap-6 md:grid-cols-2">
+    
+    <div class="grid w-full gap-4 lg:grid-cols-2">
         @foreach ($option->values as $value)
-        <li x-bind:key="{{ $value->id }}">
+        <div wire:key="{{ $value->id }}" wire:loading.class="opacity-50 pointer-events-none">
             <label 
                 for="{{ $option->slug }}-{{ $value->id }}" 
                 class="inline-flex items-center w-full h-full p-5 text-gray-500 bg-white border border-gray-200 rounded-lg 
@@ -30,11 +24,11 @@
                 <input 
                     type="radio"
                     name="{{ $option->slug }}"
-                    id="{{ $option->slug }}-{{ $value->id }}" 
-                    x-model="selected"
-                    x-on:change="$dispatch('option-changed', {id: {{ $option->id }}, price: '{{ $value->price->format() }}', value: selected})"
-                    value="{{ $value->id }}" 
-                    class="form-radio w-5 h-5 text-blue-600 bg-gray-100 border-gray-300" 
+                    id="{{ $option->slug }}-{{ $value->id }}"
+                    wire:change.throttle="selectOption({{ $option->id }}, {{ $value->id }})"
+                    value="{{ $value->id }}"
+                    class="form-radio w-5 h-5 text-blue-600 bg-gray-100 border-gray-300"
+                    @if ($this->isOptionValueSelected($option->id, $value->id)) checked @endif
                 />
                 <div class="flex flex-col md:flex-row justify-between md:items-center ml-3">
                     <div>
@@ -52,7 +46,7 @@
                     </div>
                 </div>
             </label>
-        </li>
+        </div>
         @endforeach
-    </ul>
+    </div>
 </div>
