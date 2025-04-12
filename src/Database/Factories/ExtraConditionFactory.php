@@ -153,4 +153,56 @@ class ExtraConditionFactory extends Factory
             ];
         });
     }
+
+    public function requiredExtraInCategorySelected()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'conditions' => [[
+                    'operation' => 'required',
+                    'type' => 'extra_in_category_selected',
+                    'value' => 1,
+                ]],
+            ];
+        });
+    }
+
+    public function requiredNoExtraInCategorySelected()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'conditions' => [[
+                    'operation' => 'required',
+                    'type' => 'no_extra_in_category_selected',
+                    'value' => 1,
+                ]],
+            ];
+        });
+    }
+
+    public function showExtraInCategorySelected()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'conditions' => [[
+                    'operation' => 'show',
+                    'type' => 'extra_in_category_selected',
+                    'value' => 1,
+                ]],
+            ];
+        });
+    }
+
+    public function hideExtraInCategorySelected()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'conditions' => [[
+                    'operation' => 'hidden',
+                    'type' => 'extra_in_category_selected',
+                    'value' => 1,
+                ]],
+            ];
+        });
+    }
 }

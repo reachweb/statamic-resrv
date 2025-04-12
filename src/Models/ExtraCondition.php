@@ -176,6 +176,8 @@ class ExtraCondition extends Model
             'reservation_duration' => $this->checkDuration($condition, $data),
             'extra_selected' => $this->checkInSelectedExtras($condition, $data),
             'extra_not_selected' => $this->checkNotInSelectedExtras($condition, $data),
+            'extra_in_category_selected' => $this->checkExtraInCategorySelected($condition, $data),
+            'no_extra_in_category_selected' => $this->checkNoExtraInCategorySelected($condition, $data),
             default => false
         };
     }
@@ -231,6 +233,16 @@ class ExtraCondition extends Model
             case 'extra_not_selected':
                 if ($this->checkNotSelected($condition, $data)) {
                     return 'Extra required because extra with ID '.$condition->value.' is not selected';
+                }
+                break;
+            case 'extra_in_category_selected':
+                if ($this->checkExtraInCategorySelected($condition, $data)) {
+                    return 'Extra required because an extra in category with ID '.$condition->value.' is selected';
+                }
+                break;
+            case 'no_extra_in_category_selected':
+                if ($this->checkNoExtraInCategorySelected($condition, $data)) {
+                    return 'Extra required because no extra in category with ID '.$condition->value.' is selected';
                 }
                 break;
         }
@@ -315,5 +327,43 @@ class ExtraCondition extends Model
         }
 
         return false;
+    }
+
+    protected function checkExtraInCategorySelected($condition, $data)
+    {
+        if (! Arr::exists($data, 'extras') || $data['extras']->count() == 0) {
+            return false;
+        }
+
+        // Get all extras in the specified category
+        $categoryExtras = Extra::where('category_id', $condition->value)
+            ->where('published', true)
+            ->pluck('id');
+
+        // Check if any of the extras in the data array are in the category
+        $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
+            return $categoryExtras->contains($extraId);
+        });
+
+        return $selected->count() > 0;
+    }
+
+    protected function checkNoExtraInCategorySelected($condition, $data)
+    {
+        if (! Arr::exists($data, 'extras')) {
+            return true; // If no extras are provided at all, then no extras in the category are selected
+        }
+
+        // Get all extras in the specified category
+        $categoryExtras = Extra::where('category_id', $condition->value)
+            ->where('published', true)
+            ->pluck('id');
+
+        // Check if none of the extras in the data array are in the category
+        $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
+            return $categoryExtras->contains($extraId);
+        });
+
+        return $selected->count() == 0;
     }
 }

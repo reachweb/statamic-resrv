@@ -24,9 +24,7 @@ class ExtraCpController extends Controller
 
     public function index()
     {
-        $extras = $this->extra->all();
-
-        return response()->json($extras);
+        return response()->json($this->extra->with('category')->get());
     }
 
     public function entryIndex($statamic_id)
@@ -153,7 +151,7 @@ class ExtraCpController extends Controller
             'conditions.*.date_end' => 'required_if:conditions.*.type,reservation_dates',
             'conditions.*.time_start' => 'required_if:conditions.*.type,pickup_time|required_if:conditions.*.type,dropoff_time',
             'conditions.*.time_end' => 'required_if:conditions.*.type,pickup_time|required_if:conditions.*.type,dropoff_time',
-            'conditions.*.value' => 'required_if:conditions.*.type,extra_selected|required_if:conditions.*.type,reservation_duration',
+            'conditions.*.value' => 'required_if:conditions.*.type,extra_selected|required_if:conditions.*.type,extra_not_selected|required_if:conditions.*.type,reservation_duration|required_if:conditions.*.type,extra_in_category_selected|required_if:conditions.*.type,no_extra_in_category_selected',
             'conditions.*.comparison' => 'required_if:conditions.*.type,reservation_duration',
         ]);
 
