@@ -121,7 +121,7 @@ class Extras extends Component
             $this->enabledExtras->extras->put($extraId, [
                 'id' => $extraId,
                 'price' => $extra->price->format(),
-                'name' => $extra->name,
+                'name' => $extra->override_label ?? $extra->name,
                 'quantity' => 1,
             ]);
         }
