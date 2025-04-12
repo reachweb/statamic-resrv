@@ -162,6 +162,21 @@
                         </div>                        
                     </div>
                 </div>
+                <div class="ml-4" v-if="typeIsCategory(index)">
+                    <div class="flex items-center">
+                        <div class="ml-2 min-w-lg">
+                            <div class="mb-1 text-sm font-semibold">
+                                {{ __('Category') }}
+                            </div>
+                            <div class="w-full">
+                                <v-select class="min-w-40" v-model="conditionsForm[index].value" :options="categoryOptions" :reduce="type => type.value" />
+                            </div>
+                            <div v-if="errors['conditions.'+index+'.value']" class="w-full mt-1 text-sm text-red-400">
+                                {{ errors['conditions.'+index+'.value'][0] }}
+                            </div>  
+                        </div>                        
+                    </div>
+                </div>
                 <div class="ml-2 mt-4">
                     <button class="btn-close group" @click="remove(index)">
                         <svg viewBox="0 0 16 16" class="w-4 h-4 group-hover:text-red"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1 3h14M9.5 1h-3a1 1 0 0 0-1 1v1h5V2a1 1 0 0 0-1-1zm-3 10.5v-5m3 5v-5m3.077 7.583a1 1 0 0 1-.997.917H4.42a1 1 0 0 1-.996-.917L2.5 3h11l-.923 11.083z"></path></svg>
@@ -181,7 +196,6 @@
 <script>
 
 import HasInputOptions from '../mixins/HasInputOptions.vue'
-
 
 export default {
     props: {
@@ -216,6 +230,8 @@ export default {
                 reservation_dates: __('Reservation dates included'),
                 extra_selected: __('Extra is selected'),
                 extra_not_selected: __('Extra is not selected'),
+                extra_in_category_selected: __('Extra in category is selected'),
+                no_extra_in_category_selected: __('No extra in category is selected'),
             });
         },
         comparison() {
@@ -236,6 +252,18 @@ export default {
                     'label': extra.name
                 }
             })
+        },
+        categoryOptions() {
+            let categories = _.filter(this.extras, (extra) => extra.category_id !== null);
+            let groupedCategories = _.groupBy(categories, 'category_id');
+
+            return _.map(groupedCategories, (items) => {
+                let category = items[0].category;
+                return {
+                    'value': parseInt(category.id),
+                    'label': category ? category.name : 'Uncategorized'
+                }
+            });
         }
     },
 
@@ -311,6 +339,12 @@ export default {
         },
         typeIsExtra(index) {
             if (this.conditionsForm[index].type == 'extra_selected' || this.conditionsForm[index].type == 'extra_not_selected') {
+                return true
+            }
+            return false
+        },
+        typeIsCategory(index) {
+            if (this.conditionsForm[index].type == 'extra_in_category_selected' || this.conditionsForm[index].type == 'no_extra_in_category_selected') {
                 return true
             }
             return false
