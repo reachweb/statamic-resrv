@@ -15,19 +15,18 @@ Dcumentation page: https://resrv.dev/
 
 * Availability and price management: set available items per day
 * Advanced availabity: set different price / availability for a single item on an unlimited number of properties
-* Online reservation and payment (using Stripe) plus email notifications to the admins and user. 
+* Ready to use frontend availability search and checkout using Laravel Livewire.
+* Online reservation and payment (using Stripe or Mollie) plus email notifications to the admins and user. 
 * Can charge the whole amount, a downpayment or nothing at all. Build in way to offer a refund for cancelled reservations.
 * Reservation options: max or min days of a reservation, min days before, charge an extra day based on drop off time.
 * Reservation list and calendar: to never let a reservation slip away!
 * Options: additional selectable options per entry (with an extra charge or not)
-* Extras: additional global options (with an extra charge or not)
-* Locations: Add pick-up and drop-off locations, Charge extra if you like!
+* Extras: additional global options (with an extra charge or not). Can be conditionally shown, hidden or be required.
 * Fixed pricing: set a fixed pricing schedule
 * Dynamic pricing: increase or decrease prices based a set of rules
 * Easily adjustable checkout forms using Statamic form editor
-* Multi reservations: Create reservations for return trips or multiple different periods in one checkout
 * Report page: see a quick summary of how your business is booming thank to Resrv!
-* Highly tested codebase: 100+ tests, 450+ assertions
+* Highly tested codebase: 200+ tests, 800+ assertions
 * Starter kits available soon!
 
 ## License 
