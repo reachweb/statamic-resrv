@@ -294,7 +294,6 @@ class Checkout extends Component
 
     protected function assignExtras(): void
     {
-        ray($this->enabledExtras, $this->enabledExtras->extrasToSync());
         if ($this->enabledExtras->extras->count() > 0) {
             try {
                 $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
