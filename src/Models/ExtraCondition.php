@@ -241,7 +241,7 @@ class ExtraCondition extends Model
                 }
                 break;
             case 'no_extra_in_category_selected':
-                if ($this->checkNoExtraInCategorySelected($condition, $data)) {
+                if (! $this->checkNoExtraInCategorySelected($condition, $data)) {
                     return 'Extra required because no extra in category with ID '.$condition->value.' is selected';
                 }
                 break;
