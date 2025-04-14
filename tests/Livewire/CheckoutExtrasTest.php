@@ -572,4 +572,60 @@ class CheckoutExtrasTest extends TestCase
         // The conditional extra should now be shown (no longer in hidden extras)
         $this->assertFalse($component->extraConditions->get('hide')->contains($conditionalExtra->id));
     }
+
+    // Test that an extra can be hidden when NO extra from a category is selected
+    public function test_it_handles_hidden_extra_when_no_category_extra_is_selected()
+    {
+        $item = $this->entries->first();
+
+        // Create a category
+        $extraCategory = ExtraCategory::factory()->create([
+            'name' => 'Test Category',
+        ]);
+
+        // Create extras in the category
+        $categoryExtra = ResrvExtra::factory()->create([
+            'id' => 10,
+            'name' => 'Category Extra',
+            'category_id' => $extraCategory->id,
+        ]);
+
+        // Create an extra that will be conditionally hidden
+        $conditionalExtra = ResrvExtra::factory()->create([
+            'id' => 11,
+            'name' => 'Conditional Extra',
+        ]);
+
+        $entry = ResrvEntry::whereItemId($item->id());
+        $entry->extras()->attach($categoryExtra->id);
+        $entry->extras()->attach($conditionalExtra->id);
+
+        // Create condition: conditional_extra is hidden when NO extra from category is selected
+        ExtraCondition::factory()->create([
+            'extra_id' => $conditionalExtra->id,
+            'conditions' => [[
+                'operation' => 'required',
+                'type' => 'no_extra_in_category_selected',
+                'value' => $extraCategory->id,
+            ]],
+        ]);
+
+        // Test with no extras selected
+        $component = Livewire::test(Extras::class, ['reservation' => $this->reservation]);
+
+        // Conditional extra should be required initially when no category extra is selected
+        $this->assertTrue($component->extraConditions->get('required')->contains($conditionalExtra->id));
+
+        // Now select a category extra
+        $component->call('toggleExtra', $categoryExtra->id);
+
+        // The conditional extra should no longer be required
+        $this->assertFalse($component->extraConditions->get('required')->contains($conditionalExtra->id));
+
+        // Now unselect the category extra
+        $component->call('toggleExtra', $categoryExtra->id);
+
+        // The conditional extra should be required again
+        $this->assertTrue($component->extraConditions->get('required')->contains($conditionalExtra->id));
+    }
 }
