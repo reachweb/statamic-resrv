@@ -13,7 +13,7 @@
 {{ __("Reservation code") }} **{{ $reservation->id }}**<br>
 {{ __("Date") }}: **{{ $reservation->updated_at->format('d-m-Y H:i') }}**<br>
 {{ __("Booking reference") }}: **{{ $reservation->reference }}**<br>
-{{ __("Email") }}: **{{ $reservation->customer->get('email') }}** 
+{{ __("Email") }}: **{{ $reservation->customer->email }}** 
 @endcomponent
 
 @component('mail::table')

@@ -51,6 +51,6 @@ class ReservationMade extends Mailable
 
     private function generateSubject($reservation)
     {
-        return 'Reservation #'.$reservation->id.' ['.$reservation->entry['title']->value().'] ['.$reservation->date_start->format('Y-m-d').'] ['.$reservation->customer->get('email').']';
+        return 'Reservation #'.$reservation->id.' ['.$reservation->entry['title']->value().'] ['.$reservation->date_start->format('Y-m-d').'] ['.$reservation->customer->email.']';
     }
 }

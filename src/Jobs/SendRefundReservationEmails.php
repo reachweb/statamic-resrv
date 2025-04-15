@@ -30,7 +30,7 @@ class SendRefundReservationEmails implements ShouldQueue
     public function handle()
     {
         // Customer email
-        Mail::to($this->reservation->customer->get('email'))->send(new ReservationRefunded($this->reservation));
+        Mail::to($this->reservation->customer->email)->send(new ReservationRefunded($this->reservation));
         // Admin emails if set
         if (config('resrv-config.admin_email') != false) {
             $admin_emails = explode(',', config('resrv-config.admin_email'));
