@@ -5,31 +5,40 @@ namespace Reach\StatamicResrv\Mail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Traits\HandlesFormOptions;
 
 class ReservationMade extends Mailable
 {
-    use Queueable, SerializesModels;
+    use HandlesFormOptions, Queueable, SerializesModels;
 
     public $reservation;
 
     public function __construct(Reservation $reservation)
     {
         $this->reservation = $reservation;
+
+        $recipients = [];
+
         if ($this->getOption('from', 1)) {
             $this->from($this->getOption('from', 1), env('APP_NAME', ''));
         }
 
         if ($this->getOption('to', 1)) {
+            $recipients = array_merge($recipients, explode(',', $this->getOption('to', 1)));
             $this->to(explode(',', $this->getOption('to', 1)));
         } elseif (config('resrv-config.admin_email') != false) {
-            $this->to(explode(',', config('resrv-config.admin_email')));
+            $recipients = array_merge($recipients, explode(',', config('resrv-config.admin_email')));
         }
 
         if (config('resrv-config.enable_affiliates') && $reservation->affiliate->count() > 0) {
             $affiliate = $reservation->affiliate->first();
             if ($affiliate->send_reservation_email === true) {
-                $this->to($affiliate->email);
+                $recipients = array_merge($recipients, explode(',', $affiliate->email));
             }
+        }
+
+        if (count($recipients) > 0) {
+            $this->to($recipients);
         }
 
         $this->subject($this->generateSubject($reservation));

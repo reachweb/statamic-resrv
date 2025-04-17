@@ -5,10 +5,11 @@ namespace Reach\StatamicResrv\Mail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Traits\HandlesFormOptions;
 
 class ReservationRefunded extends Mailable
 {
-    use Queueable, SerializesModels;
+    use HandlesFormOptions, Queueable, SerializesModels;
 
     public $reservation;
 

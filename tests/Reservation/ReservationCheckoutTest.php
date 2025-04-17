@@ -150,16 +150,26 @@ class ReservationCheckoutTest extends TestCase
     // Test if email is sent when reservation is confirmed
     public function test_email_is_sent_when_reservation_is_confirmed()
     {
+        // Set up multiple admin emails
+        Config::set('resrv-config.admin_email', 'admin1@test.com,admin2@test.com,admin3@test.com');
+
         Mail::fake();
 
         $this->post(route('resrv.webhook.store', ['reservation_id' => $this->reservation->id, 'status' => 'success']));
 
+        // Check ReservationConfirmed - one to customer
+        Mail::assertSent(ReservationConfirmed::class, 1);
         Mail::assertSent(ReservationConfirmed::class, function ($mail) {
-            return $mail->reservation->id === $this->reservation->id;
+            return $mail->hasTo($this->reservation->customer->email);
         });
 
+        // Check ReservationMade - one email with multiple recipients
+        Mail::assertSent(ReservationMade::class, 1);
         Mail::assertSent(ReservationMade::class, function ($mail) {
-            return $mail->reservation->id === $this->reservation->id;
+            // Verify all recipients are included in a single email
+            return $mail->hasTo('admin1@test.com') &&
+                $mail->hasTo('admin2@test.com')
+                && $mail->hasTo('admin3@test.com');
         });
     }
 
