@@ -194,6 +194,24 @@ class ReservationCheckoutTest extends TestCase
         $this->assertStringContainsString('500', $htmlMade);
     }
 
+    // Test if logo appears in emails when configured
+    public function test_logo_appears_in_emails_when_configured()
+    {
+        $logoUrl = 'https://example.com/logo.png';
+        Config::set('resrv-config.logo', $logoUrl);
+
+        $mailToCustomer = new ReservationConfirmed($this->reservation);
+        $htmlCustomer = $mailToCustomer->render();
+
+        $mailToAdmin = new ReservationMade($this->reservation);
+        $htmlAdmin = $mailToAdmin->render();
+
+        ray($mailToAdmin);
+
+        $this->assertStringContainsString($logoUrl, $htmlCustomer);
+        $this->assertStringContainsString($logoUrl, $htmlAdmin);
+    }
+
     // Test if it saves dynamic pricings that were applied
     public function test_it_saves_dynamic_pricings_that_were_applied()
     {
