@@ -15,6 +15,7 @@
             type="text" 
             placeholder="{{ trans_choice('statamic-resrv::frontend.selectDate', ($calendar === 'range') ? 2 : 1) }}"
             class="form-input h-11 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full px-10 py-2.5"
+            readonly
         />
         <div 
             x-show="! isDatesEmpty"
