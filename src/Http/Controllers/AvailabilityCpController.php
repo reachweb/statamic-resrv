@@ -78,8 +78,6 @@ class AvailabilityCpController extends Controller
 
         foreach ($period as $day) {
             if ($onlyDays && ! in_array($day->dayOfWeek, $onlyDays)) {
-                ray($onlyDays, $day->dayOfWeek);
-
                 continue;
             }
 
