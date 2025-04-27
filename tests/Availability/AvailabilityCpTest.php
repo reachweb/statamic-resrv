@@ -347,4 +347,55 @@ class AvailabilityCpTest extends TestCase
             'statamic_id' => $item->id(),
         ]);
     }
+
+    public function test_availability_can_update_for_date_range_with_specific_days()
+    {
+        $item = $this->makeStatamicItem();
+
+        $startDate = today()->next(\Carbon\Carbon::SUNDAY);
+        $endDate = $startDate->copy()->addDays(6);
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => $startDate->isoFormat('YYYY-MM-DD'),
+            'date_end' => $endDate->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 6,
+            'onlyDays' => [1, 3, 5], // Monday, Wednesday, Friday
+        ];
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        // Calculate the specific dates we expect
+        $expectedMonday = $startDate->copy()->addDays(1)->isoFormat('YYYY-MM-DD');
+        $expectedWednesday = $startDate->copy()->addDays(3)->isoFormat('YYYY-MM-DD');
+        $expectedFriday = $startDate->copy()->addDays(5)->isoFormat('YYYY-MM-DD');
+        $unexpectedTuesday = $startDate->copy()->addDays(2)->isoFormat('YYYY-MM-DD');
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'date' => $expectedMonday,
+            'price' => 150,
+            'available' => 6,
+        ]);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'date' => $expectedWednesday,
+            'price' => 150,
+            'available' => 6,
+        ]);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'date' => $expectedFriday,
+            'price' => 150,
+            'available' => 6,
+        ]);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'date' => $unexpectedTuesday,
+        ]);
+
+        $this->assertDatabaseCount('resrv_availabilities', 3);
+    }
 }

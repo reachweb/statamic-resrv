@@ -21,6 +21,8 @@ class AvailabilityCpRequest extends FormRequest
             'price' => ['nullable', 'numeric', 'required_if:available,null', new ResrvAvailabilityExists],
             'available' => ['nullable', 'numeric', 'required_if:price,null', new ResrvAvailabilityExists],
             'advanced' => ['sometimes', 'array'],
+            'onlyDays' => ['sometimes', 'array'],
+            'onlyDays.*' => ['integer', 'between:0,6'],
         ];
     }
 }
