@@ -17,7 +17,7 @@
                 </div>
             </div>
             <div class="px-4 mt-2 my-4">
-                <span class="block mb-2 text-md">{{ __('Select dates') }}</span>
+                <span class="block mb-2 text-sm">{{ __('Select dates') }}</span>
                 <div class="date-container input-group w-full">
                     <v-date-picker
                         v-model="dates"
@@ -63,11 +63,11 @@
                     {{ __('Date range is required') }}
                 </div>  
             </div>
-            <div class="flex-1 px-4 mb-2">
+            <div class="flex-1 px-4 mb-4">
                 <div class="flex flex-wrap items-center space-x-4">
                     <div class="flex-1">
-                        <div class="mb-1 text-sm font-bold">
-                            <label for="available">Available</label>
+                        <div class="mb-1 text-sm">
+                            <label for="available">{{ __('Available') }}</label>
                         </div>
                         <div class="w-full">
                             <input class="input-text" name="available" type="text" v-model="available">
@@ -77,8 +77,8 @@
                         </div>                    
                     </div>
                     <div class="flex-1">
-                        <div class="mb-1 text-sm font-bold">
-                            <label for="available">Price</label>
+                        <div class="mb-1 text-sm">
+                            <label for="available">{{ __('Price') }}</label>
                         </div>
                         <div class="w-full">
                             <input class="input-text" name="price" type="text" v-model="price">
@@ -89,6 +89,17 @@
                     </div>
                 </div>
             </div>
+            <div class="flex-1 px-4 mb-4">
+                <span class="block text-sm mb-2">{{ __('Only apply to specific days of the week (optional)') }}</span>
+                <div class="flex flex-wrap space-x-4">
+                    <div v-for="(day, index) in weekdays" :key="index">
+                        <label class="flex items-center space-x-1">
+                            <input type="checkbox" v-model="onlyDays" :value="index">
+                            <span>{{ day }}</span>
+                        </label>
+                    </div>
+                </div>
+            </div>            
             <div class="p-4 bg-gray-200 dark:bg-dark-500 border-t rounded-b-lg flex items-center justify-between dark:border-dark-900">
                 <button class="text-gray-700 hover:text-gray-900 dark:text-dark-100 dark:hover:text-dark-175" v-html="__('Cancel')" @click="$emit('cancel')"></button>
                 <button 
@@ -132,6 +143,8 @@ export default {
             },
             available: null,
             price: null,
+            onlyDays: [],
+            weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
             successMessage: 'Availability successfully saved',
             postUrl: '/cp/resrv/availability',
             method: 'post',
@@ -147,6 +160,9 @@ export default {
             fields.statamic_id = this.parentId
             fields.price = this.price
             fields.available = this.available
+            if (this.onlyDays.length > 0) {
+                fields.onlyDays = this.onlyDays
+            }
             if (this.property) {
                 fields.advanced = _.isArray(this.selectedProperty) ? this.selectedProperty : [_.findWhere(this.propertiesOptions, {'code': this.selectedProperty.code})]
             }
