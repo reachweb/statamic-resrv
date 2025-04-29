@@ -25,7 +25,6 @@ class ReservationMade extends Mailable
 
         if ($this->getOption('to', 1)) {
             $recipients = array_merge($recipients, explode(',', $this->getOption('to', 1)));
-            $this->to(explode(',', $this->getOption('to', 1)));
         } elseif (config('resrv-config.admin_email') != false) {
             $recipients = array_merge($recipients, explode(',', config('resrv-config.admin_email')));
         }
@@ -36,6 +35,8 @@ class ReservationMade extends Mailable
                 $recipients = array_merge($recipients, explode(',', $affiliate->email));
             }
         }
+
+        $recipients = array_filter(array_unique($recipients));
 
         if (count($recipients) > 0) {
             $this->to($recipients);
