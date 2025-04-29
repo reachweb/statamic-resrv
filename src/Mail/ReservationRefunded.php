@@ -16,27 +16,8 @@ class ReservationRefunded extends Mailable
     public function __construct(Reservation $reservation)
     {
         $this->reservation = $reservation;
-
-        $recipients = [];
-
-        if ($this->getOption('from', 1)) {
-            $this->from($this->getOption('from', 1), env('APP_NAME', ''));
-        }
-
-        if ($this->reservation->customer->email) {
-            $recipients = array_merge($recipients, explode(',', $this->reservation->customer->email));
-        }
-
         if ($this->getOption('to', 1)) {
-            $recipients = array_merge($recipients, explode(',', $this->getOption('to', 1)));
-        } elseif (config('resrv-config.admin_email') != false) {
-            $recipients = array_merge($recipients, explode(',', config('resrv-config.admin_email')));
-        }
-
-        $recipients = array_filter(array_unique($recipients));
-
-        if (count($recipients) > 0) {
-            $this->to($recipients);
+            $this->to(explode(',', $this->getOption('to', 1)), env('APP_NAME', ''));
         }
     }
 
