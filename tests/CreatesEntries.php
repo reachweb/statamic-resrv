@@ -119,36 +119,45 @@ trait CreatesEntries
 
     protected function makeBlueprint($collection)
     {
+        $fields = [
+            [
+                'handle' => 'title',
+                'field' => [
+                    'type' => 'text',
+                    'display' => 'Title',
+                ],
+            ],
+            [
+                'handle' => 'slug',
+                'field' => [
+                    'type' => 'text',
+                    'display' => 'Slug',
+                ],
+            ],
+            [
+                'handle' => 'resrv_availability',
+                'field' => [
+                    'type' => 'resrv_availability',
+                    'display' => 'Resrv Availability',
+                ],
+            ],
+        ];
+
+        if ($collection->handle() === 'advanced') {
+            $fields[2]['field']['advanced_availability'] = [
+                'test' => 'Test Property',
+                'another-test' => 'Another Test',
+                'yet-another-test' => 'Yet Another Test',
+            ];
+        }
+
         $blueprint = Blueprint::make()->setContents([
             'sections' => [
                 'main' => [
-                    'fields' => [
-                        [
-                            'handle' => 'title',
-                            'field' => [
-                                'type' => 'text',
-                                'display' => 'Title',
-                            ],
-                        ],
-                        [
-                            'handle' => 'slug',
-                            'field' => [
-                                'type' => 'text',
-                                'display' => 'Slug',
-                            ],
-                        ],
-                        [
-
-                            'handle' => 'resrv_availability',
-                            'field' => [
-                                'type' => 'resrv_availability',
-                                'display' => 'Resrv Availability',
-                            ],
-                        ],
-                    ],
+                    'fields' => $fields,
                 ],
             ],
         ]);
-        $blueprint->setHandle('pages')->setNamespace('collections.'.$collection->handle())->save();
+        $blueprint->setHandle($collection->handle())->setNamespace('collections.'.$collection->handle())->save();
     }
 }

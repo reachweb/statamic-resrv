@@ -43,6 +43,9 @@ class AvailabilityResults extends Component
     public int $extraDaysOffset = 0;
 
     #[Locked]
+    public $advanced = false;
+
+    #[Locked]
     public $showExtras = false;
 
     #[Locked]
@@ -53,6 +56,9 @@ class AvailabilityResults extends Component
 
     #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
+
+    #[Locked]
+    public array $overrideProperties;
 
     public function mount(string $entry)
     {
@@ -71,6 +77,16 @@ class AvailabilityResults extends Component
     public function entry(): ?Entry
     {
         return $this->getEntry($this->entryId) ?? null;
+    }
+
+    #[Computed(persist: true)]
+    public function advancedProperties(): array
+    {
+        if (! $this->advanced) {
+            return [];
+        }
+
+        return $this->overrideProperties ?? $this->getEntryProperties($this->entry);
     }
 
     #[On('availability-search-updated')]
@@ -101,6 +117,13 @@ class AvailabilityResults extends Component
 
     public function getAvailability(): void
     {
+        if ($this->advanced === true) {
+            $this->data->advanced = 'any';
+            $this->availability = collect($this->queryAvailabilityForAllProperties());
+
+            return;
+        }
+
         if ($this->extraDays === 0) {
             $this->availability = collect($this->queryBaseAvailabilityForEntry());
 
@@ -129,6 +152,13 @@ class AvailabilityResults extends Component
         } catch (AvailabilityException $exception) {
             $this->addError('availability', $exception->getMessage());
         }
+    }
+
+    public function checkoutProperty(string $property): void
+    {
+        $this->data->advanced = $property;
+        $this->availability = collect($this->availability->get($property));
+        $this->checkout();
     }
 
     #[On('extras-updated')]

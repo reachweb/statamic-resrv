@@ -20,6 +20,25 @@ trait HandlesStatamicQueries
         return $this->getPropertiesFromBlueprint();
     }
 
+    public function getEntryProperties($entry)
+    {
+        $blueprint = $entry->blueprint();
+
+        if (! $blueprint) {
+            throw new BlueprintNotFoundException($entry->collection()->handle().' via entry '.$entry->id());
+        }
+
+        $field = $this->getStatamicField($blueprint);
+
+        $config = $field->config();
+
+        if (isset($config['advanced_availability'])) {
+            return $config['advanced_availability'];
+        }
+
+        throw new NoAdvancedAvailabilitySet($entry->collection()->handle().' (from entry '.$entry->id().')');
+    }
+
     public function getStatamicBlueprint()
     {
         if ($blueprint = Blueprint::find('collections.'.$this->advanced)) {

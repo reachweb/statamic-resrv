@@ -17,18 +17,25 @@ class AvailabilitySearch extends Component
     #[Session('resrv-search')]
     public AvailabilityData $data;
 
+    #[Locked]
     public string $calendar = 'single';
 
+    #[Locked]
     public bool $live = true;
 
+    #[Locked]
     public $advanced = false;
 
+    #[Locked]
     public bool $anyAdvanced = false;
 
+    #[Locked]
     public bool $resetAdvancedOnBoot = false;
 
+    #[Locked]
     public bool $enableQuantity = false;
 
+    #[Locked]
     public ?string $redirectTo = null;
 
     #[Locked]
@@ -37,6 +44,7 @@ class AvailabilitySearch extends Component
     #[Locked]
     public bool $showAvailabilityOnCalendar = false;
 
+    #[Locked]
     public array $overrideProperties;
 
     public function boot(): void
