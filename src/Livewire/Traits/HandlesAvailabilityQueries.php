@@ -77,6 +77,27 @@ trait HandlesAvailabilityQueries
         return $periods;
     }
 
+    public function queryAvailabilityForAllProperties(): Collection
+    {
+        return collect($this->advancedProperties)->keys()->mapWithKeys(function ($property) {
+            $searchData = array_merge($this->data->toResrvArray(), ['advanced' => $property]);
+            try {
+                return [$property => app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId)];
+            } catch (AvailabilityException $exception) {
+                return [
+                    $property => [
+                        'message' => [
+                            'status' => false,
+                            'error' => $exception->getMessage(),
+                        ],
+                        'request' => $searchData,
+                    ],
+                ];
+            }
+        });
+
+    }
+
     public function validateAvailabilityAndPrice()
     {
         $searchData = array_merge(['price' => data_get($this->availability, 'data.price')], $this->data->toResrvArray());

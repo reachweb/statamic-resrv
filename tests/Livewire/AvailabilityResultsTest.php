@@ -495,6 +495,102 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.message.status', false);
     }
 
+    // Test that it returns availability for all advanced properties when advanced is true
+    public function test_returns_availability_for_all_properties_when_advanced_is_true()
+    {
+        // Add a second property to this entry
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->addDay()],
+            )
+            ->create([
+                'available' => 1,
+                'price' => 50,
+                'statamic_id' => $this->advancedEntries->first()->id(),
+                'property' => 'another-test']);
+
+        // Test for one day
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'advanced' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'any', // This will be overridden by the component
+                ]
+            )
+            ->assertSet('advanced', true)
+            ->assertSeeHtml('Test Property')
+            ->assertViewHas('availability.test')
+            ->assertViewHas('availability.another-test')
+            ->assertViewHas('availability.test.data.price')
+            ->assertViewHas('availability.another-test.data.price');
+
+        // Test for two days
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'advanced' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'any', // This will be overridden by the component
+                ]
+            )
+            ->assertSet('advanced', true)
+            ->assertSeeHtml('Test Property')
+            ->assertViewHas('availability.test')
+            ->assertViewHas('availability.another-test')
+            ->assertViewHas('availability.test.data.price')
+            ->assertViewMissing('availability.another-test.data.price')
+            ->assertViewHas('availability.another-test.message.status', false);
+    }
+
+    // Test that checkout method works correctly when advanced is true and a property has been selected via checkoutProperty
+    public function test_checkout_after_checkout_property_when_advanced_is_true()
+    {
+        $checkoutPage = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+        $checkoutPage->save();
+        Config::set('resrv-config.checkout_entry', $checkoutPage->id());
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'advanced' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => 'any',
+                ]
+            );
+
+        $availability = $component->viewData('availability');
+        $propertyToCheckout = 'test';
+
+        // Checkout
+        $component->call('checkoutProperty', $propertyToCheckout)->assertRedirect($checkoutPage->url());
+
+        // The reservation should be for the property selected via checkoutProperty
+        $this->assertDatabaseHas('resrv_reservations', [
+            'item_id' => $this->advancedEntries->first()->id(),
+            'property' => $propertyToCheckout,
+            'price' => data_get($availability, $propertyToCheckout.'.data.price'),
+        ]);
+
+        // Ensure data.advanced was updated to the specific property
+        $this->assertEquals($propertyToCheckout, $component->get('data.advanced'));
+    }
+
     // Test that it gets options if property is enabled
     public function test_gets_options_if_property_is_enabled()
     {

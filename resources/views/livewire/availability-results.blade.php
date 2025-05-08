@@ -1,70 +1,74 @@
 @use(Carbon\Carbon)
 
 <div class="relative">
-    @if (data_get($availability, 'message.status') === true && data_get($availability, 'request.property') !== 'any')
-        @if ($this->showOptions)
-        <div class="flex flex-col gap-y-6 my-4">
-            <livewire:options
-                :data="$this->data"
-                :filter="$this->showOptions"
-                :entryId="$this->entry->id"
-            />
-        </div>
-        @endif
-        @if ($this->showExtras)
-        <div class="flex flex-col gap-y-6 my-4">
-            <livewire:extras
-                :data="$this->data"
-                :filter="$this->showExtras"
-                :entryId="$this->entry->id"
-            />
-        </div>
-        @endif
-    <div class="divide-y divide-gray-200">
-        <div class="flex flex-col pb-6">
-            <div class="text-lg font-medium mb-2">{{ trans('statamic-resrv::frontend.yourSearch') }}</div>
-            <div class="mb-1">
+    @if ($advanced == true)
+    <x-resrv::availability-results-advanced :$availability :advancedProperties="$this->advancedProperties" />    
+    @else
+        @if (data_get($availability, 'message.status') === true && data_get($availability, 'request.property') !== 'any')
+            @if ($this->showOptions)
+            <div class="flex flex-col gap-y-6 my-4">
+                <livewire:options
+                    :data="$this->data"
+                    :filter="$this->showOptions"
+                    :entryId="$this->entry->id"
+                />
+            </div>
+            @endif
+            @if ($this->showExtras)
+            <div class="flex flex-col gap-y-6 my-4">
+                <livewire:extras
+                    :data="$this->data"
+                    :filter="$this->showExtras"
+                    :entryId="$this->entry->id"
+                />
+            </div>
+            @endif
+        <div class="divide-y divide-gray-200">
+            <div class="flex flex-col pb-6">
+                <div class="text-lg font-medium mb-2">{{ trans('statamic-resrv::frontend.yourSearch') }}</div>
                 <div class="mb-1">
-                    <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.from')) }}:</span> 
-                    <span class=font-medium>{{ Carbon::parse($data->dates['date_start'])->format('D d M Y') }}</span>
-                </div>
-                <div class="mb-1">
-                    <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.to')) }}:</span> 
-                    <span class=font-medium>{{ Carbon::parse($data->dates['date_end'])->format('D d M Y') }}</span>
-                </div>
-                <div class="mb-1">
-                    <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.duration')) }}:</span> 
-                    <span class=font-medium>{{ data_get($availability, 'request.days') }} {{ trans('statamic-resrv::frontend.days') }}</span>
+                    <div class="mb-1">
+                        <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.from')) }}:</span> 
+                        <span class=font-medium>{{ Carbon::parse($data->dates['date_start'])->format('D d M Y') }}</span>
+                    </div>
+                    <div class="mb-1">
+                        <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.to')) }}:</span> 
+                        <span class=font-medium>{{ Carbon::parse($data->dates['date_end'])->format('D d M Y') }}</span>
+                    </div>
+                    <div class="mb-1">
+                        <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.duration')) }}:</span> 
+                        <span class=font-medium>{{ data_get($availability, 'request.days') }} {{ trans('statamic-resrv::frontend.days') }}</span>
+                    </div>
                 </div>
             </div>
+            <div class="flex flex-col py-6">
+                @include('statamic-resrv::livewire.components.partials.availability-results-pricing')
+            </div>
         </div>
-        <div class="flex flex-col py-6">
-            @include('statamic-resrv::livewire.components.partials.availability-results-pricing')
+        <div class="mt-6 xl:mt-8">
+            <button 
+                type="button" 
+                class="w-full px-6 py-3.5 text-base font-medium text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg text-center"
+                wire:click="checkout()"
+            >
+                {{ trans('statamic-resrv::frontend.bookNow') }}
+            </button>
         </div>
-    </div>
-    <div class="mt-6 xl:mt-8">
-        <button 
-            type="button" 
-            class="w-full px-6 py-3.5 text-base font-medium text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg text-center"
-            wire:click="checkout()"
-        >
-            {{ trans('statamic-resrv::frontend.bookNow') }}
-        </button>
-    </div>
-    @elseif (data_get($availability, 'request.property') === 'any')
-    <div class="flex flex-col py-4">
-        <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.multipleAvailable') }}</dt>
-        <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.pleaseSelectProperty') }}</dd>
-    </div>
-    @elseif (data_get($availability, 'message.status') === false)
-    <div class="flex flex-col py-4">
-        <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.noAvailability') }}</dt>
-        <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.tryAdjustingYourSearch') }}</dd>
-    </div>
-    @elseif (! $data->hasDates())
-    <div class="flex flex-col py-4">
-        <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.pleaseSelectDates') }}</dt>
-    </div>
+        @elseif (data_get($availability, 'request.property') === 'any')
+        <div class="flex flex-col py-4">
+            <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.multipleAvailable') }}</dt>
+            <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.pleaseSelectProperty') }}</dd>
+        </div>
+        @elseif (data_get($availability, 'message.status') === false)
+        <div class="flex flex-col py-4">
+            <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.noAvailability') }}</dt>
+            <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.tryAdjustingYourSearch') }}</dd>
+        </div>
+        @elseif (! $data->hasDates())
+        <div class="flex flex-col py-4">
+            <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.pleaseSelectDates') }}</dt>
+        </div>
+        @endif
     @endif
     @if ($errors->has('availability') && $data->hasDates())
     <div class="flex flex-col py-4">
