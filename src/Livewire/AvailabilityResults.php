@@ -58,7 +58,7 @@ class AvailabilityResults extends Component
     public EnabledOptions $enabledOptions;
 
     #[Locked]
-    public array $overrideProperties;
+    public array $overrideProperties = [];
 
     public function mount(string $entry)
     {
@@ -86,7 +86,7 @@ class AvailabilityResults extends Component
             return [];
         }
 
-        return $this->overrideProperties ?? $this->getEntryProperties($this->entry);
+        return count($this->overrideProperties) > 0 ? $this->overrideProperties : $this->getEntryProperties($this->entry);
     }
 
     #[On('availability-search-updated')]

@@ -45,7 +45,7 @@ class AvailabilitySearch extends Component
     public bool $showAvailabilityOnCalendar = false;
 
     #[Locked]
-    public array $overrideProperties;
+    public array $overrideProperties = [];
 
     public function boot(): void
     {
@@ -62,7 +62,7 @@ class AvailabilitySearch extends Component
             return [];
         }
 
-        return $this->overrideProperties ?? $this->getProperties();
+        return count($this->overrideProperties) > 0 ? $this->overrideProperties : $this->getProperties();
     }
 
     #[Computed(persist: true)]
