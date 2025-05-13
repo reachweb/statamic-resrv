@@ -77,7 +77,7 @@ class Availability extends Model implements AvailabilityContract
         return $slug;
     }
 
-    public function getConnectedAvailabilitySetting()
+    public function getConnectedAvailabilitySettings(): Collection
     {
         $blueprint = $this->entry->getStatamicEntry()->blueprint();
 
@@ -86,16 +86,13 @@ class Availability extends Model implements AvailabilityContract
                 return false;
             }
 
-            return $blueprint->field('resrv_availability')->get('connected_availabilities');
-        });
-    }
-
-    public function getConnectedAvailabilityManualSetting()
-    {
-        $blueprint = $this->entry->getStatamicEntry()->blueprint();
-
-        return Cache::rememberForever('connected_availability_manual_setting_'.$blueprint->namespace(), function () use ($blueprint) {
-            return $blueprint->field('resrv_availability')->get('manual_connected_availabilities');
+            return collect([
+                'connected_availabilities' => $blueprint->field('resrv_availability')->get('connected_availabilities'),
+                'manual_connected_availabilities' => $blueprint->field('resrv_availability')->get('manual_connected_availabilities'),
+                'block_availability' => $blueprint->field('resrv_availability')->get('block_availability'),
+                'change_by_amount' => $blueprint->field('resrv_availability')->get('change_by_amount'),
+                'disable_on_cp' => $blueprint->field('resrv_availability')->get('disable_on_cp'),
+            ]);
         });
     }
 

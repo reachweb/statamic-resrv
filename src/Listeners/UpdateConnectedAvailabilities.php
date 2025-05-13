@@ -7,6 +7,8 @@ use Reach\StatamicResrv\Models\Availability;
 
 class UpdateConnectedAvailabilities
 {
+    protected $config;
+
     public function handle(AvailabilityChanged $event): void
     {
         if (config('resrv-config.enable_connected_availabilities') === false) {
@@ -15,7 +17,9 @@ class UpdateConnectedAvailabilities
 
         $availability = $event->availability;
 
-        switch ($availability->getConnectedAvailabilitySetting()) {
+        $this->config = $availability->getConnectedAvailabilitySettings();
+
+        switch ($this->config->get('connected_availabilities')) {
             case 'none':
                 break;
             case 'all':
@@ -52,7 +56,7 @@ class UpdateConnectedAvailabilities
 
     public function updateSelectConnectedAvailabilities($availability): void
     {
-        $propertiesToUpdate = $availability->getConnectedAvailabilityManualSetting();
+        $propertiesToUpdate = $this->config->get('manual_connected_availabilities');
 
         if (! array_key_exists($availability->property, $propertiesToUpdate)) {
             return;

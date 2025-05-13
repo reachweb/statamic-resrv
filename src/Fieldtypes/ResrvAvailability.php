@@ -76,6 +76,33 @@ class ResrvAvailability extends Fieldtype
                     ],
                     'default' => 'none',
                 ],
+                'block_availability' => [
+                    'display' => __('Block availability'),
+                    'instructions' => __('If enabled, the connected availability will be block instead of synced, only when the availability is decreased.'),
+                    'type' => 'toggle',
+                    'default' => false,
+                    'unless' => [
+                        'connected_availabilities' => 'none',
+                    ],
+                ],
+                'change_by_amount' => [
+                    'display' => __('Change by amount'),
+                    'instructions' => __('If enabled, instead of syncing the availability, the connected availability will be changed by the amount of the availability that has changed.'),
+                    'type' => 'toggle',
+                    'default' => false,
+                    'unless' => [
+                        'connected_availabilities' => 'none',
+                    ],
+                ],
+                'disable_on_cp' => [
+                    'display' => __('Disable on control panel'),
+                    'instructions' => __('If enabled, only apply the rules when the availability is changed from the frontend.'),
+                    'type' => 'toggle',
+                    'default' => false,
+                    'unless' => [
+                        'connected_availabilities' => 'none',
+                    ],
+                ],
                 'manual_connected_availabilities' => [
                     'display' => __('Manually connected availabilities'),
                     'instructions' => __('Please enter the slug of the availability and the slug(s) of the other availabilities you want to affect (seperated by commas).'),
