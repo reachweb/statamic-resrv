@@ -19,6 +19,13 @@ class UpdateConnectedAvailabilities
 
         $this->config = $availability->getConnectedAvailabilitySettings();
 
+        $cp = config('statamic.cp.route');
+        if ($this->config->get('disable_on_cp')
+            && request()->is("{$cp}/*")
+        ) {
+            return;
+        }
+
         switch ($this->config->get('connected_availabilities')) {
             case 'none':
                 break;

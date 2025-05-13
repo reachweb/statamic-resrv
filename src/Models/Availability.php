@@ -77,7 +77,7 @@ class Availability extends Model implements AvailabilityContract
         return $slug;
     }
 
-    public function getConnectedAvailabilitySettings(): Collection
+    public function getConnectedAvailabilitySettings(): Collection|bool
     {
         $blueprint = $this->entry->getStatamicEntry()->blueprint();
 
