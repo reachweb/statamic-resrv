@@ -220,6 +220,126 @@ class ConnectedAvailabilityFrontTest extends TestCase
         ]);
     }
 
+    public function test_connected_availability_gets_changed_only_for_amount()
+    {
+        Config::set('resrv-config.enable_connected_availabilities', true);
+
+        $blueprint = Blueprint::make()->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'advanced_availability' => [
+                                    'something' => 'Something',
+                                    'something-else' => 'Something else',
+                                    'something-else-completely' => 'Something else completely',
+                                ],
+                                'connected_availabilities' => 'all',
+                                'change_by_amount' => true,
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $blueprint->setHandle('pages')->setNamespace('collections.'.$this->collection->handle())->save();
+
+        $item = $this->makeStatamicItem();
+        // To ensure it gets saved in the Entry table
+        $item->save();
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item->id(),
+                ]
+            );
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item->id(),
+                    'property' => 'something-else',
+                    'available' => 6,
+                ]
+            );
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item->id(),
+                    'property' => 'something-else-completely',
+                    'available' => 8,
+                ]
+            );
+
+        $reservation = Reservation::factory()
+            ->advanced()
+            ->create(
+                [
+                    'item_id' => $item->id(),
+                    'quantity' => 2,
+                ]
+            );
+
+        Event::dispatch(new ReservationCreated($reservation));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 0,
+            'property' => 'something',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 4,
+            'property' => 'something-else',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 6,
+            'property' => 'something-else-completely',
+        ]);
+
+        Event::dispatch(new ReservationExpired($reservation));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 2,
+            'property' => 'something',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 6,
+            'property' => 'something-else',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 8,
+            'property' => 'something-else-completely',
+        ]);
+    }
+
     public function test_connected_availability_gets_updated_on_same_slug()
     {
         Config::set('resrv-config.enable_connected_availabilities', true);
