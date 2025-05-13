@@ -69,8 +69,8 @@ class UpdateConnectedAvailabilities
 
             foreach ($properties as $property => $label) {
                 $propertyQuery = clone $query;
-                $current = $propertyQuery->where('property', $property)->ray()->first();
-                ray($current, $property);
+                $current = $propertyQuery->where('property', $property)->first();
+
                 if (! $current) {
                     continue;
                 }
