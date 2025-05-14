@@ -20,8 +20,7 @@ class UpdateConnectedAvailabilities
         $this->config = $availability->getConnectedAvailabilitySettings();
 
         $cp = config('statamic.cp.route');
-        if ($this->config->get('disable_on_cp')
-            && request()->is("{$cp}/*")
+        if ($this->config->get('disable_on_cp') === true && request()->is("{$cp}/*")
         ) {
             return;
         }
@@ -41,9 +40,85 @@ class UpdateConnectedAvailabilities
         }
     }
 
+    protected function calculateChange($availability): int
+    {
+        return $availability->available - $availability->getOriginal('available');
+    }
+
+    protected function processAvailabilityUpdate($availability, $query, $properties = null): void
+    {
+        if ($this->config->get('change_by_amount') === true) {
+            $this->updateByChangeAmount($availability, $query, $properties);
+
+            return;
+        }
+
+        if ($this->config->get('block_availability') === true) {
+            $this->handleBlockUnblock($availability, $query, $properties);
+
+            return;
+        }
+
+        $this->directUpdate($availability, $query, $properties);
+    }
+
+    protected function handleBlockUnblock($availability, $query, $properties = null): void
+    {
+        $change = $this->calculateChange($availability);
+        $isPositiveChange = $change > 0;
+
+        // Handle the specific cases differently based on the context
+        if ($this->config->get('connected_availabilities') === 'same_slug' && $properties !== null) {
+            // Same slug case requires a different query structure
+            $baseQuery = Availability::where('date', $availability->date)
+                ->where('property', $availability->property)
+                ->whereNot('statamic_id', $availability->statamic_id);
+        } else {
+            // Create base query
+            $baseQuery = clone $query;
+
+            if ($properties !== null) {
+                // For manually selected properties
+                $baseQuery = $baseQuery->whereIn('property', $properties);
+            } elseif (isset($availability->property)) {
+                // Exclude current property if not in properties list
+                $baseQuery = $baseQuery->whereNot('property', $availability->property);
+            }
+        }
+
+        $items = $baseQuery->get();
+
+        // Apply block or unblock to each item
+        $items->each(function ($av) use ($isPositiveChange) {
+            if (! $isPositiveChange) {
+                $av->block();
+            } elseif (! $this->config->get('never_unblock')) {
+                $av->unblock();
+            }
+        });
+    }
+
+    protected function directUpdate($availability, $query, $properties = null): void
+    {
+        // Create base query
+        $baseQuery = clone $query;
+
+        if ($properties !== null) {
+            // For manually selected properties
+            $baseQuery = $baseQuery->whereIn('property', $properties);
+        } elseif (isset($availability->property)) {
+            // Exclude current property if not in properties list
+            $baseQuery = $baseQuery->whereNot('property', $availability->property);
+        }
+
+        $baseQuery->update([
+            'available' => $availability->available,
+        ]);
+    }
+
     protected function updateByChangeAmount($availability, $query, $properties = null): void
     {
-        $change = $availability->available - $availability->getOriginal('available');
+        $change = $this->calculateChange($availability);
 
         if ($properties) {
             // For manually selected properties
@@ -88,46 +163,22 @@ class UpdateConnectedAvailabilities
 
     public function updateAllConnectedAvailabilities($availability): void
     {
-        if ($this->config->get('change_by_amount') === true) {
-            $query = Availability::where('statamic_id', $availability->statamic_id)
-                ->where('date', $availability->date);
+        $query = Availability::where('statamic_id', $availability->statamic_id)
+            ->where('date', $availability->date);
 
-            $this->updateByChangeAmount($availability, $query);
-
-            return;
-        }
-
-        Availability::where('statamic_id', $availability->statamic_id)
-            ->where('date', $availability->date)
-            ->whereNot('property', $availability->property)
-            ->update([
-                'available' => $availability->available,
-            ]);
+        $this->processAvailabilityUpdate($availability, $query);
     }
 
     public function updateSameSlugConnectedAvailabilities($availability): void
     {
-        if ($this->config->get('change_by_amount') === true) {
-            $query = Availability::where('date', $availability->date);
-            $properties = Availability::where('date', $availability->date)
-                ->where('property', $availability->property)
-                ->whereNot('statamic_id', $availability->statamic_id)
-                ->pluck('property')
-                ->toArray();
-
-            $this->updateByChangeAmount($availability, $query, $properties);
-
-            return;
-        }
-
-        $available = $availability->available;
-
-        Availability::where('date', $availability->date)
+        $query = Availability::where('date', $availability->date);
+        $properties = Availability::where('date', $availability->date)
             ->where('property', $availability->property)
             ->whereNot('statamic_id', $availability->statamic_id)
-            ->update([
-                'available' => $available,
-            ]);
+            ->pluck('property')
+            ->toArray();
+
+        $this->processAvailabilityUpdate($availability, $query, $properties);
     }
 
     public function updateSelectConnectedAvailabilities($availability): void
@@ -140,24 +191,9 @@ class UpdateConnectedAvailabilities
 
         $properties = explode(',', $propertiesToUpdate[$availability->property]);
 
-        if ($this->config->get('change_by_amount') === true) {
-            $query = Availability::where('statamic_id', $availability->statamic_id)
-                ->where('date', $availability->date);
+        $query = Availability::where('statamic_id', $availability->statamic_id)
+            ->where('date', $availability->date);
 
-            $this->updateByChangeAmount($availability, $query, $properties);
-
-            return;
-        }
-
-        $available = $availability->available;
-
-        foreach ($properties as $property) {
-            Availability::where('statamic_id', $availability->statamic_id)
-                ->where('date', $availability->date)
-                ->where('property', $property)
-                ->update([
-                    'available' => $availability->available,
-                ]);
-        }
+        $this->processAvailabilityUpdate($availability, $query, $properties);
     }
 }
