@@ -34,6 +34,7 @@ class Availability extends Model implements AvailabilityContract
         'date',
         'price',
         'available',
+        'available_blocked',
         'property',
         'pending',
     ];
@@ -77,7 +78,19 @@ class Availability extends Model implements AvailabilityContract
         return $slug;
     }
 
-    public function getConnectedAvailabilitySetting()
+    public function getProperties(): array
+    {
+        $blueprint = $this->entry->getStatamicEntry()->blueprint();
+        if (! $blueprint->hasField('resrv_availability')) {
+            return [];
+        }
+
+        return Cache::rememberForever('properties'.$blueprint->namespace(), function () use ($blueprint) {
+            return $blueprint->field('resrv_availability')->get('advanced_availability');
+        });
+    }
+
+    public function getConnectedAvailabilitySettings(): Collection|bool
     {
         $blueprint = $this->entry->getStatamicEntry()->blueprint();
 
@@ -86,16 +99,14 @@ class Availability extends Model implements AvailabilityContract
                 return false;
             }
 
-            return $blueprint->field('resrv_availability')->get('connected_availabilities');
-        });
-    }
-
-    public function getConnectedAvailabilityManualSetting()
-    {
-        $blueprint = $this->entry->getStatamicEntry()->blueprint();
-
-        return Cache::rememberForever('connected_availability_manual_setting_'.$blueprint->namespace(), function () use ($blueprint) {
-            return $blueprint->field('resrv_availability')->get('manual_connected_availabilities');
+            return collect([
+                'connected_availabilities' => $blueprint->field('resrv_availability')->get('connected_availabilities'),
+                'manual_connected_availabilities' => $blueprint->field('resrv_availability')->get('manual_connected_availabilities'),
+                'block_availability' => $blueprint->field('resrv_availability')->get('block_availability'),
+                'never_unblock' => $blueprint->field('resrv_availability')->get('never_unblock'),
+                'change_by_amount' => $blueprint->field('resrv_availability')->get('change_by_amount'),
+                'disable_on_cp' => $blueprint->field('resrv_availability')->get('disable_on_cp'),
+            ]);
         });
     }
 
@@ -235,6 +246,34 @@ class Availability extends Model implements AvailabilityContract
             statamic_id: $statamic_id,
             advanced: $advanced
         );
+    }
+
+    public function block(): bool
+    {
+        // Only block if it's not already zero
+        if ($this->available > 0) {
+            $this->available_blocked = $this->available;
+            $this->available = 0;
+            $this->saveQuietly();
+
+            return true;
+        }
+
+        return false;
+    }
+
+    public function unblock(): bool
+    {
+        // Only unblock if we have an original value stored and if it's blocked
+        if ($this->available_blocked !== null && $this->available == 0) {
+            $this->available = $this->available_blocked;
+            $this->available_blocked = null;
+            $this->saveQuietly();
+
+            return true;
+        }
+
+        return false;
     }
 
     protected function getAvailabilityCollection(?array $entries = null)

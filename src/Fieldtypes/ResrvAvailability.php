@@ -76,6 +76,54 @@ class ResrvAvailability extends Fieldtype
                     ],
                     'default' => 'none',
                 ],
+                'block_availability' => [
+                    'display' => __('Block availability'),
+                    'instructions' => __('If enabled, the connected availability will be block instead of synced, only when the availability is decreased.'),
+                    'type' => 'toggle',
+                    'default' => false,
+                    'unless' => [
+                        'connected_availabilities' => 'none',
+                    ],
+                    'validate' => [
+                        'sometimes',
+                        'declined_if:change_by_amount,true',
+                    ],
+                ],
+                'never_unblock' => [
+                    'display' => __('Never unblock'),
+                    'instructions' => __('If enabled, the engine will never unblock the connected availability, even if the availability is increased.'),
+                    'type' => 'toggle',
+                    'default' => false,
+                    'if' => [
+                        'block_availability' => 'true',
+                    ],
+                ],
+                'change_by_amount' => [
+                    'display' => __('Change by amount'),
+                    'instructions' => __('If enabled, instead of syncing the availability, the connected availabilities will be changed by the amount of the availability that has changed.'),
+                    'type' => 'toggle',
+                    'default' => false,
+                    'unless' => [
+                        'connected_availabilities' => 'none',
+                    ],
+                    'validate' => [
+                        'sometimes',
+                        'declined_if:block_availability,true',
+                    ],
+                ],
+                'disable_on_cp' => [
+                    'display' => __('Disable on control panel'),
+                    'instructions' => __('If enabled, only apply the rules when the availability is changed from the frontend.'),
+                    'type' => 'toggle',
+                    'default' => false,
+                    'unless' => [
+                        'connected_availabilities' => 'none',
+                    ],
+                    'validate' => [
+                        'sometimes',
+                        'accepted_if:block_availability,true',
+                    ],
+                ],
                 'manual_connected_availabilities' => [
                     'display' => __('Manually connected availabilities'),
                     'instructions' => __('Please enter the slug of the availability and the slug(s) of the other availabilities you want to affect (seperated by commas).'),
