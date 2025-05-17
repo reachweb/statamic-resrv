@@ -629,4 +629,244 @@ class ConnectedAvailabilityCpTest extends TestCase
             'property' => 'something-else',
         ]);
     }
+
+    public function test_multiple_connected_availability_rules_can_be_applied()
+    {
+        Config::set('resrv-config.enable_connected_availabilities', true);
+
+        $blueprint = Blueprint::make()->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'advanced_availability' => [
+                                    'standard' => 'Standard Rate',
+                                    'non_refundable' => 'Non-Refundable Rate',
+                                    'free_car' => 'Free Car Rental',
+                                ],
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'all',
+                                        'block_type' => 'sync',
+                                    ],
+                                    [
+                                        'connected_availability_type' => 'same_slug',
+                                        'block_type' => 'sync',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $blueprint->setHandle('pages')->setNamespace('collections.'.$this->collection->handle())->save();
+
+        // Create three different entries
+        $item1 = $this->makeStatamicItem();
+        $item1->save();
+
+        $item2 = $this->makeStatamicItem();
+        $item2->save();
+
+        $item3 = $this->makeStatamicItem();
+        $item3->save();
+
+        // Create initial availabilities for the three rate types in first entry
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'standard',
+                'available' => 10,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'non_refundable',
+                'available' => 10,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'free_car',
+                'available' => 5,
+            ]);
+
+        // Create availabilities for second entry
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'standard',
+                'available' => 8,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'free_car',
+                'available' => 5,
+            ]);
+
+        // Create availabilities for third entry
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item3->id(),
+                'property' => 'standard',
+                'available' => 15,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item3->id(),
+                'property' => 'free_car',
+                'available' => 5,
+            ]);
+
+        // Update free_car availability in first entry
+        $payload = [
+            'statamic_id' => $item1->id(),
+            'date_start' => today()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'advanced' => [['code' => 'free_car']],
+            'available' => 3,
+            'price' => null,
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        // First rule: "all" - within the same entry, all availability types are synced
+        // The standard and non_refundable rates in the first entry should be updated
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'free_car',
+            'available' => 3,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'standard',
+            'available' => 3,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'non_refundable',
+            'available' => 3,
+        ]);
+
+        // Second rule: "same_slug" - the free_car availability should be updated across all entries
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'free_car',
+            'available' => 3,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'free_car',
+            'available' => 3,
+        ]);
+
+        // But the standard rate in other entries should remain unchanged
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'standard',
+            'available' => 8,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'standard',
+            'available' => 15,
+        ]);
+
+        // Now update the standard rate in entry 2
+        $payload = [
+            'statamic_id' => $item2->id(),
+            'date_start' => today()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'advanced' => [['code' => 'standard']],
+            'available' => 6,
+            'price' => null,
+        ];
+
+        $response = $this->post(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        // First rule: "all" - within entry 2, free_car should be updated
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'standard',
+            'available' => 6,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'free_car',
+            'available' => 6,
+        ]);
+
+        // But the free_car in other entries should remain at 3 (from previous update)
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'free_car',
+            'available' => 3,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'free_car',
+            'available' => 3,
+        ]);
+    }
 }

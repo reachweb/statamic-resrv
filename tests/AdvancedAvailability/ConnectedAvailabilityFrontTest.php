@@ -571,6 +571,169 @@ class ConnectedAvailabilityFrontTest extends TestCase
         ]);
     }
 
+    public function test_connected_availability_gets_updated_on_specific_slug()
+    {
+        Config::set('resrv-config.enable_connected_availabilities', true);
+
+        $item = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+
+        Blueprint::find('collections.pages.pages')->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'advanced_availability' => [
+                                    'something' => 'Something',
+                                    'something-else' => 'Something else',
+                                    'something-else-completely' => 'Something else completely',
+                                ],
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'specific_slugs',
+                                        'block_type' => 'sync',
+                                        'slugs_to_sync' => 'something-else',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ])->save();
+
+        $item->save();
+        $item2->save();
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item->id(),
+                    'property' => 'something-else',
+                ]
+            );
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item->id(),
+                    'property' => 'something-else-completely',
+                ]
+            );
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item2->id(),
+                    'property' => 'something-else',
+                ]
+            );
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create(
+                [
+                    'statamic_id' => $item2->id(),
+                    'property' => 'something-else-completely',
+                ]
+            );
+
+        $reservation = Reservation::factory()
+            ->advanced()
+            ->create(
+                ['property' => 'something-else',
+                    'item_id' => $item->id(),
+                ]
+            );
+
+        Event::dispatch(new ReservationCreated($reservation));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 1,
+            'property' => 'something-else',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'available' => 1,
+            'property' => 'something-else',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 2,
+            'property' => 'something-else-completely',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'available' => 2,
+            'property' => 'something-else-completely',
+        ]);
+
+        $reservation = Reservation::factory()
+            ->advanced()
+            ->create(
+                ['property' => 'something-else-completely',
+                    'item_id' => $item->id(),
+                ]
+            );
+
+        Event::dispatch(new ReservationCreated($reservation));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 1,
+            'property' => 'something-else',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'available' => 1,
+            'property' => 'something-else',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'available' => 1,
+            'property' => 'something-else-completely',
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'available' => 2,
+            'property' => 'something-else-completely',
+        ]);
+    }
+
     public function test_connected_availability_gets_blocked_and_unblocked_on_same_slug()
     {
         Config::set('resrv-config.enable_connected_availabilities', true);
@@ -1301,5 +1464,396 @@ class ConnectedAvailabilityFrontTest extends TestCase
             'available_blocked' => 4,
             'property' => 'fullday',
         ]);
+    }
+
+    public function test_multiple_connected_availability_rules_can_be_applied()
+    {
+        Config::set('resrv-config.enable_connected_availabilities', true);
+
+        Blueprint::find('collections.pages.pages')->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'advanced_availability' => [
+                                    'standard' => 'Standard Rate',
+                                    'non_refundable' => 'Non-Refundable Rate',
+                                    'free_car' => 'Free Car Rental',
+                                ],
+                                'connected_availabilities' => [
+
+                                    [
+                                        'connected_availability_type' => 'specific_slugs',
+                                        'slugs_to_sync' => 'free_car',
+                                        'block_type' => 'sync',
+                                    ],
+                                    [
+                                        'connected_availability_type' => 'select',
+                                        'block_type' => 'change_by_amount',
+                                        'manually_connected_availabilities' => [
+                                            'standard' => 'non_refundable',
+                                            'non_refundable' => 'standard',
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ])->save();
+
+        // Create three different entries
+        $item1 = $this->makeStatamicItem();
+        $item1->save();
+
+        $item2 = $this->makeStatamicItem();
+        $item2->save();
+
+        $item3 = $this->makeStatamicItem();
+        $item3->save();
+
+        // Create initial availabilities for the three rate types in first entry
+        // First item: 10 standard, 10 non_refundable, 5 free_car
+        // Second item: 8 standard, 8 non_refundable, 5 free_car
+        // Third item: 15 standard, 15 non_refundable, 5 free_car
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'standard',
+                'available' => 10,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'non_refundable',
+                'available' => 10,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'free_car',
+                'available' => 5,
+            ]);
+
+        // Create availabilities for second entry
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'standard',
+                'available' => 8,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'non_refundable',
+                'available' => 8,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'free_car',
+                'available' => 5,
+            ]);
+
+        // Create availabilities for third entry
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item3->id(),
+                'property' => 'standard',
+                'available' => 15,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item3->id(),
+                'property' => 'non_refundable',
+                'available' => 15,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item3->id(),
+                'property' => 'free_car',
+                'available' => 5,
+            ]);
+
+        // Create a reservation for free_car in entry 1
+        $reservation = Reservation::factory()
+            ->advanced()
+            ->create([
+                'item_id' => $item1->id(),
+                'property' => 'free_car',
+                'quantity' => 2,
+            ]);
+
+        Event::dispatch(new ReservationCreated($reservation));
+
+        // First rule: "specific_slug"
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'free_car',
+            'available' => 3, // 5 - 2
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'free_car',
+            'available' => 3, // 5 - 2
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'free_car',
+            'available' => 3, // 5 - 2
+        ]);
+
+        // Second rule: the rest should not be updated only on the same entry
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'standard',
+            'available' => 10,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'non_refundable',
+            'available' => 10,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'standard',
+            'available' => 8,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'standard',
+            'available' => 15,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'non_refundable',
+            'available' => 8,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'non_refundable',
+            'available' => 15,
+        ]);
+
+        // Now create a reservation for standard rate in entry 2
+        $reservation2 = Reservation::factory()
+            ->advanced()
+            ->create([
+                'item_id' => $item2->id(),
+                'property' => 'standard',
+                'quantity' => 3,
+            ]);
+
+        Event::dispatch(new ReservationCreated($reservation2));
+
+        // First rule: "specific_slug" - the car availability should not be affected
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'free_car',
+            'available' => 3,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'free_car',
+            'available' => 3,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'free_car',
+            'available' => 3,
+        ]);
+
+        // Second rule: the non refundable in item2 should change and nothing else
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'standard',
+            'available' => 10,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'non_refundable',
+            'available' => 10,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'standard',
+            'available' => 5,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'non_refundable',
+            'available' => 5,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'standard',
+            'available' => 15,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'non_refundable',
+            'available' => 15,
+        ]);
+
+        // First reservation expired
+        Event::dispatch(new ReservationExpired($reservation));
+
+        // free_car availabilities should be restored
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'free_car',
+            'available' => 5,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'free_car',
+            'available' => 5,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'free_car',
+            'available' => 5,
+        ]);
+
+        // non refundable availabilities should be restored
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'standard',
+            'available' => 10,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'non_refundable',
+            'available' => 10,
+        ]);
+
+        // The rest should not be updated
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'standard',
+            'available' => 5,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'non_refundable',
+            'available' => 5,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'standard',
+            'available' => 15,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'non_refundable',
+            'available' => 15,
+        ]);
+
+        Event::dispatch(new ReservationExpired($reservation2));
+
+        // free_car should not be affected
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'free_car',
+            'available' => 5,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'free_car',
+            'available' => 5,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'free_car',
+            'available' => 5,
+        ]);
+
     }
 }

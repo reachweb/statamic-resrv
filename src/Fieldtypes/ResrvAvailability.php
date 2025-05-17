@@ -79,6 +79,7 @@ class ResrvAvailability extends Fieldtype
                                 'options' => [
                                     'all' => __('All availabilities of the same entry'),
                                     'same_slug' => __('Same slug (works for multiple entries with the same availability slug)'),
+                                    'specific_slugs' => __('Specific slugs (works for multiple entries with the slugs you set)'),
                                     'select' => __('Select manually below (works for the same entry)'),
                                     'entries' => __('Connect specific entries\' availabilities together'),
                                 ],
@@ -111,6 +112,17 @@ class ResrvAvailability extends Fieldtype
                                 'default' => false,
                                 'if' => [
                                     'block_type' => 'block_availability',
+                                ],
+                            ],
+                        ],
+                        [
+                            'handle' => 'slugs_to_sync',
+                            'field' => [
+                                'display' => __('Slugs to sync'),
+                                'instructions' => __('Enter a comma-separated list of slugs to sync.'),
+                                'type' => 'text',
+                                'if' => [
+                                    'connected_availability_type' => 'specific_slugs',
                                 ],
                             ],
                         ],
