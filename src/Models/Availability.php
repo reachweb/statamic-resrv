@@ -101,11 +101,7 @@ class Availability extends Model implements AvailabilityContract
 
             return collect([
                 'connected_availabilities' => $blueprint->field('resrv_availability')->get('connected_availabilities'),
-                'manual_connected_availabilities' => $blueprint->field('resrv_availability')->get('manual_connected_availabilities'),
-                'block_availability' => $blueprint->field('resrv_availability')->get('block_availability'),
-                'never_unblock' => $blueprint->field('resrv_availability')->get('never_unblock'),
-                'change_by_amount' => $blueprint->field('resrv_availability')->get('change_by_amount'),
-                'disable_on_cp' => $blueprint->field('resrv_availability')->get('disable_on_cp'),
+                'disable_connected_availabilities_on_cp' => $blueprint->field('resrv_availability')->get('disable_connected_availabilities_on_cp'),
             ]);
         });
     }

@@ -47,7 +47,12 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'all',
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'all',
+                                        'block_type' => 'sync',
+                                    ],
+                                ],
                             ],
                         ],
                     ],
@@ -142,8 +147,13 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'all',
-                                'disable_on_cp' => true,
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'all',
+                                        'block_type' => 'sync',
+                                    ],
+                                ],
+                                'disable_connected_availabilities_on_cp' => true,
                             ],
                         ],
                     ],
@@ -238,8 +248,12 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'all',
-                                'change_by_amount' => true,
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'all',
+                                        'block_type' => 'change_by_amount',
+                                    ],
+                                ],
                             ],
                         ],
                     ],
@@ -358,8 +372,12 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'all',
-                                'block_availability' => true,
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'all',
+                                        'block_type' => 'block_availability',
+                                    ],
+                                ],
                             ],
                         ],
                     ],
@@ -486,7 +504,12 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'same_slug',
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'same_slug',
+                                        'block_type' => 'sync',
+                                    ],
+                                ],
                             ],
                         ],
                     ],
@@ -569,8 +592,12 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'same_slug',
-                                'block_availability' => true,
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'same_slug',
+                                        'block_type' => 'block_availability',
+                                    ],
+                                ],
                             ],
                         ],
                     ],
@@ -671,10 +698,15 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'select',
-                                'manual_connected_availabilities' => [
-                                    'something' => 'something-else',
-                                    'something-else-completely' => 'something,something-else',
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'select',
+                                        'block_type' => 'sync',
+                                        'manually_connected_availabilities' => [
+                                            'something' => 'something-else',
+                                            'something-else-completely' => 'something,something-else',
+                                        ],
+                                    ],
                                 ],
                             ],
                         ],
@@ -814,11 +846,16 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'afternoon' => 'Afternoon',
                                     'fullday' => 'Full day',
                                 ],
-                                'connected_availabilities' => 'select',
-                                'manual_connected_availabilities' => [
-                                    'morning' => 'fullday',
-                                    'afternoon' => 'fullday',
-                                    'fullday' => 'morning,afternoon',
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'select',
+                                        'block_type' => 'sync',
+                                        'manually_connected_availabilities' => [
+                                            'morning' => 'fullday',
+                                            'afternoon' => 'fullday',
+                                            'fullday' => 'morning,afternoon',
+                                        ],
+                                    ],
                                 ],
                             ],
                         ],
@@ -937,13 +974,17 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'afternoon' => 'Afternoon',
                                     'fullday' => 'Full day',
                                 ],
-                                'connected_availabilities' => 'select',
-                                'manual_connected_availabilities' => [
-                                    'morning' => 'fullday',
-                                    'afternoon' => 'fullday',
-                                    'fullday' => 'morning,afternoon',
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'select',
+                                        'block_type' => 'block_availability',
+                                        'manually_connected_availabilities' => [
+                                            'morning' => 'fullday',
+                                            'afternoon' => 'fullday',
+                                            'fullday' => 'morning,afternoon',
+                                        ],
+                                    ],
                                 ],
-                                'block_availability' => true,
                             ],
                         ],
                     ],
@@ -1107,14 +1148,18 @@ class ConnectedAvailabilityFrontTest extends TestCase
                                     'afternoon' => 'Afternoon',
                                     'fullday' => 'Full day',
                                 ],
-                                'connected_availabilities' => 'select',
-                                'manual_connected_availabilities' => [
-                                    'morning' => 'fullday',
-                                    'afternoon' => 'fullday',
-                                    'fullday' => 'morning,afternoon',
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'select',
+                                        'block_type' => 'block_availability',
+                                        'manually_connected_availabilities' => [
+                                            'morning' => 'fullday',
+                                            'afternoon' => 'fullday',
+                                            'fullday' => 'morning,afternoon',
+                                        ],
+                                        'never_unblock' => true,
+                                    ],
                                 ],
-                                'block_availability' => true,
-                                'never_unblock' => true,
                             ],
                         ],
                     ],

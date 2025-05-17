@@ -43,7 +43,12 @@ class ConnectedAvailabilityCpTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'all',
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'all',
+                                        'block_type' => 'sync',
+                                    ],
+                                ],
                             ],
                         ],
                     ],
@@ -168,8 +173,13 @@ class ConnectedAvailabilityCpTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'all',
-                                'disable_on_cp' => true,
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'all',
+                                        'block_type' => 'sync',
+                                    ],
+                                ],
+                                'disable_connected_availabilities_on_cp' => true,
                             ],
                         ],
                     ],
@@ -267,8 +277,12 @@ class ConnectedAvailabilityCpTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'all',
-                                'change_by_amount' => true,
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'all',
+                                        'block_type' => 'change_by_amount',
+                                    ],
+                                ],
                             ],
                         ],
                     ],
@@ -398,7 +412,12 @@ class ConnectedAvailabilityCpTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'same_slug',
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'same_slug',
+                                        'block_type' => 'sync',
+                                    ],
+                                ],
                             ],
                         ],
                     ],
@@ -482,10 +501,15 @@ class ConnectedAvailabilityCpTest extends TestCase
                                     'something-else' => 'Something else',
                                     'something-else-completely' => 'Something else completely',
                                 ],
-                                'connected_availabilities' => 'select',
-                                'manual_connected_availabilities' => [
-                                    'something' => 'something-else',
-                                    'something-else-completely' => 'something,something-else',
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'select',
+                                        'block_type' => 'sync',
+                                        'manually_connected_availabilities' => [
+                                            'something' => 'something-else',
+                                            'something-else-completely' => 'something,something-else',
+                                        ],
+                                    ],
                                 ],
                             ],
                         ],
