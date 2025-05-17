@@ -1854,6 +1854,450 @@ class ConnectedAvailabilityFrontTest extends TestCase
             'property' => 'free_car',
             'available' => 5,
         ]);
+    }
 
+    public function test_entries_connected_availability_with_sync_same_property_only_enabled()
+    {
+        Config::set('resrv-config.enable_connected_availabilities', true);
+
+        // Create two entry items
+        $item1 = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+
+        // Save both items
+        $item1->save();
+        $item2->save();
+
+        // Set up blueprint with connected entries rule and entries_sync_same_property_only enabled (default)
+        Blueprint::find('collections.pages.pages')->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'advanced_availability' => [
+                                    'property1' => 'Property 1',
+                                    'property2' => 'Property 2',
+                                    'property3' => 'Property 3',
+                                ],
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'entries',
+                                        'block_type' => 'sync',
+                                        'entries_sync_same_property_only' => true,
+                                        'connected_entries' => [
+                                            [
+                                                'entries' => [$item1->id(), $item2->id()],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        // Create availabilities for item1 with different properties
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'property1',
+                'available' => 2,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'property2',
+                'available' => 2,
+            ]);
+
+        // Create availabilities for item2 with the same properties
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'property1',
+                'available' => 2,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'property2',
+                'available' => 2,
+            ]);
+
+        // Create a reservation for item1, property1
+        $reservation = Reservation::factory()
+            ->advanced()
+            ->create([
+                'item_id' => $item1->id(),
+                'property' => 'property1',
+            ]);
+
+        // Dispatch reservation created event
+        Event::dispatch(new ReservationCreated($reservation));
+
+        // Check that item1, property1 availability is updated
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        // Check that item2, property1 availability is also updated (same property sync)
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        // Check that property2 availabilities are NOT updated for both items
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'property2',
+            'available' => 2,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'property2',
+            'available' => 2,
+        ]);
+    }
+
+    public function test_entries_connected_availability_with_sync_same_property_only_disabled()
+    {
+        Config::set('resrv-config.enable_connected_availabilities', true);
+
+        // Create two entry items
+        $item1 = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+
+        // Save both items
+        $item1->save();
+        $item2->save();
+
+        // Set up blueprint with connected entries rule and entries_sync_same_property_only disabled
+        Blueprint::find('collections.pages.pages')->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'advanced_availability' => [
+                                    'property1' => 'Property 1',
+                                    'property2' => 'Property 2',
+                                    'property3' => 'Property 3',
+                                ],
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'entries',
+                                        'block_type' => 'sync',
+                                        'entries_sync_same_property_only' => false,
+                                        'connected_entries' => [
+                                            [
+                                                'entries' => [$item1->id(), $item2->id()],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        // Create availabilities for item1 with different properties
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'property1',
+                'available' => 2,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'property2',
+                'available' => 3,
+            ]);
+
+        // Create availabilities for item2 with the same properties
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'property1',
+                'available' => 5,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'property2',
+                'available' => 4,
+            ]);
+
+        // Create a reservation for item1, property1
+        $reservation = Reservation::factory()
+            ->advanced()
+            ->create([
+                'item_id' => $item1->id(),
+                'property' => 'property1',
+            ]);
+
+        // Dispatch reservation created event
+        Event::dispatch(new ReservationCreated($reservation));
+
+        // Check that item1, property1 availability is updated
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        // Check that ALL properties of item2 are updated, not just the same property
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'property2',
+            'available' => 1,
+        ]);
+
+        // Check that property2 of item1 is NOT updated (only affected the source item's property)
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'property2',
+            'available' => 3,
+        ]);
+    }
+
+    public function test_entries_connected_availability_with_multiple_rules()
+    {
+        Config::set('resrv-config.enable_connected_availabilities', true);
+
+        // Create three entry items
+        $item1 = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+        $item3 = $this->makeStatamicItem();
+
+        // Save all items
+        $item1->save();
+        $item2->save();
+        $item3->save();
+
+        // Set up blueprint with both connected entries rule and all properties rule
+        Blueprint::find('collections.pages.pages')->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'advanced_availability' => [
+                                    'property1' => 'Property 1',
+                                    'property2' => 'Property 2',
+                                    'property3' => 'Property 3',
+                                ],
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'entries',
+                                        'block_type' => 'sync',
+                                        'entries_sync_same_property_only' => true,
+                                        'connected_entries' => [
+                                            [
+                                                'entries' => [$item1->id(), $item2->id()],
+                                            ],
+                                        ],
+                                    ],
+                                    [
+                                        'connected_availability_type' => 'all',
+                                        'block_type' => 'sync',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        // Create availabilities for item1 with different properties
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'property1',
+                'available' => 2,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item1->id(),
+                'property' => 'property2',
+                'available' => 3,
+            ]);
+
+        // Create availabilities for item2 with the same properties
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'property1',
+                'available' => 5,
+            ]);
+
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item2->id(),
+                'property' => 'property2',
+                'available' => 4,
+            ]);
+
+        // Create availabilities for item3 (not in connected entries)
+        Availability::factory()
+            ->advanced()
+            ->count(2)
+            ->sequence(
+                ['date' => today()->isoFormat('YYYY-MM-DD')],
+                ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
+            )
+            ->create([
+                'statamic_id' => $item3->id(),
+                'property' => 'property1',
+                'available' => 6,
+            ]);
+
+        // Create a reservation for item1, property1
+        $reservation = Reservation::factory()
+            ->advanced()
+            ->create([
+                'item_id' => $item1->id(),
+                'property' => 'property1',
+            ]);
+
+        // Dispatch reservation created event
+        Event::dispatch(new ReservationCreated($reservation));
+
+        // Check that item1, property1 availability is updated
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        // Check that item1, property2 availability is also updated (due to 'all' rule)
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'property2',
+            'available' => 1,
+        ]);
+
+        // Check that item2, property1 availability is updated (due to entries rule with same property only)
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        // Check that item2, property2 availability is NOT updated (same property only is enabled)
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'property2',
+            'available' => 4,
+        ]);
+
+        // Check that item3 availability is not updated (not in connected entries)
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'property1',
+            'available' => 6,
+        ]);
     }
 }
