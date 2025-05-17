@@ -162,6 +162,18 @@ class ResrvAvailability extends Fieldtype
                                 ],
                             ],
                         ],
+                        [
+                            'handle' => 'entries_sync_same_property_only',
+                            'field' => [
+                                'display' => __('Sync same property only'),
+                                'instructions' => __('If enabled, only the same property across connected entries will be affected. If disabled, all properties of the connected entries will be affected.'),
+                                'type' => 'toggle',
+                                'default' => true,
+                                'if' => [
+                                    'connected_availability_type' => 'entries',
+                                ],
+                            ],
+                        ],
                     ],
                 ],
                 'disable_connected_availabilities_on_cp' => [

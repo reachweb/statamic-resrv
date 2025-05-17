@@ -38,6 +38,9 @@ class UpdateConnectedAvailabilities
                 case 'select':
                     $this->updateSelectConnectedAvailabilities($availability, $config);
                     break;
+                case 'entries':
+                    $this->updateEntriesConnectedAvailabilities($availability, $config);
+                    break;
             }
         }
     }
@@ -217,5 +220,58 @@ class UpdateConnectedAvailabilities
             ->where('date', $availability->date);
 
         $this->processAvailabilityUpdate($availability, $config, $query, $properties);
+    }
+
+    public function updateEntriesConnectedAvailabilities(Availability $availability, array $config): void
+    {
+        // Check if there are connected entries configured
+        if (empty($config['connected_entries'])) {
+            return;
+        }
+
+        // Find the connected entry group that contains the current entry
+        $currentStatamicId = $availability->statamic_id;
+        $connectedGroup = null;
+
+        foreach ($config['connected_entries'] as $group) {
+            $entries = $group['entries'] ?? [];
+            if (in_array($currentStatamicId, $entries)) {
+                $connectedGroup = $entries;
+                break;
+            }
+        }
+
+        // If the current statamic_id is not part of any group, return
+        if (!$connectedGroup) {
+            return;
+        }
+
+        // Remove the current statamic_id from the group to avoid loops
+        $connectedEntries = array_filter($connectedGroup, function ($entryId) use ($currentStatamicId) {
+            return $entryId !== $currentStatamicId;
+        });
+
+        // If no other entries in the group, return
+        if (empty($connectedEntries)) {
+            return;
+        }
+
+        // Check if we should sync only the same property or all properties
+        $syncSamePropertyOnly = isset($config['entries_sync_same_property_only']) 
+            ? $config['entries_sync_same_property_only'] 
+            : true; // Default to true for backward compatibility
+
+        // Create a query for all connected entries with the same date
+        $query = Availability::whereIn('statamic_id', $connectedEntries)
+            ->where('date', $availability->date);
+        
+        // If property is set and we want to sync only the same property, 
+        // match the same property in connected entries
+        if (isset($availability->property) && $syncSamePropertyOnly) {
+            $query = $query->where('property', $availability->property);
+        }
+
+        // Process the availability update for all entries in the group
+        $this->processAvailabilityUpdate($availability, $config, $query);
     }
 }
