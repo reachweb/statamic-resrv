@@ -77,24 +77,8 @@ class UpdateConnectedAvailabilities
         $change = $this->calculateChange($availability);
         $isPositiveChange = $change > 0;
 
-        // Handle the specific cases differently based on the context
-        if ($config['connected_availability_type'] === 'same_slug' && $properties !== null) {
-            // Same slug case requires a different query structure
-            $baseQuery = Availability::where('date', $availability->date)
-                ->where('property', $availability->property)
-                ->whereNot('statamic_id', $availability->statamic_id);
-        } else {
-            // Create base query
-            $baseQuery = clone $query;
-
-            if ($properties !== null) {
-                // For manually selected properties
-                $baseQuery = $baseQuery->whereIn('property', $properties);
-            } elseif (isset($availability->property)) {
-                // Exclude current property if not in properties list
-                $baseQuery = $baseQuery->whereNot('property', $availability->property);
-            }
-        }
+        // Build query with optional same_slug handling
+        $baseQuery = $this->filterQuery($query, $availability, $properties, $config);
 
         $items = $baseQuery->get();
 
@@ -108,18 +92,31 @@ class UpdateConnectedAvailabilities
         });
     }
 
+    /**
+     * Filter a query by properties or exclude current property.
+     * Accepts optional $config to handle special block/unblock cases.
+     */
+    protected function filterQuery(Builder $query, Availability $availability, ?array $properties, ?array $config = null): Builder
+    {
+        // Special same_slug case when blocking/unblocking
+        if ($config !== null && ($config['connected_availability_type'] ?? null) === 'same_slug' && $properties !== null) {
+            return Availability::where('date', $availability->date)
+                ->where('property', $availability->property)
+                ->whereNot('statamic_id', $availability->statamic_id);
+        }
+        $base = clone $query;
+        if ($properties !== null) {
+            return $base->whereIn('property', $properties);
+        } elseif (isset($availability->property)) {
+            return $base->whereNot('property', $availability->property);
+        }
+        return $base;
+    }
+
     protected function directUpdate(Availability $availability, Builder $query, $properties = null): void
     {
-        // Create base query
-        $baseQuery = clone $query;
-
-        if ($properties !== null) {
-            // For manually selected properties
-            $baseQuery = $baseQuery->whereIn('property', $properties);
-        } elseif (isset($availability->property)) {
-            // Exclude current property if not in properties list
-            $baseQuery = $baseQuery->whereNot('property', $availability->property);
-        }
+        // Build query with property filters
+        $baseQuery = $this->filterQuery($query, $availability, $properties);
 
         // Update without firing events to prevent loops
         Availability::withoutEvents(function () use ($baseQuery, $availability) {
@@ -136,8 +133,8 @@ class UpdateConnectedAvailabilities
         if ($properties) {
             // For manually selected properties
             foreach ($properties as $property) {
-                $propertyQuery = clone $query;
-                $current = $propertyQuery->where('property', $property)->first();
+                $propertyQuery = $this->filterQuery($query, $availability, [$property]);
+                $current = $propertyQuery->first();
                 if (! $current) {
                     continue;
                 }
@@ -158,8 +155,8 @@ class UpdateConnectedAvailabilities
             unset($properties[$availability->property]);
 
             foreach ($properties as $property => $label) {
-                $propertyQuery = clone $query;
-                $current = $propertyQuery->where('property', $property)->first();
+                $propertyQuery = $this->filterQuery($query, $availability, [$property]);
+                $current = $propertyQuery->first();
 
                 if (! $current) {
                     continue;
