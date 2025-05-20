@@ -229,28 +229,28 @@ class UpdateConnectedAvailabilities
 
         // Find the connected entry group that contains the current entry
         $currentStatamicId = $availability->statamic_id;
-        $connectedGroup = null;
+        $connectedGroups = collect();
 
         foreach ($config['connected_entries'] as $group) {
             $entries = $group['entries'] ?? [];
             if (in_array($currentStatamicId, $entries)) {
-                $connectedGroup = $entries;
-                break;
+                $connectedGroups->push($entries);
             }
         }
-
         // If the current statamic_id is not part of any group, return
-        if (! $connectedGroup) {
+        if ($connectedGroups->isEmpty()) {
             return;
         }
 
-        // Remove the current statamic_id from the group to avoid loops
-        $connectedEntries = array_filter($connectedGroup, function ($entryId) use ($currentStatamicId) {
-            return $entryId !== $currentStatamicId;
-        });
+        // Merge all matching groups into one and remove duplicate IDs
+        $connectedGroup = $connectedGroups
+            ->flatten()
+            ->unique()
+            ->reject(fn ($entryId) => $entryId === $currentStatamicId)
+            ->all();
 
         // If no other entries in the group, return
-        if (empty($connectedEntries)) {
+        if (empty($connectedGroup)) {
             return;
         }
 
@@ -260,7 +260,7 @@ class UpdateConnectedAvailabilities
             : true; // Default to true for backward compatibility
 
         // Create a query for all connected entries with the same date
-        $query = Availability::whereIn('statamic_id', $connectedEntries)
+        $query = Availability::whereIn('statamic_id', $connectedGroup)
             ->where('date', $availability->date);
 
         // If property is set and we want to sync only the same property,
@@ -269,7 +269,7 @@ class UpdateConnectedAvailabilities
             $properties = [$availability->property];
         } else {
             // Otherwise, get all properties from the connected entries
-            $properties = Availability::whereIn('statamic_id', $connectedEntries)
+            $properties = Availability::whereIn('statamic_id', $connectedGroup)
                 ->where('date', $availability->date)
                 ->pluck('property')
                 ->toArray();

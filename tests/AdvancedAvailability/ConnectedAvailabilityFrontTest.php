@@ -2300,4 +2300,125 @@ class ConnectedAvailabilityFrontTest extends TestCase
             'available' => 6,
         ]);
     }
+
+    public function test_entries_connected_availability_with_two_groups_of_entries()
+    {
+        Config::set('resrv-config.enable_connected_availabilities', true);
+
+        // Create four entry items
+        $item1 = $this->makeStatamicItem();
+        $item2 = $this->makeStatamicItem();
+        $item3 = $this->makeStatamicItem();
+        $item4 = $this->makeStatamicItem();
+
+        $item1->save();
+        $item2->save();
+        $item3->save();
+        $item4->save();
+
+        // Set up blueprint with two connected entries rules: [1,2] and [1,3,4]
+        Blueprint::find('collections.pages.pages')->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        [
+                            'handle' => 'resrv_availability',
+                            'field' => [
+                                'type' => 'resrv_availability',
+                                'display' => 'Resrv Availability',
+                                'advanced_availability' => [
+                                    'property1' => 'Property 1',
+                                ],
+                                'connected_availabilities' => [
+                                    [
+                                        'connected_availability_type' => 'entries',
+                                        'block_type' => 'sync',
+                                        'entries_sync_same_property_only' => true,
+                                        'connected_entries' => [
+                                            ['entries' => [$item1->id(), $item2->id()]],
+                                            ['entries' => [$item1->id(), $item3->id(), $item4->id()]],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ])->save();
+
+        // Create initial availability (2) for all items
+        foreach ([$item1, $item2, $item3, $item4] as $item) {
+            Availability::factory()
+                ->advanced()
+                ->create([
+                    'statamic_id' => $item->id(),
+                    'property' => 'property1',
+                    'available' => 2,
+                ]);
+        }
+
+        // When item1 changes, all four should decrement to 1
+        $res1 = Reservation::factory()->advanced()->create([
+            'item_id' => $item1->id(),
+            'property' => 'property1',
+        ]);
+
+        Event::dispatch(new ReservationCreated($res1));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item4->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        $res2 = Reservation::factory()->advanced()->create([
+            'item_id' => $item3->id(),
+            'property' => 'property1',
+        ]);
+
+        Event::dispatch(new ReservationCreated($res2));
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item1->id(),
+            'property' => 'property1',
+            'available' => 0,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item2->id(),
+            'property' => 'property1',
+            'available' => 1,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item3->id(),
+            'property' => 'property1',
+            'available' => 0,
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item4->id(),
+            'property' => 'property1',
+            'available' => 0,
+        ]);
+    }
 }
