@@ -110,6 +110,7 @@ class UpdateConnectedAvailabilities
         } elseif (isset($availability->property)) {
             return $base->whereNot('property', $availability->property);
         }
+
         return $base;
     }
 

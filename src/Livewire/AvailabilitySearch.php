@@ -30,7 +30,7 @@ class AvailabilitySearch extends Component
     public bool $anyAdvanced = false;
 
     #[Locked]
-    public bool $resetAdvancedOnBoot = false;
+    public bool $resetOnBoot = false;
 
     #[Locked]
     public bool $enableQuantity = false;
@@ -49,9 +49,10 @@ class AvailabilitySearch extends Component
 
     public function boot(): void
     {
-        if ($this->resetAdvancedOnBoot && $this->data->advanced !== null) {
+        if ($this->resetOnBoot) {
+            $this->data->quantity = 1;
             $this->data->advanced = null;
-            $this->search();
+            $this->search(true);
         }
     }
 
@@ -87,9 +88,11 @@ class AvailabilitySearch extends Component
         }
     }
 
-    public function search(): void
+    public function search(?bool $withoutValidation = false): void
     {
-        $this->data->validate();
+        if (! $withoutValidation) {
+            $this->data->validate();
+        }
 
         if ($this->data->advanced == null && $this->anyAdvanced) {
             $this->data->advanced = 'any';
