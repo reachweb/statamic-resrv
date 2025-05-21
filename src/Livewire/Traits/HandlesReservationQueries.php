@@ -44,7 +44,7 @@ trait HandlesReservationQueries
 
         if (! empty($this->data->customer)) {
             $customer = Customer::create([
-                'email' => $this->data->customer['email'] ?? 'pending',
+                'email' => $this->data->customer['email'] ?? '',
                 'data' => collect($this->data->customer)->except('email'),
             ]);
         }
