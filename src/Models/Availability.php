@@ -475,7 +475,7 @@ class Availability extends Model implements AvailabilityContract
             })
             ->get(['date', 'available', 'price', 'property'])
             ->groupBy('date')
-            ->map(fn ($item) => $item->first())
+            ->map(fn ($item) => $item->firstWhere('available', '>', 0))
             ->toArray();
     }
 }
