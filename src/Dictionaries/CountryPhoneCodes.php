@@ -7,7 +7,7 @@ use Statamic\Dictionaries\Item;
 
 class CountryPhoneCodes extends BasicDictionary
 {
-    protected string $valueKey = 'code';
+    protected string $valueKey = 'iso';
 
     protected string $labelKey = 'name';
 

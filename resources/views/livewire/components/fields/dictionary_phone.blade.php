@@ -27,9 +27,9 @@
                 x-on:keydown.enter.prevent="openedWithKeyboard = true"
                 x-on:keydown.space.prevent="openedWithKeyboard = true"
                 x-bind:aria-expanded="isOpen || openedWithKeyboard"
-                x-bind:aria-label="selectedOption ? selectedOption : '{{ __('Select') }}'"
+                x-bind:aria-label="selectedOption ? getSelectedOptionLabel() : '{{ __('Select') }}'"
             >
-                <span class="font-normal" x-text="selectedOption ? selectedOption : '{{ __('Select') }}'"></span>
+                <span class="font-normal" x-text="selectedOption ? getSelectedOptionLabel() : '{{ __('Select') }}'"></span>
                 <svg class="size-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
                 </svg>
@@ -65,7 +65,7 @@
                     <li class="hidden px-4 py-2 text-sm text-gray-600" x-ref="noResultsMessage">
                         <span>{{ __('No results found') }}</span>
                     </li>
-                    <template x-for="(item, index) in options" x-bind:key="item.code">
+                    <template x-for="(item, index) in options" x-bind:key="item.value">
                         <li 
                             class="combobox-option inline-flex cursor-pointer justify-between gap-6 bg-gray-50 px-4 py-2 text-sm text-gray-600 hover:bg-gray-900/5 hover:text-gray-900 focus-visible:bg-gray-900/5 focus-visible:text-gray-900 focus-visible:outline-none"
                             role="option"
@@ -75,14 +75,14 @@
                             tabindex="0"
                         >
                             <div class="flex items-center gap-2">
-                                <span x-bind:class="selectedOption == item ? 'font-bold' : null">
-                                    <span x-text="item.label"></span> (<span class="font-bold" x-text=item.code></span>)
+                                <span x-bind:class="selectedOption == item.value ? 'font-bold' : null">
+                                    <span x-text="item.label"></span> (<span class="font-bold" x-text="item.code"></span>)
                                 </span>
-                                <span class="sr-only" x-text="selectedOption == item ? 'selected' : null"></span>
+                                <span class="sr-only" x-text="selectedOption == item.value ? 'selected' : null"></span>
                             </div>
                             <svg 
                                 x-cloak
-                                x-show="selectedOption == item"
+                                x-show="selectedOption == item.value"
                                 class="size-4"
                                 xmlns="http://www.w3.org/2000/svg"
                                 viewBox="0 0 24 24"
@@ -127,15 +127,20 @@ Alpine.data('phonebox', (comboboxData, fieldHandle) => ({
     openedWithKeyboard: false,
     selectedOption: null,
     setSelectedOption(option) {
-        this.selectedOption = option.code
+        this.selectedOption = option.value // This will be the ISO code
         this.isOpen = false
         this.openedWithKeyboard = false
-        this.$refs.phoneNumber.value = option.code
+        this.$refs.phoneNumber.value = option.code // Set the phone code as the value
         this.$refs.phoneNumber.focus()
+    },
+    getSelectedOptionLabel() {
+        if (!this.selectedOption) return null
+        const selected = this.options.find(opt => opt.value === this.selectedOption)
+        return selected ? selected.code : null
     },
     getFilteredOptions(query) {
         this.options = comboboxData.filter((option) =>
-            option.name.toLowerCase().includes(query.toLowerCase()) ||
+            option.label.toLowerCase().includes(query.toLowerCase()) ||
             option.code.toLowerCase().includes(query.toLowerCase())
         )
         if (this.options.length === 0) {
