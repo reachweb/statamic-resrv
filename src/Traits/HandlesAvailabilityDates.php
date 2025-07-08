@@ -96,7 +96,7 @@ trait HandlesAvailabilityDates
             throw new AvailabilityException(__('Your pickup date is before the drop-off date.'));
         }
 
-        if ($this->clearTime($date_start) < Carbon::now() || $this->clearTime($date_end) < Carbon::now()) {
+        if ($this->clearTime($date_start) < Carbon::now()->startOfDay() || $this->clearTime($date_end) < Carbon::now()->startOfDay()) {
             throw new AvailabilityException(__('Your pickup date is before the actual date and time.'));
         }
 
