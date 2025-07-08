@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Livewire\Forms;
 
 use Livewire\Form;
+use Reach\StatamicResrv\Rules\ResrvAfterToday;
 use Reach\StatamicResrv\Rules\ResrvMaxQuantity;
 use Reach\StatamicResrv\Rules\ResrvMinimumDate;
 use Reach\StatamicResrv\Rules\ResrvMinimumDuration;
@@ -25,14 +26,14 @@ class AvailabilityData extends Form
                 'required',
                 'date',
                 'before:dates.date_end',
-                'after_or_equal:today',
+                new ResrvAfterToday,
                 new ResrvMinimumDate,
             ],
             'dates.date_end' => [
                 'required',
                 'date',
                 'after:dates.date_start',
-                'after:today',
+                new ResrvAfterToday,
             ],
             'quantity' => ['sometimes', 'integer', new ResrvMaxQuantity],
             'advanced' => ['nullable', 'string'],
