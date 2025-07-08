@@ -469,7 +469,7 @@ class Availability extends Model implements AvailabilityContract
     public function getAvailabilityCalendar(string $id, ?string $advanced): array
     {
         return $this->where('statamic_id', $id)
-            ->where('date', '>=', now()->startOfDay())
+            ->where('date', '>=', now()->startOfDay()->toDateString())
             ->when($advanced, function ($query) use ($advanced) {
                 return $query->where('property', $advanced);
             })
