@@ -19,7 +19,6 @@ class ResrvCutoff extends Fieldtype
             return false;
         }
 
-        // Return the cutoff rules for frontend use
         try {
             $resrvEntry = Entry::whereItemId($this->field->parent()->id());
 

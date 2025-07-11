@@ -2,6 +2,8 @@
 
 namespace Reach\StatamicResrv\Traits;
 
+use Carbon\Carbon;
+
 trait HandlesCutoffRules
 {
     public function getCutoffRules(): ?array
@@ -11,7 +13,6 @@ trait HandlesCutoffRules
 
     public function hasCutoffRules(): bool
     {
-        // Check if cutoff rules are globally enabled first
         if (! config('statamic.resrv.enable_cutoff_rules', false)) {
             return false;
         }
@@ -20,9 +21,6 @@ trait HandlesCutoffRules
             && $this->options['cutoff_rules']['enable_cutoff'] === true;
     }
 
-    /**
-     * Get the cutoff schedule (starting time and cutoff hours) for a specific date
-     */
     public function getCutoffScheduleForDate(string $date): ?array
     {
         if (! $this->hasCutoffRules()) {
@@ -31,7 +29,6 @@ trait HandlesCutoffRules
 
         $rules = $this->getCutoffRules();
 
-        // Check schedules first
         if (isset($rules['schedules'])) {
             foreach ($rules['schedules'] as $schedule) {
                 if ($this->isDateInRange($date, $schedule['date_start'], $schedule['date_end'])) {
@@ -44,7 +41,6 @@ trait HandlesCutoffRules
             }
         }
 
-        // Fall back to default
         return [
             'starting_time' => $rules['default_starting_time'] ?? '16:00',
             'cutoff_hours' => $rules['default_cutoff_hours'] ?? 3,
@@ -52,11 +48,12 @@ trait HandlesCutoffRules
         ];
     }
 
-    /**
-     * Check if a date falls within a given range
-     */
     private function isDateInRange(string $date, string $startDate, string $endDate): bool
     {
-        return $date >= $startDate && $date <= $endDate;
+        $checkDate = Carbon::parse($date);
+        $rangeStart = Carbon::parse($startDate);
+        $rangeEnd = Carbon::parse($endDate);
+
+        return $checkDate->between($rangeStart, $rangeEnd, true);
     }
 }
