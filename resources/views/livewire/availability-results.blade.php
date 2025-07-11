@@ -76,6 +76,12 @@
         <dd class="mb-1 text-gray-500">{{ $errors->first('availability') }}</dd>
     </div>
     @endif
+    @if ($errors->has('cutoff') && $data->hasDates())
+    <div class="flex flex-col py-4">
+        <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.youAreTooLate') }}</dt>
+        <dd class="mb-1 text-gray-500">{{ $errors->first('cutoff') }}</dd>
+    </div>
+    @endif
     <div class="absolute left-0 right-0 top-0 w-full h-full bg-white/50" wire:loading.delay.long>
         <span class="flex items-center justify-center w-full h-full">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="animate-spin w-5 h-5">

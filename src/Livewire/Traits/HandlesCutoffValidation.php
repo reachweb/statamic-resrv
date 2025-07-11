@@ -27,7 +27,7 @@ trait HandlesCutoffValidation
             return; // No schedule found
         }
         if ($this->isWithinCutoffWindow($schedule, $dateStart)) {
-            throw new CutoffException(__('Reservations for this time must be made at least :hours hours before the starting time (:time). Please select a date from tomorrow onwards.', [
+            throw new CutoffException(__('Reservations are allowed at least :hours hours before the starting time (:time). Please select a date from tomorrow onwards.', [
                 'hours' => $schedule['cutoff_hours'],
                 'time' => $schedule['starting_time'],
             ]));
