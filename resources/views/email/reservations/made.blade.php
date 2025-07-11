@@ -82,7 +82,7 @@
 | :----------------------------- |:----------------|
 @if (config('resrv-config.payment') !== 'everything' && $reservation->status !== 'partner')
 | {{ __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
-| {{ __("Remaing amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
+| {{ __("Remaining amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
 | **{{ __("Total") }}** ({{ __("including taxes") }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->format() }} |
 
