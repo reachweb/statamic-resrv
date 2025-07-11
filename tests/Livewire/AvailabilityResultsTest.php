@@ -1091,4 +1091,263 @@ class AvailabilityResultsTest extends TestCase
             ]
         );
     }
+
+    public function test_cutoff_ignores_when_disabled_per_entry()
+    {
+        // Enable cutoff rules globally
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        // Create an entry with cutoff rules disabled
+        $entry = $this->makeStatamicItemWithAvailability();
+        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+
+        // Set options but with cutoff disabled
+        $resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => false,
+                'default_starting_time' => '16:00',
+                'default_cutoff_hours' => 3,
+            ],
+        ];
+        $resrvEntry->save();
+
+        // Try to make a reservation for today (which would be within cutoff if enabled)
+        $today = now()->startOfDay();
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $today->toISOString(),
+                    'date_end' => $today->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertHasNoErrors()
+            ->assertDispatched('availability-results-updated');
+    }
+
+    public function test_cutoff_enforces_default_setting()
+    {
+        // Enable cutoff rules globally
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        // Create an entry with cutoff rules enabled (3 hours before 4pm)
+        $entry = $this->makeStatamicItemWithAvailability();
+        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+
+        $resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => '16:00',
+                'default_cutoff_hours' => 3,
+            ],
+        ];
+        $resrvEntry->save();
+
+        // Mock current time to be 2pm (within cutoff window for today's 4pm start)
+        $this->travelTo(now()->setTime(14, 0, 0));
+        $today = now()->startOfDay();
+
+        // Try to make a reservation for today (should fail due to cutoff)
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $today->toISOString(),
+                    'date_end' => $today->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertHasErrors(['cutoff'])
+            ->assertDispatched('availability-results-updated');
+
+        // Try to make a reservation for tomorrow (should work)
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $today->copy()->add(1, 'day')->toISOString(),
+                    'date_end' => $today->copy()->add(2, 'days')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertHasNoErrors()
+            ->assertDispatched('availability-results-updated');
+    }
+
+    public function test_cutoff_enforces_correct_schedule_based_on_date()
+    {
+        // Enable cutoff rules globally
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        // Create an entry with cutoff rules and schedules
+        $entry = $this->makeStatamicItemWithAvailability();
+        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+
+        // Set up realistic 2-month schedules
+        $currentMonthStart = now()->startOfMonth()->format('Y-m-d');
+        $currentMonthEnd = now()->endOfMonth()->format('Y-m-d');
+        $nextMonthStart = now()->addMonth()->startOfMonth()->format('Y-m-d');
+        $nextMonthEnd = now()->addMonth()->endOfMonth()->format('Y-m-d');
+
+        $resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => '16:00',
+                'default_cutoff_hours' => 3,
+                'schedules' => [
+                    [
+                        'date_start' => $currentMonthStart,
+                        'date_end' => $currentMonthEnd,
+                        'starting_time' => '10:00',
+                        'cutoff_hours' => 6,
+                        'name' => 'Current Month Schedule',
+                    ],
+                    [
+                        'date_start' => $nextMonthStart,
+                        'date_end' => $nextMonthEnd,
+                        'starting_time' => '10:00',
+                        'cutoff_hours' => 4,
+                        'name' => 'Next Month Schedule',
+                    ],
+                ],
+            ],
+        ];
+        $resrvEntry->save();
+
+        // Test current month schedule (6 hour cutoff)
+        // Mock current time to be 8am (within 6-hour cutoff window for 10am start)
+        $this->travelTo(now()->setTime(8, 0, 0));
+
+        // Try to make a reservation for today in current month (should fail due to 6-hour cutoff)
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => now()->startOfDay()->toISOString(),
+                    'date_end' => now()->startOfDay()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertHasErrors(['cutoff'])
+            ->assertDispatched('availability-results-updated');
+
+        // Try to make a reservation for tomorrow in next month (should just work)
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => now()->addMonth()->toISOString(),
+                    'date_end' => now()->addMonth()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertHasNoErrors()
+            ->assertDispatched('availability-results-updated');
+
+        // Test next month schedule cutoff enforcement
+        // Mock current time to be 7am (within 4-hour cutoff window for 10am start)
+        $this->travelTo(now()->addMonth()->setTime(7, 0, 0));
+
+        // Try to make a reservation for tomorrow in next month (should fail due to 4-hour cutoff)
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => now()->toISOString(),
+                    'date_end' => now()->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertHasErrors(['cutoff'])
+            ->assertDispatched('availability-results-updated');
+
+        //Test date outside both schedules (should use default)
+        // Mock current time to be 2pm (within 3-hour cutoff for default 4pm start)
+        $this->travelTo(now()->addMonths(2)->setTime(14, 0, 0));
+
+        // Try to make a reservation outside schedule dates (should fail due to default 3-hour cutoff)
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => now()->toISOString(),
+                    'date_end' => now()->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertHasErrors(['cutoff'])
+            ->assertDispatched('availability-results-updated');
+    }
+
+    public function test_cutoff_allows_reservation_when_time_has_passed_today()
+    {
+        // Enable cutoff rules globally
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        // Create an entry with cutoff rules enabled (3 hours before 4pm)
+        $entry = $this->makeStatamicItemWithAvailability();
+        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+
+        $resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => '16:00',
+                'default_cutoff_hours' => 3,
+            ],
+        ];
+        $resrvEntry->save();
+
+        // Mock current time to be 6pm (after today's 4pm start time has passed)
+        $this->travelTo(now()->setTime(18, 0, 0));
+        $today = now()->startOfDay();
+
+        // Try to make a reservation for today (should not work - time has already passed)
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $today->toISOString(),
+                    'date_end' => $today->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertHasErrors(['cutoff'])
+            ->assertDispatched('availability-results-updated');
+
+        // Test with schedule - current time 12pm (after today's 10am start time has passed)
+        $resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => '16:00',
+                'default_cutoff_hours' => 3,
+                'schedules' => [
+                    [
+                        'date_start' => $today->format('Y-m-d'),
+                        'date_end' => $today->format('Y-m-d'),
+                        'starting_time' => '10:00',
+                        'cutoff_hours' => 6,
+                        'name' => 'Morning Schedule',
+                    ],
+                ],
+            ],
+        ];
+        $resrvEntry->save();
+
+        $this->travelTo(now()->setTime(12, 0, 0));
+
+        // Try to make a reservation for today (should not work - 10am start time has passed)
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $today->toISOString(),
+                    'date_end' => $today->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertHasErrors(['cutoff'])
+            ->assertDispatched('availability-results-updated');
+    }
 }

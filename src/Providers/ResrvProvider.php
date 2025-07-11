@@ -70,6 +70,7 @@ class ResrvProvider extends AddonServiceProvider
         \Reach\StatamicResrv\Fieldtypes\ResrvOptions::class,
         \Reach\StatamicResrv\Fieldtypes\ResrvExtras::class,
         \Reach\StatamicResrv\Fieldtypes\ResrvFixedPricing::class,
+        \Reach\StatamicResrv\Fieldtypes\ResrvCutoff::class,
     ];
 
     protected $tags = [

@@ -2,6 +2,7 @@ import AvailabilityFieldtype from './fieldtypes/Availability.vue'
 import OptionsFieldtype from './fieldtypes/Options.vue'
 import ExtrasFieldtype from './fieldtypes/Extras.vue'
 import FixedPricing from './fieldtypes/FixedPricing.vue'
+import CutoffFieldtype from './fieldtypes/Cutoff.vue'
 
 import AffiliatesList from './components/AffiliatesList.vue'
 import ExtrasList from './components/ExtrasList.vue'
@@ -17,6 +18,7 @@ Statamic.booting(() => {
     Statamic.$components.register('resrv_options-fieldtype', OptionsFieldtype);
     Statamic.$components.register('resrv_extras-fieldtype', ExtrasFieldtype);
     Statamic.$components.register('resrv_fixed_pricing-fieldtype', FixedPricing);
+    Statamic.$components.register('resrv_cutoff-fieldtype', CutoffFieldtype);
 
     // Lists
     Statamic.$components.register('affiliates-list', AffiliatesList);

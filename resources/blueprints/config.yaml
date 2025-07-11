@@ -114,6 +114,15 @@ tabs:
                 - required
               instructions: 'Enable the [affiliate system](https://resrv.dev/affiliates).'
           -
+            handle: enable_cutoff_rules
+            field:
+              display: 'Enable cutoff rules'
+              type: toggle
+              localizable: false
+              validate:
+                - required
+              instructions: 'Enable the ability to set cutoff times for bookings based on starting times and schedules. When enabled, entries can specify how many hours before a scheduled start time bookings must be made.'
+          -
             handle: minimum_days_before
             field:
               display: 'Minimum days before'

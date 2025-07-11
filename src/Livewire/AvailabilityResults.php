@@ -21,6 +21,7 @@ class AvailabilityResults extends Component
     use HandlesMultisiteIds,
         Hookable,
         Traits\HandlesAvailabilityQueries,
+        Traits\HandlesCutoffValidation,
         Traits\HandlesPricing,
         Traits\HandlesReservationQueries,
         Traits\HandlesStatamicQueries;
@@ -108,6 +109,17 @@ class AvailabilityResults extends Component
 
             return;
         }
+
+        // Validate cutoff rules
+        try {
+            $this->validateCutoffRules();
+        } catch (\Exception $exception) {
+            $this->dispatch('availability-results-updated');
+            $this->addError('cutoff', $exception->getMessage());
+
+            return;
+        }
+
         $this->getAvailability();
 
         $this->runHooks('availability-results-updated', $this->availability);
