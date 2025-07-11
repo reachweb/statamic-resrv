@@ -32,14 +32,14 @@ trait HandlesCutoffRules
 
         $rules = $this->getCutoffRules();
         
-        // Check seasonal schedules first
-        if (isset($rules['seasonal_schedules'])) {
-            foreach ($rules['seasonal_schedules'] as $schedule) {
+        // Check schedules first
+        if (isset($rules['schedules'])) {
+            foreach ($rules['schedules'] as $schedule) {
                 if ($this->isDateInRange($date, $schedule['date_start'], $schedule['date_end'])) {
                     return [
                         'starting_time' => $schedule['starting_time'],
                         'cutoff_hours' => $schedule['cutoff_hours'],
-                        'schedule_name' => $schedule['name'] ?? 'Seasonal Schedule'
+                        'schedule_name' => $schedule['name'] ?? 'Schedule'
                     ];
                 }
             }

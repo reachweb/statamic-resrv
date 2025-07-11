@@ -68,9 +68,9 @@
                         {{ __('Configure different starting times and cutoff periods for specific date ranges.') }}
                     </p>
                     
-                    <div v-if="settings.seasonal_schedules && settings.seasonal_schedules.length > 0" class="space-y-4">
+                    <div v-if="settings.schedules && settings.schedules.length > 0" class="space-y-4">
                         <div 
-                            v-for="(schedule, index) in settings.seasonal_schedules" 
+                            v-for="(schedule, index) in settings.schedules" 
                             :key="index"
                             class="border rounded-lg p-4 bg-gray-50 dark:bg-dark-600 dark:border-dark-500"
                         >
@@ -177,7 +177,7 @@ export default {
                 enable_cutoff: false,
                 default_starting_time: '16:00',
                 default_cutoff_hours: 3,
-                seasonal_schedules: []
+                schedules: []
             }
         }
     },
@@ -201,9 +201,9 @@ export default {
                 this.settings = { ...this.settings, ...this.value }
                 this.enabled = this.settings.enable_cutoff || false
                 
-                // Set up date ranges for existing seasonal schedules
-                if (this.settings.seasonal_schedules) {
-                    this.settings.seasonal_schedules.forEach(schedule => {
+                // Set up date ranges for existing schedules
+                if (this.settings.schedules) {
+                    this.settings.schedules.forEach(schedule => {
                         if (schedule.date_start && schedule.date_end) {
                             schedule.dateRange = {
                                 start: new Date(schedule.date_start),
@@ -223,11 +223,11 @@ export default {
         },
 
         addSchedule() {
-            if (!this.settings.seasonal_schedules) {
-                this.settings.seasonal_schedules = []
+            if (!this.settings.schedules) {
+                this.settings.schedules = []
             }
             
-            this.settings.seasonal_schedules.push({
+            this.settings.schedules.push({
                 date_start: '',
                 date_end: '',
                 dateRange: null,
@@ -263,15 +263,15 @@ export default {
         },
 
         removeSchedule(index) {
-            this.settings.seasonal_schedules.splice(index, 1)
+            this.settings.schedules.splice(index, 1)
             this.updateFieldValue()
         },
 
         updateFieldValue() {
             // Clean up the data before saving - remove dateRange objects
             const cleanSettings = { ...this.settings }
-            if (cleanSettings.seasonal_schedules) {
-                cleanSettings.seasonal_schedules = cleanSettings.seasonal_schedules.map(schedule => {
+            if (cleanSettings.schedules) {
+                cleanSettings.schedules = cleanSettings.schedules.map(schedule => {
                     const { dateRange, ...cleanSchedule } = schedule
                     return cleanSchedule
                 })
