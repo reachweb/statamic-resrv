@@ -9,11 +9,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Reach\StatamicResrv\Database\Factories\EntryFactory;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
+use Reach\StatamicResrv\Traits\HandlesCutoffRules;
 use Statamic\Entries\Entry as StatamicEntry;
 
 class Entry extends Model
 {
-    use HandlesMultisiteIds, HasFactory, SoftDeletes;
+    use HandlesMultisiteIds, HandlesCutoffRules, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_entries';
 

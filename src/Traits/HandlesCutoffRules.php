@@ -1,0 +1,63 @@
+<?php
+
+namespace Reach\StatamicResrv\Traits;
+
+trait HandlesCutoffRules
+{
+    /**
+     * Get cutoff rules from the options field
+     */
+    public function getCutoffRules(): ?array
+    {
+        return $this->options['cutoff_rules'] ?? null;
+    }
+
+    /**
+     * Check if cutoff rules are enabled
+     */
+    public function hasCutoffRules(): bool
+    {
+        return isset($this->options['cutoff_rules']['enable_cutoff']) 
+            && $this->options['cutoff_rules']['enable_cutoff'] === true;
+    }
+
+    /**
+     * Get the cutoff schedule (starting time and cutoff hours) for a specific date
+     */
+    public function getCutoffScheduleForDate(string $date): ?array
+    {
+        if (!$this->hasCutoffRules()) {
+            return null;
+        }
+
+        $rules = $this->getCutoffRules();
+        
+        // Check seasonal schedules first
+        if (isset($rules['seasonal_schedules'])) {
+            foreach ($rules['seasonal_schedules'] as $schedule) {
+                if ($this->isDateInRange($date, $schedule['date_start'], $schedule['date_end'])) {
+                    return [
+                        'starting_time' => $schedule['starting_time'],
+                        'cutoff_hours' => $schedule['cutoff_hours'],
+                        'schedule_name' => $schedule['name'] ?? 'Seasonal Schedule'
+                    ];
+                }
+            }
+        }
+
+        // Fall back to default
+        return [
+            'starting_time' => $rules['default_starting_time'] ?? '16:00',
+            'cutoff_hours' => $rules['default_cutoff_hours'] ?? 3,
+            'schedule_name' => 'Default Schedule'
+        ];
+    }
+
+    /**
+     * Check if a date falls within a given range
+     */
+    private function isDateInRange(string $date, string $startDate, string $endDate): bool
+    {
+        return $date >= $startDate && $date <= $endDate;
+    }
+}
