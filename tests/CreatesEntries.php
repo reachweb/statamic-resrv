@@ -81,7 +81,7 @@ trait CreatesEntries
         $entries->put('two-available', $this->makeStatamicItemWithAvailability(available: 2));
         $entries->put('half-price', $this->makeStatamicItemWithAvailability(available: 1, price: 25));
         $stopSalesEntry = $this->makeStatamicItemWithAvailability();
-        $stopSalesEntry->set('resrv_availability', 'disabled')->save();
+        $stopSalesEntry->set('resrv_availability_field', 'disabled')->save();
         $entries->put('stop-sales', $stopSalesEntry);
 
         return $entries;
@@ -135,7 +135,7 @@ trait CreatesEntries
                 ],
             ],
             [
-                'handle' => 'resrv_availability',
+                'handle' => 'resrv_availability_field',
                 'field' => [
                     'type' => 'resrv_availability',
                     'display' => 'Resrv Availability',
