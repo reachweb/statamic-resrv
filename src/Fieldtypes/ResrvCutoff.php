@@ -11,13 +11,18 @@ class ResrvCutoff extends Fieldtype
 
     public function augment($value)
     {
-        if (!$value || !is_array($value)) {
+        if (! config('resrv-config.enable_cutoff_rules', false)) {
+            return false;
+        }
+
+        if (! $value || ! is_array($value)) {
             return false;
         }
 
         // Return the cutoff rules for frontend use
         try {
             $resrvEntry = Entry::whereItemId($this->field->parent()->id());
+
             return $resrvEntry->getCutoffRules();
         } catch (\Exception $e) {
             return false;
@@ -26,12 +31,16 @@ class ResrvCutoff extends Fieldtype
 
     public function preload(): array
     {
+        $baseData = [
+            'server_time' => now()->format('Y-m-d H:i:s'),
+            'server_timezone' => config('app.timezone', 'UTC'),
+            'cutoff_feature_enabled' => config('resrv-config.enable_cutoff_rules', false),
+        ];
+
         if (class_basename($this->field->parent()) == 'Collection') {
-            return [
+            return array_merge($baseData, [
                 'parent' => 'Collection',
-                'server_time' => now()->format('Y-m-d H:i:s'),
-                'server_timezone' => config('app.timezone', 'UTC'),
-            ];
+            ]);
         }
 
         $parent = $this->field->parent()->id();
@@ -39,33 +48,31 @@ class ResrvCutoff extends Fieldtype
             $parent = $this->field->parent()->origin()->id();
         }
 
-        return [
+        return array_merge($baseData, [
             'parent' => $parent,
-            'server_time' => now()->format('Y-m-d H:i:s'),
-            'server_timezone' => config('app.timezone', 'UTC'),
-        ];
+        ]);
     }
 
     public function process($data)
     {
-        if (!$data || !is_array($data)) {
+        if (! $data || ! is_array($data)) {
             return null;
         }
 
         // Store cutoff rules in resrv_entries.options
         try {
             $resrvEntry = Entry::whereItemId($this->field->parent()->id());
-            
+
             $options = $resrvEntry->options ?? [];
             if ($data['enable_cutoff'] ?? false) {
                 $options['cutoff_rules'] = $data;
             } else {
                 unset($options['cutoff_rules']);
             }
-            
+
             $resrvEntry->options = $options;
             $resrvEntry->save();
-            
+
             return $data['enable_cutoff'] ? $data : null;
         } catch (\Exception $e) {
             return $data;

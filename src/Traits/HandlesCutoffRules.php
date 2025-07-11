@@ -4,20 +4,19 @@ namespace Reach\StatamicResrv\Traits;
 
 trait HandlesCutoffRules
 {
-    /**
-     * Get cutoff rules from the options field
-     */
     public function getCutoffRules(): ?array
     {
         return $this->options['cutoff_rules'] ?? null;
     }
 
-    /**
-     * Check if cutoff rules are enabled
-     */
     public function hasCutoffRules(): bool
     {
-        return isset($this->options['cutoff_rules']['enable_cutoff']) 
+        // Check if cutoff rules are globally enabled first
+        if (! config('statamic.resrv.enable_cutoff_rules', false)) {
+            return false;
+        }
+
+        return isset($this->options['cutoff_rules']['enable_cutoff'])
             && $this->options['cutoff_rules']['enable_cutoff'] === true;
     }
 
@@ -26,12 +25,12 @@ trait HandlesCutoffRules
      */
     public function getCutoffScheduleForDate(string $date): ?array
     {
-        if (!$this->hasCutoffRules()) {
+        if (! $this->hasCutoffRules()) {
             return null;
         }
 
         $rules = $this->getCutoffRules();
-        
+
         // Check schedules first
         if (isset($rules['schedules'])) {
             foreach ($rules['schedules'] as $schedule) {
@@ -39,7 +38,7 @@ trait HandlesCutoffRules
                     return [
                         'starting_time' => $schedule['starting_time'],
                         'cutoff_hours' => $schedule['cutoff_hours'],
-                        'schedule_name' => $schedule['name'] ?? 'Schedule'
+                        'schedule_name' => $schedule['name'] ?? 'Schedule',
                     ];
                 }
             }
@@ -49,7 +48,7 @@ trait HandlesCutoffRules
         return [
             'starting_time' => $rules['default_starting_time'] ?? '16:00',
             'cutoff_hours' => $rules['default_cutoff_hours'] ?? 3,
-            'schedule_name' => 'Default Schedule'
+            'schedule_name' => 'Default Schedule',
         ];
     }
 

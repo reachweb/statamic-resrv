@@ -3,6 +3,25 @@
         <div class="w-full h-full text-center my-4 text-gray-700 dark:text-dark-100 text-lg" v-if="newItem">
             {{ __('You need to save this entry before you can add cutoff rules.') }}
         </div>
+        <div class="w-full h-full text-center my-4 text-gray-700 dark:text-dark-100" v-else-if="cutoffFeatureDisabled">
+            <div class="bg-gray-300 border border-gray-400 rounded-md p-3">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <svg class="h-7 w-7 text-gray-800" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-gray-800">
+                            {{ __('Cutoff Rules Disabled') }}
+                        </h3>
+                        <div class="mt-2 text-sm text-gray-800">
+                            <p>{{ __('Cutoff rules are currently disabled in the global configuration. Enable them in the Resrv settings to use this feature.') }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div class="statamic-resrv-cutoff relative" v-else>
             <div class="flex items-center py-1 my-4 border-b border-t dark:border-gray-500">
                 <span class="font-bold mr-4">{{ __('Enable Cutoff Rules') }}</span>    
@@ -13,7 +32,7 @@
                 <div class="bg-gray-300 border border-gray-400 rounded-md p-3">
                     <div class="flex items-center">
                         <div class="flex-shrink-0 flex items-center">
-                            <svg class="h-5 w-5 text-gray-800" fill="currentColor" viewBox="0 0 20 20">
+                            <svg class="h-7 w-7 text-gray-800" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
                             </svg>
                         </div>
@@ -185,6 +204,9 @@ export default {
     computed: {
         newItem() {
             return this.meta.parent === 'Collection'
+        },
+        cutoffFeatureDisabled() {
+            return this.meta.cutoff_feature_enabled === false
         }
     },
 
