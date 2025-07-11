@@ -13,7 +13,7 @@ trait HandlesCutoffRules
 
     public function hasCutoffRules(): bool
     {
-        if (! config('statamic.resrv.enable_cutoff_rules', false)) {
+        if (! config('resrv-config.enable_cutoff_rules', false)) {
             return false;
         }
 

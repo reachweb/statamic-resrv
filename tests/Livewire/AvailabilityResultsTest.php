@@ -1095,7 +1095,7 @@ class AvailabilityResultsTest extends TestCase
     public function test_cutoff_ignores_when_disabled_per_entry()
     {
         // Enable cutoff rules globally
-        Config::set('statamic.resrv.enable_cutoff_rules', true);
+        Config::set('resrv-config.enable_cutoff_rules', true);
 
         // Create an entry with cutoff rules disabled
         $entry = $this->makeStatamicItemWithAvailability();
@@ -1130,7 +1130,7 @@ class AvailabilityResultsTest extends TestCase
     public function test_cutoff_enforces_default_setting()
     {
         // Enable cutoff rules globally
-        Config::set('statamic.resrv.enable_cutoff_rules', true);
+        Config::set('resrv-config.enable_cutoff_rules', true);
 
         // Create an entry with cutoff rules enabled (3 hours before 4pm)
         $entry = $this->makeStatamicItemWithAvailability();
@@ -1179,7 +1179,7 @@ class AvailabilityResultsTest extends TestCase
     public function test_cutoff_enforces_correct_schedule_based_on_date()
     {
         // Enable cutoff rules globally
-        Config::set('statamic.resrv.enable_cutoff_rules', true);
+        Config::set('resrv-config.enable_cutoff_rules', true);
 
         // Create an entry with cutoff rules and schedules
         $entry = $this->makeStatamicItemWithAvailability();

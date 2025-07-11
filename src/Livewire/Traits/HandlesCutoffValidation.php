@@ -10,7 +10,7 @@ trait HandlesCutoffValidation
 {
     public function validateCutoffRules(): void
     {
-        if (! config('statamic.resrv.enable_cutoff_rules', false)) {
+        if (! config('resrv-config.enable_cutoff_rules', false)) {
             return;
         }
 
