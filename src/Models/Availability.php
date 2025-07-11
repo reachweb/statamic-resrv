@@ -86,7 +86,7 @@ class Availability extends Model implements AvailabilityContract
             return [];
         }
 
-        return Cache::rememberForever('properties'.$this->entry->collection.$this->entry->handle, function () use ($field) {
+        return Cache::rememberForever('properties:'.$this->entry->collection.':'.$this->entry->handle, function () use ($field) {
             return $field->get('advanced_availability');
         });
     }
