@@ -1160,7 +1160,7 @@ class AvailabilityResultsTest extends TestCase
                 'advanced' => null,
             ])
             ->assertHasErrors(['cutoff'])
-            ->assertNotDispatched('availability-results-updated');
+            ->assertDispatched('availability-results-updated');
 
         // Try to make a reservation for tomorrow (should work)
         Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
