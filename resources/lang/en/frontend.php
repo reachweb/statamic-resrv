@@ -17,6 +17,7 @@ return [
     'yourSearch' => 'Your search',
     'searchError' => 'Search error',
     'somethingWentWrong' => 'Something went wrong',
+    'youAreTooLate' => 'You are too late!',
     'reservationDetails' => 'Reservation details',
     'reservationPeriod' => 'Reservation period',
     'paymentDetails' => 'Payment details',
@@ -55,4 +56,5 @@ return [
     'toCompleteYourReservation' => 'to complete your reservation',
     'paymentDescription' => 'Securely pay for your reservation.',
     'addCoupon' => 'Add discount coupon',
+    'cutoffTimeExceeded' => 'Reservations are allowed at least :hours hours before the starting time (:time). Please select a date from tomorrow onwards.',
 ];

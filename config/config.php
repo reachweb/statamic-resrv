@@ -82,8 +82,10 @@ return [
      * enable_advanced_availability: set different availability and price for an item depending on the property.
      * enable_connected_availabilities: enable the ability to "connect" advanced availabilities.
      * enable_affiliates: enable the ability to have affiliates that can book on behalf of a customer and / or get commision based on the reservations they make.
+     * enable_cutoff_rules: enable the ability to set cutoff times for bookings based on starting times and schedules.
      */
     'enable_advanced_availability' => false,
     'enable_connected_availabilities' => false,
     'enable_affiliates' => true,
+    'enable_cutoff_rules' => false,
 ];
