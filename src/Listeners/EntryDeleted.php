@@ -3,14 +3,16 @@
 namespace Reach\StatamicResrv\Listeners;
 
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Models\Availability;
 use Statamic\Events\EntryDeleted as StatamicEntryDeleted;
+use Illuminate\Support\Facades\Cache;
 
 class EntryDeleted
 {
     public function handle(StatamicEntryDeleted $event)
     {
-        if ($event->entry->get('resrv_availability') == null) {
+        if (! AvailabilityField::blueprintHasAvailabilityField($event->entry->blueprint())) {
             return;
         }
 
@@ -24,5 +26,7 @@ class EntryDeleted
             ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
             ->where('dynamic_pricing_assignment_id', $id)
             ->delete();
+
+        Cache::forget('resrv_disabled_entry_ids');
     }
 }

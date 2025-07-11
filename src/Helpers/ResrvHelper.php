@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Helpers;
 
+use Reach\StatamicResrv\Facades\AvailabilityField;
 use Statamic\Facades\Collection;
 
 class ResrvHelper
@@ -10,10 +11,8 @@ class ResrvHelper
     {
         return Collection::all()->filter(function ($collection) {
             foreach ($collection->entryBlueprints() as $blueprint) {
-                foreach ($blueprint->fields()->all() as $field) {
-                    if ($field->config()['type'] == 'resrv_availability') {
-                        return true;
-                    }
+                if (AvailabilityField::blueprintHasAvailabilityField($blueprint)) {
+                    return true;
                 }
             }
         })->map(function ($collection) {
@@ -28,11 +27,10 @@ class ResrvHelper
     private static function hasAdvanced($collection)
     {
         foreach ($collection->entryBlueprints() as $blueprint) {
-            foreach ($blueprint->fields()->all() as $field) {
-                if ($field->config()['type'] == 'resrv_availability') {
-                    if (array_key_exists('advanced_availability', $field->config())) {
-                        return true;
-                    }
+            if (AvailabilityField::blueprintHasAvailabilityField($blueprint)) {
+                $field = AvailabilityField::getField($blueprint);
+                if (array_key_exists('advanced_availability', $field->config())) {
+                    return true;
                 }
             }
         }

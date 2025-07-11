@@ -7,10 +7,13 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Database\Factories\EntryFactory;
+use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Traits\HandlesCutoffRules;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry as StatamicEntry;
+use Statamic\Facades\Blueprint;
 
 class Entry extends Model
 {
@@ -45,27 +48,35 @@ class Entry extends Model
         return static::query()->itemId($id)->firstOrFail();
     }
 
+    // Returns the ID of the Statamic entry
+    public function id(): string
+    {
+        return $this->item_id;
+    }
+
     public function syncToDatabase(StatamicEntry $entry): void
     {
-        if (! $entry->blueprint()->hasField('resrv_availability')) {
+        if (! $field = AvailabilityField::getField($entry->blueprint())) {
             return;
         }
 
         if ($entry->hasOrigin()) {
             return;
         }
-
+        
         $this->updateOrCreate(
             [
                 'item_id' => $entry->id(),
             ],
             [
                 'title' => $entry->get('title'),
-                'enabled' => $entry->get('resrv_availability') === 'disabled' ? false : true,
+                'enabled' => $entry->get($field->handle()) === 'disabled' ? false : true,
                 'collection' => $entry->collection()->handle(),
                 'handle' => $entry->blueprint()->handle(),
             ]
         );
+
+        Cache::forget('resrv_disabled_entry_ids');
     }
 
     public function availabilities(): HasMany
@@ -76,5 +87,29 @@ class Entry extends Model
     public function getStatamicEntry(): StatamicEntry
     {
         return StatamicEntry::find($this->item_id);
+    }
+
+    public function getAvailabilityField(): ?\Statamic\Fields\Field
+    {
+        return AvailabilityField::getField($this->getBlueprint());
+    }
+
+    public function getBlueprint(): \Statamic\Fields\Blueprint
+    {
+        return Blueprint::findOrFail('collections.'.$this->collection.'.'.$this->handle);
+    }
+
+    public function isDisabled(): bool
+    {
+        return ! $this->enabled;
+    }
+
+    public static function getDisabledIds(): array
+    {
+        return Cache::remember('resrv_disabled_entry_ids', 300, function () {
+            return static::where('enabled', false)
+                ->pluck('item_id')
+                ->toArray();
+        });
     }
 }

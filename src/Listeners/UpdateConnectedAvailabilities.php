@@ -25,7 +25,7 @@ class UpdateConnectedAvailabilities
         ) {
             return;
         }
-
+        ray($this->config);
         foreach ($this->config->get('connected_availabilities') as $config) {
             switch ($config['connected_availability_type']) {
                 case 'all':
@@ -200,7 +200,6 @@ class UpdateConnectedAvailabilities
                 ->pluck('property')
                 ->toArray();
         }
-
         $this->processAvailabilityUpdate($availability, $config, $query, $properties);
     }
 
@@ -237,6 +236,7 @@ class UpdateConnectedAvailabilities
                 $connectedGroups->push($entries);
             }
         }
+
         // If the current statamic_id is not part of any group, return
         if ($connectedGroups->isEmpty()) {
             return;

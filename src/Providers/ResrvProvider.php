@@ -25,6 +25,7 @@ use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\AddResrvEntryToDatabase;
 use Reach\StatamicResrv\Listeners\CancelReservation;
+use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
 use Reach\StatamicResrv\Listeners\ConfirmReservation;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
@@ -124,6 +125,9 @@ class ResrvProvider extends AddonServiceProvider
         \Statamic\Events\EntryDeleted::class => [
             EntryDeleted::class,
             SoftDeleteResrvEntryFromDatabase::class,
+        ],
+        \Statamic\Events\BlueprintSaved::class => [
+            ClearAvailabilityFieldCache::class,
         ],
     ];
 
