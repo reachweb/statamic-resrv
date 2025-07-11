@@ -1231,7 +1231,7 @@ class AvailabilityResultsTest extends TestCase
                 'advanced' => null,
             ])
             ->assertHasErrors(['cutoff'])
-            ->assertNotDispatched('availability-results-updated');
+            ->assertDispatched('availability-results-updated');
 
         // Try to make a reservation for tomorrow in next month (should just work)
         Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
@@ -1261,7 +1261,7 @@ class AvailabilityResultsTest extends TestCase
                 'advanced' => null,
             ])
             ->assertHasErrors(['cutoff'])
-            ->assertNotDispatched('availability-results-updated');
+            ->assertDispatched('availability-results-updated');
 
         //Test date outside both schedules (should use default)
         // Mock current time to be 2pm (within 3-hour cutoff for default 4pm start)
@@ -1278,7 +1278,7 @@ class AvailabilityResultsTest extends TestCase
                 'advanced' => null,
             ])
             ->assertHasErrors(['cutoff'])
-            ->assertNotDispatched('availability-results-updated');
+            ->assertDispatched('availability-results-updated');
     }
 
     public function test_cutoff_allows_reservation_when_time_has_passed_today()
@@ -1314,7 +1314,7 @@ class AvailabilityResultsTest extends TestCase
                 'advanced' => null,
             ])
             ->assertHasErrors(['cutoff'])
-            ->assertNotDispatched('availability-results-updated');
+            ->assertDispatched('availability-results-updated');
 
         // Test with schedule - current time 12pm (after today's 10am start time has passed)
         $resrvEntry->options = [
@@ -1348,6 +1348,6 @@ class AvailabilityResultsTest extends TestCase
                 'advanced' => null,
             ])
             ->assertHasErrors(['cutoff'])
-            ->assertNotDispatched('availability-results-updated');
+            ->assertDispatched('availability-results-updated');
     }
 }

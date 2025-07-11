@@ -114,6 +114,7 @@ class AvailabilityResults extends Component
         try {
             $this->validateCutoffRules();
         } catch (\Exception $exception) {
+            $this->dispatch('availability-results-updated');
             $this->addError('cutoff', $exception->getMessage());
 
             return;
