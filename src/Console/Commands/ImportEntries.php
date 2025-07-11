@@ -3,9 +3,10 @@
 namespace Reach\StatamicResrv\Console\Commands;
 
 use Illuminate\Console\Command;
+use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Statamic\Console\RunsInPlease;
-use Statamic\Facades\Entry;
+use Statamic\Facades\Collection;
 
 class ImportEntries extends Command
 {
@@ -32,10 +33,17 @@ class ImportEntries extends Command
      */
     public function handle()
     {
-        Entry::query()
-            ->whereNotNull('resrv_availability')
-            ->get()
-            ->each(static fn ($entry) => app(ResrvEntry::class)->syncToDatabase($entry));
+        Collection::all()
+            ->filter(function ($collection) {
+                return $collection->entryBlueprints()->some(function ($blueprint) {
+                    return AvailabilityField::blueprintHasAvailabilityField($blueprint);
+                });
+            })
+            ->each(function ($collection) {
+                $collection->queryEntries()->get()->each(function ($entry) {
+                    app(ResrvEntry::class)->syncToDatabase($entry);
+                });
+            });
 
         $this->info('Resrv enabled entries imported to the database');
     }

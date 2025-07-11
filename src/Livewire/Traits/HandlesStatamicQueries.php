@@ -7,6 +7,7 @@ use Reach\StatamicResrv\Exceptions\BlueprintNotFoundException;
 use Reach\StatamicResrv\Exceptions\CheckoutEntryNotFound;
 use Reach\StatamicResrv\Exceptions\FieldNotFoundException;
 use Reach\StatamicResrv\Exceptions\NoAdvancedAvailabilitySet;
+use Reach\StatamicResrv\Facades\AvailabilityField;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
@@ -49,7 +50,7 @@ trait HandlesStatamicQueries
 
     public function getStatamicField($blueprint)
     {
-        if ($field = $blueprint->field('resrv_availability')) {
+        if ($field = AvailabilityField::getField($blueprint)) {
             return $field;
         }
         throw new FieldNotFoundException('resrv_availability', $this->advanced);

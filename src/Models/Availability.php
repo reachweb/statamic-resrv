@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
 use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
+use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -66,10 +67,11 @@ class Availability extends Model implements AvailabilityContract
     public function getPropertyLabel($handle, $collection, $slug)
     {
         $blueprint = Blueprint::find('collections.'.$collection.'.'.$handle);
-        if (! $blueprint->hasField('resrv_availability')) {
+        if (! AvailabilityField::blueprintHasAvailabilityField($blueprint)) {
             return false;
         }
-        $properties = $blueprint->field('resrv_availability')->get('advanced_availability');
+        $field = AvailabilityField::getField($blueprint);
+        $properties = $field->get('advanced_availability');
 
         if (array_key_exists($slug, $properties)) {
             return $properties[$slug];
@@ -80,28 +82,25 @@ class Availability extends Model implements AvailabilityContract
 
     public function getProperties(): array
     {
-        $blueprint = $this->entry->getStatamicEntry()->blueprint();
-        if (! $blueprint->hasField('resrv_availability')) {
+        if (! $field = $this->entry->getAvailabilityField()) {
             return [];
         }
 
-        return Cache::rememberForever('properties'.$blueprint->namespace(), function () use ($blueprint) {
-            return $blueprint->field('resrv_availability')->get('advanced_availability');
+        return Cache::rememberForever('properties:'.$this->entry->collection.':'.$this->entry->handle, function () use ($field) {
+            return $field->get('advanced_availability');
         });
     }
 
     public function getConnectedAvailabilitySettings(): Collection|bool
     {
-        $blueprint = $this->entry->getStatamicEntry()->blueprint();
+        if (! $field = $this->entry->getAvailabilityField()) {
+            return false;
+        }
 
-        return Cache::rememberForever('connected_availability_'.$blueprint->namespace(), function () use ($blueprint) {
-            if (! $blueprint->hasField('resrv_availability')) {
-                return false;
-            }
-
+        return Cache::rememberForever('connected_availability_'.$this->entry->collection.$this->entry->handle, function () use ($field) {
             return collect([
-                'connected_availabilities' => $blueprint->field('resrv_availability')->get('connected_availabilities'),
-                'disable_connected_availabilities_on_cp' => $blueprint->field('resrv_availability')->get('disable_connected_availabilities_on_cp'),
+                'connected_availabilities' => $field->get('connected_availabilities'),
+                'disable_connected_availabilities_on_cp' => $field->get('disable_connected_availabilities_on_cp'),
             ]);
         });
     }
@@ -184,7 +183,7 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
-    protected function getResultsForItem($entry, $property = null)
+    protected function getResultsForItem(Entry $entry, $property = null)
     {
         return AvailabilityRepository::itemAvailableBetween(
             date_start: $this->date_start,
@@ -290,21 +289,21 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getSpecificItemCollection($statamic_id)
     {
-        $entry = $this->getDefaultSiteEntry($statamic_id);
+        $resrvEntry = Entry::whereItemId($statamic_id);
 
         $request = $this->requestCollection();
 
         $availability = collect();
 
-        if ($entry->get('resrv_availability') == 'disabled') {
+        if ($resrvEntry->isDisabled()) {
             return new AvailabilityItemResource($availability, $request);
         }
 
         if ($this->advanced && in_array('any', $this->advanced)) {
-            return $this->getMultiplePropertiesAvailability($entry, $request);
+            return $this->getMultiplePropertiesAvailability($resrvEntry, $request);
         }
 
-        $results = $this->getResultsForItem($entry)->first();
+        $results = $this->getResultsForItem($resrvEntry)->first();
 
         if (! $results) {
             return new AvailabilityItemResource($availability, $request);
@@ -315,7 +314,7 @@ class Availability extends Model implements AvailabilityContract
         return new AvailabilityItemResource($availability, $request);
     }
 
-    protected function getMultiplePropertiesAvailability($entry, $request)
+    protected function getMultiplePropertiesAvailability(Entry $entry, $request)
     {
         $availability = collect();
 
@@ -328,7 +327,7 @@ class Availability extends Model implements AvailabilityContract
 
             if ($results) {
                 $propertyLabel = cache()->remember($property.'_availability_label', 60, function () use ($entry, $property) {
-                    if ($field = $entry->blueprint()->field('resrv_availability')) {
+                    if ($field = $entry->getAvailabilityField()) {
                         return $field->get('advanced_availability')[$property] ?? $property;
                     }
                 });
@@ -402,9 +401,7 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getDisabledIds()
     {
-        $results = Entry::where('enabled', 0)
-            ->get('item_id')
-            ->toArray();
+        $results = Entry::getDisabledIds();
 
         return Arr::flatten($results);
     }
