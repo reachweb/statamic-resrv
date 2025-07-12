@@ -25,7 +25,7 @@ class UpdateConnectedAvailabilities
         ) {
             return;
         }
-        
+
         foreach ($this->config->get('connected_availabilities') as $config) {
             switch ($config['connected_availability_type']) {
                 case 'all':

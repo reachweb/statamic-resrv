@@ -12,7 +12,6 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
-use Illuminate\Support\Facades\Cache;
 
 class ConnectedAvailabilityFrontTest extends TestCase
 {

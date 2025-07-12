@@ -2,11 +2,11 @@
 
 namespace Reach\StatamicResrv\Listeners;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Models\Availability;
 use Statamic\Events\EntryDeleted as StatamicEntryDeleted;
-use Illuminate\Support\Facades\Cache;
 
 class EntryDeleted
 {
