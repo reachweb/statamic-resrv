@@ -63,7 +63,7 @@ class Entry extends Model
         if ($entry->hasOrigin()) {
             return;
         }
-        
+
         $this->updateOrCreate(
             [
                 'item_id' => $entry->id(),
