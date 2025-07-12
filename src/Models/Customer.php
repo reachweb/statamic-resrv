@@ -3,14 +3,16 @@
 namespace Reach\StatamicResrv\Models;
 
 use ArrayIterator;
+use Countable;
 use Illuminate\Database\Eloquent\Casts\AsCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use IteratorAggregate;
 use Reach\StatamicResrv\Database\Factories\CustomerFactory;
 use Traversable;
 
-class Customer extends Model
+class Customer extends Model implements Countable, IteratorAggregate
 {
     use HasFactory;
 
