@@ -69,6 +69,23 @@ class CustomerTest extends TestCase
         $this->assertEquals('test@example.com', $customer->get('email'));
     }
 
+    public function test_it_handles_get_method_safely_when_data_is_null()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'test@example.com',
+            'data' => null,
+        ]);
+
+        // Should not find a key that doesn't exist
+        $this->assertNull($customer->get('non_existent_key'));
+
+        // Should return the provided default value if the key doesn't exist
+        $this->assertEquals('default_value', $customer->get('non_existent_key', 'default_value'));
+
+        // The get() method should still work for the 'email' attribute
+        $this->assertEquals('test@example.com', $customer->get('email'));
+    }
+
     public function test_it_is_countable_for_backward_compatibility()
     {
         $customer = Customer::factory()->create([

@@ -39,11 +39,14 @@ class Customer extends Model implements Countable, IteratorAggregate
      */
     public function get($key, $default = null)
     {
+        // First, try to get a direct model attribute (like 'id' or 'email')
         if (property_exists($this, $key) || array_key_exists($key, $this->attributes)) {
             return $this->getAttribute($key);
         }
 
-        return $this->data->get($key, $default);
+        // If data is not null, get the value from the data collection.
+        // Otherwise, return the provided default value.
+        return $this->data ? $this->data->get($key, $default) : $default;
     }
 
     /**
