@@ -7,6 +7,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
+use Reach\StatamicResrv\Exceptions\CutoffException;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\EntryCollection;
@@ -14,7 +15,7 @@ use Statamic\Extensions\Pagination\LengthAwarePaginator;
 
 trait HandlesAvailabilityQueries
 {
-    use HandlesMultisiteIds;
+    use HandlesCutoffValidation, HandlesMultisiteIds;
 
     public function getAvailability(Collection $data, EntryCollection|LengthAwarePaginator|null $entries = null): array
     {
@@ -62,8 +63,10 @@ trait HandlesAvailabilityQueries
         $periods->transform(function ($period) {
             $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'advanced']));
             try {
+                $this->validateCutoffRules($searchData['date_start']);
+
                 return app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId);
-            } catch (AvailabilityException $exception) {
+            } catch (AvailabilityException|CutoffException $exception) {
                 return [
                     'message' => [
                         'status' => false,

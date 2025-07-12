@@ -110,6 +110,22 @@ class AvailabilityResults extends Component
             return;
         }
 
+        $this->getAvailability();
+
+        $this->runHooks('availability-results-updated', $this->availability);
+
+        $this->dispatch('availability-results-updated');
+    }
+
+    public function getAvailability(): void
+    {
+        // Order is important here so that the cutoff validation works correctly
+        if ($this->extraDays > 0) {
+            $this->availability = $this->queryExtraAvailabilityForEntry();
+
+            return;
+        }
+
         // Validate cutoff rules
         try {
             $this->validateCutoffRules();
@@ -120,15 +136,6 @@ class AvailabilityResults extends Component
             return;
         }
 
-        $this->getAvailability();
-
-        $this->runHooks('availability-results-updated', $this->availability);
-
-        $this->dispatch('availability-results-updated');
-    }
-
-    public function getAvailability(): void
-    {
         if ($this->advanced === true) {
             $this->data->advanced = 'any';
             $this->availability = collect($this->queryAvailabilityForAllProperties());
@@ -141,11 +148,7 @@ class AvailabilityResults extends Component
 
             return;
         }
-        if ($this->extraDays > 0) {
-            $this->availability = $this->queryExtraAvailabilityForEntry();
 
-            return;
-        }
     }
 
     public function checkout(): void

@@ -8,7 +8,7 @@ use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 
 trait HandlesCutoffValidation
 {
-    public function validateCutoffRules(): void
+    public function validateCutoffRules($date = null): void
     {
         if (! config('resrv-config.enable_cutoff_rules', false)) {
             return;
@@ -16,7 +16,7 @@ trait HandlesCutoffValidation
 
         $resrvEntry = ResrvEntry::whereItemId($this->entryId);
 
-        $dateStart = $this->data->dates['date_start'];
+        $dateStart = $date ?? $this->data->dates['date_start'];
         $schedule = $resrvEntry->getCutoffScheduleForDate($dateStart);
 
         if (! $schedule) {

@@ -1350,4 +1350,82 @@ class AvailabilityResultsTest extends TestCase
             ->assertHasErrors(['cutoff'])
             ->assertDispatched('availability-results-updated');
     }
+
+    public function test_cutoff_enforces_for_extra_requested_days()
+    {
+        // Enable cutoff rules globally
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        // Create an entry with cutoff rules enabled (3 hours before 4pm)
+        $entry = $this->makeStatamicItemWithAvailability();
+        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+
+        $resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => '16:00',
+                'default_cutoff_hours' => 3,
+            ],
+        ];
+        $resrvEntry->save();
+
+        // Mock current time to be 2pm (within cutoff window for today's 4pm start)
+        $this->travelTo(now()->setTime(14, 0, 0));
+        $today = now()->startOfDay();
+
+        // Test with extraDays = 2 (should show availability for -2, -1, 0, +1, +2)
+        // Today (0) should fail due to cutoff, but others should work
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'extraDays' => 2])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $today->toISOString(),
+                    'date_end' => $today->copy()->add(2, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->ray()
+            ->assertViewHasAll([
+                'availability.-2',
+                'availability.-1',
+                'availability.0',
+                'availability.+1',
+                'availability.+2',
+            ])
+            // Days -2 and -1 should be false (in the past)
+            ->assertViewHas('availability.-2.message.status', false)
+            ->assertViewHas('availability.-1.message.status', false)
+            // Today (0) should fail due to cutoff
+            ->assertViewHas('availability.0.message.status', false)
+            // Future days (+1, +2) should have availability
+            ->assertViewHas('availability.+1.data.price', '100.00')
+            ->assertViewHas('availability.+2.data.price', '100.00')
+            ->assertViewHas('availability.+1.request.date_start', $today->copy()->addDays(1)->format('Y-m-d'))
+            ->assertViewHas('availability.+2.request.date_start', $today->copy()->addDays(2)->format('Y-m-d'));
+
+        // Test when current time is after cutoff (10am the next day)
+        $this->travelTo(now()->addDay()->setTime(10, 0, 0));
+
+        // Now today's slot should work since we're well before the cutoff
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'extraDays' => 1])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => now()->startOfDay()->toISOString(),
+                    'date_end' => now()->startOfDay()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertViewHasAll([
+                'availability.-1',
+                'availability.0',
+                'availability.+1',
+            ])
+            // Yesterday should be false (in the past)
+            ->assertViewHas('availability.-1.message.status', false)
+            // Today should work (well before cutoff)
+            ->assertViewHas('availability.0.data.price', '50.00')
+            // Tomorrow should work
+            ->assertViewHas('availability.+1.data.price', '50.00');
+    }
 }
