@@ -42,9 +42,9 @@ trait HandlesCutoffRules
         }
 
         return [
-            'starting_time' => $rules['default_starting_time'] ?? '16:00',
-            'cutoff_hours' => $rules['default_cutoff_hours'] ?? 3,
-            'schedule_name' => 'Default Schedule',
+            'starting_time' => $rules['default_starting_time'] ?? null,
+            'cutoff_hours' => $rules['default_cutoff_hours'] ?? null,
+            'schedule_name' => $rules['default_starting_time'] ? 'Default Schedule' : 'No Schedule Provided',
         ];
     }
 
