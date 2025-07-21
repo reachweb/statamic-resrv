@@ -18,8 +18,19 @@ class CountryPhoneCodes extends BasicDictionary
         return trans('statamic-resrv::country_phone_codes');
     }
 
-    public function get(string $key): ?Item
+    public function options(?string $search = null): array
     {
-        return new Item($key, $key, []);
+        $items = $this->getItems();
+        $options = [];
+
+        foreach ($items as $key => $item) {
+            $options[] = [
+                'value' => $item['iso'] ?? $key,
+                'label' => $item['name'] ?? $key,
+                'code' => $item['code'] ?? ''
+            ];
+        }
+
+        return $options;
     }
 }
