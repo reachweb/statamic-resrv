@@ -61,6 +61,7 @@
         >
             <div
                 x-on:click.outside="isModalOpen = false"
+                x-on:keydown.escape.window="isModalOpen = false"
                 x-show="isModalOpen"
                 x-transition:enter="ease-out duration-300"
                 x-transition:enter-start="opacity-0 scale-95"
