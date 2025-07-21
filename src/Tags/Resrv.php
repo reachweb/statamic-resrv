@@ -43,7 +43,7 @@ class Resrv extends Tags
         }
 
         try {
-            $resrvEntry = ResrvEntry::whereItemId($entryId)->firstOrFail();
+            $resrvEntry = ResrvEntry::whereItemId($entryId);
         } catch (\Exception $e) {
             return throw new \Exception('Resrv Tag error: Entry not found for ID: '.$entryId);
         }
