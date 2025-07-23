@@ -33,4 +33,9 @@ class CountryPhoneCodes extends BasicDictionary
 
         return $options;
     }
+    
+    public function get(string $key): ?Item
+    {
+        return new Item($key, $key, []);
+    }
 }
