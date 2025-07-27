@@ -232,7 +232,7 @@ Alpine.data('datepicker', () => ({
         }
         this.dates = {};
         this.isModalOpen = false;
-        $wire.set('data.dates', {});
+        $wire.clearDates();
         $dispatch('availability-search-cleared');
     },
 
