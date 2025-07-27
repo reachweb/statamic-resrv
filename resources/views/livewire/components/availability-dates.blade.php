@@ -87,7 +87,7 @@
         </div>
         
         @if ($errors->has('data.dates') || $errors->has('data.dates.date_start') || $errors->has('data.date_end'))
-        <div class="bg-white border-zinc-100 rounded-md px-4 py-2 shadow text-red-600 text-sm space-y-1 z-10" x-anchor.offset.10="$refs.dateInput">
+        <div class="bg-white border-zinc-100 rounded-md px-4 py-2 shadow text-red-600 text-sm space-y-1 z-10" x-anchor.offset.10="$refs.dateInput" x-show="!isDatesEmpty">
             <span class="block">{{ $errors->first('data.dates') }}</span>
             <span class="block">{{ $errors->first('data.dates.date_start') }}</span>
             <span class="block">{{ $errors->first('data.dates.date_end') }}</span>
