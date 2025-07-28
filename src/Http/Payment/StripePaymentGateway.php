@@ -22,7 +22,7 @@ class StripePaymentGateway implements PaymentInterface
 {
     public function paymentIntent($payment, Reservation $reservation, $data)
     {
-        Stripe::setApiKey($this->getPublicKey($reservation));
+        Stripe::setApiKey($this->getSecretKey($reservation));
         $paymentIntent = PaymentIntent::create([
             'amount' => $payment->raw(),
             'currency' => Str::lower(config('resrv-config.currency_isoCode')),
@@ -37,7 +37,7 @@ class StripePaymentGateway implements PaymentInterface
 
     public function refund($reservation)
     {
-        Stripe::setApiKey($this->getPublicKey($reservation));
+        Stripe::setApiKey($this->getSecretKey($reservation));
         try {
             $attemptRefund = Refund::create([
                 'payment_intent' => $reservation->payment_id,
@@ -62,6 +62,18 @@ class StripePaymentGateway implements PaymentInterface
 
     public function getPublicKey($reservation)
     {
+        $key = config('resrv-config.stripe_publishable_key');
+        if (! is_array($key)) {
+            return $key;
+        }
+        $handle = $reservation->entry()->collection->handle();
+        if (array_key_exists($handle, $key)) {
+            return $key[$handle];
+        }
+    }
+
+    public function getSecretKey($reservation)
+    {
         $key = config('resrv-config.stripe_secret_key');
         if (! is_array($key)) {
             return $key;
@@ -69,6 +81,19 @@ class StripePaymentGateway implements PaymentInterface
         $handle = $reservation->entry()->collection->handle();
         if (array_key_exists($handle, $key)) {
             return $key[$handle];
+        }
+    }
+
+    public function getWebhookSecret($reservation)
+    {
+        $secret = config('resrv-config.stripe_webhook_secret');
+        if (! is_array($secret)) {
+            return $secret;
+        }
+
+        $handle = $reservation->entry()->collection->handle();
+        if (array_key_exists($handle, $secret)) {
+            return $secret[$handle];
         }
     }
 
@@ -92,7 +117,7 @@ class StripePaymentGateway implements PaymentInterface
 
         $reservation = Reservation::findByPaymentId($paymentIntent)->first();
 
-        $stripe = new StripeClient($this->getPublicKey($reservation));
+        $stripe = new StripeClient($this->getSecretKey($reservation));
 
         $status = $stripe->paymentIntents->retrieve($paymentIntent, []);
 
@@ -141,7 +166,7 @@ class StripePaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
 
-        Stripe::setApiKey($this->getPublicKey($reservation));
+        Stripe::setApiKey($this->getSecretKey($reservation));
 
         try {
             $event = Event::constructFrom(json_decode($request->getContent(), true));
@@ -156,7 +181,7 @@ class StripePaymentGateway implements PaymentInterface
             $event = Webhook::constructEvent(
                 $request->getContent(),
                 $sig_header,
-                config('resrv-config.stripe_webhook_secret'),
+                $this->getWebhookSecret($reservation),
                 null,
                 false
             );

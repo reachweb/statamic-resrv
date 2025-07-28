@@ -36,7 +36,7 @@
                     <livewire:checkout-form :reservation="$this->reservation" :affiliateCanSkipPayment="$this->affiliateCanSkipPayment()" />
                 @endif
                 @if ($step === 3)
-                    <livewire:checkout-payment :client_secret="$clientSecret" :amount="$this->reservation->fresh()->payment->format()" />
+                    <livewire:checkout-payment :clientSecret="$clientSecret" :publicKey="$publicKey" :amount="$this->reservation->fresh()->payment->format()" />
                 @endif
                 </div>
         </div>

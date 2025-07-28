@@ -15,6 +15,9 @@ class CheckoutPayment extends Component
     public string $clientSecret;
 
     #[Locked]
+    public string $publicKey;
+
+    #[Locked]
     public float $amount;
 
     #[Locked]

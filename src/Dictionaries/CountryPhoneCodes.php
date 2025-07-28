@@ -27,13 +27,13 @@ class CountryPhoneCodes extends BasicDictionary
             $options[] = [
                 'value' => $item['iso'] ?? $key,
                 'label' => $item['name'] ?? $key,
-                'code' => $item['code'] ?? ''
+                'code' => $item['code'] ?? '',
             ];
         }
 
         return $options;
     }
-    
+
     public function get(string $key): ?Item
     {
         return new Item($key, $key, []);

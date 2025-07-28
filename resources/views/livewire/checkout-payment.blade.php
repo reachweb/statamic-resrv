@@ -45,6 +45,7 @@
 <script>
 Alpine.data('payment', () => ({
     client_secret: $wire.clientSecret,
+    public_key: $wire.publicKey,
     checkout_completed_url: $wire.checkoutCompletedUrl,
     stripe: null,
     elements: null,
@@ -52,7 +53,7 @@ Alpine.data('payment', () => ({
     errors: false,
 
     init() {
-        this.stripe = Stripe('{{ config('resrv-config.stripe_publishable_key') }}');
+        this.stripe = Stripe(this.public_key);
         this.elements = this.stripe.elements({ clientSecret: this.client_secret });
 
         const paymentElement = this.elements.create("payment", {

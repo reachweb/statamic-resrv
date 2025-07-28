@@ -38,6 +38,9 @@ class Checkout extends Component
     public string $clientSecret;
 
     #[Locked]
+    public string $publicKey;
+
+    #[Locked]
     public $coupon;
 
     #[Locked]
@@ -168,6 +171,9 @@ class Checkout extends Component
 
         // Get an instance of the payment interface
         $payment = app(PaymentInterface::class);
+
+        // Set the public key
+        $this->publicKey = $payment->getPublicKey($reservation);
 
         // Create a payment intent
         $paymentIndent = $payment->paymentIntent($reservation->payment, $reservation, $reservation->customerData);

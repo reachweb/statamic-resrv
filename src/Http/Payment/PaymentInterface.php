@@ -12,6 +12,10 @@ interface PaymentInterface
 
     public function getPublicKey(Reservation $reservation);
 
+    public function getSecretKey(Reservation $reservation);
+
+    public function getWebhookSecret(Reservation $reservation);
+
     public function supportsWebhooks(): bool;
 
     public function redirectsForPayment(): bool;
