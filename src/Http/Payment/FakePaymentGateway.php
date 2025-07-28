@@ -29,13 +29,38 @@ class FakePaymentGateway implements PaymentInterface
 
     public function getPublicKey($reservation)
     {
+        $key = config('resrv-config.stripe_publishable_key');
+        if (! is_array($key)) {
+            return $key;
+        }
+        $handle = $reservation->entry()->collection->handle();
+        if (array_key_exists($handle, $key)) {
+            return $key[$handle];
+        }
+    }
+
+    public function getSecretKey($reservation)
+    {
         $key = config('resrv-config.stripe_secret_key');
         if (! is_array($key)) {
             return $key;
         }
         $handle = $reservation->entry()->collection->handle();
-        if (in_array($handle, $key)) {
+        if (array_key_exists($handle, $key)) {
             return $key[$handle];
+        }
+    }
+
+    public function getWebhookSecret($reservation)
+    {
+        $secret = config('resrv-config.stripe_webhook_secret');
+        if (! is_array($secret)) {
+            return $secret;
+        }
+
+        $handle = $reservation->entry()->collection->handle();
+        if (array_key_exists($handle, $secret)) {
+            return $secret[$handle];
         }
     }
 
