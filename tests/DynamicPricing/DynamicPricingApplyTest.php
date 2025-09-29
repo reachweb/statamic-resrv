@@ -277,6 +277,74 @@ class DynamicPricingApplyTest extends TestCase
         $this->assertPrice('80.74', '100.92');
     }
 
+    public function test_dynamic_pricing_with_wildcard_coupon()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+        $this->createDynamicPricing('withWildcardCoupon');
+
+        $this->assertPrice('100.92');
+
+        // Test with a coupon that matches the wildcard prefix
+        session(['resrv_coupon' => 'YHCOSAECZC']);
+
+        $this->assertPrice('80.74', '100.92');
+        $this->assertIndexPrice('80.74', '100.92');
+    }
+
+    public function test_dynamic_pricing_wildcard_coupon_different_codes()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+        $this->createDynamicPricing('withWildcardCoupon');
+
+        // Test with different codes that match the wildcard
+        session(['resrv_coupon' => 'YHCOS123']);
+        $this->assertPrice('80.74', '100.92');
+
+        session(['resrv_coupon' => 'YHCOS']);
+        $this->assertPrice('80.74', '100.92');
+
+        session(['resrv_coupon' => 'YHCOSABCDEF']);
+        $this->assertPrice('80.74', '100.92');
+    }
+
+    public function test_dynamic_pricing_wildcard_coupon_non_matching_codes()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+        $this->createDynamicPricing('withWildcardCoupon');
+
+        // Test with codes that don't match the wildcard prefix
+        session(['resrv_coupon' => 'DIFFERENT123']);
+        $this->assertPrice('100.92');
+
+        session(['resrv_coupon' => 'YHCO']);  // Prefix too short
+        $this->assertPrice('100.92');
+
+        session(['resrv_coupon' => 'ABC123']);
+        $this->assertPrice('100.92');
+    }
+
+    public function test_dynamic_pricing_wildcard_and_exact_coupons_together()
+    {
+        $this->createAvailabilityForEntry($this->entry, 50, 2);
+
+        // Create wildcard coupon (20% off)
+        $wildcardDynamic = $this->createDynamicPricing('withWildcardCoupon', [], false);
+
+        // Create exact match coupon (10% off)
+        $exactDynamic = $this->createDynamicPricing('withCoupon', [
+            'coupon' => 'EXACT10',
+            'amount' => '10',
+        ], false);
+
+        // Test with wildcard matching code
+        session(['resrv_coupon' => 'YHCOSTEST']);
+        $this->assertPrice('160.00', '200.00');  // 20% off from wildcard
+
+        // Test with exact match code
+        session(['resrv_coupon' => 'EXACT10']);
+        $this->assertPrice('180.00', '200.00');  // 10% off from exact match
+    }
+
     public function test_dynamic_pricing_that_overrides_others()
     {
         $this->createAvailabilityForEntry($this->entry, 50, 2);
