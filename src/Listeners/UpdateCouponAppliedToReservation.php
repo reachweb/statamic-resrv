@@ -9,14 +9,18 @@ class UpdateCouponAppliedToReservation
 {
     public function handle(CouponUpdated $event): void
     {
+        $coupon = DynamicPricing::searchForCoupon($event->coupon, $event->reservation->id);
+
+        if (! $coupon) {
+            return;
+        }
+
         if ($event->remove === true) {
-            $dynamicPricing = $event->reservation->dynamicPricings()->where('resrv_reservation_dynamic_pricing.data->coupon', $event->coupon)->first();
+            $dynamicPricing = $event->reservation->dynamicPricings()->where('resrv_reservation_dynamic_pricing.data->coupon', $coupon->coupon)->first();
             $event->reservation->dynamicPricings()->detach($dynamicPricing->id);
 
             return;
         }
-
-        $coupon = DynamicPricing::where('coupon', $event->coupon)->first();
 
         // Put it last even though it may not be...
         $order = $event->reservation->dynamicPricings()

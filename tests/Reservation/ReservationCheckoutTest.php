@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
+use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
@@ -338,6 +339,48 @@ class ReservationCheckoutTest extends TestCase
         );
 
         $this->assertDatabaseCount('resrv_reservation_dynamic_pricing', 0);
+    }
+
+    // Test if coupon updated event works with wildcard coupons
+    public function test_coupon_updated_event_works_with_wildcard_coupons()
+    {
+        $wildcardDynamic = DynamicPricing::factory()->withWildcardCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $wildcardDynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        // Test that wildcard coupon YHCOS* matches user coupon YHCOS123
+        $userCoupon = 'YHCOS123';
+        event(new CouponUpdated($this->reservation, $userCoupon));
+
+        $this->assertDatabaseHas('resrv_reservation_dynamic_pricing',
+            [
+                'reservation_id' => $this->reservation->id,
+                'dynamic_pricing_id' => $wildcardDynamic->id,
+            ]
+        );
+
+        $this->assertDatabaseCount('resrv_reservation_dynamic_pricing', 1);
+
+        // Test removal works with wildcard coupons
+        event(new CouponUpdated($this->reservation, $userCoupon, true));
+
+        $this->assertDatabaseMissing('resrv_reservation_dynamic_pricing',
+            [
+                'reservation_id' => $this->reservation->id,
+                'dynamic_pricing_id' => $wildcardDynamic->id,
+            ]
+        );
+
+        $this->assertDatabaseCount('resrv_reservation_dynamic_pricing', 0);
+
+        // Test that non-matching coupon doesn't get applied
+        $nonMatchingCoupon = 'DIFFERENT123';
+        $this->expectException(\Reach\StatamicResrv\Exceptions\CouponNotFoundException::class);
+        event(new CouponUpdated($this->reservation, $nonMatchingCoupon));
     }
 
     // Test if listener listens to reservation created event
