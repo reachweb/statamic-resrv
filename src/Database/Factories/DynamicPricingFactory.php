@@ -171,6 +171,16 @@ class DynamicPricingFactory extends Factory
         });
     }
 
+    public function withWildcardCoupon()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'coupon' => 'YHCOS*',
+                'condition_value' => '1',
+            ];
+        });
+    }
+
     public function daysToReservation()
     {
         return $this->state(function (array $attributes) {

@@ -450,4 +450,119 @@ class CheckoutTest extends TestCase
             'total' => '139.30',
         ]);
     }
+
+    public function test_it_successfully_applies_a_wildcard_coupon()
+    {
+        $dynamic = DynamicPricing::factory()->withWildcardCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', 'YHCOSAECZC')
+            ->assertSet('coupon', 'YHCOSAECZC')
+            ->assertSessionHas('resrv_coupon', 'YHCOSAECZC')
+            ->assertDispatched('coupon-applied');
+    }
+
+    public function test_it_successfully_applies_a_different_wildcard_coupon()
+    {
+        $dynamic = DynamicPricing::factory()->withWildcardCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', 'YHCOS2UHEQ')
+            ->assertSet('coupon', 'YHCOS2UHEQ')
+            ->assertSessionHas('resrv_coupon', 'YHCOS2UHEQ')
+            ->assertDispatched('coupon-applied');
+    }
+
+    public function test_it_rejects_coupon_that_does_not_match_wildcard_prefix()
+    {
+        $dynamic = DynamicPricing::factory()->withWildcardCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', 'DIFFERENT123')
+            ->assertHasErrors(['coupon'])
+            ->assertSet('coupon', null)
+            ->assertSessionMissing('resrv_coupon')
+            ->assertSee('This coupon does not exist');
+    }
+
+    public function test_it_prefers_exact_match_over_wildcard_match()
+    {
+        // Create a wildcard coupon
+        $wildcardDynamic = DynamicPricing::factory()->withWildcardCoupon()->create();
+
+        // Create an exact match coupon with the same code that would match the wildcard
+        $exactDynamic = DynamicPricing::factory()->withCoupon()->create([
+            'coupon' => 'YHCOSTEST',
+        ]);
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            [
+                'dynamic_pricing_id' => $wildcardDynamic->id,
+                'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+                'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+            ],
+            [
+                'dynamic_pricing_id' => $exactDynamic->id,
+                'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+                'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', 'YHCOSTEST')
+            ->assertSet('coupon', 'YHCOSTEST')
+            ->assertSessionHas('resrv_coupon', 'YHCOSTEST')
+            ->assertDispatched('coupon-applied');
+    }
+
+    public function test_wildcard_coupon_works_with_just_prefix()
+    {
+        $dynamic = DynamicPricing::factory()->withWildcardCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        // Test with just the prefix (no additional characters)
+        $component->call('addCoupon', 'YHCOS')
+            ->assertSet('coupon', 'YHCOS')
+            ->assertSessionHas('resrv_coupon', 'YHCOS')
+            ->assertDispatched('coupon-applied');
+    }
 }

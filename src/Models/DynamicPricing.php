@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\DynamicPricingFactory;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Facades\Price;
@@ -212,7 +213,30 @@ class DynamicPricing extends Model
     {
         $reservation = Reservation::find($reservation_id);
 
-        $query = $query->where('coupon', $coupon);
+        // First try exact match
+        $exactQuery = clone $query;
+        $exactMatch = $exactQuery->where('coupon', $coupon)->first();
+
+        // If exact match found, use it
+        if ($exactMatch) {
+            $query = $query->where('id', $exactMatch->id);
+        } else {
+            // Try wildcard matching
+            $wildcardCoupons = $this->where('coupon', 'LIKE', '%*')->get();
+
+            if ($wildcardCoupons->count() == 0) {
+                throw new CouponNotFoundException(__('This coupon does not exist'));
+            }
+
+            $matchingWildcard = $wildcardCoupons->first(fn ($wildcardCoupon) => $this->matchesWildcardCoupon($wildcardCoupon->coupon, $coupon));
+
+            if (! $matchingWildcard) {
+                throw new CouponNotFoundException(__('This coupon does not exist'));
+            }
+
+            // Use the first matching wildcard coupon
+            $query = $query->where('id', $matchingWildcard->id);
+        }
 
         if ($query->count() === 0) {
             throw new CouponNotFoundException(__('This coupon does not exist'));
@@ -293,7 +317,23 @@ class DynamicPricing extends Model
 
     protected function couponNotApplied($pricing)
     {
-        return $pricing->coupon !== session('resrv_coupon');
+        $sessionCoupon = session('resrv_coupon');
+
+        if (! $sessionCoupon) {
+            return true;
+        }
+
+        // Check for exact match first
+        if ($pricing->coupon === $sessionCoupon) {
+            return false;
+        }
+
+        // Check for wildcard match
+        if (Str::endsWith($pricing->coupon, '*')) {
+            return ! $this->matchesWildcardCoupon($pricing->coupon, $sessionCoupon);
+        }
+
+        return true;
     }
 
     protected function expired($pricing)
@@ -387,5 +427,18 @@ class DynamicPricing extends Model
     public function appliesToExtras(): bool
     {
         return $this->extras()->count() > 0;
+    }
+
+    protected function matchesWildcardCoupon(string $wildcardCoupon, string $userCoupon): bool
+    {
+        // If the wildcard coupon doesn't end with *, it's not a wildcard
+        if (! Str::endsWith($wildcardCoupon, '*')) {
+            return false;
+        }
+
+        // Remove the * and check if user coupon starts with the prefix
+        $prefix = Str::substr($wildcardCoupon, 0, -1);
+
+        return Str::startsWith($userCoupon, $prefix);
     }
 }
