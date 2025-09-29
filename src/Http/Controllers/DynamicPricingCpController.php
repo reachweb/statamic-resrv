@@ -46,7 +46,7 @@ class DynamicPricingCpController extends Controller
             'amount_operation' => 'required|string',
             'amount_type' => 'required|string',
             'amount' => 'required|numeric',
-            'coupon' => 'nullable|alpha_dash',
+            'coupon' => 'nullable|regex:/^[\w*-]+$/',
             'expire_at' => 'nullable|date',
             'overrides_all' => 'nullable|boolean',
         ]);
@@ -77,7 +77,7 @@ class DynamicPricingCpController extends Controller
             'amount_type' => 'required|string',
             'amount' => 'required|numeric',
             'order' => 'required|integer',
-            'coupon' => 'nullable|alpha_dash',
+            'coupon' => 'nullable|regex:/^[\w*-]+$/',
             'expire_at' => 'nullable|date',
             'overrides_all' => 'nullable|boolean',
         ]);
