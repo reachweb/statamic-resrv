@@ -38,7 +38,11 @@ class ResrvAvailability extends Fieldtype
             $parent = $this->field->parent()->origin()->id();
         }
 
-        return ['parent' => $parent, 'advanced_availability' => $this->field->get('advanced_availability')];
+        return [
+            'parent' => $parent,
+            'advanced_availability' => $this->field->get('advanced_availability'),
+            'currency_symbol' => config('resrv-config.currency_symbol'),
+        ];
     }
 
     protected function configFieldItems(): array

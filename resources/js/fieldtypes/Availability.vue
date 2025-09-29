@@ -190,7 +190,7 @@ export default {
                 if (this.hasPrice(day) > 0) {
                     price.classList.add(...defaultClasses, 'bg-gray-700')
                 }
-                price.innerHTML = '€ '+this.hasPrice(day)
+                price.innerHTML = this.meta.currency_symbol+' '+this.hasPrice(day)
                 arrayOfDomNodes.push(price)
             }           
 
