@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Reach\StatamicResrv\Rules\CouponNotAlreadyAssigned;
 
 class AffiliateCpRequest extends FormRequest
 {
@@ -36,6 +37,8 @@ class AffiliateCpRequest extends FormRequest
             'allow_skipping_payment' => ['boolean'],
             'send_reservation_email' => ['boolean'],
             'options' => ['nullable', 'json'],
+            'coupons' => ['nullable', 'array', new CouponNotAlreadyAssigned($affiliateId)],
+            'coupons.*' => ['integer', 'exists:resrv_dynamic_pricing,id'],
         ];
     }
 }

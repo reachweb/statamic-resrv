@@ -24,21 +24,39 @@ class AffiliateCpController extends Controller
 
     public function index()
     {
-        $affiliates = $this->affiliate->all();
+        $affiliates = $this->affiliate->with('coupons')->get();
+
+        foreach ($affiliates as $affiliate) {
+            $affiliate->coupons_ids = $affiliate->coupons->pluck('id');
+        }
 
         return response()->json($affiliates);
     }
 
     public function create(AffiliateCpRequest $request)
     {
-        $affiliate = $this->affiliate->create($request->validated());
+        $data = $request->validated();
+        $coupons = $data['coupons'] ?? [];
+        unset($data['coupons']);
+
+        $affiliate = $this->affiliate->create($data);
+
+        if (! empty($coupons)) {
+            $affiliate->coupons()->sync($coupons);
+        }
 
         return response()->json(['id' => $affiliate->id]);
     }
 
     public function update(AffiliateCpRequest $request, Affiliate $affiliate)
     {
-        $affiliate->update($request->validated());
+        $data = $request->validated();
+        $coupons = $data['coupons'] ?? [];
+        unset($data['coupons']);
+
+        $affiliate->update($data);
+
+        $affiliate->coupons()->sync($coupons);
 
         return response()->json(['id' => $affiliate->id]);
     }

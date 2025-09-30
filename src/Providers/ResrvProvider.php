@@ -24,6 +24,7 @@ use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
 use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\AddResrvEntryToDatabase;
+use Reach\StatamicResrv\Listeners\AssociateAffiliateFromCoupon;
 use Reach\StatamicResrv\Listeners\CancelReservation;
 use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
 use Reach\StatamicResrv\Listeners\ConfirmReservation;
@@ -112,6 +113,7 @@ class ResrvProvider extends AddonServiceProvider
         ],
         CouponUpdated::class => [
             UpdateCouponAppliedToReservation::class,
+            AssociateAffiliateFromCoupon::class,
         ],
         AvailabilitySearch::class => [
             SaveSearchToSession::class,
