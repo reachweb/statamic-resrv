@@ -63,18 +63,61 @@
                                     </div>
                                     <div v-if="errors.fee" class="w-full mt-2 text-sm text-red-400">
                                         {{ errors.fee[0] }}
-                                    </div>  
+                                    </div>
+                                </div>
+                                <div class="pb-3">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <div class="mr-2">
+                                            <label class="font-semibold" for="coupons">{{ __('Coupons') }}</label>
+                                            <div class="text-sm font-light"><p>{{ __('Select any coupons that would make a reservation credited to this affiliate.') }}</p></div>
+                                        </div>
+                                        <div class="flex justify-end cursor-pointer mt-2">
+                                            <span class="text-xs text-gray-700" @click="clearAllCoupons()">{{ __('Clear') }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="w-full">
+                                        <v-select
+                                            v-model="submit.coupons"
+                                            label="title"
+                                            multiple="multiple"
+                                            :close-on-select="false"
+                                            :deselectFromDropdown="true"
+                                            :options="coupons"
+                                            :searchable="true"
+                                            :reduce="type => type.id"
+                                        >
+                                            <template #selected-option-container><i class="hidden"></i></template>
+                                            <template #footer="{ deselect }" v-if="couponsLoaded">
+                                                <div class="vs__selected-options-outside flex flex-wrap">
+                                                    <span v-for="id in submit.coupons" :key="id" class="vs__selected mt-1">
+                                                        {{ getCouponTitle(id) }}
+                                                        <button
+                                                            @click="() => submit.coupons = submit.coupons.filter(coupon => coupon !== id)"
+                                                            type="button"
+                                                            :aria-label="__('Deselect option')"
+                                                            class="vs__deselect"
+                                                        >
+                                                            <span>×</span>
+                                                        </button>
+                                                    </span>
+                                                </div>
+                                            </template>
+                                        </v-select>
+                                    </div>
+                                    <div v-if="errors.coupons" class="w-full mt-2 text-sm text-red-400">
+                                        {{ errors.coupons[0] }}
+                                    </div>
                                 </div>
                                 <div class="pb-3 flex items-center">
-                                    <toggle-input v-model="submit.allow_skipping_payment"></toggle-input> 
+                                    <toggle-input v-model="submit.allow_skipping_payment"></toggle-input>
                                     <div class="text-sm ml-3">{{ __('Allow skipping payment') }}</div>
                                 </div>
                                 <div class="pb-3 flex items-center">
-                                    <toggle-input v-model="submit.send_reservation_email"></toggle-input> 
+                                    <toggle-input v-model="submit.send_reservation_email"></toggle-input>
                                     <div class="text-sm ml-3">{{ __('Send reservation email') }}</div>
                                 </div>
                                 <div class="pb-3 flex items-center">
-                                    <toggle-input v-model="submit.published"></toggle-input> 
+                                    <toggle-input v-model="submit.published"></toggle-input>
                                     <div class="text-sm ml-3">{{ __('Published') }}</div>
                                 </div>
                             </div>
@@ -98,7 +141,9 @@
 </template>
 
 <script>
+import axios from 'axios'
 import FormHandler from '../mixins/FormHandler.vue'
+import vSelect from 'vue-select'
 
 export default {
 
@@ -125,7 +170,7 @@ export default {
                 return 'Edit affiliate'
             }
             return 'Add a new affiliate'
-        },
+        }
     },
 
     watch: {
@@ -138,15 +183,23 @@ export default {
         this.createSubmit()
     },
 
+    created() {
+        this.getCoupons()
+    },
+
     data() {
         return {
             submit: {},
             successMessage: 'Affiliate successfully saved',
             postUrl: '/cp/resrv/affiliate',
+            coupons: [],
+            couponsLoaded: false,
         }
     },
 
     mixins: [FormHandler],
+
+    components: [vSelect],
 
     methods: {
         close() {
@@ -156,14 +209,40 @@ export default {
         createSubmit() {
             this.submit = {}
             _.forEach(this.data, (value, name) => {
-                this.$set(this.submit, name, value)
+                // Skip the coupons relation data, use coupons_ids instead
+                if (name !== 'coupons') {
+                    this.$set(this.submit, name, value)
+                }
             })
+            
+            this.$set(this.submit, 'coupons', this.data.coupons_ids || [])
+
             if (_.has(this.data, 'id')) {
                 this.postUrl = '/cp/resrv/affiliate/' + this.data.id
             } else {
                 this.postUrl = '/cp/resrv/affiliate'
-            }            
+            }
         },
+        getCoupons() {
+            axios.get('/cp/resrv/dynamicpricing/index', {
+                params: { coupons_only: 'true' }
+            })
+            .then(response => {
+                this.coupons = response.data
+                this.couponsLoaded = true
+            })
+            .catch(error => {
+                this.$toast.error('Cannot retrieve the coupons')
+            })
+        },
+        clearAllCoupons() {
+            this.submit.coupons = []
+        },
+        getCouponTitle(id) {
+            console.log(id, this.coupons)
+            const coupon = this.coupons.find(item => item.id == id)
+            return coupon ? `${coupon.title} (${coupon.coupon})` : ''
+        }
     }
 }
 </script>

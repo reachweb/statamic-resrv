@@ -20,7 +20,7 @@ class CheckoutPaymentTest extends TestCase
 
     public $reservation;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);

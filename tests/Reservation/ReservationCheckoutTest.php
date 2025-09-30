@@ -10,7 +10,6 @@ use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
-use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
@@ -37,7 +36,7 @@ class ReservationCheckoutTest extends TestCase
 
     public $entry;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);

@@ -20,9 +20,17 @@ class DynamicPricingCpController extends Controller
         return view('statamic-resrv::cp.dynamicpricings.index');
     }
 
-    public function index()
+    public function index(Request $request)
     {
-        $dynamic = $this->dynamicPricing->get();
+        $query = $this->dynamicPricing->query();
+
+        // Filter to only coupons if requested
+        if ($request->has('coupons_only') && $request->coupons_only == 'true') {
+            $query->whereNotNull('coupon')->where('coupon', '!=', '');
+        }
+
+        $dynamic = $query->get();
+
         foreach ($dynamic as $pricing) {
             $pricing['entries'] = $pricing->entries;
             $pricing['extras'] = $pricing->extras;

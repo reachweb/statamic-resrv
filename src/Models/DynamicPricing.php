@@ -92,6 +92,11 @@ class DynamicPricing extends Model
         return $this->belongsToMany(Reservation::class, 'resrv_reservation_dynamic_pricing');
     }
 
+    public function affiliate()
+    {
+        return $this->belongsToMany(Affiliate::class, 'resrv_affiliate_dynamic_pricing');
+    }
+
     public function getEntriesAttribute($value)
     {
         $entries = DB::table('resrv_dynamic_pricing_assignments')

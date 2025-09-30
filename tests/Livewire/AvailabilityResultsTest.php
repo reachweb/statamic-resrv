@@ -1263,7 +1263,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertHasErrors(['cutoff'])
             ->assertDispatched('availability-results-updated');
 
-        //Test date outside both schedules (should use default)
+        // Test date outside both schedules (should use default)
         // Mock current time to be 2pm (within 3-hour cutoff for default 4pm start)
         $this->travelTo(now()->addMonths(2)->setTime(14, 0, 0));
 

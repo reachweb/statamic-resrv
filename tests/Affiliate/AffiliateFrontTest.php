@@ -16,7 +16,7 @@ class AffiliateFrontTest extends TestCase
 
     public $item;
 
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
         $this->item = $this->makeStatamicItem();
