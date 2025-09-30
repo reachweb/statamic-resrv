@@ -25,7 +25,8 @@ class AffiliateCpRequest extends FormRequest
      */
     public function rules()
     {
-        $affiliateId = $this->route('affiliate');
+        $affiliate = $this->route('affiliate');
+        $affiliateId = $affiliate ? $affiliate->id : null;
 
         return [
             'name' => ['required', 'string'],

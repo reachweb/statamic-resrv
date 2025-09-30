@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Rules;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Models\DynamicPricing;
 
 class CouponNotAlreadyAssigned implements ValidationRule
 {
@@ -29,10 +30,18 @@ class CouponNotAlreadyAssigned implements ValidationRule
             $query->where('affiliate_id', '!=', $this->affiliateId);
         }
 
-        $assignedCoupons = $query->pluck('dynamic_pricing_id')->toArray();
+        $assignedCouponIds = $query->pluck('dynamic_pricing_id')->toArray();
 
-        if (! empty($assignedCoupons)) {
-            $fail('One or more coupons are already assigned to another affiliate.');
+        if (! empty($assignedCouponIds)) {
+            // Get the coupon codes/titles for the error message
+            $assignedCoupons = DynamicPricing::whereIn('id', $assignedCouponIds)
+                ->get()
+                ->map(function ($coupon) {
+                    return $coupon->coupon ? "{$coupon->title} ({$coupon->coupon})" : $coupon->title;
+                })
+                ->join(', ');
+
+            $fail("The following coupons are already assigned to another affiliate: {$assignedCoupons}");
         }
     }
 }
