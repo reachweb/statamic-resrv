@@ -82,7 +82,7 @@
                                             multiple="multiple"
                                             :close-on-select="false"
                                             :deselectFromDropdown="true"
-                                            :options="couponsWithCouponCode"
+                                            :options="coupons"
                                             :searchable="true"
                                             :reduce="type => type.id"
                                         >
@@ -170,9 +170,6 @@ export default {
                 return 'Edit affiliate'
             }
             return 'Add a new affiliate'
-        },
-        couponsWithCouponCode() {
-            return this.coupons.filter(coupon => coupon.coupon != null && coupon.coupon !== '')
         }
     },
 
@@ -212,12 +209,14 @@ export default {
         createSubmit() {
             this.submit = {}
             _.forEach(this.data, (value, name) => {
-                this.$set(this.submit, name, value)
+                // Skip the coupons relation data, use coupons_ids instead
+                if (name !== 'coupons') {
+                    this.$set(this.submit, name, value)
+                }
             })
-            // Initialize coupons array if it doesn't exist
-            if (!this.submit.coupons) {
-                this.$set(this.submit, 'coupons', this.data.coupons_ids || [])
-            }
+            
+            this.$set(this.submit, 'coupons', this.data.coupons_ids || [])
+
             if (_.has(this.data, 'id')) {
                 this.postUrl = '/cp/resrv/affiliate/' + this.data.id
             } else {
@@ -225,7 +224,9 @@ export default {
             }
         },
         getCoupons() {
-            axios.get('/cp/resrv/dynamicpricing/index')
+            axios.get('/cp/resrv/dynamicpricing/index', {
+                params: { coupons_only: 'true' }
+            })
             .then(response => {
                 this.coupons = response.data
                 this.couponsLoaded = true
@@ -238,6 +239,7 @@ export default {
             this.submit.coupons = []
         },
         getCouponTitle(id) {
+            console.log(id, this.coupons)
             const coupon = this.coupons.find(item => item.id == id)
             return coupon ? `${coupon.title} (${coupon.coupon})` : ''
         }

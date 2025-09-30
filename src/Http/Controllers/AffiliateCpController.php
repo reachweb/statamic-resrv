@@ -27,7 +27,7 @@ class AffiliateCpController extends Controller
         $affiliates = $this->affiliate->with('coupons')->get();
 
         foreach ($affiliates as $affiliate) {
-            $affiliate->coupons_ids = $affiliate->coupons->pluck('id');
+            $affiliate->coupons_ids = $affiliate->coupons->pluck('id')->values()->toArray();
         }
 
         return response()->json($affiliates);
