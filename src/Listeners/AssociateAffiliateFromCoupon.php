@@ -9,11 +9,6 @@ class AssociateAffiliateFromCoupon
 {
     public function handle(CouponUpdated $event): void
     {
-        // If removing coupon, we don't need to associate affiliate
-        if ($event->remove === true) {
-            return;
-        }
-
         $coupon = DynamicPricing::searchForCoupon($event->coupon, $event->reservation->id);
 
         if (! $coupon) {
@@ -24,6 +19,12 @@ class AssociateAffiliateFromCoupon
         $affiliate = $coupon->affiliate()->first();
 
         if (! $affiliate) {
+            return;
+        }
+
+        // If removing coupon, unassociate the affiliate
+        if ($event->remove === true) {
+            $event->reservation->affiliate()->detach($affiliate->id);
             return;
         }
 

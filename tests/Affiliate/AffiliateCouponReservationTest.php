@@ -94,7 +94,7 @@ class AffiliateCouponReservationTest extends TestCase
         $this->assertEquals(1, $count);
     }
 
-    public function test_listener_does_not_run_when_coupon_is_removed()
+    public function test_affiliate_is_unassociated_when_coupon_is_removed()
     {
         $item = $this->makeStatamicItem();
 
@@ -120,23 +120,14 @@ class AffiliateCouponReservationTest extends TestCase
             'affiliate_id' => $affiliate->id,
         ]);
 
-        // Count how many times affiliate is associated
-        $countBefore = \DB::table('resrv_reservation_affiliate')
-            ->where('reservation_id', $reservation->id)
-            ->where('affiliate_id', $affiliate->id)
-            ->count();
-
         // Dispatch the CouponUpdated event with remove flag
-        // Our listener should not associate the affiliate again
         CouponUpdated::dispatch($reservation, 'AFFILIATE10', true);
 
-        // Count should remain the same
-        $countAfter = \DB::table('resrv_reservation_affiliate')
-            ->where('reservation_id', $reservation->id)
-            ->where('affiliate_id', $affiliate->id)
-            ->count();
-
-        $this->assertEquals($countBefore, $countAfter);
+        // Verify affiliate was unassociated
+        $this->assertDatabaseMissing('resrv_reservation_affiliate', [
+            'reservation_id' => $reservation->id,
+            'affiliate_id' => $affiliate->id,
+        ]);
     }
 
     public function test_affiliate_with_correct_fee_is_associated()
