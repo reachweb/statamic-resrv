@@ -87,7 +87,7 @@ class PriceTest extends TestCase
         $this->assertFalse($price2->equals($price1));
     }
 
-    public function test_price_greaterThan()
+    public function test_price_greater_than()
     {
         $price1 = Price::create(82.73);
         $price2 = Price::create(44.13);
@@ -95,7 +95,7 @@ class PriceTest extends TestCase
         $this->assertFalse($price2->greaterThan($price1));
     }
 
-    public function test_price_lessThan()
+    public function test_price_less_than()
     {
         $price1 = Price::create(82.73);
         $price2 = Price::create(44.13);

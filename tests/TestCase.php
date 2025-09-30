@@ -51,7 +51,7 @@ class TestCase extends OrchestraTestCase
         ]);
     }
 
-    public function tearDown(): void
+    protected function tearDown(): void
     {
         $uses = array_flip(class_uses_recursive(static::class));
 
@@ -112,7 +112,7 @@ class TestCase extends OrchestraTestCase
             $app['config']->set("statamic.$config", require (__DIR__."/../vendor/statamic/cms/config/{$config}.php"));
         }
 
-        //$app['config']->set("resrv-config", require(__DIR__."/../config/config.php"));
+        // $app['config']->set("resrv-config", require(__DIR__."/../config/config.php"));
 
         // Setting the user repository to the default flat file system
         $app['config']->set('statamic.users.repository', 'file');
