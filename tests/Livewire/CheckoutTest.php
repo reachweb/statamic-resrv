@@ -565,4 +565,76 @@ class CheckoutTest extends TestCase
             ->assertSessionHas('resrv_coupon', 'YHCOS')
             ->assertDispatched('coupon-applied');
     }
+
+    public function test_it_updates_reservation_total_when_coupon_is_applied()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // First, set initial total via handleFirstStep
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        // Verify initial total
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'total' => '100.0',
+        ]);
+
+        // Add coupon to session (this is what addCoupon() does)
+        session(['resrv_coupon' => '20OFF']);
+
+        // Apply coupon
+        $component->dispatch('coupon-applied', '20OFF');
+
+        // Refresh reservation from database
+        $reservation = Reservation::find($this->reservation->id);
+
+        // The total should now be updated to reflect the coupon discount (80.00)
+        $this->assertEquals('80.00', $reservation->total->format());
+    }
+
+    public function test_it_updates_reservation_total_when_coupon_is_removed()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // First, set initial total via handleFirstStep
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        // Add coupon and apply it
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        // Verify the discounted total
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('80.00', $reservation->total->format());
+
+        // Now remove the coupon
+        session()->forget('resrv_coupon');
+        $component->dispatch('coupon-removed', '20OFF', true);
+
+        // Refresh reservation from database
+        $reservation = Reservation::find($this->reservation->id);
+
+        // The total should now be updated back to original price (100.00)
+        $this->assertEquals('100.00', $reservation->total->format());
+    }
 }

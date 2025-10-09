@@ -346,8 +346,10 @@ class Checkout extends Component
         // Remove the caches
         unset($this->reservation);
 
-        // Update pricing
-        $this->calculateReservationTotals();
+        // Calculate and update the total
+        $totals = $this->calculateReservationTotals();
+        $this->reservation->update(['total' => $totals->get('total')->format()]);
+
         CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
     }
 
