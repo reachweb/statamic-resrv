@@ -52,8 +52,8 @@ class AvailabilityData extends Form
     public function toResrvArray()
     {
         return [
-            'date_start' => $this->dates['date_start'],
-            'date_end' => $this->dates['date_end'],
+            'date_start' => $this->dates['date_start'] ?? null,
+            'date_end' => $this->dates['date_end'] ?? null,
             'quantity' => $this->quantity,
             'advanced' => $this->advanced,
         ];
