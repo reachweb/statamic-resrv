@@ -57,4 +57,12 @@ return [
     'paymentDescription' => 'Securely pay for your reservation.',
     'addCoupon' => 'Add discount coupon',
     'cutoffTimeExceeded' => 'Reservations are allowed at least :hours hours before the starting time (:time). Please select a date from tomorrow onwards.',
+    'availableDates' => 'Available dates',
+    'availableDatesFrom' => 'Available from',
+    'noAvailableDates' => 'No available dates',
+    'pleaseSelectStartDate' => 'Please select a start date',
+    'available' => 'available',
+    'optionsAvailable' => 'option available|options available',
+    'only' => 'Only',
+    'left' => 'left',
 ];
