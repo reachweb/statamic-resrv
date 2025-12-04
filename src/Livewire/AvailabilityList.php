@@ -86,7 +86,7 @@ class AvailabilityList extends Component
             $this->data->validate();
             $this->runHooks('availability-search-updated', $this->data);
         } catch (\Exception $exception) {
-            $this->dispatch('availability-list-updated');
+            $this->dispatch('availability-results-updated');
             $this->addError('availability', $exception->getMessage());
 
             return;
@@ -94,9 +94,9 @@ class AvailabilityList extends Component
 
         $this->getAvailableDates();
 
-        $this->runHooks('availability-list-updated', $this->availableDates);
+        $this->runHooks('availability-results-updated', $this->availableDates);
 
-        $this->dispatch('availability-list-updated');
+        $this->dispatch('availability-results-updated');
     }
 
     protected function getAvailableDates(): void

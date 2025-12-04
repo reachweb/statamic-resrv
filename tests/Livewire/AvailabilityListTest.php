@@ -59,6 +59,22 @@ class AvailabilityListTest extends TestCase
             ->assertViewHas('availableDates.none');
     }
 
+    public function test_dispatches_availability_results_updated_event()
+    {
+        Livewire::test(AvailabilityList::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(30, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'advanced' => null,
+                ]
+            )
+            ->assertDispatched('availability-results-updated');
+    }
+
     public function test_available_dates_returns_correct_prices()
     {
         $entry = $this->makeStatamicItemWithAvailability(customAvailability: [
