@@ -413,4 +413,42 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(50, $calendar[$key]['price']);
         $this->assertEquals(1, $calendar[$key]['available']);
     }
+
+    public function test_listens_to_availability_date_selected_event()
+    {
+        Livewire::test(AvailabilitySearch::class)
+            ->dispatch('availability-date-selected', [
+                'date' => $this->date->copy()->add(5, 'day')->toDateString(),
+                'property' => null,
+            ])
+            ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
+            ->assertSet('data.dates.date_end', $this->date->copy()->add(6, 'day')->toDateString())
+            ->assertDispatched('availability-search-updated');
+    }
+
+    public function test_availability_date_selected_updates_advanced_property()
+    {
+        Livewire::test(AvailabilitySearch::class)
+            ->dispatch('availability-date-selected', [
+                'date' => $this->date->copy()->add(5, 'day')->toDateString(),
+                'property' => 'cabin-a',
+            ])
+            ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
+            ->assertSet('data.advanced', 'cabin-a')
+            ->assertDispatched('availability-search-updated');
+    }
+
+    public function test_availability_date_selected_respects_minimum_reservation_period()
+    {
+        Config::set('resrv-config.minimum_reservation_period_in_days', 3);
+
+        Livewire::test(AvailabilitySearch::class)
+            ->dispatch('availability-date-selected', [
+                'date' => $this->date->copy()->add(5, 'day')->toDateString(),
+                'property' => null,
+            ])
+            ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
+            ->assertSet('data.dates.date_end', $this->date->copy()->add(8, 'day')->toDateString())
+            ->assertDispatched('availability-search-updated');
+    }
 }
