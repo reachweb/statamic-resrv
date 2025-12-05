@@ -470,6 +470,7 @@ class Availability extends Model implements AvailabilityContract
             ->when($advanced, function ($query) use ($advanced) {
                 return $query->where('property', $advanced);
             })
+            ->orderBy('price')
             ->get(['date', 'available', 'price', 'property'])
             ->groupBy('date')
             ->map(fn ($item) => $item->firstWhere('available', '>', 0))

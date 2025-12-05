@@ -451,4 +451,44 @@ class AvailabilitySearchTest extends TestCase
             ->assertSet('data.dates.date_end', $this->date->copy()->add(8, 'day')->toDateString())
             ->assertDispatched('availability-search-updated');
     }
+
+    public function test_availability_calendar_returns_lowest_price_when_multiple_properties()
+    {
+        $entry = $this->entries->first();
+
+        // Create availability with different prices for different properties on the same date
+        \Reach\StatamicResrv\Models\Availability::factory()
+            ->create([
+                'statamic_id' => $entry->id(),
+                'date' => today(),
+                'price' => 200,
+                'available' => 2,
+                'property' => 'expensive-cabin',
+            ]);
+
+        \Reach\StatamicResrv\Models\Availability::factory()
+            ->create([
+                'statamic_id' => $entry->id(),
+                'date' => today(),
+                'price' => 25,
+                'available' => 3,
+                'property' => 'cheap-cabin',
+            ]);
+
+        $component = Livewire::test(AvailabilitySearch::class, [
+            'entry' => $entry->id(),
+            'showAvailabilityOnCalendar' => true,
+        ])
+            ->call('availabilityCalendar');
+
+        $calendar = $component->effects['returns'][0];
+        $key = today()->format('Y-m-d').' 00:00:00';
+
+        $this->assertIsArray($calendar);
+        $this->assertArrayHasKey($key, $calendar);
+        // Should return the lowest price (25) not the expensive one (200)
+        // Note: The entry already has availability at price 50, so 25 should be returned
+        $this->assertEquals(25, $calendar[$key]['price']);
+        $this->assertEquals('cheap-cabin', $calendar[$key]['property']);
+    }
 }
