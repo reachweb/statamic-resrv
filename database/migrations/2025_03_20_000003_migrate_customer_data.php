@@ -18,11 +18,24 @@ return new class extends Migration
         }
 
         // Get all reservations with customer data
-        $reservations = DB::table('resrv_reservations')
-            ->whereNotNull('customer')
-            ->whereNot('customer', '[]')
-            ->whereNot('customer', '""')
-            ->get();
+        $driver = DB::connection()->getDriverName();
+
+        $query = DB::table('resrv_reservations')
+            ->whereNotNull('customer');
+
+        if ($driver === 'pgsql') {
+            $query->whereRaw("customer::text NOT IN ('[]', '\"\"', '')");
+        } elseif ($driver === 'mysql' || $driver === 'mariadb') {
+            $query->whereRaw("JSON_TYPE(customer) = 'OBJECT'")
+                ->whereRaw('JSON_LENGTH(customer) > 0');
+        } else {
+            // SQLite and others
+            $query->whereNot('customer', '[]')
+                ->whereNot('customer', '""')
+                ->whereNot('customer', '');
+        }
+
+        $reservations = $query->get();
 
         // Create a new customer record for each reservation
         foreach ($reservations as $reservation) {
