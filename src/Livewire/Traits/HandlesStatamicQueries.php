@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
-use MarcoRieser\Livewire\RestoreCurrentSite;
 use Reach\StatamicResrv\Exceptions\BlueprintNotFoundException;
 use Reach\StatamicResrv\Exceptions\CheckoutEntryNotFound;
 use Reach\StatamicResrv\Exceptions\FieldNotFoundException;
@@ -14,8 +13,6 @@ use Statamic\Facades\Site;
 
 trait HandlesStatamicQueries
 {
-    use RestoreCurrentSite;
-
     public function getProperties()
     {
         return $this->getPropertiesFromBlueprint();

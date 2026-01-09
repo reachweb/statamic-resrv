@@ -25,15 +25,14 @@
     "require": {
         "php": "^8.2",
         "doctrine/dbal": "^3.0 || ^4.0",
-        "laravel/framework": "^10.0 || ^11.00 || ^12.0",
-        "illuminate/support": "^10.0 || ^11.0 || ^12.0",
+        "laravel/framework": "^11.00 || ^12.0",
+        "illuminate/support": "^11.0 || ^12.0",
         "statamic/cms": "^5.0.0",
         "stripe/stripe-php": "^16.0",
         "moneyphp/money": "^4.6",
         "spatie/simple-excel": "^3.7",
         "edalzell/forma": "^3.0",
-        "livewire/livewire": "^3.6",
-        "marcorieser/statamic-livewire": "^4.0"
+        "marcorieser/statamic-livewire": "^5.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5 || ^11.0",
