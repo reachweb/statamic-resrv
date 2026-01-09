@@ -114,6 +114,12 @@ class TestCase extends OrchestraTestCase
 
         // $app['config']->set("resrv-config", require(__DIR__."/../config/config.php"));
 
+        // Force the cache driver to be array for testing
+        $app['config']->set('cache.default', 'array');
+
+        // Force the queue driver to be sync for testing
+        $app['config']->set('queue.default', 'sync');
+
         // Setting the user repository to the default flat file system
         $app['config']->set('statamic.users.repository', 'file');
         $app['config']->set('statamic.stache.watcher', false);
