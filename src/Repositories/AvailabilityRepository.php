@@ -57,18 +57,20 @@ class AvailabilityRepository
 
     public function itemsExistAndHavePrices(string $date_start, string $date_end, string $statamic_id, array $advanced)
     {
-        $query = Availability::where('date', '>=', $date_start)
+        // Use a single query with conditional count to avoid double querying
+        $result = Availability::selectRaw('COUNT(*) as total_days, SUM(CASE WHEN price IS NOT NULL THEN 1 ELSE 0 END) as days_with_prices')
+            ->where('date', '>=', $date_start)
             ->where('date', '<=', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($advanced, function (Builder $query, array $advanced) {
                 if (! in_array('any', $advanced)) {
                     $query->whereIn('property', $advanced);
                 }
-            });
+            })
+            ->first();
 
-        $totalDays = $query->count();
-        $daysWithPrices = $query->whereNotNull('price')->count();
-
+        $totalDays = (int) $result->total_days;
+        $daysWithPrices = (int) $result->days_with_prices;
         $expectedDays = (int) Carbon::parse($date_start)->diffInDays(Carbon::parse($date_end)->addDay(), true);
 
         return $totalDays > 0 && $totalDays === $daysWithPrices && $totalDays === $expectedDays;
@@ -80,6 +82,17 @@ class AvailabilityRepository
             ->where('statamic_id', $statamic_id)
             ->groupBy('property')
             ->get();
+    }
+
+    public function itemAvailableBetweenForAllProperties(string $date_start, string $date_end, int $duration, int $quantity, string $statamic_id)
+    {
+        return Availability::selectRaw('count(date) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, max(available) as available, property')
+            ->where('statamic_id', $statamic_id)
+            ->where('date', '>=', $date_start)
+            ->where('date', '<', $date_end)
+            ->where('available', '>=', $quantity)
+            ->groupBy('statamic_id', 'property')
+            ->having('days', '=', $duration);
     }
 
     public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced, int $reservationId)

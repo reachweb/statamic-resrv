@@ -20,8 +20,8 @@ trait HandlesPricing
         $reservationPrice = $start->add(...$pricesCollection->toArray());
 
         // If FixedPricing exists, replace the price
-        if (FixedPricing::getFixedPricing($id, $this->duration)) {
-            $reservationPrice = FixedPricing::getFixedPricing($id, $this->duration);
+        if ($fixedPrice = FixedPricing::getFixedPricing($id, $this->duration)) {
+            $reservationPrice = $fixedPrice;
         }
 
         // Apply dynamic pricing

@@ -318,21 +318,36 @@ class Availability extends Model implements AvailabilityContract
     {
         $availability = collect();
 
-        $properties = AvailabilityRepository::itemGetProperties($entry->id())->pluck('property');
+        // Fetch all properties' availability in a single query
+        $results = AvailabilityRepository::itemAvailableBetweenForAllProperties(
+            date_start: $this->date_start,
+            date_end: $this->date_end,
+            duration: $this->duration,
+            quantity: $this->quantity,
+            statamic_id: $entry->id()
+        )->get();
 
-        foreach ($properties as $property) {
-            $this->advanced = $property;
+        if ($results->isEmpty()) {
+            return new AvailabilityItemResource($availability, $request);
+        }
 
-            $results = $this->getResultsForItem($entry, [$property])->first();
+        // Get property labels once (cached)
+        $propertyLabels = cache()->remember(
+            'availability_labels_'.$entry->collection.'_'.$entry->handle,
+            60,
+            function () use ($entry) {
+                if ($field = $entry->getAvailabilityField()) {
+                    return $field->get('advanced_availability') ?? [];
+                }
 
-            if ($results) {
-                $propertyLabel = cache()->remember($property.'_availability_label', 60, function () use ($entry, $property) {
-                    if ($field = $entry->getAvailabilityField()) {
-                        return $field->get('advanced_availability')[$property] ?? $property;
-                    }
-                });
-                $availability->put($property, $this->populateAvailability($results, $propertyLabel));
+                return [];
             }
+        );
+
+        foreach ($results as $result) {
+            $property = $result->property;
+            $propertyLabel = $propertyLabels[$property] ?? $property;
+            $availability->put($property, $this->populateAvailability($result, $propertyLabel));
         }
 
         return new AvailabilityItemResource($availability->sortBy('price'), $request);
