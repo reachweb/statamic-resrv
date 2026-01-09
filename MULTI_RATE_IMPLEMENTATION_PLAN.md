@@ -13,6 +13,8 @@ This document outlines the implementation plan for adding a multi-rate system to
 5. **Rate selection in search results** - users see all available rates per entry
 6. **Extras are rate-agnostic** - available for all rates
 7. **Migration tool provided** - for users upgrading from previous versions
+8. **Multi-rate reservations** - a single reservation can have multiple rates (e.g., 2 adults + 2 children)
+9. **Deprecate quantity field** - replaced by sum of rate quantities
 
 ---
 
@@ -62,6 +64,17 @@ Schema::create('resrv_entry_rate', function (Blueprint $table) {
     // Optional per-entry overrides
     $table->decimal('override_link_amount', 10, 2)->nullable();
 
+    // Rate constraints (per-entry, for multi-rate reservations)
+    $table->integer('min_quantity')->default(0);      // Minimum required (e.g., 1 adult)
+    $table->integer('max_quantity')->nullable();       // Maximum allowed (e.g., max 4 children)
+    $table->foreignId('requires_rate_id')              // This rate requires another (child requires adult)
+          ->nullable()
+          ->constrained('resrv_rates')
+          ->nullOnDelete();
+
+    // Availability consumption (for multi-rate)
+    $table->boolean('consumes_availability')->default(true);  // Does booking this rate consume availability?
+
     $table->unique(['entry_id', 'rate_id']);
     $table->index('entry_id');
     $table->timestamps();
@@ -97,29 +110,61 @@ Schema::create('resrv_rate_availabilities', function (Blueprint $table) {
 });
 ```
 
-### Table Modifications
+#### 4. `resrv_reservation_rate` - Multi-Rate Reservation Breakdown
 
-#### `resrv_reservations` - Add Rate Reference
+This is the key table for multi-rate reservations. Instead of a single `rate_id` on the reservation, we track each rate and its quantity separately.
 
 ```php
-Schema::table('resrv_reservations', function (Blueprint $table) {
+Schema::create('resrv_reservation_rate', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('reservation_id')
+          ->constrained('resrv_reservations')
+          ->cascadeOnDelete();
     $table->foreignId('rate_id')
-          ->nullable()
-          ->after('property')
           ->constrained('resrv_rates')
-          ->nullOnDelete();
+          ->cascadeOnDelete();
+
+    $table->integer('quantity');                    // How many of this rate (e.g., 2 adults)
+    $table->decimal('unit_price', 10, 2);           // Price per unit at booking time (frozen)
+    $table->decimal('subtotal', 10, 2);             // quantity × unit_price
+
+    $table->unique(['reservation_id', 'rate_id']);
+    $table->index('reservation_id');
+    $table->timestamps();
 });
 ```
 
-#### `resrv_child_reservations` - Add Rate Reference
+**Example Data:**
+| reservation_id | rate_id | quantity | unit_price | subtotal |
+|----------------|---------|----------|------------|----------|
+| 123            | 1       | 2        | 100.00     | 200.00   | (2 adults @ €100)
+| 123            | 2       | 2        | 50.00      | 100.00   | (2 children @ €50)
+
+Total reservation price: €300
+
+### Table Modifications
+
+#### `resrv_reservations` - Deprecate quantity, add computed total
+
+```php
+Schema::table('resrv_reservations', function (Blueprint $table) {
+    // Mark quantity as deprecated - will be computed from reservation_rate sum
+    // Keep for backwards compatibility during migration period
+    $table->integer('quantity')->default(1)->comment('DEPRECATED: Use reservation_rate table');
+
+    // Remove single rate_id - replaced by resrv_reservation_rate table
+    // $table->foreignId('rate_id') -- NOT ADDED, use pivot table instead
+});
+```
+
+#### `resrv_child_reservations` - Similar changes
 
 ```php
 Schema::table('resrv_child_reservations', function (Blueprint $table) {
-    $table->foreignId('rate_id')
-          ->nullable()
-          ->after('property')
-          ->constrained('resrv_rates')
-          ->nullOnDelete();
+    // Child reservations also support multi-rate
+    // The rate breakdown is still on the parent reservation
+    // Child reservations inherit the rate breakdown from parent
+    $table->integer('quantity')->default(1)->comment('DEPRECATED: Use parent reservation_rate');
 });
 ```
 
@@ -128,8 +173,265 @@ Schema::table('resrv_child_reservations', function (Blueprint $table) {
 1. `create_resrv_rates_table.php`
 2. `create_resrv_entry_rate_table.php`
 3. `create_resrv_rate_availabilities_table.php`
-4. `add_rate_id_to_resrv_reservations_table.php`
-5. `add_rate_id_to_resrv_child_reservations_table.php`
+4. `create_resrv_reservation_rate_table.php`
+5. `deprecate_quantity_on_resrv_reservations_table.php`
+
+---
+
+## Multi-Rate Reservations: Detailed Design
+
+This section explains how reservations with multiple rates work, including availability consumption logic.
+
+### Concept Overview
+
+**Old Model (Single Rate):**
+```
+Reservation #123
+├── quantity: 2
+├── rate_id: 1 (adult)
+└── price: €200 (2 × €100)
+```
+
+**New Model (Multi-Rate):**
+```
+Reservation #123
+├── rates:
+│   ├── adult (id: 1): quantity 2, unit_price €100, subtotal €200
+│   └── child (id: 2): quantity 2, unit_price €50, subtotal €100
+├── total_quantity: 4 (computed)
+└── price: €300 (sum of subtotals)
+```
+
+### Availability Consumption Logic
+
+The key insight: **availability consumption depends on each rate's `availability_type` setting**.
+
+#### Scenario 1: Hotel Room (Occupancy-Based)
+
+**Setup:**
+- Entry: "Deluxe Room" with base availability = 3 rooms
+- Rates: Adult (shared), Child (shared)
+
+**Booking: 2 adults + 2 children**
+
+Since both rates have `availability_type = 'shared'`:
+- This is **occupancy-based** - the 4 people occupy rooms, not consume individual units
+- The availability consumed = **1 room** (configured per entry, see below)
+- Remaining availability = 2 rooms
+
+For occupancy-based entries, we need a new field on `resrv_entry_rate`:
+```php
+$table->boolean('consumes_availability')->default(true);  // Does this rate consume availability?
+```
+
+**Hotel configuration:**
+- Adult rate: `consumes_availability = true` (each adult booking uses 1 room)
+- Child rate: `consumes_availability = false` (children don't consume extra rooms)
+
+Availability consumed = sum of quantities where `consumes_availability = true`
+
+#### Scenario 2: Van Excursion (Seat-Based)
+
+**Setup:**
+- Entry: "Island Tour" with base availability = 10 seats
+- Rates: Adult (shared), Child (shared)
+
+**Booking: 2 adults + 1 child**
+
+Both rates have `availability_type = 'shared'` and `consumes_availability = true`:
+- Each person takes a seat
+- Availability consumed = **3 seats**
+- Remaining availability = 7 seats
+
+#### Scenario 3: Limited Child Spots
+
+**Setup:**
+- Entry: "Cooking Class" with base availability = 20 spots
+- Rates: Adult (shared), Child (limited, limit = 5)
+
+**Booking: 2 adults + 2 children**
+
+- Adult rate: `availability_type = 'shared'`, consumes from base pool
+- Child rate: `availability_type = 'limited'`, consumes from base pool BUT limited to 5 children per day
+
+Availability consumed from base = 4 (2 adults + 2 children)
+Child rate bookings for this day = 2 (against limit of 5)
+
+#### Scenario 4: Independent VIP Availability
+
+**Setup:**
+- Entry: "Restaurant Table" with base availability = 10 tables
+- Rates: Standard (shared), VIP (independent, own pool of 2)
+
+**Booking: 1 VIP table**
+
+- VIP rate: `availability_type = 'independent'`
+- Consumes from VIP's own pool in `resrv_rate_availabilities`
+- Base availability remains 10
+
+### Availability Consumption Algorithm
+
+```php
+class AvailabilityConsumptionCalculator
+{
+    public function calculateConsumption(
+        array $rateQuantities,  // [rate_id => quantity]
+        string $entryId
+    ): array {
+        $sharedConsumption = 0;
+        $independentConsumptions = [];  // [rate_id => quantity]
+        $limitedConsumptions = [];      // [rate_id => quantity]
+
+        foreach ($rateQuantities as $rateId => $quantity) {
+            $entryRate = EntryRate::where('entry_id', $entryId)
+                ->where('rate_id', $rateId)
+                ->first();
+
+            $rate = $entryRate->rate;
+
+            // Skip if this rate doesn't consume availability
+            if (!$entryRate->consumes_availability) {
+                continue;
+            }
+
+            switch ($rate->availability_type) {
+                case 'shared':
+                    $sharedConsumption += $quantity;
+                    break;
+
+                case 'independent':
+                    $independentConsumptions[$rateId] = $quantity;
+                    break;
+
+                case 'limited':
+                    $sharedConsumption += $quantity;  // Still uses shared pool
+                    $limitedConsumptions[$rateId] = $quantity;  // Also tracked against limit
+                    break;
+            }
+        }
+
+        return [
+            'shared' => $sharedConsumption,
+            'independent' => $independentConsumptions,
+            'limited' => $limitedConsumptions,
+        ];
+    }
+}
+```
+
+### Rate Constraints Validation
+
+Before accepting a multi-rate booking, validate constraints:
+
+```php
+class RateConstraintValidator
+{
+    public function validate(
+        array $rateQuantities,  // [rate_id => quantity]
+        string $entryId
+    ): bool {
+        foreach ($rateQuantities as $rateId => $quantity) {
+            $entryRate = EntryRate::where('entry_id', $entryId)
+                ->where('rate_id', $rateId)
+                ->first();
+
+            // Check minimum
+            if ($quantity < $entryRate->min_quantity) {
+                throw new RateConstraintException(
+                    "Minimum {$entryRate->min_quantity} required for {$entryRate->rate->title}"
+                );
+            }
+
+            // Check maximum
+            if ($entryRate->max_quantity && $quantity > $entryRate->max_quantity) {
+                throw new RateConstraintException(
+                    "Maximum {$entryRate->max_quantity} allowed for {$entryRate->rate->title}"
+                );
+            }
+
+            // Check dependency (e.g., children require adults)
+            if ($entryRate->requires_rate_id) {
+                $requiredQuantity = $rateQuantities[$entryRate->requires_rate_id] ?? 0;
+                if ($requiredQuantity < 1) {
+                    $requiredRate = Rate::find($entryRate->requires_rate_id);
+                    throw new RateConstraintException(
+                        "{$entryRate->rate->title} requires at least 1 {$requiredRate->title}"
+                    );
+                }
+            }
+        }
+
+        return true;
+    }
+}
+```
+
+### Entry-Rate Table Addition
+
+Add to `resrv_entry_rate`:
+
+```php
+// Whether booking this rate consumes base availability
+$table->boolean('consumes_availability')->default(true);
+```
+
+### Frontend: Rate Quantity Selection
+
+The UI should show quantity selectors for each rate:
+
+```
+┌─────────────────────────────────────────────┐
+│ Select Guests                               │
+├─────────────────────────────────────────────┤
+│ Adults (€100/night)          [−] 2 [+]      │
+│ Children (€50/night)         [−] 2 [+]      │
+│ Infants (Free)               [−] 1 [+]      │
+├─────────────────────────────────────────────┤
+│ Total: €300                                 │
+│ 5 guests selected                           │
+└─────────────────────────────────────────────┘
+```
+
+### Reservation Model Changes
+
+```php
+class Reservation extends Model
+{
+    // New relationship
+    public function rates(): BelongsToMany
+    {
+        return $this->belongsToMany(Rate::class, 'resrv_reservation_rate')
+            ->withPivot(['quantity', 'unit_price', 'subtotal'])
+            ->withTimestamps();
+    }
+
+    // Computed total quantity (replaces deprecated quantity field)
+    public function getTotalQuantityAttribute(): int
+    {
+        return $this->rates->sum('pivot.quantity');
+    }
+
+    // Get rate breakdown for display
+    public function getRateBreakdown(): Collection
+    {
+        return $this->rates->map(fn ($rate) => [
+            'rate' => $rate,
+            'quantity' => $rate->pivot->quantity,
+            'unit_price' => Price::create($rate->pivot->unit_price),
+            'subtotal' => Price::create($rate->pivot->subtotal),
+        ]);
+    }
+
+    // Calculate total from rates (for validation)
+    public function calculateTotalFromRates(): PriceClass
+    {
+        return $this->rates->reduce(
+            fn ($total, $rate) => $total->add(Price::create($rate->pivot->subtotal)),
+            Price::create(0)
+        );
+    }
+}
+```
 
 ---
 
@@ -200,13 +502,24 @@ src/Models/EntryRate.php
 #### `Reservation` Model Changes
 
 **New Relationships:**
-- `rate()` - BelongsTo `Rate`
+- `rates()` - BelongsToMany `Rate` via `resrv_reservation_rate` pivot table
+
+**New Attributes:**
+- `getTotalQuantityAttribute()` - Computed sum of all rate quantities (replaces deprecated `quantity`)
+- `getRateBreakdown()` - Collection of rate details with quantities and prices
 
 **New Methods:**
-- `getRateLabel(): string`
+- `calculateTotalFromRates(): PriceClass` - Sum of all rate subtotals
+- `syncRates(array $rateQuantities)` - Sync rate breakdown to pivot table
+- `validateRateConstraints()` - Ensure booking meets min/max/dependency rules
+
+**Deprecated:**
+- `quantity` field - Use `total_quantity` attribute instead
+- `rate()` single relationship - Use `rates()` collection instead
 
 **Modified Methods:**
-- `getPrices()` - Include rate in calculation
+- `getPrices()` - Include all rates in calculation
+- `validateReservation()` - Add rate constraint validation
 
 #### `FixedPricing` Model Changes
 
@@ -658,49 +971,197 @@ public function selectRate(int $rateId): void
 
 ### New Livewire Components
 
-#### `RateSelector`
+#### `RateQuantitySelector`
 
 ```
-src/Livewire/RateSelector.php
+src/Livewire/RateQuantitySelector.php
 ```
 
-Standalone rate selection component:
+Component for selecting quantities for multiple rates (e.g., 2 adults + 2 children):
 
 ```php
-class RateSelector extends Component
+class RateQuantitySelector extends Component
 {
     use HandlesRates;
 
     #[Locked]
     public string $entryId;
 
-    public ?int $selectedRateId = null;
+    // Rate quantities: [rate_id => quantity]
+    public array $rateQuantities = [];
 
     public AvailabilityData $data;
 
     #[Computed]
     public function rates(): Collection
     {
-        return $this->calculateRatePrices(
-            $this->entryId,
-            $this->data->date_start,
-            $this->data->date_end,
-            $this->data->quantity,
-            $this->data->advanced
-        );
+        return $this->getEntryRates($this->entryId);
     }
 
-    public function selectRate(int $rateId): void
+    #[Computed]
+    public function rateConstraints(): Collection
     {
-        $this->selectedRateId = $rateId;
-        $this->dispatch('rate-selected', $rateId);
+        return EntryRate::where('entry_id', $this->entryId)
+            ->with('rate')
+            ->get()
+            ->keyBy('rate_id');
+    }
+
+    #[Computed]
+    public function totalPrice(): PriceClass
+    {
+        $calculator = app(RatePricingCalculator::class);
+        $total = Price::create(0);
+
+        foreach ($this->rateQuantities as $rateId => $quantity) {
+            if ($quantity <= 0) continue;
+
+            $rate = Rate::find($rateId);
+            $pricing = $calculator->calculate(
+                $this->entryId,
+                $rate,
+                $this->data->date_start,
+                $this->data->date_end,
+                $quantity,
+                $this->data->advanced
+            );
+            $total = $total->add($pricing['price']);
+        }
+
+        return $total;
+    }
+
+    #[Computed]
+    public function totalQuantity(): int
+    {
+        return array_sum($this->rateQuantities);
+    }
+
+    public function mount(): void
+    {
+        // Initialize quantities with defaults
+        foreach ($this->rates as $rate) {
+            $constraint = $this->rateConstraints->get($rate->id);
+            $this->rateQuantities[$rate->id] = $constraint?->min_quantity ?? 0;
+        }
+    }
+
+    public function incrementRate(int $rateId): void
+    {
+        $constraint = $this->rateConstraints->get($rateId);
+        $max = $constraint?->max_quantity;
+
+        if ($max === null || $this->rateQuantities[$rateId] < $max) {
+            $this->rateQuantities[$rateId]++;
+            $this->dispatchQuantitiesUpdated();
+        }
+    }
+
+    public function decrementRate(int $rateId): void
+    {
+        $constraint = $this->rateConstraints->get($rateId);
+        $min = $constraint?->min_quantity ?? 0;
+
+        if ($this->rateQuantities[$rateId] > $min) {
+            $this->rateQuantities[$rateId]--;
+            $this->dispatchQuantitiesUpdated();
+        }
+    }
+
+    public function setRateQuantity(int $rateId, int $quantity): void
+    {
+        $constraint = $this->rateConstraints->get($rateId);
+        $min = $constraint?->min_quantity ?? 0;
+        $max = $constraint?->max_quantity;
+
+        $this->rateQuantities[$rateId] = max($min, $max !== null ? min($max, $quantity) : $quantity);
+        $this->dispatchQuantitiesUpdated();
+    }
+
+    protected function dispatchQuantitiesUpdated(): void
+    {
+        $this->dispatch('rate-quantities-updated', [
+            'quantities' => $this->rateQuantities,
+            'total_quantity' => $this->totalQuantity,
+            'total_price' => $this->totalPrice->format(),
+        ]);
+    }
+
+    public function validateConstraints(): bool
+    {
+        $validator = app(RateConstraintValidator::class);
+
+        try {
+            return $validator->validate($this->rateQuantities, $this->entryId);
+        } catch (RateConstraintException $e) {
+            $this->addError('rates', $e->getMessage());
+            return false;
+        }
     }
 
     public function render()
     {
-        return view('statamic-resrv::livewire.rate-selector');
+        return view('statamic-resrv::livewire.rate-quantity-selector');
     }
 }
+```
+
+**Blade View (`rate-quantity-selector.blade.php`):**
+
+```blade
+<div class="resrv-rate-quantity-selector">
+    <h3>{{ __('Select Guests') }}</h3>
+
+    @foreach($this->rates as $rate)
+        @php
+            $constraint = $this->rateConstraints->get($rate->id);
+            $quantity = $rateQuantities[$rate->id] ?? 0;
+            $min = $constraint?->min_quantity ?? 0;
+            $max = $constraint?->max_quantity;
+        @endphp
+
+        <div class="rate-row" wire:key="rate-{{ $rate->id }}">
+            <div class="rate-info">
+                <span class="rate-title">{{ $rate->title }}</span>
+                <span class="rate-price">{{ $rate->calculatePrice($basePrice, $entryId)->format() }}/night</span>
+                @if($rate->description)
+                    <span class="rate-description">{{ $rate->description }}</span>
+                @endif
+            </div>
+
+            <div class="quantity-controls">
+                <button
+                    type="button"
+                    wire:click="decrementRate({{ $rate->id }})"
+                    @disabled($quantity <= $min)
+                    class="qty-btn decrement"
+                >−</button>
+
+                <span class="quantity">{{ $quantity }}</span>
+
+                <button
+                    type="button"
+                    wire:click="incrementRate({{ $rate->id }})"
+                    @disabled($max !== null && $quantity >= $max)
+                    class="qty-btn increment"
+                >+</button>
+            </div>
+        </div>
+    @endforeach
+
+    @error('rates')
+        <div class="error">{{ $message }}</div>
+    @enderror
+
+    <div class="totals">
+        <div class="total-guests">
+            {{ $this->totalQuantity }} {{ __('guests selected') }}
+        </div>
+        <div class="total-price">
+            {{ __('Total') }}: {{ $this->totalPrice->format() }}
+        </div>
+    </div>
+</div>
 ```
 
 ### New Form Objects
@@ -708,19 +1169,74 @@ class RateSelector extends Component
 #### `AvailabilityData` Changes
 
 ```php
-// Add rate support
-public ?int $rate_id = null;
+// Replace single quantity/rate with multi-rate support
+public array $rate_quantities = [];  // [rate_id => quantity]
+
+// Computed properties
+public function getTotalQuantity(): int
+{
+    return array_sum($this->rate_quantities);
+}
 
 public function validate(): void
 {
-    // Existing validation...
+    // Existing date validation...
 
-    // Validate rate if provided
-    if ($this->rate_id) {
-        $rate = Rate::find($this->rate_id);
+    // Validate rate quantities
+    if (empty($this->rate_quantities)) {
+        throw new AvailabilityException('At least one rate must be selected.');
+    }
+
+    // Validate total quantity > 0
+    if ($this->getTotalQuantity() <= 0) {
+        throw new AvailabilityException('Total quantity must be greater than 0.');
+    }
+
+    // Validate each rate exists and is assigned to entry
+    foreach ($this->rate_quantities as $rateId => $quantity) {
+        if ($quantity <= 0) continue;
+
+        $rate = Rate::find($rateId);
         if (!$rate || !$rate->entries()->where('entry_id', $this->entry_id)->exists()) {
-            throw new AvailabilityException('Invalid rate selected.');
+            throw new AvailabilityException("Invalid rate selected: {$rateId}");
         }
+    }
+
+    // Validate constraints
+    $validator = app(RateConstraintValidator::class);
+    $validator->validate($this->rate_quantities, $this->entry_id);
+}
+```
+
+#### `RateQuantitiesData` - New Form Object
+
+```php
+namespace Reach\StatamicResrv\Livewire\Forms;
+
+use Livewire\Form;
+
+class RateQuantitiesData extends Form
+{
+    public array $quantities = [];  // [rate_id => quantity]
+
+    public function fill(array $data): void
+    {
+        $this->quantities = $data;
+    }
+
+    public function toArray(): array
+    {
+        return array_filter($this->quantities, fn ($qty) => $qty > 0);
+    }
+
+    public function totalQuantity(): int
+    {
+        return array_sum($this->quantities);
+    }
+
+    public function isEmpty(): bool
+    {
+        return $this->totalQuantity() === 0;
     }
 }
 ```
@@ -780,7 +1296,70 @@ public function validate(): void
 
 ### Reservation API Changes
 
-Add rate information to reservation endpoints.
+**Before:**
+```json
+{
+  "id": 123,
+  "status": "confirmed",
+  "quantity": 2,
+  "price": "200.00",
+  "item_id": "entry-uuid"
+}
+```
+
+**After:**
+```json
+{
+  "id": 123,
+  "status": "confirmed",
+  "total_quantity": 4,
+  "price": "300.00",
+  "item_id": "entry-uuid",
+  "rates": [
+    {
+      "rate_id": 1,
+      "rate_slug": "adult",
+      "rate_title": "Adult Rate",
+      "quantity": 2,
+      "unit_price": "100.00",
+      "subtotal": "200.00"
+    },
+    {
+      "rate_id": 2,
+      "rate_slug": "child",
+      "rate_title": "Child Rate",
+      "quantity": 2,
+      "unit_price": "50.00",
+      "subtotal": "100.00"
+    }
+  ]
+}
+```
+
+### Checkout Request Changes
+
+**Before:**
+```json
+{
+  "date_start": "2024-06-01",
+  "date_end": "2024-06-05",
+  "quantity": 2,
+  "advanced": "standard-room"
+}
+```
+
+**After:**
+```json
+{
+  "date_start": "2024-06-01",
+  "date_end": "2024-06-05",
+  "rate_quantities": {
+    "1": 2,
+    "2": 2
+  },
+  "advanced": "standard-room"
+}
+```
 
 ---
 
@@ -901,8 +1480,8 @@ class MigrateToRatesCommand extends Command
 
     protected function migrateReservations(): void
     {
-        // Find reservations without rate_id
-        $reservations = Reservation::whereNull('rate_id')->get();
+        // Find reservations without rate breakdown
+        $reservations = Reservation::whereDoesntHave('rates')->get();
 
         if ($reservations->isEmpty()) {
             $this->info('No reservations to migrate.');
@@ -919,13 +1498,32 @@ class MigrateToRatesCommand extends Command
         $count = 0;
         foreach ($reservations as $reservation) {
             if (!$this->option('dry-run')) {
-                $reservation->update(['rate_id' => $defaultRate->id]);
+                // Migrate quantity to rate breakdown
+                $reservation->rates()->attach($defaultRate->id, [
+                    'quantity' => $reservation->quantity ?? 1,
+                    'unit_price' => $reservation->price->format() / ($reservation->quantity ?? 1),
+                    'subtotal' => $reservation->price->format(),
+                ]);
             }
             $count++;
         }
 
         $action = $this->option('dry-run') ? 'Would migrate' : 'Migrated';
-        $this->info("{$action} {$count} reservations to default rate.");
+        $this->info("{$action} {$count} reservations to multi-rate format.");
+    }
+
+    protected function showMigrationSummary(): void
+    {
+        $this->newLine();
+        $this->info('Migration Summary:');
+        $this->table(
+            ['Item', 'Count'],
+            [
+                ['Rates created', Rate::count()],
+                ['Entries with rates', EntryRate::distinct('entry_id')->count()],
+                ['Reservations migrated', Reservation::has('rates')->count()],
+            ]
+        );
     }
 }
 ```
@@ -965,10 +1563,29 @@ tests/
    - Limited availability respects limit
    - Disabled dates for specific rates
 
-3. **Integration Tests**
-   - Full booking flow with rate selection
-   - Rate change during checkout
-   - Expiration restores correct availability
+3. **Multi-Rate Reservations**
+   - Booking 2 adults + 2 children calculates correct total
+   - Rate constraints enforced (min/max/requires)
+   - Availability consumption respects `consumes_availability` flag
+   - Mixed availability types (shared + independent) work together
+
+4. **Availability Consumption Scenarios**
+   - Hotel (occupancy): 2 adults + 2 children = 1 room consumed
+   - Excursion (seats): 2 adults + 1 child = 3 seats consumed
+   - Limited rates: Respects per-rate limits while consuming shared pool
+   - Independent rates: Uses separate pool, doesn't affect base
+
+5. **Rate Constraint Validation**
+   - Fails when min_quantity not met
+   - Fails when max_quantity exceeded
+   - Fails when required rate missing (child without adult)
+   - Passes with valid combination
+
+6. **Integration Tests**
+   - Full booking flow with multi-rate selection
+   - Rate quantity changes update pricing correctly
+   - Expiration restores correct availability for all rate types
+   - Checkout displays correct rate breakdown
 
 ---
 
@@ -1032,9 +1649,11 @@ For users of Connected Availabilities:
 ## Breaking Changes
 
 1. **API Response Structure**: Availability responses now include `rate` and `rates` keys
-2. **Reservation Model**: New `rate_id` relationship
-3. **Checkout Flow**: Rate selection required when multiple rates available
-4. **Config**: New `enable_rates` option (defaults to true)
+2. **Reservation Model**: `quantity` field deprecated, replaced by `rates()` relationship with quantities per rate
+3. **Checkout Flow**: Rate quantity selection required (replaces single quantity input)
+4. **Request Format**: `quantity` parameter replaced by `rate_quantities` array
+5. **Config**: New `enable_rates` option (defaults to true)
+6. **Availability Calculation**: Now considers rate constraints and per-rate availability modes
 
 ### Upgrade Guide (for UPGRADE.md)
 
@@ -1071,6 +1690,30 @@ Update your API integrations to handle the new `rate` and `rates` fields.
 1. **Rate-specific Dynamic Pricing**: Apply discounts only to certain rates
 2. **Rate validity periods**: "Early Bird" available only 30+ days out
 3. **Occupancy-based pricing**: Price per person calculations
-4. **Rate packages**: Bundled rates with included extras
-5. **Rate categories**: Public, Corporate, Member rates with visibility rules
-6. **Rate-specific extras**: Different extras available per rate
+4. **Rate categories**: Public, Corporate, Member rates with visibility rules
+5. **Rate-specific extras**: Different extras available per rate
+6. **Package Pricing via Dynamic Pricing**: Special discounts when specific rate combinations are booked
+
+### Package Pricing Design (Future)
+
+Package pricing can be implemented as a Dynamic Pricing extension:
+
+```php
+// New condition type for Dynamic Pricing
+'condition_type' => 'rate_combination',
+'condition_value' => [
+    'rates' => [
+        ['rate_id' => 1, 'min_quantity' => 2],  // 2+ adults
+        ['rate_id' => 2, 'min_quantity' => 2],  // 2+ children
+    ],
+    'match' => 'all',  // 'all' or 'any'
+],
+'amount_type' => 'fixed',
+'amount_operation' => 'decrease',
+'amount' => 50,  // €50 family discount
+```
+
+**Example Packages:**
+- "Family Package": 2 adults + 2 children = €50 off
+- "Group Discount": 5+ adults = 10% off
+- "Couple Special": Exactly 2 adults = free breakfast (via extras)
