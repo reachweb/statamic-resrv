@@ -64,7 +64,7 @@ class Entry extends Model
             return;
         }
 
-        $this->updateOrCreate(
+        $resrvEntry = static::withTrashed()->updateOrCreate(
             [
                 'item_id' => $entry->id(),
             ],
@@ -75,6 +75,10 @@ class Entry extends Model
                 'handle' => $entry->blueprint()->handle(),
             ]
         );
+
+        if ($resrvEntry->trashed()) {
+            $resrvEntry->restore();
+        }
 
         Cache::forget('resrv_disabled_entry_ids');
     }
