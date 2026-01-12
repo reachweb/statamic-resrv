@@ -18,29 +18,21 @@ trait HandlesAvailabilityHooks
                 return $next($entries);
             }
 
-            // For some reason if we don't clone the entries, the live_availability
-            // will be not be set on the original entries
-            $clonedEntries = $entries->map(function ($entry) {
-                return clone $entry;
-            });
+            // If live_availability stops being set on entries, uncomment cloning below.
+            // Statamic's hook pipeline may require cloned entries in some versions.
+            // $entries = $entries->map(fn ($entry) => clone $entry);
 
-            $result = $instance->getAvailability($searchData, $clonedEntries);
+            $result = $instance->getAvailability($searchData, $entries);
             if (data_get($result, 'message.status') === false) {
                 return $next($entries);
             }
 
             $entries->each(function ($entry) use ($result) {
                 // In multisite, availability data is keyed by origin ID.
-                // Use origin ID for lookup when the entry has an origin (is localized).
                 $lookupId = $entry->hasOrigin() ? $entry->origin()->id() : $entry->id();
 
                 if ($data = data_get($result, 'data.'.$lookupId, false)) {
-
-                    if ($data->count() === 1) {
-                        $data = $data->first();
-                    }
-
-                    $entry->set('live_availability', $data);
+                    $entry->set('live_availability', $data->count() === 1 ? $data->first() : $data);
                 }
             });
 

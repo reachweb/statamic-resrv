@@ -102,7 +102,6 @@ trait HandlesAvailabilityQueries
                 ];
             }
         });
-
     }
 
     public function validateAvailabilityAndPrice()

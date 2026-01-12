@@ -25,6 +25,7 @@ class AssociateAffiliateFromCoupon
         // If removing coupon, unassociate the affiliate
         if ($event->remove === true) {
             $event->reservation->affiliate()->detach($affiliate->id);
+
             return;
         }
 

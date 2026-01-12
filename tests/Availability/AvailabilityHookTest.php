@@ -44,6 +44,27 @@ class AvailabilityHookTest extends TestCase
         $this->assertArrayHasKey('live_availability', $returnedEntries->first()->toArray());
     }
 
+    public function test_that_it_passes_availability_data_to_all_entries()
+    {
+        $this->setTagParameters(['collection' => 'pages', 'query_scope' => 'resrv_search', 'resrv_search:resrv_availability' => [
+            'dates' => [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ],
+        ]]);
+
+        $returnedEntries = $this->collectionTag->index();
+
+        $this->assertCount(3, $returnedEntries);
+
+        // Verify ALL entries have live_availability set, not just the first one
+        // This ensures the hook correctly attaches data to each entry in the collection
+        foreach ($returnedEntries as $entry) {
+            $this->assertArrayHasKey('live_availability', $entry->toArray());
+            $this->assertArrayHasKey('price', $entry->get('live_availability'));
+        }
+    }
+
     private function setTagParameters($parameters)
     {
         $this->collectionTag->setParameters($parameters);
