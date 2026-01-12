@@ -38,11 +38,15 @@ trait HandlesAvailabilityQueries
 
     protected function getEntryIds(EntryCollection|LengthAwarePaginator $entries): array
     {
-        if ($entries instanceof LengthAwarePaginator) {
-            return collect($entries->items())->pluck('id')->toArray();
-        }
+        $items = $entries instanceof LengthAwarePaginator
+            ? collect($entries->items())
+            : $entries;
 
-        return $entries->pluck('id')->toArray();
+        // In multisite, availability is stored with origin entry IDs.
+        // Map localized entry IDs to origin IDs for database queries.
+        return $items->map(function ($entry) {
+            return $entry->hasOrigin() ? $entry->origin()->id() : $entry->id();
+        })->toArray();
     }
 
     public function queryBaseAvailabilityForEntry(): array

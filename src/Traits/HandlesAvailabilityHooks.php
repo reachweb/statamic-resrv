@@ -30,7 +30,11 @@ trait HandlesAvailabilityHooks
             }
 
             $entries->each(function ($entry) use ($result) {
-                if ($data = data_get($result, 'data.'.$entry->id(), false)) {
+                // In multisite, availability data is keyed by origin ID.
+                // Use origin ID for lookup when the entry has an origin (is localized).
+                $lookupId = $entry->hasOrigin() ? $entry->origin()->id() : $entry->id();
+
+                if ($data = data_get($result, 'data.'.$lookupId, false)) {
 
                     if ($data->count() === 1) {
                         $data = $data->first();

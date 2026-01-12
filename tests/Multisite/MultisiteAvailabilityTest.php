@@ -8,10 +8,12 @@ use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Reach\StatamicResrv\Tests\TestCase;
+use Statamic\Facades\Antlers;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
+use Statamic\Tags\Collection\Collection as CollectionTag;
 
 class MultisiteAvailabilityTest extends TestCase
 {
@@ -400,5 +402,78 @@ class MultisiteAvailabilityTest extends TestCase
         $this->assertCount(1, $afterScope);
         $this->assertContains($twoAvailableLocalized->id(), $afterScope);
         $this->assertNotContains($this->localizedEntry->id(), $afterScope);
+    }
+
+    /** @test */
+    public function availability_hooks_attach_live_availability_to_localized_entries()
+    {
+        $this->createMultisiteEntry();
+
+        // Switch to Greek site
+        Site::setCurrent('el');
+
+        // Use the collection tag with resrv_search scope
+        $collectionTag = (new CollectionTag)
+            ->setParser(Antlers::parser())
+            ->setContext([]);
+
+        $collectionTag->setParameters([
+            'collection' => 'rooms',
+            'site' => 'el',
+            'query_scope' => 'resrv_search',
+            'resrv_search:resrv_availability' => [
+                'dates' => [
+                    'date_start' => $this->date,
+                    'date_end' => $this->date->copy()->add(1, 'day'),
+                ],
+            ],
+        ]);
+
+        $returnedEntries = $collectionTag->index();
+
+        // Should return the localized entry
+        $this->assertCount(1, $returnedEntries);
+        $this->assertEquals($this->localizedEntry->id(), $returnedEntries->first()->id());
+
+        // The live_availability should be attached to the localized entry
+        // This is the key assertion: the hook should correctly map origin IDs to localized entries
+        $this->assertArrayHasKey('live_availability', $returnedEntries->first()->toArray());
+        $this->assertEquals('100.00', $returnedEntries->first()->get('live_availability')['price']);
+    }
+
+    /** @test */
+    public function availability_hooks_attach_live_availability_to_origin_entries()
+    {
+        $this->createMultisiteEntry();
+
+        // Stay on English site (default)
+        Site::setCurrent('en');
+
+        // Use the collection tag with resrv_search scope
+        $collectionTag = (new CollectionTag)
+            ->setParser(Antlers::parser())
+            ->setContext([]);
+
+        $collectionTag->setParameters([
+            'collection' => 'rooms',
+            'site' => 'en',
+            'query_scope' => 'resrv_search',
+            'resrv_search:resrv_availability' => [
+                'dates' => [
+                    'date_start' => $this->date,
+                    'date_end' => $this->date->copy()->add(1, 'day'),
+                ],
+            ],
+        ]);
+
+        $returnedEntries = $collectionTag->index();
+
+        // Should return the origin entry
+        $this->assertCount(1, $returnedEntries);
+        $this->assertEquals($this->originEntry->id(), $returnedEntries->first()->id());
+
+        // The live_availability should be attached to the origin entry
+        $this->assertArrayHasKey('live_availability', $returnedEntries->first()->toArray());
+        $this->assertEquals('100.00', $returnedEntries->first()->get('live_availability')['price']);
     }
 }
