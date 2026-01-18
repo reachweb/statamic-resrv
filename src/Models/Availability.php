@@ -485,9 +485,59 @@ class Availability extends Model implements AvailabilityContract
             ->when($advanced, function ($query) use ($advanced) {
                 return $query->where('property', $advanced);
             })
+            ->orderBy('price')
             ->get(['date', 'available', 'price', 'property'])
             ->groupBy('date')
             ->map(fn ($item) => $item->firstWhere('available', '>', 0))
+            ->toArray();
+    }
+
+    public function getAvailableDatesFromDate(string $id, string $dateStart, int $quantity = 1, ?array $advanced = null, bool $groupByDate = false): array
+    {
+        $results = $this->where('statamic_id', $id)
+            ->where('date', '>=', $dateStart)
+            ->where('available', '>=', $quantity)
+            ->when($advanced, function ($query) use ($advanced) {
+                if (! in_array('any', $advanced)) {
+                    return $query->whereIn('property', $advanced);
+                }
+            })
+            ->orderBy('date')
+            ->orderBy('price')
+            ->get(['date', 'available', 'price', 'property']);
+
+        $formatDate = fn ($date) => \Carbon\Carbon::parse($date)->format('Y-m-d');
+
+        if ($groupByDate) {
+            return $results
+                ->groupBy(fn ($item) => $formatDate($item->date))
+                ->map(function ($items) {
+                    // Items already sorted by price from query
+                    return $items->mapWithKeys(function ($item) {
+                        return [
+                            $item->property => [
+                                'available' => $item->available,
+                                'price' => $item->price->format(),
+                            ],
+                        ];
+                    })->toArray();
+                })
+                ->toArray();
+        }
+
+        return $results
+            ->groupBy('property')
+            ->sortBy(fn ($items) => $items->first()->price->format())
+            ->map(function ($items) use ($formatDate) {
+                return $items->mapWithKeys(function ($item) use ($formatDate) {
+                    return [
+                        $formatDate($item->date) => [
+                            'available' => $item->available,
+                            'price' => $item->price->format(),
+                        ],
+                    ];
+                })->toArray();
+            })
             ->toArray();
     }
 }

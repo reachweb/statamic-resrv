@@ -170,4 +170,23 @@ trait HandlesAvailabilityQueries
 
         return app(Availability::class)->getAvailabilityCalendar($entry, $this->advanced && $this->data->advanced ? $this->data->advanced : null);
     }
+
+    public function queryAvailableDatesFromDate(): array
+    {
+        if (! isset($this->data->dates['date_start'])) {
+            return [];
+        }
+
+        $dateStart = Carbon::parse($this->data->dates['date_start'])->format('Y-m-d');
+
+        $advanced = $this->data->advanced ? [$this->data->advanced] : ($this->advanced ? ['any'] : null);
+
+        return app(Availability::class)->getAvailableDatesFromDate(
+            $this->entryId,
+            $dateStart,
+            $this->data->quantity ?? 1,
+            $advanced,
+            $this->groupByDate
+        );
+    }
 }

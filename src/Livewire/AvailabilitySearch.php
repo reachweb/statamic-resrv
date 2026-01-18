@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Livewire;
 
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
@@ -135,6 +136,22 @@ class AvailabilitySearch extends Component
                 $this->js('window.location.reload()');
             }
         }
+    }
+
+    #[On('availability-date-selected')]
+    public function availabilityDateSelected(array $data): void
+    {
+        $dateStart = \Carbon\Carbon::parse($data['date']);
+        $minimumPeriod = max(1, config('resrv-config.minimum_reservation_period_in_days', 1));
+
+        $this->data->dates['date_start'] = $dateStart->toDateString();
+        $this->data->dates['date_end'] = $dateStart->copy()->addDays($minimumPeriod)->toDateString();
+
+        if (isset($data['property'])) {
+            $this->data->advanced = $data['property'];
+        }
+
+        $this->search();
     }
 
     public function render()

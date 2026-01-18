@@ -413,4 +413,82 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(50, $calendar[$key]['price']);
         $this->assertEquals(1, $calendar[$key]['available']);
     }
+
+    public function test_listens_to_availability_date_selected_event()
+    {
+        Livewire::test(AvailabilitySearch::class)
+            ->dispatch('availability-date-selected', [
+                'date' => $this->date->copy()->add(5, 'day')->toDateString(),
+                'property' => null,
+            ])
+            ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
+            ->assertSet('data.dates.date_end', $this->date->copy()->add(6, 'day')->toDateString())
+            ->assertDispatched('availability-search-updated');
+    }
+
+    public function test_availability_date_selected_updates_advanced_property()
+    {
+        Livewire::test(AvailabilitySearch::class)
+            ->dispatch('availability-date-selected', [
+                'date' => $this->date->copy()->add(5, 'day')->toDateString(),
+                'property' => 'cabin-a',
+            ])
+            ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
+            ->assertSet('data.advanced', 'cabin-a')
+            ->assertDispatched('availability-search-updated');
+    }
+
+    public function test_availability_date_selected_respects_minimum_reservation_period()
+    {
+        Config::set('resrv-config.minimum_reservation_period_in_days', 3);
+
+        Livewire::test(AvailabilitySearch::class)
+            ->dispatch('availability-date-selected', [
+                'date' => $this->date->copy()->add(5, 'day')->toDateString(),
+                'property' => null,
+            ])
+            ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
+            ->assertSet('data.dates.date_end', $this->date->copy()->add(8, 'day')->toDateString())
+            ->assertDispatched('availability-search-updated');
+    }
+
+    public function test_availability_calendar_returns_lowest_price_when_multiple_properties()
+    {
+        $entry = $this->entries->first();
+
+        // Create availability with different prices for different properties on the same date
+        \Reach\StatamicResrv\Models\Availability::factory()
+            ->create([
+                'statamic_id' => $entry->id(),
+                'date' => today(),
+                'price' => 200,
+                'available' => 2,
+                'property' => 'expensive-cabin',
+            ]);
+
+        \Reach\StatamicResrv\Models\Availability::factory()
+            ->create([
+                'statamic_id' => $entry->id(),
+                'date' => today(),
+                'price' => 25,
+                'available' => 3,
+                'property' => 'cheap-cabin',
+            ]);
+
+        $component = Livewire::test(AvailabilitySearch::class, [
+            'entry' => $entry->id(),
+            'showAvailabilityOnCalendar' => true,
+        ])
+            ->call('availabilityCalendar');
+
+        $calendar = $component->effects['returns'][0];
+        $key = today()->format('Y-m-d').' 00:00:00';
+
+        $this->assertIsArray($calendar);
+        $this->assertArrayHasKey($key, $calendar);
+        // Should return the lowest price (25) not the expensive one (200)
+        // Note: The entry already has availability at price 50, so 25 should be returned
+        $this->assertEquals(25, $calendar[$key]['price']);
+        $this->assertEquals('cheap-cabin', $calendar[$key]['property']);
+    }
 }
