@@ -77,6 +77,7 @@ class TestCase extends OrchestraTestCase
         return [
             \Statamic\Providers\StatamicServiceProvider::class,
             \Livewire\LivewireServiceProvider::class,
+            \MarcoRieser\Livewire\ServiceProvider::class,
             \Reach\StatamicResrv\StatamicResrvServiceProvider::class,
             \Spatie\LaravelRay\RayServiceProvider::class,
         ];
