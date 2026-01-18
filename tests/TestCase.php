@@ -7,6 +7,9 @@ use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\WithFaker;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
 use Statamic\Extend\Manifest;
+use Illuminate\Support\Facades\Route;
+use Livewire\Livewire;
+use Livewire\Mechanisms\HandleRequests\HandleRequests;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
@@ -147,12 +150,29 @@ class TestCase extends OrchestraTestCase
         // Enable legacy endpoints for testing
         $app['config']->set('resrv-config.enable_legacy_endpoints', true);
 
+        // Register Livewire update route before Statamic's catch-all route
+        // This is needed for Livewire 4 which uses dynamic endpoint paths
+        $this->registerLivewireUpdateRoute($app);
+
         Statamic::pushCpRoutes(function () {
             return require_once realpath(__DIR__.'/../routes/cp.php');
         });
 
         Statamic::pushWebRoutes(function () {
             return require_once realpath(__DIR__.'/../routes/web.php');
+        });
+    }
+
+    protected function registerLivewireUpdateRoute($app): void
+    {
+        $app->booted(function () use ($app) {
+            // Livewire 4 uses dynamic endpoints based on APP_KEY hash
+            // We need to set the update route before Statamic's catch-all route is matched
+            Livewire::setUpdateRoute(function ($handle) {
+                return Route::post('/livewire/update', $handle)
+                    ->middleware('web')
+                    ->name('livewire.update');
+            });
         });
     }
 
