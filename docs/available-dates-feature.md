@@ -97,12 +97,13 @@ Controls advanced property (multi-room/cabin) behavior:
 
 ### `overrideProperties` (array, default: `[]`)
 
-Override specific properties from the URL/session. Useful for filtering by property from URL parameters.
+Override the property labels returned by the `advancedProperties` computed property. Pass an array of property slug to label mappings.
 
 ```blade
-<livewire:availability-list 
-    :entry="$entry->id()" 
-    :overrideProperties="['advanced' => request('cabin_type')]"
+<livewire:availability-list
+    :entry="$entry->id()"
+    :advanced="true"
+    :overrideProperties="['balcony-cabin' => 'Balcony Cabin', 'interior-cabin' => 'Interior Cabin']"
 />
 ```
 
@@ -245,7 +246,7 @@ Users see all departure dates with available cabins/rooms for each date:
 @foreach ($availableDates as $date => $properties)
     <h3>{{ \Carbon\Carbon::parse($date)->format('D d M Y') }}</h3>
     @foreach ($properties as $property => $info)
-        <div wire:click="selectDateProperty('{{ $date }}', '{{ $property }}')">
+        <div wire:click="selectDate('{{ $date }}', '{{ $property }}')">
             {{ $this->advancedProperties[$property] ?? $property }}: 
             {{ $info['price'] }} ({{ $info['available'] }} left)
         </div>

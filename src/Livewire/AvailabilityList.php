@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
-use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
@@ -11,7 +10,6 @@ use Livewire\Attributes\Session;
 use Livewire\Component;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
-use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry;
 use Statamic\Support\Traits\Hookable;
@@ -20,6 +18,7 @@ class AvailabilityList extends Component
 {
     use HandlesMultisiteIds,
         Hookable,
+        Traits\HandlesAvailabilityQueries,
         Traits\HandlesStatamicQueries;
 
     public string $view = 'availability-list';
@@ -104,25 +103,6 @@ class AvailabilityList extends Component
         $dates = $this->queryAvailableDatesFromDate();
 
         $this->availableDates = collect($dates);
-    }
-
-    protected function queryAvailableDatesFromDate(): array
-    {
-        if (! isset($this->data->dates['date_start'])) {
-            return [];
-        }
-
-        $dateStart = Carbon::parse($this->data->dates['date_start'])->format('Y-m-d');
-
-        $advanced = $this->data->advanced ? [$this->data->advanced] : ($this->advanced ? ['any'] : null);
-
-        return app(Availability::class)->getAvailableDatesFromDate(
-            $this->entryId,
-            $dateStart,
-            $this->data->quantity ?? 1,
-            $advanced,
-            $this->groupByDate
-        );
     }
 
     public function selectDate(string $date, ?string $property = null): void

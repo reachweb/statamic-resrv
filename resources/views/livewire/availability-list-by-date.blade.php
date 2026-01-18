@@ -30,46 +30,47 @@
                     
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                         @foreach ($properties as $property => $info)
-                            <div class="flex flex-col p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors cursor-pointer"
+                            <button type="button"
+                                 class="flex flex-col p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors text-left"
                                  wire:click="selectDate('{{ $date }}', '{{ $property }}')"
                                  wire:key="{{ $date }}-{{ $property }}">
-                                <div class="text-sm font-medium text-gray-900">
+                                <span class="text-sm font-medium text-gray-900">
                                     {{ $this->advancedProperties[$property] ?? $property }}
-                                </div>
-                                <div class="mt-2 text-lg font-semibold text-blue-600">
+                                </span>
+                                <span class="mt-2 text-lg font-semibold text-blue-600">
                                     {{ config('resrv-config.currency_symbol') }} {{ $info['price'] }}
-                                </div>
+                                </span>
                                 @if ($info['available'] <= 5)
-                                    <div class="text-xs text-orange-600 mt-1 font-medium">
+                                    <span class="text-xs text-orange-600 mt-1 font-medium">
                                         {{ trans('statamic-resrv::frontend.only') }} {{ $info['available'] }} {{ trans('statamic-resrv::frontend.left') }}
-                                    </div>
+                                    </span>
                                 @elseif ($info['available'] > 1)
-                                    <div class="text-xs text-gray-500 mt-1">
+                                    <span class="text-xs text-gray-500 mt-1">
                                         {{ $info['available'] }} {{ trans('statamic-resrv::frontend.available') }}
-                                    </div>
+                                    </span>
                                 @endif
-                            </div>
+                            </button>
                         @endforeach
                     </div>
                 </div>
             @endforeach
         </div>
     @elseif ($data->hasDates())
-        <div class="flex flex-col py-4">
+        <dl class="flex flex-col py-4">
             <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.noAvailableDates') }}</dt>
             <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.tryAdjustingYourSearch') }}</dd>
-        </div>
+        </dl>
     @else
-        <div class="flex flex-col py-4">
+        <dl class="flex flex-col py-4">
             <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.pleaseSelectStartDate') }}</dt>
-        </div>
+        </dl>
     @endif
 
     @if ($errors->has('availability') && $data->hasDates())
-    <div class="flex flex-col py-4">
+    <dl class="flex flex-col py-4">
         <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.searchError') }}</dt>
         <dd class="mb-1 text-gray-500">{{ $errors->first('availability') }}</dd>
-    </div>
+    </dl>
     @endif
 
     <div class="absolute left-0 right-0 top-0 w-full h-full bg-white/50" wire:loading.delay.long>
