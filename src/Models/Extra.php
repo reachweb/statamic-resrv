@@ -19,6 +19,14 @@ class Extra extends Model
 
     protected $table = 'resrv_extras';
 
+    /**
+     * The data type of the primary key ID.
+     * Set to string for PostgreSQL compatibility with dynamic_pricing_assignments table.
+     *
+     * @var string
+     */
+    protected $keyType = 'string';
+
     protected $fillable = [
         'name',
         'slug',

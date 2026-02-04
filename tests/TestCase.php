@@ -269,4 +269,27 @@ class TestCase extends OrchestraTestCase
 
         return Entry::query()->where('slug', $slug)->first();
     }
+
+    /**
+     * Assert that the database has a record with the given JSON column value.
+     * Works across SQLite, MySQL, and PostgreSQL.
+     */
+    protected function assertDatabaseHasJsonColumn(string $table, array $data, string $jsonColumn, mixed $jsonValue): void
+    {
+        $query = \Illuminate\Support\Facades\DB::table($table);
+
+        foreach ($data as $column => $value) {
+            $query->where($column, $value);
+        }
+
+        $jsonString = is_string($jsonValue) ? $jsonValue : json_encode($jsonValue);
+
+        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() === 'pgsql') {
+            $query->whereRaw("{$jsonColumn}::text = ?", [$jsonString]);
+        } else {
+            $query->where($jsonColumn, $jsonString);
+        }
+
+        $this->assertTrue($query->exists(), "Failed asserting that table [{$table}] has matching record with {$jsonColumn} = {$jsonString}");
+    }
 }

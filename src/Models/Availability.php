@@ -487,7 +487,7 @@ class Availability extends Model implements AvailabilityContract
             })
             ->orderBy('price')
             ->get(['date', 'available', 'price', 'property'])
-            ->groupBy('date')
+            ->groupBy(fn ($item) => \Carbon\Carbon::parse($item->date)->format('Y-m-d H:i:s'))
             ->map(fn ($item) => $item->firstWhere('available', '>', 0))
             ->toArray();
     }

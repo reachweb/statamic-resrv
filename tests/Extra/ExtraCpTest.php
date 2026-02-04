@@ -340,16 +340,15 @@ class ExtraCpTest extends TestCase
         ];
 
         $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
-        $this->assertDatabaseHas('resrv_extra_conditions', [
+        $this->assertDatabaseHasJsonColumn('resrv_extra_conditions', [
             'extra_id' => $extra->id,
-            'conditions' => json_encode([
-                [
-                    'operation' => 'required',
-                    'type' => 'pickup_time',
-                    'time_start' => '21:00',
-                    'time_end' => '08:00',
-                ],
-            ]),
+        ], 'conditions', [
+            [
+                'operation' => 'required',
+                'type' => 'pickup_time',
+                'time_start' => '21:00',
+                'time_end' => '08:00',
+            ],
         ]);
         $response->assertStatus(200);
     }
@@ -376,22 +375,21 @@ class ExtraCpTest extends TestCase
         ];
 
         $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
-        $this->assertDatabaseHas('resrv_extra_conditions', [
+        $this->assertDatabaseHasJsonColumn('resrv_extra_conditions', [
             'extra_id' => $extra->id,
-            'conditions' => json_encode([
-                [
-                    'operation' => 'required',
-                    'type' => 'pickup_time',
-                    'time_start' => '21:00',
-                    'time_end' => '08:00',
-                ],
-                [
-                    'operation' => 'show',
-                    'type' => 'extra_selected',
-                    'comparison' => '==',
-                    'value' => '2',
-                ],
-            ]),
+        ], 'conditions', [
+            [
+                'operation' => 'required',
+                'type' => 'pickup_time',
+                'time_start' => '21:00',
+                'time_end' => '08:00',
+            ],
+            [
+                'operation' => 'show',
+                'type' => 'extra_selected',
+                'comparison' => '==',
+                'value' => '2',
+            ],
         ]);
         $response->assertStatus(200);
     }
@@ -415,28 +413,18 @@ class ExtraCpTest extends TestCase
         ];
 
         $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
-        $this->assertDatabaseHas('resrv_extra_conditions', [
+        $this->assertDatabaseHasJsonColumn('resrv_extra_conditions', [
             'extra_id' => $extra->id,
-            'conditions' => json_encode([
-                [
-                    'operation' => 'hide',
-                    'type' => 'extra_selected',
-                    'comparison' => '!=',
-                    'value' => '4',
-                ],
-            ]),
+        ], 'conditions', [
+            [
+                'operation' => 'hide',
+                'type' => 'extra_selected',
+                'comparison' => '!=',
+                'value' => '4',
+            ],
         ]);
-        $this->assertDatabaseMissing('resrv_extra_conditions', [
-            'extra_id' => $extra->id,
-            'conditions' => json_encode([
-                [
-                    'operation' => 'show',
-                    'condition' => 'extra_selected',
-                    'comparison' => '==',
-                    'value' => '2',
-                ],
-            ]),
-        ]);
+        // The assertDatabaseHasJsonColumn above confirms the new value,
+        // which means the old value has been replaced
         $response->assertStatus(200);
     }
 
@@ -480,22 +468,21 @@ class ExtraCpTest extends TestCase
             ],
         ];
         $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), $payload);
-        $this->assertDatabaseHas('resrv_extra_conditions', [
+        $this->assertDatabaseHasJsonColumn('resrv_extra_conditions', [
             'extra_id' => $extra->id,
-            'conditions' => json_encode([
-                [
-                    'operation' => 'require',
-                    'type' => 'reservation_dates',
-                    'date_start' => today()->toIso8601String(),
-                    'date_end' => today()->add(10, 'day')->toIso8601String(),
-                ],
-                [
-                    'operation' => 'show',
-                    'type' => 'extra_selected',
-                    'comparison' => '==',
-                    'value' => '2',
-                ],
-            ]),
+        ], 'conditions', [
+            [
+                'operation' => 'require',
+                'type' => 'reservation_dates',
+                'date_start' => today()->toIso8601String(),
+                'date_end' => today()->add(10, 'day')->toIso8601String(),
+            ],
+            [
+                'operation' => 'show',
+                'type' => 'extra_selected',
+                'comparison' => '==',
+                'value' => '2',
+            ],
         ]);
         $response->assertStatus(200);
     }

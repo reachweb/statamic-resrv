@@ -17,8 +17,8 @@ return new class extends Migration
 
     public function down()
     {
-        // Schema::table('resrv_extras', function (Blueprint $table) {
-        //     $table->dropConstrainedForeignId('category_id');
-        // });
+        Schema::table('resrv_extras', function (Blueprint $table) {
+            $table->dropConstrainedForeignId('category_id');
+        });
     }
 };

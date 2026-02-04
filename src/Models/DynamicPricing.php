@@ -74,6 +74,45 @@ class DynamicPricing extends Model
         );
     }
 
+    /**
+     * Get extras count in a PostgreSQL-compatible way.
+     * PostgreSQL requires explicit type casting for bigint = varchar comparison.
+     */
+    public function extrasCount(): int
+    {
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            return DB::table('resrv_extras')
+                ->join('resrv_dynamic_pricing_assignments', function ($join) {
+                    $join->whereRaw('"resrv_extras"."id"::text = "resrv_dynamic_pricing_assignments"."dynamic_pricing_assignment_id"');
+                })
+                ->where('resrv_dynamic_pricing_assignments.dynamic_pricing_id', $this->id)
+                ->where('resrv_dynamic_pricing_assignments.dynamic_pricing_assignment_type', Extra::class)
+                ->whereNull('resrv_extras.deleted_at')
+                ->count();
+        }
+
+        return $this->extras()->count();
+    }
+
+    /**
+     * Get extras in a PostgreSQL-compatible way.
+     * PostgreSQL requires explicit type casting for bigint = varchar comparison.
+     */
+    public function getExtras()
+    {
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $ids = DB::table('resrv_dynamic_pricing_assignments')
+                ->where('dynamic_pricing_id', $this->id)
+                ->where('dynamic_pricing_assignment_type', Extra::class)
+                ->pluck('dynamic_pricing_assignment_id')
+                ->map(fn ($id) => (int) $id);
+
+            return Extra::whereIn('id', $ids)->get();
+        }
+
+        return $this->extras()->get();
+    }
+
     public function entries()
     {
         return $this->morphedByMany(
@@ -111,7 +150,7 @@ class DynamicPricing extends Model
 
     public function getExtrasAttribute($value)
     {
-        $extras = $this->extras()->get();
+        $extras = $this->getExtras();
 
         return $extras->map(function ($item) {
             return $item->id;
@@ -431,7 +470,7 @@ class DynamicPricing extends Model
 
     public function appliesToExtras(): bool
     {
-        return $this->extras()->count() > 0;
+        return $this->extrasCount() > 0;
     }
 
     protected function matchesWildcardCoupon(string $wildcardCoupon, string $userCoupon): bool

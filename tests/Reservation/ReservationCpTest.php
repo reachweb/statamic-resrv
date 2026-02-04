@@ -92,7 +92,7 @@ class ReservationCpTest extends TestCase
             'status' => 'confirmed',
         ])->withCustomer()->create();
 
-        $response = $this->get(cp_route('resrv.reservations.calendar.list').'?start="'.now()->toIso8601String().'&end='.now()->addMonth()->toIso8601String());
+        $response = $this->get(cp_route('resrv.reservations.calendar.list').'?start='.urlencode(now()->toIso8601String()).'&end='.urlencode(now()->addMonth()->toIso8601String()));
 
         $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title);
     }

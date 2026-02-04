@@ -41,10 +41,9 @@ class AvailabilityEventsTest extends TestCase
 
         Event::dispatch(new ReservationCreated($reservation));
 
-        $this->assertDatabaseHas('resrv_availabilities', [
+        $this->assertDatabaseHasJsonColumn('resrv_availabilities', [
             'available' => 1,
-            'pending' => '[1]',
-        ]);
+        ], 'pending', '[1]');
     }
 
     // Test that availability is restored when a reservation expires
@@ -70,10 +69,9 @@ class AvailabilityEventsTest extends TestCase
 
         $this->dispatchEventAndCatchException(new ReservationExpired($reservation));
 
-        $this->assertDatabaseHas('resrv_availabilities', [
+        $this->assertDatabaseHasJsonColumn('resrv_availabilities', [
             'available' => 3,
-            'pending' => '[2,3]',
-        ]);
+        ], 'pending', '[2,3]');
     }
 
     // Test that availability doesn't increase multiple times when the same reservation expires repeatedly (useful in race conditions)
@@ -106,17 +104,15 @@ class AvailabilityEventsTest extends TestCase
         $this->dispatchEventAndCatchException(new ReservationExpired($reservation));
         $this->dispatchEventAndCatchException(new ReservationExpired($reservation));
 
-        $this->assertDatabaseHas('resrv_availabilities', [
+        $this->assertDatabaseHasJsonColumn('resrv_availabilities', [
             'available' => 3,
-            'pending' => '[2,3]',
-        ]);
+        ], 'pending', '[2,3]');
 
         $this->dispatchEventAndCatchException(new ReservationExpired($reservation2));
 
-        $this->assertDatabaseHas('resrv_availabilities', [
+        $this->assertDatabaseHasJsonColumn('resrv_availabilities', [
             'available' => 4,
-            'pending' => '[3]',
-        ]);
+        ], 'pending', '[3]');
     }
 
     // Helper method to dispatch an event and catch any exceptions
