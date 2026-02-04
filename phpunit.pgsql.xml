@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.1/phpunit.xsd" backupGlobals="false" bootstrap="vendor/autoload.php" colors="true" processIsolation="false" stopOnFailure="false" cacheDirectory=".phpunit.cache" backupStaticProperties="false">
+  <testsuites>
+    <testsuite name="Resrv">
+      <directory suffix="Test.php">tests/Affiliate/</directory>
+      <directory suffix="Test.php">tests/Availability/</directory>
+      <directory suffix="Test.php">tests/AdvancedAvailability/</directory>
+      <directory suffix="Test.php">tests/Extra/</directory>
+      <directory suffix="Test.php">tests/Option/</directory>
+      <directory suffix="Test.php">tests/Livewire/</directory>
+      <directory suffix="Test.php">tests/Reservation/</directory>
+      <directory suffix="Test.php">tests/FixedPricing/</directory>
+      <directory suffix="Test.php">tests/DynamicPricing/</directory>
+      <directory suffix="Test.php">tests/Reports/</directory>
+      <directory suffix="Test.php">tests/DataImport/</directory>
+      <directory suffix="Test.php">tests/Utilities/</directory>
+      <directory suffix="Test.php">tests/Unit/</directory>
+      <directory suffix="Test.php">tests/Multisite/</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <env name="APP_ENV" value="testing"/>
+    <env name="APP_KEY" value="base64:tIt56v64/nM+5fAClHWccPRxbhvdgeRsiYDHyqXh37Y="/>
+    <env name="BCRYPT_ROUNDS" value="4"/>
+    <env name="DB_CONNECTION" value="pgsql"/>
+    <env name="DB_HOST" value="127.0.0.1"/>
+    <env name="DB_PORT" value="5432"/>
+    <env name="DB_DATABASE" value="resrv_test"/>
+    <env name="DB_USERNAME" value="postgres"/>
+    <env name="DB_PASSWORD" value=""/>
+    <env name="CACHE_DRIVER" value="array"/>
+    <env name="SESSION_DRIVER" value="array"/>
+    <env name="QUEUE_DRIVER" value="sync"/>
+    <env name="MAIL_DRIVER" value="smtp"/>
+    <env name="MAIL_HOST" value="smtp.mailtrap.io"/>
+    <env name="MAIL_USERNAME" value="0e08d400c9e1ce"/>
+    <env name="MAIL_PASSWORD" value="d9d25da57f916b"/>
+    <env name="MAIL_ENCRYPTION" value="tls"/>
+    <ini name="memory_limit" value="512M"/>
+  </php>
+</phpunit>

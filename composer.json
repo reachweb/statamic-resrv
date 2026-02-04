@@ -53,6 +53,9 @@
     },
     "scripts": {
         "test": "vendor/bin/phpunit",
+        "test:stop": "vendor/bin/phpunit --stop-on-defect",
+        "test-pgsql": "vendor/bin/phpunit --configuration phpunit.pgsql.xml",
+        "test-pgsql:stop": "vendor/bin/phpunit --configuration phpunit.pgsql.xml --stop-on-defect",
         "test-coverage": "vendor/bin/phpunit --coverage-html coverage"
     },
     "extra": {

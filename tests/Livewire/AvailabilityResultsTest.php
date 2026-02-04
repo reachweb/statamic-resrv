@@ -886,11 +886,7 @@ class AvailabilityResultsTest extends TestCase
             ]
         );
 
-        $this->assertDatabaseHas('resrv_customers',
-            [
-                'data' => json_encode(['adults' => 2, 'children' => 1]),
-            ]
-        );
+        $this->assertDatabaseHasJsonColumn('resrv_customers', [], 'data', ['adults' => 2, 'children' => 1]);
     }
 
     // Test that it creates a reservation when multiple days results are enabled
@@ -938,11 +934,7 @@ class AvailabilityResultsTest extends TestCase
             ]
         );
 
-        $this->assertDatabaseHas('resrv_customers',
-            [
-                'data' => json_encode(['adults' => 2, 'children' => 1]),
-            ]
-        );
+        $this->assertDatabaseHasJsonColumn('resrv_customers', [], 'data', ['adults' => 2, 'children' => 1]);
     }
 
     // Test that it return an error if the availability has changed after the results have been shown

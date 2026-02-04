@@ -48,8 +48,12 @@ class ReservationCpController extends Controller
             'end' => 'required',
         ]);
 
-        $reservations = $this->reservation->whereDate('date_start', '>=', $data['start'])
-            ->whereDate('date_end', '<=', $data['end'])
+        // Parse dates using Carbon to handle various formats including ISO8601
+        $start = \Carbon\Carbon::parse($data['start'])->startOfDay();
+        $end = \Carbon\Carbon::parse($data['end'])->endOfDay();
+
+        $reservations = $this->reservation->whereDate('date_start', '>=', $start)
+            ->whereDate('date_end', '<=', $end)
             ->whereIn('status', ['confirmed', 'partner'])
             ->orderBy('date_start')
             ->get();

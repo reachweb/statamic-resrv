@@ -10,9 +10,25 @@ use Reach\StatamicResrv\Models\Availability;
 
 class AvailabilityRepository
 {
+    /**
+     * Get the appropriate group concatenation function for the database driver.
+     */
+    protected static function groupConcat(string $column): string
+    {
+        $driver = DB::connection()->getDriverName();
+
+        return match ($driver) {
+            'pgsql' => "string_agg({$column}::text, ',')",
+            default => "group_concat({$column})",
+        };
+    }
+
     public function availableBetween(string $date_start, string $date_end, int $duration, int $quantity, array $advanced)
     {
-        return Availability::selectRaw('count(statamic_id) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, max(available) as available, property')
+        $priceConcat = self::groupConcat('price');
+        $dateConcat = self::groupConcat('date');
+
+        return Availability::selectRaw("count(statamic_id) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, property")
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
@@ -22,12 +38,15 @@ class AvailabilityRepository
                 }
             })
             ->groupBy('statamic_id', 'property')
-            ->having('days', '=', $duration);
+            ->havingRaw('count(statamic_id) = ?', [$duration]);
     }
 
     public function itemAvailableBetween(string $date_start, string $date_end, int $duration, int $quantity, string $statamic_id, array $advanced)
     {
-        return Availability::selectRaw('count(date) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, max(available) as available, max(property) as property')
+        $priceConcat = self::groupConcat('price');
+        $dateConcat = self::groupConcat('date');
+
+        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, max(property) as property")
             ->where('statamic_id', $statamic_id)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
@@ -38,12 +57,14 @@ class AvailabilityRepository
                 }
             })
             ->groupBy('statamic_id')
-            ->having('days', '=', $duration);
+            ->havingRaw('count(date) = ?', [$duration]);
     }
 
     public function itemPricesBetween(string $date_start, string $date_end, string $statamic_id, array $advanced)
     {
-        return Availability::selectRaw('group_concat(price) as prices, statamic_id')
+        $priceConcat = self::groupConcat('price');
+
+        return Availability::selectRaw("{$priceConcat} as prices, statamic_id")
             ->where('statamic_id', $statamic_id)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
@@ -86,13 +107,16 @@ class AvailabilityRepository
 
     public function itemAvailableBetweenForAllProperties(string $date_start, string $date_end, int $duration, int $quantity, string $statamic_id)
     {
-        return Availability::selectRaw('count(date) as days, group_concat(price) as prices, group_concat(date) as dates, statamic_id, max(available) as available, property')
+        $priceConcat = self::groupConcat('price');
+        $dateConcat = self::groupConcat('date');
+
+        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, property")
             ->where('statamic_id', $statamic_id)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
             ->groupBy('statamic_id', 'property')
-            ->having('days', '=', $duration);
+            ->havingRaw('count(date) = ?', [$duration]);
     }
 
     public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced, int $reservationId)
