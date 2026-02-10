@@ -23,14 +23,25 @@ class Resrv extends Tags
     public function reservationFromUri()
     {
         $validator = Validator::make(request()->all(), [
-            'res_id' => 'required|integer',
+            'ref' => 'required|string|max:10',
+            'hash' => 'required|string|size:64',
         ]);
 
         if ($validator->fails()) {
-            abort(400, 'Invalid reservation ID.');
+            abort(400, 'Invalid reservation parameters.');
         }
 
-        return Reservation::where('id', request()->get('res_id'))->where('status', ReservationStatus::CONFIRMED)->firstOrFail();
+        $reservation = Reservation::where('reference', request()->get('ref'))
+            ->where('status', ReservationStatus::CONFIRMED)
+            ->firstOrFail();
+
+        $expectedHash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));
+
+        if (! hash_equals($expectedHash, request()->get('hash'))) {
+            abort(404);
+        }
+
+        return $reservation;
     }
 
     public function cutoff()
