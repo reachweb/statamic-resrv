@@ -55,7 +55,7 @@ class AvailabilitySearchTest extends TestCase
                         'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                     'customer' => [],
                 ]
             )
@@ -110,7 +110,7 @@ class AvailabilitySearchTest extends TestCase
                         'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                     'customer' => [],
                 ]
             );
@@ -211,7 +211,7 @@ class AvailabilitySearchTest extends TestCase
                         'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 2,
-                    'advanced' => null,
+                    'rate' => null,
                     'customer' => [],
                 ])
             ->assertStatus(200);
@@ -249,15 +249,15 @@ class AvailabilitySearchTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->set('data.advanced', 'something')
-            ->assertSet('data.advanced', 'something')
+            ->set('data.rate', 'something')
+            ->assertSet('data.rate', 'something')
             ->assertDispatched('availability-search-updated', [
                 'dates' => [
                     'date_start' => $this->date->toISOString(),
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => 'something',
+                'rate' => 'something',
                 'customer' => [],
             ])
             ->assertStatus(200);
@@ -266,8 +266,8 @@ class AvailabilitySearchTest extends TestCase
     public function test_cannot_set_advanced_without_dates()
     {
         Livewire::test(AvailabilitySearch::class)
-            ->set('data.advanced', 'something-else')
-            ->assertSet('data.advanced', 'something-else')
+            ->set('data.rate', 'something-else')
+            ->assertSet('data.rate', 'something-else')
             ->assertHasErrors(['data.dates.date_start'])
             ->assertSee('Availability search requires date information to be provided.')
             ->assertNotDispatched('availability-search-updated')
@@ -275,14 +275,14 @@ class AvailabilitySearchTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->assertSet('data.advanced', 'something-else')
+            ->assertSet('data.rate', 'something-else')
             ->assertDispatched('availability-search-updated', [
                 'dates' => [
                     'date_start' => $this->date->toISOString(),
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => 'something-else',
+                'rate' => 'something-else',
                 'customer' => [],
             ]);
     }
@@ -310,16 +310,16 @@ class AvailabilitySearchTest extends TestCase
 
     public function test_can_return_advanced_properties_if_set()
     {
-        $component = Livewire::test(AvailabilitySearch::class, ['advanced' => true, 'overrideProperties' => ['something']])
-            ->assertSet('advanced', true)
-            ->assertSet('overrideProperties', ['something'])
+        $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'overrideRates' => ['something']])
+            ->assertSet('rates', true)
+            ->assertSet('overrideRates', ['something'])
             ->assertSee('select');
-        $this->assertEquals(['something'], $component->__get('advancedProperties'));
+        $this->assertEquals(['something'], $component->__get('entryRates'));
     }
 
     public function test_can_return_advanced_properties_from_blueprint()
     {
-        $collection = Facades\Collection::make('cars')->save();
+        $collection = Facades\Collection::make('cars')->routes('/{slug}')->save();
 
         $blueprint = Facades\Blueprint::make()->setContents([
             'sections' => [
@@ -352,14 +352,20 @@ class AvailabilitySearchTest extends TestCase
         ]);
         $blueprint->setHandle('cars')->setNamespace('collections.'.$collection->handle())->save();
 
-        $component = Livewire::test(AvailabilitySearch::class, ['advanced' => 'cars.cars'])
-            ->assertSet('advanced', 'cars.cars');
+        $entry = \Statamic\Entries\Entry::make()
+            ->collection($collection)
+            ->slug('test-car')
+            ->data(['title' => 'Test Car']);
+        $entry->save();
+
+        $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'entry' => $entry->id()])
+            ->assertSet('rates', true);
 
         $this->assertEquals([
             'location1' => 'Location 1',
             'location2' => 'Location 2',
             'location3' => 'Location 3',
-        ], $component->__get('advancedProperties'));
+        ], $component->__get('entryRates'));
     }
 
     public function test_can_set_a_custom_value()
@@ -369,7 +375,6 @@ class AvailabilitySearchTest extends TestCase
             ->assertSet('data.customer', ['adults' => 2]);
     }
 
-    // Test availability calendar returns data when enabled
     public function test_availability_calendar_returns_data_when_enabled()
     {
         $component = Livewire::test(AvailabilitySearch::class, [
@@ -389,7 +394,6 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(1, $calendar[$key]['available']);
     }
 
-    // Test availability calendar returns data when enabled with advanced availability
     public function test_availability_calendar_with_advanced_availability()
     {
         $component = Livewire::test(AvailabilitySearch::class, [
@@ -401,7 +405,7 @@ class AvailabilitySearchTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->set('data.advanced', 'test')
+            ->set('data.rate', 'test')
             ->call('availabilityCalendar');
 
         $calendar = $component->effects['returns'][0];
@@ -419,7 +423,7 @@ class AvailabilitySearchTest extends TestCase
         Livewire::test(AvailabilitySearch::class)
             ->dispatch('availability-date-selected', [
                 'date' => $this->date->copy()->add(5, 'day')->toDateString(),
-                'property' => null,
+                'rate_id' => null,
             ])
             ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
             ->assertSet('data.dates.date_end', $this->date->copy()->add(6, 'day')->toDateString())
@@ -431,10 +435,10 @@ class AvailabilitySearchTest extends TestCase
         Livewire::test(AvailabilitySearch::class)
             ->dispatch('availability-date-selected', [
                 'date' => $this->date->copy()->add(5, 'day')->toDateString(),
-                'property' => 'cabin-a',
+                'rate_id' => 'cabin-a',
             ])
             ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
-            ->assertSet('data.advanced', 'cabin-a')
+            ->assertSet('data.rate', 'cabin-a')
             ->assertDispatched('availability-search-updated');
     }
 
@@ -445,7 +449,7 @@ class AvailabilitySearchTest extends TestCase
         Livewire::test(AvailabilitySearch::class)
             ->dispatch('availability-date-selected', [
                 'date' => $this->date->copy()->add(5, 'day')->toDateString(),
-                'property' => null,
+                'rate_id' => null,
             ])
             ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
             ->assertSet('data.dates.date_end', $this->date->copy()->add(8, 'day')->toDateString())

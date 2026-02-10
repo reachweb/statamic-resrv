@@ -22,7 +22,7 @@ class LfAvailabilityFilter extends Component
     public string $calendar = 'single';
 
     #[Locked]
-    public bool $advanced = false;
+    public bool $rates = false;
 
     #[Locked]
     public bool $enableQuantity = false;
@@ -31,27 +31,24 @@ class LfAvailabilityFilter extends Component
     public bool $live = true;
 
     #[Computed(persist: true)]
-    public function enableAdvanced()
+    public function enableRates(): string|false
     {
-        if ($this->advanced === true) {
-            return $this->collection.'.'.$this->blueprint;
-        }
-
-        return false;
+        return $this->rates ? $this->collection.'.'.$this->blueprint : false;
     }
 
-    public function initiateField()
+    public function initiateField(): void
     {
         $blueprint = $this->getStatamicBlueprint();
+        $field = AvailabilityField::getField($blueprint);
 
-        if ($field = AvailabilityField::getField($blueprint)) {
-            $this->statamic_field = $field->toArray();
-            $this->field = $field->handle();
-            $this->condition = 'query_scope';
-            $this->modifier = 'resrv_search';
-        } else {
+        if (! $field) {
             throw new FieldNotFoundException('resrv_availability', $this->blueprint);
         }
+
+        $this->statamic_field = $field->toArray();
+        $this->field = $field->handle();
+        $this->condition = 'query_scope';
+        $this->modifier = 'resrv_search';
     }
 
     #[On('availability-search-updated')]

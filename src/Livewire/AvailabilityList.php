@@ -8,7 +8,6 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
 use Livewire\Component;
-use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry;
@@ -30,10 +29,10 @@ class AvailabilityList extends Component
     public AvailabilityData $data;
 
     #[Locked]
-    public $advanced = false;
+    public bool $rates = false;
 
     #[Locked]
-    public array $overrideProperties = [];
+    public array $overrideRates = [];
 
     #[Locked]
     public bool $groupByDate = false;
@@ -61,17 +60,28 @@ class AvailabilityList extends Component
     #[Computed(persist: true)]
     public function entry(): ?Entry
     {
-        return $this->getEntry($this->entryId) ?? null;
+        return $this->getEntry($this->entryId);
     }
 
     #[Computed(persist: true)]
-    public function advancedProperties(): array
+    public function entryRates(): array
     {
-        if (! $this->advanced) {
+        if (! $this->rates) {
             return [];
         }
 
-        return count($this->overrideProperties) > 0 ? $this->overrideProperties : $this->getEntryProperties($this->entry);
+        if ($this->overrideRates) {
+            return $this->overrideRates;
+        }
+
+        $rates = $this->getRatesForEntry($this->entryId);
+
+        if ($rates->isNotEmpty()) {
+            return $rates->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])->toArray();
+        }
+
+        // Fallback to blueprint properties for backward compatibility
+        return $this->getEntryProperties($this->entry);
     }
 
     #[On('availability-search-updated')]
@@ -100,16 +110,14 @@ class AvailabilityList extends Component
 
     protected function getAvailableDates(): void
     {
-        $dates = $this->queryAvailableDatesFromDate();
-
-        $this->availableDates = collect($dates);
+        $this->availableDates = collect($this->queryAvailableDatesFromDate());
     }
 
-    public function selectDate(string $date, ?string $property = null): void
+    public function selectDate(string $date, ?string $rateId = null): void
     {
         $this->dispatch('availability-date-selected', [
             'date' => $date,
-            'property' => $property,
+            'rate_id' => $rateId,
         ]);
     }
 

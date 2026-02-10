@@ -63,4 +63,13 @@ class ReservationFactory extends Factory
             ];
         });
     }
+
+    public function withRate(int $rateId): Factory
+    {
+        return $this->state(function (array $attributes) use ($rateId) {
+            return [
+                'rate_id' => $rateId,
+            ];
+        });
+    }
 }

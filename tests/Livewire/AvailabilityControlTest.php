@@ -34,14 +34,14 @@ class AvailabilityControlTest extends TestCase
                 ]
             )
             ->set('data.quantity', 2)
-            ->set('data.advanced', 'test')
+            ->set('data.rate', 'test')
             ->set('data.customer', ['adults' => 2]);
 
         Livewire::test(AvailabilityControl::class)
             ->assertSet('data.dates.date_start', $this->date)
             ->assertSet('data.dates.date_end', $this->date->copy()->add(1, 'day'))
             ->assertSet('data.quantity', 2)
-            ->assertSet('data.advanced', 'test')
+            ->assertSet('data.rate', 'test')
             ->assertSet('data.customer', ['adults' => 2]);
     }
 
@@ -53,7 +53,7 @@ class AvailabilityControlTest extends TestCase
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
             ->set('data.quantity', 2)
-            ->set('data.advanced', 'test')
+            ->set('data.rate', 'test')
             ->set('data.customer', ['adults' => 2])
             ->call('save')
             ->assertDispatched('availability-search-updated', [
@@ -62,7 +62,7 @@ class AvailabilityControlTest extends TestCase
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 2,
-                'advanced' => 'test',
+                'rate' => 'test',
                 'customer' => ['adults' => 2],
             ]);
     }

@@ -44,7 +44,7 @@ class AvailabilityResults extends Component
     public int $extraDaysOffset = 0;
 
     #[Locked]
-    public $advanced = false;
+    public bool $rates = false;
 
     #[Locked]
     public $showExtras = false;
@@ -59,7 +59,7 @@ class AvailabilityResults extends Component
     public EnabledOptions $enabledOptions;
 
     #[Locked]
-    public array $overrideProperties = [];
+    public array $overrideRates = [];
 
     public function mount(string $entry)
     {
@@ -77,29 +77,37 @@ class AvailabilityResults extends Component
     #[Computed(persist: true)]
     public function entry(): ?Entry
     {
-        return $this->getEntry($this->entryId) ?? null;
+        return $this->getEntry($this->entryId);
     }
 
     #[Computed(persist: true)]
-    public function advancedProperties(): array
+    public function entryRates(): array
     {
-        if (! $this->advanced) {
+        if (! $this->rates) {
             return [];
         }
 
-        return count($this->overrideProperties) > 0 ? $this->overrideProperties : $this->getEntryProperties($this->entry);
+        if ($this->overrideRates) {
+            return $this->overrideRates;
+        }
+
+        $rates = $this->getRatesForEntry($this->entryId);
+
+        if ($rates->isNotEmpty()) {
+            return $rates->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])->toArray();
+        }
+
+        // Fallback to blueprint properties for backward compatibility
+        return $this->getEntryProperties($this->entry);
     }
 
     #[On('availability-search-updated')]
     public function availabilitySearchChanged($data): void
     {
-        // Clear availability so that we don't get a view error
         $this->availability = collect();
 
-        // Fill the data
         $this->data->fill($data);
 
-        // Validate again in case the session data is old
         try {
             $this->data->validate();
             $this->runHooks('availability-search-updated', $this->data);
@@ -119,14 +127,12 @@ class AvailabilityResults extends Component
 
     public function getAvailability(): void
     {
-        // Order is important here so that the cutoff validation works correctly
         if ($this->extraDays > 0) {
             $this->availability = $this->queryExtraAvailabilityForEntry();
 
             return;
         }
 
-        // Validate cutoff rules
         try {
             $this->validateCutoffRules();
         } catch (\Exception $exception) {
@@ -136,19 +142,14 @@ class AvailabilityResults extends Component
             return;
         }
 
-        if ($this->advanced === true) {
-            $this->data->advanced = 'any';
-            $this->availability = collect($this->queryAvailabilityForAllProperties());
+        if ($this->rates) {
+            $this->data->rate = 'any';
+            $this->availability = collect($this->queryAvailabilityForAllRates());
 
             return;
         }
 
-        if ($this->extraDays === 0) {
-            $this->availability = collect($this->queryBaseAvailabilityForEntry());
-
-            return;
-        }
-
+        $this->availability = collect($this->queryBaseAvailabilityForEntry());
     }
 
     public function checkout(): void
@@ -156,8 +157,8 @@ class AvailabilityResults extends Component
         if ($this->extraDays !== 0 && $this->availability->count() > 1) {
             $this->availability = collect($this->availability->get(0));
         }
-        if ($this->data->advanced === 'any') {
-            $this->data->advanced = data_get($this->availability, 'data.property');
+        if ($this->data->rate === 'any') {
+            $this->data->rate = (string) data_get($this->availability, 'data.property');
         }
         try {
             $this->validateAvailabilityAndPrice();
@@ -169,10 +170,10 @@ class AvailabilityResults extends Component
         }
     }
 
-    public function checkoutProperty(string $property): void
+    public function checkoutRate(string $rateId): void
     {
-        $this->data->advanced = $property;
-        $this->availability = collect($this->availability->get($property));
+        $this->data->rate = $rateId;
+        $this->availability = collect($this->availability->get($rateId));
         $this->checkout();
     }
 

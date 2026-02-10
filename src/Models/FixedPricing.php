@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\FixedPricingFactory;
@@ -16,7 +17,7 @@ class FixedPricing extends Model
 
     protected $table = 'resrv_fixed_pricing';
 
-    protected $fillable = ['statamic_id', 'days', 'price'];
+    protected $fillable = ['statamic_id', 'days', 'price', 'rate_id'];
 
     protected $casts = [
         'price' => PriceClass::class,
@@ -25,6 +26,11 @@ class FixedPricing extends Model
     protected static function newFactory()
     {
         return FixedPricingFactory::new();
+    }
+
+    public function rate(): BelongsTo
+    {
+        return $this->belongsTo(Rate::class, 'rate_id');
     }
 
     public function scopeEntry($query, $entry)
@@ -37,26 +43,26 @@ class FixedPricing extends Model
         return Price::create($value);
     }
 
-    public function existsExactly($items, $days)
+    public function existsExactly($items, $days): bool
     {
-        return $items->where('days', $days)->count() > 0;
+        return $items->where('days', $days)->isNotEmpty();
     }
 
-    public function existsExtra($items, $days)
+    public function existsExtra($items, $days): bool
     {
-        if ($items->where('days', 0)->count() > 0 && ($items->max('days') > 0)) {
-            return true;
-        }
-
-        return false;
+        return $items->where('days', 0)->isNotEmpty() && $items->max('days') > 0;
     }
 
-    public function scopeGetFixedPricing($query, $statamic_id, $days)
+    public function scopeGetFixedPricing($query, $statamic_id, $days, ?int $rateId = null)
     {
         $data = Cache::remember('fixed_pricing_table', 60, function () {
             return DB::table('resrv_fixed_pricing')->get();
         });
         $items = $data->where('statamic_id', $statamic_id);
+
+        if ($rateId) {
+            $items = $items->where('rate_id', $rateId);
+        }
 
         if ($this->existsExactly($items, $days)) {
             return Price::create($items->where('days', $days)->first()->price);

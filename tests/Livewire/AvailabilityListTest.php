@@ -52,7 +52,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => $this->date->copy()->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             )
             ->assertViewHas('availableDates')
@@ -69,7 +69,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => $this->date->copy()->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             )
             ->assertDispatched('availability-results-updated');
@@ -91,7 +91,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             );
 
@@ -122,7 +122,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 2,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             );
 
@@ -155,7 +155,7 @@ class AvailabilityListTest extends TestCase
 
         $component = Livewire::test(AvailabilityList::class, [
             'entry' => $this->advancedEntries->first()->id(),
-            'advanced' => true,
+            'rates' => true,
         ])
             ->dispatch('availability-search-updated',
                 [
@@ -164,7 +164,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => 'any',
+                    'rate' => 'any',
                 ]
             );
 
@@ -202,7 +202,7 @@ class AvailabilityListTest extends TestCase
 
         $component = Livewire::test(AvailabilityList::class, [
             'entry' => $this->advancedEntries->first()->id(),
-            'advanced' => true,
+            'rates' => true,
         ])
             ->dispatch('availability-search-updated',
                 [
@@ -211,7 +211,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => 'test',
+                    'rate' => 'test',
                 ]
             );
 
@@ -245,7 +245,7 @@ class AvailabilityListTest extends TestCase
         $component = Livewire::test(AvailabilityList::class, [
             'entry' => $this->advancedEntries->first()->id(),
             'groupByDate' => true,
-            'advanced' => true,
+            'rates' => true,
         ])
             ->dispatch('availability-search-updated',
                 [
@@ -254,7 +254,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => 'any',
+                    'rate' => 'any',
                 ]
             );
 
@@ -292,7 +292,7 @@ class AvailabilityListTest extends TestCase
         $component = Livewire::test(AvailabilityList::class, [
             'entry' => $this->advancedEntries->first()->id(),
             'groupByDate' => true,
-            'advanced' => true,
+            'rates' => true,
         ])
             ->dispatch('availability-search-updated',
                 [
@@ -301,7 +301,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => 'any',
+                    'rate' => 'any',
                 ]
             );
 
@@ -331,13 +331,13 @@ class AvailabilityListTest extends TestCase
                         'date_end' => $this->date->copy()->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             )
             ->call('selectDate', '2025-12-05', 'none')
             ->assertDispatched('availability-date-selected', [
                 'date' => '2025-12-05',
-                'property' => 'none',
+                'rate_id' => 'none',
             ]);
     }
 }

@@ -5,7 +5,6 @@ namespace Reach\StatamicResrv\Providers;
 use Edalzell\Forma\ConfigController;
 use Edalzell\Forma\Forma;
 use Illuminate\Console\Application as Artisan;
-use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCancelled;
@@ -35,7 +34,6 @@ use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
-use Reach\StatamicResrv\Listeners\UpdateConnectedAvailabilities;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
@@ -118,9 +116,6 @@ class ResrvProvider extends AddonServiceProvider
         AvailabilitySearch::class => [
             SaveSearchToSession::class,
         ],
-        AvailabilityChanged::class => [
-            UpdateConnectedAvailabilities::class,
-        ],
         \Statamic\Events\EntrySaved::class => [
             AddResrvEntryToDatabase::class,
         ],
@@ -182,11 +177,12 @@ class ResrvProvider extends AddonServiceProvider
 
         $this->mergeConfigFrom(__DIR__.'/../../config/config.php', 'resrv-config');
 
-        $this->app->bind(PaymentInterface::class, config('resrv-config.payment_gateway'));
-
-        if (app()->environment() == 'testing') {
-            $this->app->bind(PaymentInterface::class, \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class);
-        }
+        $this->app->bind(
+            PaymentInterface::class,
+            app()->environment('testing')
+                ? \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class
+                : config('resrv-config.payment_gateway')
+        );
 
         $this->createNavigation();
 

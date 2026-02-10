@@ -25,10 +25,10 @@ class AvailabilitySearch extends Component
     public bool $live = true;
 
     #[Locked]
-    public $advanced = false;
+    public bool $rates = false;
 
     #[Locked]
-    public bool $anyAdvanced = false;
+    public bool $anyRate = false;
 
     #[Locked]
     public bool $resetOnBoot = false;
@@ -46,25 +46,42 @@ class AvailabilitySearch extends Component
     public bool $showAvailabilityOnCalendar = false;
 
     #[Locked]
-    public array $overrideProperties = [];
+    public array $overrideRates = [];
 
     public function boot(): void
     {
         if ($this->resetOnBoot) {
             $this->data->quantity = 1;
-            $this->data->advanced = null;
+            $this->data->rate = null;
             $this->search(true);
         }
     }
 
     #[Computed(persist: true)]
-    public function advancedProperties(): array
+    public function entryRates(): array
     {
-        if (! $this->advanced) {
+        if (! $this->rates) {
             return [];
         }
 
-        return count($this->overrideProperties) > 0 ? $this->overrideProperties : $this->getProperties();
+        if ($this->overrideRates) {
+            return $this->overrideRates;
+        }
+
+        if (! $this->entry) {
+            return [];
+        }
+
+        $rates = $this->getRatesForEntry($this->entry);
+
+        if ($rates->isNotEmpty()) {
+            return $rates->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])->toArray();
+        }
+
+        // Fallback to blueprint properties for backward compatibility
+        $entry = $this->getEntry($this->entry);
+
+        return $entry ? $this->getEntryProperties($entry) : [];
     }
 
     #[Computed(persist: true)]
@@ -75,7 +92,7 @@ class AvailabilitySearch extends Component
 
     public function availabilityCalendar(): array
     {
-        if ($this->showAvailabilityOnCalendar === false) {
+        if (! $this->showAvailabilityOnCalendar) {
             return [];
         }
 
@@ -95,8 +112,8 @@ class AvailabilitySearch extends Component
             $this->data->validate();
         }
 
-        if ($this->data->advanced == null && $this->anyAdvanced) {
-            $this->data->advanced = 'any';
+        if (! $this->data->rate && $this->anyRate) {
+            $this->data->rate = 'any';
         }
 
         $this->dispatch('availability-search-updated', $this->data);
@@ -113,13 +130,11 @@ class AvailabilitySearch extends Component
 
     public function validateDatesAreSet(): bool
     {
-        $datesAreSet = isset($this->data->dates['date_start']) && isset($this->data->dates['date_end']);
-
-        if (! $datesAreSet && ! $this->anyAdvanced) {
+        if (! $this->data->hasDates() && ! $this->anyRate) {
             $this->addError('data.dates.date_start', 'Availability search requires date information to be provided.');
         }
 
-        return $datesAreSet;
+        return $this->data->hasDates();
     }
 
     public function clearDates(): void
@@ -147,8 +162,8 @@ class AvailabilitySearch extends Component
         $this->data->dates['date_start'] = $dateStart->toDateString();
         $this->data->dates['date_end'] = $dateStart->copy()->addDays($minimumPeriod)->toDateString();
 
-        if (isset($data['property'])) {
-            $this->data->advanced = $data['property'];
+        if (isset($data['rate_id'])) {
+            $this->data->rate = $data['rate_id'];
         }
 
         $this->search();

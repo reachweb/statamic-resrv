@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Rate;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
@@ -115,6 +116,35 @@ trait CreatesEntries
                 'property' => $property,
             ])
             ->create();
+    }
+
+    protected function createRateForEntry(Entry $entry, array $attributes = []): Rate
+    {
+        return Rate::factory()->create(array_merge(
+            ['statamic_id' => $entry->id()],
+            $attributes,
+        ));
+    }
+
+    protected function createRelativeRate(Entry $entry, Rate $baseRate, array $attributes = []): Rate
+    {
+        return $this->createDependentRate('relative', $entry, $baseRate, $attributes);
+    }
+
+    protected function createSharedRate(Entry $entry, Rate $baseRate, array $attributes = []): Rate
+    {
+        return $this->createDependentRate('shared', $entry, $baseRate, $attributes);
+    }
+
+    private function createDependentRate(string $type, Entry $entry, Rate $baseRate, array $attributes = []): Rate
+    {
+        return Rate::factory()->{$type}()->create(array_merge(
+            [
+                'statamic_id' => $entry->id(),
+                'base_rate_id' => $baseRate->id,
+            ],
+            $attributes,
+        ));
     }
 
     protected function makeBlueprint($collection)

@@ -6,14 +6,10 @@ use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
-use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
-use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -22,7 +18,6 @@ use Reach\StatamicResrv\Resources\AvailabilityResource;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
-use Statamic\Facades\Blueprint;
 
 class Availability extends Model implements AvailabilityContract
 {
@@ -37,16 +32,13 @@ class Availability extends Model implements AvailabilityContract
         'available',
         'available_blocked',
         'property',
+        'rate_id',
         'pending',
     ];
 
     protected $casts = [
         'price' => PriceClass::class,
         'pending' => 'array',
-    ];
-
-    protected $dispatchesEvents = [
-        'updated' => AvailabilityChanged::class,
     ];
 
     protected static function newFactory()
@@ -59,50 +51,14 @@ class Availability extends Model implements AvailabilityContract
         return $this->belongsTo(Entry::class, 'statamic_id', 'item_id');
     }
 
+    public function rate(): BelongsTo
+    {
+        return $this->belongsTo(Rate::class, 'rate_id');
+    }
+
     public function getPriceAttribute($value)
     {
         return Price::create($value);
-    }
-
-    public function getPropertyLabel($handle, $collection, $slug)
-    {
-        $blueprint = Blueprint::find('collections.'.$collection.'.'.$handle);
-        if (! AvailabilityField::blueprintHasAvailabilityField($blueprint)) {
-            return false;
-        }
-        $field = AvailabilityField::getField($blueprint);
-        $properties = $field->get('advanced_availability');
-
-        if (array_key_exists($slug, $properties)) {
-            return $properties[$slug];
-        }
-
-        return $slug;
-    }
-
-    public function getProperties(): array
-    {
-        if (! $field = $this->entry->getAvailabilityField()) {
-            return [];
-        }
-
-        return Cache::rememberForever('properties:'.$this->entry->collection.':'.$this->entry->handle, function () use ($field) {
-            return $field->get('advanced_availability');
-        });
-    }
-
-    public function getConnectedAvailabilitySettings(): Collection|bool
-    {
-        if (! $field = $this->entry->getAvailabilityField()) {
-            return false;
-        }
-
-        return Cache::rememberForever('connected_availability_'.$this->entry->collection.$this->entry->handle, function () use ($field) {
-            return collect([
-                'connected_availabilities' => $field->get('connected_availabilities'),
-                'disable_connected_availabilities_on_cp' => $field->get('disable_connected_availabilities_on_cp'),
-            ]);
-        });
     }
 
     public function getAvailable($data, $entries = null)
@@ -129,11 +85,7 @@ class Availability extends Model implements AvailabilityContract
 
         $availability = $this->getSpecificItemCollection($statamic_id)->resolve();
 
-        if ($availability['message']['status'] != 1) {
-            return false;
-        }
-
-        return true;
+        return $availability['message']['status'] == 1;
     }
 
     public function confirmAvailabilityAndPrice($data, $statamic_id)
@@ -142,15 +94,8 @@ class Availability extends Model implements AvailabilityContract
 
         $availability = $this->getSpecificItemCollection($statamic_id)->resolve();
 
-        if ($availability['message']['status'] != 1) {
-            return false;
-        }
-
-        if ($availability['data']['price'] != $data['price']) {
-            return false;
-        }
-
-        return true;
+        return $availability['message']['status'] == 1
+            && $availability['data']['price'] == $data['price'];
     }
 
     public function getPricing($data, $statamic_id, $onlyPrice = false)
@@ -178,7 +123,7 @@ class Availability extends Model implements AvailabilityContract
 
         return [
             'price' => $prices['reservationPrice']->format(),
-            'original_price' => $prices['originalPrice'] ? $prices['originalPrice']->format() : null,
+            'original_price' => $prices['originalPrice']?->format(),
             'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
         ];
     }
@@ -196,14 +141,28 @@ class Availability extends Model implements AvailabilityContract
             ->get();
     }
 
-    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced)
+    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced, ?int $rateId = null): void
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
             'advanced' => $advanced,
+            'rate_id' => $rateId,
         ]);
+
+        if ($rateId) {
+            AvailabilityRepository::decrementForRate(
+                date_start: $this->date_start,
+                date_end: $this->date_end,
+                quantity: $this->quantity,
+                statamic_id: $statamic_id,
+                rateId: $rateId,
+                reservationId: $reservationId,
+            );
+
+            return;
+        }
 
         AvailabilityRepository::decrement(
             date_start: $this->date_start,
@@ -215,16 +174,31 @@ class Availability extends Model implements AvailabilityContract
         );
     }
 
-    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced)
+    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced, ?int $rateId = null): void
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
             'advanced' => $advanced,
+            'rate_id' => $rateId,
         ]);
 
-        AvailabilityRepository::increment(date_start: $this->date_start,
+        if ($rateId) {
+            AvailabilityRepository::incrementForRate(
+                date_start: $this->date_start,
+                date_end: $this->date_end,
+                quantity: $this->quantity,
+                statamic_id: $statamic_id,
+                rateId: $rateId,
+                reservationId: $reservationId,
+            );
+
+            return;
+        }
+
+        AvailabilityRepository::increment(
+            date_start: $this->date_start,
             date_end: $this->date_end,
             quantity: $this->quantity,
             statamic_id: $statamic_id,
@@ -359,7 +333,7 @@ class Availability extends Model implements AvailabilityContract
 
         return collect([
             'price' => $prices['reservationPrice']->format(),
-            'original_price' => $prices['originalPrice'] ? $prices['originalPrice']->format() : null,
+            'original_price' => $prices['originalPrice']?->format(),
             'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
             'property' => $results->property,
             'propertyLabel' => $label,
@@ -376,15 +350,9 @@ class Availability extends Model implements AvailabilityContract
             advanced: $this->advanced
         )->get();
 
-        if ($results->count() == 0) {
-            return collect([]);
-        }
-
         $disabled = array_flip($this->getDisabledIds());
 
-        return $results->reject(function ($item) use ($disabled) {
-            return isset($disabled[$item->statamic_id]);
-        });
+        return $results->reject(fn ($item) => isset($disabled[$item->statamic_id]));
     }
 
     public function getPriceForDates($item, $id)
@@ -393,7 +361,7 @@ class Availability extends Model implements AvailabilityContract
 
         return [
             'reservation_price' => $prices['reservationPrice']->format(),
-            'original_price' => $prices['originalPrice'] ? $prices['originalPrice']->format() : null,
+            'original_price' => $prices['originalPrice']?->format(),
         ];
     }
 
@@ -414,11 +382,9 @@ class Availability extends Model implements AvailabilityContract
         return $property;
     }
 
-    protected function getDisabledIds()
+    protected function getDisabledIds(): array
     {
-        $results = Entry::getDisabledIds();
-
-        return Arr::flatten($results);
+        return Entry::getDisabledIds();
     }
 
     protected function getPeriod()
@@ -431,7 +397,7 @@ class Availability extends Model implements AvailabilityContract
         return collect(explode(',', $prices))->transform(fn ($price) => Price::create($price));
     }
 
-    protected function requestCollection($label = null): Collection
+    protected function requestCollection(): Collection
     {
         return collect([
             'duration' => $this->duration,

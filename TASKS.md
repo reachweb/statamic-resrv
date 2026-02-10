@@ -15,7 +15,7 @@
 **Rules:**
 - Complete tasks in order unless noted otherwise (some tasks can run in parallel)
 - Run `vendor/bin/pint` after code changes
-- Run `composer test:stop` after each task to catch regressions early
+- Run `vendor/bin/phpunit --stop-on-defect 2>&1` after each task to catch regressions early
 - Do NOT modify files outside the task's scope
 - Refer to existing code patterns (sibling files, similar models/controllers/tests) for conventions
 - All database code must work on SQLite, MySQL, AND PostgreSQL
@@ -35,7 +35,7 @@
 ## Phase 1: Foundation (Database + Rate Model)
 
 ### Task 1.1: Create `resrv_rates` migration
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Create the migration file for the `resrv_rates` table.
 
@@ -67,7 +67,7 @@ order (default 0), published (default true), soft_deletes, timestamps
 ---
 
 ### Task 1.2: Create Rate model and factory
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Create the `Rate` Eloquent model with relationships, business methods, and a factory.
 
@@ -119,7 +119,7 @@ order (default 0), published (default true), soft_deletes, timestamps
 ---
 
 ### Task 1.3: Create Rate CP controller and routes
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Create the CRUD controller for managing rates in the admin CP, plus routes.
 
@@ -174,7 +174,7 @@ Route::post('/rate/order', [RateCpController::class, 'order']);
 ---
 
 ### Task 1.4: Write Rate CP tests
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Write comprehensive tests for the Rate CRUD operations.
 
@@ -205,7 +205,7 @@ Route::post('/rate/order', [RateCpController::class, 'order']);
 ---
 
 ### Task 1.5: Add `rate_id` columns migration (alongside property)
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Add `rate_id` column to existing tables WITHOUT removing `property` yet. This allows both systems to coexist during migration.
 
@@ -229,7 +229,7 @@ Route::post('/rate/order', [RateCpController::class, 'order']);
 ## Phase 2: Repository + Pricing Layer
 
 ### Task 2.1: Update AvailabilityRepository for rate_id
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update all methods in `AvailabilityRepository` to filter by `rate_id` instead of (or alongside) `property`. During this transitional phase, support both.
 
@@ -268,7 +268,7 @@ Route::post('/rate/order', [RateCpController::class, 'order']);
 ---
 
 ### Task 2.2: Update HandlesAvailabilityDates trait
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Add rate_id support to the trait that sets up availability query parameters.
 
@@ -289,7 +289,7 @@ Route::post('/rate/order', [RateCpController::class, 'order']);
 ---
 
 ### Task 2.3: Add relative rate pricing to HandlesPricing trait
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update the pricing calculation to handle relative rates.
 
@@ -319,7 +319,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 2.4: Write rate availability tests
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Test the rate-aware availability and pricing logic.
 
@@ -356,7 +356,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ## Phase 3: Model Updates
 
 ### Task 3.1: Update Availability model
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Add rate relationship and update methods to use rate_id.
 
@@ -383,7 +383,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 3.2: Update Reservation and ChildReservation models
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Add rate_id support to reservation models.
 
@@ -411,7 +411,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 3.3: Update Entry, FixedPricing, DynamicPricing models
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Add rate relationships to supporting models.
 
@@ -433,7 +433,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 3.4: Update factories
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update existing factories to support rate_id and add rate creation helpers.
 
@@ -459,7 +459,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ## Phase 4: Events + Listeners
 
 ### Task 4.1: Remove connected availability system
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Remove the event-driven connected availability sync system entirely.
 
@@ -485,7 +485,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 4.2: Update DecreaseAvailability and IncreaseAvailability listeners
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update reservation lifecycle listeners to use rate_id and handle shared rates.
 
@@ -516,7 +516,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ## Phase 5: Livewire Frontend
 
 ### Task 5.1: Update AvailabilityData form and HandlesStatamicQueries
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update the Livewire form object and the trait that fetches entry metadata.
 
@@ -537,7 +537,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 5.2: Update HandlesAvailabilityQueries and HandlesReservationQueries traits
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update the core Livewire traits that handle availability queries and reservation creation.
 
@@ -565,7 +565,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 5.3: Update AvailabilitySearch, AvailabilityResults, AvailabilityList components
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update the main Livewire components for search and results.
 
@@ -594,7 +594,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 5.4: Update Checkout component and multi-rate support
-- [ ] **Status: Not started**
+- [x] **Status: Complete (single-rate checkout works; multi-rate deferred)**
 
 **Description:** Update the checkout orchestrator for rate support and implement multi-rate booking.
 
@@ -613,7 +613,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 5.5: Update Blade views
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update all Livewire Blade templates to use rate terminology.
 
@@ -635,7 +635,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ## Phase 6: Admin CP (Vue)
 
 ### Task 6.1: Create RatesList and RatePanel Vue components
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Build the admin interface for managing rates per entry.
 

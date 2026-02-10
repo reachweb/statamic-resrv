@@ -15,24 +15,23 @@ trait HandlesReservationQueries
 {
     use HandlesAffiliates;
 
-    public function getReservation()
+    public function getReservation(): Reservation
     {
-        try {
-            $reservation = Reservation::findOrFail(session('resrv_reservation'));
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        $reservation = Reservation::find(session('resrv_reservation'));
+
+        if (! $reservation) {
             throw new ReservationException('Reservation not found in the session.');
         }
 
-        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
-            throw new ReservationException('This reservation is already confirmed.');
-        }
+        $error = match ($reservation->status) {
+            ReservationStatus::CONFIRMED->value => 'This reservation is already confirmed.',
+            ReservationStatus::WEBHOOK->value => 'This reservation is already paid. You cannot modify it.',
+            ReservationStatus::EXPIRED->value => 'This reservation has expired. Please start over.',
+            default => null,
+        };
 
-        if ($reservation->status === ReservationStatus::WEBHOOK->value) {
-            throw new ReservationException('This reservation is already paid. You cannot modify it.');
-        }
-
-        if ($reservation->status === ReservationStatus::EXPIRED->value) {
-            throw new ReservationException('This reservation has expired. Please start over.');
+        if ($error) {
+            throw new ReservationException($error);
         }
 
         return $reservation;
@@ -49,6 +48,10 @@ trait HandlesReservationQueries
             ]);
         }
 
+        $rateId = ($this->data->rate && $this->data->rate !== 'any' && is_numeric($this->data->rate))
+            ? (int) $this->data->rate
+            : null;
+
         $reservation = Reservation::create(
             [
                 'status' => ReservationStatus::PENDING,
@@ -58,7 +61,8 @@ trait HandlesReservationQueries
                 'date_start' => $this->data->dates['date_start'],
                 'date_end' => $this->data->dates['date_end'],
                 'quantity' => $this->data->quantity,
-                'property' => $this->data->advanced,
+                'property' => $this->data->rate,
+                'rate_id' => $rateId,
                 'price' => data_get($this->availability, 'data.price'),
                 'payment' => data_get($this->availability, 'data.payment'),
                 'payment_id' => '',
@@ -68,7 +72,7 @@ trait HandlesReservationQueries
 
         ReservationCreated::dispatch($reservation, new ReservationData(
             affiliate: $this->getAffiliateIfCookieExists(),
-            coupon: session('resrv_coupon') ?? null,
+            coupon: session('resrv_coupon'),
         ));
     }
 
@@ -78,7 +82,8 @@ trait HandlesReservationQueries
             'date_start' => $this->reservation->date_start,
             'date_end' => $this->reservation->date_end,
             'quantity' => $this->reservation->quantity,
-            'advanced' => $this->reservation->property,
+            'advanced' => $this->reservation->getRawOriginal('property'),
+            'rate_id' => $this->reservation->rate_id,
         ];
     }
 

@@ -5,10 +5,10 @@
         :errors="$errors"
     />
 
-    @if ($advanced)
-    <x-resrv::availability-advanced
-        wire:model.live="data.advanced"
-        :advancedProperties="$this->advancedProperties"
+    @if ($rates)
+    <x-resrv::availability-rates
+        wire:model.live="data.rate"
+        :entryRates="$this->entryRates"
         :errors="$errors"
     />
     @endif

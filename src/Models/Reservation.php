@@ -57,6 +57,11 @@ class Reservation extends Model
         return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee');
     }
 
+    public function rate(): BelongsTo
+    {
+        return $this->belongsTo(Rate::class, 'rate_id');
+    }
+
     public function childs()
     {
         return $this->hasMany(ChildReservation::class);
@@ -84,6 +89,10 @@ class Reservation extends Model
 
     public function getPropertyAttribute($value)
     {
+        if ($this->rate_id) {
+            return $this->rate?->slug ?? $value;
+        }
+
         if ($this->type === 'parent') {
             return $this->childs()->get()->unique(fn ($item) => $item->property);
         }
@@ -103,20 +112,24 @@ class Reservation extends Model
         return $data;
     }
 
-    public function getPropertyAttributeLabel()
+    public function getRateLabel(): string
     {
+        return $this->rate?->title ?? 'Default';
+    }
+
+    public function getPropertyAttributeLabel(): string
+    {
+        if ($this->rate_id) {
+            return $this->getRateLabel();
+        }
+
         if ($this->property == null) {
             return '';
         }
-        $availability = new Availability;
 
-        if ($this->property instanceof Collection) {
-            return $this->property->map(function ($item) use ($availability) {
-                return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $item->property);
-            })->implode(',');
-        }
-
-        return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $this->property);
+        return $this->property instanceof Collection
+            ? $this->property->pluck('property')->implode(',')
+            : (string) $this->property;
     }
 
     public function getEntryAttribute()
@@ -141,13 +154,9 @@ class Reservation extends Model
         return $query->where('payment_id', $id);
     }
 
-    public function isParent()
+    public function isParent(): bool
     {
-        if ($this->type == 'parent') {
-            return true;
-        }
-
-        return false;
+        return $this->type === 'parent';
     }
 
     public function amountRemaining()
@@ -167,26 +176,20 @@ class Reservation extends Model
 
     public function extraCharges()
     {
-        $extraCharges = Price::create(0);
-
         $data = $this->buildDataArray();
         $data['item_id'] = $this->item_id;
 
         $optionsCost = Price::create(0);
-        if ($this->options()->count() > 0) {
-            foreach ($this->options()->get() as $id => $option) {
-                $optionsCost->add($option->calculatePrice($data, $option->pivot->value));
-            }
+        foreach ($this->options()->get() as $option) {
+            $optionsCost->add($option->calculatePrice($data, $option->pivot->value));
         }
 
         $extrasCost = Price::create(0);
-        if ($this->extras()->count() > 0) {
-            foreach ($this->extras()->get() as $id => $extra) {
-                $extrasCost->add($extra->calculatePrice($data, $extra->pivot->quantity));
-            }
+        foreach ($this->extras()->get() as $extra) {
+            $extrasCost->add($extra->calculatePrice($data, $extra->pivot->quantity));
         }
 
-        return $extraCharges->add($optionsCost, $extrasCost);
+        return Price::create(0)->add($optionsCost, $extrasCost);
     }
 
     public function getPrices()
@@ -300,40 +303,26 @@ class Reservation extends Model
         return false;
     }
 
-    protected function checkForRequiredOptions($statamic_id, $data)
+    protected function checkForRequiredOptions($statamic_id, $data): bool
     {
-        $requiredOptions = Option::entry($statamic_id)
+        $requiredOptionIds = Option::entry($statamic_id)
             ->where('published', true)
             ->where('required', true)
-            ->get()
-            ->groupBy('id')
-            ->toArray();
+            ->pluck('id');
 
-        // If the item doesn't have required options return true
-        if (count($requiredOptions) == 0) {
+        if ($requiredOptionIds->isEmpty()) {
             return true;
         }
 
-        // If the item has required options but the key is not present in the data array return false
         if (! array_key_exists('options', $data)) {
             return false;
         }
 
-        $checkoutOptions = $data['options'];
+        $checkoutOptions = $data['options'] instanceof Collection
+            ? $data['options']->toArray()
+            : $data['options'];
 
-        // Convert checkoutOptions to array if it's a Laravel Collection
-        if ($checkoutOptions instanceof Collection) {
-            $checkoutOptions = $checkoutOptions->toArray();
-        }
-
-        // Check if each required option is in the data array otherwise return false
-        foreach ($requiredOptions as $id => $option) {
-            if (! array_key_exists($id, $checkoutOptions)) {
-                return false;
-            }
-        }
-
-        return true;
+        return $requiredOptionIds->every(fn ($id) => array_key_exists($id, $checkoutOptions));
     }
 
     public function createRandomReference()

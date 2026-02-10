@@ -1,8 +1,8 @@
 @use(Carbon\Carbon)
 
 <div class="relative">
-    @if ($advanced == true)
-    <x-resrv::availability-results-advanced :$availability :advancedProperties="$this->advancedProperties" />    
+    @if ($rates == true)
+    <x-resrv::availability-results-advanced :$availability :entryRates="$this->entryRates" />
     @else
         @if (data_get($availability, 'message.status') === true && data_get($availability, 'request.property') !== 'any')
             @if ($this->showOptions)
@@ -28,15 +28,15 @@
                 <div class="text-lg font-medium mb-2">{{ trans('statamic-resrv::frontend.yourSearch') }}</div>
                 <div class="mb-1">
                     <div class="mb-1">
-                        <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.from')) }}:</span> 
+                        <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.from')) }}:</span>
                         <span class=font-medium>{{ Carbon::parse($data->dates['date_start'])->format('D d M Y') }}</span>
                     </div>
                     <div class="mb-1">
-                        <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.to')) }}:</span> 
+                        <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.to')) }}:</span>
                         <span class=font-medium>{{ Carbon::parse($data->dates['date_end'])->format('D d M Y') }}</span>
                     </div>
                     <div class="mb-1">
-                        <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.duration')) }}:</span> 
+                        <span class="text-gray-500">{{ ucfirst(trans('statamic-resrv::frontend.duration')) }}:</span>
                         <span class=font-medium>{{ data_get($availability, 'request.days') }} {{ trans('statamic-resrv::frontend.days') }}</span>
                     </div>
                 </div>
@@ -46,8 +46,8 @@
             </div>
         </div>
         <div class="mt-6 xl:mt-8">
-            <button 
-                type="button" 
+            <button
+                type="button"
                 class="w-full px-6 py-3.5 text-base font-medium text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 rounded-lg text-center"
                 wire:click="checkout()"
             >
@@ -86,7 +86,7 @@
         <span class="flex items-center justify-center w-full h-full">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="animate-spin w-5 h-5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
-            </svg>   
+            </svg>
         </span>
     </div>
 </div>
