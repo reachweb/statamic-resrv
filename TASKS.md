@@ -675,7 +675,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 6.2: Update availability admin components for rates
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update the availability calendar and modals to work with rates instead of properties.
 
@@ -694,7 +694,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ## Phase 7: Config + Fieldtype
 
 ### Task 7.1: Update config and fieldtype
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Remove old config flags and update the Statamic fieldtype.
 
@@ -721,7 +721,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ## Phase 8: Data Migration + Upgrade Tool
 
 ### Task 8.1: Write data migration
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Migrate existing property data to rate records.
 
@@ -750,7 +750,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 8.2: Write schema cleanup migration
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Drop old columns and add constraints after data migration.
 
@@ -775,7 +775,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 8.3: Create upgrade artisan command
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Create a guided upgrade command for existing users.
 
@@ -811,7 +811,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ## Phase 9: Resources + Display
 
 ### Task 9.1: Update reservation resources and views
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update the admin display of reservations to show rate info.
 
@@ -832,7 +832,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ## Phase 10: Test Suite Overhaul
 
 ### Task 10.1: Update existing test files
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Update all test files that reference `property` or `advanced` to use `rate_id`.
 
@@ -861,7 +861,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 10.2: Write migration test
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Test the data migration correctness.
 
@@ -884,7 +884,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ## Phase 11: Final Cleanup
 
 ### Task 11.1: Remove all remaining property/connected references
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** Final sweep to remove all traces of the old system.
 
@@ -907,7 +907,7 @@ After computing the base price (from availability rows or fixed pricing), add a 
 ---
 
 ### Task 11.2: Update Extra model for rate context
-- [ ] **Status: Not started**
+- [x] **Status: Complete**
 
 **Description:** The Extra model's pricing methods reference property for availability context. Update to use rate_id.
 

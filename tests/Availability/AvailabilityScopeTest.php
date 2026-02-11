@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -15,14 +16,14 @@ class AvailabilityScopeTest extends TestCase
 
     public $entries;
 
-    public $advancedEntries;
+    public $rateEntries;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
         $this->entries = $this->createEntries();
-        $this->advancedEntries = $this->createAdvancedEntries();
+        $this->rateEntries = $this->createRateEntries();
     }
 
     // Test that it can filter Entries based on availability
@@ -99,10 +100,12 @@ class AvailabilityScopeTest extends TestCase
         $this->assertContains($this->entries->get('two-available')->id(), $afterScope);
     }
 
-    // Test that it filters by advanced property
-    public function test_it_filters_by_advanced_entry()
+    // Test that it filters by rate_id
+    public function test_it_filters_by_rate_entry()
     {
         $query = Entry::query()->where('collection', 'advanced');
+
+        $rateIds = $this->getRateIdsForSlug('test');
 
         $values = ['resrv_search:resrv_availability' => [
             'dates' => [
@@ -110,7 +113,7 @@ class AvailabilityScopeTest extends TestCase
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ],
             'quantity' => 1,
-            'advanced' => 'test',
+            'advanced' => implode('|', $rateIds),
         ]];
 
         (new ResrvSearch)->apply($query, $values);
@@ -118,13 +121,15 @@ class AvailabilityScopeTest extends TestCase
         $afterScope = $query->get()->pluck('id')->all();
 
         $this->assertCount(3, $afterScope);
-        $this->assertContains($this->advancedEntries->first()->id(), $afterScope);
+        $this->assertContains($this->rateEntries->first()->id(), $afterScope);
     }
 
-    // Test that it filters by advanced property and quantity
-    public function test_it_filters_by_advanced_entry_and_quantity()
+    // Test that it filters by rate_id and quantity
+    public function test_it_filters_by_rate_entry_and_quantity()
     {
         $query = Entry::query()->where('collection', 'advanced');
+
+        $rateIds = $this->getRateIdsForSlug('test');
 
         $values = ['resrv_search:resrv_availability' => [
             'dates' => [
@@ -132,7 +137,7 @@ class AvailabilityScopeTest extends TestCase
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ],
             'quantity' => 2,
-            'advanced' => 'test',
+            'advanced' => implode('|', $rateIds),
         ]];
 
         (new ResrvSearch)->apply($query, $values);
@@ -140,11 +145,11 @@ class AvailabilityScopeTest extends TestCase
         $afterScope = $query->get()->pluck('id')->all();
 
         $this->assertCount(1, $afterScope);
-        $this->assertContains($this->advancedEntries[2]->id(), $afterScope);
-        $this->assertNotContains($this->advancedEntries->first()->id(), $afterScope);
+        $this->assertContains($this->rateEntries[2]->id(), $afterScope);
+        $this->assertNotContains($this->rateEntries->first()->id(), $afterScope);
     }
 
-    // Test that it can ge all available when using the 'any' magic property
+    // Test that it can get all available when using the 'any' magic value
     public function test_it_can_get_all_availability_with_the_any_magic_word()
     {
         $query = Entry::query()->where('collection', 'advanced');
@@ -163,7 +168,22 @@ class AvailabilityScopeTest extends TestCase
         $afterScope = $query->get()->pluck('id')->all();
 
         $this->assertCount(6, $afterScope);
-        $this->assertContains($this->advancedEntries->first()->id(), $afterScope);
-        $this->assertNotContains($this->advancedEntries[1]->id(), $afterScope);
+        $this->assertContains($this->rateEntries->first()->id(), $afterScope);
+        $this->assertNotContains($this->rateEntries[1]->id(), $afterScope);
+    }
+
+    /**
+     * Get all rate_ids for rates with a given slug across all rate entries.
+     *
+     * @return array<int>
+     */
+    protected function getRateIdsForSlug(string $slug): array
+    {
+        $entryIds = $this->rateEntries->map(fn ($entry) => $entry->id())->toArray();
+
+        return Rate::whereIn('statamic_id', $entryIds)
+            ->where('slug', $slug)
+            ->pluck('id')
+            ->toArray();
     }
 }

@@ -238,7 +238,6 @@ class RateAvailabilityTest extends TestCase
                 ->create([
                     'statamic_id' => $entry->id(),
                     'rate_id' => $rate->id,
-                    'property' => $rate->slug,
                     'price' => $rate->slug === 'standard' ? 100 : 150,
                     'available' => 2,
                 ]);

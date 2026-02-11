@@ -72,16 +72,7 @@ class AvailabilitySearch extends Component
             return [];
         }
 
-        $rates = $this->getRatesForEntry($this->entry);
-
-        if ($rates->isNotEmpty()) {
-            return $rates->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])->toArray();
-        }
-
-        // Fallback to blueprint properties for backward compatibility
-        $entry = $this->getEntry($this->entry);
-
-        return $entry ? $this->getEntryProperties($entry) : [];
+        return $this->resolveEntryRates($this->entry);
     }
 
     #[Computed(persist: true)]

@@ -171,8 +171,8 @@ class Extra extends Model
         $data['date_end'] = $reservation->date_end;
         $data['quantity'] = $reservation->quantity;
         $data['item_id'] = $reservation->item_id ?? $reservation->parent->item_id;
-        if (isset($reservation->property)) {
-            $data['advanced'] = $reservation->property;
+        if ($reservation->rate_id) {
+            $data['advanced'] = (string) $reservation->rate_id;
         }
 
         return $this->priceForDates($data);
@@ -299,8 +299,8 @@ class Extra extends Model
         $reservationData['date_end'] = $data->date_end;
         $reservationData['quantity'] = $data->quantity;
         $reservationData['item_id'] = $data->item_id ?? $data->parent->item_id;
-        if (isset($data->property)) {
-            $reservationData['advanced'] = $data->property;
+        if ($data->rate_id) {
+            $reservationData['advanced'] = (string) $data->rate_id;
         }
 
         return $reservationData;

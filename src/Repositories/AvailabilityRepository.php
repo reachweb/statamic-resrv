@@ -31,16 +31,16 @@ class AvailabilityRepository
         $priceConcat = self::groupConcat('price');
         $dateConcat = self::groupConcat('date');
 
-        return Availability::selectRaw("count(statamic_id) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, property")
+        return Availability::selectRaw("count(statamic_id) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, rate_id")
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
             ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
+                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
+                    $query->whereIn('rate_id', $advanced);
                 }
             })
-            ->groupBy('statamic_id', 'property')
+            ->groupBy('statamic_id', 'rate_id')
             ->havingRaw('count(statamic_id) = ?', [$duration]);
     }
 
@@ -49,14 +49,14 @@ class AvailabilityRepository
         $priceConcat = self::groupConcat('price');
         $dateConcat = self::groupConcat('date');
 
-        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, max(property) as property")
+        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, max(rate_id) as rate_id")
             ->where('statamic_id', $statamic_id)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
             ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
+                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
+                    $query->whereIn('rate_id', $advanced);
                 }
             })
             ->groupBy('statamic_id')
@@ -72,8 +72,8 @@ class AvailabilityRepository
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
+                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
+                    $query->whereIn('rate_id', $advanced);
                 }
             })
             ->groupBy('statamic_id');
@@ -81,14 +81,13 @@ class AvailabilityRepository
 
     public function itemsExistAndHavePrices(string $date_start, string $date_end, string $statamic_id, array $advanced)
     {
-        // Use a single query with conditional count to avoid double querying
         $result = Availability::selectRaw('COUNT(*) as total_days, SUM(CASE WHEN price IS NOT NULL THEN 1 ELSE 0 END) as days_with_prices')
             ->where('date', '>=', $date_start)
             ->where('date', '<=', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
+                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
+                    $query->whereIn('rate_id', $advanced);
                 }
             })
             ->first();
@@ -100,26 +99,17 @@ class AvailabilityRepository
         return $totalDays > 0 && $totalDays === $daysWithPrices && $totalDays === $expectedDays;
     }
 
-    public function itemGetProperties(string $statamic_id)
+    public function itemGetRates(string $statamic_id)
     {
-        return Availability::select('property')
+        return Availability::select('rate_id')
             ->where('statamic_id', $statamic_id)
-            ->groupBy('property')
+            ->groupBy('rate_id')
             ->get();
     }
 
     public function itemAvailableBetweenForAllProperties(string $date_start, string $date_end, int $duration, int $quantity, string $statamic_id)
     {
-        $priceConcat = self::groupConcat('price');
-        $dateConcat = self::groupConcat('date');
-
-        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, property")
-            ->where('statamic_id', $statamic_id)
-            ->where('date', '>=', $date_start)
-            ->where('date', '<', $date_end)
-            ->where('available', '>=', $quantity)
-            ->groupBy('statamic_id', 'property')
-            ->havingRaw('count(date) = ?', [$duration]);
+        return $this->itemAvailableBetweenForAllRates($date_start, $date_end, $duration, $quantity, $statamic_id);
     }
 
     public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced, int $reservationId)
@@ -129,8 +119,8 @@ class AvailabilityRepository
                 ->where('date', '<', $date_end)
                 ->where('statamic_id', $statamic_id)
                 ->when($advanced, function (Builder $query, array $advanced) {
-                    if (! in_array('any', $advanced)) {
-                        $query->whereIn('property', $advanced);
+                    if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
+                        $query->whereIn('rate_id', $advanced);
                     }
                 })
                 ->sharedLock()
@@ -147,8 +137,8 @@ class AvailabilityRepository
                 ->where('date', '<', $date_end)
                 ->where('statamic_id', $statamic_id)
                 ->when($advanced, function (Builder $query, array $advanced) {
-                    if (! in_array('any', $advanced)) {
-                        $query->whereIn('property', $advanced);
+                    if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
+                        $query->whereIn('rate_id', $advanced);
                     }
                 })
                 ->sharedLock()
@@ -292,8 +282,8 @@ class AvailabilityRepository
             ->where('date', '<=', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced)) {
-                    $query->whereIn('property', $advanced);
+                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
+                    $query->whereIn('rate_id', $advanced);
                 }
             })
             ->delete();

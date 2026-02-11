@@ -55,15 +55,6 @@ class ReservationFactory extends Factory
         });
     }
 
-    public function advanced(): Factory
-    {
-        return $this->state(function (array $attributes) {
-            return [
-                'property' => 'something',
-            ];
-        });
-    }
-
     public function withRate(int $rateId): Factory
     {
         return $this->state(function (array $attributes) use ($rateId) {

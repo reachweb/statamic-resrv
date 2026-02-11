@@ -31,7 +31,6 @@ class Availability extends Model implements AvailabilityContract
         'price',
         'available',
         'available_blocked',
-        'property',
         'rate_id',
         'pending',
     ];
@@ -128,7 +127,7 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
-    protected function getResultsForItem(Entry $entry, $property = null)
+    protected function getResultsForItem(Entry $entry, $advanced = null)
     {
         return AvailabilityRepository::itemAvailableBetween(
             date_start: $this->date_start,
@@ -136,7 +135,7 @@ class Availability extends Model implements AvailabilityContract
             duration: $this->duration,
             quantity: $this->quantity,
             statamic_id: $entry->id(),
-            advanced: $property ?? $this->advanced
+            advanced: $advanced ?? $this->advanced
         )
             ->get();
     }
@@ -274,7 +273,7 @@ class Availability extends Model implements AvailabilityContract
         }
 
         if ($this->advanced && in_array('any', $this->advanced)) {
-            return $this->getMultiplePropertiesAvailability($resrvEntry, $request);
+            return $this->getMultipleRatesAvailability($resrvEntry, $request);
         }
 
         $results = $this->getResultsForItem($resrvEntry)->first();
@@ -288,12 +287,11 @@ class Availability extends Model implements AvailabilityContract
         return new AvailabilityItemResource($availability, $request);
     }
 
-    protected function getMultiplePropertiesAvailability(Entry $entry, $request)
+    protected function getMultipleRatesAvailability(Entry $entry, $request)
     {
         $availability = collect();
 
-        // Fetch all properties' availability in a single query
-        $results = AvailabilityRepository::itemAvailableBetweenForAllProperties(
+        $results = AvailabilityRepository::itemAvailableBetweenForAllRates(
             date_start: $this->date_start,
             date_end: $this->date_end,
             duration: $this->duration,
@@ -305,23 +303,14 @@ class Availability extends Model implements AvailabilityContract
             return new AvailabilityItemResource($availability, $request);
         }
 
-        // Get property labels once (cached)
-        $propertyLabels = cache()->remember(
-            'availability_labels_'.$entry->collection.'_'.$entry->handle,
-            60,
-            function () use ($entry) {
-                if ($field = $entry->getAvailabilityField()) {
-                    return $field->get('advanced_availability') ?? [];
-                }
-
-                return [];
-            }
-        );
+        $rateLabels = Rate::where('statamic_id', $entry->item_id)
+            ->pluck('title', 'id')
+            ->toArray();
 
         foreach ($results as $result) {
-            $property = $result->property;
-            $propertyLabel = $propertyLabels[$property] ?? $property;
-            $availability->put($property, $this->populateAvailability($result, $propertyLabel));
+            $rateId = $result->rate_id;
+            $rateLabel = $rateLabels[$rateId] ?? $rateId;
+            $availability->put($rateId, $this->populateAvailability($result, $rateLabel));
         }
 
         return new AvailabilityItemResource($availability->sortBy('price'), $request);
@@ -335,8 +324,9 @@ class Availability extends Model implements AvailabilityContract
             'price' => $prices['reservationPrice']->format(),
             'original_price' => $prices['originalPrice']?->format(),
             'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
-            'property' => $results->property,
-            'propertyLabel' => $label,
+            'rate_id' => $results->rate_id,
+            'property' => $results->rate_id,
+            'rateLabel' => $label,
         ]);
     }
 
@@ -365,21 +355,18 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
-    // TODO: check where this is used
-    protected function getProperty($results, $statamic_id, $singleItem = false)
+    protected function getRateIdFromResults($results, $statamic_id, $singleItem = false)
     {
         if (! $singleItem) {
             $results = $results->where('statamic_id', $statamic_id);
         }
-        // if (! ($results->first() instanceof AdvancedAvailability)) {
-        //     return false;
-        // }
-        $property = $results->first()->property;
-        if (! $results->every(fn ($item) => $item->property == $property)) {
+
+        $rateId = $results->first()->rate_id;
+        if (! $results->every(fn ($item) => $item->rate_id == $rateId)) {
             return false;
         }
 
-        return $property;
+        return $rateId;
     }
 
     protected function getDisabledIds(): array
@@ -416,7 +403,7 @@ class Availability extends Model implements AvailabilityContract
             'date_start' => $reservation->date_start,
             'date_end' => $reservation->date_end,
             'quantity' => $reservation->quantity,
-            'advanced' => $reservation->property,
+            'advanced' => $reservation->rate_id ? (string) $reservation->rate_id : '',
         ];
 
         $this->initiateAvailabilityUnsafe($data);
@@ -444,15 +431,15 @@ class Availability extends Model implements AvailabilityContract
         );
     }
 
-    public function getAvailabilityCalendar(string $id, ?string $advanced): array
+    public function getAvailabilityCalendar(string $id, ?string $rateId): array
     {
         return $this->where('statamic_id', $id)
             ->where('date', '>=', now()->startOfDay()->toDateString())
-            ->when($advanced, function ($query) use ($advanced) {
-                return $query->where('property', $advanced);
+            ->when($rateId, function ($query) use ($rateId) {
+                return $query->where('rate_id', $rateId);
             })
             ->orderBy('price')
-            ->get(['date', 'available', 'price', 'property'])
+            ->get(['date', 'available', 'price', 'rate_id'])
             ->groupBy(fn ($item) => \Carbon\Carbon::parse($item->date)->format('Y-m-d H:i:s'))
             ->map(fn ($item) => $item->firstWhere('available', '>', 0))
             ->toArray();
@@ -465,12 +452,12 @@ class Availability extends Model implements AvailabilityContract
             ->where('available', '>=', $quantity)
             ->when($advanced, function ($query) use ($advanced) {
                 if (! in_array('any', $advanced)) {
-                    return $query->whereIn('property', $advanced);
+                    return $query->whereIn('rate_id', $advanced);
                 }
             })
             ->orderBy('date')
             ->orderBy('price')
-            ->get(['date', 'available', 'price', 'property']);
+            ->get(['date', 'available', 'price', 'rate_id']);
 
         $formatDate = fn ($date) => \Carbon\Carbon::parse($date)->format('Y-m-d');
 
@@ -478,10 +465,9 @@ class Availability extends Model implements AvailabilityContract
             return $results
                 ->groupBy(fn ($item) => $formatDate($item->date))
                 ->map(function ($items) {
-                    // Items already sorted by price from query
                     return $items->mapWithKeys(function ($item) {
                         return [
-                            $item->property => [
+                            $item->rate_id => [
                                 'available' => $item->available,
                                 'price' => $item->price->format(),
                             ],
@@ -492,7 +478,7 @@ class Availability extends Model implements AvailabilityContract
         }
 
         return $results
-            ->groupBy('property')
+            ->groupBy('rate_id')
             ->sortBy(fn ($items) => $items->first()->price->format())
             ->map(function ($items) use ($formatDate) {
                 return $items->mapWithKeys(function ($item) use ($formatDate) {

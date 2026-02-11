@@ -61,7 +61,6 @@ trait HandlesReservationQueries
                 'date_start' => $this->data->dates['date_start'],
                 'date_end' => $this->data->dates['date_end'],
                 'quantity' => $this->data->quantity,
-                'property' => $this->data->rate,
                 'rate_id' => $rateId,
                 'price' => data_get($this->availability, 'data.price'),
                 'payment' => data_get($this->availability, 'data.payment'),
@@ -82,7 +81,7 @@ trait HandlesReservationQueries
             'date_start' => $this->reservation->date_start,
             'date_end' => $this->reservation->date_end,
             'quantity' => $this->reservation->quantity,
-            'advanced' => $this->reservation->getRawOriginal('property'),
+            'advanced' => $this->reservation->rate_id ? (string) $this->reservation->rate_id : '',
             'rate_id' => $this->reservation->rate_id,
         ];
     }

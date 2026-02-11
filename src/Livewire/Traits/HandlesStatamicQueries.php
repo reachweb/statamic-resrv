@@ -27,6 +27,20 @@ trait HandlesStatamicQueries
         return $field?->config()['advanced_availability'] ?? [];
     }
 
+    protected function resolveEntryRates(string $entryId): array
+    {
+        $rates = $this->getRatesForEntry($entryId);
+
+        if ($rates->isNotEmpty()) {
+            return $rates->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])->toArray();
+        }
+
+        // Fallback to blueprint properties for backward compatibility
+        $entry = $this->getEntry($entryId);
+
+        return $entry ? $this->getEntryProperties($entry) : [];
+    }
+
     public function getCheckoutEntry()
     {
         return $this->findEntryOrFail(config('resrv-config.checkout_entry'));

@@ -87,17 +87,9 @@ class Reservation extends Model
         return Price::create($value);
     }
 
-    public function getPropertyAttribute($value)
+    public function getRateSlugAttribute(): ?string
     {
-        if ($this->rate_id) {
-            return $this->rate?->slug ?? $value;
-        }
-
-        if ($this->type === 'parent') {
-            return $this->childs()->get()->unique(fn ($item) => $item->property);
-        }
-
-        return $value;
+        return $this->rate?->slug;
     }
 
     public function getCustomerDataAttribute(): Collection
@@ -119,17 +111,7 @@ class Reservation extends Model
 
     public function getPropertyAttributeLabel(): string
     {
-        if ($this->rate_id) {
-            return $this->getRateLabel();
-        }
-
-        if ($this->property == null) {
-            return '';
-        }
-
-        return $this->property instanceof Collection
-            ? $this->property->pluck('property')->implode(',')
-            : (string) $this->property;
+        return $this->getRateLabel();
     }
 
     public function getEntryAttribute()
@@ -222,7 +204,7 @@ class Reservation extends Model
         return [
             'date_start' => $this->date_start,
             'date_end' => $this->date_end,
-            'advanced' => $this->property,
+            'advanced' => $this->rate_id ? (string) $this->rate_id : '',
             'quantity' => $this->quantity,
         ];
     }

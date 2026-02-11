@@ -4,16 +4,16 @@
             <div class="text-lg font-semibold px-5 py-3 bg-gray-200 dark:bg-dark-500 rounded-t-lg border-b dark:border-dark-900">
                 {{ __('Change availability') }}
             </div>
-            <div v-if="property" class="px-4 mt-4">
-                <v-select 
+            <div v-if="rate" class="px-4 mt-4">
+                <v-select
                     multiple
                     :close-on-select="false"
-                    :placeholder="__('Select property')" 
-                    v-model="selectedProperty" 
-                    :options="propertiesOptions" 
+                    :placeholder="__('Select rate')"
+                    v-model="selectedRate"
+                    :options="rateOptions"
                 />
                 <div class="flex w-full justify-end pt-2">
-                    <button class="text-grey hover:text-grey-90" @click="selectedProperty = propertiesOptions">{{ __('Select all') }}</button>
+                    <button class="text-grey hover:text-grey-90" @click="selectedRate = rateOptions">{{ __('Select all') }}</button>
                 </div>
             </div>
             <div class="px-4 mt-2 my-4">
@@ -61,7 +61,7 @@
                 </div>
                 <div v-if="errors.date_start || errors.date_end" class="w-full mt-1 text-sm text-red-400">
                     {{ __('Date range is required') }}
-                </div>  
+                </div>
             </div>
             <div class="flex-1 px-4 mb-4">
                 <div class="flex flex-wrap items-center space-x-4">
@@ -74,7 +74,7 @@
                         </div>
                         <div v-if="errors.available" class="w-full mt-1 text-sm text-red-400">
                             {{ errors.available[0] }}
-                        </div>                    
+                        </div>
                     </div>
                     <div class="flex-1">
                         <div class="mb-1 text-sm">
@@ -85,7 +85,7 @@
                         </div>
                         <div v-if="errors.price" class="w-full mt-1 text-sm text-red-400">
                             {{ errors.price[0] }}
-                        </div>                     
+                        </div>
                     </div>
                 </div>
             </div>
@@ -99,18 +99,18 @@
                         </label>
                     </div>
                 </div>
-            </div>            
+            </div>
             <div class="p-4 bg-gray-200 dark:bg-dark-500 border-t rounded-b-lg flex items-center justify-between dark:border-dark-900">
                 <button class="text-gray-700 hover:text-gray-900 dark:text-dark-100 dark:hover:text-dark-175" v-html="__('Cancel')" @click="$emit('cancel')"></button>
-                <button 
-                    class="ml-4 text-white bg-blue-500 rounded font-bold px-6 py-2" 
-                    v-html="__('Save')" 
+                <button
+                    class="ml-4 text-white bg-blue-500 rounded font-bold px-6 py-2"
+                    v-html="__('Save')"
                     @click="save"
                     :disabled="disableSave"
                 >
                 </button>
             </div>
-        </div>        
+        </div>
     </modal>
 </template>
 
@@ -125,12 +125,12 @@ export default {
             type: String,
             required: true
         },
-        property: {
+        rate: {
             type: Object,
             required: false
         },
-        propertiesOptions: {
-            type: Object,
+        rateOptions: {
+            type: Array,
             required: false
         }
     },
@@ -148,7 +148,7 @@ export default {
             successMessage: 'Availability successfully saved',
             postUrl: '/cp/resrv/availability',
             method: 'post',
-            selectedProperty: (this.property ? this.property : null)
+            selectedRate: (this.rate ? this.rate : null)
         }
     },
 
@@ -163,15 +163,16 @@ export default {
             if (this.onlyDays.length > 0) {
                 fields.onlyDays = this.onlyDays
             }
-            if (this.property) {
-                fields.advanced = _.isArray(this.selectedProperty) ? this.selectedProperty : [_.findWhere(this.propertiesOptions, {'code': this.selectedProperty.code})]
+            if (this.rate) {
+                let rates = _.isArray(this.selectedRate) ? this.selectedRate : [this.selectedRate]
+                fields.rate_ids = rates.filter(r => r).map(r => r.code)
             }
             return fields
         }
     },
 
     mixins: [ FormHandler ],
-  
+
 }
 </script>
 

@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -62,6 +63,11 @@ class AvailabilityResultsTest extends TestCase
         Config::set('resrv-config.checkout_entry', $entry->id());
 
         return $entry;
+    }
+
+    protected function getFirstAdvancedEntryRateId(): int
+    {
+        return Rate::where('statamic_id', $this->advancedEntries->first()->id())->first()->id;
     }
 
     public function test_renders_successfully()
@@ -393,6 +399,8 @@ class AvailabilityResultsTest extends TestCase
 
     public function test_returns_availability_for_specific_advanced()
     {
+        $rateId = $this->getFirstAdvancedEntryRateId();
+
         Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
             ->dispatch('availability-search-updated',
                 [
@@ -401,7 +409,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'rate' => 'test',
+                    'rate' => (string) $rateId,
                 ]
             )
             ->assertViewHas('availability.data')
@@ -415,7 +423,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'rate' => 'is-this-real-life-or-just-testing',
+                    'rate' => '99999',
                 ]
             )
             ->assertViewHas('availability.message')
@@ -424,9 +432,23 @@ class AvailabilityResultsTest extends TestCase
 
     public function test_returns_availability_for_all_advanced_sorted_by_price()
     {
+        $entryId = $this->advancedEntries->first()->id();
+
+        $rate2 = Rate::factory()->create([
+            'statamic_id' => $entryId,
+            'slug' => 'test2',
+            'title' => 'Test2',
+        ]);
+
+        $rate3 = Rate::factory()->create([
+            'statamic_id' => $entryId,
+            'slug' => 'test3',
+            'title' => 'Test3',
+        ]);
+
         $availabilityData = [
             'available' => 1,
-            'statamic_id' => $this->advancedEntries->first()->id(),
+            'statamic_id' => $entryId,
         ];
 
         Availability::factory()
@@ -440,7 +462,7 @@ class AvailabilityResultsTest extends TestCase
             ->create([
                 ...$availabilityData,
                 'price' => 25,
-                'property' => 'test2',
+                'rate_id' => $rate2->id,
             ]);
 
         Availability::factory()
@@ -453,101 +475,12 @@ class AvailabilityResultsTest extends TestCase
             )
             ->create([...$availabilityData,
                 'price' => 75,
-                'property' => 'test3',
+                'rate_id' => $rate3->id,
             ]);
 
-        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
-            ->dispatch('availability-search-updated',
-                [
-                    'dates' => [
-                        'date_start' => $this->date->toISOString(),
-                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
-                    ],
-                    'quantity' => 1,
-                    'rate' => 'any',
-                ]
-            )
-            ->assertViewHas('availability.data.test')
-            ->assertViewHas('availability.data.test.price', '100.00')
-            ->assertViewHas('availability.data.test2.price', '50.00')
-            ->assertViewHas('availability.data.test3.price', '150.00')
-            ->assertViewHas('availability.request')
-            ->assertViewHas('availability.request.days', 2);
+        $testRate = Rate::where('statamic_id', $entryId)->where('slug', 'test')->first();
 
-        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
-            ->dispatch('availability-search-updated',
-                [
-                    'dates' => [
-                        'date_start' => $this->date->toISOString(),
-                        'date_end' => $this->date->copy()->add(5, 'day')->toISOString(),
-                    ],
-                    'quantity' => 1,
-                    'rate' => 'any',
-                ]
-            )
-            ->assertViewMissing('availability.data.test')
-            ->assertViewHas('availability.message')
-            ->assertViewHas('availability.message.status', false);
-    }
-
-    public function test_returns_availability_for_all_properties_when_advanced_is_true()
-    {
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-            )
-            ->create([
-                'available' => 1,
-                'price' => 50,
-                'statamic_id' => $this->advancedEntries->first()->id(),
-                'property' => 'another-test',
-            ]);
-
-        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'rates' => true])
-            ->dispatch('availability-search-updated',
-                [
-                    'dates' => [
-                        'date_start' => $this->date->toISOString(),
-                        'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
-                    ],
-                    'quantity' => 1,
-                    'rate' => 'any', // This will be overridden by the component
-                ]
-            )
-            ->assertSet('rates', true)
-            ->assertSeeHtml('Test Property')
-            ->assertViewHas('availability.test')
-            ->assertViewHas('availability.another-test')
-            ->assertViewHas('availability.test.data.price')
-            ->assertViewHas('availability.another-test.data.price');
-
-        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'rates' => true])
-            ->dispatch('availability-search-updated',
-                [
-                    'dates' => [
-                        'date_start' => $this->date->toISOString(),
-                        'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
-                    ],
-                    'quantity' => 1,
-                    'rate' => 'any', // This will be overridden by the component
-                ]
-            )
-            ->assertSet('rates', true)
-            ->assertSeeHtml('Test Property')
-            ->assertViewHas('availability.test')
-            ->assertViewHas('availability.another-test')
-            ->assertViewHas('availability.test.data.price')
-            ->assertViewMissing('availability.another-test.data.price')
-            ->assertViewHas('availability.another-test.message.status', false);
-    }
-
-    public function test_checkout_after_checkout_property_when_advanced_is_true()
-    {
-        $checkoutPage = $this->createCheckoutEntry();
-
-        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'rates' => true])
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId])
             ->dispatch('availability-search-updated',
                 [
                     'dates' => [
@@ -560,20 +493,128 @@ class AvailabilityResultsTest extends TestCase
             );
 
         $availability = $component->viewData('availability');
-        $propertyToCheckout = 'test';
+        $data = collect($availability['data']);
 
-        // Checkout
-        $component->call('checkoutRate', $propertyToCheckout)->assertRedirect($checkoutPage->url());
+        // Results are sorted by price and contain rate_id for identification
+        $this->assertCount(3, $data);
+        $this->assertEquals('50.00', $data->firstWhere('rate_id', $rate2->id)['price']);
+        $this->assertEquals('100.00', $data->firstWhere('rate_id', $testRate->id)['price']);
+        $this->assertEquals('150.00', $data->firstWhere('rate_id', $rate3->id)['price']);
 
-        // The reservation should be for the property selected via checkoutRate
-        $this->assertDatabaseHas('resrv_reservations', [
-            'item_id' => $this->advancedEntries->first()->id(),
-            'property' => $propertyToCheckout,
-            'price' => data_get($availability, $propertyToCheckout.'.data.price'),
+        $component->assertViewHas('availability.request')
+            ->assertViewHas('availability.request.days', 2);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(5, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => 'any',
+                ]
+            )
+            ->assertViewHas('availability.message')
+            ->assertViewHas('availability.message.status', false);
+    }
+
+    public function test_returns_availability_for_all_rates_when_advanced_is_true()
+    {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::where('statamic_id', $entryId)->first();
+
+        $anotherRate = Rate::factory()->create([
+            'statamic_id' => $entryId,
+            'slug' => 'another-test',
+            'title' => 'Another Test',
         ]);
 
-        // Ensure data.rate was updated to the specific property
-        $this->assertEquals($propertyToCheckout, $component->get('data.rate'));
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->addDay()],
+            )
+            ->create([
+                'available' => 1,
+                'price' => 50,
+                'statamic_id' => $entryId,
+                'rate_id' => $anotherRate->id,
+            ]);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => 'any', // This will be overridden by the component
+                ]
+            )
+            ->assertSet('rates', true)
+            ->assertSeeHtml('Test')
+            ->assertViewHas('availability.'.$testRate->id)
+            ->assertViewHas('availability.'.$anotherRate->id)
+            ->assertViewHas('availability.'.$testRate->id.'.data.price')
+            ->assertViewHas('availability.'.$anotherRate->id.'.data.price');
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => 'any', // This will be overridden by the component
+                ]
+            )
+            ->assertSet('rates', true)
+            ->assertSeeHtml('Test')
+            ->assertViewHas('availability.'.$testRate->id)
+            ->assertViewHas('availability.'.$anotherRate->id)
+            ->assertViewHas('availability.'.$testRate->id.'.data.price')
+            ->assertViewMissing('availability.'.$anotherRate->id.'.data.price')
+            ->assertViewHas('availability.'.$anotherRate->id.'.message.status', false);
+    }
+
+    public function test_checkout_after_checkout_rate_when_advanced_is_true()
+    {
+        $checkoutPage = $this->createCheckoutEntry();
+
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::where('statamic_id', $entryId)->first();
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => 'any',
+                ]
+            );
+
+        $availability = $component->viewData('availability');
+        $rateToCheckout = $testRate->id;
+
+        // Checkout
+        $component->call('checkoutRate', (string) $rateToCheckout)->assertRedirect($checkoutPage->url());
+
+        // The reservation should be for the rate selected via checkoutRate
+        $this->assertDatabaseHas('resrv_reservations', [
+            'item_id' => $entryId,
+            'rate_id' => $rateToCheckout,
+            'price' => data_get($availability, $rateToCheckout.'.data.price'),
+        ]);
+
+        // Ensure data.rate was updated to the specific rate
+        $this->assertEquals((string) $rateToCheckout, $component->get('data.rate'));
     }
 
     public function test_gets_options_if_property_is_enabled()
@@ -748,6 +789,8 @@ class AvailabilityResultsTest extends TestCase
     {
         $this->createCheckoutEntry();
 
+        $rateId = $this->getFirstAdvancedEntryRateId();
+
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
             ->dispatch('availability-search-updated',
                 [
@@ -756,7 +799,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'rate' => 'test',
+                    'rate' => (string) $rateId,
                 ]
             );
 
@@ -770,7 +813,7 @@ class AvailabilityResultsTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(2, 'day'),
                 'quantity' => 1,
-                'property' => 'test',
+                'rate_id' => $rateId,
                 'payment' => data_get($availability, 'data.payment'),
                 'price' => data_get($availability, 'data.price'),
             ]
@@ -796,7 +839,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'rate' => 'test',
+                    'rate' => (string) $rateId,
                 ]
             );
 
@@ -816,6 +859,8 @@ class AvailabilityResultsTest extends TestCase
     {
         $this->createCheckoutEntry();
 
+        $rateId = $this->getFirstAdvancedEntryRateId();
+
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
             ->dispatch('availability-search-updated',
                 [
@@ -824,7 +869,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'rate' => 'test',
+                    'rate' => (string) $rateId,
                     'customer' => [
                         'adults' => 2,
                         'children' => 1,
@@ -842,7 +887,7 @@ class AvailabilityResultsTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(2, 'day'),
                 'quantity' => 1,
-                'property' => 'test',
+                'rate_id' => $rateId,
                 'payment' => data_get($availability, 'data.payment'),
                 'price' => data_get($availability, 'data.price'),
                 'customer_id' => 1,
@@ -856,6 +901,8 @@ class AvailabilityResultsTest extends TestCase
     {
         $this->createCheckoutEntry();
 
+        $rateId = $this->getFirstAdvancedEntryRateId();
+
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'extraDays' => 1, 'extraDaysOffset' => 1])
             ->dispatch('availability-search-updated',
                 [
@@ -864,7 +911,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'rate' => 'test',
+                    'rate' => (string) $rateId,
                     'customer' => [
                         'adults' => 2,
                         'children' => 1,
@@ -882,7 +929,7 @@ class AvailabilityResultsTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(2, 'day'),
                 'quantity' => 1,
-                'property' => 'test',
+                'rate_id' => $rateId,
                 'payment' => data_get($availability[0], 'data.payment'),
                 'price' => data_get($availability[0], 'data.price'),
                 'customer_id' => 1,
@@ -925,6 +972,8 @@ class AvailabilityResultsTest extends TestCase
         $this->createCheckoutEntry();
         Config::set('resrv-config.ignore_quantity_for_prices', true);
 
+        $rateId = $this->getFirstAdvancedEntryRateId();
+
         Availability::where('statamic_id', $this->advancedEntries->first()->id())
             ->update(['available' => 3]);
 
@@ -936,7 +985,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 3,
-                    'rate' => 'test',
+                    'rate' => (string) $rateId,
                 ]
             );
 
@@ -950,7 +999,7 @@ class AvailabilityResultsTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(2, 'day'),
                 'quantity' => 3,
-                'property' => 'test',
+                'rate_id' => $rateId,
                 'payment' => data_get($availability, 'data.payment'),
                 'price' => data_get($availability, 'data.price'),
             ]
@@ -961,6 +1010,8 @@ class AvailabilityResultsTest extends TestCase
     {
         $checkoutEntry = $this->createCheckoutEntry();
 
+        $rateId = $this->getFirstAdvancedEntryRateId();
+
         Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
             ->dispatch('availability-search-updated',
                 [
@@ -969,7 +1020,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'rate' => 'test',
+                    'rate' => (string) $rateId,
                 ]
             )
             ->call('checkout')
@@ -980,6 +1031,8 @@ class AvailabilityResultsTest extends TestCase
     public function test_creates_reservation_and_saves_affiliate_when_cookie_is_in_session()
     {
         $this->createCheckoutEntry();
+
+        $rateId = $this->getFirstAdvancedEntryRateId();
 
         $affiliate = Affiliate::factory()->create();
 
@@ -992,7 +1045,7 @@ class AvailabilityResultsTest extends TestCase
                         'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'rate' => 'test',
+                    'rate' => (string) $rateId,
                 ]
             );
 

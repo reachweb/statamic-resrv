@@ -42,14 +42,6 @@ class ChildReservation extends Model
 
     public function getPropertyAttributeLabel(): string
     {
-        if ($this->rate_id) {
-            return $this->getRateLabel();
-        }
-
-        if ($this->property == null) {
-            return '';
-        }
-
-        return (string) $this->property;
+        return $this->getRateLabel();
     }
 }

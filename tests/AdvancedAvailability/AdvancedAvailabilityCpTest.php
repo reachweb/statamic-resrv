@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AdvancedAvailabilityCpTest extends TestCase
@@ -20,18 +21,24 @@ class AdvancedAvailabilityCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
 
+        $rate = Rate::factory()->create([
+            'statamic_id' => $item->id(),
+            'slug' => 'test',
+            'title' => 'Test',
+        ]);
+
         Availability::factory()
-            ->advanced()
             ->count(2)
             ->sequence(
                 ['date' => today()],
                 ['date' => today()->add(1, 'day')]
             )
-            ->create(
-                ['statamic_id' => $item->id()]
-            );
+            ->create([
+                'statamic_id' => $item->id(),
+                'rate_id' => $rate->id,
+            ]);
 
-        $response = $this->get(cp_route('resrv.availability.index', [$item->id(), 'something']));
+        $response = $this->get(cp_route('resrv.availability.index', [$item->id(), $rate->id]));
         $response->assertStatus(200)->assertSee($item->id());
     }
 
@@ -39,11 +46,17 @@ class AdvancedAvailabilityCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
 
+        $rate = Rate::factory()->create([
+            'statamic_id' => $item->id(),
+            'slug' => 'test',
+            'title' => 'Test',
+        ]);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(5, 'day')->isoFormat('YYYY-MM-DD'),
-            'advanced' => [['code' => 'something', 'label' => 'Something else']],
+            'rate_ids' => [$rate->id],
             'price' => 150,
             'available' => 2,
         ];
@@ -52,19 +65,26 @@ class AdvancedAvailabilityCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
-            'property' => 'something',
+            'rate_id' => $rate->id,
         ]);
     }
 
     public function test_advanced_availability_can_update_for_date_range()
     {
         $item = $this->makeStatamicItem();
+
+        $rate = Rate::factory()->create([
+            'statamic_id' => $item->id(),
+            'slug' => 'test',
+            'title' => 'Test',
+        ]);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 150,
-            'advanced' => [['code' => 'something']],
+            'rate_ids' => [$rate->id],
             'available' => 6,
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
@@ -80,7 +100,7 @@ class AdvancedAvailabilityCpTest extends TestCase
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 200,
-            'advanced' => [['code' => 'something']],
+            'rate_ids' => [$rate->id],
             'available' => 2,
         ];
 
@@ -97,11 +117,23 @@ class AdvancedAvailabilityCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
 
+        $rate1 = Rate::factory()->create([
+            'statamic_id' => $item->id(),
+            'slug' => 'test',
+            'title' => 'Test',
+        ]);
+
+        $rate2 = Rate::factory()->create([
+            'statamic_id' => $item->id(),
+            'slug' => 'test-else',
+            'title' => 'Test Else',
+        ]);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(5, 'day')->isoFormat('YYYY-MM-DD'),
-            'advanced' => [['code' => 'something'], ['code' => 'something-else']],
+            'rate_ids' => [$rate1->id, $rate2->id],
             'price' => 150,
             'available' => 2,
         ];
@@ -110,11 +142,11 @@ class AdvancedAvailabilityCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
-            'property' => 'something',
+            'rate_id' => $rate1->id,
         ])->assertDatabaseCount('resrv_availabilities', 10);
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
-            'property' => 'something-else',
+            'rate_id' => $rate2->id,
         ])->assertDatabaseCount('resrv_availabilities', 10);
     }
 
@@ -122,16 +154,22 @@ class AdvancedAvailabilityCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
 
+        $rate = Rate::factory()->create([
+            'statamic_id' => $item->id(),
+            'slug' => 'test',
+            'title' => 'Test',
+        ]);
+
         Availability::factory()
-            ->advanced()
             ->count(2)
             ->sequence(
                 ['date' => today()->isoFormat('YYYY-MM-DD')],
                 ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
             )
-            ->create(
-                ['statamic_id' => $item->id()]
-            );
+            ->create([
+                'statamic_id' => $item->id(),
+                'rate_id' => $rate->id,
+            ]);
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
@@ -141,7 +179,7 @@ class AdvancedAvailabilityCpTest extends TestCase
             'statamic_id' => $item->id(),
             'date_start' => today()->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
-            'advanced' => [['code' => 'something', 'label' => 'Some label here']],
+            'rate_ids' => [$rate->id],
         ];
 
         $response = $this->delete(cp_route('resrv.availability.delete'), $payload);

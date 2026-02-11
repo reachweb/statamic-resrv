@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades;
@@ -396,6 +397,8 @@ class AvailabilitySearchTest extends TestCase
 
     public function test_availability_calendar_with_advanced_availability()
     {
+        $rateId = Rate::where('statamic_id', $this->advancedEntries->first()->id())->first()->id;
+
         $component = Livewire::test(AvailabilitySearch::class, [
             'entry' => $this->advancedEntries->first()->id(),
             'showAvailabilityOnCalendar' => true,
@@ -405,7 +408,7 @@ class AvailabilitySearchTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->set('data.rate', 'test')
+            ->set('data.rate', (string) $rateId)
             ->call('availabilityCalendar');
 
         $calendar = $component->effects['returns'][0];
@@ -456,18 +459,30 @@ class AvailabilitySearchTest extends TestCase
             ->assertDispatched('availability-search-updated');
     }
 
-    public function test_availability_calendar_returns_lowest_price_when_multiple_properties()
+    public function test_availability_calendar_returns_lowest_price_when_multiple_rates()
     {
         $entry = $this->entries->first();
 
-        // Create availability with different prices for different properties on the same date
+        $expensiveRate = Rate::factory()->create([
+            'statamic_id' => $entry->id(),
+            'slug' => 'expensive-cabin',
+            'title' => 'Expensive Cabin',
+        ]);
+
+        $cheapRate = Rate::factory()->create([
+            'statamic_id' => $entry->id(),
+            'slug' => 'cheap-cabin',
+            'title' => 'Cheap Cabin',
+        ]);
+
+        // Create availability with different prices for different rates on the same date
         \Reach\StatamicResrv\Models\Availability::factory()
             ->create([
                 'statamic_id' => $entry->id(),
                 'date' => today(),
                 'price' => 200,
                 'available' => 2,
-                'property' => 'expensive-cabin',
+                'rate_id' => $expensiveRate->id,
             ]);
 
         \Reach\StatamicResrv\Models\Availability::factory()
@@ -476,7 +491,7 @@ class AvailabilitySearchTest extends TestCase
                 'date' => today(),
                 'price' => 25,
                 'available' => 3,
-                'property' => 'cheap-cabin',
+                'rate_id' => $cheapRate->id,
             ]);
 
         $component = Livewire::test(AvailabilitySearch::class, [
@@ -493,6 +508,6 @@ class AvailabilitySearchTest extends TestCase
         // Should return the lowest price (25) not the expensive one (200)
         // Note: The entry already has availability at price 50, so 25 should be returned
         $this->assertEquals(25, $calendar[$key]['price']);
-        $this->assertEquals('cheap-cabin', $calendar[$key]['property']);
+        $this->assertEquals($cheapRate->id, $calendar[$key]['rate_id']);
     }
 }

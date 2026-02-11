@@ -5,17 +5,17 @@
     </div>
     <div class="statamic-resrv-availability relative" v-else>
         <div class="flex items-center py-1 my-4 border-b border-t dark:border-gray-500">
-            <span class="font-bold mr-4">{{ __('Enable reservations') }}</span>    
+            <span class="font-bold mr-4">{{ __('Enable reservations') }}</span>
             <toggle v-model="enabled" @input="changeAvailability" :parent="this.meta.parent"></toggle>
         </div>
-        <template v-if="isAdvanced">
+        <template v-if="hasRates">
         <div class="w-full h-full relative mb-3">
-            <v-select :placeholder="__('Select property')" v-model="property" :options="propertiesOptions" />
+            <v-select :placeholder="__('Select rate')" v-model="rate" :options="rateOptions" />
         </div>
         </template>
         <div class="w-full h-full relative">
-            <Loader v-if="!availabilityLoaded && !isAdvanced" />
-            <div class="w-full my-3" v-if="!isAdvanced || property">
+            <Loader v-if="!availabilityLoaded && !hasRates && ratesLoaded" />
+            <div class="w-full my-3" v-if="!hasRates || rate">
                 <div class="w-full flex justify-end">
                     <button class="btn-flat text-sm" @click="showModal = 'massavailability'">{{ __('Bulk edit') }}</button>
                 </div>
@@ -26,16 +26,16 @@
             v-if="showModal == 'availability'"
             :dates="selectedDates"
             :parent-id="this.meta.parent"
-            :property="this.property"
+            :rate="this.rate"
             @cancel="toggleModal"
             @saved="availabilitySaved"
         >
-        </availability-modal> 
+        </availability-modal>
         <mass-availability-modal
             v-if="showModal == 'massavailability'"
             :parent-id="this.meta.parent"
-            :property="this.property"
-            :propertiesOptions="this.propertiesOptions"
+            :rate="this.rate"
+            :rate-options="this.rateOptions"
             @cancel="toggleModal"
             @saved="availabilitySaved"
         >
@@ -78,7 +78,9 @@ export default {
             },
             availability: '',
             availabilityLoaded: false,
-            property: null
+            rate: null,
+            rates: [],
+            ratesLoaded: false,
         }
     },
 
@@ -96,18 +98,14 @@ export default {
             }
             return false
         },
-        isAdvanced() {
-            if (_.isObject(this.meta.advanced_availability)) {
-                return true
-            }
-            return false
+        hasRates() {
+            return this.rates.length > 1;
         },
-        propertiesOptions() {
-            let options = [];
-            if (_.isObject(this.meta.advanced_availability)) {
-                _.forEach(this.meta.advanced_availability, (label, slug) => options.push({label: label, code: slug}))
-            }
-            return options;
+        rateOptions() {
+            return this.rates.map(rate => ({
+                label: rate.title,
+                code: rate.id
+            }));
         }
     },
 
@@ -115,10 +113,7 @@ export default {
         this.calendar = new Calendar(this.$refs.calendar, this.calendarOptions)
         if (! this.newItem) {
             this.$emit('input', this.enabled)
-        }
-        if (! this.newItem && ! this.isAdvanced) {
-            this.getAvailability()            
-            this.calendar.render()
+            this.getRates()
         }
     },
 
@@ -133,8 +128,8 @@ export default {
     },
 
     watch: {
-        property() {
-            if (this.property !== null) {
+        rate() {
+            if (this.rate !== null) {
                 this.getAvailability()
             } else {
                 this.clearAvailability()
@@ -154,7 +149,7 @@ export default {
                 this.showModal = modal
             } else {
                 this.showModal = false
-            }            
+            }
         },
         toggleAvailability() {
             this.availabilityLoaded = ! this.availabilityLoaded
@@ -163,7 +158,7 @@ export default {
             let arrayOfDomNodes = []
             let day = dayjs(arg.date).format('YYYY-MM-DD')
             const defaultClasses = ['p-2', 'text-xs', 'text-white', 'bg-green-700'];
-            
+
             // Day label
             let dayLabel = document.createElement('div')
             dayLabel.classList.add('mt-1', 'mb-1')
@@ -176,23 +171,23 @@ export default {
 
             // Availability
             if (this.hasAvailable(day)) {
-                let avail = document.createElement('div')     
+                let avail = document.createElement('div')
                 if (this.hasAvailable(day) > 0) {
                     avail.classList.add(...defaultClasses, 'bg-green-700')
                 }
                 avail.innerHTML = '# '+this.hasAvailable(day)
                 arrayOfDomNodes.push(avail)
-            }    
-               
-            // Price            
+            }
+
+            // Price
             if (this.hasPrice(day)) {
-                let price = document.createElement('div')     
+                let price = document.createElement('div')
                 if (this.hasPrice(day) > 0) {
                     price.classList.add(...defaultClasses, 'bg-gray-700')
                 }
                 price.innerHTML = this.meta.currency_symbol+' '+this.hasPrice(day)
                 arrayOfDomNodes.push(price)
-            }           
+            }
 
             return { domNodes: arrayOfDomNodes }
         },
@@ -211,20 +206,38 @@ export default {
             if (day in this.availability) {
                 if (this.availability[day].price) {
                     return this.availability[day].price
-                }                
+                }
             }
             return false
         },
         availabilitySaved() {
             this.toggleAvailability()
-            this.toggleModal()   
+            this.toggleModal()
             this.getAvailability()
             this.renderAgain()
         },
+        getRates() {
+            axios.get('/cp/resrv/rate/' + this.meta.parent)
+            .then(response => {
+                this.rates = response.data
+                this.ratesLoaded = true
+                if (this.rates.length === 1) {
+                    this.rate = { label: this.rates[0].title, code: this.rates[0].id }
+                } else if (this.rates.length === 0) {
+                    this.getAvailability()
+                    this.calendar.render()
+                }
+            })
+            .catch(error => {
+                this.ratesLoaded = true
+                this.getAvailability()
+                this.calendar.render()
+            })
+        },
         getAvailability() {
             let url = '/cp/resrv/availability/'+this.meta.parent
-            if (this.property) {
-                url += '/'+this.property.code
+            if (this.rate) {
+                url += '/'+this.rate.code
             }
             axios.get(url)
             .then(response => {
@@ -244,11 +257,11 @@ export default {
         changeAvailability() {
             if (this.enabled == 'disabled') {
                 this.$emit('input', 'disabled')
-                      
+
             } else {
                 this.$emit('input', this.meta.parent)
             }
-        }            
+        }
     }
 }
 </script>

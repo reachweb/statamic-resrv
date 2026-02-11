@@ -20,7 +20,7 @@ class DecreaseAvailability
                 quantity: $event->reservation->quantity,
                 statamic_id: $event->reservation->item_id,
                 reservationId: $event->reservation->id,
-                advanced: $event->reservation->property,
+                advanced: null,
                 rateId: $event->reservation->rate_id,
             );
         }
@@ -36,7 +36,7 @@ class DecreaseAvailability
                 quantity: $child->quantity,
                 statamic_id: $event->reservation->item_id,
                 reservationId: $child->id,
-                advanced: $child->property,
+                advanced: null,
                 rateId: $child->rate_id,
             );
         });

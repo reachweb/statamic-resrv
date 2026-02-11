@@ -91,14 +91,7 @@ class AvailabilityResults extends Component
             return $this->overrideRates;
         }
 
-        $rates = $this->getRatesForEntry($this->entryId);
-
-        if ($rates->isNotEmpty()) {
-            return $rates->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])->toArray();
-        }
-
-        // Fallback to blueprint properties for backward compatibility
-        return $this->getEntryProperties($this->entry);
+        return $this->resolveEntryRates($this->entryId);
     }
 
     #[On('availability-search-updated')]

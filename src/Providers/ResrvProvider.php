@@ -59,6 +59,7 @@ class ResrvProvider extends AddonServiceProvider
     protected $commands = [
         \Reach\StatamicResrv\Console\Commands\InstallResrv::class,
         \Reach\StatamicResrv\Console\Commands\ImportEntries::class,
+        \Reach\StatamicResrv\Console\Commands\UpgradeToRates::class,
     ];
 
     protected $dictionaries = [

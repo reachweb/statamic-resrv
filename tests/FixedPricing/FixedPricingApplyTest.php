@@ -40,7 +40,7 @@ class FixedPricingApplyTest extends TestCase
 
     public function test_fixed_pricing_changes_availability_prices()
     {
-        $this->createAvailabilityForEntry($this->entry, 25.23, 3, 'none', 7);
+        $this->createAvailabilityForEntry($this->entry, 25.23, 3, days: 7);
 
         // Baseline price
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entry->id()])
@@ -123,7 +123,7 @@ class FixedPricingApplyTest extends TestCase
 
     public function test_fixed_pricing_changes_reservation_prices()
     {
-        $this->createAvailabilityForEntry($this->entry, 25.23, 3, 'none', 7);
+        $this->createAvailabilityForEntry($this->entry, 25.23, 3, days: 7);
 
         FixedPricing::create([
             'statamic_id' => $this->entry->id(),
@@ -193,7 +193,7 @@ class FixedPricingApplyTest extends TestCase
 
     public function test_fixed_pricing_changes_reservation_prices_for_multiple_items()
     {
-        $this->createAvailabilityForEntry($this->entry, 25.23, 3, 'none', 7);
+        $this->createAvailabilityForEntry($this->entry, 25.23, 3, days: 7);
 
         FixedPricing::create([
             'statamic_id' => $this->entry->id(),

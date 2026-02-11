@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Http\Requests\AvailabilityCpRequest;
@@ -11,13 +12,11 @@ use Reach\StatamicResrv\Models\Availability;
 
 class AvailabilityCpController extends Controller
 {
-    public function index(string $statamic_id, ?string $property = null)
+    public function index(string $statamic_id, ?string $identifier = null): JsonResponse
     {
         $results = Availability::where('statamic_id', $statamic_id)
-            ->when($property, function (Builder $query, string $property) {
-                $query->where('property', $property);
-            }, function (Builder $query) {
-                $query->where('property', 'none');
+            ->when($identifier, function (Builder $query, string $identifier) {
+                $query->where('rate_id', (int) $identifier);
             })
             ->get(['statamic_id', 'date', 'price', 'available'])
             ->sortBy('date')
@@ -26,13 +25,13 @@ class AvailabilityCpController extends Controller
         return response()->json($results);
     }
 
-    public function update(AvailabilityCpRequest $request)
+    public function update(AvailabilityCpRequest $request): JsonResponse
     {
         $data = $request->validated();
 
-        if (array_key_exists('advanced', $data)) {
-            foreach ($data['advanced'] as $property) {
-                $this->updateAvailability($data, $property['code']);
+        if (array_key_exists('rate_ids', $data)) {
+            foreach ($data['rate_ids'] as $rateId) {
+                $this->updateAvailability($data, (int) $rateId);
             }
         } else {
             $this->updateAvailability($data);
@@ -41,37 +40,25 @@ class AvailabilityCpController extends Controller
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
 
-    public function delete(Request $request)
+    public function delete(Request $request): JsonResponse
     {
         $data = $request->validate([
             'statamic_id' => 'required',
             'date_start' => 'required|date',
             'date_end' => 'required|date',
-            'advanced' => 'sometimes|array',
+            'rate_ids' => 'sometimes|array',
         ]);
 
-        if (array_key_exists('advanced', $data)) {
-            foreach ($data['advanced'] as $property) {
-                (new Availability)->deleteForDates(
-                    date_start: $data['date_start'],
-                    date_end: $data['date_end'],
-                    statamic_id: $data['statamic_id'],
-                    advanced: [$property['code']]
-                );
-            }
-        } else {
-            (new Availability)->deleteForDates(
-                date_start: $data['date_start'],
-                date_end: $data['date_end'],
-                statamic_id: $data['statamic_id'],
-                advanced: ['none']
-            );
-        }
+        Availability::where('date', '>=', $data['date_start'])
+            ->where('date', '<=', $data['date_end'])
+            ->where('statamic_id', $data['statamic_id'])
+            ->when(isset($data['rate_ids']), fn (Builder $query) => $query->whereIn('rate_id', $data['rate_ids']))
+            ->delete();
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
 
-    private function updateAvailability(array $data, ?string $property = null)
+    private function updateAvailability(array $data, ?int $rateId = null): void
     {
         $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
         $onlyDays = $data['onlyDays'] ?? null;
@@ -91,14 +78,16 @@ class AvailabilityCpController extends Controller
                 $toUpdate['available'] = $data['available'];
             }
 
-            Availability::updateOrCreate(
-                [
-                    'statamic_id' => $data['statamic_id'],
-                    'date' => $day->isoFormat('YYYY-MM-DD'),
-                    'property' => $property ?? 'none',
-                ],
-                $toUpdate
-            );
+            $matchKeys = [
+                'statamic_id' => $data['statamic_id'],
+                'date' => $day->isoFormat('YYYY-MM-DD'),
+            ];
+
+            if ($rateId) {
+                $matchKeys['rate_id'] = $rateId;
+            }
+
+            Availability::updateOrCreate($matchKeys, $toUpdate);
         }
     }
 }
