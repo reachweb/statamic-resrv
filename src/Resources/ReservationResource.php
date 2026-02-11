@@ -50,7 +50,7 @@ class ReservationResource extends ResourceCollection
                     'customer' => $reservation->customer,
                     'extras' => $reservation->extras,
                     'options' => $reservation->options,
-                    'property' => $reservation->getPropertyAttributeLabel(),
+                    'rate' => $reservation->getRateLabel(),
                     'created_at' => $this->formatDate($reservation->created_at),
                     'updated_at' => $this->formatDate($reservation->updated_at),
                 ];
@@ -70,8 +70,8 @@ class ReservationResource extends ResourceCollection
             unset($columns['quantity']);
         }
 
-        if (config('resrv-config.enable_advanced_availability') == false) {
-            unset($columns['property']);
+        if (! \Reach\StatamicResrv\Models\Rate::exists()) {
+            unset($columns['rate']);
         }
 
         if ($key = $this->columnPreferenceKey) {

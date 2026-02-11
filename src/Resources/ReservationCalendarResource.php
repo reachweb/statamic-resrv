@@ -25,7 +25,7 @@ class ReservationCalendarResource extends ResourceCollection
                 'id' => $reservation->id,
                 'title' => '#'.$reservation->id.
                             ' - '.$reservation->entry['title'].
-                            (config('resrv-config.enable_advanced_availability') ? ' - '.$reservation->getPropertyAttributeLabel() : '').
+                            ($reservation->rate_id ? ' - '.$reservation->getRateLabel() : '').
                             (config('resrv-config.maximum_quantity') > 1 ? ' x '.$reservation->quantity : ''),
                 'start' => $this->formatDate($reservation->date_start),
                 'end' => $this->formatDate($reservation->date_end),
@@ -65,7 +65,7 @@ class ReservationCalendarResource extends ResourceCollection
                 'id' => $reservation->id,
                 'title' => '#'.$reservation->id.
                             ' - '.$reservation->entry['title'].
-                            (config('resrv-config.enable_advanced_availability') ? ' - '.$child->getPropertyAttributeLabel() : '').
+                            ($child->rate_id ? ' - '.$child->getRateLabel() : '').
                             (config('resrv-config.maximum_quantity') > 1 ? ' x '.$child->quantity : ''),
                 'start' => $this->formatDate($child->date_start),
                 'end' => $this->formatDate($child->date_end),

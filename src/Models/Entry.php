@@ -70,7 +70,7 @@ class Entry extends Model
             ],
             [
                 'title' => $entry->get('title'),
-                'enabled' => $entry->get($field->handle()) === 'disabled' ? false : true,
+                'enabled' => $entry->get($field->handle()) !== 'disabled',
                 'collection' => $entry->collection()->handle(),
                 'handle' => $entry->blueprint()->handle(),
             ]
@@ -86,6 +86,11 @@ class Entry extends Model
     public function availabilities(): HasMany
     {
         return $this->hasMany(Availability::class, 'statamic_id', 'item_id');
+    }
+
+    public function rates(): Builder
+    {
+        return Rate::forEntry($this->item_id);
     }
 
     public function getStatamicEntry(): StatamicEntry

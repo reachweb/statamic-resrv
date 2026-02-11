@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Reach\StatamicResrv\Database\Factories\ChildReservationFactory;
 
 class ChildReservation extends Model
@@ -29,13 +30,18 @@ class ChildReservation extends Model
         return $this->belongsTo(Reservation::class, 'reservation_id');
     }
 
-    public function getPropertyAttributeLabel()
+    public function rate(): BelongsTo
     {
-        if ($this->property == null) {
-            return '';
-        }
-        $availability = new Availability;
+        return $this->belongsTo(Rate::class, 'rate_id');
+    }
 
-        return $availability->getPropertyLabel($this->parent->entry()->blueprint, $this->parent->entry()->collection()->handle(), $this->property);
+    public function getRateLabel(): string
+    {
+        return $this->rate?->title ?? 'Default';
+    }
+
+    public function getPropertyAttributeLabel(): string
+    {
+        return $this->getRateLabel();
     }
 }

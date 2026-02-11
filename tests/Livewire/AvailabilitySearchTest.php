@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades;
@@ -55,7 +56,7 @@ class AvailabilitySearchTest extends TestCase
                         'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                     'customer' => [],
                 ]
             )
@@ -110,7 +111,7 @@ class AvailabilitySearchTest extends TestCase
                         'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                     'customer' => [],
                 ]
             );
@@ -211,7 +212,7 @@ class AvailabilitySearchTest extends TestCase
                         'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 2,
-                    'advanced' => null,
+                    'rate' => null,
                     'customer' => [],
                 ])
             ->assertStatus(200);
@@ -249,15 +250,15 @@ class AvailabilitySearchTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->set('data.advanced', 'something')
-            ->assertSet('data.advanced', 'something')
+            ->set('data.rate', 'something')
+            ->assertSet('data.rate', 'something')
             ->assertDispatched('availability-search-updated', [
                 'dates' => [
                     'date_start' => $this->date->toISOString(),
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => 'something',
+                'rate' => 'something',
                 'customer' => [],
             ])
             ->assertStatus(200);
@@ -266,8 +267,8 @@ class AvailabilitySearchTest extends TestCase
     public function test_cannot_set_advanced_without_dates()
     {
         Livewire::test(AvailabilitySearch::class)
-            ->set('data.advanced', 'something-else')
-            ->assertSet('data.advanced', 'something-else')
+            ->set('data.rate', 'something-else')
+            ->assertSet('data.rate', 'something-else')
             ->assertHasErrors(['data.dates.date_start'])
             ->assertSee('Availability search requires date information to be provided.')
             ->assertNotDispatched('availability-search-updated')
@@ -275,14 +276,14 @@ class AvailabilitySearchTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->assertSet('data.advanced', 'something-else')
+            ->assertSet('data.rate', 'something-else')
             ->assertDispatched('availability-search-updated', [
                 'dates' => [
                     'date_start' => $this->date->toISOString(),
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => 'something-else',
+                'rate' => 'something-else',
                 'customer' => [],
             ]);
     }
@@ -310,56 +311,37 @@ class AvailabilitySearchTest extends TestCase
 
     public function test_can_return_advanced_properties_if_set()
     {
-        $component = Livewire::test(AvailabilitySearch::class, ['advanced' => true, 'overrideProperties' => ['something']])
-            ->assertSet('advanced', true)
-            ->assertSet('overrideProperties', ['something'])
+        $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'overrideRates' => ['something']])
+            ->assertSet('rates', true)
+            ->assertSet('overrideRates', ['something'])
             ->assertSee('select');
-        $this->assertEquals(['something'], $component->__get('advancedProperties'));
+        $this->assertEquals(['something'], $component->__get('entryRates'));
     }
 
-    public function test_can_return_advanced_properties_from_blueprint()
+    public function test_can_return_rates_from_rate_model()
     {
-        $collection = Facades\Collection::make('cars')->save();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
 
-        $blueprint = Facades\Blueprint::make()->setContents([
-            'sections' => [
-                'main' => [
-                    'fields' => [
-                        [
-                            'handle' => 'title',
-                            'field' => [
-                                'type' => 'text',
-                                'display' => 'Title',
-                            ],
-                        ],
-                        [
-
-                            'handle' => 'resrv_availability',
-                            'field' => [
-                                'type' => 'resrv_availability',
-                                'display' => 'Resrv Availability',
-                                'listable' => 'hidden',
-                                'advanced_availability' => [
-                                    'location1' => 'Location 1',
-                                    'location2' => 'Location 2',
-                                    'location3' => 'Location 3',
-                                ],
-                            ],
-                        ],
-                    ],
-                ],
-            ],
+        $rate1 = Rate::factory()->create([
+            'collection' => 'pages',
+            'title' => 'Standard',
+            'slug' => 'standard',
         ]);
-        $blueprint->setHandle('cars')->setNamespace('collections.'.$collection->handle())->save();
+        $rate2 = Rate::factory()->create([
+            'collection' => 'pages',
+            'title' => 'Premium',
+            'slug' => 'premium',
+        ]);
 
-        $component = Livewire::test(AvailabilitySearch::class, ['advanced' => 'cars.cars'])
-            ->assertSet('advanced', 'cars.cars');
+        $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'entry' => $item->id()])
+            ->assertSet('rates', true);
 
-        $this->assertEquals([
-            'location1' => 'Location 1',
-            'location2' => 'Location 2',
-            'location3' => 'Location 3',
-        ], $component->__get('advancedProperties'));
+        $entryRates = $component->__get('entryRates');
+
+        $this->assertArrayHasKey($rate1->id, $entryRates);
+        $this->assertArrayHasKey($rate2->id, $entryRates);
+        $this->assertEquals('Standard', $entryRates[$rate1->id]);
+        $this->assertEquals('Premium', $entryRates[$rate2->id]);
     }
 
     public function test_can_set_a_custom_value()
@@ -369,7 +351,6 @@ class AvailabilitySearchTest extends TestCase
             ->assertSet('data.customer', ['adults' => 2]);
     }
 
-    // Test availability calendar returns data when enabled
     public function test_availability_calendar_returns_data_when_enabled()
     {
         $component = Livewire::test(AvailabilitySearch::class, [
@@ -389,9 +370,10 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(1, $calendar[$key]['available']);
     }
 
-    // Test availability calendar returns data when enabled with advanced availability
     public function test_availability_calendar_with_advanced_availability()
     {
+        $rateId = Rate::forEntry($this->advancedEntries->first()->id())->first()->id;
+
         $component = Livewire::test(AvailabilitySearch::class, [
             'entry' => $this->advancedEntries->first()->id(),
             'showAvailabilityOnCalendar' => true,
@@ -401,7 +383,7 @@ class AvailabilitySearchTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->set('data.advanced', 'test')
+            ->set('data.rate', (string) $rateId)
             ->call('availabilityCalendar');
 
         $calendar = $component->effects['returns'][0];
@@ -419,7 +401,7 @@ class AvailabilitySearchTest extends TestCase
         Livewire::test(AvailabilitySearch::class)
             ->dispatch('availability-date-selected', [
                 'date' => $this->date->copy()->add(5, 'day')->toDateString(),
-                'property' => null,
+                'rate_id' => null,
             ])
             ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
             ->assertSet('data.dates.date_end', $this->date->copy()->add(6, 'day')->toDateString())
@@ -431,10 +413,10 @@ class AvailabilitySearchTest extends TestCase
         Livewire::test(AvailabilitySearch::class)
             ->dispatch('availability-date-selected', [
                 'date' => $this->date->copy()->add(5, 'day')->toDateString(),
-                'property' => 'cabin-a',
+                'rate_id' => 'cabin-a',
             ])
             ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
-            ->assertSet('data.advanced', 'cabin-a')
+            ->assertSet('data.rate', 'cabin-a')
             ->assertDispatched('availability-search-updated');
     }
 
@@ -445,25 +427,37 @@ class AvailabilitySearchTest extends TestCase
         Livewire::test(AvailabilitySearch::class)
             ->dispatch('availability-date-selected', [
                 'date' => $this->date->copy()->add(5, 'day')->toDateString(),
-                'property' => null,
+                'rate_id' => null,
             ])
             ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
             ->assertSet('data.dates.date_end', $this->date->copy()->add(8, 'day')->toDateString())
             ->assertDispatched('availability-search-updated');
     }
 
-    public function test_availability_calendar_returns_lowest_price_when_multiple_properties()
+    public function test_availability_calendar_returns_lowest_price_when_multiple_rates()
     {
         $entry = $this->entries->first();
 
-        // Create availability with different prices for different properties on the same date
+        $expensiveRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'expensive-cabin',
+            'title' => 'Expensive Cabin',
+        ]);
+
+        $cheapRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'cheap-cabin',
+            'title' => 'Cheap Cabin',
+        ]);
+
+        // Create availability with different prices for different rates on the same date
         \Reach\StatamicResrv\Models\Availability::factory()
             ->create([
                 'statamic_id' => $entry->id(),
                 'date' => today(),
                 'price' => 200,
                 'available' => 2,
-                'property' => 'expensive-cabin',
+                'rate_id' => $expensiveRate->id,
             ]);
 
         \Reach\StatamicResrv\Models\Availability::factory()
@@ -472,7 +466,7 @@ class AvailabilitySearchTest extends TestCase
                 'date' => today(),
                 'price' => 25,
                 'available' => 3,
-                'property' => 'cheap-cabin',
+                'rate_id' => $cheapRate->id,
             ]);
 
         $component = Livewire::test(AvailabilitySearch::class, [
@@ -489,6 +483,6 @@ class AvailabilitySearchTest extends TestCase
         // Should return the lowest price (25) not the expensive one (200)
         // Note: The entry already has availability at price 50, so 25 should be returned
         $this->assertEquals(25, $calendar[$key]['price']);
-        $this->assertEquals('cheap-cabin', $calendar[$key]['property']);
+        $this->assertEquals($cheapRate->id, $calendar[$key]['rate_id']);
     }
 }

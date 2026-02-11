@@ -16,10 +16,8 @@ class ChildReservationFactory extends Factory
 
     /**
      * Define the model's default state.
-     *
-     * @return array
      */
-    public function definition()
+    public function definition(): array
     {
         return [
             'reservation_id' => '',
@@ -27,5 +25,14 @@ class ChildReservationFactory extends Factory
             'date_end' => today()->add(3, 'day')->toIso8601String(),
             'quantity' => 1,
         ];
+    }
+
+    public function withRate(int $rateId): Factory
+    {
+        return $this->state(function (array $attributes) use ($rateId) {
+            return [
+                'rate_id' => $rateId,
+            ];
+        });
     }
 }

@@ -42,11 +42,9 @@ trait HandlesAvailabilityQueries
             ? collect($entries->items())
             : $entries;
 
-        // In multisite, availability is stored with origin entry IDs.
-        // Map localized entry IDs to origin IDs for database queries.
-        return $items->map(function ($entry) {
-            return $entry->hasOrigin() ? $entry->origin()->id() : $entry->id();
-        })->toArray();
+        return $items->map(
+            fn ($entry) => $entry->hasOrigin() ? $entry->origin()->id() : $entry->id()
+        )->toArray();
     }
 
     public function queryBaseAvailabilityForEntry(): array
@@ -62,10 +60,8 @@ trait HandlesAvailabilityQueries
 
     public function queryExtraAvailabilityForEntry(): Collection
     {
-        $periods = $this->generateDatePeriods($this->data);
-
-        $periods->transform(function ($period) {
-            $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'advanced']));
+        return $this->generateDatePeriods($this->data)->map(function ($period) {
+            $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'rate_id', 'advanced']));
             try {
                 $this->validateCutoffRules($searchData['date_start']);
 
@@ -80,19 +76,17 @@ trait HandlesAvailabilityQueries
                 ];
             }
         });
-
-        return $periods;
     }
 
-    public function queryAvailabilityForAllProperties(): Collection
+    public function queryAvailabilityForAllRates(): Collection
     {
-        return collect($this->advancedProperties)->keys()->mapWithKeys(function ($property) {
-            $searchData = array_merge($this->data->toResrvArray(), ['advanced' => $property]);
+        return collect($this->entryRates)->keys()->mapWithKeys(function ($rateKey) {
+            $searchData = array_merge($this->data->toResrvArray(), ['advanced' => $rateKey, 'rate_id' => $rateKey]);
             try {
-                return [$property => app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId)];
+                return [$rateKey => app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId)];
             } catch (AvailabilityException $exception) {
                 return [
-                    $property => [
+                    $rateKey => [
                         'message' => [
                             'status' => false,
                             'error' => $exception->getMessage(),
@@ -104,10 +98,11 @@ trait HandlesAvailabilityQueries
         });
     }
 
-    public function validateAvailabilityAndPrice()
+    public function validateAvailabilityAndPrice(): void
     {
         $searchData = array_merge(['price' => data_get($this->availability, 'data.price')], $this->data->toResrvArray());
-        if (app(Availability::class)->confirmAvailabilityAndPrice($searchData, $this->entryId) === false) {
+
+        if (! app(Availability::class)->confirmAvailabilityAndPrice($searchData, $this->entryId)) {
             throw new AvailabilityException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
     }
@@ -117,7 +112,7 @@ trait HandlesAvailabilityQueries
         $dateStart = Carbon::parse($this->data->dates['date_start']);
         $dateEnd = Carbon::parse($this->data->dates['date_end']);
 
-        $datePeriods = collect([]);
+        $datePeriods = collect();
 
         for ($i = 1; $i <= $this->extraDays; $i++) {
             $beforeStart = $dateStart->copy()->subDays($i + ($i * $this->extraDaysOffset));
@@ -145,17 +140,18 @@ trait HandlesAvailabilityQueries
 
     public function availabilitySearchData($values): Collection
     {
-        return collect($values)->filter(function ($value, $key) {
-            return Str::startsWith($key, 'resrv_search:');
-        })->reject(fn ($value) => empty($value) || ! Arr::has($value, 'dates.date_start'));
+        return collect($values)
+            ->filter(fn ($value, $key) => Str::startsWith($key, 'resrv_search:'))
+            ->reject(fn ($value) => empty($value) || ! Arr::has($value, 'dates.date_start'));
     }
 
-    public function toResrvArray($search)
+    public function toResrvArray($search): array
     {
         return [
             'date_start' => $search['dates']['date_start'],
             'date_end' => $search['dates']['date_end'],
             'quantity' => $search['quantity'] ?? 1,
+            'rate_id' => $search['rate_id'] ?? null,
             'advanced' => $search['advanced'] ?? '',
         ];
     }
@@ -168,7 +164,9 @@ trait HandlesAvailabilityQueries
 
         $entry = $this->getDefaultSiteEntry($this->entry)->id();
 
-        return app(Availability::class)->getAvailabilityCalendar($entry, $this->advanced && $this->data->advanced ? $this->data->advanced : null);
+        $rateId = ($this->rates && $this->data->rate) ? $this->data->rate : null;
+
+        return app(Availability::class)->getAvailabilityCalendar($entry, $rateId);
     }
 
     public function queryAvailableDatesFromDate(): array
@@ -179,13 +177,13 @@ trait HandlesAvailabilityQueries
 
         $dateStart = Carbon::parse($this->data->dates['date_start'])->format('Y-m-d');
 
-        $advanced = $this->data->advanced ? [$this->data->advanced] : ($this->advanced ? ['any'] : null);
+        $rateId = $this->data->rate ? [$this->data->rate] : ($this->rates ? ['any'] : null);
 
         return app(Availability::class)->getAvailableDatesFromDate(
             $this->entryId,
             $dateStart,
             $this->data->quantity ?? 1,
-            $advanced,
+            $rateId,
             $this->groupByDate
         );
     }

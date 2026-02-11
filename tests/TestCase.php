@@ -5,11 +5,11 @@ namespace Reach\StatamicResrv\Tests;
 use Facades\Statamic\Version;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\WithFaker;
-use Orchestra\Testbench\TestCase as OrchestraTestCase;
-use Statamic\Extend\Manifest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
-use Livewire\Mechanisms\HandleRequests\HandleRequests;
+use Orchestra\Testbench\TestCase as OrchestraTestCase;
+use Statamic\Extend\Manifest;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
@@ -33,13 +33,7 @@ class TestCase extends OrchestraTestCase
         parent::setUp();
 
         $this->withoutVite();
-
-        $uses = array_flip(class_uses_recursive(static::class));
-
-        if (isset($uses[PreventSavingStacheItemsToDisk::class])) {
-            $this->preventSavingStacheItemsToDisk();
-        }
-
+        $this->preventSavingStacheItemsToDisk();
         $this->withoutExceptionHandling();
 
         Version::shouldReceive('get')->andReturn('5.5.0');
@@ -56,11 +50,7 @@ class TestCase extends OrchestraTestCase
 
     protected function tearDown(): void
     {
-        $uses = array_flip(class_uses_recursive(static::class));
-
-        if (isset($uses[PreventSavingStacheItemsToDisk::class])) {
-            $this->deleteFakeStacheDirectory();
-        }
+        $this->deleteFakeStacheDirectory();
 
         parent::tearDown();
     }
@@ -165,7 +155,7 @@ class TestCase extends OrchestraTestCase
 
     protected function registerLivewireUpdateRoute($app): void
     {
-        $app->booted(function () use ($app) {
+        $app->booted(function () {
             // Livewire 4 uses dynamic endpoints based on APP_KEY hash
             // We need to set the update route before Statamic's catch-all route is matched
             Livewire::setUpdateRoute(function ($handle) {
@@ -189,28 +179,28 @@ class TestCase extends OrchestraTestCase
     {
         $entryData = [
             'title' => $data['title'] ?? 'Test Statamic Item',
-            'resrv_availability' => $data['resrv_availability'] ?? Str::random('6'),
+            'resrv_availability' => $data['resrv_availability'] ?? Str::random(6),
         ];
 
-        $collection = Collection::make('pages')->routes('/{slug}')->save();
+        Collection::make('pages')->routes('/{slug}')->save();
 
         Entry::make()
             ->collection('pages')
-            ->slug($slug = Str::random('6'))
+            ->slug($slug = Str::random(6))
             ->data($data ?? $entryData)
             ->save();
 
         return Entry::query()->where('slug', $slug)->first();
     }
 
-    public function makeStatamicItemWithResrvAvailabilityField(?array $data = null)
+    public function makeStatamicItemWithResrvAvailabilityField(?array $data = null, string $collectionHandle = 'pages')
     {
         $entryData = [
             'title' => $data['title'] ?? 'Test Statamic Item',
-            'resrv_availability' => $data['resrv_availability'] ?? Str::random('6'),
+            'resrv_availability' => $data['resrv_availability'] ?? Str::random(6),
         ];
 
-        $collection = Collection::make('pages')->routes('/{slug}')->save();
+        $collection = Collection::make($collectionHandle)->routes('/{slug}')->save();
 
         $blueprint = Blueprint::make()->setContents([
             'sections' => [
@@ -242,11 +232,11 @@ class TestCase extends OrchestraTestCase
                 ],
             ],
         ]);
-        $blueprint->setHandle('pages')->setNamespace('collections.'.$collection->handle())->save();
+        $blueprint->setHandle($collectionHandle)->setNamespace('collections.'.$collection->handle())->save();
 
         Entry::make()
-            ->collection('pages')
-            ->slug($slug = Str::random('6'))
+            ->collection($collectionHandle)
+            ->slug($slug = Str::random(6))
             ->data($data ?? $entryData)
             ->save();
 
@@ -259,11 +249,11 @@ class TestCase extends OrchestraTestCase
             'title' => $data['title'] ?? 'Test Statamic Item',
         ];
 
-        $collection = Collection::make('something')->routes('/something/{slug}')->save();
+        Collection::make('something')->routes('/something/{slug}')->save();
 
         Entry::make()
             ->collection('something')
-            ->slug($slug = Str::random('6'))
+            ->slug($slug = Str::random(6))
             ->data($data ?? $entryData)
             ->save();
 
@@ -276,7 +266,7 @@ class TestCase extends OrchestraTestCase
      */
     protected function assertDatabaseHasJsonColumn(string $table, array $data, string $jsonColumn, mixed $jsonValue): void
     {
-        $query = \Illuminate\Support\Facades\DB::table($table);
+        $query = DB::table($table);
 
         foreach ($data as $column => $value) {
             $query->where($column, $value);
@@ -284,7 +274,7 @@ class TestCase extends OrchestraTestCase
 
         $jsonString = is_string($jsonValue) ? $jsonValue : json_encode($jsonValue);
 
-        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() === 'pgsql') {
+        if (DB::connection()->getDriverName() === 'pgsql') {
             $query->whereRaw("{$jsonColumn}::text = ?", [$jsonString]);
         } else {
             $query->where($jsonColumn, $jsonString);

@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityList;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -44,7 +45,10 @@ class AvailabilityListTest extends TestCase
 
     public function test_returns_available_dates_from_start_date()
     {
-        Livewire::test(AvailabilityList::class, ['entry' => $this->entries->first()->id()])
+        $entryId = $this->entries->first()->id();
+        $rateId = Rate::forEntry($entryId)->first()->id;
+
+        $component = Livewire::test(AvailabilityList::class, ['entry' => $entryId])
             ->dispatch('availability-search-updated',
                 [
                     'dates' => [
@@ -52,11 +56,13 @@ class AvailabilityListTest extends TestCase
                         'date_end' => $this->date->copy()->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             )
-            ->assertViewHas('availableDates')
-            ->assertViewHas('availableDates.none');
+            ->assertViewHas('availableDates');
+
+        $availableDates = $component->viewData('availableDates');
+        $this->assertArrayHasKey($rateId, $availableDates->toArray());
     }
 
     public function test_dispatches_availability_results_updated_event()
@@ -69,7 +75,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => $this->date->copy()->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             )
             ->assertDispatched('availability-results-updated');
@@ -91,14 +97,15 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             );
 
         $availableDates = $component->viewData('availableDates');
+        $rateId = Rate::forEntry($entry->id())->first()->id;
 
-        $this->assertArrayHasKey('none', $availableDates->toArray());
-        $dates = $availableDates['none'];
+        $this->assertArrayHasKey($rateId, $availableDates->toArray());
+        $dates = $availableDates[$rateId];
 
         $this->assertEquals('25.00', $dates[today()->format('Y-m-d')]['price']);
         $this->assertEquals('50.00', $dates[today()->addDay()->format('Y-m-d')]['price']);
@@ -122,22 +129,32 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 2,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             );
 
         $availableDates = $component->viewData('availableDates');
+        $rateId = Rate::forEntry($entry->id())->first()->id;
 
-        $this->assertArrayHasKey('none', $availableDates->toArray());
-        $dates = $availableDates['none'];
+        $this->assertArrayHasKey($rateId, $availableDates->toArray());
+        $dates = $availableDates[$rateId];
 
         $this->assertCount(2, $dates);
         $this->assertArrayHasKey(today()->addDay()->format('Y-m-d'), $dates);
         $this->assertArrayHasKey(today()->addDays(3)->format('Y-m-d'), $dates);
     }
 
-    public function test_available_dates_returns_grouped_by_property_for_advanced()
+    public function test_available_dates_returns_grouped_by_rate_id_for_advanced()
     {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+
+        $anotherRate = Rate::factory()->create([
+            'collection' => 'advanced',
+            'slug' => 'another-test-extra',
+            'title' => 'Another Test Extra',
+        ]);
+
         Availability::factory()
             ->count(4)
             ->sequence(
@@ -149,13 +166,13 @@ class AvailabilityListTest extends TestCase
             ->create([
                 'available' => 1,
                 'price' => 75,
-                'statamic_id' => $this->advancedEntries->first()->id(),
-                'property' => 'another-test',
+                'statamic_id' => $entryId,
+                'rate_id' => $anotherRate->id,
             ]);
 
         $component = Livewire::test(AvailabilityList::class, [
-            'entry' => $this->advancedEntries->first()->id(),
-            'advanced' => true,
+            'entry' => $entryId,
+            'rates' => true,
         ])
             ->dispatch('availability-search-updated',
                 [
@@ -164,17 +181,17 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => 'any',
+                    'rate' => 'any',
                 ]
             );
 
         $availableDates = $component->viewData('availableDates');
 
-        $this->assertArrayHasKey('test', $availableDates->toArray());
-        $this->assertArrayHasKey('another-test', $availableDates->toArray());
+        $this->assertArrayHasKey($testRate->id, $availableDates->toArray());
+        $this->assertArrayHasKey($anotherRate->id, $availableDates->toArray());
 
-        $testDates = $availableDates['test'];
-        $anotherTestDates = $availableDates['another-test'];
+        $testDates = $availableDates[$testRate->id];
+        $anotherTestDates = $availableDates[$anotherRate->id];
 
         $this->assertCount(4, $testDates);
         $this->assertCount(4, $anotherTestDates);
@@ -183,8 +200,17 @@ class AvailabilityListTest extends TestCase
         $this->assertEquals('75.00', $anotherTestDates[today()->format('Y-m-d')]['price']);
     }
 
-    public function test_available_dates_returns_only_selected_property()
+    public function test_available_dates_returns_only_selected_rate()
     {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+
+        $anotherRate = Rate::factory()->create([
+            'collection' => 'advanced',
+            'slug' => 'another-test-extra',
+            'title' => 'Another Test Extra',
+        ]);
+
         Availability::factory()
             ->count(4)
             ->sequence(
@@ -196,13 +222,13 @@ class AvailabilityListTest extends TestCase
             ->create([
                 'available' => 1,
                 'price' => 75,
-                'statamic_id' => $this->advancedEntries->first()->id(),
-                'property' => 'another-test',
+                'statamic_id' => $entryId,
+                'rate_id' => $anotherRate->id,
             ]);
 
         $component = Livewire::test(AvailabilityList::class, [
-            'entry' => $this->advancedEntries->first()->id(),
-            'advanced' => true,
+            'entry' => $entryId,
+            'rates' => true,
         ])
             ->dispatch('availability-search-updated',
                 [
@@ -211,22 +237,31 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => 'test',
+                    'rate' => (string) $testRate->id,
                 ]
             );
 
         $availableDates = $component->viewData('availableDates');
 
-        $this->assertArrayHasKey('test', $availableDates->toArray());
-        $this->assertArrayNotHasKey('another-test', $availableDates->toArray());
+        $this->assertArrayHasKey($testRate->id, $availableDates->toArray());
+        $this->assertArrayNotHasKey($anotherRate->id, $availableDates->toArray());
 
-        $testDates = $availableDates['test'];
+        $testDates = $availableDates[$testRate->id];
         $this->assertCount(4, $testDates);
         $this->assertEquals('50.00', $testDates[today()->format('Y-m-d')]['price']);
     }
 
     public function test_group_by_date_returns_date_first_structure()
     {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+
+        $anotherRate = Rate::factory()->create([
+            'collection' => 'advanced',
+            'slug' => 'another-test-extra',
+            'title' => 'Another Test Extra',
+        ]);
+
         Availability::factory()
             ->count(4)
             ->sequence(
@@ -238,14 +273,14 @@ class AvailabilityListTest extends TestCase
             ->create([
                 'available' => 1,
                 'price' => 75,
-                'statamic_id' => $this->advancedEntries->first()->id(),
-                'property' => 'another-test',
+                'statamic_id' => $entryId,
+                'rate_id' => $anotherRate->id,
             ]);
 
         $component = Livewire::test(AvailabilityList::class, [
-            'entry' => $this->advancedEntries->first()->id(),
+            'entry' => $entryId,
             'groupByDate' => true,
-            'advanced' => true,
+            'rates' => true,
         ])
             ->dispatch('availability-search-updated',
                 [
@@ -254,7 +289,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => 'any',
+                    'rate' => 'any',
                 ]
             );
 
@@ -264,18 +299,27 @@ class AvailabilityListTest extends TestCase
         $this->assertArrayHasKey($todayKey, $availableDates->toArray());
 
         $todayData = $availableDates[$todayKey];
-        $this->assertArrayHasKey('test', $todayData);
-        $this->assertArrayHasKey('another-test', $todayData);
+        $this->assertArrayHasKey($testRate->id, $todayData);
+        $this->assertArrayHasKey($anotherRate->id, $todayData);
 
-        $this->assertEquals('50.00', $todayData['test']['price']);
-        $this->assertEquals('75.00', $todayData['another-test']['price']);
+        $this->assertEquals('50.00', $todayData[$testRate->id]['price']);
+        $this->assertEquals('75.00', $todayData[$anotherRate->id]['price']);
 
-        $this->assertEquals(1, $todayData['test']['available']);
-        $this->assertEquals(1, $todayData['another-test']['available']);
+        $this->assertEquals(1, $todayData[$testRate->id]['available']);
+        $this->assertEquals(1, $todayData[$anotherRate->id]['available']);
     }
 
     public function test_group_by_date_shows_sparse_availability()
     {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+
+        $anotherRate = Rate::factory()->create([
+            'collection' => 'advanced',
+            'slug' => 'another-test-extra',
+            'title' => 'Another Test Extra',
+        ]);
+
         Availability::factory()
             ->count(2)
             ->sequence(
@@ -285,14 +329,14 @@ class AvailabilityListTest extends TestCase
             ->create([
                 'available' => 1,
                 'price' => 100,
-                'statamic_id' => $this->advancedEntries->first()->id(),
-                'property' => 'another-test',
+                'statamic_id' => $entryId,
+                'rate_id' => $anotherRate->id,
             ]);
 
         $component = Livewire::test(AvailabilityList::class, [
-            'entry' => $this->advancedEntries->first()->id(),
+            'entry' => $entryId,
             'groupByDate' => true,
-            'advanced' => true,
+            'rates' => true,
         ])
             ->dispatch('availability-search-updated',
                 [
@@ -301,7 +345,7 @@ class AvailabilityListTest extends TestCase
                         'date_end' => today()->setHour(12)->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => 'any',
+                    'rate' => 'any',
                 ]
             );
 
@@ -311,14 +355,14 @@ class AvailabilityListTest extends TestCase
         $day1Key = today()->addDay()->format('Y-m-d');
         $day2Key = today()->addDays(2)->format('Y-m-d');
 
-        $this->assertArrayHasKey('test', $availableDates[$todayKey]);
-        $this->assertArrayHasKey('another-test', $availableDates[$todayKey]);
+        $this->assertArrayHasKey($testRate->id, $availableDates[$todayKey]);
+        $this->assertArrayHasKey($anotherRate->id, $availableDates[$todayKey]);
 
-        $this->assertArrayHasKey('test', $availableDates[$day1Key]);
-        $this->assertArrayNotHasKey('another-test', $availableDates[$day1Key]);
+        $this->assertArrayHasKey($testRate->id, $availableDates[$day1Key]);
+        $this->assertArrayNotHasKey($anotherRate->id, $availableDates[$day1Key]);
 
-        $this->assertArrayHasKey('test', $availableDates[$day2Key]);
-        $this->assertArrayHasKey('another-test', $availableDates[$day2Key]);
+        $this->assertArrayHasKey($testRate->id, $availableDates[$day2Key]);
+        $this->assertArrayHasKey($anotherRate->id, $availableDates[$day2Key]);
     }
 
     public function test_dispatches_event_on_date_selection()
@@ -331,13 +375,13 @@ class AvailabilityListTest extends TestCase
                         'date_end' => $this->date->copy()->add(30, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
-                    'advanced' => null,
+                    'rate' => null,
                 ]
             )
             ->call('selectDate', '2025-12-05', 'none')
             ->assertDispatched('availability-date-selected', [
                 'date' => '2025-12-05',
-                'property' => 'none',
+                'rate_id' => 'none',
             ]);
     }
 }

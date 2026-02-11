@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Rate;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
@@ -15,8 +16,9 @@ trait CreatesEntries
         ?string $collection = 'pages',
         ?int $available = null,
         ?int $price = null,
-        ?string $advanced = null,
-        ?array $customAvailability = null
+        ?string $rateSlug = null,
+        ?array $customAvailability = null,
+        ?int $rateId = null
     ) {
         $entryData = [
             'title' => fake()->sentence(),
@@ -36,11 +38,27 @@ trait CreatesEntries
 
         $entry->save();
 
+        if (! $rateId) {
+            $slug = $rateSlug ?? 'default';
+            $rate = Rate::where('collection', $collection->handle())
+                ->where('slug', $slug)
+                ->first();
+
+            if (! $rate) {
+                $rate = Rate::factory()->create([
+                    'collection' => $collection->handle(),
+                    'slug' => $slug,
+                    'title' => $rateSlug ? ucfirst(str_replace('-', ' ', $rateSlug)) : 'Default',
+                ]);
+            }
+            $rateId = $rate->id;
+        }
+
         $defaultAvailabilityData = [
             'available' => $available ?? 1,
             'price' => $price ?? 50,
             'statamic_id' => $entry->id(),
-            'property' => $advanced ?? 'none',
+            'rate_id' => $rateId,
         ];
 
         if ($customAvailability) {
@@ -55,7 +73,7 @@ trait CreatesEntries
                     'available' => is_array($availables) ? $availables[$sequence->index] : $availables,
                     'price' => is_array($prices) ? $prices[$sequence->index] : $prices,
                     'statamic_id' => $defaultAvailabilityData['statamic_id'],
-                    'property' => $defaultAvailabilityData['property'],
+                    'rate_id' => $defaultAvailabilityData['rate_id'],
                 ])
                 ->create();
         } else {
@@ -89,21 +107,38 @@ trait CreatesEntries
 
     public function createAdvancedEntries()
     {
+        return $this->createRateEntries();
+    }
+
+    public function createRateEntries()
+    {
         $entries = collect();
-        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', advanced: 'test'));
-        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 0, advanced: 'test'));
-        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 2, advanced: 'test'));
-        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, advanced: 'test'));
-        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, advanced: 'another-test'));
-        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, advanced: 'another-test'));
-        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, advanced: 'yet-another-test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', rateSlug: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 0, rateSlug: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 2, rateSlug: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, rateSlug: 'test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, rateSlug: 'another-test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, rateSlug: 'another-test'));
+        $entries->push($this->makeStatamicItemWithAvailability(collection: 'advanced', available: 1, rateSlug: 'yet-another-test'));
 
         return $entries;
     }
 
-    protected function createAvailabilityForEntry(Entry $entry, float $price, int $available, ?string $property = 'none', int $days = 20)
+    protected function createAvailabilityForEntry(Entry $entry, float $price, int $available, ?int $rateId = null, int $days = 20)
     {
         $startDate = now()->startOfDay();
+
+        if (! $rateId) {
+            $rate = Rate::forEntry($entry->id())->first();
+            if (! $rate) {
+                $rate = Rate::factory()->create([
+                    'collection' => $entry->collection()->handle(),
+                    'slug' => 'default',
+                    'title' => 'Default',
+                ]);
+            }
+            $rateId = $rate->id;
+        }
 
         Availability::factory()
             ->count($days)
@@ -112,9 +147,38 @@ trait CreatesEntries
                 'price' => $price,
                 'available' => $available,
                 'statamic_id' => $entry->id(),
-                'property' => $property,
+                'rate_id' => $rateId,
             ])
             ->create();
+    }
+
+    protected function createRateForEntry(Entry $entry, array $attributes = []): Rate
+    {
+        return Rate::factory()->create(array_merge(
+            ['collection' => $entry->collection()->handle()],
+            $attributes,
+        ));
+    }
+
+    protected function createRelativeRate(Entry $entry, Rate $baseRate, array $attributes = []): Rate
+    {
+        return $this->createDependentRate('relative', $entry, $baseRate, $attributes);
+    }
+
+    protected function createSharedRate(Entry $entry, Rate $baseRate, array $attributes = []): Rate
+    {
+        return $this->createDependentRate('shared', $entry, $baseRate, $attributes);
+    }
+
+    private function createDependentRate(string $type, Entry $entry, Rate $baseRate, array $attributes = []): Rate
+    {
+        return Rate::factory()->{$type}()->create(array_merge(
+            [
+                'collection' => $entry->collection()->handle(),
+                'base_rate_id' => $baseRate->id,
+            ],
+            $attributes,
+        ));
     }
 
     protected function makeBlueprint($collection)
@@ -142,14 +206,6 @@ trait CreatesEntries
                 ],
             ],
         ];
-
-        if ($collection->handle() === 'advanced') {
-            $fields[2]['field']['advanced_availability'] = [
-                'test' => 'Test Property',
-                'another-test' => 'Another Test',
-                'yet-another-test' => 'Yet Another Test',
-            ];
-        }
 
         $blueprint = Blueprint::make()->setContents([
             'sections' => [

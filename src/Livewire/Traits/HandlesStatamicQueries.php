@@ -2,103 +2,59 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
-use Reach\StatamicResrv\Exceptions\BlueprintNotFoundException;
+use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Exceptions\CheckoutEntryNotFound;
-use Reach\StatamicResrv\Exceptions\FieldNotFoundException;
-use Reach\StatamicResrv\Exceptions\NoAdvancedAvailabilitySet;
-use Reach\StatamicResrv\Facades\AvailabilityField;
-use Statamic\Facades\Blueprint;
+use Reach\StatamicResrv\Models\Rate;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
 
 trait HandlesStatamicQueries
 {
-    public function getProperties()
+    public function getRatesForEntry(string $entryId): Collection
     {
-        return $this->getPropertiesFromBlueprint();
+        return Rate::forEntry($entryId)
+            ->published()
+            ->orderBy('order')
+            ->get();
     }
 
-    public function getEntryProperties($entry)
+    protected function resolveEntryRates(string $entryId): array
     {
-        $blueprint = $entry->blueprint();
-
-        if (! $blueprint) {
-            throw new BlueprintNotFoundException($entry->collection()->handle().' via entry '.$entry->id());
-        }
-
-        $field = $this->getStatamicField($blueprint);
-
-        $config = $field->config();
-
-        if (isset($config['advanced_availability'])) {
-            return $config['advanced_availability'];
-        }
-
-        throw new NoAdvancedAvailabilitySet($entry->collection()->handle().' (from entry '.$entry->id().')');
-    }
-
-    public function getStatamicBlueprint()
-    {
-        if ($blueprint = Blueprint::find('collections.'.$this->advanced)) {
-            return $blueprint;
-        }
-        throw new BlueprintNotFoundException($this->advanced);
-    }
-
-    public function getStatamicField($blueprint)
-    {
-        if ($field = AvailabilityField::getField($blueprint)) {
-            return $field;
-        }
-        throw new FieldNotFoundException('resrv_availability', $this->advanced);
-    }
-
-    public function getPropertiesFromBlueprint()
-    {
-        $blueprint = $this->getStatamicBlueprint();
-        $field = $this->getStatamicField($blueprint);
-
-        $config = $field->config();
-
-        if (isset($config['advanced_availability'])) {
-            return $config['advanced_availability'];
-        }
-        throw new NoAdvancedAvailabilitySet($this->advanced);
+        return $this->getRatesForEntry($entryId)
+            ->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])
+            ->toArray();
     }
 
     public function getCheckoutEntry()
     {
-        if ($entry = Entry::find(config('resrv-config.checkout_entry'))) {
-            if ($localizedCheckout = $this->getLocalizedEntry($entry)) {
-                return $localizedCheckout;
-            }
-
-            return $entry;
-        }
-        throw new CheckoutEntryNotFound;
+        return $this->findEntryOrFail(config('resrv-config.checkout_entry'));
     }
 
     public function getCheckoutCompleteEntry()
     {
-        if ($entry = Entry::find(config('resrv-config.checkout_completed_entry'))) {
-            if ($localizedComplete = $this->getLocalizedEntry($entry)) {
-                return $localizedComplete;
-            }
+        return $this->findEntryOrFail(config('resrv-config.checkout_completed_entry'));
+    }
 
-            return $entry;
+    protected function findEntryOrFail(string $entryId)
+    {
+        $entry = Entry::find($entryId);
+
+        if (! $entry) {
+            throw new CheckoutEntryNotFound;
         }
-        throw new CheckoutEntryNotFound;
+
+        return $this->getLocalizedEntry($entry) ?? $entry;
     }
 
     public function getLocalizedEntry($entry)
     {
-        if ($localizedEntry = $entry->in(Site::current()->handle())) {
-            if ($this->isSafe($localizedEntry)) {
-                return $localizedEntry;
-            }
+        $localizedEntry = $entry->in(Site::current()->handle());
+
+        if ($localizedEntry && $this->isSafe($localizedEntry)) {
+            return $localizedEntry;
         }
 
-        return false;
+        return null;
     }
 
     public function getEntry($id)

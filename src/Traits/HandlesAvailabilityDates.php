@@ -18,6 +18,8 @@ trait HandlesAvailabilityDates
 
     protected $advanced;
 
+    protected $rateId;
+
     protected $round_trip;
 
     protected function useTime()
@@ -37,35 +39,42 @@ trait HandlesAvailabilityDates
 
     protected function checkMinimumDate($date_start)
     {
-        if (config('resrv-config.minimum_days_before') > 0) {
-            $date = Carbon::create($date_start->year, $date_start->month, $date_start->day, 0, 0, 0);
-            if ((int) $date->diffInDays(Carbon::now()->startOfDay(), true) < config('resrv-config.minimum_days_before')) {
-                throw new AvailabilityException(__('Your pickup date is closer than allowed.'));
-            }
+        $minimumDays = config('resrv-config.minimum_days_before');
+
+        if ($minimumDays <= 0) {
+            return;
+        }
+
+        $daysUntilStart = (int) $date_start->copy()->startOfDay()->diffInDays(Carbon::now()->startOfDay(), true);
+
+        if ($daysUntilStart < $minimumDays) {
+            throw new AvailabilityException(__('Your pickup date is closer than allowed.'));
         }
     }
 
     private function setQuantity($data)
     {
-        if (! Arr::exists($data, 'quantity')) {
-            $this->quantity = 1;
+        $quantity = Arr::get($data, 'quantity', 1);
 
-            return;
-        }
-        if ($data['quantity'] > config('resrv-config.maximum_quantity')) {
+        if ($quantity > config('resrv-config.maximum_quantity')) {
             throw new AvailabilityException(__('You cannot reserve these many in one reservation.'));
         }
-        $this->quantity = $data['quantity'];
+
+        $this->quantity = $quantity;
     }
 
     private function setAdvanced($data)
     {
-        if (! Arr::exists($data, 'advanced')) {
-            $this->advanced = ['none'];
+        $advanced = Arr::get($data, 'advanced');
 
-            return;
-        }
-        $this->advanced = $data['advanced'] ? explode('|', $data['advanced']) : [];
+        $this->advanced = $advanced ? explode('|', $advanced) : ['none'];
+    }
+
+    private function setRate($data)
+    {
+        $rateId = Arr::get($data, 'rate_id');
+
+        $this->rateId = $rateId ? (int) $rateId : null;
     }
 
     private function setDates($date_start, $date_end)
@@ -108,6 +117,8 @@ trait HandlesAvailabilityDates
 
         $this->setAdvanced($data);
 
+        $this->setRate($data);
+
         $this->checkDurationValidity();
     }
 
@@ -121,11 +132,13 @@ trait HandlesAvailabilityDates
 
         $this->setAdvanced($data);
 
+        $this->setRate($data);
+
         $this->setDates($date_start, $date_end);
     }
 
     public function clearTime(Carbon $date): Carbon
     {
-        return Carbon::create($date->year, $date->month, $date->day, 0, 0, 0);
+        return $date->copy()->startOfDay();
     }
 }

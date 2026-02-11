@@ -62,11 +62,11 @@ class ReservationBlueprint
                             ],
                         ],
                         [
-                            'handle' => 'property',
+                            'handle' => 'rate',
                             'field' => [
-                                'type' => 'integer',
+                                'type' => 'text',
                                 'listable' => true,
-                                'display' => 'Property',
+                                'display' => 'Rate',
                                 'sortable' => true,
                             ],
                         ],

@@ -6,14 +6,9 @@ use Reach\StatamicResrv\Models\Availability;
 
 class IncreaseAvailability
 {
-    protected $availability;
+    public function __construct(protected Availability $availability) {}
 
-    public function __construct(Availability $availability)
-    {
-        $this->availability = $availability;
-    }
-
-    public function handle($event)
+    public function handle($event): void
     {
         if ($event->reservation->type === 'parent') {
             $this->incrementMultiple($event);
@@ -24,12 +19,13 @@ class IncreaseAvailability
                 quantity: $event->reservation->quantity,
                 statamic_id: $event->reservation->item_id,
                 reservationId: $event->reservation->id,
-                advanced: $event->reservation->property
+                advanced: null,
+                rateId: $event->reservation->rate_id,
             );
         }
     }
 
-    protected function incrementMultiple($event)
+    protected function incrementMultiple($event): void
     {
         $childs = $event->reservation->childs()->get();
         $childs->each(function ($child) use ($event) {
@@ -39,7 +35,8 @@ class IncreaseAvailability
                 quantity: $child->quantity,
                 statamic_id: $event->reservation->item_id,
                 reservationId: $child->id,
-                advanced: $child->property
+                advanced: null,
+                rateId: $child->rate_id,
             );
         });
     }

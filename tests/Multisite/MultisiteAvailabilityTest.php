@@ -6,6 +6,7 @@ use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Antlers;
@@ -79,6 +80,13 @@ class MultisiteAvailabilityTest extends TestCase
         ]);
         $this->localizedEntry->save();
 
+        // Create a rate for the origin entry
+        $rate = Rate::factory()->create([
+            'collection' => 'rooms',
+            'slug' => 'default',
+            'title' => 'Default',
+        ]);
+
         // Create availability records using the ORIGIN entry ID (this is how the system stores data)
         Availability::factory()
             ->count(4)
@@ -92,7 +100,7 @@ class MultisiteAvailabilityTest extends TestCase
                 'statamic_id' => $this->originEntry->id(),
                 'available' => 1,
                 'price' => 100,
-                'property' => 'none',
+                'rate_id' => $rate->id,
             ]);
     }
 
@@ -362,6 +370,11 @@ class MultisiteAvailabilityTest extends TestCase
         ]);
         $twoAvailableLocalized->save();
 
+        // Create a rate for the two-available entry (reuse existing rate from same collection)
+        $twoAvailableRate = Rate::where('collection', 'rooms')
+            ->where('slug', 'default')
+            ->first();
+
         // Create availability with 2 available using ORIGIN ID
         Availability::factory()
             ->count(4)
@@ -375,7 +388,7 @@ class MultisiteAvailabilityTest extends TestCase
                 'statamic_id' => $twoAvailableEntry->id(),
                 'available' => 2,
                 'price' => 150,
-                'property' => 'none',
+                'rate_id' => $twoAvailableRate->id,
             ]);
 
         // Switch to Greek site

@@ -4,7 +4,7 @@
         <div class="availability-modal flex flex-col h-full">
             <div class="text-lg font-semibold px-5 py-3 bg-gray-200 dark:bg-dark-500 rounded-t-lg border-b dark:border-dark-900">
                 {{ __('Change availability') }}
-                <span class="block mt-1 text-md" v-if="property"><span class="font-light">For:</span> {{ property.label }}</span>
+                <span class="block mt-1 text-md" v-if="rate"><span class="font-light">For:</span> {{ rate.label }}</span>
                 <span class="block mt-1 font-light text-sm">From {{ date_start }} to {{ date_end }}</span>
             </div>
             <div class="flex-1 py-4 px-4 text-grey">
@@ -18,7 +18,7 @@
                         </div>
                         <div v-if="errors.available" class="w-full mt-1 text-sm text-red-400">
                             {{ errors.available[0] }}
-                        </div>                    
+                        </div>
                     </div>
                     <div class="flex-1">
                         <div class="mb-2 text-sm font-bold">
@@ -29,15 +29,15 @@
                         </div>
                         <div v-if="errors.price" class="w-full mt-1 text-sm text-red-400">
                             {{ errors.price[0] }}
-                        </div>                     
+                        </div>
                     </div>
                 </div>
             </div>
             <div class="p-4 bg-gray-200 dark:bg-dark-500 border-t dark:border-dark-900 rounded-b-lg flex items-center justify-between">
                 <div class="flex items-center">
-                    <button 
-                        class="text-white bg-red-400 rounded font-bold py-2 px-6" 
-                        v-html="__('Delete')" 
+                    <button
+                        class="text-white bg-red-400 rounded font-bold py-2 px-6"
+                        v-html="__('Delete')"
                         @click="confirmDelete"
                         :disabled="disableDelete"
                     >
@@ -45,16 +45,16 @@
                 </div>
                 <div class="flex item-center justify-end">
                     <button class="text-gray-700 hover:text-gray-900 dark:text-dark-100 dark:hover:text-dark-175" v-html="__('Cancel')" @click="$emit('cancel')"></button>
-                    <button 
-                        class="ml-4 text-white bg-blue-500 rounded font-bold py-2 px-6" 
-                        v-html="__('Save')" 
+                    <button
+                        class="ml-4 text-white bg-blue-500 rounded font-bold py-2 px-6"
+                        v-html="__('Save')"
                         @click="save"
                         :disabled="disableSave"
                     >
                     </button>
                 </div>
             </div>
-        </div>        
+        </div>
     </modal>
     <confirmation-modal
         v-if="deleteId"
@@ -65,7 +65,7 @@
     >
         {{ __('Are you sure you want to clear availability date for those dates?') }}
     </confirmation-modal>
-    </div>    
+    </div>
 </template>
 
 <script>
@@ -84,7 +84,7 @@ export default {
             type: String,
             required: true
         },
-        property: {
+        rate: {
             type: Object,
             required: false
         }
@@ -106,12 +106,12 @@ export default {
             return dayjs(this.dates.start).format('YYYY-MM-DD')
         },
         date_end() {
-            // We need to subtract here because FullCaledar uses day+1 for end date 
+            // We need to subtract here because FullCaledar uses day+1 for end date
             return dayjs(this.dates.end).subtract(1, 'day').format('YYYY-MM-DD')
         },
         disableDelete() {
             return false
-        },   
+        },
         submit() {
             let fields = {}
             fields.date_start = this.date_start
@@ -119,8 +119,8 @@ export default {
             fields.statamic_id = this.parentId
             fields.price = this.price
             fields.available = this.available
-            if (this.property) {
-                fields.advanced = [this.property]
+            if (this.rate) {
+                fields.rate_ids = [this.rate.code]
             }
             return fields
         }
@@ -137,8 +137,8 @@ export default {
             deleteData.statamic_id = this.deleteId
             deleteData.date_start = this.date_start
             deleteData.date_end = this.date_end
-            if (this.property) {
-                deleteData.advanced = [this.property]
+            if (this.rate) {
+                deleteData.rate_ids = [this.rate.code]
             }
             axios.delete(this.postUrl, {data: deleteData})
                 .then(response => {
@@ -156,6 +156,6 @@ export default {
             }
         },
     }
-  
+
 }
 </script>

@@ -27,7 +27,7 @@ class ProcessDataImport implements ShouldQueue
         $dataImport->prepare()->each(function ($item, $id) {
             $item->each(function ($data) use ($id) {
                 $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
-                $advanced = array_key_exists('advanced', $data) ? $data['advanced'] : false;
+                $rateId = $data['rate_id'] ?? null;
                 $dataToAdd = [];
                 foreach ($period as $day) {
                     $dayData = [
@@ -36,14 +36,12 @@ class ProcessDataImport implements ShouldQueue
                         'price' => $data['price'],
                         'available' => $data['available'],
                     ];
-                    if ($advanced) {
-                        $dayData['property'] = $data['advanced'];
-                    } else {
-                        $dayData['property'] = 'none';
+                    if ($rateId) {
+                        $dayData['rate_id'] = $rateId;
                     }
                     $dataToAdd[] = $dayData;
                 }
-                Availability::upsert($dataToAdd, ['statamic_id', 'date', 'property'], ['price', 'available']);
+                Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], ['price', 'available']);
             });
         });
 
