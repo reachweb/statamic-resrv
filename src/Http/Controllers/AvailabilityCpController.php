@@ -29,12 +29,8 @@ class AvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
-        if (array_key_exists('rate_ids', $data)) {
-            foreach ($data['rate_ids'] as $rateId) {
-                $this->updateAvailability($data, (int) $rateId);
-            }
-        } else {
-            $this->updateAvailability($data);
+        foreach ($data['rate_ids'] as $rateId) {
+            $this->updateAvailability($data, (int) $rateId);
         }
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
@@ -58,7 +54,7 @@ class AvailabilityCpController extends Controller
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
 
-    private function updateAvailability(array $data, ?int $rateId = null): void
+    private function updateAvailability(array $data, int $rateId): void
     {
         $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
         $onlyDays = $data['onlyDays'] ?? null;
@@ -78,16 +74,11 @@ class AvailabilityCpController extends Controller
                 $toUpdate['available'] = $data['available'];
             }
 
-            $matchKeys = [
+            Availability::updateOrCreate([
                 'statamic_id' => $data['statamic_id'],
                 'date' => $day->isoFormat('YYYY-MM-DD'),
-            ];
-
-            if ($rateId) {
-                $matchKeys['rate_id'] = $rateId;
-            }
-
-            Availability::updateOrCreate($matchKeys, $toUpdate);
+                'rate_id' => $rateId,
+            ], $toUpdate);
         }
     }
 }

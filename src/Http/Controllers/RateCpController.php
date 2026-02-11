@@ -112,7 +112,7 @@ class RateCpController extends Controller
             );
         }
 
-        $rate->delete();
+        $rate->forceDelete();
 
         return response()->json(['message' => 'Rate deleted.']);
     }
@@ -147,7 +147,7 @@ class RateCpController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('resrv_rates')->where(function ($query) use ($collection) {
+                Rule::unique('resrv_rates')->withoutTrashed()->where(function ($query) use ($collection) {
                     return $query->where('collection', $collection);
                 })->ignore($ignoreId),
             ],

@@ -318,55 +318,30 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(['something'], $component->__get('entryRates'));
     }
 
-    public function test_can_return_advanced_properties_from_blueprint()
+    public function test_can_return_rates_from_rate_model()
     {
-        $collection = Facades\Collection::make('cars')->routes('/{slug}')->save();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
 
-        $blueprint = Facades\Blueprint::make()->setContents([
-            'sections' => [
-                'main' => [
-                    'fields' => [
-                        [
-                            'handle' => 'title',
-                            'field' => [
-                                'type' => 'text',
-                                'display' => 'Title',
-                            ],
-                        ],
-                        [
-
-                            'handle' => 'resrv_availability',
-                            'field' => [
-                                'type' => 'resrv_availability',
-                                'display' => 'Resrv Availability',
-                                'listable' => 'hidden',
-                                'advanced_availability' => [
-                                    'location1' => 'Location 1',
-                                    'location2' => 'Location 2',
-                                    'location3' => 'Location 3',
-                                ],
-                            ],
-                        ],
-                    ],
-                ],
-            ],
+        $rate1 = Rate::factory()->create([
+            'collection' => 'pages',
+            'title' => 'Standard',
+            'slug' => 'standard',
         ]);
-        $blueprint->setHandle('cars')->setNamespace('collections.'.$collection->handle())->save();
+        $rate2 = Rate::factory()->create([
+            'collection' => 'pages',
+            'title' => 'Premium',
+            'slug' => 'premium',
+        ]);
 
-        $entry = \Statamic\Entries\Entry::make()
-            ->collection($collection)
-            ->slug('test-car')
-            ->data(['title' => 'Test Car']);
-        $entry->save();
-
-        $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'entry' => $entry->id()])
+        $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'entry' => $item->id()])
             ->assertSet('rates', true);
 
-        $this->assertEquals([
-            'location1' => 'Location 1',
-            'location2' => 'Location 2',
-            'location3' => 'Location 3',
-        ], $component->__get('entryRates'));
+        $entryRates = $component->__get('entryRates');
+
+        $this->assertArrayHasKey($rate1->id, $entryRates);
+        $this->assertArrayHasKey($rate2->id, $entryRates);
+        $this->assertEquals('Standard', $entryRates[$rate1->id]);
+        $this->assertEquals('Premium', $entryRates[$rate2->id]);
     }
 
     public function test_can_set_a_custom_value()

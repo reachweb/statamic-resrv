@@ -302,7 +302,7 @@ class RateCpTest extends TestCase
         ]);
     }
 
-    public function test_can_soft_delete_a_rate()
+    public function test_can_delete_a_rate()
     {
         $this->makeStatamicItemWithResrvAvailabilityField();
 
@@ -311,7 +311,32 @@ class RateCpTest extends TestCase
         $response = $this->delete(cp_route('resrv.rate.destroy', $rate->id));
         $response->assertStatus(200);
 
-        $this->assertSoftDeleted('resrv_rates', ['id' => $rate->id]);
+        $this->assertDatabaseMissing('resrv_rates', ['id' => $rate->id]);
+    }
+
+    public function test_can_recreate_rate_with_same_slug_after_deletion()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'standard-room',
+        ]);
+
+        $this->delete(cp_route('resrv.rate.destroy', $rate->id));
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Standard Room',
+            'slug' => 'standard-room',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'published' => true,
+        ];
+
+        $response = $this->post(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(200)->assertJsonStructure(['id']);
     }
 
     public function test_cannot_delete_rate_that_is_base_for_other_rates()

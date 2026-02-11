@@ -395,6 +395,24 @@ class AvailabilityCpTest extends TestCase
         ]);
     }
 
+    public function test_availability_update_requires_rate_ids()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItem();
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 2,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(422)->assertJsonValidationErrors('rate_ids');
+    }
+
     public function test_availability_can_update_for_date_range_with_specific_days()
     {
         $item = $this->makeStatamicItem();

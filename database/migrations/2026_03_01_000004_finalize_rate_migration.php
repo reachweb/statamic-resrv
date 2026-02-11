@@ -77,6 +77,17 @@ return new class extends Migration
 
         Schema::table('resrv_fixed_pricing', function (Blueprint $table) {
             $table->dropUnique(['statamic_id', 'days', 'rate_id']);
+        });
+
+        // Remove duplicates before restoring old unique constraint
+        DB::statement('
+            DELETE FROM resrv_fixed_pricing
+            WHERE id NOT IN (
+                SELECT MIN(id) FROM resrv_fixed_pricing GROUP BY statamic_id, days
+            )
+        ');
+
+        Schema::table('resrv_fixed_pricing', function (Blueprint $table) {
             $table->unique(['statamic_id', 'days']);
         });
     }

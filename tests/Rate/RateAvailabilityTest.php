@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Rate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -233,6 +234,74 @@ class RateAvailabilityTest extends TestCase
         $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(5)->toDateString()));
         // Too far out
         $this->assertFalse($rate->meetsBookingLeadTime(now()->addDays(15)->toDateString()));
+    }
+
+    public function test_fixed_pricing_filtered_by_rate_id()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate1 = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'standard',
+            'order' => 0,
+        ]);
+        $rate2 = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'premium',
+            'order' => 1,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        foreach ([$rate1, $rate2] as $rate) {
+            Availability::factory()
+                ->count(3)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                    ['date' => $startDate->copy()->addDays(2)],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $rate->id,
+                    'price' => 100,
+                    'available' => 2,
+                ]);
+        }
+
+        // Different fixed pricing per rate: 3-day stay
+        FixedPricing::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $rate1->id,
+            'days' => 3,
+            'price' => '250.00',
+        ]);
+        FixedPricing::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $rate2->id,
+            'days' => 3,
+            'price' => '400.00',
+        ]);
+
+        // Rate 1 should get 250
+        $priceRate1 = (new Availability)->getPricing([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(3)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $rate1->id,
+        ], $entry->id(), true);
+
+        $this->assertEquals('250.00', $priceRate1);
+
+        // Rate 2 should get 400
+        $priceRate2 = (new Availability)->getPricing([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(3)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $rate2->id,
+        ], $entry->id(), true);
+
+        $this->assertEquals('400.00', $priceRate2);
     }
 
     public function test_all_rates_query_returns_multiple_rates()

@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Livewire\Traits;
 
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Exceptions\CheckoutEntryNotFound;
-use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Models\Rate;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
@@ -19,26 +18,11 @@ trait HandlesStatamicQueries
             ->get();
     }
 
-    public function getEntryProperties($entry): array
-    {
-        $blueprint = $entry->blueprint();
-        $field = $blueprint ? AvailabilityField::getField($blueprint) : null;
-
-        return $field?->config()['advanced_availability'] ?? [];
-    }
-
     protected function resolveEntryRates(string $entryId): array
     {
-        $rates = $this->getRatesForEntry($entryId);
-
-        if ($rates->isNotEmpty()) {
-            return $rates->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])->toArray();
-        }
-
-        // Fallback to blueprint properties for backward compatibility
-        $entry = $this->getEntry($entryId);
-
-        return $entry ? $this->getEntryProperties($entry) : [];
+        return $this->getRatesForEntry($entryId)
+            ->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])
+            ->toArray();
     }
 
     public function getCheckoutEntry()
