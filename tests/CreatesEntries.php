@@ -39,11 +39,18 @@ trait CreatesEntries
         $entry->save();
 
         if (! $rateId) {
-            $rate = Rate::factory()->create([
-                'statamic_id' => $entry->id(),
-                'slug' => $rateSlug ?? 'default',
-                'title' => $rateSlug ? ucfirst(str_replace('-', ' ', $rateSlug)) : 'Default',
-            ]);
+            $slug = $rateSlug ?? 'default';
+            $rate = Rate::where('collection', $collection->handle())
+                ->where('slug', $slug)
+                ->first();
+
+            if (! $rate) {
+                $rate = Rate::factory()->create([
+                    'collection' => $collection->handle(),
+                    'slug' => $slug,
+                    'title' => $rateSlug ? ucfirst(str_replace('-', ' ', $rateSlug)) : 'Default',
+                ]);
+            }
             $rateId = $rate->id;
         }
 
@@ -122,10 +129,10 @@ trait CreatesEntries
         $startDate = now()->startOfDay();
 
         if (! $rateId) {
-            $rate = Rate::where('statamic_id', $entry->id())->first();
+            $rate = Rate::forEntry($entry->id())->first();
             if (! $rate) {
                 $rate = Rate::factory()->create([
-                    'statamic_id' => $entry->id(),
+                    'collection' => $entry->collection()->handle(),
                     'slug' => 'default',
                     'title' => 'Default',
                 ]);
@@ -148,7 +155,7 @@ trait CreatesEntries
     protected function createRateForEntry(Entry $entry, array $attributes = []): Rate
     {
         return Rate::factory()->create(array_merge(
-            ['statamic_id' => $entry->id()],
+            ['collection' => $entry->collection()->handle()],
             $attributes,
         ));
     }
@@ -167,7 +174,7 @@ trait CreatesEntries
     {
         return Rate::factory()->{$type}()->create(array_merge(
             [
-                'statamic_id' => $entry->id(),
+                'collection' => $entry->collection()->handle(),
                 'base_rate_id' => $baseRate->id,
             ],
             $attributes,

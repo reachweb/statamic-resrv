@@ -67,7 +67,7 @@ class AvailabilityResultsTest extends TestCase
 
     protected function getFirstAdvancedEntryRateId(): int
     {
-        return Rate::where('statamic_id', $this->advancedEntries->first()->id())->first()->id;
+        return Rate::forEntry($this->advancedEntries->first()->id())->first()->id;
     }
 
     public function test_renders_successfully()
@@ -435,13 +435,13 @@ class AvailabilityResultsTest extends TestCase
         $entryId = $this->advancedEntries->first()->id();
 
         $rate2 = Rate::factory()->create([
-            'statamic_id' => $entryId,
+            'collection' => 'advanced',
             'slug' => 'test2',
             'title' => 'Test2',
         ]);
 
         $rate3 = Rate::factory()->create([
-            'statamic_id' => $entryId,
+            'collection' => 'advanced',
             'slug' => 'test3',
             'title' => 'Test3',
         ]);
@@ -478,7 +478,7 @@ class AvailabilityResultsTest extends TestCase
                 'rate_id' => $rate3->id,
             ]);
 
-        $testRate = Rate::where('statamic_id', $entryId)->where('slug', 'test')->first();
+        $testRate = Rate::forEntry($entryId)->where('slug', 'test')->first();
 
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId])
             ->dispatch('availability-search-updated',
@@ -522,12 +522,12 @@ class AvailabilityResultsTest extends TestCase
     public function test_returns_availability_for_all_rates_when_advanced_is_true()
     {
         $entryId = $this->advancedEntries->first()->id();
-        $testRate = Rate::where('statamic_id', $entryId)->first();
+        $testRate = Rate::forEntry($entryId)->first();
 
         $anotherRate = Rate::factory()->create([
-            'statamic_id' => $entryId,
-            'slug' => 'another-test',
-            'title' => 'Another Test',
+            'collection' => 'advanced',
+            'slug' => 'another-test-extra',
+            'title' => 'Another Test Extra',
         ]);
 
         Availability::factory()
@@ -586,7 +586,7 @@ class AvailabilityResultsTest extends TestCase
         $checkoutPage = $this->createCheckoutEntry();
 
         $entryId = $this->advancedEntries->first()->id();
-        $testRate = Rate::where('statamic_id', $entryId)->first();
+        $testRate = Rate::forEntry($entryId)->first();
 
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
             ->dispatch('availability-search-updated',

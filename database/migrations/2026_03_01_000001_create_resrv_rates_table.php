@@ -10,7 +10,8 @@ return new class extends Migration
     {
         Schema::create('resrv_rates', function (Blueprint $table) {
             $table->id();
-            $table->string('statamic_id')->index();
+            $table->string('collection')->index();
+            $table->boolean('apply_to_all')->default(true);
             $table->string('title');
             $table->string('slug');
             $table->text('description')->nullable();
@@ -30,6 +31,7 @@ return new class extends Migration
             $table->date('date_start')->nullable();
             $table->date('date_end')->nullable();
             $table->integer('min_days_before')->nullable();
+            $table->integer('max_days_before')->nullable();
             $table->integer('min_stay')->nullable();
             $table->integer('max_stay')->nullable();
 
@@ -42,12 +44,22 @@ return new class extends Migration
             $table->softDeletes();
             $table->timestamps();
 
-            $table->unique(['statamic_id', 'slug']);
+            $table->unique(['collection', 'slug']);
+        });
+
+        Schema::create('resrv_rate_entries', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('rate_id')->constrained('resrv_rates')->cascadeOnDelete();
+            $table->string('statamic_id');
+            $table->timestamps();
+
+            $table->unique(['rate_id', 'statamic_id']);
         });
     }
 
     public function down(): void
     {
+        Schema::dropIfExists('resrv_rate_entries');
         Schema::dropIfExists('resrv_rates');
     }
 };

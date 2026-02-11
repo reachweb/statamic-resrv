@@ -5,14 +5,57 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
+use Illuminate\View\View;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Rate;
 
 class RateCpController extends Controller
 {
-    public function index(string $statamicId): JsonResponse
+    public function indexCp(): View
     {
-        $rates = Rate::where('statamic_id', $statamicId)
+        return view('statamic-resrv::cp.rates.index');
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $query = Rate::query();
+
+        if ($request->has('collection')) {
+            $query->forCollection($request->input('collection'));
+        }
+
+        return response()->json($query->orderBy('order')->with('entries')->get());
+    }
+
+    public function collections(): JsonResponse
+    {
+        $handles = Entry::query()
+            ->select('collection')
+            ->distinct()
+            ->pluck('collection');
+
+        $collections = $handles->map(fn (string $handle) => [
+            'handle' => $handle,
+            'title' => \Statamic\Facades\Collection::findByHandle($handle)?->title() ?? ucfirst($handle),
+        ])->values();
+
+        return response()->json($collections);
+    }
+
+    public function entries(string $collection): JsonResponse
+    {
+        $entries = Entry::where('collection', $collection)
+            ->select('item_id as id', 'title')
+            ->get();
+
+        return response()->json($entries);
+    }
+
+    public function forEntry(string $statamicId): JsonResponse
+    {
+        $rates = Rate::forEntry($statamicId)
             ->orderBy('order')
             ->get();
 
@@ -23,9 +66,15 @@ class RateCpController extends Controller
     {
         $data = $request->validate($this->validationRules($request));
 
-        $data['order'] = Rate::where('statamic_id', $data['statamic_id'])->max('order') + 1;
+        $entries = Arr::pull($data, 'entries', []);
+
+        $data['order'] = Rate::where('collection', $data['collection'])->max('order') + 1;
 
         $rate = Rate::create($data);
+
+        if (! $data['apply_to_all'] && ! empty($entries)) {
+            $rate->entries()->sync($entries);
+        }
 
         return response()->json(['id' => $rate->id]);
     }
@@ -34,7 +83,15 @@ class RateCpController extends Controller
     {
         $data = $request->validate($this->validationRules($request, $rate));
 
+        $entries = Arr::pull($data, 'entries', []);
+
         $rate->update($data);
+
+        if ($data['apply_to_all'] ?? $rate->apply_to_all) {
+            $rate->entries()->detach();
+        } else {
+            $rate->entries()->sync($entries);
+        }
 
         return response()->json(['id' => $rate->id]);
     }
@@ -77,18 +134,21 @@ class RateCpController extends Controller
     /** @return array<string, mixed> */
     protected function validationRules(Request $request, ?Rate $rate = null): array
     {
-        $statamicId = $rate?->statamic_id ?? $request->input('statamic_id');
+        $collection = $rate?->collection ?? $request->input('collection');
         $ignoreId = $rate?->id;
 
         return [
-            'statamic_id' => ['required', 'string'],
+            'collection' => ['required', 'string'],
+            'apply_to_all' => ['boolean'],
+            'entries' => ['nullable', 'array'],
+            'entries.*' => ['string'],
             'title' => ['required', 'string', 'max:255'],
             'slug' => [
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('resrv_rates')->where(function ($query) use ($statamicId) {
-                    return $query->where('statamic_id', $statamicId);
+                Rule::unique('resrv_rates')->where(function ($query) use ($collection) {
+                    return $query->where('collection', $collection);
                 })->ignore($ignoreId),
             ],
             'description' => ['nullable', 'string'],
@@ -97,9 +157,9 @@ class RateCpController extends Controller
                 'nullable',
                 'required_if:pricing_type,relative',
                 'exists:resrv_rates,id',
-                function ($attribute, $value, $fail) use ($statamicId) {
-                    if ($value && Rate::where('id', $value)->where('statamic_id', $statamicId)->doesntExist()) {
-                        $fail('The base rate must belong to the same entry.');
+                function ($attribute, $value, $fail) use ($collection) {
+                    if ($value && Rate::where('id', $value)->where('collection', $collection)->doesntExist()) {
+                        $fail('The base rate must belong to the same collection.');
                     }
                 },
             ],
@@ -111,6 +171,7 @@ class RateCpController extends Controller
             'date_start' => ['nullable', 'date'],
             'date_end' => ['nullable', 'date'],
             'min_days_before' => ['nullable', 'integer', 'min:0'],
+            'max_days_before' => ['nullable', 'integer', 'min:0'],
             'min_stay' => ['nullable', 'integer', 'min:0'],
             'max_stay' => ['nullable', 'integer', 'min:0'],
             'refundable' => ['boolean'],

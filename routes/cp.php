@@ -7,7 +7,11 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/availability', 'AvailabilityCpController@update')->name('availability.update');
         Route::delete('/resrv/availability', 'AvailabilityCpController@delete')->name('availability.delete');
 
-        Route::get('/resrv/rate/{statamic_id}', 'RateCpController@index')->name('rate.index');
+        Route::get('/resrv/rates', 'RateCpController@indexCp')->name('rates.index');
+        Route::get('/resrv/rates/index', 'RateCpController@index')->name('rate.index');
+        Route::get('/resrv/rates/collections', 'RateCpController@collections')->name('rate.collections');
+        Route::get('/resrv/rates/entries/{collection}', 'RateCpController@entries')->name('rate.entries');
+        Route::get('/resrv/rates/for-entry/{statamic_id}', 'RateCpController@forEntry')->name('rate.forEntry');
         Route::post('/resrv/rate', 'RateCpController@store')->name('rate.store');
         Route::patch('/resrv/rate/{rate}', 'RateCpController@update')->name('rate.update');
         Route::delete('/resrv/rate/{rate}', 'RateCpController@destroy')->name('rate.destroy');

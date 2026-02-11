@@ -79,7 +79,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_can_index_for_a_statamic_item()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->count(2)
@@ -99,7 +99,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_returns_empty_array_not_found()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->create([
@@ -114,7 +114,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_can_add_for_date_range()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -136,7 +136,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_can_add_for_single_day()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -158,7 +158,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_can_stop_sales()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -180,7 +180,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_can_update_for_date_range()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -219,7 +219,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_can_update_without_price()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -261,7 +261,7 @@ class AvailabilityCpTest extends TestCase
         $this->withExceptionHandling();
 
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -297,7 +297,7 @@ class AvailabilityCpTest extends TestCase
         $this->withExceptionHandling();
 
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -326,7 +326,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_cannot_save_price_without_availability()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -361,7 +361,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_can_delete_for_date_range()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->count(2)
@@ -398,7 +398,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_can_update_for_date_range_with_specific_days()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $startDate = today()->next(\Carbon\Carbon::SUNDAY);
         $endDate = $startDate->copy()->addDays(6);

@@ -1,25 +1,23 @@
 # Validated Issues
 
-## 1) `reservationFromUri()` allows reservation enumeration by numeric ID
-- Reason: `security`
-- What is wrong: The tag now accepts only `res_id` and returns the confirmed reservation directly.
-- Why it is wrong: This removes the previous integrity check and makes reservation lookup predictable (`/path?res_id=123`), enabling unauthorized disclosure of reservation data.
-- Exact location: `src/Tags/Resrv.php:23`
-- Concrete fix steps:
-1. Require a signed token (or restore `ref` + `hash` validation) instead of plain numeric ID lookup.
-2. Validate the signature with `hash_equals()` against a server-side HMAC secret.
-3. Return `404` on failed signature validation to avoid ID probing.
-4. Add a regression test that lookup without a valid signature is rejected.
-- Alignment with TASKS scope: Supports secure checkout/reservation display behavior while migrating to rates; this is not a rate-model requirement and should not regress.
-
-## 2) Multi-rate partial availability updates fail validation incorrectly
+## 1) Editing a specific-entry rate silently detaches all entry assignments
 - Reason: `correctness`
-- What is wrong: `AvailabilityCpRequest` validates `rate_ids`, but `ResrvAvailabilityExists` still reads legacy `advanced` data and falls back to `['none']`.
-- Why it is wrong: For entries with multiple rates, fallback validation queries all rates and compares total row count to expected day count, so valid single-rate partial updates are rejected.
-- Exact location: `src/Http/Requests/AvailabilityCpRequest.php:16`, `src/Rules/ResrvAvailabilityExists.php:24`
+- What is wrong: The edit form depends on `data.entries` to prefill assigned entries, but the list endpoint used to open the editor does not include that relationship.
+- Why it is wrong: For `apply_to_all = false`, opening and saving a rate without manually reselecting entries sends `entries: []`, and the controller syncs that empty array, permanently removing all assignments.
+- Exact location: `src/Http/Controllers/RateCpController.php:29`, `resources/js/components/RatesList.vue:122`, `resources/js/components/RatePanel.vue:471`, `resources/js/components/RatePanel.vue:505`, `src/Http/Controllers/RateCpController.php:93`
 - Concrete fix steps:
-1. Update `ResrvAvailabilityExists` to read `rate_ids` (and iterate each selected rate) instead of legacy `advanced`.
-2. Pass each selected rate ID into `Availability::itemsExistAndHavePrices(...)`.
-3. Keep a backward-compatibility branch only for legacy payloads, then remove once deprecated.
-4. Add a regression test for a multi-rate entry where one selected rate is partially updated and should succeed.
-- Alignment with TASKS scope: Task 6.2/7.1/11.1 fully migrate CP availability editing from property/advanced to rate IDs; validation must follow the new payload shape.
+1. Return assigned entries with rate payloads used for editing (for example `with('entries:item_id,title')` in `index()` and/or load full rate on edit).
+2. In the panel, avoid defaulting to `[]` for existing specific rates unless assignments were actually loaded.
+3. Add a regression test: create `apply_to_all=false` rate with assignments, open/edit/save unchanged payload, assert pivot rows remain intact.
+- Alignment with TASKS scope: Task 6.1 adds CRUD for collection/entry-scoped rates; edit flows must preserve assignment state.
+
+## 2) Single-sided date restrictions are cleared when opening the edit panel
+- Reason: `correctness`
+- What is wrong: The panel only initializes range state when both `date_start` and `date_end` exist, then the `date` watcher writes both submit fields to `null` when range state is `null`.
+- Why it is wrong: Rates that validly use only one bound (`date_start` only or `date_end` only) lose that restriction on save even if the user made no date changes.
+- Exact location: `resources/js/components/RatePanel.vue:436`, `resources/js/components/RatePanel.vue:474`
+- Concrete fix steps:
+1. Preserve original `submit.date_start`/`submit.date_end` when editing and no range is selected.
+2. Support partial ranges explicitly (or keep separate start/end inputs) instead of forcing both-or-none.
+3. Add a regression test for editing a rate with only `date_start` set and asserting the value remains unchanged after save.
+- Alignment with TASKS scope: Task 6.1 requires restriction fields to round-trip correctly in CP CRUD.

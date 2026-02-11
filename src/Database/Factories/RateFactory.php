@@ -12,7 +12,8 @@ class RateFactory extends Factory
     public function definition(): array
     {
         return [
-            'statamic_id' => 'test-entry-id',
+            'collection' => 'pages',
+            'apply_to_all' => true,
             'title' => 'Standard Rate',
             'slug' => 'standard-rate',
             'description' => null,
@@ -26,6 +27,7 @@ class RateFactory extends Factory
             'date_start' => null,
             'date_end' => null,
             'min_days_before' => null,
+            'max_days_before' => null,
             'min_stay' => null,
             'max_stay' => null,
             'refundable' => true,
@@ -36,41 +38,36 @@ class RateFactory extends Factory
 
     public function relative(): static
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'title' => 'Discounted Rate',
-                'slug' => 'discounted-rate',
-                'pricing_type' => 'relative',
-                'modifier_type' => 'percent',
-                'modifier_operation' => 'decrease',
-                'modifier_amount' => 20.00,
-            ];
-        });
+        return $this->state(fn () => [
+            'title' => 'Discounted Rate',
+            'slug' => 'discounted-rate',
+            'pricing_type' => 'relative',
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 20.00,
+        ]);
     }
 
     public function shared(): static
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'title' => 'Shared Rate',
-                'slug' => 'shared-rate',
-                'availability_type' => 'shared',
-            ];
-        });
+        return $this->state(fn () => [
+            'title' => 'Shared Rate',
+            'slug' => 'shared-rate',
+            'availability_type' => 'shared',
+        ]);
     }
 
     public function withRestrictions(): static
     {
-        return $this->state(function (array $attributes) {
-            return [
-                'title' => 'Restricted Rate',
-                'slug' => 'restricted-rate',
-                'date_start' => now()->startOfDay(),
-                'date_end' => now()->addMonths(3)->endOfDay(),
-                'min_days_before' => 2,
-                'min_stay' => 2,
-                'max_stay' => 14,
-            ];
-        });
+        return $this->state(fn () => [
+            'title' => 'Restricted Rate',
+            'slug' => 'restricted-rate',
+            'date_start' => now()->startOfDay(),
+            'date_end' => now()->addMonths(3)->endOfDay(),
+            'min_days_before' => 2,
+            'max_days_before' => 30,
+            'min_stay' => 2,
+            'max_stay' => 14,
+        ]);
     }
 }

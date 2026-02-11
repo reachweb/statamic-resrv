@@ -27,7 +27,7 @@ class RateAvailabilityTest extends TestCase
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
         $rate = Rate::factory()->create(array_merge(
-            ['statamic_id' => $entry->id()],
+            ['collection' => 'pages'],
             $rateAttributes,
         ));
 
@@ -121,12 +121,12 @@ class RateAvailabilityTest extends TestCase
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
         $baseRate = Rate::factory()->create([
-            'statamic_id' => $entry->id(),
+            'collection' => 'pages',
             'slug' => 'standard',
         ]);
 
         $relativeRate = Rate::factory()->relative()->create([
-            'statamic_id' => $entry->id(),
+            'collection' => 'pages',
             'base_rate_id' => $baseRate->id,
             'modifier_type' => $modifierType,
             'modifier_operation' => $modifierOperation,
@@ -211,17 +211,41 @@ class RateAvailabilityTest extends TestCase
         $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(5)->toDateString()));
     }
 
+    public function test_rate_max_days_before_restriction()
+    {
+        $rate = Rate::factory()->create(['max_days_before' => 7]);
+
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(3)->toDateString()));
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(7)->toDateString()));
+        $this->assertFalse($rate->meetsBookingLeadTime(now()->addDays(14)->toDateString()));
+    }
+
+    public function test_rate_combined_lead_time_restrictions()
+    {
+        $rate = Rate::factory()->create([
+            'min_days_before' => 2,
+            'max_days_before' => 10,
+        ]);
+
+        // Too soon
+        $this->assertFalse($rate->meetsBookingLeadTime(now()->addDay()->toDateString()));
+        // Within range
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(5)->toDateString()));
+        // Too far out
+        $this->assertFalse($rate->meetsBookingLeadTime(now()->addDays(15)->toDateString()));
+    }
+
     public function test_all_rates_query_returns_multiple_rates()
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
         $rate1 = Rate::factory()->create([
-            'statamic_id' => $entry->id(),
+            'collection' => 'pages',
             'slug' => 'standard',
             'order' => 0,
         ]);
         $rate2 = Rate::factory()->create([
-            'statamic_id' => $entry->id(),
+            'collection' => 'pages',
             'slug' => 'premium',
             'order' => 1,
         ]);

@@ -303,7 +303,7 @@ class Availability extends Model implements AvailabilityContract
             return new AvailabilityItemResource($availability, $request);
         }
 
-        $rateLabels = Rate::where('statamic_id', $entry->item_id)
+        $rateLabels = Rate::forEntry($entry->item_id)
             ->pluck('title', 'id')
             ->toArray();
 

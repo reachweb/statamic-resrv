@@ -13,7 +13,7 @@ trait HandlesStatamicQueries
 {
     public function getRatesForEntry(string $entryId): Collection
     {
-        return Rate::where('statamic_id', $entryId)
+        return Rate::forEntry($entryId)
             ->published()
             ->orderBy('order')
             ->get();

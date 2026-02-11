@@ -82,7 +82,7 @@ class MultisiteAvailabilityTest extends TestCase
 
         // Create a rate for the origin entry
         $rate = Rate::factory()->create([
-            'statamic_id' => $this->originEntry->id(),
+            'collection' => 'rooms',
             'slug' => 'default',
             'title' => 'Default',
         ]);
@@ -370,12 +370,10 @@ class MultisiteAvailabilityTest extends TestCase
         ]);
         $twoAvailableLocalized->save();
 
-        // Create a rate for the two-available entry
-        $twoAvailableRate = Rate::factory()->create([
-            'statamic_id' => $twoAvailableEntry->id(),
-            'slug' => 'default',
-            'title' => 'Default',
-        ]);
+        // Create a rate for the two-available entry (reuse existing rate from same collection)
+        $twoAvailableRate = Rate::where('collection', 'rooms')
+            ->where('slug', 'default')
+            ->first();
 
         // Create availability with 2 available using ORIGIN ID
         Availability::factory()

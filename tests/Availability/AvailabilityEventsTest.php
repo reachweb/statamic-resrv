@@ -24,7 +24,7 @@ class AvailabilityEventsTest extends TestCase
     public function test_availability_decreases_on_reservation_created()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->count(2)
@@ -53,7 +53,7 @@ class AvailabilityEventsTest extends TestCase
     public function test_availability_increases_on_reservation_expired()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->withPendingArray()
@@ -83,7 +83,7 @@ class AvailabilityEventsTest extends TestCase
     public function test_availability_does_increase_multiple_times_on_reservation_expired()
     {
         $item = $this->makeStatamicItem();
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->withPendingArray()

@@ -25,12 +25,12 @@ class RateSharedAvailabilityTest extends TestCase
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
         $baseRate = Rate::factory()->create([
-            'statamic_id' => $entry->id(),
+            'collection' => 'pages',
             'slug' => 'base-rate',
         ]);
 
         $sharedRate = Rate::factory()->shared()->create([
-            'statamic_id' => $entry->id(),
+            'collection' => 'pages',
             'base_rate_id' => $baseRate->id,
             'max_available' => $maxAvailable,
         ]);
@@ -163,7 +163,7 @@ class RateSharedAvailabilityTest extends TestCase
         $setup = $this->createSharedSetup(baseAvailable: 10);
 
         $sharedRate2 = Rate::factory()->shared()->create([
-            'statamic_id' => $setup['entry']->id(),
+            'collection' => 'pages',
             'slug' => 'shared-rate-2',
             'base_rate_id' => $setup['baseRate']->id,
         ]);
@@ -226,7 +226,7 @@ class RateSharedAvailabilityTest extends TestCase
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
         $rate = Rate::factory()->create([
-            'statamic_id' => $entry->id(),
+            'collection' => 'pages',
         ]);
 
         $startDate = now()->startOfDay();

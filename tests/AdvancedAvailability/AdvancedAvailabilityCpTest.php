@@ -22,7 +22,7 @@ class AdvancedAvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
 
         $rate = Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'test',
             'title' => 'Test',
         ]);
@@ -47,7 +47,7 @@ class AdvancedAvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
 
         $rate = Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'test',
             'title' => 'Test',
         ]);
@@ -74,7 +74,7 @@ class AdvancedAvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
 
         $rate = Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'test',
             'title' => 'Test',
         ]);
@@ -118,13 +118,13 @@ class AdvancedAvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
 
         $rate1 = Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'test',
             'title' => 'Test',
         ]);
 
         $rate2 = Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'test-else',
             'title' => 'Test Else',
         ]);
@@ -155,7 +155,7 @@ class AdvancedAvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
 
         $rate = Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'test',
             'title' => 'Test',
         ]);

@@ -88,9 +88,9 @@ class Entry extends Model
         return $this->hasMany(Availability::class, 'statamic_id', 'item_id');
     }
 
-    public function rates(): HasMany
+    public function rates(): Builder
     {
-        return $this->hasMany(Rate::class, 'statamic_id', 'item_id');
+        return Rate::forEntry($this->item_id);
     }
 
     public function getStatamicEntry(): StatamicEntry

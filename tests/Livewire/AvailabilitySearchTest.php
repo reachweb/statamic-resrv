@@ -397,7 +397,7 @@ class AvailabilitySearchTest extends TestCase
 
     public function test_availability_calendar_with_advanced_availability()
     {
-        $rateId = Rate::where('statamic_id', $this->advancedEntries->first()->id())->first()->id;
+        $rateId = Rate::forEntry($this->advancedEntries->first()->id())->first()->id;
 
         $component = Livewire::test(AvailabilitySearch::class, [
             'entry' => $this->advancedEntries->first()->id(),
@@ -464,13 +464,13 @@ class AvailabilitySearchTest extends TestCase
         $entry = $this->entries->first();
 
         $expensiveRate = Rate::factory()->create([
-            'statamic_id' => $entry->id(),
+            'collection' => 'pages',
             'slug' => 'expensive-cabin',
             'title' => 'Expensive Cabin',
         ]);
 
         $cheapRate = Rate::factory()->create([
-            'statamic_id' => $entry->id(),
+            'collection' => 'pages',
             'slug' => 'cheap-cabin',
             'title' => 'Cheap Cabin',
         ]);

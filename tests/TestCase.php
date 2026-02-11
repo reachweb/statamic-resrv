@@ -193,14 +193,14 @@ class TestCase extends OrchestraTestCase
         return Entry::query()->where('slug', $slug)->first();
     }
 
-    public function makeStatamicItemWithResrvAvailabilityField(?array $data = null)
+    public function makeStatamicItemWithResrvAvailabilityField(?array $data = null, string $collectionHandle = 'pages')
     {
         $entryData = [
             'title' => $data['title'] ?? 'Test Statamic Item',
             'resrv_availability' => $data['resrv_availability'] ?? Str::random(6),
         ];
 
-        $collection = Collection::make('pages')->routes('/{slug}')->save();
+        $collection = Collection::make($collectionHandle)->routes('/{slug}')->save();
 
         $blueprint = Blueprint::make()->setContents([
             'sections' => [
@@ -232,10 +232,10 @@ class TestCase extends OrchestraTestCase
                 ],
             ],
         ]);
-        $blueprint->setHandle('pages')->setNamespace('collections.'.$collection->handle())->save();
+        $blueprint->setHandle($collectionHandle)->setNamespace('collections.'.$collection->handle())->save();
 
         Entry::make()
-            ->collection('pages')
+            ->collection($collectionHandle)
             ->slug($slug = Str::random(6))
             ->data($data ?? $entryData)
             ->save();

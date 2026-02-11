@@ -46,7 +46,7 @@ class AvailabilityListTest extends TestCase
     public function test_returns_available_dates_from_start_date()
     {
         $entryId = $this->entries->first()->id();
-        $rateId = Rate::where('statamic_id', $entryId)->first()->id;
+        $rateId = Rate::forEntry($entryId)->first()->id;
 
         $component = Livewire::test(AvailabilityList::class, ['entry' => $entryId])
             ->dispatch('availability-search-updated',
@@ -102,7 +102,7 @@ class AvailabilityListTest extends TestCase
             );
 
         $availableDates = $component->viewData('availableDates');
-        $rateId = Rate::where('statamic_id', $entry->id())->first()->id;
+        $rateId = Rate::forEntry($entry->id())->first()->id;
 
         $this->assertArrayHasKey($rateId, $availableDates->toArray());
         $dates = $availableDates[$rateId];
@@ -134,7 +134,7 @@ class AvailabilityListTest extends TestCase
             );
 
         $availableDates = $component->viewData('availableDates');
-        $rateId = Rate::where('statamic_id', $entry->id())->first()->id;
+        $rateId = Rate::forEntry($entry->id())->first()->id;
 
         $this->assertArrayHasKey($rateId, $availableDates->toArray());
         $dates = $availableDates[$rateId];
@@ -147,12 +147,12 @@ class AvailabilityListTest extends TestCase
     public function test_available_dates_returns_grouped_by_rate_id_for_advanced()
     {
         $entryId = $this->advancedEntries->first()->id();
-        $testRate = Rate::where('statamic_id', $entryId)->first();
+        $testRate = Rate::forEntry($entryId)->first();
 
         $anotherRate = Rate::factory()->create([
-            'statamic_id' => $entryId,
-            'slug' => 'another-test',
-            'title' => 'Another Test',
+            'collection' => 'advanced',
+            'slug' => 'another-test-extra',
+            'title' => 'Another Test Extra',
         ]);
 
         Availability::factory()
@@ -203,12 +203,12 @@ class AvailabilityListTest extends TestCase
     public function test_available_dates_returns_only_selected_rate()
     {
         $entryId = $this->advancedEntries->first()->id();
-        $testRate = Rate::where('statamic_id', $entryId)->first();
+        $testRate = Rate::forEntry($entryId)->first();
 
         $anotherRate = Rate::factory()->create([
-            'statamic_id' => $entryId,
-            'slug' => 'another-test',
-            'title' => 'Another Test',
+            'collection' => 'advanced',
+            'slug' => 'another-test-extra',
+            'title' => 'Another Test Extra',
         ]);
 
         Availability::factory()
@@ -254,12 +254,12 @@ class AvailabilityListTest extends TestCase
     public function test_group_by_date_returns_date_first_structure()
     {
         $entryId = $this->advancedEntries->first()->id();
-        $testRate = Rate::where('statamic_id', $entryId)->first();
+        $testRate = Rate::forEntry($entryId)->first();
 
         $anotherRate = Rate::factory()->create([
-            'statamic_id' => $entryId,
-            'slug' => 'another-test',
-            'title' => 'Another Test',
+            'collection' => 'advanced',
+            'slug' => 'another-test-extra',
+            'title' => 'Another Test Extra',
         ]);
 
         Availability::factory()
@@ -312,12 +312,12 @@ class AvailabilityListTest extends TestCase
     public function test_group_by_date_shows_sparse_availability()
     {
         $entryId = $this->advancedEntries->first()->id();
-        $testRate = Rate::where('statamic_id', $entryId)->first();
+        $testRate = Rate::forEntry($entryId)->first();
 
         $anotherRate = Rate::factory()->create([
-            'statamic_id' => $entryId,
-            'slug' => 'another-test',
-            'title' => 'Another Test',
+            'collection' => 'advanced',
+            'slug' => 'another-test-extra',
+            'title' => 'Another Test Extra',
         ]);
 
         Availability::factory()

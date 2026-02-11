@@ -217,7 +217,7 @@ export default {
             this.renderAgain()
         },
         getRates() {
-            axios.get('/cp/resrv/rate/' + this.meta.parent)
+            axios.get('/cp/resrv/rates/for-entry/' + this.meta.parent)
             .then(response => {
                 this.rates = response.data
                 this.ratesLoaded = true

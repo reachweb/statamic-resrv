@@ -179,9 +179,7 @@ class AvailabilityScopeTest extends TestCase
      */
     protected function getRateIdsForSlug(string $slug): array
     {
-        $entryIds = $this->rateEntries->map(fn ($entry) => $entry->id())->toArray();
-
-        return Rate::whereIn('statamic_id', $entryIds)
+        return Rate::where('collection', 'advanced')
             ->where('slug', $slug)
             ->pluck('id')
             ->toArray();

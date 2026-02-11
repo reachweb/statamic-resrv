@@ -17,30 +17,95 @@ class RateCpTest extends TestCase
         $this->signInAdmin();
     }
 
-    public function test_can_list_rates_for_entry_empty()
+    public function test_can_list_rates_empty()
     {
-        $item = $this->makeStatamicItemWithResrvAvailabilityField();
-
-        $response = $this->get(cp_route('resrv.rate.index', $item->id()));
+        $response = $this->get(cp_route('resrv.rate.index'));
         $response->assertStatus(200)->assertJson([]);
     }
 
-    public function test_can_list_rates_for_entry()
+    public function test_can_list_rates_filtered_by_collection()
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
 
-        Rate::factory()->create(['statamic_id' => $item->id()]);
+        Rate::factory()->create(['collection' => 'pages']);
 
-        $response = $this->get(cp_route('resrv.rate.index', $item->id()));
+        $response = $this->get(cp_route('resrv.rate.index', ['collection' => 'pages']));
         $response->assertStatus(200)->assertJsonCount(1);
+    }
+
+    public function test_can_list_collections()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $response = $this->get(cp_route('resrv.rate.collections'));
+        $response->assertStatus(200)->assertJsonFragment(['handle' => 'pages']);
+    }
+
+    public function test_can_list_entries_for_collection()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $response = $this->get(cp_route('resrv.rate.entries', 'pages'));
+        $response->assertStatus(200)->assertJsonCount(1);
+    }
+
+    public function test_can_get_rates_for_entry()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        Rate::factory()->create(['collection' => 'pages']);
+
+        $response = $this->get(cp_route('resrv.rate.forEntry', $item->id()));
+        $response->assertStatus(200)->assertJsonCount(1);
+    }
+
+    public function test_for_entry_returns_apply_to_all_rates()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        Rate::factory()->create(['collection' => 'pages', 'apply_to_all' => true]);
+
+        $response = $this->get(cp_route('resrv.rate.forEntry', $item->id()));
+        $response->assertStatus(200)->assertJsonCount(1);
+    }
+
+    public function test_for_entry_returns_specifically_assigned_rates()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'apply_to_all' => false,
+        ]);
+
+        // Assign via pivot (attach using item_id, which is the relatedKey)
+        $rate->entries()->attach($item->id());
+
+        $response = $this->get(cp_route('resrv.rate.forEntry', $item->id()));
+        $response->assertStatus(200)->assertJsonCount(1);
+    }
+
+    public function test_for_entry_excludes_unassigned_specific_rates()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        Rate::factory()->create([
+            'collection' => 'pages',
+            'apply_to_all' => false,
+        ]);
+
+        // Not assigned to this entry
+        $response = $this->get(cp_route('resrv.rate.forEntry', $item->id()));
+        $response->assertStatus(200)->assertJsonCount(0);
     }
 
     public function test_can_create_independent_rate()
     {
-        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField();
 
         $payload = [
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
+            'apply_to_all' => true,
             'title' => 'Standard Room',
             'slug' => 'standard-room',
             'pricing_type' => 'independent',
@@ -53,19 +118,44 @@ class RateCpTest extends TestCase
         $response->assertStatus(200)->assertJsonStructure(['id']);
 
         $this->assertDatabaseHas('resrv_rates', [
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'standard-room',
         ]);
     }
 
-    public function test_can_create_relative_rate()
+    public function test_can_create_rate_with_specific_entries()
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
 
-        $baseRate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => false,
+            'entries' => [$item->id()],
+            'title' => 'Specific Rate',
+            'slug' => 'specific-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'refundable' => true,
+            'published' => true,
+        ];
+
+        $response = $this->post(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(200);
+
+        $rate = Rate::where('slug', 'specific-rate')->first();
+        $this->assertFalse($rate->apply_to_all);
+        $this->assertCount(1, $rate->entries);
+    }
+
+    public function test_can_create_relative_rate()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
+            'apply_to_all' => true,
             'title' => 'Discounted Rate',
             'slug' => 'discounted-rate',
             'pricing_type' => 'relative',
@@ -88,19 +178,20 @@ class RateCpTest extends TestCase
         ]);
     }
 
-    public function test_rejects_duplicate_slug_for_same_entry()
+    public function test_rejects_duplicate_slug_for_same_collection()
     {
         $this->withExceptionHandling();
 
-        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField();
 
         Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'standard-room',
         ]);
 
         $payload = [
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
+            'apply_to_all' => true,
             'title' => 'Another Standard Room',
             'slug' => 'standard-room',
             'pricing_type' => 'independent',
@@ -112,18 +203,19 @@ class RateCpTest extends TestCase
         $response->assertStatus(422);
     }
 
-    public function test_allows_same_slug_for_different_entries()
+    public function test_allows_same_slug_for_different_collections()
     {
-        $item1 = $this->makeStatamicItemWithResrvAvailabilityField();
-        $item2 = $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField(collectionHandle: 'rooms');
 
         Rate::factory()->create([
-            'statamic_id' => $item1->id(),
+            'collection' => 'pages',
             'slug' => 'standard-room',
         ]);
 
         $payload = [
-            'statamic_id' => $item2->id(),
+            'collection' => 'rooms',
+            'apply_to_all' => true,
             'title' => 'Standard Room',
             'slug' => 'standard-room',
             'pricing_type' => 'independent',
@@ -139,10 +231,11 @@ class RateCpTest extends TestCase
     {
         $this->withExceptionHandling();
 
-        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField();
 
         $payload = [
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
+            'apply_to_all' => true,
             'title' => 'Bad Rate',
             'slug' => 'bad-rate',
             'pricing_type' => 'relative',
@@ -157,17 +250,18 @@ class RateCpTest extends TestCase
         $response->assertStatus(422);
     }
 
-    public function test_rejects_base_rate_from_different_entry()
+    public function test_rejects_base_rate_from_different_collection()
     {
         $this->withExceptionHandling();
 
-        $item1 = $this->makeStatamicItemWithResrvAvailabilityField();
-        $item2 = $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField(collectionHandle: 'rooms');
 
-        $baseRate = Rate::factory()->create(['statamic_id' => $item1->id()]);
+        $baseRate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
-            'statamic_id' => $item2->id(),
+            'collection' => 'rooms',
+            'apply_to_all' => true,
             'title' => 'Bad Rate',
             'slug' => 'bad-rate',
             'pricing_type' => 'relative',
@@ -185,12 +279,13 @@ class RateCpTest extends TestCase
 
     public function test_can_update_a_rate()
     {
-        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField();
 
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
+            'apply_to_all' => true,
             'title' => 'Updated Title',
             'slug' => 'standard-rate',
             'pricing_type' => 'independent',
@@ -209,9 +304,9 @@ class RateCpTest extends TestCase
 
     public function test_can_soft_delete_a_rate()
     {
-        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField();
 
-        $rate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $response = $this->delete(cp_route('resrv.rate.destroy', $rate->id));
         $response->assertStatus(200);
@@ -223,12 +318,12 @@ class RateCpTest extends TestCase
     {
         $this->withExceptionHandling();
 
-        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField();
 
-        $baseRate = Rate::factory()->create(['statamic_id' => $item->id()]);
+        $baseRate = Rate::factory()->create(['collection' => 'pages']);
 
         Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'dependent-rate',
             'pricing_type' => 'relative',
             'base_rate_id' => $baseRate->id,
@@ -245,15 +340,15 @@ class RateCpTest extends TestCase
 
     public function test_can_reorder_rates()
     {
-        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $this->makeStatamicItemWithResrvAvailabilityField();
 
         $rate1 = Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'rate-1',
             'order' => 0,
         ]);
         $rate2 = Rate::factory()->create([
-            'statamic_id' => $item->id(),
+            'collection' => 'pages',
             'slug' => 'rate-2',
             'order' => 1,
         ]);
@@ -362,5 +457,136 @@ class RateCpTest extends TestCase
         $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(3)->toDateString()));
         $this->assertFalse($rate->meetsBookingLeadTime(now()->addDays(1)->toDateString()));
         $this->assertFalse($rate->meetsBookingLeadTime(now()->toDateString()));
+    }
+
+    public function test_meets_booking_lead_time_with_max_days_before()
+    {
+        $rate = Rate::factory()->create([
+            'max_days_before' => 7,
+        ]);
+
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(5)->toDateString()));
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(7)->toDateString()));
+        $this->assertFalse($rate->meetsBookingLeadTime(now()->addDays(10)->toDateString()));
+    }
+
+    public function test_meets_booking_lead_time_with_min_and_max_days_before()
+    {
+        $rate = Rate::factory()->create([
+            'min_days_before' => 2,
+            'max_days_before' => 7,
+        ]);
+
+        // Within range
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(3)->toDateString()));
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(2)->toDateString()));
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(7)->toDateString()));
+
+        // Too soon (below min)
+        $this->assertFalse($rate->meetsBookingLeadTime(now()->addDay()->toDateString()));
+
+        // Too far ahead (above max)
+        $this->assertFalse($rate->meetsBookingLeadTime(now()->addDays(10)->toDateString()));
+    }
+
+    public function test_index_returns_assigned_entries_for_specific_rates()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'apply_to_all' => false,
+        ]);
+
+        $rate->entries()->attach($item->id());
+
+        $response = $this->get(cp_route('resrv.rate.index', ['collection' => 'pages']));
+        $response->assertStatus(200);
+
+        $data = $response->json();
+        $this->assertNotEmpty($data[0]['entries']);
+        $this->assertEquals($item->id(), $data[0]['entries'][0]['item_id']);
+    }
+
+    public function test_updating_specific_rate_preserves_entry_assignments()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'apply_to_all' => false,
+        ]);
+
+        $rate->entries()->attach($item->id());
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => false,
+            'entries' => [$item->id()],
+            'title' => 'Updated Title',
+            'slug' => 'standard-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'published' => true,
+        ];
+
+        $response = $this->patch(cp_route('resrv.rate.update', $rate->id), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_rate_entries', [
+            'rate_id' => $rate->id,
+            'statamic_id' => $item->id(),
+        ]);
+    }
+
+    public function test_updating_rate_preserves_single_sided_date_start()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'date_start' => '2026-06-01',
+            'date_end' => null,
+        ]);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Updated Title',
+            'slug' => 'standard-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'date_start' => '2026-06-01',
+            'date_end' => null,
+            'published' => true,
+        ];
+
+        $response = $this->patch(cp_route('resrv.rate.update', $rate->id), $payload);
+        $response->assertStatus(200);
+
+        $rate->refresh();
+        $this->assertNotNull($rate->date_start);
+        $this->assertNull($rate->date_end);
+    }
+
+    public function test_max_days_before_validation()
+    {
+        $this->withExceptionHandling();
+
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Test Rate',
+            'slug' => 'test-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'max_days_before' => -1,
+            'published' => true,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(422)->assertJsonValidationErrors('max_days_before');
     }
 }

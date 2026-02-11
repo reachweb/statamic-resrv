@@ -7,14 +7,16 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $entries = DB::table('resrv_availabilities')
-            ->select('statamic_id', 'property')
+        // Group availability records by collection (via resrv_entries) and property
+        $entries = DB::table('resrv_availabilities as a')
+            ->join('resrv_entries as e', 'a.statamic_id', '=', 'e.item_id')
+            ->select('a.statamic_id', 'a.property', 'e.collection')
             ->distinct()
             ->get()
-            ->groupBy('statamic_id');
+            ->groupBy('collection');
 
-        foreach ($entries as $statamicId => $properties) {
-            $propertySlugs = $properties->pluck('property')->unique()->values();
+        foreach ($entries as $collection => $records) {
+            $propertySlugs = $records->pluck('property')->unique()->values();
             $order = 0;
 
             foreach ($propertySlugs as $slug) {
@@ -22,7 +24,7 @@ return new class extends Migration
                 $rateTitle = $slug === 'none' ? 'Default' : $slug;
 
                 $existingRate = DB::table('resrv_rates')
-                    ->where('statamic_id', $statamicId)
+                    ->where('collection', $collection)
                     ->where('slug', $rateSlug)
                     ->first();
 
@@ -30,7 +32,8 @@ return new class extends Migration
                     $rateId = $existingRate->id;
                 } else {
                     $rateId = DB::table('resrv_rates')->insertGetId([
-                        'statamic_id' => $statamicId,
+                        'collection' => $collection,
+                        'apply_to_all' => true,
                         'title' => $rateTitle,
                         'slug' => $rateSlug,
                         'pricing_type' => 'independent',
@@ -43,41 +46,51 @@ return new class extends Migration
                     ]);
                 }
 
-                DB::table('resrv_availabilities')
-                    ->where('statamic_id', $statamicId)
-                    ->where('property', $slug)
-                    ->whereNull('rate_id')
-                    ->update(['rate_id' => $rateId]);
+                // Get all statamic_ids for this collection + property
+                $statamicIds = $records->where('property', $slug)->pluck('statamic_id')->unique();
 
-                DB::table('resrv_reservations')
-                    ->where('item_id', $statamicId)
-                    ->where('property', $slug)
-                    ->whereNull('rate_id')
-                    ->update(['rate_id' => $rateId]);
+                foreach ($statamicIds as $statamicId) {
+                    DB::table('resrv_availabilities')
+                        ->where('statamic_id', $statamicId)
+                        ->where('property', $slug)
+                        ->whereNull('rate_id')
+                        ->update(['rate_id' => $rateId]);
 
-                DB::table('resrv_child_reservations')
-                    ->whereIn('reservation_id', function ($query) use ($statamicId) {
-                        $query->select('id')
-                            ->from('resrv_reservations')
-                            ->where('item_id', $statamicId);
-                    })
-                    ->where('property', $slug)
-                    ->whereNull('rate_id')
-                    ->update(['rate_id' => $rateId]);
+                    DB::table('resrv_reservations')
+                        ->where('item_id', $statamicId)
+                        ->where('property', $slug)
+                        ->whereNull('rate_id')
+                        ->update(['rate_id' => $rateId]);
+
+                    DB::table('resrv_child_reservations')
+                        ->whereIn('reservation_id', function ($query) use ($statamicId) {
+                            $query->select('id')
+                                ->from('resrv_reservations')
+                                ->where('item_id', $statamicId);
+                        })
+                        ->where('property', $slug)
+                        ->whereNull('rate_id')
+                        ->update(['rate_id' => $rateId]);
+                }
 
                 $order++;
             }
 
+            // Assign fixed pricing to first rate in this collection
             $defaultRate = DB::table('resrv_rates')
-                ->where('statamic_id', $statamicId)
+                ->where('collection', $collection)
                 ->orderBy('order')
                 ->first();
 
             if ($defaultRate) {
-                DB::table('resrv_fixed_pricing')
-                    ->where('statamic_id', $statamicId)
-                    ->whereNull('rate_id')
-                    ->update(['rate_id' => $defaultRate->id]);
+                $statamicIdsInCollection = $records->pluck('statamic_id')->unique();
+
+                foreach ($statamicIdsInCollection as $statamicId) {
+                    DB::table('resrv_fixed_pricing')
+                        ->where('statamic_id', $statamicId)
+                        ->whereNull('rate_id')
+                        ->update(['rate_id' => $defaultRate->id]);
+                }
             }
         }
     }

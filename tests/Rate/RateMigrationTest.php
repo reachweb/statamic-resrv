@@ -35,6 +35,7 @@ class RateMigrationTest extends TestCase
         DB::table('resrv_reservations')->delete();
         DB::table('resrv_child_reservations')->delete();
         DB::table('resrv_fixed_pricing')->delete();
+        DB::table('resrv_entries')->delete();
     }
 
     protected function runDataMigration(): void
@@ -43,43 +44,56 @@ class RateMigrationTest extends TestCase
         $migration->up();
     }
 
+    protected function insertEntry(string $statamicId, string $collection = 'rooms'): void
+    {
+        DB::table('resrv_entries')->insert([
+            'item_id' => $statamicId,
+            'title' => 'Entry '.$statamicId,
+            'enabled' => true,
+            'collection' => $collection,
+            'handle' => $collection,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     public function test_entry_with_none_property_gets_default_rate(): void
     {
+        $this->insertEntry('entry-1');
         $this->insertAvailability('entry-1', 'none', 50, 1, now()->toDateString());
 
         $this->runDataMigration();
 
         $this->assertDatabaseHas('resrv_rates', [
-            'statamic_id' => 'entry-1',
+            'collection' => 'rooms',
             'slug' => 'default',
             'title' => 'Default',
         ]);
 
-        $this->assertEquals(1, DB::table('resrv_rates')->where('statamic_id', 'entry-1')->count());
+        $this->assertEquals(1, DB::table('resrv_rates')->where('collection', 'rooms')->count());
     }
 
-    public function test_entry_with_multiple_properties_gets_multiple_rates(): void
+    public function test_entries_in_same_collection_share_rates(): void
     {
-        $this->insertAvailability('entry-2', 'double-room', 100, 2, now()->toDateString());
-        $this->insertAvailability('entry-2', 'single-room', 75, 3, now()->addDay()->toDateString());
-        $this->insertAvailability('entry-2', 'suite', 200, 1, now()->addDays(2)->toDateString());
+        $this->insertEntry('entry-2a', 'hotel');
+        $this->insertEntry('entry-2b', 'hotel');
+        $this->insertAvailability('entry-2a', 'double-room', 100, 2, now()->toDateString());
+        $this->insertAvailability('entry-2b', 'double-room', 120, 1, now()->addDay()->toDateString());
+        $this->insertAvailability('entry-2a', 'single-room', 75, 3, now()->addDay()->toDateString());
 
         $this->runDataMigration();
 
-        $rates = DB::table('resrv_rates')->where('statamic_id', 'entry-2')->orderBy('order')->get();
+        // Should have 2 rates for the 'hotel' collection, not 3 (double-room shared)
+        $rates = DB::table('resrv_rates')->where('collection', 'hotel')->orderBy('order')->get();
 
-        $this->assertCount(3, $rates);
+        $this->assertCount(2, $rates);
         $this->assertEquals('double-room', $rates[0]->slug);
         $this->assertEquals('single-room', $rates[1]->slug);
-        $this->assertEquals('suite', $rates[2]->slug);
-
-        $this->assertEquals(0, $rates[0]->order);
-        $this->assertEquals(1, $rates[1]->order);
-        $this->assertEquals(2, $rates[2]->order);
     }
 
     public function test_availability_records_mapped_to_correct_rate_ids(): void
     {
+        $this->insertEntry('entry-3');
         $this->insertAvailability('entry-3', 'standard', 80, 2, now()->toDateString());
         $this->insertAvailability('entry-3', 'standard', 80, 2, now()->addDay()->toDateString());
         $this->insertAvailability('entry-3', 'premium', 120, 1, now()->toDateString());
@@ -87,12 +101,12 @@ class RateMigrationTest extends TestCase
         $this->runDataMigration();
 
         $standardRate = DB::table('resrv_rates')
-            ->where('statamic_id', 'entry-3')
+            ->where('collection', 'rooms')
             ->where('slug', 'standard')
             ->first();
 
         $premiumRate = DB::table('resrv_rates')
-            ->where('statamic_id', 'entry-3')
+            ->where('collection', 'rooms')
             ->where('slug', 'premium')
             ->first();
 
@@ -120,6 +134,7 @@ class RateMigrationTest extends TestCase
 
     public function test_reservation_property_values_mapped_to_rate_ids(): void
     {
+        $this->insertEntry('entry-4');
         $this->insertAvailability('entry-4', 'deluxe', 150, 2, now()->toDateString());
         $this->insertReservation('entry-4', 'deluxe');
         $this->insertReservation('entry-4', 'deluxe');
@@ -127,7 +142,7 @@ class RateMigrationTest extends TestCase
         $this->runDataMigration();
 
         $deluxeRate = DB::table('resrv_rates')
-            ->where('statamic_id', 'entry-4')
+            ->where('collection', 'rooms')
             ->where('slug', 'deluxe')
             ->first();
 
@@ -141,6 +156,7 @@ class RateMigrationTest extends TestCase
 
     public function test_child_reservation_property_values_mapped_to_rate_ids(): void
     {
+        $this->insertEntry('entry-5');
         $this->insertAvailability('entry-5', 'cabin', 90, 1, now()->toDateString());
         $reservationId = $this->insertReservation('entry-5', 'cabin');
         $this->insertChildReservation($reservationId, 'cabin');
@@ -148,7 +164,7 @@ class RateMigrationTest extends TestCase
         $this->runDataMigration();
 
         $cabinRate = DB::table('resrv_rates')
-            ->where('statamic_id', 'entry-5')
+            ->where('collection', 'rooms')
             ->where('slug', 'cabin')
             ->first();
 
@@ -162,13 +178,14 @@ class RateMigrationTest extends TestCase
 
     public function test_fixed_pricing_gets_rate_id_assigned(): void
     {
+        $this->insertEntry('entry-6');
         $this->insertAvailability('entry-6', 'none', 50, 1, now()->toDateString());
         $this->insertFixedPricing('entry-6');
 
         $this->runDataMigration();
 
         $defaultRate = DB::table('resrv_rates')
-            ->where('statamic_id', 'entry-6')
+            ->where('collection', 'rooms')
             ->where('slug', 'default')
             ->first();
 
@@ -183,18 +200,19 @@ class RateMigrationTest extends TestCase
 
     public function test_migration_is_idempotent(): void
     {
+        $this->insertEntry('entry-7');
         $this->insertAvailability('entry-7', 'room-a', 100, 1, now()->toDateString());
         $this->insertAvailability('entry-7', 'room-b', 80, 2, now()->addDay()->toDateString());
 
         $this->runDataMigration();
 
-        $ratesAfterFirst = DB::table('resrv_rates')->where('statamic_id', 'entry-7')->count();
+        $ratesAfterFirst = DB::table('resrv_rates')->where('collection', 'rooms')->count();
         $mappedAfterFirst = DB::table('resrv_availabilities')->whereNotNull('rate_id')->count();
 
         // Run again — should not create duplicates
         $this->runDataMigration();
 
-        $ratesAfterSecond = DB::table('resrv_rates')->where('statamic_id', 'entry-7')->count();
+        $ratesAfterSecond = DB::table('resrv_rates')->where('collection', 'rooms')->count();
         $mappedAfterSecond = DB::table('resrv_availabilities')->whereNotNull('rate_id')->count();
 
         $this->assertEquals($ratesAfterFirst, $ratesAfterSecond);
@@ -203,12 +221,13 @@ class RateMigrationTest extends TestCase
 
     public function test_rates_created_with_correct_defaults(): void
     {
+        $this->insertEntry('entry-8');
         $this->insertAvailability('entry-8', 'villa', 300, 1, now()->toDateString());
 
         $this->runDataMigration();
 
         $rate = DB::table('resrv_rates')
-            ->where('statamic_id', 'entry-8')
+            ->where('collection', 'rooms')
             ->where('slug', 'villa')
             ->first();
 
@@ -216,6 +235,7 @@ class RateMigrationTest extends TestCase
         $this->assertEquals('independent', $rate->availability_type);
         $this->assertTrue((bool) $rate->refundable);
         $this->assertTrue((bool) $rate->published);
+        $this->assertTrue((bool) $rate->apply_to_all);
         $this->assertNotNull($rate->created_at);
         $this->assertNotNull($rate->updated_at);
     }

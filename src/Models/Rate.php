@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Reach\StatamicResrv\Database\Factories\RateFactory;
@@ -29,7 +30,8 @@ class Rate extends Model
     protected $keyType = 'string';
 
     protected $fillable = [
-        'statamic_id',
+        'collection',
+        'apply_to_all',
         'title',
         'slug',
         'description',
@@ -43,6 +45,7 @@ class Rate extends Model
         'date_start',
         'date_end',
         'min_days_before',
+        'max_days_before',
         'min_stay',
         'max_stay',
         'refundable',
@@ -51,6 +54,7 @@ class Rate extends Model
     ];
 
     protected $casts = [
+        'apply_to_all' => 'boolean',
         'published' => 'boolean',
         'refundable' => 'boolean',
         'date_start' => 'date',
@@ -68,9 +72,10 @@ class Rate extends Model
         static::addGlobalScope(new OrderScope);
     }
 
-    public function entry(): BelongsTo
+    public function entries(): BelongsToMany
     {
-        return $this->belongsTo(Entry::class, 'statamic_id', 'item_id');
+        return $this->belongsToMany(Entry::class, 'resrv_rate_entries', 'rate_id', 'statamic_id', 'id', 'item_id')
+            ->withTimestamps();
     }
 
     public function availabilities(): HasMany
@@ -96,6 +101,24 @@ class Rate extends Model
     public function fixedPricing(): HasMany
     {
         return $this->hasMany(FixedPricing::class, 'rate_id');
+    }
+
+    public function scopeForEntry(Builder $query, string $entryId): void
+    {
+        $collection = Entry::where('item_id', $entryId)->value('collection');
+
+        $query->where('collection', $collection)
+            ->where(function (Builder $q) use ($entryId) {
+                $q->where('apply_to_all', true)
+                    ->orWhereHas('entries', function (Builder $q) use ($entryId) {
+                        $q->where('resrv_entries.item_id', $entryId);
+                    });
+            });
+    }
+
+    public function scopeForCollection(Builder $query, string $collection): void
+    {
+        $query->where('collection', $collection);
     }
 
     public function isRelative(): bool
@@ -139,14 +162,22 @@ class Rate extends Model
 
     public function meetsBookingLeadTime(string $dateStart): bool
     {
-        if (! $this->min_days_before) {
+        if (! $this->min_days_before && ! $this->max_days_before) {
             return true;
         }
 
         $start = Carbon::parse($dateStart);
         $daysUntilStart = Carbon::today()->diffInDays($start, false);
 
-        return $daysUntilStart >= $this->min_days_before;
+        if ($this->min_days_before && $daysUntilStart < $this->min_days_before) {
+            return false;
+        }
+
+        if ($this->max_days_before && $daysUntilStart > $this->max_days_before) {
+            return false;
+        }
+
+        return true;
     }
 
     public function calculatePrice(PriceClass $basePrice): PriceClass
@@ -158,20 +189,16 @@ class Rate extends Model
         $price = Price::create($basePrice->format());
 
         if ($this->modifier_type === 'percent') {
-            if ($this->modifier_operation === 'increase') {
-                return $price->increasePercent($this->modifier_amount);
-            }
-
-            return $price->decreasePercent($this->modifier_amount);
+            return $this->modifier_operation === 'increase'
+                ? $price->increasePercent($this->modifier_amount)
+                : $price->decreasePercent($this->modifier_amount);
         }
 
         $modifier = Price::create($this->modifier_amount);
 
-        if ($this->modifier_operation === 'increase') {
-            return $price->add($modifier);
-        }
-
-        return $price->subtract($modifier);
+        return $this->modifier_operation === 'increase'
+            ? $price->add($modifier)
+            : $price->subtract($modifier);
     }
 
     public function scopePublished(Builder $query): void

@@ -3,7 +3,9 @@
 namespace Reach\StatamicResrv\Console\Commands;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Collection as BaseCollection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Models\Rate;
 use Statamic\Console\RunsInPlease;
@@ -59,11 +61,7 @@ class UpgradeToRates extends Command
     {
         $this->components->task('Reading blueprint configurations', fn () => true);
 
-        $collections = Collection::all()->filter(function ($collection) {
-            return $collection->entryBlueprints()->some(function ($blueprint) {
-                return AvailabilityField::blueprintHasAvailabilityField($blueprint);
-            });
-        });
+        $collections = $this->getResrvCollections();
 
         if ($collections->isEmpty()) {
             $this->components->warn('No collections with Resrv availability fields found.');
@@ -92,19 +90,19 @@ class UpgradeToRates extends Command
             $propertyLabels = $field->config()['advanced_availability'] ?? [];
 
             if (empty($propertyLabels)) {
+                $this->updateStandardRate($collection);
+
                 continue;
             }
 
             $this->components->twoColumnDetail(
                 "Collection: <info>{$collection->title()}</info>",
-                count($propertyLabels).' propert'.((count($propertyLabels) === 1) ? 'y' : 'ies').' found'
+                count($propertyLabels).' '.Str::plural('property', count($propertyLabels)).' found'
             );
-
-            $entryIds = $collection->queryEntries()->get()->map(fn ($entry) => $entry->id());
 
             foreach ($propertyLabels as $slug => $label) {
                 $rates = Rate::withoutGlobalScopes()
-                    ->whereIn('statamic_id', $entryIds)
+                    ->where('collection', $collection->handle())
                     ->where('slug', $slug)
                     ->where('title', $slug)
                     ->get();
@@ -133,6 +131,40 @@ class UpgradeToRates extends Command
         }
     }
 
+    protected function updateStandardRate($collection): void
+    {
+        $rates = Rate::withoutGlobalScopes()
+            ->where('collection', $collection->handle())
+            ->where('slug', 'default')
+            ->get();
+
+        if ($rates->isEmpty()) {
+            return;
+        }
+
+        $this->components->twoColumnDetail(
+            "Collection: <info>{$collection->title()}</info>",
+            'No properties (standard availability)'
+        );
+
+        foreach ($rates as $rate) {
+            $this->updatedCount++;
+
+            if ($this->dryRun) {
+                $this->components->twoColumnDetail(
+                    '  Would update rate <comment>default</comment>',
+                    '<comment>default</comment> → <info>Standard Rate (standard-rate)</info>'
+                );
+            } else {
+                $rate->update(['title' => 'Standard Rate', 'slug' => 'standard-rate']);
+                $this->components->twoColumnDetail(
+                    '  Updated rate <comment>default</comment>',
+                    '<info>Standard Rate (standard-rate)</info>'
+                );
+            }
+        }
+    }
+
     protected function detectCrossEntryConnections(): void
     {
         $this->newLine();
@@ -141,11 +173,7 @@ class UpgradeToRates extends Command
         $crossEntryTypes = ['same_slug', 'specific_slugs', 'entries'];
         $warnings = [];
 
-        $collections = Collection::all()->filter(function ($collection) {
-            return $collection->entryBlueprints()->some(function ($blueprint) {
-                return AvailabilityField::blueprintHasAvailabilityField($blueprint);
-            });
-        });
+        $collections = $this->getResrvCollections();
 
         foreach ($collections as $collection) {
             foreach ($collection->entryBlueprints() as $blueprint) {
@@ -183,9 +211,10 @@ class UpgradeToRates extends Command
                     }
 
                     if ($type === 'entries') {
-                        $entryGroups = collect($rule['connected_entries'] ?? [])->map(function ($group) {
-                            return implode(', ', $group['entries'] ?? []);
-                        })->filter()->implode(' | ');
+                        $entryGroups = collect($rule['connected_entries'] ?? [])
+                            ->map(fn ($group) => implode(', ', $group['entries'] ?? []))
+                            ->filter()
+                            ->implode(' | ');
                         $warning['entries'] = $entryGroups ?: 'N/A';
                     }
 
@@ -229,5 +258,12 @@ class UpgradeToRates extends Command
         $this->line('  3. Consolidate related entries into a single entry with multiple rates');
         $this->newLine();
         $this->line('  The blueprint config is preserved for reference but no longer functional.');
+    }
+
+    protected function getResrvCollections(): BaseCollection
+    {
+        return Collection::all()->filter(fn ($collection) => $collection->entryBlueprints()->some(
+            fn ($blueprint) => AvailabilityField::blueprintHasAvailabilityField($blueprint)
+        ));
     }
 }
