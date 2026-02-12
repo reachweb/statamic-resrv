@@ -16,7 +16,7 @@
 {{ __("Date") }}: **{{ $reservation->created_at->format('d-m-Y H:i') }}**<br>
 {{ __("Pick-up date") }}: **{{ $reservation->date_start->format('d-m-Y H:i') }}**<br>
 {{ __("Drop-off date") }}: **{{ $reservation->date_end->format('d-m-Y H:i') }}**<br>
-{{ __("Property") }}: **{{ $reservation->entry()['title'] ?? '' }}**
+{{ __("Property") }}: **{{ $reservation->entry()->title ?? '' }}**
 @endcomponent
 
 @component('mail::button', ['url' => config('app.url')])
