@@ -25,7 +25,7 @@ class SendAbandonedReservationEmails extends Command
         $targetDate = now()->subDays($delayDays);
 
         $reservations = Reservation::where('status', 'expired')
-            ->whereNotNull('customer_id')
+            ->whereHas('customer')
             ->whereNull('abandoned_email_sent_at')
             ->whereDate('updated_at', '<=', $targetDate)
             ->with('customer')
@@ -41,9 +41,12 @@ class SendAbandonedReservationEmails extends Command
             return self::SUCCESS;
         }
 
-        $toNotify->each(function (Reservation $reservation): void {
+        $toNotify->each(function (Reservation $reservation) use ($reservations): void {
             Mail::to($reservation->customer->email)->send(new ReservationAbandoned($reservation));
-            $reservation->update(['abandoned_email_sent_at' => now()]);
+
+            $reservations
+                ->where('customer_id', $reservation->customer_id)
+                ->each(fn (Reservation $r) => $r->update(['abandoned_email_sent_at' => now()]));
         });
 
         $this->info("Sent {$toNotify->count()} abandoned reservation email(s).");

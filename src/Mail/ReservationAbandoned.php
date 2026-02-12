@@ -26,7 +26,7 @@ class ReservationAbandoned extends Mailable
         }
     }
 
-    public function build(): static
+    public function build()
     {
         if ($this->getOption('html')) {
             return $this->markdown($this->getOption('html'));
