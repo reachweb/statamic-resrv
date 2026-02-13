@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,6 +12,10 @@ return new class extends Migration
         Schema::table('resrv_reservations', function (Blueprint $table) {
             $table->timestamp('abandoned_email_sent_at')->nullable()->after('status');
         });
+
+        DB::table('resrv_reservations')
+            ->where('status', 'expired')
+            ->update(['abandoned_email_sent_at' => now()]);
     }
 
     public function down(): void

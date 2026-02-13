@@ -16,11 +16,11 @@ class ReservationAbandoned extends Mailable
     public function __construct(Reservation $reservation)
     {
         $this->reservation = $reservation;
-        if ($this->getOption('from')) {
-            $this->from(explode(',', $this->getOption('from')), env('APP_NAME', ''));
+        if ($this->getOption('from', 3)) {
+            $this->from(explode(',', $this->getOption('from', 3)), env('APP_NAME', ''));
         }
-        if ($this->getOption('subject')) {
-            $this->subject($this->getOption('subject'));
+        if ($this->getOption('subject', 3)) {
+            $this->subject($this->getOption('subject', 3));
         } else {
             $this->subject(__("We noticed you didn't complete your reservation"));
         }
@@ -28,8 +28,8 @@ class ReservationAbandoned extends Mailable
 
     public function build()
     {
-        if ($this->getOption('html')) {
-            return $this->markdown($this->getOption('html'));
+        if ($this->getOption('html', 3)) {
+            return $this->markdown($this->getOption('html', 3));
         }
 
         return $this->markdown('statamic-resrv::email.reservations.abandoned');

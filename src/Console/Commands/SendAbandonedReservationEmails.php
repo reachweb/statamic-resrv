@@ -15,7 +15,7 @@ class SendAbandonedReservationEmails extends Command
 
     public function handle(): int
     {
-        if (config('resrv-config.enable_abandoned_emails') !== true) {
+        if (! config('resrv-config.enable_abandoned_emails')) {
             $this->info('Abandoned reservation emails are disabled. Set enable_abandoned_emails to true in resrv config.');
 
             return self::SUCCESS;
