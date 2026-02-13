@@ -267,8 +267,6 @@ tabs:
               display: 'Default checkout form'
               instructions: 'Used when no entry-specific or collection-specific mapping matches.'
               localizable: false
-              validate:
-                - required
           -
             handle: checkout_forms_collections
             field:

@@ -121,7 +121,19 @@ class CheckoutFormResolver
 
         foreach ($mappings as $mapping) {
             // `handle` is accepted as a legacy alias for collection key.
-            $mappedHandle = trim((string) (data_get($mapping, 'collection') ?? data_get($mapping, 'handle') ?? ''));
+            $collectionHandle = $this->normalizeStringValue(data_get($mapping, 'collection'));
+            $legacyHandle = $this->normalizeStringValue(data_get($mapping, 'handle'));
+
+            if ($collectionHandle && $legacyHandle && $collectionHandle !== $legacyHandle) {
+                Log::warning('Conflicting collection mapping keys detected in checkout form mapping. Skipping mapping row.', [
+                    'collection' => $collectionHandle,
+                    'handle' => $legacyHandle,
+                ]);
+
+                continue;
+            }
+
+            $mappedHandle = $collectionHandle ?: $legacyHandle;
             $formHandle = $this->extractFormHandle(data_get($mapping, 'form'));
 
             if (! $mappedHandle || ! $formHandle) {
@@ -193,21 +205,7 @@ class CheckoutFormResolver
 
     protected function extractEntryId(mixed $value): ?string
     {
-        if (! $value) {
-            return null;
-        }
-
-        if (is_string($value)) {
-            return trim($value) !== '' ? trim($value) : null;
-        }
-
-        if (is_array($value)) {
-            $first = Arr::first($value);
-
-            return is_string($first) && trim($first) !== '' ? trim($first) : null;
-        }
-
-        return null;
+        return $this->normalizeStringValue($value);
     }
 
     protected function extractFormHandle(mixed $value): ?string
@@ -230,6 +228,27 @@ class CheckoutFormResolver
 
         if ($value instanceof Collection) {
             return $this->extractFormHandle($value->all());
+        }
+
+        return null;
+    }
+
+    protected function normalizeStringValue(mixed $value): ?string
+    {
+        if (! $value) {
+            return null;
+        }
+
+        if (is_string($value)) {
+            $trimmed = trim($value);
+
+            return $trimmed !== '' ? $trimmed : null;
+        }
+
+        if (is_array($value)) {
+            $first = Arr::first($value);
+
+            return is_string($first) && trim($first) !== '' ? trim($first) : null;
         }
 
         return null;

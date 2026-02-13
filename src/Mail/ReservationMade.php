@@ -36,7 +36,7 @@ class ReservationMade extends Mailable
             ? (string) $entryTitle->value()
             : (string) ($entryTitle ?: '## Entry deleted ##');
 
-        $customerEmail = (string) ($reservation->customer?->email ?: 'unknown@example.com');
+        $customerEmail = (string) ($reservation->customer?->email ?: 'unknown');
 
         return 'Reservation #'.$reservation->id.' ['.$title.'] ['.$reservation->date_start->format('Y-m-d').'] ['.$customerEmail.']';
     }

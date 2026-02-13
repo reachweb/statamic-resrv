@@ -212,6 +212,33 @@ class ReservationEmailConfigurationTest extends TestCase
         Mail::assertNotSent(ReservationConfirmed::class);
     }
 
+    public function test_custom_recipients_with_valid_emails_are_used()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $item->id(),
+        ]);
+
+        Config::set('resrv-config.reservation_emails_global', [
+            [
+                'event' => ReservationEmailEvent::CustomerConfirmed->value,
+                'recipients' => 'test@example.com,custom:custom@example.com',
+            ],
+        ]);
+
+        app(ReservationEmailDispatcher::class)->send(
+            $reservation,
+            ReservationEmailEvent::CustomerConfirmed,
+            new ReservationConfirmed($reservation),
+        );
+
+        Mail::assertSent(ReservationConfirmed::class, function (ReservationConfirmed $mail) {
+            return $mail->hasTo('test@example.com')
+                && $mail->hasTo('custom@example.com');
+        });
+    }
+
     public function test_admin_made_default_recipients_include_admins_and_affiliate()
     {
         Mail::fake();
