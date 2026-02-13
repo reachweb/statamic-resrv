@@ -220,6 +220,30 @@ tabs:
               validate:
                 - required
               instructions: 'Comma-separated list of the emails that should be notified for new reservations or refunds.'
+      -
+        display: 'Abandoned reservation emails'
+        instructions: 'Send recovery emails to customers who started but did not complete a reservation.'
+        fields:
+          -
+            handle: enable_abandoned_emails
+            field:
+              display: 'Enable abandoned reservation emails'
+              type: toggle
+              localizable: false
+              validate:
+                - required
+              instructions: 'When enabled, the `resrv:send-abandoned-emails` command will send recovery emails to customers with expired reservations.'
+          -
+            handle: abandoned_email_delay_days
+            field:
+              display: 'Delay (in days)'
+              type: integer
+              width: 50
+              localizable: false
+              default: 1
+              validate:
+                - required
+              instructions: 'Number of days after a reservation expires before sending the recovery email. For example, 1 means the email is sent the next day.'
   checkout_settings:
     display: Checkout
     sections:

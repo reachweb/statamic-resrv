@@ -16,6 +16,7 @@
       <directory suffix="Test.php">tests/Utilities/</directory>
       <directory suffix="Test.php">tests/Unit/</directory>
       <directory suffix="Test.php">tests/Multisite/</directory>
+      <directory suffix="Test.php">tests/Mail/</directory>
     </testsuite>
   </testsuites>
   <php>

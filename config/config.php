@@ -88,4 +88,12 @@ return [
     'enable_connected_availabilities' => false,
     'enable_affiliates' => true,
     'enable_cutoff_rules' => false,
+
+    /**
+     * Abandoned reservation emails.
+     * enable_abandoned_emails: send recovery emails for expired reservations with customer data.
+     * abandoned_email_delay_days: days after expiration before sending (1 = next day).
+     */
+    'enable_abandoned_emails' => false,
+    'abandoned_email_delay_days' => 1,
 ];

@@ -33,6 +33,7 @@ class Reservation extends Model
         'price' => PriceClass::class,
         'payment' => PriceClass::class,
         'total' => PriceClass::class,
+        'abandoned_email_sent_at' => 'datetime',
     ];
 
     protected $appends = ['entry'];
