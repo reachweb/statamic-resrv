@@ -55,13 +55,25 @@ return [
 
     /**
      * Checkout settings.
-     * form_name: handle of the checkout form (needed to work correctly!)
+     * form_name: DEPRECATED. Kept for backwards compatibility and used only if checkout_forms_default is not set.
+     * checkout_forms_default: default checkout form handle used when no entry/collection mapping matches
+     * checkout_forms_collections: list of collection-specific checkout forms (rows: collection, form)
+     * checkout_forms_entries: list of entry-specific checkout forms (rows: entry, form)
      * payment: full charges the whole amount, everything the amount plus extras and options and fixed charges a fixed deposit and percent charges a percentage
      * fixed_amount: the amount to charge for a reservation
      * percent_amount: the percentage of the reservation to charge as an amount
      * minutes_to_hold: how much time the user has the complete the checkout until availability is reset.
      */
     'form_name' => 'checkout',
+    'checkout_forms_default' => 'checkout',
+    'checkout_forms_collections' => [],
+    'checkout_forms_entries' => [],
+    // Optional nested alternative to the flat checkout_forms_* keys above.
+    'checkout_forms' => [
+        'default' => null,
+        'collections' => [],
+        'entries' => [],
+    ],
     'payment' => 'full',
     'fixed_amount' => 50,
     'percent_amount' => 20,
@@ -96,4 +108,24 @@ return [
      */
     'enable_abandoned_emails' => false,
     'abandoned_email_delay_days' => 1,
+
+    /**
+     * Reservation email overrides.
+     *
+     * reservation_emails_global: optional event-level defaults across all forms.
+     * reservation_emails_forms: optional per-form event overrides.
+     *
+     * Event keys:
+     * - customer_confirmed
+     * - admin_made
+     * - customer_refunded
+     * - customer_abandoned
+     */
+    'reservation_emails_global' => [],
+    'reservation_emails_forms' => [],
+    // Optional nested alternative to the flat reservation_emails_* keys above.
+    'reservation_emails' => [
+        'global' => [],
+        'forms' => [],
+    ],
 ];

@@ -16,8 +16,9 @@ use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Support\CheckoutFormResolver;
+use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Facades\Entry;
-use Statamic\Facades\Form;
 
 class Reservation extends Model
 {
@@ -345,9 +346,10 @@ class Reservation extends Model
     // TODO: cleanup these methods
     public function getCheckoutForm()
     {
-        $formHandle = $this->entry()->get('resrv_override_form') ?? config('resrv-config.form_name', 'checkout');
+        /** @var CheckoutFormResolver $resolver */
+        $resolver = app(CheckoutFormResolver::class);
 
-        return Form::find($formHandle)->fields()->values();
+        return $resolver->resolveForReservation($this)->fields()->values();
     }
 
     public function checkoutForm($entry = null)
@@ -378,25 +380,24 @@ class Reservation extends Model
 
     protected function getForm($entry = null)
     {
-        $formHandle = config('resrv-config.form_name', 'checkout');
+        /** @var CheckoutFormResolver $resolver */
+        $resolver = app(CheckoutFormResolver::class);
+
         if ($entry) {
-            $entry = Entry::find($entry);
-            if ($entry->get('resrv_override_form')) {
-                $formHandle = $entry->get('resrv_override_form');
-            }
+            $entryId = $entry instanceof EntryContract ? (string) $entry->id() : (string) $entry;
+
+            return $resolver->resolveForEntryId($entryId)->fields()->values();
         }
 
-        return Form::find($formHandle)->fields()->values();
+        return $resolver->resolveForReservation($this)->fields()->values();
     }
 
     public function getFormOptions()
     {
-        $formHandle = config('resrv-config.form_name', 'checkout');
-        if ($this->entry()->get('resrv_override_form')) {
-            $formHandle = $this->entry()->get('resrv_override_form');
-        }
+        /** @var CheckoutFormResolver $resolver */
+        $resolver = app(CheckoutFormResolver::class);
 
-        return Form::find($formHandle);
+        return $resolver->resolveForReservation($this);
     }
 
     public function expire($id)

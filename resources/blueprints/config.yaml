@@ -256,9 +256,59 @@ tabs:
             field:
               max_items: 1
               type: form
-              display: Form
-              instructions: 'The form you want to use during checkout. The default is "checkout" and should work out of the box.'
+              display: 'Legacy checkout form (deprecated)'
+              instructions: 'Deprecated. Used only as a fallback when no checkout form is configured below.'
               localizable: false
+          -
+            handle: checkout_forms_default
+            field:
+              max_items: 1
+              type: form
+              display: 'Default checkout form'
+              instructions: 'Used when no entry-specific or collection-specific mapping matches.'
+              localizable: false
+              validate:
+                - required
+          -
+            handle: checkout_forms_collections
+            field:
+              type: grid
+              display: 'Collection checkout form mappings'
+              instructions: 'Map collection handles to checkout forms.'
+              localizable: false
+              fields:
+                -
+                  handle: collection
+                  field:
+                    type: text
+                    display: Collection
+                    instructions: 'Statamic collection handle, for example pages.'
+                -
+                  handle: form
+                  field:
+                    max_items: 1
+                    type: form
+                    display: Form
+          -
+            handle: checkout_forms_entries
+            field:
+              type: grid
+              display: 'Entry checkout form mappings'
+              instructions: 'Map specific entries to checkout forms. Entry mappings take precedence over collection mappings.'
+              localizable: false
+              fields:
+                -
+                  handle: entry
+                  field:
+                    display: Entry
+                    type: entries
+                    max_items: 1
+                -
+                  handle: form
+                  field:
+                    max_items: 1
+                    type: form
+                    display: Form
           -
             handle: checkout_entry
             field:
@@ -332,6 +382,130 @@ tabs:
               validate:
                 - required
               instructions: 'When a user initiates a checkout, the availability for their reservation is temporarily blocked for the given number of minutes. This helps to prevent double bookings, especially when availability is low.'
+      -
+        display: 'Reservation email overrides'
+        instructions: 'Configure event-based email settings globally or per checkout form.'
+        fields:
+          -
+            handle: reservation_emails_global
+            field:
+              type: grid
+              display: 'Global email event settings'
+              instructions: 'Add rows per event. Recipients accepts: customer, admins, affiliate, email@example.com, custom:one@example.com|two@example.com'
+              localizable: false
+              fields:
+                -
+                  handle: event
+                  field:
+                    type: select
+                    display: Event
+                    options:
+                      -
+                        key: customer_confirmed
+                        value: 'Customer confirmed'
+                      -
+                        key: admin_made
+                        value: 'Admin made'
+                      -
+                        key: customer_refunded
+                        value: 'Customer refunded'
+                      -
+                        key: customer_abandoned
+                        value: 'Customer abandoned'
+                -
+                  handle: enabled
+                  field:
+                    type: toggle
+                    display: Enabled
+                    default: true
+                -
+                  handle: recipients
+                  field:
+                    type: text
+                    display: Recipients
+                -
+                  handle: from_address
+                  field:
+                    type: text
+                    display: 'From address'
+                -
+                  handle: from_name
+                  field:
+                    type: text
+                    display: 'From name'
+                -
+                  handle: subject
+                  field:
+                    type: text
+                    display: Subject
+                -
+                  handle: markdown
+                  field:
+                    type: text
+                    display: 'Markdown view'
+          -
+            handle: reservation_emails_forms
+            field:
+              type: grid
+              display: 'Per-form email event overrides'
+              instructions: 'Override a specific event for a specific checkout form.'
+              localizable: false
+              fields:
+                -
+                  handle: form
+                  field:
+                    max_items: 1
+                    type: form
+                    display: Form
+                -
+                  handle: event
+                  field:
+                    type: select
+                    display: Event
+                    options:
+                      -
+                        key: customer_confirmed
+                        value: 'Customer confirmed'
+                      -
+                        key: admin_made
+                        value: 'Admin made'
+                      -
+                        key: customer_refunded
+                        value: 'Customer refunded'
+                      -
+                        key: customer_abandoned
+                        value: 'Customer abandoned'
+                -
+                  handle: enabled
+                  field:
+                    type: toggle
+                    display: Enabled
+                    default: true
+                -
+                  handle: recipients
+                  field:
+                    type: text
+                    display: Recipients
+                -
+                  handle: from_address
+                  field:
+                    type: text
+                    display: 'From address'
+                -
+                  handle: from_name
+                  field:
+                    type: text
+                    display: 'From name'
+                -
+                  handle: subject
+                  field:
+                    type: text
+                    display: Subject
+                -
+                  handle: markdown
+                  field:
+                    type: text
+                    display: 'Markdown view'
   currency_settings:
     display: Currency
     sections:
