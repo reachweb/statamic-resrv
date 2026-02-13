@@ -240,6 +240,7 @@ tabs:
               type: integer
               width: 50
               localizable: false
+              default: 1
               validate:
                 - required
               instructions: 'Number of days after a reservation expires before sending the recovery email. For example, 1 means the email is sent the next day.'

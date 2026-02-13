@@ -6,9 +6,11 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Mail\ReservationAbandoned;
 use Reach\StatamicResrv\Models\Reservation;
+use Statamic\Console\RunsInPlease;
 
 class SendAbandonedReservationEmails extends Command
 {
+    use RunsInPlease;
     protected $signature = 'resrv:send-abandoned-emails';
 
     protected $description = 'Send recovery emails for expired reservations that have customer data';
@@ -27,7 +29,7 @@ class SendAbandonedReservationEmails extends Command
         $reservations = Reservation::where('status', 'expired')
             ->whereHas('customer')
             ->whereNull('abandoned_email_sent_at')
-            ->whereDate('updated_at', '<=', $targetDate)
+            ->where('updated_at', '<=', $targetDate)
             ->with('customer')
             ->get();
 

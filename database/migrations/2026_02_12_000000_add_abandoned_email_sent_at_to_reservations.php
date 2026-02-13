@@ -15,7 +15,7 @@ return new class extends Migration
 
         DB::table('resrv_reservations')
             ->where('status', 'expired')
-            ->update(['abandoned_email_sent_at' => now()]);
+            ->update(['abandoned_email_sent_at' => DB::raw('updated_at')]);
     }
 
     public function down(): void
