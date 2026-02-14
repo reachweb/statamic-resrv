@@ -163,13 +163,22 @@ class ReservationCheckoutTest extends TestCase
             return $mail->hasTo($this->reservation->customer->email);
         });
 
-        // Check ReservationMade - one email with multiple recipients
-        Mail::assertSent(ReservationMade::class, 1);
+        // Check ReservationMade - one email per recipient to avoid exposing addresses.
+        Mail::assertSent(ReservationMade::class, 3);
         Mail::assertSent(ReservationMade::class, function ($mail) {
-            // Verify all recipients are included in a single email
-            return $mail->hasTo('admin1@test.com') &&
-                $mail->hasTo('admin2@test.com')
-                && $mail->hasTo('admin3@test.com');
+            return $mail->hasTo('admin1@test.com')
+                && ! $mail->hasTo('admin2@test.com')
+                && ! $mail->hasTo('admin3@test.com');
+        });
+        Mail::assertSent(ReservationMade::class, function ($mail) {
+            return $mail->hasTo('admin2@test.com')
+                && ! $mail->hasTo('admin1@test.com')
+                && ! $mail->hasTo('admin3@test.com');
+        });
+        Mail::assertSent(ReservationMade::class, function ($mail) {
+            return $mail->hasTo('admin3@test.com')
+                && ! $mail->hasTo('admin1@test.com')
+                && ! $mail->hasTo('admin2@test.com');
         });
     }
 
