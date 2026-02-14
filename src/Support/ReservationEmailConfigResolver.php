@@ -124,7 +124,7 @@ class ReservationEmailConfigResolver
         $fromAddress = data_get($config, 'from.address') ?? data_get($config, 'from_address');
         $fromName = data_get($config, 'from.name') ?? data_get($config, 'from_name');
 
-        return [
+        $normalized = [
             'enabled' => $this->toBool(data_get($config, 'enabled', true)),
             'from' => [
                 'address' => is_string($fromAddress) && trim($fromAddress) !== '' ? trim($fromAddress) : null,
@@ -132,8 +132,13 @@ class ReservationEmailConfigResolver
             ],
             'subject' => $this->nullableString(data_get($config, 'subject')),
             'markdown' => $this->nullableString(data_get($config, 'markdown')),
-            'recipients' => $this->normalizeRecipients(data_get($config, 'recipients', [])),
         ];
+
+        if (Arr::has($config, 'recipients')) {
+            $normalized['recipients'] = $this->normalizeRecipients(data_get($config, 'recipients', []));
+        }
+
+        return $normalized;
     }
 
     protected function defaultForEvent(string $event): array
@@ -193,9 +198,20 @@ class ReservationEmailConfigResolver
             return [];
         }
 
-        // Allow short associative style, e.g. ['admins' => true].
-        if (Arr::isAssoc($value) && isset($value['type'])) {
-            return [$this->normalizeRecipientRow($value)];
+        if (Arr::isAssoc($value)) {
+            if (isset($value['type'])) {
+                $row = $this->normalizeRecipientRow($value);
+
+                return $row ? [$row] : [];
+            }
+
+            return collect($value)
+                ->filter(fn ($enabled) => (bool) $enabled)
+                ->keys()
+                ->map(fn ($token) => $this->normalizeRecipientRow((string) $token))
+                ->filter()
+                ->values()
+                ->all();
         }
 
         return collect($value)
@@ -232,11 +248,13 @@ class ReservationEmailConfigResolver
                 return null;
             }
 
-            if (in_array($value, ['customer', 'admins', 'affiliate'], true)) {
-                return ['type' => $value];
+            $normalizedValue = strtolower($value);
+
+            if (in_array($normalizedValue, ['customer', 'admins', 'affiliate'], true)) {
+                return ['type' => $normalizedValue];
             }
 
-            if (str_starts_with($value, 'custom:')) {
+            if (str_starts_with($normalizedValue, 'custom:')) {
                 return [
                     'type' => 'custom',
                     'emails' => trim(substr($value, 7)),
@@ -250,7 +268,7 @@ class ReservationEmailConfigResolver
             ];
         }
 
-        $type = trim((string) ($row['type'] ?? ''));
+        $type = strtolower(trim((string) ($row['type'] ?? '')));
         if ($type === '') {
             return null;
         }

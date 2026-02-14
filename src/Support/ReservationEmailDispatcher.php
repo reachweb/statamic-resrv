@@ -41,7 +41,9 @@ class ReservationEmailDispatcher
 
         $mailable->applyResrvEmailConfig($config);
 
-        Mail::to($recipients)->send($mailable);
+        foreach ($recipients as $recipient) {
+            Mail::to($recipient)->send(clone $mailable);
+        }
 
         return true;
     }
