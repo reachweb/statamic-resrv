@@ -134,11 +134,41 @@ class ReservationEmailConfigResolver
             'markdown' => $this->nullableString(data_get($config, 'markdown')),
         ];
 
-        if (Arr::has($config, 'recipients')) {
+        $friendlyRecipients = $this->normalizeRecipientsFromFriendlyFields($config);
+        if ($friendlyRecipients !== null) {
+            $normalized['recipients'] = $friendlyRecipients;
+        } elseif (Arr::has($config, 'recipients')) {
             $normalized['recipients'] = $this->normalizeRecipients(data_get($config, 'recipients', []));
         }
 
         return $normalized;
+    }
+
+    protected function normalizeRecipientsFromFriendlyFields(array $config): ?array
+    {
+        $hasSources = Arr::has($config, 'recipient_sources');
+        $hasEmails = Arr::has($config, 'recipient_emails');
+
+        if (! $hasSources && ! $hasEmails) {
+            return null;
+        }
+
+        $rows = $this->normalizeRecipients(data_get($config, 'recipient_sources', []));
+        $customEmails = $this->tokenizeCustomEmails(data_get($config, 'recipient_emails', ''));
+
+        if (count($customEmails) > 0) {
+            $rows[] = [
+                'type' => 'custom',
+                'emails' => $customEmails,
+            ];
+        }
+
+        // Keep event defaults if the user did not configure anything in the friendly fields.
+        if (count($rows) === 0) {
+            return null;
+        }
+
+        return $rows;
     }
 
     protected function defaultForEvent(string $event): array
@@ -280,6 +310,26 @@ class ReservationEmailConfigResolver
         }
 
         return $normalized;
+    }
+
+    protected function tokenizeCustomEmails(mixed $value): array
+    {
+        if (is_string($value)) {
+            return collect(preg_split('/[,;\r\n|]+/', $value) ?: [])
+                ->map(fn ($email) => trim($email))
+                ->filter()
+                ->values()
+                ->all();
+        }
+
+        if (is_array($value)) {
+            return collect($value)
+                ->flatMap(fn ($item) => $this->tokenizeCustomEmails($item))
+                ->values()
+                ->all();
+        }
+
+        return [];
     }
 
     protected function extractFormHandle(mixed $value): ?string

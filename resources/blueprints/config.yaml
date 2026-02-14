@@ -220,30 +220,6 @@ tabs:
               validate:
                 - required
               instructions: 'Comma-separated list of the emails that should be notified for new reservations or refunds.'
-      -
-        display: 'Abandoned reservation emails'
-        instructions: 'Send recovery emails to customers who started but did not complete a reservation.'
-        fields:
-          -
-            handle: enable_abandoned_emails
-            field:
-              display: 'Enable abandoned reservation emails'
-              type: toggle
-              localizable: false
-              validate:
-                - required
-              instructions: 'When enabled, the `resrv:send-abandoned-emails` command will send recovery emails to customers with expired reservations.'
-          -
-            handle: abandoned_email_delay_days
-            field:
-              display: 'Delay (in days)'
-              type: integer
-              width: 50
-              localizable: false
-              default: 1
-              validate:
-                - required
-              instructions: 'Number of days after a reservation expires before sending the recovery email. For example, 1 means the email is sent the next day.'
   checkout_settings:
     display: Checkout
     sections:
@@ -380,6 +356,9 @@ tabs:
               validate:
                 - required
               instructions: 'When a user initiates a checkout, the availability for their reservation is temporarily blocked for the given number of minutes. This helps to prevent double bookings, especially when availability is low.'
+  emails_settings:
+    display: Emails
+    sections:
       -
         display: 'Reservation email overrides'
         instructions: 'Configure event-based email settings globally or per checkout form.'
@@ -388,8 +367,9 @@ tabs:
             handle: reservation_emails_global
             field:
               type: grid
+              mode: stacked
               display: 'Global email event settings'
-              instructions: 'Add rows per event. Recipients accepts: customer, admins, affiliate, email@example.com, custom:one@example.com|two@example.com'
+              instructions: 'Add rows per event. Choose recipient sources and optional extra email addresses.'
               localizable: false
               fields:
                 -
@@ -417,10 +397,27 @@ tabs:
                     display: Enabled
                     default: true
                 -
-                  handle: recipients
+                  handle: recipient_sources
                   field:
-                    type: text
-                    display: Recipients
+                    type: checkboxes
+                    display: 'Recipient sources'
+                    instructions: 'Choose built-in recipient groups.'
+                    options:
+                      -
+                        key: customer
+                        value: Customer
+                      -
+                        key: admins
+                        value: Admins
+                      -
+                        key: affiliate
+                        value: Affiliate
+                -
+                  handle: recipient_emails
+                  field:
+                    type: textarea
+                    display: 'Extra email addresses'
+                    instructions: 'Optional. Enter one email per line, or separate with commas.'
                 -
                   handle: from_address
                   field:
@@ -445,8 +442,9 @@ tabs:
             handle: reservation_emails_forms
             field:
               type: grid
+              mode: stacked
               display: 'Per-form email event overrides'
-              instructions: 'Override a specific event for a specific checkout form.'
+              instructions: 'Override a specific event for a specific checkout form. Choose recipient sources and optional extra email addresses.'
               localizable: false
               fields:
                 -
@@ -480,10 +478,27 @@ tabs:
                     display: Enabled
                     default: true
                 -
-                  handle: recipients
+                  handle: recipient_sources
                   field:
-                    type: text
-                    display: Recipients
+                    type: checkboxes
+                    display: 'Recipient sources'
+                    instructions: 'Choose built-in recipient groups.'
+                    options:
+                      -
+                        key: customer
+                        value: Customer
+                      -
+                        key: admins
+                        value: Admins
+                      -
+                        key: affiliate
+                        value: Affiliate
+                -
+                  handle: recipient_emails
+                  field:
+                    type: textarea
+                    display: 'Extra email addresses'
+                    instructions: 'Optional. Enter one email per line, or separate with commas.'
                 -
                   handle: from_address
                   field:
@@ -504,6 +519,30 @@ tabs:
                   field:
                     type: text
                     display: 'Markdown view'
+      -
+        display: 'Abandoned reservation emails'
+        instructions: 'Send recovery emails to customers who started but did not complete a reservation.'
+        fields:
+          -
+            handle: enable_abandoned_emails
+            field:
+              display: 'Enable abandoned reservation emails'
+              type: toggle
+              localizable: false
+              validate:
+                - required
+              instructions: 'When enabled, the `resrv:send-abandoned-emails` command will send recovery emails to customers with expired reservations.'
+          -
+            handle: abandoned_email_delay_days
+            field:
+              display: 'Delay (in days)'
+              type: integer
+              width: 50
+              localizable: false
+              default: 1
+              validate:
+                - required
+              instructions: 'Number of days after a reservation expires before sending the recovery email. For example, 1 means the email is sent the next day.'
   currency_settings:
     display: Currency
     sections:

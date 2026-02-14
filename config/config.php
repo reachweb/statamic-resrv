@@ -114,6 +114,8 @@ return [
      *
      * reservation_emails_global: optional event-level defaults across all forms.
      * reservation_emails_forms: optional per-form event overrides.
+     * In the CP blueprint, recipient_sources + recipient_emails are stored and normalized
+     * to the same recipients structure used by legacy string tokens.
      *
      * Event keys:
      * - customer_confirmed

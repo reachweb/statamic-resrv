@@ -351,6 +351,71 @@ class ReservationEmailConfigurationTest extends TestCase
         });
     }
 
+    public function test_friendly_recipient_fields_are_supported()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $item->id(),
+        ]);
+
+        Config::set('resrv-config.admin_email', 'admin1@example.com');
+        Config::set('resrv-config.reservation_emails_global', [
+            [
+                'event' => ReservationEmailEvent::CustomerConfirmed->value,
+                'recipient_sources' => ['admins'],
+                'recipient_emails' => "one@example.com\ntwo@example.com",
+            ],
+        ]);
+
+        app(ReservationEmailDispatcher::class)->send(
+            $reservation,
+            ReservationEmailEvent::CustomerConfirmed,
+            new ReservationConfirmed($reservation),
+        );
+
+        Mail::assertSent(ReservationConfirmed::class, 3);
+        Mail::assertSent(ReservationConfirmed::class, function (ReservationConfirmed $mail) {
+            return $mail->hasTo('admin1@example.com');
+        });
+        Mail::assertSent(ReservationConfirmed::class, function (ReservationConfirmed $mail) {
+            return $mail->hasTo('one@example.com');
+        });
+        Mail::assertSent(ReservationConfirmed::class, function (ReservationConfirmed $mail) {
+            return $mail->hasTo('two@example.com');
+        });
+    }
+
+    public function test_empty_friendly_recipient_fields_preserve_default_recipients()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $item->id(),
+        ]);
+
+        Config::set('resrv-config.reservation_emails_global', [
+            [
+                'event' => ReservationEmailEvent::CustomerConfirmed->value,
+                'subject' => 'Updated subject',
+                'recipient_sources' => [],
+                'recipient_emails' => '',
+            ],
+        ]);
+
+        app(ReservationEmailDispatcher::class)->send(
+            $reservation,
+            ReservationEmailEvent::CustomerConfirmed,
+            new ReservationConfirmed($reservation),
+        );
+
+        Mail::assertSent(ReservationConfirmed::class, 1);
+        Mail::assertSent(ReservationConfirmed::class, function (ReservationConfirmed $mail) use ($reservation) {
+            return $mail->hasTo($reservation->customer->email)
+                && $mail->subject === 'Updated subject';
+        });
+    }
+
     public function test_case_insensitive_recipient_tokens_are_supported()
     {
         Mail::fake();

@@ -74,8 +74,7 @@ class ReservationEmailRecipientResolver
     protected function parseEmailList(mixed $value): array
     {
         if (is_string($value)) {
-            return collect(explode(',', $value))
-                ->flatMap(fn ($item) => explode('|', $item))
+            return collect(preg_split('/[,;\r\n|]+/', $value) ?: [])
                 ->map(fn ($email) => trim($email))
                 ->filter()
                 ->values()
