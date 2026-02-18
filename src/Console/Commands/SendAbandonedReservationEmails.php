@@ -3,14 +3,16 @@
 namespace Reach\StatamicResrv\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Mail;
+use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Mail\ReservationAbandoned;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
 use Statamic\Console\RunsInPlease;
 
 class SendAbandonedReservationEmails extends Command
 {
     use RunsInPlease;
+
     protected $signature = 'resrv:send-abandoned-emails';
 
     protected $description = 'Send recovery emails for expired reservations that have customer data';
@@ -43,15 +45,24 @@ class SendAbandonedReservationEmails extends Command
             return self::SUCCESS;
         }
 
-        $toNotify->each(function (Reservation $reservation) use ($reservations): void {
-            Mail::to($reservation->customer->email)->send(new ReservationAbandoned($reservation));
+        $sentCount = 0;
+        /** @var ReservationEmailDispatcher $dispatcher */
+        $dispatcher = app(ReservationEmailDispatcher::class);
 
-            $reservations
-                ->where('customer_id', $reservation->customer_id)
-                ->each(fn (Reservation $r) => $r->update(['abandoned_email_sent_at' => now()]));
+        $toNotify->each(function (Reservation $reservation) use ($reservations, &$sentCount, $dispatcher): void {
+            if ($dispatcher->send(
+                $reservation,
+                ReservationEmailEvent::CustomerAbandoned,
+                new ReservationAbandoned($reservation),
+            )) {
+                $sentCount++;
+                $reservations
+                    ->where('customer_id', $reservation->customer_id)
+                    ->each(fn (Reservation $r) => $r->update(['abandoned_email_sent_at' => now()]));
+            }
         });
 
-        $this->info("Sent {$toNotify->count()} abandoned reservation email(s).");
+        $this->info("Sent {$sentCount} abandoned reservation email(s).");
 
         return self::SUCCESS;
     }
