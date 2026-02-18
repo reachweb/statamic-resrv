@@ -30,8 +30,12 @@ class ReservationEmailConfigResolver
 
         $form = $formHandle ? $this->formEventConfig($formHandle, $eventKey) : [];
 
+        $defaultRecipients = Arr::pull($default, 'recipients', []);
+        $globalRecipients = Arr::pull($global, 'recipients');
+        $formRecipients = Arr::pull($form, 'recipients');
+
         $resolved = array_replace_recursive($default, $global, $form);
-        $resolved['recipients'] = $this->normalizeRecipients(data_get($resolved, 'recipients', []));
+        $resolved['recipients'] = $this->normalizeRecipients($formRecipients ?? $globalRecipients ?? $defaultRecipients);
 
         return $resolved;
     }

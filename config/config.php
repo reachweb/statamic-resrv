@@ -65,7 +65,7 @@ return [
      * minutes_to_hold: how much time the user has the complete the checkout until availability is reset.
      */
     'form_name' => 'checkout',
-    'checkout_forms_default' => 'checkout',
+    'checkout_forms_default' => null,
     'checkout_forms_collections' => [],
     'checkout_forms_entries' => [],
     // Optional nested alternative to the flat checkout_forms_* keys above.
