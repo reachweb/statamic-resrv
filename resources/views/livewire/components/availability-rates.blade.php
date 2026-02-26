@@ -6,7 +6,7 @@
         class="form-select min-w-[200px] h-11 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full py-2.5"
         {{ $attributes->whereStartsWith('wire:model') }}
     >
-        <option selected value="any">{{ trans('statamic-resrv::frontend.selectProperty') }}</option>
+        <option selected value="any">{{ trans('statamic-resrv::frontend.selectRate') }}</option>
         @foreach ($entryRates as $value => $label)
             <option value="{{ $value }}">
                 {{ $label }}

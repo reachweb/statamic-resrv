@@ -3,6 +3,7 @@
 return [
     'select' => 'Please select',
     'selectProperty' => 'Select property',
+    'selectRate' => 'Select rate',
     'selectDate' => 'Select your date|Select your dates',
     'quantityLabel' => 'items',
     'search' => 'Search',

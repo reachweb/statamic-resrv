@@ -83,7 +83,9 @@ return new class extends Migration
         DB::statement('
             DELETE FROM resrv_fixed_pricing
             WHERE id NOT IN (
-                SELECT MIN(id) FROM resrv_fixed_pricing GROUP BY statamic_id, days
+                SELECT min_id FROM (
+                    SELECT MIN(id) as min_id FROM resrv_fixed_pricing GROUP BY statamic_id, days
+                ) AS tmp
             )
         ');
 

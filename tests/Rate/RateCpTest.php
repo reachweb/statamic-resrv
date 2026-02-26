@@ -4,7 +4,10 @@ namespace Reach\StatamicResrv\Tests\Rate;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class RateCpTest extends TestCase
@@ -363,6 +366,32 @@ class RateCpTest extends TestCase
         $this->assertDatabaseHas('resrv_rates', ['id' => $baseRate->id, 'deleted_at' => null]);
     }
 
+    public function test_rejects_self_referencing_base_rate()
+    {
+        $this->withExceptionHandling();
+
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Self Ref Rate',
+            'slug' => 'standard-rate',
+            'pricing_type' => 'relative',
+            'base_rate_id' => $rate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+            'availability_type' => 'independent',
+            'published' => true,
+        ];
+
+        $response = $this->patchJson(cp_route('resrv.rate.update', $rate->id), $payload);
+        $response->assertStatus(422)->assertJsonValidationErrors('base_rate_id');
+    }
+
     public function test_can_reorder_rates()
     {
         $this->makeStatamicItemWithResrvAvailabilityField();
@@ -613,5 +642,73 @@ class RateCpTest extends TestCase
 
         $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
         $response->assertStatus(422)->assertJsonValidationErrors('max_days_before');
+    }
+
+    public function test_can_delete_rate_with_availability_rows()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()->count(3)->sequence(
+            ['date' => $startDate],
+            ['date' => $startDate->copy()->addDay()],
+            ['date' => $startDate->copy()->addDays(2)],
+        )->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'price' => 100,
+            'available' => 2,
+        ]);
+
+        FixedPricing::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'days' => 3,
+            'price' => '250.00',
+        ]);
+
+        $response = $this->delete(cp_route('resrv.rate.destroy', $rate->id));
+        $response->assertStatus(200);
+
+        $this->assertDatabaseMissing('resrv_rates', ['id' => $rate->id]);
+        $this->assertDatabaseMissing('resrv_availabilities', ['rate_id' => $rate->id]);
+        $this->assertDatabaseMissing('resrv_fixed_pricing', ['rate_id' => $rate->id]);
+    }
+
+    public function test_cannot_delete_rate_with_availability_and_active_reservations()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $startDate,
+            'price' => 100,
+            'available' => 2,
+        ]);
+
+        Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'status' => 'confirmed',
+        ]);
+
+        $response = $this->delete(cp_route('resrv.rate.destroy', $rate->id));
+        $response->assertStatus(422);
+
+        // Rate and availability should still exist
+        $this->assertDatabaseHas('resrv_rates', ['id' => $rate->id, 'deleted_at' => null]);
+        $this->assertDatabaseHas('resrv_availabilities', ['rate_id' => $rate->id]);
     }
 }

@@ -406,6 +406,7 @@ export default {
             successMessage: 'Rate successfully saved',
             postUrl: '/cp/resrv/rate',
             date: null,
+            skipDateWatch: false,
             pricingTypes: [
                 { code: 'independent', label: 'Independent' },
                 { code: 'relative', label: 'Relative' }
@@ -427,13 +428,17 @@ export default {
 
     mixins: [FormHandler],
 
-    components: [vSelect],
+    components: { vSelect },
 
     watch: {
         data() {
             this.createSubmit()
         },
         date() {
+            if (this.skipDateWatch) {
+                this.skipDateWatch = false
+                return
+            }
             if (this.date) {
                 this.submit.date_start = Vue.moment(this.date.start).format('YYYY-MM-DD')
                 this.submit.date_end = Vue.moment(this.date.end).format('YYYY-MM-DD')
@@ -477,9 +482,8 @@ export default {
                     end: Vue.moment(this.data.date_end).toDate()
                 }
             } else {
+                this.skipDateWatch = true
                 this.date = null
-                // The date watcher clears submit.date_start/date_end when date is null.
-                // Restore any single-sided values from the original data.
                 this.submit.date_start = this.data.date_start || null
                 this.submit.date_end = this.data.date_end || null
             }

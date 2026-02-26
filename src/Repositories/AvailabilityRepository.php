@@ -26,6 +26,48 @@ class AvailabilityRepository
         };
     }
 
+    /**
+     * Resolve shared rate IDs to their base rate IDs.
+     * Non-shared rates are returned as-is.
+     */
+    public function resolveBaseRateIds(array $rateIds): array
+    {
+        if (empty($rateIds)) {
+            return $rateIds;
+        }
+
+        $rates = Rate::withoutGlobalScopes()
+            ->whereIn('id', $rateIds)
+            ->get(['id', 'base_rate_id', 'availability_type']);
+
+        return collect($rateIds)->map(function ($id) use ($rates) {
+            $rate = $rates->firstWhere('id', $id);
+
+            return ($rate?->isShared() && $rate->base_rate_id)
+                ? $rate->base_rate_id
+                : $id;
+        })->all();
+    }
+
+    /**
+     * Resolve a single rate ID: if shared, return its base_rate_id.
+     */
+    public function resolveBaseRateId(int $rateId): int
+    {
+        $rate = Rate::withoutGlobalScopes()->find($rateId, ['id', 'base_rate_id', 'availability_type']);
+
+        return ($rate?->isShared() && $rate->base_rate_id)
+            ? (int) $rate->base_rate_id
+            : $rateId;
+    }
+
+    protected function applyAdvancedRateFilter(Builder $query, array $advanced): void
+    {
+        if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
+            $query->whereIn('rate_id', $this->resolveBaseRateIds($advanced));
+        }
+    }
+
     public function availableBetween(string $date_start, string $date_end, int $duration, int $quantity, array $advanced)
     {
         $priceConcat = self::groupConcat('price');
@@ -35,11 +77,7 @@ class AvailabilityRepository
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
-            ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
-                    $query->whereIn('rate_id', $advanced);
-                }
-            })
+            ->when($advanced, fn (Builder $query, array $advanced) => $this->applyAdvancedRateFilter($query, $advanced))
             ->groupBy('statamic_id', 'rate_id')
             ->havingRaw('count(statamic_id) = ?', [$duration]);
     }
@@ -49,17 +87,13 @@ class AvailabilityRepository
         $priceConcat = self::groupConcat('price');
         $dateConcat = self::groupConcat('date');
 
-        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, max(rate_id) as rate_id")
+        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, rate_id")
             ->where('statamic_id', $statamic_id)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
-            ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
-                    $query->whereIn('rate_id', $advanced);
-                }
-            })
-            ->groupBy('statamic_id')
+            ->when($advanced, fn (Builder $query, array $advanced) => $this->applyAdvancedRateFilter($query, $advanced))
+            ->groupBy('statamic_id', 'rate_id')
             ->havingRaw('count(date) = ?', [$duration]);
     }
 
@@ -71,11 +105,7 @@ class AvailabilityRepository
             ->where('statamic_id', $statamic_id)
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
-            ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
-                    $query->whereIn('rate_id', $advanced);
-                }
-            })
+            ->when($advanced, fn (Builder $query, array $advanced) => $this->applyAdvancedRateFilter($query, $advanced))
             ->groupBy('statamic_id');
     }
 
@@ -85,11 +115,7 @@ class AvailabilityRepository
             ->where('date', '>=', $date_start)
             ->where('date', '<=', $date_end)
             ->where('statamic_id', $statamic_id)
-            ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
-                    $query->whereIn('rate_id', $advanced);
-                }
-            })
+            ->when($advanced, fn (Builder $query, array $advanced) => $this->applyAdvancedRateFilter($query, $advanced))
             ->first();
 
         $totalDays = (int) $result->total_days;
@@ -120,7 +146,7 @@ class AvailabilityRepository
                 ->where('statamic_id', $statamic_id)
                 ->when($advanced, function (Builder $query, array $advanced) {
                     if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
-                        $query->whereIn('rate_id', $advanced);
+                        $query->whereIn('rate_id', $this->resolveBaseRateIds($advanced));
                     }
                 })
                 ->sharedLock()
@@ -138,7 +164,7 @@ class AvailabilityRepository
                 ->where('statamic_id', $statamic_id)
                 ->when($advanced, function (Builder $query, array $advanced) {
                     if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
-                        $query->whereIn('rate_id', $advanced);
+                        $query->whereIn('rate_id', $this->resolveBaseRateIds($advanced));
                     }
                 })
                 ->sharedLock()
@@ -158,7 +184,7 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
             ->when($rateId, function (Builder $query, int $rateId) {
-                $query->where('rate_id', $rateId);
+                $query->where('rate_id', $this->resolveBaseRateId($rateId));
             })
             ->groupBy('statamic_id', 'rate_id')
             ->havingRaw('count(statamic_id) = ?', [$duration]);
@@ -175,7 +201,7 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
             ->when($rateId, function (Builder $query, int $rateId) {
-                $query->where('rate_id', $rateId);
+                $query->where('rate_id', $this->resolveBaseRateId($rateId));
             })
             ->groupBy('statamic_id')
             ->havingRaw('count(date) = ?', [$duration]);
@@ -190,7 +216,7 @@ class AvailabilityRepository
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->when($rateId, function (Builder $query, int $rateId) {
-                $query->where('rate_id', $rateId);
+                $query->where('rate_id', $this->resolveBaseRateId($rateId));
             })
             ->groupBy('statamic_id');
     }
@@ -258,7 +284,7 @@ class AvailabilityRepository
                     throw new AvailabilityException(__('Not enough availability for this rate.'));
                 }
 
-                $this->validateMaxAvailable($rate, $availability);
+                $this->validateMaxAvailable($rate, $availability, $reservationId, $quantity);
             }
 
             $this->addToPending($availabilities, $reservationId, $quantity);
@@ -281,11 +307,7 @@ class AvailabilityRepository
         return Availability::where('date', '>=', $date_start)
             ->where('date', '<=', $date_end)
             ->where('statamic_id', $statamic_id)
-            ->when($advanced, function (Builder $query, array $advanced) {
-                if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
-                    $query->whereIn('rate_id', $advanced);
-                }
-            })
+            ->when($advanced, fn (Builder $query, array $advanced) => $this->applyAdvancedRateFilter($query, $advanced))
             ->delete();
     }
 
@@ -336,19 +358,20 @@ class AvailabilityRepository
         }
     }
 
-    protected function validateMaxAvailable(Rate $rate, Availability $availability): void
+    protected function validateMaxAvailable(Rate $rate, Availability $availability, int $reservationId, int $quantity): void
     {
         if (! $rate->max_available) {
             return;
         }
 
-        $activeReservations = Reservation::where('rate_id', $rate->id)
+        $activeQuantity = Reservation::where('rate_id', $rate->id)
+            ->where('id', '!=', $reservationId)
             ->whereNotIn('status', ['completed', 'cancelled', 'refunded', 'expired'])
             ->where('date_start', '<=', $availability->date)
             ->where('date_end', '>', $availability->date)
-            ->count();
+            ->sum('quantity');
 
-        if ($activeReservations >= $rate->max_available) {
+        if (($activeQuantity + $quantity) > $rate->max_available) {
             throw new AvailabilityException(__('The maximum number of bookings for this rate has been reached.'));
         }
     }

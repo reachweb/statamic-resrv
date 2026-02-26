@@ -319,13 +319,14 @@ class Availability extends Model implements AvailabilityContract
     protected function populateAvailability($results, $label = null)
     {
         $prices = $this->getPrices($results->prices, $results->statamic_id);
+        $rateId = $this->rateId ?? $results->rate_id;
 
         return collect([
             'price' => $prices['reservationPrice']->format(),
             'original_price' => $prices['originalPrice']?->format(),
             'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
-            'rate_id' => $results->rate_id,
-            'property' => $results->rate_id,
+            'rate_id' => $rateId,
+            'property' => $rateId,
             'rateLabel' => $label,
         ]);
     }
@@ -359,6 +360,10 @@ class Availability extends Model implements AvailabilityContract
     {
         if (! $singleItem) {
             $results = $results->where('statamic_id', $statamic_id);
+        }
+
+        if ($results->isEmpty()) {
+            return false;
         }
 
         $rateId = $results->first()->rate_id;
@@ -433,10 +438,12 @@ class Availability extends Model implements AvailabilityContract
 
     public function getAvailabilityCalendar(string $id, ?string $rateId): array
     {
+        $resolvedRateId = $rateId ? AvailabilityRepository::resolveBaseRateId((int) $rateId) : null;
+
         return $this->where('statamic_id', $id)
             ->where('date', '>=', now()->startOfDay()->toDateString())
-            ->when($rateId, function ($query) use ($rateId) {
-                return $query->where('rate_id', $rateId);
+            ->when($resolvedRateId, function ($query) use ($resolvedRateId) {
+                return $query->where('rate_id', $resolvedRateId);
             })
             ->orderBy('price')
             ->get(['date', 'available', 'price', 'rate_id'])
@@ -447,14 +454,14 @@ class Availability extends Model implements AvailabilityContract
 
     public function getAvailableDatesFromDate(string $id, string $dateStart, int $quantity = 1, ?array $advanced = null, bool $groupByDate = false): array
     {
+        $resolvedAdvanced = ($advanced && ! in_array('any', $advanced))
+            ? AvailabilityRepository::resolveBaseRateIds($advanced)
+            : null;
+
         $results = $this->where('statamic_id', $id)
             ->where('date', '>=', $dateStart)
             ->where('available', '>=', $quantity)
-            ->when($advanced, function ($query) use ($advanced) {
-                if (! in_array('any', $advanced)) {
-                    return $query->whereIn('rate_id', $advanced);
-                }
-            })
+            ->when($resolvedAdvanced, fn ($query) => $query->whereIn('rate_id', $resolvedAdvanced))
             ->orderBy('date')
             ->orderBy('price')
             ->get(['date', 'available', 'price', 'rate_id']);

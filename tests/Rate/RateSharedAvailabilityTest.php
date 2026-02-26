@@ -91,8 +91,8 @@ class RateSharedAvailabilityTest extends TestCase
     {
         $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 2);
 
-        // Create a reservation to simulate an active booking for this shared rate
-        $reservation = Reservation::factory()->create([
+        // Create two existing confirmed reservations for this shared rate
+        Reservation::factory()->create([
             'item_id' => $setup['entry']->id(),
             'rate_id' => $setup['sharedRate']->id,
             'date_start' => $setup['startDate']->toDateString(),
@@ -100,8 +100,7 @@ class RateSharedAvailabilityTest extends TestCase
             'status' => 'confirmed',
         ]);
 
-        // Second reservation
-        $reservation2 = Reservation::factory()->create([
+        Reservation::factory()->create([
             'item_id' => $setup['entry']->id(),
             'rate_id' => $setup['sharedRate']->id,
             'date_start' => $setup['startDate']->toDateString(),
@@ -109,7 +108,16 @@ class RateSharedAvailabilityTest extends TestCase
             'status' => 'confirmed',
         ]);
 
-        // Third should fail because max_available = 2
+        // Third reservation is just-created (simulates real flow where INSERT happens before decrement)
+        $thirdReservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'pending',
+        ]);
+
+        // Should fail because max_available = 2 and 2 existing active reservations
         $this->expectException(AvailabilityException::class);
 
         AvailabilityRepository::decrementForRate(
@@ -118,7 +126,7 @@ class RateSharedAvailabilityTest extends TestCase
             quantity: 1,
             statamic_id: $setup['entry']->id(),
             rateId: $setup['sharedRate']->id,
-            reservationId: 3,
+            reservationId: $thirdReservation->id,
         );
     }
 
@@ -257,5 +265,123 @@ class RateSharedAvailabilityTest extends TestCase
         foreach ($availabilities as $availability) {
             $this->assertEquals(2, $availability->available);
         }
+    }
+
+    public function test_shared_rate_availability_query_returns_base_rate_results()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 5);
+
+        // Query availability using the shared rate's ID — should find base rate's rows
+        $results = AvailabilityRepository::itemAvailableBetweenForRate(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            duration: 2,
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+        )->get();
+
+        $this->assertCount(1, $results);
+        $this->assertEquals($setup['entry']->id(), $results->first()->statamic_id);
+    }
+
+    public function test_shared_rate_confirm_availability_and_price()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 5);
+
+        $availability = new \Reach\StatamicResrv\Models\Availability;
+
+        // Use shared rate ID — should resolve to base rate's availability rows
+        $result = $availability->confirmAvailabilityAndPrice([
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'advanced' => (string) $setup['sharedRate']->id,
+            'rate_id' => $setup['sharedRate']->id,
+            'price' => '200.00',
+        ], $setup['entry']->id());
+
+        $this->assertTrue($result);
+    }
+
+    public function test_max_available_allows_first_booking()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        // Create the reservation first (simulates real flow)
+        $reservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'pending',
+        ]);
+
+        // First booking should succeed even with max_available = 1
+        AvailabilityRepository::decrementForRate(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $reservation->id,
+        );
+
+        foreach ($this->getBaseRateAvailabilities($setup) as $availability) {
+            $this->assertEquals(9, $availability->available);
+        }
+    }
+
+    public function test_max_available_counts_quantity_not_rows()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 3);
+
+        // One reservation with quantity = 2 uses 2 of the 3 slots
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'confirmed',
+        ]);
+
+        // Second reservation with quantity = 2 (total would be 4 > max_available 3)
+        $reservation2 = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $this->expectException(AvailabilityException::class);
+
+        AvailabilityRepository::decrementForRate(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            quantity: 2,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $reservation2->id,
+        );
+    }
+
+    public function test_shared_rate_availability_query_via_advanced_param()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 5);
+
+        // Query using the `advanced` array with shared rate ID
+        $results = AvailabilityRepository::itemAvailableBetween(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            duration: 2,
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            advanced: [(string) $setup['sharedRate']->id],
+        )->get();
+
+        $this->assertCount(1, $results);
     }
 }

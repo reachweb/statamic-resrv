@@ -70,7 +70,7 @@ class ReservationResource extends ResourceCollection
             unset($columns['quantity']);
         }
 
-        if (! \Reach\StatamicResrv\Models\Rate::exists()) {
+        if (! \Reach\StatamicResrv\Models\Rate::withoutGlobalScopes()->exists()) {
             unset($columns['rate']);
         }
 

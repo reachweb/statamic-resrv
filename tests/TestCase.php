@@ -111,6 +111,9 @@ class TestCase extends OrchestraTestCase
         // Force the cache driver to be array for testing
         $app['config']->set('cache.default', 'array');
 
+        // Force the session driver to be array for testing
+        $app['config']->set('session.driver', 'array');
+
         // Force the queue driver to be sync for testing
         $app['config']->set('queue.default', 'sync');
 

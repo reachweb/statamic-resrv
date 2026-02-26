@@ -42,7 +42,7 @@ class AvailabilityCpController extends Controller
             'statamic_id' => 'required',
             'date_start' => 'required|date',
             'date_end' => 'required|date',
-            'rate_ids' => 'sometimes|array',
+            'rate_ids' => 'required|array',
         ]);
 
         Availability::where('date', '>=', $data['date_start'])

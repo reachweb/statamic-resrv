@@ -112,6 +112,8 @@ class RateCpController extends Controller
             );
         }
 
+        $rate->availabilities()->delete();
+        $rate->fixedPricing()->delete();
         $rate->forceDelete();
 
         return response()->json(['message' => 'Rate deleted.']);
@@ -139,7 +141,7 @@ class RateCpController extends Controller
 
         return [
             'collection' => ['required', 'string'],
-            'apply_to_all' => ['boolean'],
+            'apply_to_all' => ['required', 'boolean'],
             'entries' => ['nullable', 'array'],
             'entries.*' => ['string'],
             'title' => ['required', 'string', 'max:255'],
@@ -157,6 +159,7 @@ class RateCpController extends Controller
                 'nullable',
                 'required_if:pricing_type,relative',
                 'exists:resrv_rates,id',
+                Rule::notIn([$rate?->id]),
                 function ($attribute, $value, $fail) use ($collection) {
                     if ($value && Rate::where('id', $value)->where('collection', $collection)->doesntExist()) {
                         $fail('The base rate must belong to the same collection.');
