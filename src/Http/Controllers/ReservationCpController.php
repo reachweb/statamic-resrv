@@ -92,7 +92,12 @@ class ReservationCpController extends Controller
             'id' => 'required|integer',
         ]);
         $reservation = $this->reservation->find($data['id']);
-        $payment = app(PaymentGatewayManager::class)->forReservation($reservation);
+        $manager = app(PaymentGatewayManager::class);
+        try {
+            $payment = $manager->forReservation($reservation);
+        } catch (\InvalidArgumentException $e) {
+            $payment = $manager->gateway();
+        }
         try {
             $payment->refund($reservation);
         } catch (RefundFailedException $exception) {

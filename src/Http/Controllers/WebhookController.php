@@ -26,7 +26,11 @@ class WebhookController extends Controller
     protected function resolveGateway(?string $gateway): PaymentInterface
     {
         if ($gateway) {
-            return app(PaymentGatewayManager::class)->gateway($gateway);
+            try {
+                return app(PaymentGatewayManager::class)->gateway($gateway);
+            } catch (\InvalidArgumentException $e) {
+                abort(404);
+            }
         }
 
         return app(PaymentInterface::class);

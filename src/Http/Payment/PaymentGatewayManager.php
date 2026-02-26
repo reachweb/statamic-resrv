@@ -59,7 +59,11 @@ class PaymentGatewayManager
     {
         $name = $name ?? $this->defaultName;
 
-        return $this->gateways[$name]['label'] ?? $name;
+        if (! isset($this->gateways[$name])) {
+            return $name ?? '';
+        }
+
+        return $this->gateways[$name]['label'];
     }
 
     public function all(): array
