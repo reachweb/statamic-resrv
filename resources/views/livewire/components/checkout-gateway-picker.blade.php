@@ -8,7 +8,7 @@
         @foreach ($gateways as $gateway)
             <button
                 type="button"
-                wire:click="$dispatch('gateway-selected', { gateway: '{{ $gateway['name'] }}' })"
+                wire:click="$dispatch('gateway-selected', { gateway: @js($gateway['name']) })"
                 class="flex items-center justify-between w-full p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors duration-200 cursor-pointer"
             >
                 <span class="text-base font-medium">{{ $gateway['label'] }}</span>

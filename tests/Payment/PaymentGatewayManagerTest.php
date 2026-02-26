@@ -200,4 +200,40 @@ class PaymentGatewayManagerTest extends TestCase
 
         $this->assertEquals('Fake Payment', $available[0]['label']);
     }
+
+    public function test_gateway_throws_for_unknown_name()
+    {
+        $manager = app(PaymentGatewayManager::class);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Payment gateway [nonexistent] is not configured.');
+
+        $manager->gateway('nonexistent');
+    }
+
+    public function test_label_returns_configured_label()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertEquals('Credit Card', $manager->label('stripe'));
+        $this->assertEquals('PayPal', $manager->label('paypal'));
+    }
+
+    public function test_label_returns_default_gateway_label_when_null()
+    {
+        $manager = app(PaymentGatewayManager::class);
+
+        $this->assertEquals('Fake Payment', $manager->label());
+    }
 }

@@ -44,14 +44,22 @@ class PaymentGatewayManager
 
     public function gateway(?string $name = null): PaymentInterface
     {
-        $name = $name ?? $this->defaultName;
-
-        if (isset($this->gateways[$name])) {
-            return $this->gateways[$name]['instance'];
+        if ($name === null) {
+            $name = $this->defaultName;
         }
 
-        // Fallback to default if the requested gateway is not found
-        return $this->gateways[$this->defaultName]['instance'];
+        if (! isset($this->gateways[$name])) {
+            throw new \InvalidArgumentException("Payment gateway [{$name}] is not configured.");
+        }
+
+        return $this->gateways[$name]['instance'];
+    }
+
+    public function label(?string $name = null): string
+    {
+        $name = $name ?? $this->defaultName;
+
+        return $this->gateways[$name]['label'] ?? $name;
     }
 
     public function all(): array

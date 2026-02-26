@@ -192,6 +192,14 @@ class Checkout extends Component
     #[On('gateway-selected')]
     public function selectGateway(string $gateway)
     {
+        $allowedGateways = array_column($this->availableGateways, 'name');
+
+        if (! in_array($gateway, $allowedGateways, true)) {
+            $this->addError('gateway', __('Invalid payment gateway selected.'));
+
+            return;
+        }
+
         $this->selectedGateway = $gateway;
 
         return $this->initializePayment();
@@ -225,9 +233,19 @@ class Checkout extends Component
         if ($payment->redirectsForPayment()) {
             $redirectUrl = $paymentIndent->redirectTo;
             // Append gateway config key for redirect-based gateways
-            $separator = str_contains($redirectUrl, '?') ? '&' : '?';
+            $parsed = parse_url($redirectUrl);
+            parse_str($parsed['query'] ?? '', $queryParams);
+            $queryParams['resrv_gateway'] = $this->selectedGateway;
+            $parsed['query'] = http_build_query($queryParams);
 
-            return redirect()->away($redirectUrl.$separator.'resrv_gateway='.$this->selectedGateway);
+            $safeUrl = (isset($parsed['scheme']) ? $parsed['scheme'].'://' : '')
+                .($parsed['host'] ?? '')
+                .(isset($parsed['port']) ? ':'.$parsed['port'] : '')
+                .($parsed['path'] ?? '')
+                .'?'.$parsed['query']
+                .(isset($parsed['fragment']) ? '#'.$parsed['fragment'] : '');
+
+            return redirect()->away($safeUrl);
         }
 
         // Set it in a public property so that we can access it at the payment step

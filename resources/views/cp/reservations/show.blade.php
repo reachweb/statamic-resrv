@@ -248,7 +248,7 @@
             @if ($reservation->payment_gateway)
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
                 <div>{{ __("Payment method") }}</div>
-                <div class="font-bold">{{ Str::ucfirst($reservation->payment_gateway) }}</div>
+                <div class="font-bold">{{ app(\Reach\StatamicResrv\Http\Payment\PaymentGatewayManager::class)->label($reservation->payment_gateway) }}</div>
             </div>
             @endif
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
