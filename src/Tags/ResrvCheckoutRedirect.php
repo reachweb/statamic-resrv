@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tags;
 
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Statamic\Tags\Tags;
 
@@ -9,7 +10,14 @@ class ResrvCheckoutRedirect extends Tags
 {
     public function index(): array
     {
-        $payment = app(PaymentInterface::class);
+        $gatewayName = request()->input('resrv_gateway');
+
+        if ($gatewayName) {
+            $payment = app(PaymentGatewayManager::class)->gateway($gatewayName);
+        } else {
+            $payment = app(PaymentInterface::class);
+        }
+
         $redirectData = $payment->handleRedirectBack();
 
         session()->forget('resrv-search');

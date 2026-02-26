@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
@@ -39,6 +40,13 @@ class Checkout extends Component
 
     #[Locked]
     public string $publicKey;
+
+    #[Locked]
+    public string $paymentView = '';
+
+    public string $selectedGateway = '';
+
+    public array $availableGateways = [];
 
     #[Locked]
     public $coupon;
@@ -166,14 +174,46 @@ class Checkout extends Component
             return;
         }
 
+        // Populate available gateways
+        $manager = app(PaymentGatewayManager::class);
+        $this->availableGateways = $manager->availableForFrontend();
+
+        // If only one gateway, auto-select and initialize payment
+        if (! $manager->hasMultiple()) {
+            $this->selectedGateway = $this->availableGateways[0]['name'];
+
+            return $this->initializePayment();
+        }
+
+        // Multiple gateways — show picker
+        $this->step = 3;
+    }
+
+    #[On('gateway-selected')]
+    public function selectGateway(string $gateway)
+    {
+        $this->selectedGateway = $gateway;
+
+        return $this->initializePayment();
+    }
+
+    protected function initializePayment()
+    {
         // Get a fresh record from the database
         $reservation = $this->reservation->fresh();
 
-        // Get an instance of the payment interface
-        $payment = app(PaymentInterface::class);
+        // Resolve the selected gateway
+        $manager = app(PaymentGatewayManager::class);
+        $payment = $manager->gateway($this->selectedGateway);
+
+        // Save the config key so forReservation() can resolve the correct gateway later
+        $reservation->update(['payment_gateway' => $this->selectedGateway]);
 
         // Set the public key
         $this->publicKey = $payment->getPublicKey($reservation);
+
+        // Set the payment view
+        $this->paymentView = $payment->paymentView();
 
         // Create a payment intent
         $paymentIndent = $payment->paymentIntent($reservation->payment, $reservation, $reservation->customerData);
@@ -183,7 +223,11 @@ class Checkout extends Component
 
         // If the payment method needs to redirect to another website do so
         if ($payment->redirectsForPayment()) {
-            return redirect()->away($paymentIndent->redirectTo);
+            $redirectUrl = $paymentIndent->redirectTo;
+            // Append gateway config key for redirect-based gateways
+            $separator = str_contains($redirectUrl, '?') ? '&' : '?';
+
+            return redirect()->away($redirectUrl.$separator.'resrv_gateway='.$this->selectedGateway);
         }
 
         // Set it in a public property so that we can access it at the payment step

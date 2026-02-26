@@ -21,6 +21,9 @@ class CheckoutPayment extends Component
     public float $amount;
 
     #[Locked]
+    public string $paymentView = '';
+
+    #[Locked]
     public string $checkoutCompletedUrl;
 
     public function mount(): void
@@ -30,6 +33,10 @@ class CheckoutPayment extends Component
 
     public function render()
     {
+        if ($this->paymentView) {
+            return view($this->paymentView);
+        }
+
         return view('statamic-resrv::livewire.'.$this->view);
     }
 }

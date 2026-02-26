@@ -85,6 +85,28 @@ return [
      * If you want, you can swap our payment gateway with your own integration.
      */
     'payment_gateway' => Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
+
+    /**
+     * Multiple payment gateways (optional).
+     *
+     * When set, customers can choose between payment methods during checkout.
+     * Each gateway must implement PaymentInterface. The first gateway is the default.
+     * When using multiple gateways, configure per-gateway webhook URLs in each
+     * provider's dashboard (e.g., /resrv/api/webhook/stripe, /resrv/api/webhook/paypal).
+     *
+     * 'payment_gateways' => [
+     *     'stripe' => [
+     *         'class' => \Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
+     *         'label' => 'Credit Card',
+     *     ],
+     *     'paypal' => [
+     *         'class' => \App\Payment\PayPalPaymentGateway::class,
+     *         'label' => 'PayPal',
+     *     ],
+     * ],
+     */
+    'payment_gateways' => [],
+
     'stripe_secret_key' => env('RESRV_STRIPE_SECRET', ''),
     'stripe_publishable_key' => env('RESRV_STRIPE_PUBLISHABLE', ''),
     'stripe_webhook_secret' => env('RESRV_STRIPE_WEBHOOK_SECRET', ''),

@@ -65,4 +65,5 @@ return [
     'optionsAvailable' => 'option available|options available',
     'only' => 'Only',
     'left' => 'left',
+    'selectPaymentMethod' => 'Select payment method',
 ];

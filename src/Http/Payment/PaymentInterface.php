@@ -6,6 +6,12 @@ use Reach\StatamicResrv\Models\Reservation;
 
 interface PaymentInterface
 {
+    public function name(): string;
+
+    public function label(): string;
+
+    public function paymentView(): string;
+
     public function paymentIntent($amount, Reservation $reservation, $data);
 
     public function refund(Reservation $reservation);
