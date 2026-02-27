@@ -148,6 +148,13 @@ class ResrvProvider extends AddonServiceProvider
         __DIR__.'/../../resources/frontend' => 'frontend',
     ];
 
+    public function register(): void
+    {
+        parent::register();
+
+        $this->app->singleton(PaymentGatewayManager::class, fn () => new PaymentGatewayManager);
+    }
+
     public function boot(): void
     {
         parent::boot();
@@ -189,8 +196,6 @@ class ResrvProvider extends AddonServiceProvider
         if (app()->environment() == 'testing') {
             $this->app->bind(PaymentInterface::class, \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class);
         }
-
-        $this->app->singleton(PaymentGatewayManager::class);
 
         $this->createNavigation();
 

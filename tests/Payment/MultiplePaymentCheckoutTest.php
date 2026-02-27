@@ -49,7 +49,7 @@ class MultiplePaymentCheckoutTest extends TestCase
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $component = Livewire::test(Checkout::class)
+        Livewire::test(Checkout::class)
             ->call('handleSecondStep')
             ->assertSet('step', 3)
             ->assertSet('selectedGateway', 'fake');
@@ -91,7 +91,7 @@ class MultiplePaymentCheckoutTest extends TestCase
 
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $component = Livewire::test(Checkout::class)
+        Livewire::test(Checkout::class)
             ->call('handleSecondStep')
             ->assertSet('step', 3)
             ->assertSet('selectedGateway', '')
@@ -138,6 +138,41 @@ class MultiplePaymentCheckoutTest extends TestCase
         ]);
     }
 
+    public function test_resubmitting_second_step_clears_stale_payment_state()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake_one' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake One',
+            ],
+            'fake_two' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake Two',
+            ],
+        ]);
+
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // First pass: select a gateway so payment state gets populated
+        $component = Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->dispatch('gateway-selected', gateway: 'fake_one')
+            ->assertSet('selectedGateway', 'fake_one')
+            ->assertNotSet('clientSecret', '')
+            ->assertNotSet('paymentView', '');
+
+        // Simulate navigating back and resubmitting the checkout form
+        $component
+            ->call('goToStep', 2)
+            ->call('handleSecondStep')
+            ->assertSet('step', 3)
+            ->assertSet('selectedGateway', '')
+            ->assertSet('clientSecret', '')
+            ->assertSet('paymentView', '');
+    }
+
     public function test_webhook_without_gateway_param_uses_default()
     {
         $this->signInAdmin();
@@ -165,7 +200,7 @@ class MultiplePaymentCheckoutTest extends TestCase
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $component = Livewire::test(Checkout::class)
+        Livewire::test(Checkout::class)
             ->call('handleSecondStep')
             ->assertSet('paymentView', 'statamic-resrv::livewire.checkout-payment');
     }
@@ -178,5 +213,66 @@ class MultiplePaymentCheckoutTest extends TestCase
 
         $response = $this->get(cp_route('resrv.reservations.index'));
         $response->assertOk();
+    }
+
+    public function test_selecting_invalid_gateway_returns_error()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake_one' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake One',
+            ],
+        ]);
+
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->dispatch('gateway-selected', gateway: 'nonexistent')
+            ->assertHasErrors('gateway');
+    }
+
+    public function test_webhook_post_with_invalid_gateway_returns_404()
+    {
+        $this->withExceptionHandling();
+
+        $response = $this->post('/resrv/api/webhook/nonexistent');
+        $response->assertNotFound();
+    }
+
+    public function test_refund_uses_reservation_payment_gateway()
+    {
+        $this->signInAdmin();
+
+        Config::set('resrv-config.payment_gateways', [
+            'fake_one' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake One',
+            ],
+            'fake_two' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake Two',
+            ],
+        ]);
+
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $this->reservation->update([
+            'payment_gateway' => 'fake_two',
+            'status' => 'confirmed',
+        ]);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund'), [
+            'id' => $this->reservation->id,
+        ]);
+
+        $response->assertOk();
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'status' => 'refunded',
+        ]);
     }
 }

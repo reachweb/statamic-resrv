@@ -32,26 +32,26 @@ class ResrvCheckoutRedirect extends Tags
     protected function resolveGateway(): PaymentInterface
     {
         $manager = app(PaymentGatewayManager::class);
-        $gatewayName = request()->input('resrv_gateway');
 
-        // Try to resolve from query parameter (set during checkout redirect)
-        if ($gatewayName) {
-            try {
-                return $manager->gateway($gatewayName);
-            } catch (\InvalidArgumentException) {
-                // Fall through to reservation/default resolution
-            }
-        }
-
-        // Try to resolve from the reservation's stored gateway
+        // Try to resolve from the reservation's stored gateway (trusted)
         if ($reservationId = session('resrv_reservation')) {
             $reservation = Reservation::find($reservationId);
             if ($reservation?->payment_gateway) {
                 try {
                     return $manager->forReservation($reservation);
                 } catch (\InvalidArgumentException) {
-                    // Fall through to default
+                    // Fall through to query param / default
                 }
+            }
+        }
+
+        // Fall back to query parameter (set during checkout redirect)
+        $gatewayName = request()->input('resrv_gateway');
+        if ($gatewayName) {
+            try {
+                return $manager->gateway($gatewayName);
+            } catch (\InvalidArgumentException) {
+                // Fall through to default
             }
         }
 

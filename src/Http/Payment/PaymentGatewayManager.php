@@ -21,10 +21,10 @@ class PaymentGatewayManager
 
         if (! empty($multipleGateways) && is_array($multipleGateways)) {
             foreach ($multipleGateways as $name => $config) {
-                $instance = app($config['class']);
                 $this->gateways[$name] = [
-                    'instance' => $instance,
-                    'label' => $config['label'] ?? $instance->label(),
+                    'class' => $config['class'],
+                    'label' => $config['label'] ?? null,
+                    'instance' => null,
                 ];
             }
             $this->defaultName = array_key_first($this->gateways);
@@ -32,14 +32,30 @@ class PaymentGatewayManager
             return;
         }
 
-        // Fallback to single gateway config
+        // Fallback to single gateway config — resolve eagerly since there's only one
         $instance = app(PaymentInterface::class);
         $name = $instance->name();
         $this->gateways[$name] = [
-            'instance' => $instance,
+            'class' => get_class($instance),
             'label' => $instance->label(),
+            'instance' => $instance,
         ];
         $this->defaultName = $name;
+    }
+
+    protected function resolve(string $name): PaymentInterface
+    {
+        if ($this->gateways[$name]['instance'] === null) {
+            $instance = app($this->gateways[$name]['class']);
+            $this->gateways[$name]['instance'] = $instance;
+
+            // Resolve the label lazily if it wasn't set in config
+            if ($this->gateways[$name]['label'] === null) {
+                $this->gateways[$name]['label'] = $instance->label();
+            }
+        }
+
+        return $this->gateways[$name]['instance'];
     }
 
     public function gateway(?string $name = null): PaymentInterface
@@ -52,7 +68,7 @@ class PaymentGatewayManager
             throw new \InvalidArgumentException("Payment gateway [{$name}] is not configured.");
         }
 
-        return $this->gateways[$name]['instance'];
+        return $this->resolve($name);
     }
 
     public function label(?string $name = null): string
@@ -63,13 +79,18 @@ class PaymentGatewayManager
             return $name ?? '';
         }
 
+        // Resolve instance if label is still null
+        if ($this->gateways[$name]['label'] === null) {
+            $this->resolve($name);
+        }
+
         return $this->gateways[$name]['label'];
     }
 
     public function all(): array
     {
         return collect($this->gateways)->mapWithKeys(function ($config, $name) {
-            return [$name => $config['instance']];
+            return [$name => $this->resolve($name)];
         })->all();
     }
 
@@ -86,10 +107,12 @@ class PaymentGatewayManager
     public function availableForFrontend(): array
     {
         return collect($this->gateways)->map(function ($config, $name) {
+            $instance = $this->resolve($name);
+
             return [
                 'name' => $name,
-                'label' => $config['label'],
-                'redirects' => $config['instance']->redirectsForPayment(),
+                'label' => $this->gateways[$name]['label'],
+                'redirects' => $instance->redirectsForPayment(),
             ];
         })->values()->all();
     }

@@ -174,6 +174,9 @@ class Checkout extends Component
             return;
         }
 
+        // Reset any stale payment state from a previous pass through checkout
+        $this->resetPaymentState();
+
         // Populate available gateways
         $manager = app(PaymentGatewayManager::class);
         $this->availableGateways = $manager->availableForFrontend();
@@ -205,6 +208,14 @@ class Checkout extends Component
         return $this->initializePayment();
     }
 
+    protected function resetPaymentState(): void
+    {
+        $this->selectedGateway = '';
+        $this->clientSecret = '';
+        $this->publicKey = '';
+        $this->paymentView = '';
+    }
+
     protected function initializePayment()
     {
         // Get a fresh record from the database
@@ -232,20 +243,10 @@ class Checkout extends Component
         // If the payment method needs to redirect to another website do so
         if ($payment->redirectsForPayment()) {
             $redirectUrl = $paymentIndent->redirectTo;
-            // Append gateway config key for redirect-based gateways
-            $parsed = parse_url($redirectUrl);
-            parse_str($parsed['query'] ?? '', $queryParams);
-            $queryParams['resrv_gateway'] = $this->selectedGateway;
-            $parsed['query'] = http_build_query($queryParams);
+            $separator = str_contains($redirectUrl, '?') ? '&' : '?';
+            $redirectUrl .= $separator.http_build_query(['resrv_gateway' => $this->selectedGateway]);
 
-            $safeUrl = (isset($parsed['scheme']) ? $parsed['scheme'].'://' : '')
-                .($parsed['host'] ?? '')
-                .(isset($parsed['port']) ? ':'.$parsed['port'] : '')
-                .($parsed['path'] ?? '')
-                .'?'.$parsed['query']
-                .(isset($parsed['fragment']) ? '#'.$parsed['fragment'] : '');
-
-            return redirect()->away($safeUrl);
+            return redirect()->away($redirectUrl);
         }
 
         // Set it in a public property so that we can access it at the payment step
