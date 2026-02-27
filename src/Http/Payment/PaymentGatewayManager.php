@@ -21,6 +21,10 @@ class PaymentGatewayManager
 
         if (! empty($multipleGateways) && is_array($multipleGateways)) {
             foreach ($multipleGateways as $name => $config) {
+                if (! isset($config['class']) || ! is_subclass_of($config['class'], PaymentInterface::class)) {
+                    throw new \InvalidArgumentException("Payment gateway [{$name}] must have a 'class' that implements PaymentInterface.");
+                }
+
                 $this->gateways[$name] = [
                     'class' => $config['class'],
                     'label' => $config['label'] ?? null,
@@ -92,6 +96,11 @@ class PaymentGatewayManager
         return collect($this->gateways)->mapWithKeys(function ($config, $name) {
             return [$name => $this->resolve($name)];
         })->all();
+    }
+
+    public function has(string $name): bool
+    {
+        return isset($this->gateways[$name]);
     }
 
     public function hasMultiple(): bool

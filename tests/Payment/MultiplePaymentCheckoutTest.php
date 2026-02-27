@@ -54,10 +54,9 @@ class MultiplePaymentCheckoutTest extends TestCase
             ->assertSet('step', 3)
             ->assertSet('selectedGateway', 'fake');
 
-        $this->assertDatabaseMissing('resrv_reservations', [
-            'id' => $this->reservation->id,
-            'payment_id' => '',
-        ]);
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertNotNull($reservation->payment_id);
+        $this->assertNotSame('', $reservation->payment_id);
     }
 
     public function test_single_gateway_saves_payment_gateway_on_reservation()
@@ -132,10 +131,9 @@ class MultiplePaymentCheckoutTest extends TestCase
         ]);
 
         // Payment ID should be set
-        $this->assertDatabaseMissing('resrv_reservations', [
-            'id' => $this->reservation->id,
-            'payment_id' => '',
-        ]);
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertNotNull($reservation->payment_id);
+        $this->assertNotSame('', $reservation->payment_id);
     }
 
     public function test_resubmitting_second_step_clears_stale_payment_state()
@@ -175,8 +173,6 @@ class MultiplePaymentCheckoutTest extends TestCase
 
     public function test_webhook_without_gateway_param_uses_default()
     {
-        $this->signInAdmin();
-
         $response = $this->get('/resrv/api/webhook');
         $response->assertOk();
     }

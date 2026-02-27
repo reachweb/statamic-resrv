@@ -201,6 +201,56 @@ class PaymentGatewayManagerTest extends TestCase
         $this->assertEquals('Fake Payment', $available[0]['label']);
     }
 
+    public function test_has_returns_true_for_configured_gateway()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertTrue($manager->has('stripe'));
+    }
+
+    public function test_has_returns_false_for_unknown_gateway()
+    {
+        $manager = app(PaymentGatewayManager::class);
+
+        $this->assertFalse($manager->has('nonexistent'));
+    }
+
+    public function test_throws_for_gateway_with_missing_class()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'broken' => [
+                'label' => 'Broken',
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [broken] must have a 'class' that implements PaymentInterface.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_throws_for_gateway_with_invalid_class()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'bad' => [
+                'class' => \stdClass::class,
+                'label' => 'Bad',
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [bad] must have a 'class' that implements PaymentInterface.");
+
+        new PaymentGatewayManager;
+    }
+
     public function test_gateway_throws_for_unknown_name()
     {
         $manager = app(PaymentGatewayManager::class);

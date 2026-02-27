@@ -197,7 +197,7 @@ class Checkout extends Component
     {
         $manager = app(PaymentGatewayManager::class);
 
-        if (! array_key_exists($gateway, $manager->all())) {
+        if (! $manager->has($gateway)) {
             $this->addError('gateway', __('Invalid payment gateway selected.'));
 
             return;
