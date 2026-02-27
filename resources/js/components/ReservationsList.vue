@@ -83,6 +83,9 @@
                             <template slot="cell-customer" slot-scope="{ row: reservation }">
                                 <a :href="'mailto:'+customerEmail(reservation.customer)">{{ customerEmail(reservation.customer) }}</a>
                             </template>
+                            <template slot="cell-payment_gateway" slot-scope="{ row: reservation }">
+                                {{ reservation.payment_gateway || '-' }}
+                            </template>
                             <template slot="actions" slot-scope="{ row: reservation }">
                                 <dropdown-list>
                                     <dropdown-item :text="__('View')" :redirect="showUrl(reservation)" />                                

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Resources\ReservationCalendarResource;
@@ -91,8 +92,14 @@ class ReservationCpController extends Controller
             'id' => 'required|integer',
         ]);
         $reservation = $this->reservation->find($data['id']);
+        $manager = app(PaymentGatewayManager::class);
         try {
-            $this->payment->refund($reservation);
+            $payment = $manager->forReservation($reservation);
+        } catch (\InvalidArgumentException $e) {
+            $payment = $manager->gateway();
+        }
+        try {
+            $payment->refund($reservation);
         } catch (RefundFailedException $exception) {
             return response()->json(['error' => $exception->getMessage()], 400);
         }

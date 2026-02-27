@@ -2,14 +2,17 @@
 
 namespace Reach\StatamicResrv\Tags;
 
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Tags\Tags;
 
 class ResrvCheckoutRedirect extends Tags
 {
     public function index(): array
     {
-        $payment = app(PaymentInterface::class);
+        $payment = $this->resolveGateway();
+
         $redirectData = $payment->handleRedirectBack();
 
         session()->forget('resrv-search');
@@ -24,6 +27,35 @@ class ResrvCheckoutRedirect extends Tags
         if ($redirectData['status'] === 'pending') {
             return $this->makeResponse('pending', __('Reservation confirmed successfully'), __('Your reservation is not confirmed, pending payment. You will receive an email confirmation shortly.'), $redirectData);
         }
+    }
+
+    protected function resolveGateway(): PaymentInterface
+    {
+        $manager = app(PaymentGatewayManager::class);
+
+        // Try to resolve from the reservation's stored gateway (trusted)
+        if ($reservationId = session('resrv_reservation')) {
+            $reservation = Reservation::find($reservationId);
+            if ($reservation?->payment_gateway) {
+                try {
+                    return $manager->forReservation($reservation);
+                } catch (\InvalidArgumentException) {
+                    // Fall through to query param / default
+                }
+            }
+        }
+
+        // Fall back to query parameter (set during checkout redirect)
+        $gatewayName = request()->input('resrv_gateway');
+        if ($gatewayName) {
+            try {
+                return $manager->gateway($gatewayName);
+            } catch (\InvalidArgumentException) {
+                // Fall through to default
+            }
+        }
+
+        return $manager->gateway();
     }
 
     protected function makeResponse(string $status, string $title, string $message, array $redirectData = []): array

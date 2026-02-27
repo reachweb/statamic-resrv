@@ -9,6 +9,21 @@ use Reach\StatamicResrv\Models\Reservation;
 
 class FakePaymentGateway implements PaymentInterface
 {
+    public function name(): string
+    {
+        return 'fake';
+    }
+
+    public function label(): string
+    {
+        return 'Fake Payment';
+    }
+
+    public function paymentView(): string
+    {
+        return 'statamic-resrv::livewire.checkout-payment';
+    }
+
     public function paymentIntent($amount, $reservation, $data)
     {
         $data = new \stdClass;

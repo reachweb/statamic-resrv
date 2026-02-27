@@ -19,6 +19,7 @@ use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
 use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
@@ -146,6 +147,13 @@ class ResrvProvider extends AddonServiceProvider
     protected $publishables = [
         __DIR__.'/../../resources/frontend' => 'frontend',
     ];
+
+    public function register(): void
+    {
+        parent::register();
+
+        $this->app->singleton(PaymentGatewayManager::class, fn () => new PaymentGatewayManager);
+    }
 
     public function boot(): void
     {
