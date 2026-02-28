@@ -24,6 +24,8 @@ interface PaymentInterface
 
     public function supportsWebhooks(): bool;
 
+    public function supportsManualConfirmation(): bool;
+
     public function redirectsForPayment(): bool;
 
     public function handleRedirectBack(): array;
