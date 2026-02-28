@@ -94,14 +94,18 @@ return [
      * When using multiple gateways, configure per-gateway webhook URLs in each
      * provider's dashboard (e.g., /resrv/api/webhook/stripe, /resrv/api/webhook/paypal).
      *
+     * A built-in OfflinePaymentGateway is included for bank transfers or
+     * pay-at-premises scenarios. It confirms reservations without an external
+     * payment provider and sends the confirmation email immediately.
+     *
      * 'payment_gateways' => [
      *     'stripe' => [
      *         'class' => \Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
      *         'label' => 'Credit Card',
      *     ],
-     *     'paypal' => [
-     *         'class' => \App\Payment\PayPalPaymentGateway::class,
-     *         'label' => 'PayPal',
+     *     'offline' => [
+     *         'class' => \Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway::class,
+     *         'label' => 'Bank Transfer / Pay at Premises',
      *     ],
      * ],
      */

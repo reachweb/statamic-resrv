@@ -66,4 +66,6 @@ return [
     'only' => 'Only',
     'left' => 'left',
     'selectPaymentMethod' => 'Select payment method',
+    'offlinePaymentDescription' => 'Complete your reservation by confirming below. Payment can be arranged separately.',
+    'offlinePaymentAmount' => 'Amount due',
 ];
