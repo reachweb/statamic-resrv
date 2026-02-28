@@ -57,6 +57,7 @@ Alpine.data('offlinePayment', () => ({
             await $wire.confirmPayment();
         } catch (e) {
             this.errors = e.message || 'An unexpected error occurred. Please try again.';
+        } finally {
             this.loading = false;
         }
     }

@@ -45,7 +45,13 @@ class CheckoutPayment extends Component
             return;
         }
 
-        $reservation = Reservation::findOrFail($reservationId);
+        $reservation = Reservation::find($reservationId);
+
+        if (! $reservation) {
+            $this->addError('reservation', 'Reservation could not be found. Please start over.');
+
+            return;
+        }
 
         $manager = app(PaymentGatewayManager::class);
         $gatewayKey = $reservation->payment_gateway;

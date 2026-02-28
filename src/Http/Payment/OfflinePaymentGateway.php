@@ -72,7 +72,7 @@ class OfflinePaymentGateway implements PaymentInterface
             return $pending;
         }
 
-        return ['status' => true];
+        return ['status' => false];
     }
 
     public function handlePaymentPending(): bool|array
