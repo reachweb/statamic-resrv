@@ -25,7 +25,7 @@ class ResrvCheckoutRedirect extends Tags
             return $this->makeResponse('success', __('Payment successful'), __('Your payment has been processed successfully. You will receive an email confirmation shortly.'), $redirectData);
         }
         if ($redirectData['status'] === 'pending') {
-            return $this->makeResponse('pending', __('Reservation confirmed successfully'), __('Your reservation is not confirmed, pending payment. You will receive an email confirmation shortly.'), $redirectData);
+            return $this->makeResponse('pending', __('Reservation received'), __('Your reservation has been received and held. It will be confirmed upon payment. You will receive an email with further details shortly.'), $redirectData);
         }
     }
 

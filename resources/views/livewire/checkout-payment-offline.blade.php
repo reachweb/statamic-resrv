@@ -29,6 +29,15 @@
                     {{ trans('statamic-resrv::frontend.confirmReservation') }}
                 </span>
             </button>
+            <button
+                type="button"
+                class="flex items-center justify-center w-full mt-3 px-6 py-3 text-base font-medium text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 focus:ring-4
+                focus:outline-none focus:ring-gray-200 rounded-lg text-center transition-colors duration-200"
+                x-on:click="$wire.$parent.goToStep(2)"
+                x-bind:disabled="loading"
+            >
+                {{ trans('statamic-resrv::frontend.returnToThePreviousPage') }}
+            </button>
         </div>
         @if ($errors->has('reservation'))
         <div class="mt-6 p-4 bg-red-50 border border-red-300 rounded text-red-600">
