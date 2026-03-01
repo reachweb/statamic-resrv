@@ -46,7 +46,7 @@
             @endforeach
         </div>
         @endif
-        <p x-show="errors" x-cloak x-transition class="mt-6 xm:mt-8 text-red-600">
+        <p x-show="errors" x-cloak x-transition class="mt-6 xl:mt-8 text-red-600">
             <span x-html="errors"></span>
         </p>
     </div>
