@@ -208,7 +208,7 @@ class Checkout extends Component
         return $this->initializePayment();
     }
 
-    protected function resetPaymentState(): void
+    public function resetPaymentState(): void
     {
         $this->selectedGateway = '';
         $this->clientSecret = '';

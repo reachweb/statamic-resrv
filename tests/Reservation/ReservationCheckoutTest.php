@@ -102,7 +102,7 @@ class ReservationCheckoutTest extends TestCase
 
         $this->get($this->entry->absoluteUrl().'?payment_pending=1')
             ->assertOk()
-            ->assertSee('Reservation confirmed successfully');
+            ->assertSee('Reservation received');
     }
 
     // Test if webhook can confirm a reservation
