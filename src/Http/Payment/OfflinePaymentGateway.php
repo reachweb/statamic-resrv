@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Models\Reservation;
 
 class OfflinePaymentGateway implements PaymentInterface
@@ -33,6 +34,11 @@ class OfflinePaymentGateway implements PaymentInterface
 
     public function refund($reservation)
     {
+        $reservation->status = 'refunded';
+        $reservation->save();
+
+        ReservationRefunded::dispatch($reservation);
+
         return true;
     }
 

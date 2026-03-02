@@ -104,10 +104,12 @@ class ReservationCpController extends Controller
             return response()->json(['error' => $exception->getMessage()], 400);
         }
 
-        $reservation->status = 'refunded';
-        $reservation->save();
+        if ($reservation->status !== 'refunded') {
+            $reservation->status = 'refunded';
+            $reservation->save();
 
-        ReservationRefunded::dispatch($reservation);
+            ReservationRefunded::dispatch($reservation);
+        }
 
         return response()->json($reservation->id);
     }
