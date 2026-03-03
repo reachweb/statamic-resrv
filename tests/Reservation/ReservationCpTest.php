@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -70,6 +71,7 @@ class ReservationCpTest extends TestCase
 
         $reservation = Reservation::factory([
             'item_id' => $item->id(),
+            'status' => 'confirmed',
             'payment_id' => 'abcedf',
         ])->withCustomer()->create();
 
@@ -81,6 +83,104 @@ class ReservationCpTest extends TestCase
 
         $response->assertStatus(200)->assertSee($reservation->id);
         Mail::assertSent(ReservationRefunded::class);
+    }
+
+    public function test_can_refund_partner_reservation_that_skipped_payment()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'partner',
+            'payment_id' => '',
+        ])->withCustomer()->create();
+
+        $affiliate = Affiliate::factory()->create();
+        $reservation->affiliate()->attach($affiliate, ['fee' => $affiliate->fee]);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(200)->assertSee($reservation->id);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
+        Mail::assertSent(ReservationRefunded::class);
+    }
+
+    public function test_can_refund_partner_reservation_that_paid_normally()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'pi_test123',
+        ])->withCustomer()->create();
+
+        $affiliate = Affiliate::factory()->create();
+        $reservation->affiliate()->attach($affiliate, ['fee' => $affiliate->fee]);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(200)->assertSee($reservation->id);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
+        Mail::assertSent(ReservationRefunded::class);
+    }
+
+    public function test_cannot_refund_pending_reservation()
+    {
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'pending',
+        ])->withCustomer()->create();
+
+        $response = $this->withExceptionHandling()->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(400);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    public function test_cannot_refund_expired_reservation()
+    {
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+        ])->withCustomer()->create();
+
+        $response = $this->withExceptionHandling()->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(400);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'expired',
+        ]);
+    }
+
+    public function test_cannot_refund_already_refunded_reservation()
+    {
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'refunded',
+        ])->withCustomer()->create();
+
+        $response = $this->withExceptionHandling()->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(400);
     }
 
     public function test_can_query_reservations_calendar_json()
