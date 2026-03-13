@@ -19,10 +19,12 @@ class ResrvLivewireProvider extends AddonServiceProvider
         // Define the default package view path
         $packagePath = __DIR__.'/../../resources/views/livewire/components';
 
-        // Use the override path if it exists; otherwise, use the package's default path
-        $viewPath = is_dir($overridePath) ? $overridePath : $packagePath;
-
-        Blade::anonymousComponentPath($viewPath, 'resrv');
+        // Register override path first so it takes priority, then always register
+        // the package path as fallback for any components not overridden by the user
+        if (is_dir($overridePath)) {
+            Blade::anonymousComponentPath($overridePath, 'resrv');
+        }
+        Blade::anonymousComponentPath($packagePath, 'resrv');
 
         $this->bootLivewireComponents();
 
