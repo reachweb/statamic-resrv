@@ -7,16 +7,22 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Http\Requests\AvailabilityCpRequest;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Rate;
 
 class AvailabilityCpController extends Controller
 {
     public function index(string $statamic_id, ?string $identifier = null): JsonResponse
     {
+        $resolvedIdentifier = $identifier
+            ? AvailabilityRepository::resolveBaseRateId((int) $identifier)
+            : null;
+
         $results = Availability::where('statamic_id', $statamic_id)
-            ->when($identifier, function (Builder $query, string $identifier) {
-                $query->where('rate_id', (int) $identifier);
+            ->when($resolvedIdentifier, function (Builder $query, int $rateId) {
+                $query->where('rate_id', $rateId);
             })
             ->get(['statamic_id', 'date', 'price', 'available'])
             ->sortBy('date')
@@ -29,7 +35,9 @@ class AvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
-        foreach ($data['rate_ids'] as $rateId) {
+        $rateIds = $data['rate_ids'] ?? $this->defaultRateIds($data['statamic_id']);
+
+        foreach ($rateIds as $rateId) {
             $this->updateAvailability($data, (int) $rateId);
         }
 
@@ -42,13 +50,17 @@ class AvailabilityCpController extends Controller
             'statamic_id' => 'required',
             'date_start' => 'required|date',
             'date_end' => 'required|date',
-            'rate_ids' => 'required|array',
+            'rate_ids' => 'sometimes|array',
         ]);
+
+        $rateIds = ! empty($data['rate_ids'])
+            ? AvailabilityRepository::resolveBaseRateIds($data['rate_ids'])
+            : $this->defaultRateIds($data['statamic_id']);
 
         Availability::where('date', '>=', $data['date_start'])
             ->where('date', '<=', $data['date_end'])
             ->where('statamic_id', $data['statamic_id'])
-            ->when(isset($data['rate_ids']), fn (Builder $query) => $query->whereIn('rate_id', $data['rate_ids']))
+            ->whereIn('rate_id', $rateIds)
             ->delete();
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
@@ -56,6 +68,8 @@ class AvailabilityCpController extends Controller
 
     private function updateAvailability(array $data, int $rateId): void
     {
+        $resolvedRateId = AvailabilityRepository::resolveBaseRateId($rateId);
+
         $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
         $onlyDays = $data['onlyDays'] ?? null;
 
@@ -77,8 +91,20 @@ class AvailabilityCpController extends Controller
             Availability::updateOrCreate([
                 'statamic_id' => $data['statamic_id'],
                 'date' => $day->isoFormat('YYYY-MM-DD'),
-                'rate_id' => $rateId,
+                'rate_id' => $resolvedRateId,
             ], $toUpdate);
         }
+    }
+
+    private function defaultRateIds(string $statamicId): array
+    {
+        $rate = Rate::forEntry($statamicId)->first();
+        if ($rate) {
+            return [$rate->id];
+        }
+
+        $rate = Rate::findOrCreateDefaultForEntry($statamicId);
+
+        return $rate ? [$rate->id] : [];
     }
 }

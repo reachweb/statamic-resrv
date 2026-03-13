@@ -10,6 +10,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Rate;
 
 class ProcessDataImport implements ShouldQueue
 {
@@ -25,21 +26,36 @@ class ProcessDataImport implements ShouldQueue
         $dataImport = Cache::get('resrv-data-import');
 
         $dataImport->prepare()->each(function ($item, $id) {
-            $item->each(function ($data) use ($id) {
+            $defaultRateId = null;
+
+            $item->each(function ($data) use ($id, &$defaultRateId) {
                 $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
                 $rateId = $data['rate_id'] ?? null;
+
+                if (! $rateId) {
+                    if ($defaultRateId === null) {
+                        $defaultRateId = Rate::forEntry($id)->value('id');
+                    }
+                    if ($defaultRateId === null) {
+                        $defaultRate = Rate::findOrCreateDefaultForEntry($id);
+                        $defaultRateId = $defaultRate?->id;
+                    }
+                    $rateId = $defaultRateId;
+                }
+
+                if (! $rateId) {
+                    return;
+                }
+
                 $dataToAdd = [];
                 foreach ($period as $day) {
-                    $dayData = [
+                    $dataToAdd[] = [
                         'statamic_id' => $id,
                         'date' => $day->isoFormat('YYYY-MM-DD'),
                         'price' => $data['price'],
                         'available' => $data['available'],
+                        'rate_id' => $rateId,
                     ];
-                    if ($rateId) {
-                        $dayData['rate_id'] = $rateId;
-                    }
-                    $dataToAdd[] = $dayData;
                 }
                 Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], ['price', 'available']);
             });

@@ -102,8 +102,8 @@ Alpine.data('datepicker', () => ({
     // Livewire & Config Properties
     mode: $wire.calendar,
     dates: $wire.data.dates, 
-    advanced: $wire.advanced,
-    advancedSelected: $wire.entangle('data.advanced'),
+    advanced: $wire.rates,
+    advancedSelected: $wire.entangle('data.rate'),
     minPeriod: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
     maxPeriod: {{ config('resrv-config.maximum_reservation_period_in_days', 30) }},
     disabledDays: @json($disabledDays),

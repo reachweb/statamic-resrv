@@ -395,11 +395,10 @@ class AvailabilityCpTest extends TestCase
         ]);
     }
 
-    public function test_availability_update_requires_rate_ids()
+    public function test_availability_update_without_rate_ids_uses_existing_default_rate()
     {
-        $this->withExceptionHandling();
-
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -410,7 +409,86 @@ class AvailabilityCpTest extends TestCase
         ];
 
         $response = $this->postJson(cp_route('resrv.availability.update'), $payload);
-        $response->assertStatus(422)->assertJsonValidationErrors('rate_ids');
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'price' => 150,
+            'available' => 2,
+        ]);
+    }
+
+    public function test_availability_update_without_rate_ids_creates_default_rate_when_none_exist()
+    {
+        $item = $this->makeStatamicItem();
+
+        $this->assertDatabaseCount('resrv_rates', 0);
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 2,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseCount('resrv_rates', 1);
+        $this->assertDatabaseHas('resrv_rates', [
+            'collection' => 'pages',
+            'slug' => 'default',
+            'apply_to_all' => true,
+        ]);
+
+        $rate = Rate::first();
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'price' => 150,
+            'available' => 2,
+        ]);
+    }
+
+    public function test_availability_update_without_rate_ids_reuses_existing_default_rate_not_assigned_to_entry()
+    {
+        $item = $this->makeStatamicItem();
+
+        // Create a default rate for same collection but NOT apply_to_all and NOT assigned to this entry
+        $existingDefault = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'default',
+            'title' => 'Default',
+            'apply_to_all' => false,
+        ]);
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 2,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        // Should reuse the existing default rate, not create a new one
+        $this->assertDatabaseCount('resrv_rates', 1);
+
+        // Should have attached pivot so forEntry() finds it
+        $this->assertDatabaseHas('resrv_rate_entries', [
+            'rate_id' => $existingDefault->id,
+            'statamic_id' => $item->id(),
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $existingDefault->id,
+            'price' => 150,
+        ]);
     }
 
     public function test_availability_can_update_for_date_range_with_specific_days()

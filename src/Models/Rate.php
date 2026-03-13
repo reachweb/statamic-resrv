@@ -205,4 +205,39 @@ class Rate extends Model
     {
         $query->where('published', true);
     }
+
+    public static function findOrCreateDefaultForEntry(string $statamicId): ?self
+    {
+        $entry = Entry::where('item_id', $statamicId)->first();
+        if (! $entry) {
+            return null;
+        }
+
+        // withTrashed() to respect unique(collection, slug) constraint — Rate uses SoftDeletes
+        $rate = static::withTrashed()
+            ->where('collection', $entry->collection)
+            ->where('slug', 'default')
+            ->first();
+
+        if ($rate && $rate->trashed()) {
+            $rate->restore();
+        }
+
+        if (! $rate) {
+            $rate = static::create([
+                'collection' => $entry->collection,
+                'apply_to_all' => true,
+                'title' => 'Default',
+                'slug' => 'default',
+                'published' => true,
+            ]);
+        }
+
+        // If existing rate is not apply_to_all, attach pivot so forEntry() finds it
+        if (! $rate->apply_to_all) {
+            $rate->entries()->syncWithoutDetaching([$statamicId]);
+        }
+
+        return $rate;
+    }
 }
