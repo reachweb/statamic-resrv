@@ -209,11 +209,12 @@ class DynamicPricing extends Model
     public function scopeSearchForAvailability($query, $statamic_id, $price, $date_start, $date_end, $duration)
     {
         $data = Cache::remember('dynamic_pricing_assignments_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing_assignments')->get();
+            return DB::table('resrv_dynamic_pricing_assignments')
+                ->get()
+                ->groupBy(fn ($item) => $item->dynamic_pricing_assignment_type.':'.$item->dynamic_pricing_assignment_id);
         });
 
-        $itemsForId = $data->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
-            ->where('dynamic_pricing_assignment_id', $statamic_id);
+        $itemsForId = $data->get('Reach\StatamicResrv\Models\Availability:'.$statamic_id, collect());
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -233,11 +234,12 @@ class DynamicPricing extends Model
     public function scopeSearchForExtra($query, $extra_id, $price, $date_start, $date_end, $duration)
     {
         $data = Cache::remember('dynamic_pricing_assignments_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing_assignments')->get();
+            return DB::table('resrv_dynamic_pricing_assignments')
+                ->get()
+                ->groupBy(fn ($item) => $item->dynamic_pricing_assignment_type.':'.$item->dynamic_pricing_assignment_id);
         });
 
-        $itemsForId = $data->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Extra')
-            ->where('dynamic_pricing_assignment_id', $extra_id);
+        $itemsForId = $data->get('Reach\StatamicResrv\Models\Extra:'.$extra_id, collect());
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -312,12 +314,12 @@ class DynamicPricing extends Model
         $dynamicPricingThatApplies = collect();
 
         $data = Cache::remember('dynamic_pricing_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing')->get();
-        }, 120);
+            return DB::table('resrv_dynamic_pricing')->get()->keyBy('id');
+        });
 
         foreach ($items as $item) {
-            $pricing = $data->firstWhere('id', $item->dynamic_pricing_id);
-            if ($this->expired($pricing)) {
+            $pricing = $data->get($item->dynamic_pricing_id);
+            if (! $pricing || $this->expired($pricing)) {
                 continue;
             }
             if ($this->hasCoupon($pricing)) {
