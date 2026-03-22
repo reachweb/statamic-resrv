@@ -59,10 +59,10 @@
                     <div>x {{ $reservation->quantity }}</div>
                 </div>
                 @endif
-                @if (config('resrv-config.enable_advanced_availability') && $reservation->property)
+                @if ($reservation->rate_id)
                 <div>
-                    <div class="font-bold mb-2">{{ __("Property") }}</div>
-                    <div>{{ $reservation->getPropertyAttributeLabel() }}</div>
+                    <div class="font-bold mb-2">{{ __("Rate") }}</div>
+                    <div>{{ $reservation->getRateLabel() }}</div>
                 </div>
                 @endif
             </div>
@@ -94,10 +94,10 @@
                     <div>x {{ $child->quantity }}</div>
                 </div>
                 @endif
-                @if (config('resrv-config.enable_advanced_availability'))
+                @if ($child->rate_id)
                 <div>
-                    <div class="font-bold mb-2">{{ __("Property") }}</div>
-                    <div>{{ $child->getPropertyAttributeLabel() }}</div>
+                    <div class="font-bold mb-2">{{ __("Rate") }}</div>
+                    <div>{{ $child->getRateLabel() }}</div>
                 </div>
                 @endif
             </div>          

@@ -151,7 +151,7 @@ class AvailabilityResults extends Component
             $this->availability = collect($this->availability->get(0));
         }
         if ($this->data->rate === 'any') {
-            $this->data->rate = (string) data_get($this->availability, 'data.property');
+            $this->data->rate = (string) data_get($this->availability, 'data.rate_id');
         }
         try {
             $this->validateAvailabilityAndPrice();

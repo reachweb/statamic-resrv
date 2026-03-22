@@ -4,7 +4,7 @@
     @if ($rates == true)
     <x-resrv::availability-results-advanced :$availability :entryRates="$this->entryRates" />
     @else
-        @if (data_get($availability, 'message.status') === true && data_get($availability, 'request.property') !== 'any')
+        @if (data_get($availability, 'message.status') === true && data_get($availability, 'request.rate_id') !== 'any')
             @if ($this->showOptions)
             <div class="flex flex-col gap-y-6 my-4">
                 <livewire:options
@@ -54,10 +54,10 @@
                 {{ trans('statamic-resrv::frontend.bookNow') }}
             </button>
         </div>
-        @elseif (data_get($availability, 'request.property') === 'any')
+        @elseif (data_get($availability, 'request.rate_id') === 'any')
         <div class="flex flex-col py-4">
-            <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.multipleAvailable') }}</dt>
-            <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.pleaseSelectProperty') }}</dd>
+            <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.multipleRatesAvailable') }}</dt>
+            <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.pleaseSelectRate') }}</dd>
         </div>
         @elseif (data_get($availability, 'message.status') === false)
         <div class="flex flex-col py-4">

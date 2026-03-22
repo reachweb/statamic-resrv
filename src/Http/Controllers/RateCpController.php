@@ -143,7 +143,14 @@ class RateCpController extends Controller
             'collection' => ['required', 'string'],
             'apply_to_all' => ['required', 'boolean'],
             'entries' => ['nullable', 'array'],
-            'entries.*' => ['string'],
+            'entries.*' => [
+                'string',
+                function ($attribute, $value, $fail) use ($collection) {
+                    if (! Entry::where('item_id', $value)->where('collection', $collection)->exists()) {
+                        $fail('The selected entry does not belong to this collection.');
+                    }
+                },
+            ],
             'title' => ['required', 'string', 'max:255'],
             'slug' => [
                 'required',

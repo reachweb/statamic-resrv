@@ -107,6 +107,12 @@ class Rate extends Model
     {
         $collection = Entry::where('item_id', $entryId)->value('collection');
 
+        if (! $collection) {
+            $query->whereNull('id');
+
+            return;
+        }
+
         $query->where('collection', $collection)
             ->where(function (Builder $q) use ($entryId) {
                 $q->where('apply_to_all', true)

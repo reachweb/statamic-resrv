@@ -326,7 +326,6 @@ class Availability extends Model implements AvailabilityContract
             'original_price' => $prices['originalPrice']?->format(),
             'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
             'rate_id' => $rateId,
-            'property' => $rateId,
             'rateLabel' => $label,
         ]);
     }
@@ -396,6 +395,7 @@ class Availability extends Model implements AvailabilityContract
             'date_start' => $this->date_start,
             'date_end' => $this->date_end,
             'quantity' => $this->quantity,
+            'rate_id' => $this->advanced,
             'property' => $this->advanced,
         ]);
     }

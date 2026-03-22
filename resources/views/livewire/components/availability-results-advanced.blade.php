@@ -2,7 +2,7 @@
 
 <div {{ $attributes->merge(['class' => 'my-3 lg:my-4']) }}>
     <div class="text=-sm font-medium text-gray-600 mb-3">
-        {{ trans('statamic-resrv::frontend.pleaseSelectPropertyToBook') }}:
+        {{ trans('statamic-resrv::frontend.pleaseSelectRateToBook') }}:
     </div>
     <div class="grid grid-cols-1 gap-2" role="list">
         @foreach ($availability as $rateId => $data)
