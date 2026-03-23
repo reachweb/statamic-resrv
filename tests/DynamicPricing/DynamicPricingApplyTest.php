@@ -60,7 +60,7 @@ class DynamicPricingApplyTest extends TestCase
         return $dynamic;
     }
 
-    private function assertPrice($expectedPrice, $expectedOriginalPrice = null, $dates = null, $quantity = 1, $advanced = null)
+    private function assertPrice($expectedPrice, $expectedOriginalPrice = null, $dates = null, $quantity = 1, $rateId = null)
     {
         $dates = $dates ?? [
             'date_start' => $this->date->toISOString(),
@@ -71,13 +71,13 @@ class DynamicPricingApplyTest extends TestCase
             ->dispatch('availability-search-updated', [
                 'dates' => $dates,
                 'quantity' => $quantity,
-                'advanced' => $advanced,
+                'rate' => $rateId,
             ])
             ->assertViewHas('availability.data.price', $expectedPrice)
             ->assertViewHas('availability.data.original_price', $expectedOriginalPrice);
     }
 
-    private function assertIndexPrice($expectedPrice, $expectedOriginalPrice = null, $dates = null, $quantity = 1, $advanced = null)
+    private function assertIndexPrice($expectedPrice, $expectedOriginalPrice = null, $dates = null, $quantity = 1, $rateId = null)
     {
         $dates = $dates ?? [
             'date_start' => $this->date,
@@ -90,7 +90,7 @@ class DynamicPricingApplyTest extends TestCase
             'resrv_search:resrv_availability' => [
                 'dates' => $dates,
                 'quantity' => $quantity,
-                'advanced' => $advanced,
+                'rate_id' => $rateId,
             ],
         ]);
 
@@ -396,7 +396,7 @@ class DynamicPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertSee('23.00');
     }

@@ -61,7 +61,7 @@ trait HandlesAvailabilityQueries
     public function queryExtraAvailabilityForEntry(): Collection
     {
         return $this->generateDatePeriods($this->data)->map(function ($period) {
-            $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'rate_id', 'advanced']));
+            $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'rate_id']));
             try {
                 $this->validateCutoffRules($searchData['date_start']);
 
@@ -80,22 +80,37 @@ trait HandlesAvailabilityQueries
 
     public function queryAvailabilityForAllRates(): Collection
     {
-        return collect($this->entryRates)->keys()->mapWithKeys(function ($rateKey) {
-            $searchData = array_merge($this->data->toResrvArray(), ['advanced' => $rateKey, 'rate_id' => $rateKey]);
-            try {
-                return [$rateKey => app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId)];
-            } catch (AvailabilityException $exception) {
-                return [
-                    $rateKey => [
-                        'message' => [
-                            'status' => false,
-                            'error' => $exception->getMessage(),
-                        ],
-                        'request' => $searchData,
-                    ],
-                ];
+        $searchData = array_merge($this->data->toResrvArray(), ['rate_id' => 'any']);
+
+        try {
+            $result = app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId);
+            $rawData = data_get($result, 'data', []);
+
+            // Re-key by rate_id: handle both single-rate (flat array) and multi-rate (keyed array) formats
+            if (isset($rawData['rate_id'])) {
+                $data = collect([$rawData['rate_id'] => $rawData]);
+            } else {
+                $data = collect($rawData)->keyBy('rate_id');
             }
-        });
+
+            return collect($this->entryRates)->keys()->mapWithKeys(function ($rateId) use ($data, $result) {
+                if ($data->has($rateId)) {
+                    return [$rateId => [
+                        'data' => $data->get($rateId),
+                        'request' => $result['request'],
+                        'message' => ['status' => true],
+                    ]];
+                }
+
+                return [$rateId => [
+                    'data' => [],
+                    'request' => $result['request'] ?? [],
+                    'message' => ['status' => false],
+                ]];
+            });
+        } catch (AvailabilityException $exception) {
+            return collect();
+        }
     }
 
     public function validateAvailabilityAndPrice(): void
@@ -152,7 +167,6 @@ trait HandlesAvailabilityQueries
             'date_end' => $search['dates']['date_end'],
             'quantity' => $search['quantity'] ?? 1,
             'rate_id' => $search['rate_id'] ?? null,
-            'advanced' => $search['advanced'] ?? '',
         ];
     }
 
@@ -177,13 +191,18 @@ trait HandlesAvailabilityQueries
 
         $dateStart = Carbon::parse($this->data->dates['date_start'])->format('Y-m-d');
 
-        $rateId = $this->data->rate ? [$this->data->rate] : ($this->rates ? ['any'] : null);
+        $rateId = ($this->data->rate && $this->data->rate !== 'any')
+            ? (int) $this->data->rate
+            : null;
+
+        $showAllRates = $this->rates && ! $rateId;
 
         return app(Availability::class)->getAvailableDatesFromDate(
             $this->entryId,
             $dateStart,
             $this->data->quantity ?? 1,
             $rateId,
+            $showAllRates,
             $this->groupByDate
         );
     }

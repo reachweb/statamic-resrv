@@ -50,7 +50,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(4, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '100.92');
 
@@ -71,7 +71,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(4, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '90.00');
 
@@ -83,7 +83,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(6, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '151.38');
 
@@ -104,7 +104,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(6, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '130.00');
 
@@ -116,7 +116,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(6, 'day')->toISOString(),
                 ],
                 'quantity' => 3,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '390.00');
     }
@@ -138,7 +138,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(4, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ]);
 
         $component->assertViewHas('availability.data.price', '90.00');
@@ -172,7 +172,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(6, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ]);
 
         $component->assertViewHas('availability.data.price', '130.00');
@@ -208,7 +208,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(4, 'day')->toISOString(),
                 ],
                 'quantity' => 3,
-                'advanced' => null,
+                'rate' => null,
             ]);
 
         $component->assertViewHas('availability.data.price', '270.00');

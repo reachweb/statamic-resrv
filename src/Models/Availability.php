@@ -106,7 +106,7 @@ class Availability extends Model implements AvailabilityContract
             date_start: $this->date_start,
             date_end: $this->date_end,
             statamic_id: $entry->id(),
-            advanced: $this->advanced,
+            rateId: $this->rateId,
         )
             ->first();
 
@@ -127,7 +127,7 @@ class Availability extends Model implements AvailabilityContract
         ];
     }
 
-    protected function getResultsForItem(Entry $entry, $advanced = null)
+    protected function getResultsForItem(Entry $entry, ?int $rateId = null)
     {
         return AvailabilityRepository::itemAvailableBetween(
             date_start: $this->date_start,
@@ -135,84 +135,56 @@ class Availability extends Model implements AvailabilityContract
             duration: $this->duration,
             quantity: $this->quantity,
             statamic_id: $entry->id(),
-            advanced: $advanced ?? $this->advanced
+            rateId: $rateId ?? $this->rateId,
         )
             ->get();
     }
 
-    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced, ?int $rateId = null): void
+    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null): void
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
-            'advanced' => $advanced,
             'rate_id' => $rateId,
         ]);
-
-        if ($rateId) {
-            AvailabilityRepository::decrementForRate(
-                date_start: $this->date_start,
-                date_end: $this->date_end,
-                quantity: $this->quantity,
-                statamic_id: $statamic_id,
-                rateId: $rateId,
-                reservationId: $reservationId,
-            );
-
-            return;
-        }
 
         AvailabilityRepository::decrement(
             date_start: $this->date_start,
             date_end: $this->date_end,
             quantity: $this->quantity,
             statamic_id: $statamic_id,
-            advanced: $this->advanced,
-            reservationId: $reservationId
+            rateId: $rateId,
+            reservationId: $reservationId,
         );
     }
 
-    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced, ?int $rateId = null): void
+    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null): void
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
             'date_end' => $date_end,
             'quantity' => $quantity,
-            'advanced' => $advanced,
             'rate_id' => $rateId,
         ]);
-
-        if ($rateId) {
-            AvailabilityRepository::incrementForRate(
-                date_start: $this->date_start,
-                date_end: $this->date_end,
-                quantity: $this->quantity,
-                statamic_id: $statamic_id,
-                rateId: $rateId,
-                reservationId: $reservationId,
-            );
-
-            return;
-        }
 
         AvailabilityRepository::increment(
             date_start: $this->date_start,
             date_end: $this->date_end,
             quantity: $this->quantity,
             statamic_id: $statamic_id,
-            advanced: $this->advanced,
-            reservationId: $reservationId
+            rateId: $rateId,
+            reservationId: $reservationId,
         );
     }
 
-    public function deleteForDates(string $date_start, string $date_end, string $statamic_id, ?array $advanced)
+    public function deleteForDates(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): int
     {
-        AvailabilityRepository::delete(
+        return AvailabilityRepository::delete(
             date_start: $date_start,
             date_end: $date_end,
             statamic_id: $statamic_id,
-            advanced: $advanced
+            rateId: $rateId,
         );
     }
 
@@ -272,7 +244,7 @@ class Availability extends Model implements AvailabilityContract
             return new AvailabilityItemResource($availability, $request);
         }
 
-        if ($this->advanced && in_array('any', $this->advanced)) {
+        if ($this->showAllRates) {
             return $this->getMultipleRatesAvailability($resrvEntry, $request);
         }
 
@@ -337,7 +309,7 @@ class Availability extends Model implements AvailabilityContract
             date_end: $this->date_end,
             duration: $this->duration,
             quantity: $this->quantity,
-            advanced: $this->advanced
+            rateId: $this->rateId,
         )->get();
 
         $disabled = array_flip($this->getDisabledIds());
@@ -395,8 +367,7 @@ class Availability extends Model implements AvailabilityContract
             'date_start' => $this->date_start,
             'date_end' => $this->date_end,
             'quantity' => $this->quantity,
-            'rate_id' => $this->advanced,
-            'property' => $this->advanced,
+            'rate_id' => $this->rateId,
         ]);
     }
 
@@ -404,20 +375,18 @@ class Availability extends Model implements AvailabilityContract
     {
         $entry = $this->getDefaultSiteEntry($reservation->item_id);
 
-        $data = [
+        $this->initiateAvailabilityUnsafe([
             'date_start' => $reservation->date_start,
             'date_end' => $reservation->date_end,
             'quantity' => $reservation->quantity,
-            'advanced' => $reservation->rate_id ? (string) $reservation->rate_id : '',
-        ];
-
-        $this->initiateAvailabilityUnsafe($data);
+            'rate_id' => $reservation->rate_id,
+        ]);
 
         $dbPrices = AvailabilityRepository::itemPricesBetween(
             date_start: $this->date_start,
             date_end: $this->date_end,
             statamic_id: $entry->id(),
-            advanced: $this->advanced,
+            rateId: $this->rateId,
         )
             ->first();
 
@@ -452,16 +421,16 @@ class Availability extends Model implements AvailabilityContract
             ->toArray();
     }
 
-    public function getAvailableDatesFromDate(string $id, string $dateStart, int $quantity = 1, ?array $advanced = null, bool $groupByDate = false): array
+    public function getAvailableDatesFromDate(string $id, string $dateStart, int $quantity = 1, ?int $rateId = null, bool $showAllRates = false, bool $groupByDate = false): array
     {
-        $resolvedAdvanced = ($advanced && ! in_array('any', $advanced))
-            ? AvailabilityRepository::resolveBaseRateIds($advanced)
+        $resolvedRateId = ($rateId && ! $showAllRates)
+            ? AvailabilityRepository::resolveBaseRateId($rateId)
             : null;
 
         $results = $this->where('statamic_id', $id)
             ->where('date', '>=', $dateStart)
             ->where('available', '>=', $quantity)
-            ->when($resolvedAdvanced, fn ($query) => $query->whereIn('rate_id', $resolvedAdvanced))
+            ->when($resolvedRateId, fn ($query) => $query->where('rate_id', $resolvedRateId))
             ->orderBy('date')
             ->orderBy('price')
             ->get(['date', 'available', 'price', 'rate_id']);

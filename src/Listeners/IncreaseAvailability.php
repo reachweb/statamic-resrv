@@ -19,7 +19,6 @@ class IncreaseAvailability
                 quantity: $event->reservation->quantity,
                 statamic_id: $event->reservation->item_id,
                 reservationId: $event->reservation->id,
-                advanced: null,
                 rateId: $event->reservation->rate_id,
             );
         }
@@ -35,7 +34,6 @@ class IncreaseAvailability
                 quantity: $child->quantity,
                 statamic_id: $event->reservation->item_id,
                 reservationId: $child->id,
-                advanced: null,
                 rateId: $child->rate_id,
             );
         });

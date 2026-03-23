@@ -71,7 +71,7 @@ class RateSharedAvailabilityTest extends TestCase
     {
         $setup = $this->createSharedSetup(baseAvailable: 5);
 
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -120,7 +120,7 @@ class RateSharedAvailabilityTest extends TestCase
         // Should fail because max_available = 2 and 2 existing active reservations
         $this->expectException(AvailabilityException::class);
 
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -135,7 +135,7 @@ class RateSharedAvailabilityTest extends TestCase
         $setup = $this->createSharedSetup(baseAvailable: 5);
 
         // Decrement first
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -150,7 +150,7 @@ class RateSharedAvailabilityTest extends TestCase
         }
 
         // Now increment (cancel)
-        AvailabilityRepository::incrementForRate(
+        AvailabilityRepository::increment(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -177,7 +177,7 @@ class RateSharedAvailabilityTest extends TestCase
         ]);
 
         // Decrement for first shared rate
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -187,7 +187,7 @@ class RateSharedAvailabilityTest extends TestCase
         );
 
         // Decrement for second shared rate
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -207,7 +207,7 @@ class RateSharedAvailabilityTest extends TestCase
         $setup = $this->createSharedSetup(baseAvailable: 1);
 
         // First booking succeeds
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -219,7 +219,7 @@ class RateSharedAvailabilityTest extends TestCase
         // Second booking should fail
         $this->expectException(AvailabilityException::class);
 
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -252,7 +252,7 @@ class RateSharedAvailabilityTest extends TestCase
                 'available' => 3,
             ]);
 
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $startDate->toDateString(),
             date_end: $startDate->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -272,7 +272,7 @@ class RateSharedAvailabilityTest extends TestCase
         $setup = $this->createSharedSetup(baseAvailable: 5);
 
         // Query availability using the shared rate's ID — should find base rate's rows
-        $results = AvailabilityRepository::itemAvailableBetweenForRate(
+        $results = AvailabilityRepository::itemAvailableBetween(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             duration: 2,
@@ -296,7 +296,6 @@ class RateSharedAvailabilityTest extends TestCase
             'date_start' => $setup['startDate']->toDateString(),
             'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
             'quantity' => 1,
-            'advanced' => (string) $setup['sharedRate']->id,
             'rate_id' => $setup['sharedRate']->id,
             'price' => '200.00',
         ], $setup['entry']->id());
@@ -318,7 +317,7 @@ class RateSharedAvailabilityTest extends TestCase
         ]);
 
         // First booking should succeed even with max_available = 1
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 1,
@@ -358,7 +357,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $this->expectException(AvailabilityException::class);
 
-        AvailabilityRepository::decrementForRate(
+        AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             quantity: 2,
@@ -368,18 +367,18 @@ class RateSharedAvailabilityTest extends TestCase
         );
     }
 
-    public function test_shared_rate_availability_query_via_advanced_param()
+    public function test_shared_rate_availability_query_via_rate_id_param()
     {
         $setup = $this->createSharedSetup(baseAvailable: 5);
 
-        // Query using the `advanced` array with shared rate ID
+        // Query using rate ID parameter with shared rate ID
         $results = AvailabilityRepository::itemAvailableBetween(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
             duration: 2,
             quantity: 1,
             statamic_id: $setup['entry']->id(),
-            advanced: [(string) $setup['sharedRate']->id],
+            rateId: $setup['sharedRate']->id,
         )->get();
 
         $this->assertCount(1, $results);

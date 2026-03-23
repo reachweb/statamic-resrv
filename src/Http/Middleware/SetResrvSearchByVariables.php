@@ -21,7 +21,7 @@ class SetResrvSearchByVariables
             return $next($request);
         }
 
-        $data = collect($request->only(['date_start', 'date_end', 'duration', 'quantity', 'advanced']));
+        $data = collect($request->only(['date_start', 'date_end', 'duration', 'quantity', 'rate_id']));
 
         if ($data->has('duration')) {
             $data->put('date_end', Carbon::parse($data->get('date_start'))->addDays((int) $data->get('duration'))->toDateString());

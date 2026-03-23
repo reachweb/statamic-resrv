@@ -430,7 +430,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.message.status', false);
     }
 
-    public function test_returns_availability_for_all_advanced_sorted_by_price()
+    public function test_returns_availability_for_all_rates_sorted_by_price()
     {
         $entryId = $this->advancedEntries->first()->id();
 
@@ -480,7 +480,7 @@ class AvailabilityResultsTest extends TestCase
 
         $testRate = Rate::forEntry($entryId)->where('slug', 'test')->first();
 
-        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId])
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
             ->dispatch('availability-search-updated',
                 [
                     'dates' => [
@@ -493,18 +493,16 @@ class AvailabilityResultsTest extends TestCase
             );
 
         $availability = $component->viewData('availability');
-        $data = collect($availability['data']);
 
-        // Results are sorted by price and contain rate_id for identification
-        $this->assertCount(3, $data);
-        $this->assertEquals('50.00', $data->firstWhere('rate_id', $rate2->id)['price']);
-        $this->assertEquals('100.00', $data->firstWhere('rate_id', $testRate->id)['price']);
-        $this->assertEquals('150.00', $data->firstWhere('rate_id', $rate3->id)['price']);
+        // Each rate is keyed by its ID with data nested inside
+        $this->assertArrayHasKey($rate2->id, $availability->toArray());
+        $this->assertArrayHasKey($testRate->id, $availability->toArray());
+        $this->assertArrayHasKey($rate3->id, $availability->toArray());
+        $this->assertEquals('50.00', data_get($availability, $rate2->id.'.data.price'));
+        $this->assertEquals('100.00', data_get($availability, $testRate->id.'.data.price'));
+        $this->assertEquals('150.00', data_get($availability, $rate3->id.'.data.price'));
 
-        $component->assertViewHas('availability.request')
-            ->assertViewHas('availability.request.days', 2);
-
-        Livewire::test(AvailabilityResults::class, ['entry' => $entryId])
+        Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
             ->dispatch('availability-search-updated',
                 [
                     'dates' => [
@@ -515,8 +513,9 @@ class AvailabilityResultsTest extends TestCase
                     'rate' => 'any',
                 ]
             )
-            ->assertViewHas('availability.message')
-            ->assertViewHas('availability.message.status', false);
+            ->assertViewHas('availability.'.$testRate->id.'.message.status', false)
+            ->assertViewHas('availability.'.$rate2->id.'.message.status', false)
+            ->assertViewHas('availability.'.$rate3->id.'.message.status', false);
     }
 
     public function test_returns_availability_for_all_rates_when_advanced_is_true()

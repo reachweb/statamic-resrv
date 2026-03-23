@@ -211,7 +211,7 @@ class MultisiteAvailabilityTest extends TestCase
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => '',
+                'rate' => null,
             ])
             ->assertHasNoErrors()
             ->assertSet('availability.data.price', '100.00');
@@ -233,7 +233,7 @@ class MultisiteAvailabilityTest extends TestCase
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => '',
+                'rate' => null,
             ])
             ->assertHasNoErrors()
             ->assertSet('availability.data.price', '100.00');

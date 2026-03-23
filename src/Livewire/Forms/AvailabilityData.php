@@ -51,14 +51,11 @@ class AvailabilityData extends Form
 
     public function toResrvArray(): array
     {
-        $rateValue = ($this->rate && $this->rate !== 'any') ? $this->rate : null;
-
         return [
             'date_start' => $this->dates['date_start'] ?? null,
             'date_end' => $this->dates['date_end'] ?? null,
             'quantity' => $this->quantity,
-            'rate_id' => $rateValue,
-            'advanced' => $this->rate ?? '',
+            'rate_id' => $this->rate,
         ];
     }
 

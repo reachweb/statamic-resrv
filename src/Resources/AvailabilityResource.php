@@ -26,8 +26,7 @@ class AvailabilityResource extends ResourceCollection
                 'date_start' => $this->userRequest->get('date_start'),
                 'date_end' => $this->userRequest->get('date_end'),
                 'quantity' => $this->userRequest->get('quantity'),
-                'rate_id' => implode(',', $this->userRequest->get('rate_id', [])),
-                'property' => implode(',', $this->userRequest->get('property', [])),
+                'rate_id' => $this->userRequest->get('rate_id'),
             ],
             'message' => [
                 'status' => $this->availability->isNotEmpty() ? true : false,

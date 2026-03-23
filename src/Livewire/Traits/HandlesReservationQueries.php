@@ -81,7 +81,6 @@ trait HandlesReservationQueries
             'date_start' => $this->reservation->date_start,
             'date_end' => $this->reservation->date_end,
             'quantity' => $this->reservation->quantity,
-            'advanced' => $this->reservation->rate_id ? (string) $this->reservation->rate_id : '',
             'rate_id' => $this->reservation->rate_id,
         ];
     }

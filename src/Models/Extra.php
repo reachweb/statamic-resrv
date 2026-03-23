@@ -172,7 +172,7 @@ class Extra extends Model
         $data['quantity'] = $reservation->quantity;
         $data['item_id'] = $reservation->item_id ?? $reservation->parent->item_id;
         if ($reservation->rate_id) {
-            $data['advanced'] = (string) $reservation->rate_id;
+            $data['rate_id'] = $reservation->rate_id;
         }
 
         return $this->priceForDates($data);
@@ -300,7 +300,7 @@ class Extra extends Model
         $reservationData['quantity'] = $data->quantity;
         $reservationData['item_id'] = $data->item_id ?? $data->parent->item_id;
         if ($data->rate_id) {
-            $reservationData['advanced'] = (string) $data->rate_id;
+            $reservationData['rate_id'] = $data->rate_id;
         }
 
         return $reservationData;

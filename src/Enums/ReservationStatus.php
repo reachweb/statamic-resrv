@@ -11,4 +11,14 @@ enum ReservationStatus: string
     case COMPLETED = 'completed';
     case EXPIRED = 'expired';
     case PARTNER = 'partner';
+
+    /** @return string[] */
+    public static function terminal(): array
+    {
+        return [
+            self::COMPLETED->value,
+            self::CANCELLED->value,
+            self::EXPIRED->value,
+        ];
+    }
 }

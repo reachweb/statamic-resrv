@@ -6,8 +6,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Rate;
 
@@ -76,6 +78,8 @@ class RateCpController extends Controller
             $rate->entries()->sync($entries);
         }
 
+        Cache::forget('resrv_rates_exist');
+
         return response()->json(['id' => $rate->id]);
     }
 
@@ -105,7 +109,7 @@ class RateCpController extends Controller
             );
         }
 
-        if ($rate->reservations()->whereNotIn('status', ['completed', 'cancelled', 'refunded', 'expired'])->exists()) {
+        if ($rate->reservations()->whereNotIn('status', ReservationStatus::terminal())->exists()) {
             return response()->json(
                 ['message' => 'Cannot delete a rate that has active reservations.'],
                 422
@@ -115,6 +119,8 @@ class RateCpController extends Controller
         $rate->availabilities()->delete();
         $rate->fixedPricing()->delete();
         $rate->forceDelete();
+
+        Cache::forget('resrv_rates_exist');
 
         return response()->json(['message' => 'Rate deleted.']);
     }

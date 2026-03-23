@@ -16,9 +16,9 @@ trait HandlesAvailabilityDates
 
     protected $quantity;
 
-    protected $advanced;
-
     protected $rateId;
+
+    protected bool $showAllRates = false;
 
     protected $round_trip;
 
@@ -63,18 +63,12 @@ trait HandlesAvailabilityDates
         $this->quantity = $quantity;
     }
 
-    private function setAdvanced($data)
-    {
-        $advanced = Arr::get($data, 'advanced');
-
-        $this->advanced = $advanced ? explode('|', $advanced) : ['none'];
-    }
-
     private function setRate($data)
     {
         $rateId = Arr::get($data, 'rate_id');
 
-        $this->rateId = $rateId ? (int) $rateId : null;
+        $this->showAllRates = ($rateId === 'any');
+        $this->rateId = ($rateId && $rateId !== 'any') ? (int) $rateId : null;
     }
 
     private function setDates($date_start, $date_end)
@@ -115,22 +109,17 @@ trait HandlesAvailabilityDates
 
         $this->setQuantity($data);
 
-        $this->setAdvanced($data);
-
         $this->setRate($data);
 
         $this->checkDurationValidity();
     }
 
-    // Quick method to use when extra checks are not required, will merge later
     public function initiateAvailabilityUnsafe($data)
     {
         $date_start = new Carbon($data['date_start']);
         $date_end = new Carbon($data['date_end']);
 
         $this->setQuantity($data);
-
-        $this->setAdvanced($data);
 
         $this->setRate($data);
 

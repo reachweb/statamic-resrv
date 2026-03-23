@@ -54,7 +54,7 @@ class AvailabilityCpController extends Controller
         ]);
 
         $rateIds = ! empty($data['rate_ids'])
-            ? AvailabilityRepository::resolveBaseRateIds($data['rate_ids'])
+            ? array_map(fn ($id) => AvailabilityRepository::resolveBaseRateId((int) $id), $data['rate_ids'])
             : $this->defaultRateIds($data['statamic_id']);
 
         Availability::where('date', '>=', $data['date_start'])

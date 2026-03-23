@@ -27,7 +27,7 @@ class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
                         $this->data['date_start'],
                         $this->data['date_end'],
                         $this->data['statamic_id'],
-                        [$rateId]
+                        (int) $rateId
                     )) {
                         $fail(__('The availability does not exist or does not have prices for the selected date range.'));
                     }
@@ -37,7 +37,6 @@ class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
                     $this->data['date_start'],
                     $this->data['date_end'],
                     $this->data['statamic_id'],
-                    ['none']
                 )) {
                     $fail(__('The availability does not exist or does not have prices for the selected date range.'));
                 }

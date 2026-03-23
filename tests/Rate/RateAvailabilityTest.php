@@ -52,7 +52,7 @@ class RateAvailabilityTest extends TestCase
     {
         $data = $this->createEntryWithRateAndAvailability();
 
-        $results = AvailabilityRepository::itemAvailableBetweenForRate(
+        $results = AvailabilityRepository::itemAvailableBetween(
             date_start: now()->startOfDay()->toDateString(),
             date_end: now()->startOfDay()->addDays(2)->toDateString(),
             duration: 2,
@@ -69,7 +69,7 @@ class RateAvailabilityTest extends TestCase
     {
         $data = $this->createEntryWithRateAndAvailability();
 
-        $results = AvailabilityRepository::itemAvailableBetweenForRate(
+        $results = AvailabilityRepository::itemAvailableBetween(
             date_start: now()->startOfDay()->toDateString(),
             date_end: now()->startOfDay()->addDays(2)->toDateString(),
             duration: 2,

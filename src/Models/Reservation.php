@@ -204,8 +204,8 @@ class Reservation extends Model
         return [
             'date_start' => $this->date_start,
             'date_end' => $this->date_end,
-            'advanced' => $this->rate_id ? (string) $this->rate_id : '',
             'quantity' => $this->quantity,
+            'rate_id' => $this->rate_id,
         ];
     }
 
@@ -224,7 +224,7 @@ class Reservation extends Model
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
             'quantity' => $data['quantity'],
-            'advanced' => $data['advanced'],
+            'rate_id' => $data['rate_id'] ?? null,
             'payment' => $data['payment'],
             'price' => $data['price'],
         ], $statamic_id);

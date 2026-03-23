@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Resources;
 
 use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\ResourceCollection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Blueprints\ReservationBlueprint;
 use Statamic\Http\Resources\CP\Concerns\HasRequestedColumns;
@@ -70,7 +71,7 @@ class ReservationResource extends ResourceCollection
             unset($columns['quantity']);
         }
 
-        if (! \Reach\StatamicResrv\Models\Rate::withoutGlobalScopes()->exists()) {
+        if (! Cache::rememberForever('resrv_rates_exist', fn () => \Reach\StatamicResrv\Models\Rate::withoutGlobalScopes()->exists())) {
             unset($columns['rate']);
         }
 

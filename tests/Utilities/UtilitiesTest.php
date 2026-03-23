@@ -40,16 +40,16 @@ class UtilitiesTest extends TestCase
 
         // Test normal with duration
         $response = (new \Reach\StatamicResrv\Http\Middleware\SetResrvSearchByVariables)->handle(
-            Request::create('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&advanced=something', 'GET'),
+            Request::create('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&rate_id=something', 'GET'),
             fn () => new \Symfony\Component\HttpFoundation\Response
         );
 
-        $response = $this->get('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&advanced=something');
+        $response = $this->get('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&rate_id=something');
 
         $s = [
             'date_start' => today()->setHour(12)->toISOString(),
             'date_end' => today()->setHour(12)->addDays(5)->toDateString(),
-            'advanced' => 'something',
+            'rate_id' => 'something',
         ];
 
         $response->assertSessionHas([

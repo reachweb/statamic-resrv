@@ -71,8 +71,6 @@ class DataImport
                         $arrayToPush['price'] = $value;
                         if (array_key_exists('rate_id', $row)) {
                             $arrayToPush['rate_id'] = $row['rate_id'];
-                        } elseif (array_key_exists('advanced', $row)) {
-                            $arrayToPush['rate_id'] = $row['advanced'];
                         }
                         $data->push($arrayToPush);
                     }

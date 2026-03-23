@@ -113,7 +113,7 @@ class AvailabilityScopeTest extends TestCase
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ],
             'quantity' => 1,
-            'advanced' => implode('|', $rateIds),
+            'rate_id' => $rateIds[0],
         ]];
 
         (new ResrvSearch)->apply($query, $values);
@@ -137,7 +137,7 @@ class AvailabilityScopeTest extends TestCase
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ],
             'quantity' => 2,
-            'advanced' => implode('|', $rateIds),
+            'rate_id' => $rateIds[0],
         ]];
 
         (new ResrvSearch)->apply($query, $values);
@@ -160,7 +160,7 @@ class AvailabilityScopeTest extends TestCase
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ],
             'quantity' => 1,
-            'advanced' => 'any',
+            'rate_id' => 'any',
         ]];
 
         (new ResrvSearch)->apply($query, $values);
