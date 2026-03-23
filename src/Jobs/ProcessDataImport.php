@@ -9,6 +9,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 
@@ -33,6 +34,14 @@ class ProcessDataImport implements ShouldQueue
                 $rateId = $data['rate_id'] ?? null;
 
                 if (! $rateId) {
+                    $rateCount = Rate::forEntry($id)->count();
+
+                    if ($rateCount > 1) {
+                        Log::warning("Data import: skipping row for entry {$id} — rate_id required when multiple rates exist.");
+
+                        return;
+                    }
+
                     if ($defaultRateId === null) {
                         $defaultRateId = Rate::forEntry($id)->value('id');
                     }

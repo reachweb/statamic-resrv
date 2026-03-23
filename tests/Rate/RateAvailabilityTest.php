@@ -142,7 +142,7 @@ class RateAvailabilityTest extends TestCase
             )
             ->create([
                 'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
+                'rate_id' => $relativeRate->id,
                 'price' => $basePrice,
                 'available' => 2,
             ]);
@@ -345,5 +345,293 @@ class RateAvailabilityTest extends TestCase
         )->get();
 
         $this->assertCount(2, $results);
+    }
+
+    public function test_all_rates_view_includes_shared_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => 'any',
+        ], $entry->id());
+
+        $this->assertTrue($result['message']['status']);
+
+        // Resource re-indexes integer keys; re-key by rate_id like Livewire does
+        $data = collect($result['data'])->keyBy('rate_id');
+        $this->assertTrue($data->has($baseRate->id));
+        $this->assertTrue($data->has($sharedRate->id));
+    }
+
+    public function test_all_rates_view_applies_relative_pricing_modifier()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $relativeRate = Rate::factory()->relative()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 20,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => 'any',
+        ], $entry->id());
+
+        $this->assertTrue($result['message']['status']);
+
+        $data = collect($result['data'])->keyBy('rate_id');
+
+        // Base rate: 2 * 100 = 200
+        $this->assertEquals('200.00', $data->get($baseRate->id)['price']);
+
+        // Relative rate: 2 * 80 (20% decrease) = 160
+        $this->assertEquals('160.00', $data->get($relativeRate->id)['price']);
+    }
+
+    public function test_all_rates_view_filters_rate_failing_date_restriction()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $validRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'valid-rate',
+        ]);
+
+        $restrictedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'restricted-rate',
+            'date_start' => now()->addMonth()->toDateString(),
+            'date_end' => now()->addMonths(3)->toDateString(),
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        foreach ([$validRate, $restrictedRate] as $rate) {
+            Availability::factory()
+                ->count(2)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $rate->id,
+                    'price' => 100,
+                    'available' => 5,
+                ]);
+        }
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => 'any',
+        ], $entry->id());
+
+        $this->assertTrue($result['message']['status']);
+
+        // Only the valid rate should appear (single result = flat data)
+        $this->assertEquals($validRate->id, $result['data']['rate_id']);
+    }
+
+    public function test_all_rates_view_filters_rate_failing_stay_restriction()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $validRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'valid-rate',
+        ]);
+
+        $restrictedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'restricted-rate',
+            'min_stay' => 5,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        foreach ([$validRate, $restrictedRate] as $rate) {
+            Availability::factory()
+                ->count(2)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $rate->id,
+                    'price' => 100,
+                    'available' => 5,
+                ]);
+        }
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => 'any',
+        ], $entry->id());
+
+        $this->assertTrue($result['message']['status']);
+        $this->assertEquals($validRate->id, $result['data']['rate_id']);
+    }
+
+    public function test_all_rates_view_filters_rate_failing_lead_time_restriction()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $validRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'valid-rate',
+        ]);
+
+        $restrictedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'restricted-rate',
+            'min_days_before' => 30,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        foreach ([$validRate, $restrictedRate] as $rate) {
+            Availability::factory()
+                ->count(2)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $rate->id,
+                    'price' => 100,
+                    'available' => 5,
+                ]);
+        }
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => 'any',
+        ], $entry->id());
+
+        $this->assertTrue($result['message']['status']);
+        $this->assertEquals($validRate->id, $result['data']['rate_id']);
+    }
+
+    public function test_single_rate_query_rejects_rate_failing_date_restriction()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            days: 2,
+            rateAttributes: [
+                'slug' => 'restricted-rate',
+                'date_start' => now()->addMonth()->toDateString(),
+                'date_end' => now()->addMonths(3)->toDateString(),
+            ],
+        );
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $data['rate']->id,
+        ], $data['entry']->id());
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_single_rate_query_rejects_rate_failing_stay_restriction()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            days: 2,
+            rateAttributes: [
+                'slug' => 'restricted-rate',
+                'min_stay' => 5,
+            ],
+        );
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $data['rate']->id,
+        ], $data['entry']->id());
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_confirm_availability_rejects_rate_failing_restrictions()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            days: 2,
+            rateAttributes: [
+                'slug' => 'restricted-rate',
+                'min_stay' => 5,
+            ],
+        );
+
+        $result = (new Availability)->confirmAvailabilityAndPrice([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $data['rate']->id,
+            'price' => '200.00',
+        ], $data['entry']->id());
+
+        $this->assertFalse($result);
     }
 }

@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Repositories;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
@@ -34,7 +35,7 @@ class AvailabilityRepository
 
         $rate = Rate::withoutGlobalScopes()->find($rateId, ['id', 'base_rate_id', 'availability_type', 'pricing_type']);
 
-        $resolved = ($rate?->base_rate_id && ($rate->isShared() || $rate->isRelative()))
+        $resolved = ($rate?->base_rate_id && $rate->isShared())
             ? (int) $rate->base_rate_id
             : $rateId;
 
@@ -205,7 +206,7 @@ class AvailabilityRepository
         });
     }
 
-    /** @return \Illuminate\Database\Eloquent\Collection<int, Availability> */
+    /** @return Collection<int, Availability> */
     protected function getLockedAvailabilities(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null)
     {
         return Availability::where('date', '>=', $date_start)

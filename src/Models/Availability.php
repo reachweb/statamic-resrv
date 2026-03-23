@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Models;
 
+use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -248,6 +249,13 @@ class Availability extends Model implements AvailabilityContract
             return $this->getMultipleRatesAvailability($resrvEntry, $request);
         }
 
+        if ($this->rateId) {
+            $rate = Rate::find($this->rateId);
+            if ($rate && ! $this->ratePassesRestrictions($rate)) {
+                return new AvailabilityItemResource($availability, $request);
+            }
+        }
+
         $results = $this->getResultsForItem($resrvEntry)->first();
 
         if (! $results) {
@@ -263,29 +271,44 @@ class Availability extends Model implements AvailabilityContract
     {
         $availability = collect();
 
-        $results = AvailabilityRepository::itemAvailableBetweenForAllRates(
+        $directResults = AvailabilityRepository::itemAvailableBetweenForAllRates(
             date_start: $this->date_start,
             date_end: $this->date_end,
             duration: $this->duration,
             quantity: $this->quantity,
             statamic_id: $entry->id()
-        )->get();
+        )->get()->keyBy('rate_id');
 
-        if ($results->isEmpty()) {
-            return new AvailabilityItemResource($availability, $request);
+        $rates = Rate::forEntry($entry->item_id)->published()->get();
+        $originalRateId = $this->rateId;
+
+        foreach ($rates as $rate) {
+            $result = ($rate->isShared() && $rate->base_rate_id)
+                ? $directResults->get($rate->base_rate_id)
+                : $directResults->get($rate->id);
+
+            if (! $result) {
+                continue;
+            }
+
+            if (! $this->ratePassesRestrictions($rate)) {
+                continue;
+            }
+
+            $this->rateId = $rate->id;
+            $availability->put($rate->id, $this->populateAvailability($result, $rate->title));
         }
 
-        $rateLabels = Rate::forEntry($entry->item_id)
-            ->pluck('title', 'id')
-            ->toArray();
-
-        foreach ($results as $result) {
-            $rateId = $result->rate_id;
-            $rateLabel = $rateLabels[$rateId] ?? $rateId;
-            $availability->put($rateId, $this->populateAvailability($result, $rateLabel));
-        }
+        $this->rateId = $originalRateId;
 
         return new AvailabilityItemResource($availability->sortBy('price'), $request);
+    }
+
+    protected function ratePassesRestrictions(Rate $rate): bool
+    {
+        return $rate->isAvailableForDates($this->date_start, $this->date_end)
+            && $rate->meetsStayRestrictions($this->duration)
+            && $rate->meetsBookingLeadTime($this->date_start);
     }
 
     protected function populateAvailability($results, $label = null)
@@ -416,7 +439,7 @@ class Availability extends Model implements AvailabilityContract
             })
             ->orderBy('price')
             ->get(['date', 'available', 'price', 'rate_id'])
-            ->groupBy(fn ($item) => \Carbon\Carbon::parse($item->date)->format('Y-m-d H:i:s'))
+            ->groupBy(fn ($item) => Carbon::parse($item->date)->format('Y-m-d H:i:s'))
             ->map(fn ($item) => $item->firstWhere('available', '>', 0))
             ->toArray();
     }
@@ -435,7 +458,7 @@ class Availability extends Model implements AvailabilityContract
             ->orderBy('price')
             ->get(['date', 'available', 'price', 'rate_id']);
 
-        $formatDate = fn ($date) => \Carbon\Carbon::parse($date)->format('Y-m-d');
+        $formatDate = fn ($date) => Carbon::parse($date)->format('Y-m-d');
 
         if ($groupByDate) {
             return $results

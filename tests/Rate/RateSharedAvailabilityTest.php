@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Rate;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
@@ -59,7 +60,7 @@ class RateSharedAvailabilityTest extends TestCase
         ];
     }
 
-    protected function getBaseRateAvailabilities(array $setup, int $days = 2): \Illuminate\Database\Eloquent\Collection
+    protected function getBaseRateAvailabilities(array $setup, int $days = 2): Collection
     {
         return Availability::where('rate_id', $setup['baseRate']->id)
             ->where('date', '>=', $setup['startDate']->toDateString())
@@ -289,7 +290,7 @@ class RateSharedAvailabilityTest extends TestCase
     {
         $setup = $this->createSharedSetup(baseAvailable: 5);
 
-        $availability = new \Reach\StatamicResrv\Models\Availability;
+        $availability = new Availability;
 
         // Use shared rate ID — should resolve to base rate's availability rows
         $result = $availability->confirmAvailabilityAndPrice([
@@ -382,5 +383,50 @@ class RateSharedAvailabilityTest extends TestCase
         )->get();
 
         $this->assertCount(1, $results);
+    }
+
+    public function test_shared_relative_rate_uses_base_availability_with_price_modifier()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRelativeRate = Rate::factory()->relative()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // Single-rate query with shared+relative rate should resolve to base availability
+        $availability = new Availability;
+        $result = $availability->confirmAvailabilityAndPrice([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $sharedRelativeRate->id,
+            'price' => '180.00', // 2 * 90 (10% decrease from 100)
+        ], $entry->id());
+
+        $this->assertTrue($result);
     }
 }
