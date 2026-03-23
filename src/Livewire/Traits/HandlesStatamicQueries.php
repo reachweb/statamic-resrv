@@ -25,6 +25,23 @@ trait HandlesStatamicQueries
             ->toArray();
     }
 
+    protected function computeEntryRates(?string $entryId): array
+    {
+        if (! $this->rates) {
+            return [];
+        }
+
+        if ($this->overrideRates) {
+            return $this->overrideRates;
+        }
+
+        if (! $entryId) {
+            return [];
+        }
+
+        return $this->resolveEntryRates($entryId);
+    }
+
     public function getCheckoutEntry()
     {
         return $this->findEntryOrFail(config('resrv-config.checkout_entry'));

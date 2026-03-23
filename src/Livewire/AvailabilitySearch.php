@@ -60,19 +60,7 @@ class AvailabilitySearch extends Component
     #[Computed(persist: true)]
     public function entryRates(): array
     {
-        if (! $this->rates) {
-            return [];
-        }
-
-        if ($this->overrideRates) {
-            return $this->overrideRates;
-        }
-
-        if (! $this->entry) {
-            return [];
-        }
-
-        return $this->resolveEntryRates($this->entry);
+        return $this->computeEntryRates($this->entry);
     }
 
     #[Computed(persist: true)]

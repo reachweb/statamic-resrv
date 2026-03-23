@@ -66,15 +66,7 @@ class AvailabilityList extends Component
     #[Computed(persist: true)]
     public function entryRates(): array
     {
-        if (! $this->rates) {
-            return [];
-        }
-
-        if ($this->overrideRates) {
-            return $this->overrideRates;
-        }
-
-        return $this->resolveEntryRates($this->entryId);
+        return $this->computeEntryRates($this->entryId);
     }
 
     #[On('availability-search-updated')]

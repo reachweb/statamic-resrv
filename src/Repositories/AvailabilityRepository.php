@@ -133,22 +133,13 @@ class AvailabilityRepository
             ->get();
     }
 
-    public function itemAvailableBetweenForAllProperties(string $date_start, string $date_end, int $duration, int $quantity, string $statamic_id)
-    {
-        return $this->itemAvailableBetweenForAllRates($date_start, $date_end, $duration, $quantity, $statamic_id);
-    }
-
     public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, array $advanced, int $reservationId)
     {
         DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $advanced, $reservationId) {
             $availabilities = Availability::where('date', '>=', $date_start)
                 ->where('date', '<', $date_end)
                 ->where('statamic_id', $statamic_id)
-                ->when($advanced, function (Builder $query, array $advanced) {
-                    if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
-                        $query->whereIn('rate_id', $this->resolveBaseRateIds($advanced));
-                    }
-                })
+                ->when($advanced, fn (Builder $query, array $advanced) => $this->applyAdvancedRateFilter($query, $advanced))
                 ->sharedLock()
                 ->get();
 
@@ -162,11 +153,7 @@ class AvailabilityRepository
             $availabilities = Availability::where('date', '>=', $date_start)
                 ->where('date', '<', $date_end)
                 ->where('statamic_id', $statamic_id)
-                ->when($advanced, function (Builder $query, array $advanced) {
-                    if (! in_array('any', $advanced) && ! in_array('none', $advanced)) {
-                        $query->whereIn('rate_id', $this->resolveBaseRateIds($advanced));
-                    }
-                })
+                ->when($advanced, fn (Builder $query, array $advanced) => $this->applyAdvancedRateFilter($query, $advanced))
                 ->sharedLock()
                 ->get();
 
