@@ -226,9 +226,16 @@ class Availability extends Model implements AvailabilityContract
             ->when($entries, fn ($query) => $query->whereIn('statamic_id', $entries))
             ->groupBy('statamic_id')
             ->map(function ($items) {
-                return $items->map(fn ($item) => $this->populateAvailability($item))
+                return $items
+                    ->filter(function ($item) {
+                        $rate = Rate::find($item->rate_id);
+
+                        return ! $rate || $this->ratePassesRestrictions($rate);
+                    })
+                    ->map(fn ($item) => $this->populateAvailability($item))
                     ->sortBy('price', SORT_NUMERIC);
-            });
+            })
+            ->filter(fn ($items) => $items->isNotEmpty());
 
         return new AvailabilityResource($availableWithPricing, $request);
     }
@@ -458,6 +465,20 @@ class Availability extends Model implements AvailabilityContract
             ->orderBy('price')
             ->get(['date', 'available', 'price', 'rate_id']);
 
+        if ($rateId && ! $showAllRates) {
+            $rate = Rate::find($rateId);
+            if ($rate && ! $rate->meetsBookingLeadTime($dateStart)) {
+                return [];
+            }
+            if ($rate?->isRelative()) {
+                $results->transform(fn ($item) => tap($item, fn ($i) => $i->price = $rate->calculatePrice($i->price)));
+            }
+        }
+
+        if ($showAllRates) {
+            $results = $this->expandSharedRatesForDates($results, $id, $dateStart);
+        }
+
         $formatDate = fn ($date) => Carbon::parse($date)->format('Y-m-d');
 
         if ($groupByDate) {
@@ -490,5 +511,42 @@ class Availability extends Model implements AvailabilityContract
                 })->toArray();
             })
             ->toArray();
+    }
+
+    protected function expandSharedRatesForDates(Collection $baseResults, string $entryId, string $dateStart): Collection
+    {
+        $entry = Entry::whereItemId($entryId);
+        $rates = Rate::forEntry($entry->item_id)->published()->get();
+        $baseGrouped = $baseResults->groupBy('rate_id');
+        $expanded = collect();
+
+        foreach ($rates as $rate) {
+            if (! $rate->meetsBookingLeadTime($dateStart)) {
+                continue;
+            }
+
+            $sourceRateId = ($rate->isShared() && $rate->base_rate_id)
+                ? $rate->base_rate_id
+                : $rate->id;
+
+            $sourceRows = $baseGrouped->get($sourceRateId);
+            if (! $sourceRows) {
+                continue;
+            }
+
+            $rateRows = $sourceRows->map(function ($row) use ($rate) {
+                $clone = clone $row;
+                $clone->rate_id = $rate->id;
+                if ($rate->isRelative()) {
+                    $clone->price = $rate->calculatePrice($clone->price);
+                }
+
+                return $clone;
+            });
+
+            $expanded = $expanded->merge($rateRows);
+        }
+
+        return $expanded;
     }
 }
