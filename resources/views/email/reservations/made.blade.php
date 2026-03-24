@@ -19,7 +19,7 @@
 | {{ __("Vehicle") }}   | {{ $reservation->entry()->title }} |
 @if ($reservation->type !== 'parent')
 @if (config('resrv-config.maximum_quantity') > 1)
-| {{ __("Property") }}  | x {{ $reservation->quantity }} |
+| {{ __("Quantity") }}  | x {{ $reservation->quantity }} |
 @endif
 @if ($reservation->rate_id)
 | {{ __("Rate") }} | {{ $reservation->getRateLabel() }} |

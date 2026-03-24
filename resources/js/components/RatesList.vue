@@ -71,13 +71,13 @@ export default {
     data() {
         return {
             showPanel: false,
-            rates: '',
+            rates: [],
             collections: [],
             selectedCollection: null,
             dataLoaded: false,
             deleteId: false,
             drag: false,
-            rate: '',
+            rate: {},
         }
     },
 
@@ -112,6 +112,7 @@ export default {
                 date_start: null,
                 date_end: null,
                 min_days_before: null,
+                max_days_before: null,
                 min_stay: null,
                 max_stay: null,
                 refundable: true,

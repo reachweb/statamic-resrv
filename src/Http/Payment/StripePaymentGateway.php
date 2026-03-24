@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Models\Reservation;
 use Stripe\Event;
+use Stripe\Exception\InvalidRequestException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Exception\UnexpectedValueException;
 use Stripe\PaymentIntent;
@@ -43,7 +44,7 @@ class StripePaymentGateway implements PaymentInterface
                 'payment_intent' => $reservation->payment_id,
                 'reverse_transfer' => false,
             ]);
-        } catch (\Stripe\Exception\InvalidRequestException $exception) {
+        } catch (InvalidRequestException $exception) {
             throw new RefundFailedException($exception->getMessage());
         }
 

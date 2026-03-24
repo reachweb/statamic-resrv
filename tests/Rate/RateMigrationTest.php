@@ -240,6 +240,32 @@ class RateMigrationTest extends TestCase
         $this->assertNotNull($rate->updated_at);
     }
 
+    public function test_finalize_migration_handles_orphaned_availability_rows(): void
+    {
+        // Insert availability with no matching resrv_entries row (orphan)
+        $this->insertAvailability('orphan-entry', 'none', 50, 1, now()->toDateString());
+
+        // Also insert a valid entry so migration 3 has work to do
+        $this->insertEntry('valid-entry');
+        $this->insertAvailability('valid-entry', 'none', 60, 1, now()->toDateString());
+
+        $this->runDataMigration();
+
+        // The orphan should still have null rate_id (no matching entry in resrv_entries)
+        $this->assertEquals(
+            1,
+            DB::table('resrv_availabilities')->whereNull('rate_id')->count()
+        );
+
+        // Run finalize migration — should clean up orphans and not throw
+        $finalize = include __DIR__.'/../../database/migrations/2026_03_01_000004_finalize_rate_migration.php';
+        $finalize->up();
+
+        // Orphan should be deleted, valid entry should remain
+        $this->assertEquals(0, DB::table('resrv_availabilities')->whereNull('rate_id')->count());
+        $this->assertEquals(1, DB::table('resrv_availabilities')->count());
+    }
+
     protected function insertAvailability(string $statamicId, string $property, float $price, int $available, string $date): int
     {
         return DB::table('resrv_availabilities')->insertGetId([

@@ -3,12 +3,19 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        // Safety: remove availability rows with no rate_id (orphaned records not handled by migration 3)
+        $deleted = DB::table('resrv_availabilities')->whereNull('rate_id')->delete();
+        if ($deleted > 0) {
+            Log::warning("Resrv rate migration: removed {$deleted} orphaned availability rows with null rate_id");
+        }
+
         Schema::table('resrv_availabilities', function (Blueprint $table) {
             $table->dropUnique(['statamic_id', 'date', 'property']);
             $table->dropIndex(['statamic_id', 'date', 'property', 'available']);

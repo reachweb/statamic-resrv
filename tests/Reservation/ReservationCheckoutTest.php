@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Events\CouponUpdated;
+use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
+use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
@@ -142,7 +144,7 @@ class ReservationCheckoutTest extends TestCase
         $this->post(route('resrv.webhook.store', ['reservation_id' => $this->reservation->id, 'status' => 'fail']))
             ->assertOk(200);
 
-        Event::assertDispatched(\Reach\StatamicResrv\Events\ReservationCancelled::class, function ($event) {
+        Event::assertDispatched(ReservationCancelled::class, function ($event) {
             return $event->reservation->id === $this->reservation->id;
         });
     }
@@ -378,7 +380,7 @@ class ReservationCheckoutTest extends TestCase
 
         // Test that non-matching coupon doesn't get applied
         $nonMatchingCoupon = 'DIFFERENT123';
-        $this->expectException(\Reach\StatamicResrv\Exceptions\CouponNotFoundException::class);
+        $this->expectException(CouponNotFoundException::class);
         event(new CouponUpdated($this->reservation, $nonMatchingCoupon));
     }
 

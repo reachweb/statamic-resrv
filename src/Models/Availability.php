@@ -222,13 +222,18 @@ class Availability extends Model implements AvailabilityContract
         $request = $this->requestCollection();
         $available = $this->availableForDates();
 
-        $availableWithPricing = $available
-            ->when($entries, fn ($query) => $query->whereIn('statamic_id', $entries))
+        $filteredAvailable = $available
+            ->when($entries, fn ($query) => $query->whereIn('statamic_id', $entries));
+
+        $rateIds = $filteredAvailable->pluck('rate_id')->unique()->filter()->values();
+        $ratesMap = Rate::withoutGlobalScopes()->whereIn('id', $rateIds)->get()->keyBy('id');
+
+        $availableWithPricing = $filteredAvailable
             ->groupBy('statamic_id')
-            ->map(function ($items) {
+            ->map(function ($items) use ($ratesMap) {
                 return $items
-                    ->filter(function ($item) {
-                        $rate = Rate::find($item->rate_id);
+                    ->filter(function ($item) use ($ratesMap) {
+                        $rate = $ratesMap->get($item->rate_id);
 
                         return ! $rate || $this->ratePassesRestrictions($rate);
                     })
@@ -257,7 +262,7 @@ class Availability extends Model implements AvailabilityContract
         }
 
         if ($this->rateId) {
-            $rate = Rate::find($this->rateId);
+            $rate = $this->getRate();
             if ($rate && ! $this->ratePassesRestrictions($rate)) {
                 return new AvailabilityItemResource($availability, $request);
             }
@@ -289,24 +294,28 @@ class Availability extends Model implements AvailabilityContract
         $rates = Rate::forEntry($entry->item_id)->published()->get();
         $originalRateId = $this->rateId;
 
-        foreach ($rates as $rate) {
-            $result = ($rate->isShared() && $rate->base_rate_id)
-                ? $directResults->get($rate->base_rate_id)
-                : $directResults->get($rate->id);
+        try {
+            foreach ($rates as $rate) {
+                $result = ($rate->isShared() && $rate->base_rate_id)
+                    ? $directResults->get($rate->base_rate_id)
+                    : $directResults->get($rate->id);
 
-            if (! $result) {
-                continue;
+                if (! $result) {
+                    continue;
+                }
+
+                if (! $this->ratePassesRestrictions($rate)) {
+                    continue;
+                }
+
+                $this->rateId = $rate->id;
+                $this->cachedRate = $rate;
+                $this->cachedRateId = $rate->id;
+                $availability->put($rate->id, $this->populateAvailability($result, $rate->title));
             }
-
-            if (! $this->ratePassesRestrictions($rate)) {
-                continue;
-            }
-
-            $this->rateId = $rate->id;
-            $availability->put($rate->id, $this->populateAvailability($result, $rate->title));
+        } finally {
+            $this->rateId = $originalRateId;
         }
-
-        $this->rateId = $originalRateId;
 
         return new AvailabilityItemResource($availability->sortBy('price'), $request);
     }

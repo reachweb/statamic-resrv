@@ -442,7 +442,7 @@ export default {
             if (this.date) {
                 this.submit.date_start = Vue.moment(this.date.start).format('YYYY-MM-DD')
                 this.submit.date_end = Vue.moment(this.date.end).format('YYYY-MM-DD')
-            } else {
+            } else if (this.submit.date_start && this.submit.date_end) {
                 this.submit.date_start = null
                 this.submit.date_end = null
             }

@@ -8,13 +8,18 @@ use Illuminate\Foundation\Testing\WithFaker;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
+use Livewire\LivewireServiceProvider;
+use MarcoRieser\Livewire\ServiceProvider;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
+use Reach\StatamicResrv\StatamicResrvServiceProvider;
+use Spatie\LaravelRay\RayServiceProvider;
 use Statamic\Extend\Manifest;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
+use Statamic\Providers\StatamicServiceProvider;
 use Statamic\Stache\Stores\UsersStore;
 use Statamic\Statamic;
 use Statamic\Support\Str;
@@ -68,11 +73,11 @@ class TestCase extends OrchestraTestCase
     protected function getPackageProviders($app)
     {
         return [
-            \Statamic\Providers\StatamicServiceProvider::class,
-            \Livewire\LivewireServiceProvider::class,
-            \MarcoRieser\Livewire\ServiceProvider::class,
-            \Reach\StatamicResrv\StatamicResrvServiceProvider::class,
-            \Spatie\LaravelRay\RayServiceProvider::class,
+            StatamicServiceProvider::class,
+            LivewireServiceProvider::class,
+            ServiceProvider::class,
+            StatamicResrvServiceProvider::class,
+            RayServiceProvider::class,
         ];
     }
 

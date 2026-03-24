@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Traits\HandlesCutoffRules;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry as StatamicEntry;
 use Statamic\Facades\Blueprint;
+use Statamic\Fields\Field;
 
 class Entry extends Model
 {
@@ -98,7 +99,7 @@ class Entry extends Model
         return StatamicEntry::find($this->item_id);
     }
 
-    public function getAvailabilityField(): ?\Statamic\Fields\Field
+    public function getAvailabilityField(): ?Field
     {
         return AvailabilityField::getField($this->getBlueprint());
     }

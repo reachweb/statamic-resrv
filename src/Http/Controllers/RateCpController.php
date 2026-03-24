@@ -12,6 +12,7 @@ use Illuminate\View\View;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Rate;
+use Statamic\Facades\Collection;
 
 class RateCpController extends Controller
 {
@@ -40,7 +41,7 @@ class RateCpController extends Controller
 
         $collections = $handles->map(fn (string $handle) => [
             'handle' => $handle,
-            'title' => \Statamic\Facades\Collection::findByHandle($handle)?->title() ?? ucfirst($handle),
+            'title' => Collection::findByHandle($handle)?->title() ?? ucfirst($handle),
         ])->values();
 
         return response()->json($collections);
@@ -87,13 +88,14 @@ class RateCpController extends Controller
     {
         $data = $request->validate($this->validationRules($request, $rate));
 
+        $hasEntries = array_key_exists('entries', $data);
         $entries = Arr::pull($data, 'entries', []);
 
         $rate->update($data);
 
         if ($data['apply_to_all'] ?? $rate->apply_to_all) {
             $rate->entries()->detach();
-        } else {
+        } elseif ($hasEntries) {
             $rate->entries()->sync($entries);
         }
 

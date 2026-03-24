@@ -14,7 +14,7 @@ class AvailabilityData extends Form
 
     public int $quantity = 1;
 
-    public ?string $rate = null;
+    public string|int|null $rate = null;
 
     public ?array $customer = [];
 
@@ -36,7 +36,7 @@ class AvailabilityData extends Form
                 new ResrvAfterToday,
             ],
             'quantity' => ['sometimes', 'integer', new ResrvMaxQuantity],
-            'rate' => ['nullable', 'string'],
+            'rate' => ['nullable'],
             'customer' => ['sometimes', 'array'],
         ];
     }

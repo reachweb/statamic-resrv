@@ -26,7 +26,7 @@ class AvailabilityResultsTest extends TestCase
 
     public $entries;
 
-    public $advancedEntries;
+    public $rateEntries;
 
     public $option;
 
@@ -397,7 +397,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.+1.request.date_start', $this->date->copy()->addDays(2)->format('Y-m-d'));
     }
 
-    public function test_returns_availability_for_specific_advanced()
+    public function test_returns_availability_for_specific_rate()
     {
         $rateId = $this->getFirstAdvancedEntryRateId();
 
@@ -518,7 +518,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.'.$rate3->id.'.message.status', false);
     }
 
-    public function test_returns_availability_for_all_rates_when_advanced_is_true()
+    public function test_returns_availability_for_all_rates()
     {
         $entryId = $this->advancedEntries->first()->id();
         $testRate = Rate::forEntry($entryId)->first();
@@ -580,7 +580,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.'.$anotherRate->id.'.message.status', false);
     }
 
-    public function test_checkout_after_checkout_rate_when_advanced_is_true()
+    public function test_checkout_after_checkout_rate()
     {
         $checkoutPage = $this->createCheckoutEntry();
 
@@ -616,7 +616,7 @@ class AvailabilityResultsTest extends TestCase
         $this->assertEquals((string) $rateToCheckout, $component->get('data.rate'));
     }
 
-    public function test_gets_options_if_property_is_enabled()
+    public function test_gets_options_if_show_options_is_enabled()
     {
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'showOptions' => true])
             ->assertSet('showOptions', true)
@@ -634,7 +634,7 @@ class AvailabilityResultsTest extends TestCase
             ->assertSee('45.50');
     }
 
-    public function test_gets_extras_if_property_is_enabled()
+    public function test_gets_extras_if_show_extras_is_enabled()
     {
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'showExtras' => true])
             ->assertSet('showExtras', true)
@@ -1066,7 +1066,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules disabled
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         // Set options but with cutoff disabled
         $resrvEntry->options = [
@@ -1101,7 +1101,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules enabled (3 hours before 4pm)
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         $resrvEntry->options = [
             'cutoff_rules' => [
@@ -1150,7 +1150,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules and schedules
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         // Set up realistic 2-month schedules
         $currentMonthStart = now()->startOfMonth()->format('Y-m-d');
@@ -1255,7 +1255,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules enabled (3 hours before 4pm)
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         $resrvEntry->options = [
             'cutoff_rules' => [
@@ -1325,7 +1325,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules enabled (3 hours before 4pm)
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         $resrvEntry->options = [
             'cutoff_rules' => [

@@ -77,7 +77,8 @@ return new class extends Migration
                     $order++;
                 }
 
-                // Assign fixed pricing to first rate in this collection
+                // Fixed pricing was not property-scoped in the old schema (no property column
+                // on resrv_fixed_pricing), so we assign it to the default/first rate per collection.
                 $defaultRate = DB::table('resrv_rates')
                     ->where('collection', $collection)
                     ->orderBy('order')

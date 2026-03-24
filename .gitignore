@@ -7,3 +7,6 @@ coverage
 .phpunit.cache/test-results
 /resources/dist/hot
 /resources/frontend/hot
+.mcp.json
+ISSUES.md
+PLAN.md

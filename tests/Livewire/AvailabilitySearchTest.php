@@ -5,10 +5,10 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
-use Statamic\Facades;
 
 class AvailabilitySearchTest extends TestCase
 {
@@ -18,7 +18,7 @@ class AvailabilitySearchTest extends TestCase
 
     public $entries;
 
-    public $advancedEntries;
+    public $rateEntries;
 
     protected function setUp(): void
     {
@@ -243,7 +243,7 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(config('resrv-config.maximum_quantity'), $component->__get('maxQuantity'));
     }
 
-    public function test_can_set_advanced()
+    public function test_can_set_rate()
     {
         Livewire::test(AvailabilitySearch::class)
             ->set('data.dates', [
@@ -264,7 +264,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertStatus(200);
     }
 
-    public function test_cannot_set_advanced_without_dates()
+    public function test_cannot_set_rate_without_dates()
     {
         Livewire::test(AvailabilitySearch::class)
             ->set('data.rate', 'something-else')
@@ -309,7 +309,7 @@ class AvailabilitySearchTest extends TestCase
                 ])->assertStatus(200);
     }
 
-    public function test_can_return_advanced_properties_if_set()
+    public function test_can_return_rates_if_set()
     {
         $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'overrideRates' => ['something']])
             ->assertSet('rates', true)
@@ -370,7 +370,7 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(1, $calendar[$key]['available']);
     }
 
-    public function test_availability_calendar_with_advanced_availability()
+    public function test_availability_calendar_with_rate_availability()
     {
         $rateId = Rate::forEntry($this->advancedEntries->first()->id())->first()->id;
 
@@ -408,7 +408,7 @@ class AvailabilitySearchTest extends TestCase
             ->assertDispatched('availability-search-updated');
     }
 
-    public function test_availability_date_selected_updates_advanced_property()
+    public function test_availability_date_selected_updates_rate()
     {
         Livewire::test(AvailabilitySearch::class)
             ->dispatch('availability-date-selected', [
@@ -451,7 +451,7 @@ class AvailabilitySearchTest extends TestCase
         ]);
 
         // Create availability with different prices for different rates on the same date
-        \Reach\StatamicResrv\Models\Availability::factory()
+        Availability::factory()
             ->create([
                 'statamic_id' => $entry->id(),
                 'date' => today(),
@@ -460,7 +460,7 @@ class AvailabilitySearchTest extends TestCase
                 'rate_id' => $expensiveRate->id,
             ]);
 
-        \Reach\StatamicResrv\Models\Availability::factory()
+        Availability::factory()
             ->create([
                 'statamic_id' => $entry->id(),
                 'date' => today(),

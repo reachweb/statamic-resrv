@@ -5,6 +5,10 @@ namespace Reach\StatamicResrv\Providers;
 use Edalzell\Forma\ConfigController;
 use Edalzell\Forma\Forma;
 use Illuminate\Console\Application as Artisan;
+use Reach\StatamicResrv\Console\Commands\ImportEntries;
+use Reach\StatamicResrv\Console\Commands\InstallResrv;
+use Reach\StatamicResrv\Console\Commands\UpgradeToRates;
+use Reach\StatamicResrv\Dictionaries\CountryPhoneCodes;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCancelled;
@@ -12,12 +16,18 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
+use Reach\StatamicResrv\Fieldtypes\ResrvAvailability;
+use Reach\StatamicResrv\Fieldtypes\ResrvCutoff;
+use Reach\StatamicResrv\Fieldtypes\ResrvExtras;
+use Reach\StatamicResrv\Fieldtypes\ResrvFixedPricing;
+use Reach\StatamicResrv\Fieldtypes\ResrvOptions;
 use Reach\StatamicResrv\Filters\ReservationEntry;
 use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
 use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
@@ -36,10 +46,15 @@ use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
+use Reach\StatamicResrv\Tags\Resrv;
+use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
+use Statamic\Events\BlueprintSaved;
+use Statamic\Events\EntrySaved;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
+use Statamic\Tags\Collection\Collection;
 
 class ResrvProvider extends AddonServiceProvider
 {
@@ -57,26 +72,26 @@ class ResrvProvider extends AddonServiceProvider
     ];
 
     protected $commands = [
-        \Reach\StatamicResrv\Console\Commands\InstallResrv::class,
-        \Reach\StatamicResrv\Console\Commands\ImportEntries::class,
-        \Reach\StatamicResrv\Console\Commands\UpgradeToRates::class,
+        InstallResrv::class,
+        ImportEntries::class,
+        UpgradeToRates::class,
     ];
 
     protected $dictionaries = [
-        \Reach\StatamicResrv\Dictionaries\CountryPhoneCodes::class,
+        CountryPhoneCodes::class,
     ];
 
     protected $fieldtypes = [
-        \Reach\StatamicResrv\Fieldtypes\ResrvAvailability::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvOptions::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvExtras::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvFixedPricing::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvCutoff::class,
+        ResrvAvailability::class,
+        ResrvOptions::class,
+        ResrvExtras::class,
+        ResrvFixedPricing::class,
+        ResrvCutoff::class,
     ];
 
     protected $tags = [
-        \Reach\StatamicResrv\Tags\Resrv::class,
-        \Reach\StatamicResrv\Tags\ResrvCheckoutRedirect::class,
+        Resrv::class,
+        ResrvCheckoutRedirect::class,
     ];
 
     protected $scopes = [
@@ -117,14 +132,14 @@ class ResrvProvider extends AddonServiceProvider
         AvailabilitySearch::class => [
             SaveSearchToSession::class,
         ],
-        \Statamic\Events\EntrySaved::class => [
+        EntrySaved::class => [
             AddResrvEntryToDatabase::class,
         ],
         \Statamic\Events\EntryDeleted::class => [
             EntryDeleted::class,
             SoftDeleteResrvEntryFromDatabase::class,
         ],
-        \Statamic\Events\BlueprintSaved::class => [
+        BlueprintSaved::class => [
             ClearAvailabilityFieldCache::class,
         ],
     ];
@@ -181,7 +196,7 @@ class ResrvProvider extends AddonServiceProvider
         $this->app->bind(
             PaymentInterface::class,
             app()->environment('testing')
-                ? \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class
+                ? FakePaymentGateway::class
                 : config('resrv-config.payment_gateway')
         );
 
@@ -270,7 +285,7 @@ class ResrvProvider extends AddonServiceProvider
     protected function bootHooks(): void
     {
         $this->bootEntriesHooks('fetched-entries', function ($hookName, $callback) {
-            \Statamic\Tags\Collection\Collection::hook($hookName, $callback);
+            Collection::hook($hookName, $callback);
         });
     }
 }

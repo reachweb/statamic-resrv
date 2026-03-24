@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Events\ReservationRefunded;
@@ -49,8 +50,8 @@ class ReservationCpController extends Controller
         ]);
 
         // Parse dates using Carbon to handle various formats including ISO8601
-        $start = \Carbon\Carbon::parse($data['start'])->startOfDay();
-        $end = \Carbon\Carbon::parse($data['end'])->endOfDay();
+        $start = Carbon::parse($data['start'])->startOfDay();
+        $end = Carbon::parse($data['end'])->endOfDay();
 
         $reservations = $this->reservation->whereDate('date_start', '>=', $start)
             ->whereDate('date_end', '<=', $end)

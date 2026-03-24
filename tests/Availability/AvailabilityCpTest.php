@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
@@ -496,7 +497,7 @@ class AvailabilityCpTest extends TestCase
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        $startDate = today()->next(\Carbon\Carbon::SUNDAY);
+        $startDate = today()->next(Carbon::SUNDAY);
         $endDate = $startDate->copy()->addDays(6);
 
         $payload = [

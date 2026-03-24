@@ -7,6 +7,7 @@ use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Blueprints\ReservationBlueprint;
+use Reach\StatamicResrv\Models\Rate;
 use Statamic\Http\Resources\CP\Concerns\HasRequestedColumns;
 
 class ReservationResource extends ResourceCollection
@@ -71,7 +72,7 @@ class ReservationResource extends ResourceCollection
             unset($columns['quantity']);
         }
 
-        if (! Cache::rememberForever('resrv_rates_exist', fn () => \Reach\StatamicResrv\Models\Rate::withoutGlobalScopes()->exists())) {
+        if (! Cache::rememberForever('resrv_rates_exist', fn () => Rate::withoutGlobalScopes()->exists())) {
             unset($columns['rate']);
         }
 

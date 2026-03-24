@@ -10,6 +10,24 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 
 trait HandlesPricing
 {
+    private ?Rate $cachedRate = null;
+
+    private ?int $cachedRateId = null;
+
+    protected function getRate(): ?Rate
+    {
+        if ($this->rateId === null) {
+            return null;
+        }
+
+        if ($this->cachedRateId !== $this->rateId) {
+            $this->cachedRate = Rate::find($this->rateId);
+            $this->cachedRateId = $this->rateId;
+        }
+
+        return $this->cachedRate;
+    }
+
     protected function getPrices($prices, $id): array
     {
         // Convert comma separated prices to collection of Price objects
@@ -17,7 +35,7 @@ trait HandlesPricing
 
         // If a rate_id is set and the rate is relative, apply the modifier per day
         if ($this->rateId) {
-            $rate = Rate::find($this->rateId);
+            $rate = $this->getRate();
             if ($rate?->isRelative()) {
                 $pricesCollection = $pricesCollection->transform(fn ($price) => $rate->calculatePrice($price));
             }

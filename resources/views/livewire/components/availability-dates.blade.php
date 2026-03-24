@@ -102,8 +102,8 @@ Alpine.data('datepicker', () => ({
     // Livewire & Config Properties
     mode: $wire.calendar,
     dates: $wire.data.dates, 
-    advanced: $wire.rates,
-    advancedSelected: $wire.entangle('data.rate'),
+    rates: $wire.rates,
+    rateSelected: $wire.entangle('data.rate'),
     minPeriod: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
     maxPeriod: {{ config('resrv-config.maximum_reservation_period_in_days', 30) }},
     disabledDays: @json($disabledDays),
@@ -131,7 +131,7 @@ Alpine.data('datepicker', () => ({
     },
 
     init() {
-        this.$watch('advancedSelected', async () => {
+        this.$watch('rateSelected', async () => {
             if (this.calendar) {
                 this.availabilityCalendar = await this.fetchAvailability();
                 this.calendar.update({ dates: false });
@@ -152,7 +152,7 @@ Alpine.data('datepicker', () => ({
     },
     
     async fetchAvailability() {
-        if (this.advanced !== false && this.advancedSelected === null) {
+        if (this.rates !== false && this.rateSelected === null) {
             return [];
         }
         return await $wire.availabilityCalendar();
