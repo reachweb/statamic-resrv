@@ -153,6 +153,21 @@ class Rate extends Model
         return true;
     }
 
+    public function dateIsWithinWindow(string $date): bool
+    {
+        $d = Carbon::parse($date);
+
+        if ($this->date_start && $d->lt($this->date_start)) {
+            return false;
+        }
+
+        if ($this->date_end && $d->gt($this->date_end)) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function meetsStayRestrictions(int $duration): bool
     {
         if ($this->min_stay && $duration < $this->min_stay) {

@@ -305,4 +305,258 @@ class RateDateListTest extends TestCase
         $this->assertArrayHasKey($openRate->id, $availableDates->toArray());
         $this->assertArrayNotHasKey($restrictedRate->id, $availableDates->toArray());
     }
+
+    public function test_date_list_preserves_shared_rate_id_in_specific_rate_search()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $baseRate->id, 4);
+
+        $component = Livewire::test(AvailabilityList::class, [
+            'entry' => $entry->id(),
+            'rates' => true,
+        ])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => today()->toISOString(),
+                    'date_end' => today()->addDays(30)->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $sharedRate->id,
+            ]);
+
+        $availableDates = $component->viewData('availableDates');
+
+        $this->assertArrayHasKey($sharedRate->id, $availableDates->toArray());
+        $this->assertArrayNotHasKey($baseRate->id, $availableDates->toArray());
+    }
+
+    public function test_date_list_shared_relative_rate_has_correct_id_and_price_in_specific_search()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRelativeRate = Rate::factory()->shared()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 25,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 200, 3, $baseRate->id, 4);
+
+        $component = Livewire::test(AvailabilityList::class, [
+            'entry' => $entry->id(),
+            'rates' => true,
+        ])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => today()->toISOString(),
+                    'date_end' => today()->addDays(30)->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $sharedRelativeRate->id,
+            ]);
+
+        $availableDates = $component->viewData('availableDates');
+
+        $this->assertArrayHasKey($sharedRelativeRate->id, $availableDates->toArray());
+
+        $dates = $availableDates[$sharedRelativeRate->id];
+        // 200 * 0.75 = 150.00
+        $this->assertEquals('150.00', $dates[today()->format('Y-m-d')]['price']);
+    }
+
+    public function test_date_list_excludes_expired_rate_in_specific_rate_search()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'expired-rate',
+            'date_end' => today()->subDay(),
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $rate->id, 4);
+
+        $component = Livewire::test(AvailabilityList::class, [
+            'entry' => $entry->id(),
+            'rates' => true,
+        ])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => today()->toISOString(),
+                    'date_end' => today()->addDays(30)->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $rate->id,
+            ]);
+
+        $availableDates = $component->viewData('availableDates');
+
+        $this->assertEmpty($availableDates->toArray());
+    }
+
+    public function test_date_list_filters_dates_before_rate_date_start()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'future-rate',
+            'date_start' => today()->addDays(2),
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $rate->id, 4);
+
+        $component = Livewire::test(AvailabilityList::class, [
+            'entry' => $entry->id(),
+            'rates' => true,
+        ])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => today()->toISOString(),
+                    'date_end' => today()->addDays(30)->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $rate->id,
+            ]);
+
+        $availableDates = $component->viewData('availableDates');
+        $dates = $availableDates[$rate->id] ?? [];
+
+        $this->assertArrayNotHasKey(today()->format('Y-m-d'), $dates);
+        $this->assertArrayNotHasKey(today()->addDay()->format('Y-m-d'), $dates);
+        $this->assertArrayHasKey(today()->addDays(2)->format('Y-m-d'), $dates);
+        $this->assertArrayHasKey(today()->addDays(3)->format('Y-m-d'), $dates);
+    }
+
+    public function test_date_list_filters_dates_after_rate_date_end()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'ending-rate',
+            'date_end' => today()->addDay(),
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $rate->id, 4);
+
+        $component = Livewire::test(AvailabilityList::class, [
+            'entry' => $entry->id(),
+            'rates' => true,
+        ])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => today()->toISOString(),
+                    'date_end' => today()->addDays(30)->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $rate->id,
+            ]);
+
+        $availableDates = $component->viewData('availableDates');
+        $dates = $availableDates[$rate->id] ?? [];
+
+        $this->assertArrayHasKey(today()->format('Y-m-d'), $dates);
+        $this->assertArrayHasKey(today()->addDay()->format('Y-m-d'), $dates);
+        $this->assertArrayNotHasKey(today()->addDays(2)->format('Y-m-d'), $dates);
+        $this->assertArrayNotHasKey(today()->addDays(3)->format('Y-m-d'), $dates);
+    }
+
+    public function test_date_list_excludes_expired_rate_in_all_rates_mode()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $openRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'open-rate',
+        ]);
+
+        $expiredRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'expired-rate',
+            'date_end' => today()->subDay(),
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $openRate->id, 4);
+        $this->createAvailabilityForEntry($entry, 80, 2, $expiredRate->id, 4);
+
+        $component = Livewire::test(AvailabilityList::class, [
+            'entry' => $entry->id(),
+            'rates' => true,
+        ])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => today()->toISOString(),
+                    'date_end' => today()->addDays(30)->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => 'any',
+            ]);
+
+        $availableDates = $component->viewData('availableDates');
+
+        $this->assertArrayHasKey($openRate->id, $availableDates->toArray());
+        $this->assertArrayNotHasKey($expiredRate->id, $availableDates->toArray());
+    }
+
+    public function test_date_list_filters_dates_by_window_in_all_rates_mode()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $openRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'open-rate',
+        ]);
+
+        $windowedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'windowed-rate',
+            'date_start' => today()->addDays(2),
+            'date_end' => today()->addDays(3),
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $openRate->id, 4);
+        $this->createAvailabilityForEntry($entry, 80, 2, $windowedRate->id, 4);
+
+        $component = Livewire::test(AvailabilityList::class, [
+            'entry' => $entry->id(),
+            'rates' => true,
+        ])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => today()->toISOString(),
+                    'date_end' => today()->addDays(30)->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => 'any',
+            ]);
+
+        $availableDates = $component->viewData('availableDates');
+
+        $this->assertCount(4, $availableDates[$openRate->id]);
+
+        $this->assertArrayHasKey($windowedRate->id, $availableDates->toArray());
+        $windowedDates = $availableDates[$windowedRate->id];
+        $this->assertCount(2, $windowedDates);
+        $this->assertArrayHasKey(today()->addDays(2)->format('Y-m-d'), $windowedDates);
+        $this->assertArrayHasKey(today()->addDays(3)->format('Y-m-d'), $windowedDates);
+    }
 }
