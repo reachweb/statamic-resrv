@@ -123,7 +123,6 @@ class AvailabilityRepository
             ->where('resrv_availabilities.date', '>=', $date_start)
             ->where('resrv_availabilities.date', '<', $date_end)
             ->where('resrv_availabilities.available', '>=', $quantity)
-            ->where('resrv_rates.published', true)
             ->whereNull('resrv_rates.deleted_at')
             ->groupBy('resrv_availabilities.statamic_id', 'resrv_availabilities.rate_id')
             ->havingRaw('count(resrv_availabilities.date) = ?', [$duration]);
@@ -253,14 +252,25 @@ class AvailabilityRepository
         }
     }
 
-    protected function validateMaxAvailableForDateRange(Rate $rate, string $dateStart, string $dateEnd, int $reservationId, int $quantity): void
+    public function validateMaxAvailable(int $rateId, string $dateStart, string $dateEnd, int $quantity): void
+    {
+        $rate = Rate::withoutGlobalScopes()->find($rateId, ['id', 'max_available', 'availability_type']);
+
+        if (! $rate || ! $rate->isShared() || ! $rate->max_available) {
+            return;
+        }
+
+        $this->validateMaxAvailableForDateRange($rate, $dateStart, $dateEnd, null, $quantity);
+    }
+
+    protected function validateMaxAvailableForDateRange(Rate $rate, string $dateStart, string $dateEnd, ?int $reservationId, int $quantity): void
     {
         if (! $rate->max_available) {
             return;
         }
 
         $overlapping = Reservation::where('rate_id', $rate->id)
-            ->where('id', '!=', $reservationId)
+            ->when($reservationId, fn ($q) => $q->where('id', '!=', $reservationId))
             ->whereNotIn('status', ReservationStatus::terminal())
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)

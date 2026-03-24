@@ -128,10 +128,10 @@
                                         {{ errors.pricing_type[0] }}
                                     </div>
                                 </div>
-                                <div class="form-group w-full xl:!w-1/2" v-if="submit.pricing_type === 'relative'">
+                                <div class="form-group w-full xl:!w-1/2" v-if="submit.pricing_type === 'relative' || submit.availability_type === 'shared'">
                                     <div class="mb-1 text-sm">
                                         <label class="font-semibold" for="base_rate_id">Base rate</label>
-                                        <div class="text-sm font-light"><p>The rate to derive pricing from.</p></div>
+                                        <div class="text-sm font-light"><p>{{ baseRateDescription }}</p></div>
                                     </div>
                                     <div class="w-full">
                                         <v-select v-model="submit.base_rate_id" :options="availableBaseRates" :reduce="r => r.code" />
@@ -395,6 +395,18 @@ export default {
             return this.allRates
                 .filter(rate => rate.id !== this.data.id)
                 .map(rate => ({ code: rate.id, label: rate.title }))
+        },
+        needsBaseRate() {
+            return this.submit.pricing_type === 'relative' || this.submit.availability_type === 'shared'
+        },
+        baseRateDescription() {
+            if (this.submit.pricing_type === 'relative' && this.submit.availability_type === 'shared') {
+                return 'Derive pricing and share inventory with this rate.'
+            }
+            if (this.submit.pricing_type === 'relative') {
+                return 'The rate to derive pricing from.'
+            }
+            return 'The rate to share inventory with.'
         }
     },
 
@@ -450,6 +462,16 @@ export default {
         'submit.collection'(newVal) {
             if (newVal) {
                 this.getCollectionEntries(newVal)
+            }
+        },
+        'submit.pricing_type'() {
+            if (!this.needsBaseRate) {
+                this.submit.base_rate_id = null
+            }
+        },
+        'submit.availability_type'() {
+            if (!this.needsBaseRate) {
+                this.submit.base_rate_id = null
             }
         },
         'submit.apply_to_all'(newVal) {

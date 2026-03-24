@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Rate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
@@ -710,5 +711,111 @@ class RateCpTest extends TestCase
         // Rate and availability should still exist
         $this->assertDatabaseHas('resrv_rates', ['id' => $rate->id, 'deleted_at' => null]);
         $this->assertDatabaseHas('resrv_availabilities', ['rate_id' => $rate->id]);
+    }
+
+    public function test_cannot_delete_rate_with_active_child_reservations()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $parentReservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'type' => 'parent',
+            'status' => 'confirmed',
+        ]);
+
+        ChildReservation::factory()->withRate($rate->id)->create([
+            'reservation_id' => $parentReservation->id,
+        ]);
+
+        $response = $this->delete(cp_route('resrv.rate.destroy', $rate->id));
+        $response->assertStatus(422);
+
+        $this->assertDatabaseHas('resrv_rates', ['id' => $rate->id, 'deleted_at' => null]);
+    }
+
+    public function test_can_delete_rate_when_child_reservations_are_terminal()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $parentReservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'type' => 'parent',
+            'status' => 'expired',
+        ]);
+
+        ChildReservation::factory()->withRate($rate->id)->create([
+            'reservation_id' => $parentReservation->id,
+        ]);
+
+        $response = $this->delete(cp_route('resrv.rate.destroy', $rate->id));
+        $response->assertStatus(200);
+
+        $this->assertDatabaseMissing('resrv_rates', ['id' => $rate->id]);
+    }
+
+    public function test_shared_rate_requires_base_rate_id()
+    {
+        $this->withExceptionHandling();
+
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Shared No Base',
+            'slug' => 'shared-no-base',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'published' => true,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('base_rate_id');
+    }
+
+    public function test_shared_rate_accepts_base_rate_id()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create(['collection' => 'pages']);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Shared With Base',
+            'slug' => 'shared-with-base',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+            'published' => true,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(200);
+    }
+
+    public function test_independent_rate_does_not_require_base_rate_id()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Independent Rate',
+            'slug' => 'independent-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'published' => true,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(200);
     }
 }

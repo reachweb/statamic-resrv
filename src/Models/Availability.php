@@ -10,10 +10,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Repositories\AvailabilityRepository as AvailabilityRepositoryClass;
 use Reach\StatamicResrv\Resources\AvailabilityItemResource;
 use Reach\StatamicResrv\Resources\AvailabilityResource;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
@@ -94,8 +96,24 @@ class Availability extends Model implements AvailabilityContract
 
         $availability = $this->getSpecificItemCollection($statamic_id)->resolve();
 
-        return $availability['message']['status'] == 1
-            && $availability['data']['price'] == $data['price'];
+        if ($availability['message']['status'] != 1 || $availability['data']['price'] != $data['price']) {
+            return false;
+        }
+
+        if ($this->rateId) {
+            try {
+                app(AvailabilityRepositoryClass::class)->validateMaxAvailable(
+                    rateId: $this->rateId,
+                    dateStart: $this->date_start,
+                    dateEnd: $this->date_end,
+                    quantity: $this->quantity,
+                );
+            } catch (AvailabilityException) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function getPricing($data, $statamic_id, $onlyPrice = false)

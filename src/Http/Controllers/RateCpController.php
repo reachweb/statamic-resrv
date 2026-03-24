@@ -118,6 +118,13 @@ class RateCpController extends Controller
             );
         }
 
+        if ($rate->childReservations()->whereHas('parent', fn ($q) => $q->whereNotIn('status', ReservationStatus::terminal()))->exists()) {
+            return response()->json(
+                ['message' => 'Cannot delete a rate that has active reservations.'],
+                422
+            );
+        }
+
         $rate->availabilities()->delete();
         $rate->fixedPricing()->delete();
         $rate->forceDelete();
@@ -172,7 +179,7 @@ class RateCpController extends Controller
             'pricing_type' => ['required', Rule::in(['independent', 'relative'])],
             'base_rate_id' => [
                 'nullable',
-                'required_if:pricing_type,relative',
+                Rule::requiredIf(fn () => $request->input('pricing_type') === 'relative' || $request->input('availability_type') === 'shared'),
                 'exists:resrv_rates,id',
                 Rule::notIn([$rate?->id]),
                 function ($attribute, $value, $fail) use ($collection) {

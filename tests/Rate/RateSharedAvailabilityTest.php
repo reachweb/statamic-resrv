@@ -429,4 +429,137 @@ class RateSharedAvailabilityTest extends TestCase
 
         $this->assertTrue($result);
     }
+
+    public function test_confirm_availability_rejects_when_shared_rate_cap_exhausted()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 2);
+
+        // Create two confirmed reservations — cap is now full
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'confirmed',
+        ]);
+
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'confirmed',
+        ]);
+
+        $availability = new Availability;
+
+        $result = $availability->confirmAvailabilityAndPrice([
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $setup['sharedRate']->id,
+            'price' => '200.00',
+        ], $setup['entry']->id());
+
+        $this->assertFalse($result);
+    }
+
+    public function test_confirm_availability_allows_when_shared_rate_cap_not_reached()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 3);
+
+        // Only one reservation — cap of 3 not reached
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'confirmed',
+        ]);
+
+        $availability = new Availability;
+
+        $result = $availability->confirmAvailabilityAndPrice([
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $setup['sharedRate']->id,
+            'price' => '200.00',
+        ], $setup['entry']->id());
+
+        $this->assertTrue($result);
+    }
+
+    public function test_confirm_availability_ignores_cap_for_shared_rate_without_max_available()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: null);
+
+        // Many reservations but no cap set
+        for ($i = 0; $i < 5; $i++) {
+            Reservation::factory()->create([
+                'item_id' => $setup['entry']->id(),
+                'rate_id' => $setup['sharedRate']->id,
+                'date_start' => $setup['startDate']->toDateString(),
+                'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+                'status' => 'confirmed',
+            ]);
+        }
+
+        $availability = new Availability;
+
+        $result = $availability->confirmAvailabilityAndPrice([
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $setup['sharedRate']->id,
+            'price' => '200.00',
+        ], $setup['entry']->id());
+
+        $this->assertTrue($result);
+    }
+
+    public function test_shared_rate_visible_when_base_rate_unpublished()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => 'any',
+        ], $entry->id());
+
+        $this->assertTrue($result['message']['status']);
+
+        // Single published rate returns flat data (AvailabilityItemResource unwraps single items)
+        $data = $result['data'];
+        $this->assertEquals($sharedRate->id, $data['rate_id']);
+    }
 }

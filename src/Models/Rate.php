@@ -98,6 +98,11 @@ class Rate extends Model
         return $this->hasMany(Reservation::class, 'rate_id');
     }
 
+    public function childReservations(): HasMany
+    {
+        return $this->hasMany(ChildReservation::class, 'rate_id');
+    }
+
     public function fixedPricing(): HasMany
     {
         return $this->hasMany(FixedPricing::class, 'rate_id');
