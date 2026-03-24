@@ -146,7 +146,7 @@ class Rate extends Model
             return false;
         }
 
-        if ($this->date_end && $end->gt($this->date_end)) {
+        if ($this->date_end && $end->copy()->subDay()->gt($this->date_end)) {
             return false;
         }
 

@@ -198,6 +198,38 @@ class RateMigrationTest extends TestCase
         );
     }
 
+    public function test_fixed_pricing_duplicated_for_all_rates_after_finalize(): void
+    {
+        $this->insertEntry('entry-fp');
+        $this->insertAvailability('entry-fp', 'double-room', 100, 2, now()->toDateString());
+        $this->insertAvailability('entry-fp', 'single-room', 75, 3, now()->toDateString());
+        $this->insertFixedPricing('entry-fp');
+
+        $this->runDataMigration();
+
+        // After data migration, fixed pricing is assigned to the first rate only
+        $rates = DB::table('resrv_rates')->where('collection', 'rooms')->orderBy('order')->get();
+        $this->assertCount(2, $rates);
+        $this->assertEquals(1, DB::table('resrv_fixed_pricing')->where('statamic_id', 'entry-fp')->count());
+
+        // Run finalize migration — should duplicate fixed pricing for all rates
+        $finalize = include __DIR__.'/../../database/migrations/2026_03_01_000004_finalize_rate_migration.php';
+        $finalize->up();
+
+        $fixedPricingRows = DB::table('resrv_fixed_pricing')
+            ->where('statamic_id', 'entry-fp')
+            ->get();
+
+        $this->assertCount(2, $fixedPricingRows);
+        $this->assertEquals(
+            $rates->pluck('id')->sort()->values()->toArray(),
+            $fixedPricingRows->pluck('rate_id')->sort()->values()->toArray()
+        );
+
+        // All copies should have the same price
+        $this->assertEquals(1, $fixedPricingRows->pluck('price')->unique()->count());
+    }
+
     public function test_migration_is_idempotent(): void
     {
         $this->insertEntry('entry-7');

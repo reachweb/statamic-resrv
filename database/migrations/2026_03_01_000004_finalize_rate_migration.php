@@ -44,6 +44,39 @@ return new class extends Migration
             $table->unique(['statamic_id', 'days', 'rate_id']);
         });
 
+        // Duplicate fixed pricing for all rates in each collection.
+        // Migration 3 assigned each entry's fixed pricing to the default (first) rate only,
+        // but in the old schema fixed pricing was entry-level and applied to all properties.
+        $collections = DB::table('resrv_rates')->distinct()->pluck('collection');
+
+        foreach ($collections as $collection) {
+            $rates = DB::table('resrv_rates')->where('collection', $collection)->orderBy('order')->get();
+
+            if ($rates->count() <= 1) {
+                continue;
+            }
+
+            $defaultRate = $rates->first();
+            $otherRates = $rates->skip(1);
+
+            $fixedRows = DB::table('resrv_fixed_pricing')
+                ->where('rate_id', $defaultRate->id)
+                ->get();
+
+            foreach ($otherRates as $rate) {
+                foreach ($fixedRows as $row) {
+                    DB::table('resrv_fixed_pricing')->insert([
+                        'statamic_id' => $row->statamic_id,
+                        'days' => $row->days,
+                        'price' => $row->price,
+                        'rate_id' => $rate->id,
+                        'created_at' => $row->created_at,
+                        'updated_at' => $row->updated_at,
+                    ]);
+                }
+            }
+        }
+
         Schema::dropIfExists('resrv_advanced_availabilities');
     }
 

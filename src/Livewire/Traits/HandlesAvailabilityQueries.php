@@ -178,7 +178,7 @@ trait HandlesAvailabilityQueries
 
         $entry = $this->getDefaultSiteEntry($this->entry)->id();
 
-        $rateId = ($this->rates && $this->data->rate) ? $this->data->rate : null;
+        $rateId = ($this->rates && $this->data->rate && $this->data->rate !== 'any') ? $this->data->rate : null;
 
         return app(Availability::class)->getAvailabilityCalendar($entry, $rateId);
     }

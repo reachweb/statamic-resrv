@@ -476,16 +476,13 @@ class Availability extends Model implements AvailabilityContract
 
         if ($rateId && ! $showAllRates) {
             $rate = Rate::find($rateId);
-            if ($rate && ! $rate->meetsBookingLeadTime($dateStart)) {
-                return [];
-            }
 
             if ($rate?->date_end && Carbon::parse($dateStart)->gt($rate->date_end)) {
                 return [];
             }
 
             if ($rate) {
-                $results = $results->filter(fn ($item) => $rate->dateIsWithinWindow($item->date));
+                $results = $results->filter(fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date));
             }
 
             $rewriteRateId = $resolvedRateId && $resolvedRateId !== $rateId;
@@ -550,10 +547,6 @@ class Availability extends Model implements AvailabilityContract
         $expanded = collect();
 
         foreach ($rates as $rate) {
-            if (! $rate->meetsBookingLeadTime($dateStart)) {
-                continue;
-            }
-
             if ($rate->date_end && Carbon::parse($dateStart)->gt($rate->date_end)) {
                 continue;
             }
@@ -577,9 +570,7 @@ class Availability extends Model implements AvailabilityContract
                 return $clone;
             });
 
-            if ($rate->date_start || $rate->date_end) {
-                $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date));
-            }
+            $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date) && $rate->meetsBookingLeadTime($row->date));
 
             $expanded = $expanded->merge($rateRows);
         }

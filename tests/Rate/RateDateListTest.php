@@ -215,6 +215,44 @@ class RateDateListTest extends TestCase
         $this->assertEmpty($availableDates->toArray());
     }
 
+    public function test_date_list_returns_later_dates_that_pass_lead_time()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'advance-only',
+            'min_days_before' => 2,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $rate->id, 10);
+
+        // Search starting today — rate requires 2 days lead time
+        $component = Livewire::test(AvailabilityList::class, [
+            'entry' => $entry->id(),
+            'rates' => true,
+        ])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => today()->toISOString(),
+                    'date_end' => today()->addDays(30)->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $rate->id,
+            ]);
+
+        $availableDates = $component->viewData('availableDates');
+        $dates = $availableDates[$rate->id] ?? [];
+
+        // Today and tomorrow fail lead time (0 and 1 days)
+        $this->assertArrayNotHasKey(today()->format('Y-m-d'), $dates);
+        $this->assertArrayNotHasKey(today()->addDay()->format('Y-m-d'), $dates);
+
+        // Day+2 onward pass lead time (2+ days)
+        $this->assertArrayHasKey(today()->addDays(2)->format('Y-m-d'), $dates);
+        $this->assertArrayHasKey(today()->addDays(3)->format('Y-m-d'), $dates);
+    }
+
     public function test_date_list_group_by_date_includes_shared_rates()
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();

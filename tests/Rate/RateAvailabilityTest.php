@@ -186,6 +186,32 @@ class RateAvailabilityTest extends TestCase
         ));
     }
 
+    public function test_rate_date_restrictions_with_exclusive_checkout()
+    {
+        $rate = Rate::factory()->create([
+            'date_start' => now()->toDateString(),
+            'date_end' => now()->addDays(3)->toDateString(),
+        ]);
+
+        // 2-night stay: last occupied night is date_end, checkout is date_end + 1
+        $this->assertTrue($rate->isAvailableForDates(
+            now()->addDay()->toDateString(),
+            now()->addDays(4)->toDateString()
+        ));
+
+        // Checkout exactly on date_end (last night is date_end - 1)
+        $this->assertTrue($rate->isAvailableForDates(
+            now()->addDay()->toDateString(),
+            now()->addDays(3)->toDateString()
+        ));
+
+        // Last occupied night is one day past date_end — should fail
+        $this->assertFalse($rate->isAvailableForDates(
+            now()->addDay()->toDateString(),
+            now()->addDays(5)->toDateString()
+        ));
+    }
+
     public function test_rate_min_stay_restriction()
     {
         $rate = Rate::factory()->create(['min_stay' => 3]);
