@@ -168,4 +168,54 @@ class RateCollectionSearchTest extends TestCase
         $this->assertTrue($result['message']['status']);
         $this->assertArrayHasKey($entry->id(), $result['data']->toArray());
     }
+
+    public function test_collection_search_excludes_entry_when_only_rate_is_unpublished()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'unpublished',
+            'published' => false,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $rate->id, 4);
+
+        $result = app(Availability::class)->getAvailable([
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ]);
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_collection_search_includes_entry_when_one_rate_published()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $unpublished = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'unpublished',
+            'published' => false,
+        ]);
+
+        $published = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'published',
+            'published' => true,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $unpublished->id, 4);
+        $this->createAvailabilityForEntry($entry, 80, 2, $published->id, 4);
+
+        $result = app(Availability::class)->getAvailable([
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ]);
+
+        $this->assertTrue($result['message']['status']);
+        $this->assertArrayHasKey($entry->id(), $result['data']->toArray());
+    }
 }

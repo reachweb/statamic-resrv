@@ -47,6 +47,17 @@ class AvailabilityRepository
         $query->where('rate_id', $this->resolveBaseRateId($rateId));
     }
 
+    protected function applyPublishedRateFilter(Builder $query): void
+    {
+        $query->whereExists(function ($subQuery) {
+            $subQuery->selectRaw('1')
+                ->from('resrv_rates')
+                ->whereColumn('resrv_rates.id', 'resrv_availabilities.rate_id')
+                ->where('resrv_rates.published', true)
+                ->whereNull('resrv_rates.deleted_at');
+        });
+    }
+
     public function availableBetween(string $date_start, string $date_end, int $duration, int $quantity, ?int $rateId = null): Builder
     {
         $priceConcat = self::groupConcat('price');
@@ -57,6 +68,7 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
             ->when($rateId, fn (Builder $query, int $rateId) => $this->applyRateFilter($query, $rateId))
+            ->when(! $rateId, fn (Builder $query) => $this->applyPublishedRateFilter($query))
             ->groupBy('statamic_id', 'rate_id')
             ->havingRaw('count(statamic_id) = ?', [$duration]);
     }
@@ -72,6 +84,7 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
             ->when($rateId, fn (Builder $query, int $rateId) => $this->applyRateFilter($query, $rateId))
+            ->when(! $rateId, fn (Builder $query) => $this->applyPublishedRateFilter($query))
             ->groupBy('statamic_id', 'rate_id')
             ->havingRaw('count(date) = ?', [$duration]);
     }

@@ -660,4 +660,142 @@ class RateAvailabilityTest extends TestCase
 
         $this->assertFalse($result);
     }
+
+    public function test_single_rate_query_rejects_unpublished_rate()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            days: 2,
+            rateAttributes: [
+                'slug' => 'unpublished-rate',
+                'published' => false,
+            ],
+        );
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $data['rate']->id,
+        ], $data['entry']->id());
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_confirm_availability_rejects_unpublished_rate()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            days: 2,
+            rateAttributes: [
+                'slug' => 'unpublished-rate',
+                'published' => false,
+            ],
+        );
+
+        $result = (new Availability)->confirmAvailabilityAndPrice([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $data['rate']->id,
+            'price' => '200.00',
+        ], $data['entry']->id());
+
+        $this->assertFalse($result);
+    }
+
+    public function test_all_rates_view_excludes_unpublished_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $publishedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'published-rate',
+            'published' => true,
+        ]);
+
+        $unpublishedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'unpublished-rate',
+            'published' => false,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        foreach ([$publishedRate, $unpublishedRate] as $rate) {
+            Availability::factory()
+                ->count(2)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $rate->id,
+                    'price' => 100,
+                    'available' => 5,
+                ]);
+        }
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => 'any',
+        ], $entry->id());
+
+        $this->assertTrue($result['message']['status']);
+        $this->assertEquals($publishedRate->id, $result['data']['rate_id']);
+    }
+
+    public function test_single_item_query_without_rate_id_rejects_unpublished_rate()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            days: 2,
+            rateAttributes: [
+                'slug' => 'unpublished-rate',
+                'published' => false,
+            ],
+        );
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ], $data['entry']->id());
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_confirm_availability_without_rate_id_rejects_unpublished_rate()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            days: 2,
+            rateAttributes: [
+                'slug' => 'unpublished-rate',
+                'published' => false,
+            ],
+        );
+
+        $result = (new Availability)->confirmAvailabilityAndPrice([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'price' => '200.00',
+        ], $data['entry']->id());
+
+        $this->assertFalse($result);
+    }
+
+    public function test_single_item_query_without_rate_id_returns_published_rate()
+    {
+        $data = $this->createEntryWithRateAndAvailability(days: 2);
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ], $data['entry']->id());
+
+        $this->assertTrue($result['message']['status']);
+        $this->assertEquals($data['rate']->id, $result['data']['rate_id']);
+    }
 }

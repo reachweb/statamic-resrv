@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Repositories\AvailabilityRepository;
 
 class ProcessDataImport implements ShouldQueue
 {
@@ -32,6 +33,10 @@ class ProcessDataImport implements ShouldQueue
             $item->each(function ($data) use ($id, &$defaultRateId) {
                 $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
                 $rateId = $data['rate_id'] ?? null;
+
+                if ($rateId) {
+                    $rateId = app(AvailabilityRepository::class)->resolveBaseRateId($rateId);
+                }
 
                 if (! $rateId) {
                     $rateCount = Rate::forEntry($id)->count();

@@ -340,7 +340,8 @@ class Availability extends Model implements AvailabilityContract
 
     protected function ratePassesRestrictions(Rate $rate): bool
     {
-        return $rate->isAvailableForDates($this->date_start, $this->date_end)
+        return $rate->published
+            && $rate->isAvailableForDates($this->date_start, $this->date_end)
             && $rate->meetsStayRestrictions($this->duration)
             && $rate->meetsBookingLeadTime($this->date_start);
     }

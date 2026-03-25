@@ -298,6 +298,98 @@ class RateMigrationTest extends TestCase
         $this->assertEquals(1, DB::table('resrv_availabilities')->count());
     }
 
+    public function test_reservation_only_property_gets_rate_created(): void
+    {
+        $this->insertEntry('entry-ro1');
+        // No availability for 'suite', only a reservation
+        $this->insertReservation('entry-ro1', 'suite');
+
+        $this->runDataMigration();
+
+        $this->assertDatabaseHas('resrv_rates', [
+            'collection' => 'rooms',
+            'slug' => 'suite',
+        ]);
+
+        $rate = DB::table('resrv_rates')
+            ->where('collection', 'rooms')
+            ->where('slug', 'suite')
+            ->first();
+
+        $this->assertEquals(
+            1,
+            DB::table('resrv_reservations')
+                ->where('rate_id', $rate->id)
+                ->count()
+        );
+    }
+
+    public function test_reservation_only_property_reuses_rate_from_availability(): void
+    {
+        $this->insertEntry('entry-ro2');
+        // Availability creates the 'deluxe' rate
+        $this->insertAvailability('entry-ro2', 'deluxe', 150, 2, now()->toDateString());
+        // Reservation for same property but no matching availability date
+        $this->insertReservation('entry-ro2', 'deluxe');
+
+        $this->runDataMigration();
+
+        // Should be exactly 1 rate, not 2
+        $this->assertEquals(
+            1,
+            DB::table('resrv_rates')
+                ->where('collection', 'rooms')
+                ->where('slug', 'deluxe')
+                ->count()
+        );
+
+        // Both availability and reservation should point to the same rate
+        $rate = DB::table('resrv_rates')
+            ->where('collection', 'rooms')
+            ->where('slug', 'deluxe')
+            ->first();
+
+        $this->assertEquals(0, DB::table('resrv_reservations')->whereNull('rate_id')->count());
+        $this->assertEquals(0, DB::table('resrv_availabilities')->whereNull('rate_id')->count());
+        $this->assertEquals($rate->id, DB::table('resrv_reservations')->first()->rate_id);
+    }
+
+    public function test_child_reservation_gets_rate_from_reservation_only_property(): void
+    {
+        $this->insertEntry('entry-ro3');
+        $reservationId = $this->insertReservation('entry-ro3', 'cabin');
+        $this->insertChildReservation($reservationId, 'cabin');
+
+        $this->runDataMigration();
+
+        $rate = DB::table('resrv_rates')
+            ->where('collection', 'rooms')
+            ->where('slug', 'cabin')
+            ->first();
+
+        $this->assertNotNull($rate);
+        $this->assertEquals(
+            1,
+            DB::table('resrv_child_reservations')
+                ->where('rate_id', $rate->id)
+                ->count()
+        );
+    }
+
+    public function test_finalize_succeeds_when_reservation_property_has_no_availability(): void
+    {
+        $this->insertEntry('entry-ro4');
+        $this->insertReservation('entry-ro4', 'archive');
+
+        $this->runDataMigration();
+
+        // Should not throw when making rate_id NOT NULL
+        $finalize = include __DIR__.'/../../database/migrations/2026_03_01_000004_finalize_rate_migration.php';
+        $finalize->up();
+
+        $this->assertEquals(0, DB::table('resrv_reservations')->whereNull('rate_id')->count());
+    }
+
     protected function insertAvailability(string $statamicId, string $property, float $price, int $available, string $date): int
     {
         return DB::table('resrv_availabilities')->insertGetId([

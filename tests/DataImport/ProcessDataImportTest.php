@@ -195,4 +195,100 @@ class ProcessDataImportTest extends TestCase
             'available' => 2,
         ]);
     }
+
+    public function test_import_resolves_shared_rate_to_base_rate_id()
+    {
+        $item = $this->makeStatamicItem();
+        $entryId = $item->id();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $tomorrow = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $fakeImport = new class($entryId, $tomorrow, $sharedRate->id)
+        {
+            public function __construct(private $entryId, private $date, private $rateId) {}
+
+            public function prepare()
+            {
+                return collect([
+                    $this->entryId => collect([
+                        [
+                            'date_start' => $this->date,
+                            'date_end' => $this->date,
+                            'price' => 100,
+                            'available' => 2,
+                            'rate_id' => $this->rateId,
+                        ],
+                    ]),
+                ]);
+            }
+        };
+
+        Cache::put('resrv-data-import', $fakeImport);
+
+        (new ProcessDataImport)->handle();
+
+        // Should be stored under the base rate, not the shared rate
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $baseRate->id,
+            'price' => 100,
+        ]);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'rate_id' => $sharedRate->id,
+        ]);
+    }
+
+    public function test_import_leaves_independent_rate_id_unchanged()
+    {
+        $item = $this->makeStatamicItem();
+        $entryId = $item->id();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'independent',
+        ]);
+
+        $tomorrow = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $fakeImport = new class($entryId, $tomorrow, $rate->id)
+        {
+            public function __construct(private $entryId, private $date, private $rateId) {}
+
+            public function prepare()
+            {
+                return collect([
+                    $this->entryId => collect([
+                        [
+                            'date_start' => $this->date,
+                            'date_end' => $this->date,
+                            'price' => 100,
+                            'available' => 2,
+                            'rate_id' => $this->rateId,
+                        ],
+                    ]),
+                ]);
+            }
+        };
+
+        Cache::put('resrv-data-import', $fakeImport);
+
+        (new ProcessDataImport)->handle();
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $rate->id,
+            'price' => 100,
+        ]);
+    }
 }
