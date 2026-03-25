@@ -562,4 +562,113 @@ class RateSharedAvailabilityTest extends TestCase
         $data = $result['data'];
         $this->assertEquals($sharedRate->id, $data['rate_id']);
     }
+
+    public function test_calendar_shows_adjusted_price_for_shared_relative_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRelativeRate = Rate::factory()->relative()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'date' => $startDate,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $sharedRelativeRate->id);
+
+        $this->assertNotEmpty($calendar);
+
+        $dateKey = $startDate->format('Y-m-d H:i:s');
+        $this->assertArrayHasKey($dateKey, $calendar);
+
+        // Price should be 90.00 (100 - 10%), not the base rate's 100.00
+        $this->assertEquals('90.00', (string) $calendar[$dateKey]['price']);
+        $this->assertEquals($sharedRelativeRate->id, $calendar[$dateKey]['rate_id']);
+    }
+
+    public function test_calendar_adjusts_price_for_independent_relative_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $relativeRate = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 25,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $relativeRate->id,
+            'date' => $startDate,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $relativeRate->id);
+
+        $this->assertNotEmpty($calendar);
+
+        $dateKey = $startDate->format('Y-m-d H:i:s');
+        $this->assertArrayHasKey($dateKey, $calendar);
+
+        // Price should be 75.00 (100 - 25%), not the raw 100.00
+        $this->assertEquals('75.00', (string) $calendar[$dateKey]['price']);
+    }
+
+    public function test_calendar_rewrites_rate_id_for_shared_non_relative_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'date' => $startDate,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $sharedRate->id);
+
+        $dateKey = $startDate->format('Y-m-d H:i:s');
+        // Price unchanged, but rate_id should be the shared rate's ID
+        $this->assertEquals('100.00', (string) $calendar[$dateKey]['price']);
+        $this->assertEquals($sharedRate->id, $calendar[$dateKey]['rate_id']);
+    }
 }

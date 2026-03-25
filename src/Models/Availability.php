@@ -243,22 +243,86 @@ class Availability extends Model implements AvailabilityContract
         $filteredAvailable = $available
             ->when($entries, fn ($query) => $query->whereIn('statamic_id', $entries));
 
-        $rateIds = $filteredAvailable->pluck('rate_id')->unique()->filter()->values();
-        $ratesMap = Rate::withoutGlobalScopes()->whereIn('id', $rateIds)->get()->keyBy('id');
+        $baseRateIds = $filteredAvailable->pluck('rate_id')->unique()->filter()->values();
+        $ratesMap = Rate::withoutGlobalScopes()->whereIn('id', $baseRateIds)->get()->keyBy('id');
 
-        $availableWithPricing = $filteredAvailable
-            ->groupBy('statamic_id')
-            ->map(function ($items) use ($ratesMap) {
-                return $items
-                    ->filter(function ($item) use ($ratesMap) {
-                        $rate = $ratesMap->get($item->rate_id);
+        // When browsing without a rate_id, find published shared rates that reference the base rates
+        $sharedByBase = collect();
+        if (! $this->rateId) {
+            $sharedRates = Rate::withoutGlobalScopes()
+                ->whereIn('base_rate_id', $baseRateIds)
+                ->where('availability_type', 'shared')
+                ->where('published', true)
+                ->whereNull('deleted_at')
+                ->with('entries')
+                ->get();
 
-                        return ! $rate || $this->ratePassesRestrictions($rate);
-                    })
-                    ->map(fn ($item) => $this->populateAvailability($item))
-                    ->sortBy('price', SORT_NUMERIC);
-            })
-            ->filter(fn ($items) => $items->isNotEmpty());
+            $sharedRates->each(fn ($rate) => $ratesMap->put($rate->id, $rate));
+            $sharedByBase = $sharedRates->groupBy('base_rate_id');
+        }
+
+        // When filtering by a specific shared rate, validate against its restrictions
+        $selectedSharedRate = null;
+        if ($this->rateId) {
+            $rate = $this->getRate();
+            if ($rate?->isShared()) {
+                $rate->loadMissing('entries');
+                $selectedSharedRate = $rate;
+                $ratesMap->put($rate->id, $rate);
+            }
+        }
+
+        $originalRateId = $this->rateId;
+
+        try {
+            $availableWithPricing = $filteredAvailable
+                ->groupBy('statamic_id')
+                ->map(function ($items) use ($ratesMap, $sharedByBase, $selectedSharedRate, $originalRateId) {
+                    $processed = collect();
+
+                    foreach ($items as $item) {
+                        if ($selectedSharedRate) {
+                            if ($this->ratePassesRestrictions($selectedSharedRate)
+                                && $selectedSharedRate->appliesToEntry($item->statamic_id)
+                            ) {
+                                $this->rateId = $selectedSharedRate->id;
+                                $this->cachedRate = $selectedSharedRate;
+                                $this->cachedRateId = $selectedSharedRate->id;
+                                $processed->push($this->populateAvailability($item));
+                            }
+
+                            continue;
+                        }
+
+                        $this->rateId = $originalRateId;
+                        $baseRate = $ratesMap->get($item->rate_id);
+
+                        if (! $baseRate || $this->ratePassesRestrictions($baseRate)) {
+                            $processed->push($this->populateAvailability($item));
+                        }
+
+                        foreach ($sharedByBase->get($item->rate_id, collect()) as $sharedRate) {
+                            if (! $this->ratePassesRestrictions($sharedRate)) {
+                                continue;
+                            }
+                            if (! $sharedRate->appliesToEntry($item->statamic_id)) {
+                                continue;
+                            }
+                            $this->rateId = $sharedRate->id;
+                            $this->cachedRate = $sharedRate;
+                            $this->cachedRateId = $sharedRate->id;
+                            $processed->push($this->populateAvailability($item));
+                        }
+                    }
+
+                    return $processed->sortBy('price', SORT_NUMERIC);
+                })
+                ->filter(fn ($items) => $items->isNotEmpty());
+        } finally {
+            $this->rateId = $originalRateId;
+            $this->cachedRate = null;
+            $this->cachedRateId = null;
+        }
 
         return new AvailabilityResource($availableWithPricing, $request);
     }
@@ -465,15 +529,35 @@ class Availability extends Model implements AvailabilityContract
 
     public function getAvailabilityCalendar(string $id, ?string $rateId): array
     {
-        $resolvedRateId = $rateId ? AvailabilityRepository::resolveBaseRateId((int) $rateId) : null;
+        $rate = $rateId ? Rate::withoutGlobalScopes()->find((int) $rateId) : null;
+        $resolvedRateId = $rate ? (($rate->base_rate_id && $rate->isShared()) ? (int) $rate->base_rate_id : $rate->id) : null;
 
-        return $this->where('statamic_id', $id)
+        $results = $this->where('statamic_id', $id)
             ->where('date', '>=', now()->startOfDay()->toDateString())
             ->when($resolvedRateId, function ($query) use ($resolvedRateId) {
                 return $query->where('rate_id', $resolvedRateId);
             })
             ->orderBy('price')
-            ->get(['date', 'available', 'price', 'rate_id'])
+            ->get(['date', 'available', 'price', 'rate_id']);
+
+        if ($rate && $resolvedRateId) {
+            $rewriteRateId = $resolvedRateId !== $rate->id;
+
+            if ($rewriteRateId || $rate->isRelative()) {
+                $results->transform(function ($item) use ($rate, $rewriteRateId) {
+                    if ($rewriteRateId) {
+                        $item->rate_id = $rate->id;
+                    }
+                    if ($rate->isRelative()) {
+                        $item->price = $rate->calculatePrice($item->price);
+                    }
+
+                    return $item;
+                });
+            }
+        }
+
+        return $results
             ->groupBy(fn ($item) => Carbon::parse($item->date)->format('Y-m-d H:i:s'))
             ->map(fn ($item) => $item->firstWhere('available', '>', 0))
             ->toArray();

@@ -142,6 +142,11 @@ class Rate extends Model
         return $this->availability_type === 'shared';
     }
 
+    public function appliesToEntry(string $statamicId): bool
+    {
+        return $this->apply_to_all || $this->entries->contains('item_id', $statamicId);
+    }
+
     public function isAvailableForDates(string $dateStart, string $dateEnd): bool
     {
         $start = Carbon::parse($dateStart);

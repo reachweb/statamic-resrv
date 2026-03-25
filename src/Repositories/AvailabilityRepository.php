@@ -52,9 +52,15 @@ class AvailabilityRepository
         $query->whereExists(function ($subQuery) {
             $subQuery->selectRaw('1')
                 ->from('resrv_rates')
-                ->whereColumn('resrv_rates.id', 'resrv_availabilities.rate_id')
                 ->where('resrv_rates.published', true)
-                ->whereNull('resrv_rates.deleted_at');
+                ->whereNull('resrv_rates.deleted_at')
+                ->where(function ($q) {
+                    $q->whereColumn('resrv_rates.id', 'resrv_availabilities.rate_id')
+                        ->orWhere(function ($q2) {
+                            $q2->whereColumn('resrv_rates.base_rate_id', 'resrv_availabilities.rate_id')
+                                ->where('resrv_rates.availability_type', 'shared');
+                        });
+                });
         });
     }
 

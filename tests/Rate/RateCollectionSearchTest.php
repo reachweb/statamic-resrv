@@ -218,4 +218,216 @@ class RateCollectionSearchTest extends TestCase
         $this->assertTrue($result['message']['status']);
         $this->assertArrayHasKey($entry->id(), $result['data']->toArray());
     }
+
+    public function test_collection_search_includes_entry_when_base_rate_unpublished_but_shared_rate_published()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'published' => true,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $baseRate->id, 4);
+
+        $result = app(Availability::class)->getAvailable([
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ]);
+
+        $this->assertTrue($result['message']['status']);
+        $this->assertArrayHasKey($entry->id(), $result['data']->toArray());
+    }
+
+    public function test_collection_search_excludes_entry_when_shared_rate_also_unpublished()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'published' => false,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $baseRate->id, 4);
+
+        $result = app(Availability::class)->getAvailable([
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ]);
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_collection_search_applies_shared_rate_relative_pricing()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        Rate::factory()->shared()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'published' => true,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $baseRate->id, 4);
+
+        $result = app(Availability::class)->getAvailable([
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ]);
+
+        $this->assertTrue($result['message']['status']);
+
+        $entryData = $result['data'][$entry->id()]->first();
+        // 2 days * 90 (100 - 10%) = 180.00
+        $this->assertEquals('180.00', $entryData['price']);
+    }
+
+    public function test_collection_search_respects_shared_rate_min_stay_when_filtering_by_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'min_stay' => 5,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $baseRate->id, 10);
+
+        // Search for 2 days with shared rate that requires min_stay of 5
+        $result = app(Availability::class)->getAvailable([
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $sharedRate->id,
+        ]);
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_collection_search_includes_entry_when_shared_rate_min_stay_is_met()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'min_stay' => 5,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $baseRate->id, 10);
+
+        // Search for 5 days — meets shared rate's min_stay
+        $result = app(Availability::class)->getAvailable([
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(5)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $sharedRate->id,
+        ]);
+
+        $this->assertTrue($result['message']['status']);
+        $this->assertArrayHasKey($entry->id(), $result['data']->toArray());
+    }
+
+    public function test_collection_search_excludes_shared_rate_that_fails_restrictions_in_browse()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'published' => true,
+            'min_stay' => 5,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 2, $baseRate->id, 4);
+
+        // Browse (no rate_id) for 2 days — shared rate requires min_stay 5
+        $result = app(Availability::class)->getAvailable([
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ]);
+
+        // Base rate unpublished, shared rate fails restrictions → entry excluded
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_collection_search_excludes_unassigned_entry_for_scoped_shared_rate()
+    {
+        $entry1 = $this->makeStatamicItemWithResrvAvailabilityField();
+        $entry2 = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $scopedSharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'apply_to_all' => false,
+        ]);
+
+        // Only attach to entry1
+        $scopedSharedRate->entries()->attach($entry1->id());
+
+        $this->createAvailabilityForEntry($entry1, 100, 2, $baseRate->id, 4);
+        $this->createAvailabilityForEntry($entry2, 100, 2, $baseRate->id, 4);
+
+        // Search with scoped shared rate — should only return entry1
+        $result = app(Availability::class)->getAvailable([
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $scopedSharedRate->id,
+        ]);
+
+        $this->assertTrue($result['message']['status']);
+        $data = $result['data']->toArray();
+        $this->assertArrayHasKey($entry1->id(), $data);
+        $this->assertArrayNotHasKey($entry2->id(), $data);
+    }
 }
