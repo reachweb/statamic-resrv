@@ -55,10 +55,10 @@ class FixedPricing extends Model
 
     public function scopeGetFixedPricing($query, $statamic_id, $days, ?int $rateId = null)
     {
-        $data = Cache::remember('fixed_pricing_table', 60, function () {
-            return DB::table('resrv_fixed_pricing')->get();
+        $grouped = Cache::remember('fixed_pricing_table', 60, function () {
+            return DB::table('resrv_fixed_pricing')->get()->groupBy('statamic_id');
         });
-        $items = $data->where('statamic_id', $statamic_id);
+        $items = $grouped->get($statamic_id, collect());
 
         if ($rateId) {
             $rateItems = $items->where('rate_id', $rateId);

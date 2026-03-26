@@ -11,6 +11,7 @@ use Livewire\Livewire;
 use Livewire\LivewireServiceProvider;
 use MarcoRieser\Livewire\ServiceProvider;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\StatamicResrvServiceProvider;
 use Spatie\LaravelRay\RayServiceProvider;
 use Statamic\Extend\Manifest;
@@ -40,6 +41,8 @@ class TestCase extends OrchestraTestCase
         $this->withoutVite();
         $this->preventSavingStacheItemsToDisk();
         $this->withoutExceptionHandling();
+
+        Rate::resetEntryCollectionCache();
 
         Version::shouldReceive('get')->andReturn('5.5.0');
 

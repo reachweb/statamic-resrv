@@ -72,9 +72,11 @@ class Availability extends Model implements AvailabilityContract
         return $this->getAvailabilityCollection($entries)->resolve();
     }
 
-    public function getAvailabilityForEntry($data, $statamic_id)
+    public function getAvailabilityForEntry($data, $statamic_id, bool $expireReservations = true)
     {
-        ExpireReservations::dispatchSync();
+        if ($expireReservations) {
+            ExpireReservations::dispatchSync();
+        }
 
         $this->initiateAvailability($data);
 

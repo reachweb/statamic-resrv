@@ -211,12 +211,10 @@ class DynamicPricing extends Model
 
     public function scopeSearchForAvailability($query, $statamic_id, $price, $date_start, $date_end, $duration)
     {
-        $data = Cache::remember('dynamic_pricing_assignments_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing_assignments')->get();
-        });
+        $grouped = self::getCachedAssignments();
 
-        $itemsForId = $data->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
-            ->where('dynamic_pricing_assignment_id', $statamic_id);
+        $key = 'Reach\StatamicResrv\Models\Availability|'.$statamic_id;
+        $itemsForId = $grouped->get($key, collect());
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -235,12 +233,10 @@ class DynamicPricing extends Model
 
     public function scopeSearchForExtra($query, $extra_id, $price, $date_start, $date_end, $duration)
     {
-        $data = Cache::remember('dynamic_pricing_assignments_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing_assignments')->get();
-        });
+        $grouped = self::getCachedAssignments();
 
-        $itemsForId = $data->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Extra')
-            ->where('dynamic_pricing_assignment_id', $extra_id);
+        $key = 'Reach\StatamicResrv\Models\Extra|'.$extra_id;
+        $itemsForId = $grouped->get($key, collect());
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -315,11 +311,11 @@ class DynamicPricing extends Model
         $dynamicPricingThatApplies = collect();
 
         $data = Cache::remember('dynamic_pricing_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing')->get();
-        }, 120);
+            return DB::table('resrv_dynamic_pricing')->get()->keyBy('id');
+        });
 
         foreach ($items as $item) {
-            $pricing = $data->firstWhere('id', $item->dynamic_pricing_id);
+            $pricing = $data->get($item->dynamic_pricing_id);
             if ($this->expired($pricing)) {
                 continue;
             }
@@ -459,6 +455,15 @@ class DynamicPricing extends Model
     public function appliesToExtras(): bool
     {
         return $this->extrasCount() > 0;
+    }
+
+    protected static function getCachedAssignments(): Collection
+    {
+        return Cache::remember('dynamic_pricing_assignments_table', 60, function () {
+            return DB::table('resrv_dynamic_pricing_assignments')
+                ->get()
+                ->groupBy(fn ($row) => $row->dynamic_pricing_assignment_type.'|'.$row->dynamic_pricing_assignment_id);
+        });
     }
 
     protected function matchesWildcardCoupon(string $wildcardCoupon, string $userCoupon): bool

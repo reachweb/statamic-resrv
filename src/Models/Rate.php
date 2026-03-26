@@ -21,6 +21,8 @@ class Rate extends Model
 
     protected $table = 'resrv_rates';
 
+    private static array $entryCollectionCache = [];
+
     /**
      * The data type of the primary key ID.
      * Set to string for PostgreSQL compatibility with dynamic_pricing_assignments table.
@@ -119,7 +121,8 @@ class Rate extends Model
 
     public function scopeForEntry(Builder $query, string $entryId): void
     {
-        $collection = Entry::where('item_id', $entryId)->value('collection');
+        $collection = static::$entryCollectionCache[$entryId]
+            ??= Entry::where('item_id', $entryId)->value('collection');
 
         if (! $collection) {
             $query->whereNull('id');
@@ -279,5 +282,10 @@ class Rate extends Model
         }
 
         return $rate;
+    }
+
+    public static function resetEntryCollectionCache(): void
+    {
+        static::$entryCollectionCache = [];
     }
 }

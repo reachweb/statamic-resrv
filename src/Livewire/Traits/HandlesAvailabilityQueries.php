@@ -8,6 +8,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\CutoffException;
+use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\EntryCollection;
@@ -60,12 +61,14 @@ trait HandlesAvailabilityQueries
 
     public function queryExtraAvailabilityForEntry(): Collection
     {
+        ExpireReservations::dispatchSync();
+
         return $this->generateDatePeriods($this->data)->map(function ($period) {
             $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'rate_id']));
             try {
                 $this->validateCutoffRules($searchData['date_start']);
 
-                return app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId);
+                return app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId, expireReservations: false);
             } catch (AvailabilityException|CutoffException $exception) {
                 return [
                     'message' => [
