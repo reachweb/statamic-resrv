@@ -20,6 +20,13 @@ trait HandlesStatamicQueries
 
     protected function resolveEntryRates(string $entryId): array
     {
+        if (Site::hasMultiple()) {
+            $entry = Entry::find($entryId);
+            if ($entry?->hasOrigin()) {
+                $entryId = $entry->origin()->id();
+            }
+        }
+
         return $this->getRatesForEntry($entryId)
             ->mapWithKeys(fn ($rate) => [$rate->id => $rate->title])
             ->toArray();

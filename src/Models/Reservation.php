@@ -59,7 +59,7 @@ class Reservation extends Model
 
     public function rate(): BelongsTo
     {
-        return $this->belongsTo(Rate::class, 'rate_id');
+        return $this->belongsTo(Rate::class, 'rate_id')->withTrashed();
     }
 
     public function childs()

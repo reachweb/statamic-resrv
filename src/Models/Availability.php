@@ -244,7 +244,7 @@ class Availability extends Model implements AvailabilityContract
             ->when($entries, fn ($query) => $query->whereIn('statamic_id', $entries));
 
         $baseRateIds = $filteredAvailable->pluck('rate_id')->unique()->filter()->values();
-        $ratesMap = Rate::withoutGlobalScopes()->whereIn('id', $baseRateIds)->get()->keyBy('id');
+        $ratesMap = Rate::withoutGlobalScopes()->whereIn('id', $baseRateIds)->with('entries')->get()->keyBy('id');
 
         // When browsing without a rate_id, find published shared rates that reference the base rates
         $sharedByBase = collect();
@@ -297,7 +297,7 @@ class Availability extends Model implements AvailabilityContract
                         $this->rateId = $originalRateId;
                         $baseRate = $ratesMap->get($item->rate_id);
 
-                        if (! $baseRate || $this->ratePassesRestrictions($baseRate)) {
+                        if (! $baseRate || ($this->ratePassesRestrictions($baseRate) && $baseRate->appliesToEntry($item->statamic_id))) {
                             $processed->push($this->populateAvailability($item));
                         }
 
@@ -412,8 +412,14 @@ class Availability extends Model implements AvailabilityContract
 
     protected function populateAvailability($results, $label = null)
     {
-        $prices = $this->getPrices($results->prices, $results->statamic_id);
         $rateId = $this->rateId ?? $results->rate_id;
+
+        $savedRateId = $this->rateId;
+        $this->rateId = $rateId;
+
+        $prices = $this->getPrices($results->prices, $results->statamic_id);
+
+        $this->rateId = $savedRateId;
 
         return collect([
             'price' => $prices['reservationPrice']->format(),
@@ -557,10 +563,57 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
+        if (! $rate) {
+            $results = $this->expandCalendarWithPublishedRates($results, $id);
+        }
+
         return $results
             ->groupBy(fn ($item) => Carbon::parse($item->date)->format('Y-m-d H:i:s'))
-            ->map(fn ($item) => $item->firstWhere('available', '>', 0))
+            ->map(fn ($item) => $item->sortBy(fn ($row) => (int) $row->price->raw())->firstWhere('available', '>', 0))
             ->toArray();
+    }
+
+    protected function expandCalendarWithPublishedRates(Collection $baseResults, string $entryId): Collection
+    {
+        $entry = Entry::whereItemId($entryId);
+        $rates = Rate::forEntry($entry->item_id)->published()->get();
+
+        if ($rates->isEmpty()) {
+            // Only fall back for legacy entries with no rate association
+            return $baseResults->contains(fn ($row) => $row->rate_id !== null)
+                ? collect()
+                : $baseResults;
+        }
+
+        $baseGrouped = $baseResults->groupBy('rate_id');
+        $expanded = collect();
+
+        foreach ($rates as $rate) {
+            $sourceRateId = ($rate->isShared() && $rate->base_rate_id)
+                ? $rate->base_rate_id
+                : $rate->id;
+
+            $sourceRows = $baseGrouped->get($sourceRateId);
+            if (! $sourceRows) {
+                continue;
+            }
+
+            $rateRows = $sourceRows->map(function ($row) use ($rate) {
+                $clone = clone $row;
+                $clone->rate_id = $rate->id;
+                if ($rate->isRelative()) {
+                    $clone->price = $rate->calculatePrice($clone->price);
+                }
+
+                return $clone;
+            });
+
+            $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date) && $rate->meetsBookingLeadTime($row->date));
+
+            $expanded = $expanded->merge($rateRows);
+        }
+
+        return $expanded;
     }
 
     public function getAvailableDatesFromDate(string $id, string $dateStart, int $quantity = 1, ?int $rateId = null, bool $showAllRates = false, bool $groupByDate = false): array
@@ -628,7 +681,7 @@ class Availability extends Model implements AvailabilityContract
 
         return $results
             ->groupBy('rate_id')
-            ->sortBy(fn ($items) => $items->first()->price->format())
+            ->sortBy(fn ($items) => (int) $items->first()->price->raw())
             ->map(function ($items) use ($formatDate) {
                 return $items->mapWithKeys(function ($item) use ($formatDate) {
                     return [

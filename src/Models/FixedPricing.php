@@ -61,7 +61,8 @@ class FixedPricing extends Model
         $items = $data->where('statamic_id', $statamic_id);
 
         if ($rateId) {
-            $items = $items->where('rate_id', $rateId);
+            $rateItems = $items->where('rate_id', $rateId);
+            $items = $rateItems->isNotEmpty() ? $rateItems : $items->whereNull('rate_id');
         }
 
         if ($this->existsExactly($items, $days)) {

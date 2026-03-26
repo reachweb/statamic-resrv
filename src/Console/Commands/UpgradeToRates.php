@@ -153,13 +153,13 @@ class UpgradeToRates extends Command
             if ($this->dryRun) {
                 $this->components->twoColumnDetail(
                     '  Would update rate <comment>default</comment>',
-                    '<comment>default</comment> → <info>Standard Rate (standard-rate)</info>'
+                    '<comment>default</comment> → <info>Standard Rate</info>'
                 );
             } else {
-                $rate->update(['title' => 'Standard Rate', 'slug' => 'standard-rate']);
+                $rate->update(['title' => 'Standard Rate']);
                 $this->components->twoColumnDetail(
                     '  Updated rate <comment>default</comment>',
-                    '<info>Standard Rate (standard-rate)</info>'
+                    '<info>Standard Rate</info>'
                 );
             }
         }

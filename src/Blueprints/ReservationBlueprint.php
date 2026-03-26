@@ -67,7 +67,7 @@ class ReservationBlueprint
                                 'type' => 'text',
                                 'listable' => true,
                                 'display' => 'Rate',
-                                'sortable' => true,
+                                'sortable' => false,
                             ],
                         ],
                         [

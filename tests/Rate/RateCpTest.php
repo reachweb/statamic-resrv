@@ -315,7 +315,7 @@ class RateCpTest extends TestCase
         $response = $this->delete(cp_route('resrv.rate.destroy', $rate->id));
         $response->assertStatus(200);
 
-        $this->assertDatabaseMissing('resrv_rates', ['id' => $rate->id]);
+        $this->assertSoftDeleted('resrv_rates', ['id' => $rate->id]);
     }
 
     public function test_can_recreate_rate_with_same_slug_after_deletion()
@@ -674,7 +674,7 @@ class RateCpTest extends TestCase
         $response = $this->delete(cp_route('resrv.rate.destroy', $rate->id));
         $response->assertStatus(200);
 
-        $this->assertDatabaseMissing('resrv_rates', ['id' => $rate->id]);
+        $this->assertSoftDeleted('resrv_rates', ['id' => $rate->id]);
         $this->assertDatabaseMissing('resrv_availabilities', ['rate_id' => $rate->id]);
         $this->assertDatabaseMissing('resrv_fixed_pricing', ['rate_id' => $rate->id]);
     }
@@ -756,7 +756,7 @@ class RateCpTest extends TestCase
         $response = $this->delete(cp_route('resrv.rate.destroy', $rate->id));
         $response->assertStatus(200);
 
-        $this->assertDatabaseMissing('resrv_rates', ['id' => $rate->id]);
+        $this->assertSoftDeleted('resrv_rates', ['id' => $rate->id]);
     }
 
     public function test_shared_rate_requires_base_rate_id()
@@ -799,6 +799,40 @@ class RateCpTest extends TestCase
 
         $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
         $response->assertStatus(200);
+    }
+
+    public function test_can_update_rate_slug_to_one_used_by_deleted_rate()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $deletedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'old-slug',
+        ]);
+        $this->delete(cp_route('resrv.rate.destroy', $deletedRate->id));
+
+        $activeRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'current-slug',
+        ]);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Updated Rate',
+            'slug' => 'old-slug',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'published' => true,
+        ];
+
+        $response = $this->patch(cp_route('resrv.rate.update', $activeRate->id), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_rates', [
+            'id' => $activeRate->id,
+            'slug' => 'old-slug',
+        ]);
     }
 
     public function test_independent_rate_does_not_require_base_rate_id()

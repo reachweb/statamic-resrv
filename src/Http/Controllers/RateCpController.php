@@ -73,6 +73,8 @@ class RateCpController extends Controller
 
         $data['order'] = Rate::where('collection', $data['collection'])->max('order') + 1;
 
+        Rate::renameTrashedSlugs($data['collection'], $data['slug']);
+
         $rate = Rate::create($data);
 
         if (! $data['apply_to_all'] && ! empty($entries)) {
@@ -90,6 +92,10 @@ class RateCpController extends Controller
 
         $hasEntries = array_key_exists('entries', $data);
         $entries = Arr::pull($data, 'entries', []);
+
+        if (isset($data['slug']) && $data['slug'] !== $rate->slug) {
+            Rate::renameTrashedSlugs($rate->collection, $data['slug']);
+        }
 
         $rate->update($data);
 
@@ -127,7 +133,7 @@ class RateCpController extends Controller
 
         $rate->availabilities()->delete();
         $rate->fixedPricing()->delete();
-        $rate->forceDelete();
+        $rate->delete();
 
         Cache::forget('resrv_rates_exist');
 

@@ -142,8 +142,11 @@ class AvailabilityResults extends Component
         if ($this->extraDays !== 0 && $this->availability->count() > 1) {
             $this->availability = collect($this->availability->get(0));
         }
-        if ($this->data->rate === 'any') {
-            $this->data->rate = (string) data_get($this->availability, 'data.rate_id');
+        if (! $this->data->rate || $this->data->rate === 'any') {
+            $rateFromResults = data_get($this->availability, 'data.rate_id');
+            if ($rateFromResults) {
+                $this->data->rate = (string) $rateFromResults;
+            }
         }
         try {
             $this->validateAvailabilityAndPrice();

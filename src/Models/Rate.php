@@ -72,6 +72,15 @@ class Rate extends Model
         static::addGlobalScope(new OrderScope);
     }
 
+    public static function renameTrashedSlugs(string $collection, string $slug): void
+    {
+        static::onlyTrashed()
+            ->where('collection', $collection)
+            ->where('slug', $slug)
+            ->get()
+            ->each(fn (self $trashed) => $trashed->updateQuietly(['slug' => $trashed->slug.'-deleted-'.$trashed->id]));
+    }
+
     public function entries(): BelongsToMany
     {
         return $this->belongsToMany(Entry::class, 'resrv_rate_entries', 'rate_id', 'statamic_id', 'id', 'item_id')
