@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -670,5 +671,241 @@ class RateSharedAvailabilityTest extends TestCase
         // Price unchanged, but rate_id should be the shared rate's ID
         $this->assertEquals('100.00', (string) $calendar[$dateKey]['price']);
         $this->assertEquals($sharedRate->id, $calendar[$dateKey]['rate_id']);
+    }
+
+    public function test_implicit_search_resolves_shared_rate_when_base_unpublished()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // Search without specifying a rate_id — should resolve to the published shared rate
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ], $entry->id());
+
+        $this->assertTrue($result['message']['status']);
+        $this->assertEquals($sharedRate->id, $result['data']['rate_id']);
+    }
+
+    public function test_implicit_search_does_not_show_entry_outside_shared_rate_scope()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        // Shared rate that does NOT apply to this entry (apply_to_all false, no pivot)
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'published' => true,
+            'apply_to_all' => false,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // Search without rate — shared rate doesn't apply to this entry, should return empty
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ], $entry->id());
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_max_available_counts_child_reservations()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 2);
+
+        // Parent reservation uses a different rate
+        $parentRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'parent-rate',
+        ]);
+
+        $parent = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $parentRate->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'confirmed',
+        ]);
+
+        // Two child reservations consume the shared rate's cap
+        ChildReservation::factory()->withRate($setup['sharedRate']->id)->create([
+            'reservation_id' => $parent->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ]);
+
+        ChildReservation::factory()->withRate($setup['sharedRate']->id)->create([
+            'reservation_id' => $parent->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ]);
+
+        // Third booking via a new parent+child should fail (max_available = 2, 2 children already active)
+        $this->expectException(AvailabilityException::class);
+
+        AvailabilityRepository::decrement(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: 999,
+        );
+    }
+
+    public function test_max_available_ignores_child_reservations_with_terminal_parent()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 2);
+
+        $parentRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'parent-rate',
+        ]);
+
+        // Refunded (terminal) parent — its children should not count toward cap
+        $cancelledParent = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $parentRate->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'refunded',
+        ]);
+
+        ChildReservation::factory()->withRate($setup['sharedRate']->id)->create([
+            'reservation_id' => $cancelledParent->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 2,
+        ]);
+
+        // Should succeed — the child's parent is cancelled so it doesn't count
+        $newReservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'pending',
+        ]);
+
+        AvailabilityRepository::decrement(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $newReservation->id,
+        );
+
+        // Verify decrement happened
+        foreach ($this->getBaseRateAvailabilities($setup) as $availability) {
+            $this->assertEquals(9, $availability->available);
+        }
+    }
+
+    public function test_max_available_counts_both_parent_and_child_reservations()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 3);
+
+        // One direct parent reservation on the shared rate (counts 1)
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'confirmed',
+        ]);
+
+        // One child reservation on the shared rate via a different parent (counts 1)
+        $parentRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'parent-rate',
+        ]);
+
+        $parent = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $parentRate->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'confirmed',
+        ]);
+
+        ChildReservation::factory()->withRate($setup['sharedRate']->id)->create([
+            'reservation_id' => $parent->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ]);
+
+        // Total active = 2 (1 parent + 1 child). Trying to add quantity 2 would exceed cap of 3.
+        $newReservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $this->expectException(AvailabilityException::class);
+
+        AvailabilityRepository::decrement(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            quantity: 2,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $newReservation->id,
+        );
     }
 }

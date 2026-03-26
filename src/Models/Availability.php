@@ -356,9 +356,36 @@ class Availability extends Model implements AvailabilityContract
             return new AvailabilityItemResource($availability, $request);
         }
 
+        if (! $this->rateId) {
+            $rate = $this->resolveRateForResult($results, $resrvEntry);
+            if (! $rate) {
+                return new AvailabilityItemResource($availability, $request);
+            }
+            $this->rateId = $rate->id;
+            $this->cachedRate = $rate;
+            $this->cachedRateId = $rate->id;
+        }
+
         $availability->push($this->populateAvailability($results));
 
         return new AvailabilityItemResource($availability, $request);
+    }
+
+    protected function resolveRateForResult($result, Entry $entry): ?Rate
+    {
+        $rates = Rate::forEntry($entry->item_id)->published()->get();
+
+        foreach ($rates as $rate) {
+            $matchesResult = ($rate->isShared() && $rate->base_rate_id)
+                ? $rate->base_rate_id == $result->rate_id
+                : $rate->id == $result->rate_id;
+
+            if ($matchesResult && $this->ratePassesRestrictions($rate)) {
+                return $rate;
+            }
+        }
+
+        return null;
     }
 
     protected function getMultipleRatesAvailability(Entry $entry, $request)

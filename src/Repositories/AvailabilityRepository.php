@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 
@@ -295,11 +296,24 @@ class AvailabilityRepository
             ->where('date_end', '>', $dateStart)
             ->get(['quantity', 'date_start', 'date_end']);
 
+        $overlappingChildren = ChildReservation::where('rate_id', $rate->id)
+            ->whereHas('parent', function ($q) use ($reservationId) {
+                $q->whereNotIn('status', ReservationStatus::terminal());
+                if ($reservationId) {
+                    $q->where('id', '!=', $reservationId);
+                }
+            })
+            ->where('date_start', '<', $dateEnd)
+            ->where('date_end', '>', $dateStart)
+            ->get(['quantity', 'date_start', 'date_end']);
+
+        $allOverlapping = $overlapping->concat($overlappingChildren);
+
         $period = Carbon::parse($dateStart)->daysUntil(Carbon::parse($dateEnd));
 
         foreach ($period as $date) {
             $dateStr = $date->toDateString();
-            $activeQuantity = $overlapping
+            $activeQuantity = $allOverlapping
                 ->filter(fn ($r) => $r->date_start <= $dateStr && $r->date_end > $dateStr)
                 ->sum('quantity');
 
