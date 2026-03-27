@@ -10,9 +10,9 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Helpers\ResrvHelper;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Rate;
-use Statamic\Facades\Collection;
 
 class RateCpController extends Controller
 {
@@ -34,17 +34,7 @@ class RateCpController extends Controller
 
     public function collections(): JsonResponse
     {
-        $handles = Entry::query()
-            ->select('collection')
-            ->distinct()
-            ->pluck('collection');
-
-        $collections = $handles->map(fn (string $handle) => [
-            'handle' => $handle,
-            'title' => Collection::findByHandle($handle)?->title() ?? ucfirst($handle),
-        ])->values();
-
-        return response()->json($collections);
+        return response()->json(ResrvHelper::collectionsWithResrv()->values());
     }
 
     public function entries(string $collection): JsonResponse
@@ -189,8 +179,17 @@ class RateCpController extends Controller
                 'exists:resrv_rates,id',
                 Rule::notIn([$rate?->id]),
                 function ($attribute, $value, $fail) use ($collection) {
-                    if ($value && Rate::where('id', $value)->where('collection', $collection)->doesntExist()) {
+                    if (! $value) {
+                        return;
+                    }
+                    $baseRate = Rate::where('id', $value)->where('collection', $collection)->first();
+                    if (! $baseRate) {
                         $fail('The base rate must belong to the same collection.');
+
+                        return;
+                    }
+                    if ($baseRate->isShared()) {
+                        $fail('A shared rate cannot be used as a base rate.');
                     }
                 },
             ],

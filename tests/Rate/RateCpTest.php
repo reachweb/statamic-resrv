@@ -835,6 +835,36 @@ class RateCpTest extends TestCase
         ]);
     }
 
+    public function test_rejects_shared_rate_as_base_rate()
+    {
+        $this->withExceptionHandling();
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base-rate']);
+
+        $sharedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-rate',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Chained Shared',
+            'slug' => 'chained-shared',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $sharedRate->id,
+            'published' => true,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('base_rate_id');
+    }
+
     public function test_independent_rate_does_not_require_base_rate_id()
     {
         $this->makeStatamicItemWithResrvAvailabilityField();
