@@ -436,7 +436,22 @@ class Availability extends Model implements AvailabilityContract
         return $rate->published
             && $rate->isAvailableForDates($this->date_start, $this->date_end)
             && $rate->meetsStayRestrictions($this->duration)
-            && $rate->meetsBookingLeadTime($this->date_start);
+            && $rate->meetsBookingLeadTime($this->date_start)
+            && $this->rateHasCapacity($rate);
+    }
+
+    protected function rateHasCapacity(Rate $rate): bool
+    {
+        if (! $rate->isShared() || ! $rate->max_available) {
+            return true;
+        }
+
+        return app(AvailabilityRepositoryClass::class)->checkMaxAvailable(
+            rateId: $rate->id,
+            dateStart: $this->date_start,
+            dateEnd: $this->date_end,
+            quantity: $this->quantity,
+        );
     }
 
     protected function populateAvailability($results, $label = null)
@@ -590,6 +605,17 @@ class Availability extends Model implements AvailabilityContract
                     return $item;
                 });
             }
+
+            $results = $results->filter(
+                fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date)
+            );
+
+            if ($rate->isShared() && $rate->max_available) {
+                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate);
+                if ($exhaustedDates->isNotEmpty()) {
+                    $results = $results->reject(fn ($item) => $exhaustedDates->contains($item->date));
+                }
+            }
         }
 
         if (! $rate) {
@@ -639,6 +665,13 @@ class Availability extends Model implements AvailabilityContract
 
             $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date) && $rate->meetsBookingLeadTime($row->date));
 
+            if ($rate->isShared() && $rate->max_available) {
+                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate);
+                if ($exhaustedDates->isNotEmpty()) {
+                    $rateRows = $rateRows->reject(fn ($row) => $exhaustedDates->contains($row->date));
+                }
+            }
+
             $expanded = $expanded->merge($rateRows);
         }
 
@@ -670,6 +703,13 @@ class Availability extends Model implements AvailabilityContract
                 $results = $results->filter(fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date));
             }
 
+            if ($rate?->isShared() && $rate->max_available) {
+                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, $quantity);
+                if ($exhaustedDates->isNotEmpty()) {
+                    $results = $results->reject(fn ($item) => $exhaustedDates->contains($item->date));
+                }
+            }
+
             $rewriteRateId = $resolvedRateId && $resolvedRateId !== $rateId;
 
             if ($rewriteRateId || $rate?->isRelative()) {
@@ -687,7 +727,7 @@ class Availability extends Model implements AvailabilityContract
         }
 
         if ($showAllRates) {
-            $results = $this->expandSharedRatesForDates($results, $id, $dateStart);
+            $results = $this->expandSharedRatesForDates($results, $id, $dateStart, $quantity);
         }
 
         $formatDate = fn ($date) => Carbon::parse($date)->format('Y-m-d');
@@ -724,7 +764,7 @@ class Availability extends Model implements AvailabilityContract
             ->toArray();
     }
 
-    protected function expandSharedRatesForDates(Collection $baseResults, string $entryId, string $dateStart): Collection
+    protected function expandSharedRatesForDates(Collection $baseResults, string $entryId, string $dateStart, int $quantity = 1): Collection
     {
         $entry = Entry::whereItemId($entryId);
         $rates = Rate::forEntry($entry->item_id)->published()->get();
@@ -756,6 +796,13 @@ class Availability extends Model implements AvailabilityContract
             });
 
             $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date) && $rate->meetsBookingLeadTime($row->date));
+
+            if ($rate->isShared() && $rate->max_available) {
+                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, $quantity);
+                if ($exhaustedDates->isNotEmpty()) {
+                    $rateRows = $rateRows->reject(fn ($row) => $exhaustedDates->contains($row->date));
+                }
+            }
 
             $expanded = $expanded->merge($rateRows);
         }

@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Repositories;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
@@ -283,6 +284,51 @@ class AvailabilityRepository
         $this->validateMaxAvailableForDateRange($rate, $dateStart, $dateEnd, null, $quantity);
     }
 
+    public function checkMaxAvailable(int $rateId, string $dateStart, string $dateEnd, int $quantity): bool
+    {
+        try {
+            $this->validateMaxAvailable($rateId, $dateStart, $dateEnd, $quantity);
+
+            return true;
+        } catch (AvailabilityException) {
+            return false;
+        }
+    }
+
+    public function getExhaustedDatesForRate(Rate $rate, int $quantity = 1): SupportCollection
+    {
+        if (! $rate->isShared() || ! $rate->max_available) {
+            return collect();
+        }
+
+        $overlapping = Reservation::where('rate_id', $rate->id)
+            ->whereNotIn('status', ReservationStatus::terminal())
+            ->get(['quantity', 'date_start', 'date_end']);
+
+        $overlappingChildren = ChildReservation::where('rate_id', $rate->id)
+            ->whereHas('parent', fn ($q) => $q->whereNotIn('status', ReservationStatus::terminal()))
+            ->get(['quantity', 'date_start', 'date_end']);
+
+        $all = $overlapping->concat($overlappingChildren);
+
+        if ($all->isEmpty()) {
+            return collect();
+        }
+
+        $dateCounts = [];
+        foreach ($all as $res) {
+            $period = Carbon::parse($res->date_start)->daysUntil(Carbon::parse($res->date_end));
+            foreach ($period as $date) {
+                $dateStr = $date->toDateString();
+                $dateCounts[$dateStr] = ($dateCounts[$dateStr] ?? 0) + $res->quantity;
+            }
+        }
+
+        return collect($dateCounts)
+            ->filter(fn ($count) => ($count + $quantity) > $rate->max_available)
+            ->keys();
+    }
+
     protected function validateMaxAvailableForDateRange(Rate $rate, string $dateStart, string $dateEnd, ?int $reservationId, int $quantity): void
     {
         if (! $rate->max_available) {
@@ -297,11 +343,9 @@ class AvailabilityRepository
             ->get(['quantity', 'date_start', 'date_end']);
 
         $overlappingChildren = ChildReservation::where('rate_id', $rate->id)
-            ->whereHas('parent', function ($q) use ($reservationId) {
+            ->when($reservationId, fn ($q) => $q->where('id', '!=', $reservationId))
+            ->whereHas('parent', function ($q) {
                 $q->whereNotIn('status', ReservationStatus::terminal());
-                if ($reservationId) {
-                    $q->where('id', '!=', $reservationId);
-                }
             })
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)

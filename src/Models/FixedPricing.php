@@ -66,8 +66,9 @@ class FixedPricing extends Model
                 $items = $rateItems;
             } elseif ($items->whereNull('rate_id')->isNotEmpty()) {
                 $items = $items->whereNull('rate_id');
+            } else {
+                $items = collect();
             }
-            // else: keep all items for the entry (inherit from whichever rate has them)
         }
 
         if ($this->existsExactly($items, $days)) {
