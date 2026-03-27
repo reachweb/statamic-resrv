@@ -62,7 +62,12 @@ class FixedPricing extends Model
 
         if ($rateId) {
             $rateItems = $items->where('rate_id', $rateId);
-            $items = $rateItems->isNotEmpty() ? $rateItems : $items->whereNull('rate_id');
+            if ($rateItems->isNotEmpty()) {
+                $items = $rateItems;
+            } elseif ($items->whereNull('rate_id')->isNotEmpty()) {
+                $items = $items->whereNull('rate_id');
+            }
+            // else: keep all items for the entry (inherit from whichever rate has them)
         }
 
         if ($this->existsExactly($items, $days)) {
