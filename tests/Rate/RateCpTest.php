@@ -865,6 +865,38 @@ class RateCpTest extends TestCase
             ->assertJsonValidationErrors('base_rate_id');
     }
 
+    public function test_rejects_relative_rate_as_base_rate()
+    {
+        $this->withExceptionHandling();
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base-rate']);
+
+        $relativeRate = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'slug' => 'relative-rate',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Chained Relative',
+            'slug' => 'chained-relative',
+            'pricing_type' => 'relative',
+            'base_rate_id' => $relativeRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+            'availability_type' => 'independent',
+            'published' => true,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('base_rate_id');
+    }
+
     public function test_independent_rate_does_not_require_base_rate_id()
     {
         $this->makeStatamicItemWithResrvAvailabilityField();

@@ -191,6 +191,9 @@ class RateCpController extends Controller
                     if ($baseRate->isShared()) {
                         $fail('A shared rate cannot be used as a base rate.');
                     }
+                    if ($baseRate->isRelative()) {
+                        $fail('A relative rate cannot be used as a base rate.');
+                    }
                 },
             ],
             'modifier_type' => ['nullable', 'required_if:pricing_type,relative', Rule::in(['percent', 'fixed'])],

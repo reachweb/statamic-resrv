@@ -347,7 +347,11 @@ class Availability extends Model implements AvailabilityContract
 
         if ($this->rateId) {
             $rate = $this->getRate();
-            if ($rate && ! $this->ratePassesRestrictions($rate)) {
+            if (! $rate) {
+                return new AvailabilityItemResource($availability, $request);
+            }
+            $rate->loadMissing('entries');
+            if (! $rate->appliesToEntry($statamic_id) || ! $this->ratePassesRestrictions($rate)) {
                 return new AvailabilityItemResource($availability, $request);
             }
         }
@@ -579,7 +583,19 @@ class Availability extends Model implements AvailabilityContract
 
     public function getAvailabilityCalendar(string $id, ?string $rateId): array
     {
-        $rate = $rateId ? Rate::withoutGlobalScopes()->find((int) $rateId) : null;
+        $rate = $rateId ? Rate::find((int) $rateId) : null;
+
+        if ($rateId && ! $rate) {
+            return [];
+        }
+
+        if ($rate) {
+            $rate->loadMissing('entries');
+            if (! $rate->published || ! $rate->appliesToEntry($id)) {
+                return [];
+            }
+        }
+
         $resolvedRateId = $rate ? (($rate->base_rate_id && $rate->isShared()) ? (int) $rate->base_rate_id : $rate->id) : null;
 
         $results = $this->where('statamic_id', $id)
@@ -680,6 +696,17 @@ class Availability extends Model implements AvailabilityContract
 
     public function getAvailableDatesFromDate(string $id, string $dateStart, int $quantity = 1, ?int $rateId = null, bool $showAllRates = false, bool $groupByDate = false): array
     {
+        if ($rateId && ! $showAllRates) {
+            $rateCheck = Rate::find($rateId);
+            if (! $rateCheck) {
+                return [];
+            }
+            $rateCheck->loadMissing('entries');
+            if (! $rateCheck->published || ! $rateCheck->appliesToEntry($id)) {
+                return [];
+            }
+        }
+
         $resolvedRateId = ($rateId && ! $showAllRates)
             ? AvailabilityRepository::resolveBaseRateId($rateId)
             : null;

@@ -798,4 +798,253 @@ class RateAvailabilityTest extends TestCase
         $this->assertTrue($result['message']['status']);
         $this->assertEquals($data['rate']->id, $result['data']['rate_id']);
     }
+
+    public function test_single_item_rejects_shared_rate_not_assigned_to_entry()
+    {
+        $entryA = $this->makeStatamicItemWithResrvAvailabilityField();
+        $entryB = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'apply_to_all' => true,
+        ]);
+
+        // Shared rate assigned only to entry B — shares base rate's inventory
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-rate',
+            'base_rate_id' => $baseRate->id,
+            'apply_to_all' => false,
+        ]);
+        $sharedRate->entries()->attach($entryB->id());
+
+        $startDate = now()->startOfDay();
+
+        // Entry A has availability under the base rate
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entryA->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // Query entry A with the shared rate (only assigned to entry B) — should be rejected
+        // Without the guard, the shared rate resolves to base_rate_id and leaks entry A's availability
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $sharedRate->id,
+        ], $entryA->id());
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_single_item_accepts_apply_to_all_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'global-rate',
+            'apply_to_all' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $rate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $rate->id,
+        ], $entry->id());
+
+        $this->assertTrue($result['message']['status']);
+    }
+
+    public function test_single_item_rejects_deleted_shared_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'apply_to_all' => true,
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'deleted-shared',
+            'base_rate_id' => $baseRate->id,
+            'apply_to_all' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // Soft-delete the shared rate
+        $sharedRate->delete();
+
+        // Should be rejected — deleted rate must not resolve through to base inventory
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $sharedRate->id,
+        ], $entry->id());
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_calendar_rejects_rate_not_assigned_to_entry()
+    {
+        $entryA = $this->makeStatamicItemWithResrvAvailabilityField();
+        $entryB = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'apply_to_all' => true,
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-rate',
+            'base_rate_id' => $baseRate->id,
+            'apply_to_all' => false,
+        ]);
+        $sharedRate->entries()->attach($entryB->id());
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entryA->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // Calendar for entry A with shared rate assigned only to entry B — should return empty
+        $result = (new Availability)->getAvailabilityCalendar($entryA->id(), (string) $sharedRate->id);
+
+        $this->assertEmpty($result);
+    }
+
+    public function test_available_dates_rejects_rate_not_assigned_to_entry()
+    {
+        $entryA = $this->makeStatamicItemWithResrvAvailabilityField();
+        $entryB = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'apply_to_all' => true,
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-rate',
+            'base_rate_id' => $baseRate->id,
+            'apply_to_all' => false,
+        ]);
+        $sharedRate->entries()->attach($entryB->id());
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entryA->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // Available dates for entry A with shared rate assigned only to entry B — should return empty
+        $result = (new Availability)->getAvailableDatesFromDate(
+            $entryA->id(),
+            $startDate->toDateString(),
+            1,
+            $sharedRate->id
+        );
+
+        $this->assertEmpty($result);
+    }
+
+    public function test_calendar_rejects_unpublished_rate()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            days: 2,
+            rateAttributes: [
+                'slug' => 'unpublished-rate',
+                'published' => false,
+            ],
+        );
+
+        $result = (new Availability)->getAvailabilityCalendar($data['entry']->id(), (string) $data['rate']->id);
+
+        $this->assertEmpty($result);
+    }
+
+    public function test_available_dates_rejects_unpublished_rate()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            days: 2,
+            rateAttributes: [
+                'slug' => 'unpublished-rate',
+                'published' => false,
+            ],
+        );
+
+        $result = (new Availability)->getAvailableDatesFromDate(
+            $data['entry']->id(),
+            now()->startOfDay()->toDateString(),
+            1,
+            $data['rate']->id
+        );
+
+        $this->assertEmpty($result);
+    }
 }
