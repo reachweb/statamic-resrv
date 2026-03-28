@@ -100,6 +100,6 @@ class FixedPricing extends Model
         $daysLeft = $days - $maxDaysSet;
         $daysLeftPrice = $extraDaysPrice->multiply($daysLeft);
 
-        return $extraDaysPrice->add($maxDaysPrice);
+        return $daysLeftPrice->add($maxDaysPrice);
     }
 }

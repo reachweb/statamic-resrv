@@ -14,6 +14,8 @@ class ResrvFixedPricing extends Fieldtype
         return Fixed::entry($this->field->parent()->id())
             ->orderBy('days')
             ->get()
+            ->unique(fn ($row) => $row->days.'|'.$row->price)
+            ->values()
             ->toArray();
     }
 
