@@ -35,6 +35,10 @@ class Resrv extends Tags
             ->where('status', ReservationStatus::CONFIRMED)
             ->firstOrFail();
 
+        if (! $reservation->customer) {
+            abort(404);
+        }
+
         $expectedHash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));
 
         if (! hash_equals($expectedHash, request()->get('hash'))) {

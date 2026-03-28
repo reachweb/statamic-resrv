@@ -49,6 +49,13 @@ trait HandlesPricing
         // If FixedPricing exists, replace the price
         if ($fixedPrice = FixedPricing::getFixedPricing($id, $this->duration, $this->rateId)) {
             $reservationPrice = $fixedPrice;
+        } elseif ($this->rateId) {
+            $rate = $this->getRate();
+            if ($rate?->isRelative() && $rate->base_rate_id) {
+                if ($baseFixedPrice = FixedPricing::getFixedPricing($id, $this->duration, $rate->base_rate_id)) {
+                    $reservationPrice = $rate->calculateTotalPrice($baseFixedPrice, $this->duration);
+                }
+            }
         }
 
         // Apply dynamic pricing

@@ -150,11 +150,11 @@ class RateAvailabilityTest extends TestCase
         return [$entry, $baseRate, $relativeRate];
     }
 
-    protected function getPricingForRate(Rate $rate, $entry): string
+    protected function getPricingForRate(Rate $rate, $entry, int $days = 2): string
     {
         return (new Availability)->getPricing([
             'date_start' => now()->startOfDay()->toDateString(),
-            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'date_end' => now()->startOfDay()->addDays($days)->toDateString(),
             'quantity' => 1,
             'rate_id' => $rate->id,
         ], $entry->id(), true);
@@ -328,6 +328,158 @@ class RateAvailabilityTest extends TestCase
         ], $entry->id(), true);
 
         $this->assertEquals('400.00', $priceRate2);
+    }
+
+    public function test_relative_rate_inherits_base_rate_fixed_pricing_percent()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'standard',
+        ]);
+
+        $relativeRate = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 20,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        // Create availability for the relative rate (3 days at $100/day)
+        Availability::factory()
+            ->count(3)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+                ['date' => $startDate->copy()->addDays(2)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $relativeRate->id,
+                'price' => 100,
+                'available' => 2,
+            ]);
+
+        // Fixed pricing on the BASE rate only: 3-day stay = $250
+        FixedPricing::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'days' => 3,
+            'price' => '250.00',
+        ]);
+
+        // Without fixed pricing inheritance, the relative rate would sum daily:
+        // 3 * (100 * 0.80) = 240
+        // With inheritance: 250 * 0.80 = 200
+        $price = $this->getPricingForRate($relativeRate, $entry, days: 3);
+
+        $this->assertEquals('200.00', $price);
+    }
+
+    public function test_relative_rate_inherits_base_rate_fixed_pricing_flat()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'standard',
+        ]);
+
+        $relativeRate = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'fixed',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(3)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+                ['date' => $startDate->copy()->addDays(2)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $relativeRate->id,
+                'price' => 100,
+                'available' => 2,
+            ]);
+
+        // Fixed pricing on the BASE rate: 3-day stay = $250
+        FixedPricing::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'days' => 3,
+            'price' => '250.00',
+        ]);
+
+        // Flat decrease of $10/day over 3 days: 250 - (10 * 3) = 220
+        $price = $this->getPricingForRate($relativeRate, $entry, days: 3);
+
+        $this->assertEquals('220.00', $price);
+    }
+
+    public function test_relative_rate_own_fixed_pricing_takes_precedence_over_base()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'standard',
+        ]);
+
+        $relativeRate = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 20,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(3)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+                ['date' => $startDate->copy()->addDays(2)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $relativeRate->id,
+                'price' => 100,
+                'available' => 2,
+            ]);
+
+        // Fixed pricing on base rate
+        FixedPricing::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'days' => 3,
+            'price' => '250.00',
+        ]);
+
+        // Fixed pricing on the relative rate itself (takes precedence)
+        FixedPricing::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $relativeRate->id,
+            'days' => 3,
+            'price' => '180.00',
+        ]);
+
+        // Should use the relative rate's own fixed price, not the base rate's
+        $price = $this->getPricingForRate($relativeRate, $entry, days: 3);
+
+        $this->assertEquals('180.00', $price);
     }
 
     public function test_all_rates_query_returns_multiple_rates()

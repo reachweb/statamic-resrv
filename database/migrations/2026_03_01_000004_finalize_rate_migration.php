@@ -44,6 +44,42 @@ return new class extends Migration
             $table->unique(['statamic_id', 'days', 'rate_id']);
         });
 
+        // Duplicate fixed pricing across all rates per collection.
+        // Migration 3 assigned each row to the first rate; now that the unique constraint
+        // includes rate_id, we can safely clone them for the remaining rates.
+        $fixedRows = DB::table('resrv_fixed_pricing as fp')
+            ->join('resrv_entries as e', 'fp.statamic_id', '=', 'e.item_id')
+            ->select('fp.statamic_id', 'fp.days', 'fp.price', 'fp.rate_id', 'e.collection')
+            ->get();
+
+        foreach ($fixedRows->groupBy('collection') as $collection => $rows) {
+            $allRates = DB::table('resrv_rates')
+                ->where('collection', $collection)
+                ->orderBy('order')
+                ->get();
+
+            if ($allRates->count() <= 1) {
+                continue;
+            }
+
+            $assignedRateIds = $rows->pluck('rate_id')->unique();
+
+            foreach ($allRates as $rate) {
+                if ($assignedRateIds->contains($rate->id)) {
+                    continue;
+                }
+
+                foreach ($rows->unique(fn ($r) => $r->statamic_id.'|'.$r->days) as $row) {
+                    DB::table('resrv_fixed_pricing')->insert([
+                        'statamic_id' => $row->statamic_id,
+                        'days' => $row->days,
+                        'price' => $row->price,
+                        'rate_id' => $rate->id,
+                    ]);
+                }
+            }
+        }
+
         Schema::dropIfExists('resrv_advanced_availabilities');
     }
 

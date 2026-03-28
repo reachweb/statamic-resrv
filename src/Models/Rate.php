@@ -244,6 +244,32 @@ class Rate extends Model
             : $price->subtract($modifier);
     }
 
+    /**
+     * Apply the relative modifier to a total price (e.g. inherited fixed pricing).
+     * For percentage modifiers, applies directly. For flat modifiers, scales by duration
+     * since the flat amount represents a per-day adjustment.
+     */
+    public function calculateTotalPrice(PriceClass $totalPrice, int $duration): PriceClass
+    {
+        if (! $this->isRelative()) {
+            return $totalPrice;
+        }
+
+        $price = Price::create($totalPrice->format());
+
+        if ($this->modifier_type === 'percent') {
+            return $this->modifier_operation === 'increase'
+                ? $price->increasePercent($this->modifier_amount)
+                : $price->decreasePercent($this->modifier_amount);
+        }
+
+        $modifier = Price::create($this->modifier_amount)->multiply($duration);
+
+        return $this->modifier_operation === 'increase'
+            ? $price->add($modifier)
+            : $price->subtract($modifier);
+    }
+
     public function scopePublished(Builder $query): void
     {
         $query->where('published', true);

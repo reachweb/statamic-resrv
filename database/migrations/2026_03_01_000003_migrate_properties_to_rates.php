@@ -79,6 +79,8 @@ return new class extends Migration
 
                 // Fixed pricing was not property-scoped in the old schema (no property column
                 // on resrv_fixed_pricing), so we assign it to the default/first rate per collection.
+                // The finalize migration will duplicate it across all rates after the unique
+                // constraint changes from (statamic_id, days) to (statamic_id, days, rate_id).
                 $defaultRate = DB::table('resrv_rates')
                     ->where('collection', $collection)
                     ->orderBy('order')
