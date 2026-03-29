@@ -316,7 +316,7 @@ class DynamicPricing extends Model
 
         foreach ($items as $item) {
             $pricing = $data->get($item->dynamic_pricing_id);
-            if ($this->expired($pricing)) {
+            if (! $pricing || $this->expired($pricing)) {
                 continue;
             }
             if ($this->hasCoupon($pricing) && $this->couponNotApplied($pricing)) {

@@ -6,7 +6,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
 use Reach\StatamicResrv\Models\Reservation;
 
-class ReservationConfirmed extends Mailable
+class ReservationAbandoned extends Mailable
 {
     use Queueable, SerializesModels;
 
@@ -15,15 +15,11 @@ class ReservationConfirmed extends Mailable
     public function __construct(Reservation $reservation)
     {
         $this->reservation = $reservation;
+        $this->subject(__("We noticed you didn't complete your reservation"));
     }
 
-    /**
-     * Build the message.
-     *
-     * @return $this
-     */
     public function build()
     {
-        return $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.confirmed'));
+        return $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.abandoned'));
     }
 }

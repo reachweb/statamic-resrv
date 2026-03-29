@@ -53,6 +53,9 @@ class ReservationResource extends ResourceCollection
                     'extras' => $reservation->extras,
                     'options' => $reservation->options,
                     'rate' => $reservation->getRateLabel(),
+                    'payment_gateway' => $reservation->payment_gateway
+                        ? app(\Reach\StatamicResrv\Http\Payment\PaymentGatewayManager::class)->label($reservation->payment_gateway)
+                        : null,
                     'created_at' => $this->formatDate($reservation->created_at),
                     'updated_at' => $this->formatDate($reservation->updated_at),
                 ];

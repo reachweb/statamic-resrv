@@ -362,7 +362,7 @@ class AvailabilitySearchTest extends TestCase
 
         $calendar = $component->effects['returns'][0];
 
-        $key = $this->date->format('Y-m-d').' 00:00:00';
+        $key = $this->date->format('Y-m-d');
 
         $this->assertIsArray($calendar);
         $this->assertArrayHasKey($key, $calendar);
@@ -388,7 +388,7 @@ class AvailabilitySearchTest extends TestCase
 
         $calendar = $component->effects['returns'][0];
 
-        $key = $this->date->format('Y-m-d').' 00:00:00';
+        $key = $this->date->format('Y-m-d');
 
         $this->assertIsArray($calendar);
         $this->assertArrayHasKey($key, $calendar);
@@ -476,7 +476,7 @@ class AvailabilitySearchTest extends TestCase
             ->call('availabilityCalendar');
 
         $calendar = $component->effects['returns'][0];
-        $key = today()->format('Y-m-d').' 00:00:00';
+        $key = today()->format('Y-m-d');
 
         $this->assertIsArray($calendar);
         $this->assertArrayHasKey($key, $calendar);
@@ -484,5 +484,22 @@ class AvailabilitySearchTest extends TestCase
         // Note: The entry already has availability at price 50, so 25 should be returned
         $this->assertEquals(25, $calendar[$key]['price']);
         $this->assertEquals($cheapRate->id, $calendar[$key]['rate_id']);
+    }
+
+    public function test_availability_calendar_keys_are_date_only_format()
+    {
+        $component = Livewire::test(AvailabilitySearch::class, [
+            'entry' => $this->entries->first()->id(),
+            'showAvailabilityOnCalendar' => true,
+        ])
+            ->call('availabilityCalendar');
+
+        $calendar = $component->effects['returns'][0];
+
+        $this->assertNotEmpty($calendar);
+
+        foreach (array_keys($calendar) as $key) {
+            $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $key, "Calendar key '{$key}' should be in Y-m-d format without time component");
+        }
     }
 }

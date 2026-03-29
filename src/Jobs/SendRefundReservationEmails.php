@@ -7,9 +7,10 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Mail;
+use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
 
 class SendRefundReservationEmails implements ShouldQueue
 {
@@ -29,12 +30,13 @@ class SendRefundReservationEmails implements ShouldQueue
      */
     public function handle()
     {
-        // Customer email
-        Mail::to($this->reservation->customer->email)->send(new ReservationRefunded($this->reservation));
-        // Admin emails if set
-        if (config('resrv-config.admin_email') != false) {
-            $admin_emails = explode(',', config('resrv-config.admin_email'));
-            Mail::to($admin_emails)->send(new ReservationRefunded($this->reservation));
-        }
+        /** @var ReservationEmailDispatcher $dispatcher */
+        $dispatcher = app(ReservationEmailDispatcher::class);
+
+        $dispatcher->send(
+            $this->reservation,
+            ReservationEmailEvent::CustomerRefunded,
+            new ReservationRefunded($this->reservation),
+        );
     }
 }

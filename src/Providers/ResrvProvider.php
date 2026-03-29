@@ -27,7 +27,7 @@ use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
 use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
@@ -75,6 +75,7 @@ class ResrvProvider extends AddonServiceProvider
         InstallResrv::class,
         ImportEntries::class,
         UpgradeToRates::class,
+        \Reach\StatamicResrv\Console\Commands\SendAbandonedReservationEmails::class,
     ];
 
     protected $dictionaries = [
@@ -157,6 +158,13 @@ class ResrvProvider extends AddonServiceProvider
         __DIR__.'/../../resources/frontend' => 'frontend',
     ];
 
+    public function register(): void
+    {
+        parent::register();
+
+        $this->app->singleton(PaymentGatewayManager::class, fn () => new PaymentGatewayManager);
+    }
+
     public function boot(): void
     {
         parent::boot();
@@ -196,7 +204,7 @@ class ResrvProvider extends AddonServiceProvider
         $this->app->bind(
             PaymentInterface::class,
             app()->environment('testing')
-                ? FakePaymentGateway::class
+                ? \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class
                 : config('resrv-config.payment_gateway')
         );
 

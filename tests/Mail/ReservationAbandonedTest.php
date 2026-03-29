@@ -1,0 +1,263 @@
+<?php
+
+namespace Reach\StatamicResrv\Tests\Mail;
+
+use Carbon\Carbon;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Mail;
+use Reach\StatamicResrv\Mail\ReservationAbandoned;
+use Reach\StatamicResrv\Models\Customer;
+use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\TestCase;
+
+class ReservationAbandonedTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_command_sends_email_for_expired_reservations_with_customer()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'updated_at' => Carbon::yesterday(),
+        ])->withCustomer()->create();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('1 abandoned reservation email(s)')
+            ->assertSuccessful();
+
+        Mail::assertSent(ReservationAbandoned::class, function ($mail) use ($reservation) {
+            return $mail->hasTo($reservation->customer->email);
+        });
+    }
+
+    public function test_command_sends_one_email_per_unique_customer()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+        $customer = Customer::factory()->create();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'customer_id' => $customer->id,
+            'updated_at' => Carbon::yesterday(),
+        ])->count(3)->create();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('1 abandoned reservation email(s)')
+            ->assertSuccessful();
+
+        Mail::assertSent(ReservationAbandoned::class, 1);
+    }
+
+    public function test_command_does_nothing_when_disabled()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', false);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'updated_at' => Carbon::yesterday(),
+        ])->withCustomer()->create();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('Abandoned reservation emails are disabled')
+            ->assertSuccessful();
+
+        Mail::assertNotSent(ReservationAbandoned::class);
+    }
+
+    public function test_command_ignores_reservations_without_customer()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'updated_at' => Carbon::yesterday(),
+        ])->create();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('No abandoned reservations found')
+            ->assertSuccessful();
+
+        Mail::assertNotSent(ReservationAbandoned::class);
+    }
+
+    public function test_command_respects_delay_days_config()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+        Config::set('resrv-config.abandoned_email_delay_days', 3);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+
+        // This one expired yesterday - should NOT be picked up with delay=3
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'updated_at' => Carbon::yesterday(),
+        ])->withCustomer()->create();
+
+        // This one expired 3 days ago - should be picked up
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'updated_at' => Carbon::now()->subDays(3),
+        ])->withCustomer()->create();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('1 abandoned reservation email(s)')
+            ->assertSuccessful();
+
+        Mail::assertSent(ReservationAbandoned::class, function ($mail) use ($reservation) {
+            return $mail->hasTo($reservation->customer->email);
+        });
+    }
+
+    public function test_command_ignores_non_expired_reservations()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'pending',
+            'updated_at' => Carbon::yesterday(),
+        ])->withCustomer()->create();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'updated_at' => Carbon::yesterday(),
+        ])->withCustomer()->create();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('No abandoned reservations found')
+            ->assertSuccessful();
+
+        Mail::assertNotSent(ReservationAbandoned::class);
+    }
+
+    public function test_command_sets_abandoned_email_sent_at_on_all_customer_reservations()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+        $customer = Customer::factory()->create();
+
+        $reservations = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'customer_id' => $customer->id,
+            'updated_at' => Carbon::yesterday(),
+        ])->count(3)->create();
+
+        $this->artisan('resrv:send-abandoned-emails')->assertSuccessful();
+
+        $reservations->each(function ($reservation) {
+            $reservation->refresh();
+            $this->assertNotNull($reservation->abandoned_email_sent_at);
+        });
+
+        Mail::assertSent(ReservationAbandoned::class, 1);
+    }
+
+    public function test_command_does_not_resend_to_already_notified_reservations()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'updated_at' => Carbon::yesterday(),
+            'abandoned_email_sent_at' => Carbon::now(),
+        ])->withCustomer()->create();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('No abandoned reservations found')
+            ->assertSuccessful();
+
+        Mail::assertNotSent(ReservationAbandoned::class);
+    }
+
+    public function test_command_does_not_resend_on_second_run()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+        $customer = Customer::factory()->create();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'customer_id' => $customer->id,
+            'updated_at' => Carbon::yesterday(),
+        ])->count(3)->create();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('1 abandoned reservation email(s)')
+            ->assertSuccessful();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('No abandoned reservations found')
+            ->assertSuccessful();
+
+        Mail::assertSent(ReservationAbandoned::class, 1);
+    }
+
+    public function test_command_picks_up_older_missed_reservations()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+
+        // Expired 5 days ago — would have been missed by exact date match
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'updated_at' => Carbon::now()->subDays(5),
+        ])->withCustomer()->create();
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('1 abandoned reservation email(s)')
+            ->assertSuccessful();
+
+        Mail::assertSent(ReservationAbandoned::class, function ($mail) use ($reservation) {
+            return $mail->hasTo($reservation->customer->email);
+        });
+    }
+}

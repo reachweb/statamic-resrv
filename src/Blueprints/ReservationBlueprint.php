@@ -112,6 +112,14 @@ class ReservationBlueprint
                             ],
                         ],
                         [
+                            'handle' => 'payment_gateway',
+                            'field' => [
+                                'type' => 'text',
+                                'listable' => true,
+                                'display' => 'Payment method',
+                            ],
+                        ],
+                        [
                             'handle' => 'created_at',
                             'field' => [
                                 'type' => 'date',

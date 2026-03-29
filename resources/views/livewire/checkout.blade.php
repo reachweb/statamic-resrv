@@ -36,7 +36,16 @@
                     <livewire:checkout-form :reservation="$this->reservation" :affiliateCanSkipPayment="$this->affiliateCanSkipPayment()" />
                 @endif
                 @if ($step === 3)
-                    <livewire:checkout-payment :clientSecret="$clientSecret" :publicKey="$publicKey" :amount="$this->reservation->fresh()->payment->format()" />
+                    @if (count($availableGateways) > 1 && empty($selectedGateway))
+                        <x-resrv::checkout-gateway-picker :gateways="$availableGateways" />
+                    @else
+                        <livewire:checkout-payment
+                            :clientSecret="$clientSecret"
+                            :publicKey="$publicKey"
+                            :amount="$this->reservation->fresh()->payment->format()"
+                            :paymentView="$paymentView"
+                        />
+                    @endif
                 @endif
                 </div>
         </div>

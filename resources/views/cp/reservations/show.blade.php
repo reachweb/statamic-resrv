@@ -245,6 +245,12 @@
             <h2 class="text-base">{{ __("Payment information") }}</h2>
         </div>
         <div class="card px-6 py-4 mb-6">
+            @if ($reservation->payment_gateway)
+            <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
+                <div>{{ __("Payment method") }}</div>
+                <div class="font-bold">{{ app(\Reach\StatamicResrv\Http\Payment\PaymentGatewayManager::class)->label($reservation->payment_gateway) }}</div>
+            </div>
+            @endif
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
                 <div>{{ __("Payment") }}</div>
                 <div class="font-bold">

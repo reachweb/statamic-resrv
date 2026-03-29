@@ -23,7 +23,7 @@ class Resrv extends Tags
     public function reservationFromUri()
     {
         $validator = Validator::make(request()->all(), [
-            'ref' => 'required|string|max:255',
+            'ref' => 'required|string|max:10',
             'hash' => 'required|string|size:64',
         ]);
 
@@ -38,6 +38,7 @@ class Resrv extends Tags
         if (! $reservation->customer) {
             abort(404);
         }
+
 
         $expectedHash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));
 

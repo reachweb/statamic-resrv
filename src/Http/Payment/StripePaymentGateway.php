@@ -21,6 +21,21 @@ use Stripe\Webhook;
 
 class StripePaymentGateway implements PaymentInterface
 {
+    public function name(): string
+    {
+        return 'stripe';
+    }
+
+    public function label(): string
+    {
+        return 'Credit Card';
+    }
+
+    public function paymentView(): string
+    {
+        return 'statamic-resrv::livewire.checkout-payment';
+    }
+
     public function paymentIntent($payment, Reservation $reservation, $data)
     {
         Stripe::setApiKey($this->getSecretKey($reservation));
@@ -101,6 +116,11 @@ class StripePaymentGateway implements PaymentInterface
     public function supportsWebhooks(): bool
     {
         return true;
+    }
+
+    public function supportsManualConfirmation(): bool
+    {
+        return false;
     }
 
     public function redirectsForPayment(): bool
