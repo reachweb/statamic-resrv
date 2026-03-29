@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 use Reach\StatamicResrv\Rules\ResrvAvailabilityExists;
 
 class AvailabilityCpRequest extends FormRequest
@@ -16,7 +17,7 @@ class AvailabilityCpRequest extends FormRequest
             'price' => ['nullable', 'numeric', 'required_if:available,null', new ResrvAvailabilityExists],
             'available' => ['nullable', 'numeric', 'required_if:price,null', new ResrvAvailabilityExists],
             'rate_ids' => ['sometimes', 'array'],
-            'rate_ids.*' => ['integer'],
+            'rate_ids.*' => ['integer', Rule::exists('resrv_rates', 'id')->whereNull('deleted_at')],
             'onlyDays' => ['sometimes', 'array'],
             'onlyDays.*' => ['integer', 'between:0,6'],
         ];
