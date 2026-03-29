@@ -111,11 +111,11 @@ return new class extends Migration
         });
 
         Schema::table('resrv_reservations', function (Blueprint $table) {
-            $table->string('property')->default('none');
+            $table->string('property')->nullable();
         });
 
         Schema::table('resrv_child_reservations', function (Blueprint $table) {
-            $table->string('property')->default('none');
+            $table->string('property')->nullable();
         });
 
         Schema::table('resrv_fixed_pricing', function (Blueprint $table) {

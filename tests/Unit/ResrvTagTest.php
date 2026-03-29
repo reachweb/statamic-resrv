@@ -80,6 +80,32 @@ class ResrvTagTest extends TestCase
         $this->assertEquals('TEST02', $reservation->reference);
     }
 
+    public function test_reservation_from_uri_accepts_reference_longer_than_10_chars()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'long@example.com',
+        ]);
+
+        $longRef = 'ABCDEFGHIJKLMNO';
+
+        Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CONFIRMED,
+            'reference' => $longRef,
+            'customer_id' => $customer->id,
+        ]);
+
+        $expectedHash = hash_hmac('sha256', 'long@example.com', config('app.key'));
+
+        request()->merge([
+            'ref' => $longRef,
+            'hash' => $expectedHash,
+        ]);
+
+        $reservation = $this->tag->reservationFromUri();
+        $this->assertEquals($longRef, $reservation->reference);
+    }
+
     public function test_cutoff_throws_exception_when_no_entry_id()
     {
         $this->tag->setParameters([]);

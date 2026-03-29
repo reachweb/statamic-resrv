@@ -293,6 +293,75 @@ class RateMigrationTest extends TestCase
         $this->assertNotNull($rate->updated_at);
     }
 
+    public function test_apply_to_all_false_when_properties_differ_across_entries(): void
+    {
+        $this->insertEntry('entry-aa', 'hotel');
+        $this->insertEntry('entry-bb', 'hotel');
+        $this->insertAvailability('entry-aa', 'double-room', 100, 2, now()->toDateString());
+        $this->insertAvailability('entry-aa', 'single-room', 75, 3, now()->toDateString());
+        $this->insertAvailability('entry-bb', 'double-room', 120, 1, now()->toDateString());
+
+        $this->runDataMigration();
+
+        $doubleRoom = DB::table('resrv_rates')
+            ->where('collection', 'hotel')
+            ->where('slug', 'double-room')
+            ->first();
+
+        $singleRoom = DB::table('resrv_rates')
+            ->where('collection', 'hotel')
+            ->where('slug', 'single-room')
+            ->first();
+
+        // double-room: both entries have it → apply_to_all = true
+        $this->assertTrue((bool) $doubleRoom->apply_to_all);
+        $this->assertEquals(0, DB::table('resrv_rate_entries')->where('rate_id', $doubleRoom->id)->count());
+
+        // single-room: only entry-aa has it → apply_to_all = false with pivot
+        $this->assertFalse((bool) $singleRoom->apply_to_all);
+        $this->assertEquals(1, DB::table('resrv_rate_entries')->where('rate_id', $singleRoom->id)->count());
+        $this->assertDatabaseHas('resrv_rate_entries', [
+            'rate_id' => $singleRoom->id,
+            'statamic_id' => 'entry-aa',
+        ]);
+    }
+
+    public function test_null_property_reservations_get_default_rate(): void
+    {
+        $this->insertEntry('entry-np1');
+        $this->insertAvailability('entry-np1', 'none', 50, 1, now()->toDateString());
+        $this->insertReservation('entry-np1');
+
+        $this->runDataMigration();
+
+        $defaultRate = DB::table('resrv_rates')
+            ->where('collection', 'rooms')
+            ->where('slug', 'default')
+            ->first();
+
+        $this->assertNotNull($defaultRate);
+        $this->assertEquals(
+            1,
+            DB::table('resrv_reservations')
+                ->where('rate_id', $defaultRate->id)
+                ->count()
+        );
+        $this->assertEquals(0, DB::table('resrv_reservations')->whereNull('rate_id')->count());
+    }
+
+    public function test_null_property_child_reservations_get_default_rate(): void
+    {
+        $this->insertEntry('entry-np2');
+        $this->insertAvailability('entry-np2', 'none', 50, 1, now()->toDateString());
+        $reservationId = $this->insertReservation('entry-np2');
+        $this->insertChildReservation($reservationId);
+
+        $this->runDataMigration();
+
+        $this->assertEquals(0, DB::table('resrv_reservations')->whereNull('rate_id')->count());
+        $this->assertEquals(0, DB::table('resrv_child_reservations')->whereNull('rate_id')->count());
+    }
+
     public function test_finalize_migration_handles_orphaned_availability_rows(): void
     {
         // Insert availability with no matching resrv_entries row (orphan)
@@ -425,7 +494,7 @@ class RateMigrationTest extends TestCase
         ]);
     }
 
-    protected function insertReservation(string $itemId, string $property): int
+    protected function insertReservation(string $itemId, ?string $property = null): int
     {
         return DB::table('resrv_reservations')->insertGetId([
             'status' => 'confirmed',
@@ -445,7 +514,7 @@ class RateMigrationTest extends TestCase
         ]);
     }
 
-    protected function insertChildReservation(int $reservationId, string $property): int
+    protected function insertChildReservation(int $reservationId, ?string $property = null): int
     {
         return DB::table('resrv_child_reservations')->insertGetId([
             'reservation_id' => $reservationId,

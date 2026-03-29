@@ -20,9 +20,18 @@ return new class extends Migration
                 $propertySlugs = $records->pluck('property')->unique()->values();
                 $order = 0;
 
+                $allCollectionEntryIds = DB::table('resrv_entries')
+                    ->where('collection', $collection)
+                    ->pluck('item_id');
+
                 foreach ($propertySlugs as $slug) {
                     $rateSlug = $slug === 'none' ? 'default' : $slug;
                     $rateTitle = $slug === 'none' ? 'Default' : $slug;
+
+                    $statamicIds = $records->where('property', $slug)->pluck('statamic_id')->unique();
+
+                    $applyToAll = $allCollectionEntryIds->isNotEmpty()
+                        && $allCollectionEntryIds->diff($statamicIds)->isEmpty();
 
                     $existingRate = DB::table('resrv_rates')
                         ->where('collection', $collection)
@@ -34,7 +43,7 @@ return new class extends Migration
                     } else {
                         $rateId = DB::table('resrv_rates')->insertGetId([
                             'collection' => $collection,
-                            'apply_to_all' => true,
+                            'apply_to_all' => $applyToAll,
                             'title' => $rateTitle,
                             'slug' => $rateSlug,
                             'pricing_type' => 'independent',
@@ -47,8 +56,20 @@ return new class extends Migration
                         ]);
                     }
 
-                    // Get all statamic_ids for this collection + property
-                    $statamicIds = $records->where('property', $slug)->pluck('statamic_id')->unique();
+                    if (! $applyToAll) {
+                        $existingPivotIds = DB::table('resrv_rate_entries')
+                            ->where('rate_id', $rateId)
+                            ->pluck('statamic_id');
+
+                        foreach ($statamicIds->diff($existingPivotIds) as $statamicId) {
+                            DB::table('resrv_rate_entries')->insert([
+                                'rate_id' => $rateId,
+                                'statamic_id' => $statamicId,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                        }
+                    }
 
                     foreach ($statamicIds as $statamicId) {
                         DB::table('resrv_availabilities')
@@ -112,9 +133,18 @@ return new class extends Migration
             foreach ($reservationProperties as $collection => $records) {
                 $propertySlugs = $records->pluck('property')->unique()->values();
 
+                $allCollectionEntryIds = DB::table('resrv_entries')
+                    ->where('collection', $collection)
+                    ->pluck('item_id');
+
                 foreach ($propertySlugs as $slug) {
                     $rateSlug = $slug === 'none' ? 'default' : $slug;
                     $rateTitle = $slug === 'none' ? 'Default' : $slug;
+
+                    $statamicIds = $records->where('property', $slug)->pluck('statamic_id')->unique();
+
+                    $applyToAll = $allCollectionEntryIds->isNotEmpty()
+                        && $allCollectionEntryIds->diff($statamicIds)->isEmpty();
 
                     $existingRate = DB::table('resrv_rates')
                         ->where('collection', $collection)
@@ -130,7 +160,7 @@ return new class extends Migration
 
                         $rateId = DB::table('resrv_rates')->insertGetId([
                             'collection' => $collection,
-                            'apply_to_all' => true,
+                            'apply_to_all' => $applyToAll,
                             'title' => $rateTitle,
                             'slug' => $rateSlug,
                             'pricing_type' => 'independent',
@@ -143,7 +173,20 @@ return new class extends Migration
                         ]);
                     }
 
-                    $statamicIds = $records->where('property', $slug)->pluck('statamic_id')->unique();
+                    if (! $applyToAll) {
+                        $existingPivotIds = DB::table('resrv_rate_entries')
+                            ->where('rate_id', $rateId)
+                            ->pluck('statamic_id');
+
+                        foreach ($statamicIds->diff($existingPivotIds) as $statamicId) {
+                            DB::table('resrv_rate_entries')->insert([
+                                'rate_id' => $rateId,
+                                'statamic_id' => $statamicId,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                        }
+                    }
 
                     foreach ($statamicIds as $statamicId) {
                         DB::table('resrv_reservations')
@@ -162,6 +205,53 @@ return new class extends Migration
                             ->whereNull('rate_id')
                             ->update(['rate_id' => $rateId]);
                     }
+                }
+            }
+
+            // Third pass: handle reservations with null property (standard non-advanced bookings).
+            // In the old schema, standard reservations stored property as null while availability
+            // used 'none'. Assign these to the default rate for their collection.
+            $nullPropertyReservations = DB::table('resrv_reservations as r')
+                ->join('resrv_entries as e', 'r.item_id', '=', 'e.item_id')
+                ->select('r.item_id as statamic_id', 'e.collection')
+                ->whereNull('r.property')
+                ->whereNull('r.rate_id')
+                ->distinct()
+                ->get()
+                ->groupBy('collection');
+
+            foreach ($nullPropertyReservations as $collection => $records) {
+                $defaultRate = DB::table('resrv_rates')
+                    ->where('collection', $collection)
+                    ->where('slug', 'default')
+                    ->first()
+                    ?? DB::table('resrv_rates')
+                        ->where('collection', $collection)
+                        ->orderBy('order')
+                        ->first();
+
+                if (! $defaultRate) {
+                    continue;
+                }
+
+                $statamicIds = $records->pluck('statamic_id')->unique();
+
+                foreach ($statamicIds as $statamicId) {
+                    DB::table('resrv_reservations')
+                        ->where('item_id', $statamicId)
+                        ->whereNull('property')
+                        ->whereNull('rate_id')
+                        ->update(['rate_id' => $defaultRate->id]);
+
+                    DB::table('resrv_child_reservations')
+                        ->whereIn('reservation_id', function ($query) use ($statamicId) {
+                            $query->select('id')
+                                ->from('resrv_reservations')
+                                ->where('item_id', $statamicId);
+                        })
+                        ->whereNull('property')
+                        ->whereNull('rate_id')
+                        ->update(['rate_id' => $defaultRate->id]);
                 }
             }
         });
