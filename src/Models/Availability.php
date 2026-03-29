@@ -639,7 +639,7 @@ class Availability extends Model implements AvailabilityContract
         }
 
         return $results
-            ->groupBy(fn ($item) => Carbon::parse($item->date)->format('Y-m-d H:i:s'))
+            ->groupBy(fn ($item) => Carbon::parse($item->date)->format('Y-m-d'))
             ->map(fn ($item) => $item->sortBy(fn ($row) => (int) $row->price->raw())->firstWhere('available', '>', 0))
             ->toArray();
     }

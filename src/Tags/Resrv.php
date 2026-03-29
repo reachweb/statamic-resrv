@@ -23,7 +23,7 @@ class Resrv extends Tags
     public function reservationFromUri()
     {
         $validator = Validator::make(request()->all(), [
-            'ref' => 'required|string|max:10',
+            'ref' => 'required|string|max:255',
             'hash' => 'required|string|size:64',
         ]);
 

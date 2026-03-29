@@ -595,7 +595,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $this->assertNotEmpty($calendar);
 
-        $dateKey = $startDate->format('Y-m-d H:i:s');
+        $dateKey = $startDate->format('Y-m-d');
         $this->assertArrayHasKey($dateKey, $calendar);
 
         // Price should be 90.00 (100 - 10%), not the base rate's 100.00
@@ -634,7 +634,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $this->assertNotEmpty($calendar);
 
-        $dateKey = $startDate->format('Y-m-d H:i:s');
+        $dateKey = $startDate->format('Y-m-d');
         $this->assertArrayHasKey($dateKey, $calendar);
 
         // Price should be 75.00 (100 - 25%), not the raw 100.00
@@ -667,7 +667,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $sharedRate->id);
 
-        $dateKey = $startDate->format('Y-m-d H:i:s');
+        $dateKey = $startDate->format('Y-m-d');
         // Price unchanged, but rate_id should be the shared rate's ID
         $this->assertEquals('100.00', (string) $calendar[$dateKey]['price']);
         $this->assertEquals($sharedRate->id, $calendar[$dateKey]['rate_id']);
