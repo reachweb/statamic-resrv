@@ -7,6 +7,7 @@ use Edalzell\Forma\Forma;
 use Illuminate\Console\Application as Artisan;
 use Reach\StatamicResrv\Console\Commands\ImportEntries;
 use Reach\StatamicResrv\Console\Commands\InstallResrv;
+use Reach\StatamicResrv\Console\Commands\SendAbandonedReservationEmails;
 use Reach\StatamicResrv\Console\Commands\UpgradeToRates;
 use Reach\StatamicResrv\Dictionaries\CountryPhoneCodes;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
@@ -27,6 +28,7 @@ use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
@@ -45,6 +47,7 @@ use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Reach\StatamicResrv\Tags\Resrv;
 use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
@@ -75,7 +78,7 @@ class ResrvProvider extends AddonServiceProvider
         InstallResrv::class,
         ImportEntries::class,
         UpgradeToRates::class,
-        \Reach\StatamicResrv\Console\Commands\SendAbandonedReservationEmails::class,
+        SendAbandonedReservationEmails::class,
     ];
 
     protected $dictionaries = [
@@ -204,7 +207,7 @@ class ResrvProvider extends AddonServiceProvider
         $this->app->bind(
             PaymentInterface::class,
             app()->environment('testing')
-                ? \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class
+                ? FakePaymentGateway::class
                 : config('resrv-config.payment_gateway')
         );
 
@@ -215,6 +218,8 @@ class ResrvProvider extends AddonServiceProvider
         $this->bootPermissions();
 
         $this->bootHooks();
+
+        $this->app->terminating(fn () => Rate::resetEntryCollectionCache());
 
         // Register commands if running in console
         Artisan::starting(function ($artisan) {

@@ -39,7 +39,6 @@ class Resrv extends Tags
             abort(404);
         }
 
-
         $expectedHash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));
 
         if (! hash_equals($expectedHash, request()->get('hash'))) {

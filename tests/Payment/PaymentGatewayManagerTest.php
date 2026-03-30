@@ -5,7 +5,6 @@ namespace Reach\StatamicResrv\Tests\Payment;
 use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
-use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;

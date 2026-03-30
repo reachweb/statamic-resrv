@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Http\Requests\AvailabilityCpRequest;
 use Reach\StatamicResrv\Models\Availability;
@@ -18,7 +19,7 @@ class AvailabilityCpController extends Controller
     {
         $resolvedIdentifier = $identifier
             ? AvailabilityRepository::resolveBaseRateId((int) $identifier)
-            : null;
+            : $this->defaultRateIds($statamic_id)[0] ?? null;
 
         $results = Availability::where('statamic_id', $statamic_id)
             ->when($resolvedIdentifier, function (Builder $query, int $rateId) {
@@ -79,34 +80,36 @@ class AvailabilityCpController extends Controller
             $skipPrice = $rate && $rate->isRelative();
         }
 
-        $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
-        $onlyDays = $data['onlyDays'] ?? null;
+        DB::transaction(function () use ($data, $resolvedRateId, $skipPrice) {
+            $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
+            $onlyDays = $data['onlyDays'] ?? null;
 
-        foreach ($period as $day) {
-            if ($onlyDays && ! in_array($day->dayOfWeek, $onlyDays)) {
-                continue;
+            foreach ($period as $day) {
+                if ($onlyDays && ! in_array($day->dayOfWeek, $onlyDays)) {
+                    continue;
+                }
+
+                $toUpdate = [];
+
+                if (! is_null($data['price']) && ! $skipPrice) {
+                    $toUpdate['price'] = $data['price'];
+                }
+
+                if (! is_null($data['available'])) {
+                    $toUpdate['available'] = $data['available'];
+                }
+
+                if (empty($toUpdate)) {
+                    continue;
+                }
+
+                Availability::updateOrCreate([
+                    'statamic_id' => $data['statamic_id'],
+                    'date' => $day->isoFormat('YYYY-MM-DD'),
+                    'rate_id' => $resolvedRateId,
+                ], $toUpdate);
             }
-
-            $toUpdate = [];
-
-            if (! is_null($data['price']) && ! $skipPrice) {
-                $toUpdate['price'] = $data['price'];
-            }
-
-            if (! is_null($data['available'])) {
-                $toUpdate['available'] = $data['available'];
-            }
-
-            if (empty($toUpdate)) {
-                continue;
-            }
-
-            Availability::updateOrCreate([
-                'statamic_id' => $data['statamic_id'],
-                'date' => $day->isoFormat('YYYY-MM-DD'),
-                'rate_id' => $resolvedRateId,
-            ], $toUpdate);
-        }
+        });
     }
 
     private function defaultRateIds(string $statamicId): array

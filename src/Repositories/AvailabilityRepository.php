@@ -71,7 +71,7 @@ class AvailabilityRepository
         $priceConcat = self::groupConcat('price');
         $dateConcat = self::groupConcat('date');
 
-        return Availability::selectRaw("count(statamic_id) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, rate_id")
+        return Availability::selectRaw("count(statamic_id) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, min(available) as available, rate_id")
             ->where('date', '>=', $date_start)
             ->where('date', '<', $date_end)
             ->where('available', '>=', $quantity)
@@ -86,7 +86,7 @@ class AvailabilityRepository
         $priceConcat = self::groupConcat('price');
         $dateConcat = self::groupConcat('date');
 
-        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, resrv_availabilities.rate_id")
+        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, min(available) as available, resrv_availabilities.rate_id")
             ->join('resrv_rates', 'resrv_availabilities.rate_id', '=', 'resrv_rates.id')
             ->where('resrv_availabilities.statamic_id', $statamic_id)
             ->where('resrv_availabilities.date', '>=', $date_start)
@@ -140,7 +140,7 @@ class AvailabilityRepository
         $priceConcat = self::groupConcat('resrv_availabilities.price');
         $dateConcat = self::groupConcat('resrv_availabilities.date');
 
-        return Availability::selectRaw("count(resrv_availabilities.date) as days, {$priceConcat} as prices, {$dateConcat} as dates, resrv_availabilities.statamic_id, max(resrv_availabilities.available) as available, resrv_availabilities.rate_id")
+        return Availability::selectRaw("count(resrv_availabilities.date) as days, {$priceConcat} as prices, {$dateConcat} as dates, resrv_availabilities.statamic_id, min(resrv_availabilities.available) as available, resrv_availabilities.rate_id")
             ->join('resrv_rates', 'resrv_availabilities.rate_id', '=', 'resrv_rates.id')
             ->where('resrv_availabilities.statamic_id', $statamic_id)
             ->where('resrv_availabilities.date', '>=', $date_start)
@@ -165,6 +165,12 @@ class AvailabilityRepository
 
         DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $rateId);
+
+            foreach ($availabilities as $availability) {
+                if ($availability->available < $quantity) {
+                    throw new AvailabilityException(__('Not enough availability for this rate.'));
+                }
+            }
 
             $this->addToPending($availabilities, $reservationId, $quantity);
         });
@@ -235,7 +241,7 @@ class AvailabilityRepository
             ->where('date', '<', $date_end)
             ->where('statamic_id', $statamic_id)
             ->when($rateId, fn (Builder $query, int $rateId) => $query->where('rate_id', $rateId))
-            ->sharedLock()
+            ->lockForUpdate()
             ->get();
     }
 
@@ -303,32 +309,52 @@ class AvailabilityRepository
             return collect();
         }
 
-        $overlapping = Reservation::where('rate_id', $rate->id)
-            ->whereNotIn('status', ReservationStatus::terminal())
-            ->get(['quantity', 'date_start', 'date_end']);
+        $result = $this->getExhaustedDatesForRates(collect([$rate]), $quantity);
 
-        $overlappingChildren = ChildReservation::where('rate_id', $rate->id)
-            ->whereHas('parent', fn ($q) => $q->whereNotIn('status', ReservationStatus::terminal()))
-            ->get(['quantity', 'date_start', 'date_end']);
+        return $result->get($rate->id, collect());
+    }
 
-        $all = $overlapping->concat($overlappingChildren);
+    /** @return SupportCollection<int, SupportCollection<int, string>> keyed by rate ID */
+    public function getExhaustedDatesForRates(SupportCollection $rates, int $quantity = 1): SupportCollection
+    {
+        $sharedRates = $rates->filter(fn (Rate $rate) => $rate->isShared() && $rate->max_available);
 
-        if ($all->isEmpty()) {
+        if ($sharedRates->isEmpty()) {
             return collect();
         }
 
-        $dateCounts = [];
-        foreach ($all as $res) {
-            $period = Carbon::parse($res->date_start)->daysUntil(Carbon::parse($res->date_end));
-            foreach ($period as $date) {
-                $dateStr = $date->toDateString();
-                $dateCounts[$dateStr] = ($dateCounts[$dateStr] ?? 0) + $res->quantity;
-            }
-        }
+        $rateIds = $sharedRates->pluck('id');
 
-        return collect($dateCounts)
-            ->filter(fn ($count) => ($count + $quantity) > $rate->max_available)
-            ->keys();
+        $overlapping = Reservation::whereIn('rate_id', $rateIds)
+            ->whereNotIn('status', ReservationStatus::terminal())
+            ->get(['rate_id', 'quantity', 'date_start', 'date_end']);
+
+        $overlappingChildren = ChildReservation::whereIn('rate_id', $rateIds)
+            ->whereHas('parent', fn ($q) => $q->whereNotIn('status', ReservationStatus::terminal()))
+            ->get(['rate_id', 'quantity', 'date_start', 'date_end']);
+
+        $allByRate = $overlapping->concat($overlappingChildren)->groupBy('rate_id');
+
+        return $sharedRates->mapWithKeys(function (Rate $rate) use ($allByRate, $quantity) {
+            $all = $allByRate->get($rate->id, collect());
+
+            if ($all->isEmpty()) {
+                return [$rate->id => collect()];
+            }
+
+            $dateCounts = [];
+            foreach ($all as $res) {
+                $period = Carbon::parse($res->date_start)->daysUntil(Carbon::parse($res->date_end));
+                foreach ($period as $date) {
+                    $dateStr = $date->toDateString();
+                    $dateCounts[$dateStr] = ($dateCounts[$dateStr] ?? 0) + $res->quantity;
+                }
+            }
+
+            return [$rate->id => collect($dateCounts)
+                ->filter(fn ($count) => ($count + $quantity) > $rate->max_available)
+                ->keys()];
+        });
     }
 
     protected function validateMaxAvailableForDateRange(Rate $rate, string $dateStart, string $dateEnd, ?int $reservationId, int $quantity, bool $isChildReservation = false): void
@@ -345,6 +371,7 @@ class AvailabilityRepository
             ->whereNotIn('status', ReservationStatus::terminal())
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)
+            ->lockForUpdate()
             ->get(['quantity', 'date_start', 'date_end']);
 
         $overlappingChildren = ChildReservation::where('rate_id', $rate->id)
@@ -354,6 +381,7 @@ class AvailabilityRepository
             })
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)
+            ->lockForUpdate()
             ->get(['quantity', 'date_start', 'date_end']);
 
         $allOverlapping = $overlapping->concat($overlappingChildren);

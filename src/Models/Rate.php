@@ -290,6 +290,16 @@ class Rate extends Model
 
         if ($rate && $rate->trashed()) {
             $rate->restore();
+            $rate->update([
+                'published' => true,
+                'apply_to_all' => true,
+                'pricing_type' => 'independent',
+                'availability_type' => 'independent',
+                'base_rate_id' => null,
+                'modifier_type' => null,
+                'modifier_operation' => null,
+                'modifier_amount' => null,
+            ]);
         }
 
         if (! $rate) {

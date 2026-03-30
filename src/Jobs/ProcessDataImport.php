@@ -27,6 +27,12 @@ class ProcessDataImport implements ShouldQueue
     {
         $dataImport = Cache::get('resrv-data-import');
 
+        if (! $dataImport) {
+            Log::warning('Data import job fired but cache entry was missing.');
+
+            return;
+        }
+
         $dataImport->prepare()->each(function ($item, $id) {
             $defaultRateId = null;
 
