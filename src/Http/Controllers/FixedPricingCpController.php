@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
 
@@ -31,6 +32,8 @@ class FixedPricingCpController extends Controller
             'days' => 'required',
             'price' => 'required|numeric',
         ]);
+
+        Cache::forget('fixed_pricing_table');
 
         if (isset($data['id'])) {
             return $this->updateExisting($data);
@@ -89,6 +92,8 @@ class FixedPricingCpController extends Controller
                 ->where('days', $row->days)
                 ->where('price', $row->getRawOriginal('price'))
                 ->delete();
+
+            Cache::forget('fixed_pricing_table');
         }
 
         return response(200);

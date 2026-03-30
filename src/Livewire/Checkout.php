@@ -14,7 +14,6 @@ use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
-use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;

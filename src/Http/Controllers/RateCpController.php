@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Reach\StatamicResrv\Enums\ReservationStatus;
@@ -121,9 +122,11 @@ class RateCpController extends Controller
             );
         }
 
-        $rate->availabilities()->delete();
-        $rate->fixedPricing()->delete();
-        $rate->delete();
+        DB::transaction(function () use ($rate) {
+            $rate->availabilities()->delete();
+            $rate->fixedPricing()->delete();
+            $rate->delete();
+        });
 
         Cache::forget('resrv_rates_exist');
 
@@ -198,7 +201,13 @@ class RateCpController extends Controller
             ],
             'modifier_type' => ['nullable', 'required_if:pricing_type,relative', Rule::in(['percent', 'fixed'])],
             'modifier_operation' => ['nullable', 'required_if:pricing_type,relative', Rule::in(['increase', 'decrease'])],
-            'modifier_amount' => ['nullable', 'required_if:pricing_type,relative', 'numeric', 'min:0'],
+            'modifier_amount' => [
+                'nullable', 'required_if:pricing_type,relative', 'numeric', 'min:0',
+                Rule::when(
+                    fn () => $request->input('modifier_type') === 'percent' && $request->input('modifier_operation') === 'decrease',
+                    ['max:100']
+                ),
+            ],
             'availability_type' => ['required', Rule::in(['independent', 'shared'])],
             'max_available' => ['nullable', 'integer', 'min:1'],
             'date_start' => ['nullable', 'date'],

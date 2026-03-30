@@ -143,6 +143,11 @@ class AvailabilityResults extends Component
             $this->availability = collect($this->availability->get(0));
         }
         if (! $this->data->rate || $this->data->rate === 'any') {
+            if ($this->rates && $this->availability->count() > 1) {
+                $this->addError('availability', __('Please select a rate before proceeding.'));
+
+                return;
+            }
             $rateFromResults = data_get($this->availability, 'data.rate_id');
             if ($rateFromResults) {
                 $this->data->rate = (string) $rateFromResults;
