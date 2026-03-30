@@ -36,6 +36,7 @@ class DecreaseAvailability
                 statamic_id: $event->reservation->item_id,
                 reservationId: $child->id,
                 rateId: $child->rate_id,
+                isChildReservation: true,
             );
         });
     }

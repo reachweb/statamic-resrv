@@ -161,7 +161,7 @@ class Availability extends Model implements AvailabilityContract
             ->get();
     }
 
-    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null): void
+    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null, bool $isChildReservation = false): void
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
@@ -177,6 +177,7 @@ class Availability extends Model implements AvailabilityContract
             statamic_id: $statamic_id,
             rateId: $rateId,
             reservationId: $reservationId,
+            isChildReservation: $isChildReservation,
         );
     }
 

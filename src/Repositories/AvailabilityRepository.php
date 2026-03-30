@@ -86,15 +86,17 @@ class AvailabilityRepository
         $priceConcat = self::groupConcat('price');
         $dateConcat = self::groupConcat('date');
 
-        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, rate_id")
-            ->where('statamic_id', $statamic_id)
-            ->where('date', '>=', $date_start)
-            ->where('date', '<', $date_end)
-            ->where('available', '>=', $quantity)
+        return Availability::selectRaw("count(date) as days, {$priceConcat} as prices, {$dateConcat} as dates, statamic_id, max(available) as available, resrv_availabilities.rate_id")
+            ->join('resrv_rates', 'resrv_availabilities.rate_id', '=', 'resrv_rates.id')
+            ->where('resrv_availabilities.statamic_id', $statamic_id)
+            ->where('resrv_availabilities.date', '>=', $date_start)
+            ->where('resrv_availabilities.date', '<', $date_end)
+            ->where('resrv_availabilities.available', '>=', $quantity)
             ->when($rateId, fn (Builder $query, int $rateId) => $this->applyRateFilter($query, $rateId))
             ->when(! $rateId, fn (Builder $query) => $this->applyPublishedRateFilter($query))
-            ->groupBy('statamic_id', 'rate_id')
-            ->havingRaw('count(date) = ?', [$duration]);
+            ->groupBy('resrv_availabilities.statamic_id', 'resrv_availabilities.rate_id', 'resrv_rates.order')
+            ->havingRaw('count(resrv_availabilities.date) = ?', [$duration])
+            ->orderBy('resrv_rates.order');
     }
 
     public function itemPricesBetween(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): Builder
@@ -149,13 +151,13 @@ class AvailabilityRepository
             ->havingRaw('count(resrv_availabilities.date) = ?', [$duration]);
     }
 
-    public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId): void
+    public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false): void
     {
         if ($rateId) {
             $rate = Rate::findOrFail($rateId);
 
             if ($rate->isShared()) {
-                $this->decrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId);
+                $this->decrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation);
 
                 return;
             }
@@ -196,11 +198,11 @@ class AvailabilityRepository
             ->delete();
     }
 
-    protected function decrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId): void
+    protected function decrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false): void
     {
         $baseRateId = $rate->base_rate_id ?? $rate->id;
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $rate, $reservationId) {
+        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $rate, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $baseRateId);
 
             foreach ($availabilities as $availability) {
@@ -209,7 +211,7 @@ class AvailabilityRepository
                 }
             }
 
-            $this->validateMaxAvailableForDateRange($rate, $date_start, $date_end, $reservationId, $quantity);
+            $this->validateMaxAvailableForDateRange($rate, $date_start, $date_end, $reservationId, $quantity, $isChildReservation);
 
             $this->addToPending($availabilities, $reservationId, $quantity);
         });
@@ -329,21 +331,24 @@ class AvailabilityRepository
             ->keys();
     }
 
-    protected function validateMaxAvailableForDateRange(Rate $rate, string $dateStart, string $dateEnd, ?int $reservationId, int $quantity): void
+    protected function validateMaxAvailableForDateRange(Rate $rate, string $dateStart, string $dateEnd, ?int $reservationId, int $quantity, bool $isChildReservation = false): void
     {
         if (! $rate->max_available) {
             return;
         }
 
+        $excludeParentId = ($reservationId && ! $isChildReservation) ? $reservationId : null;
+        $excludeChildId = ($reservationId && $isChildReservation) ? $reservationId : null;
+
         $overlapping = Reservation::where('rate_id', $rate->id)
-            ->when($reservationId, fn ($q) => $q->where('id', '!=', $reservationId))
+            ->when($excludeParentId, fn ($q) => $q->where('id', '!=', $excludeParentId))
             ->whereNotIn('status', ReservationStatus::terminal())
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)
             ->get(['quantity', 'date_start', 'date_end']);
 
         $overlappingChildren = ChildReservation::where('rate_id', $rate->id)
-            ->when($reservationId, fn ($q) => $q->where('id', '!=', $reservationId))
+            ->when($excludeChildId, fn ($q) => $q->where('id', '!=', $excludeChildId))
             ->whereHas('parent', function ($q) {
                 $q->whereNotIn('status', ReservationStatus::terminal());
             })
@@ -358,7 +363,7 @@ class AvailabilityRepository
         foreach ($period as $date) {
             $dateStr = $date->toDateString();
             $activeQuantity = $allOverlapping
-                ->filter(fn ($r) => $r->date_start <= $dateStr && $r->date_end > $dateStr)
+                ->filter(fn ($r) => $r->date_start->toDateString() <= $dateStr && $r->date_end->toDateString() > $dateStr)
                 ->sum('quantity');
 
             if (($activeQuantity + $quantity) > $rate->max_available) {

@@ -50,9 +50,9 @@ trait HandlesCutoffRules
 
     private function isDateInRange(string $date, string $startDate, string $endDate): bool
     {
-        $checkDate = Carbon::parse($date);
-        $rangeStart = Carbon::parse($startDate);
-        $rangeEnd = Carbon::parse($endDate);
+        $checkDate = Carbon::parse($date)->startOfDay();
+        $rangeStart = Carbon::parse($startDate)->startOfDay();
+        $rangeEnd = Carbon::parse($endDate)->startOfDay();
 
         return $checkDate->between($rangeStart, $rangeEnd, true);
     }
