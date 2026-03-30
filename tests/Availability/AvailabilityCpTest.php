@@ -28,8 +28,8 @@ class AvailabilityCpTest extends TestCase
             'item_id' => $item->id(),
             'title' => $item->get('title'),
             'enabled' => 1,
-            'collection' => $item->collection(),
-            'handle' => $item->blueprint(),
+            'collection' => $item->collection()->handle(),
+            'handle' => $item->blueprint()->handle(),
         ]);
     }
 
@@ -49,9 +49,7 @@ class AvailabilityCpTest extends TestCase
 
     public function test_entry_disabled_when_resrv_availability_off()
     {
-        $item = $this->makeStatamicItem();
-
-        $item->save();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
 
         $item->set('resrv_availability', 'disabled');
 
@@ -61,8 +59,8 @@ class AvailabilityCpTest extends TestCase
             'item_id' => $item->id(),
             'title' => $item->get('title'),
             'enabled' => 0,
-            'collection' => $item->collection(),
-            'handle' => $item->blueprint(),
+            'collection' => $item->collection()->handle(),
+            'handle' => $item->blueprint()->handle(),
         ]);
     }
 
