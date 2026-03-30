@@ -289,7 +289,7 @@ class AvailabilityRepository
             return;
         }
 
-        $this->validateMaxAvailableForDateRange($rate, $dateStart, $dateEnd, null, $quantity);
+        $this->validateMaxAvailableForDateRange($rate, $dateStart, $dateEnd, null, $quantity, false, false);
     }
 
     public function checkMaxAvailable(int $rateId, string $dateStart, string $dateEnd, int $quantity): bool
@@ -357,7 +357,7 @@ class AvailabilityRepository
         });
     }
 
-    protected function validateMaxAvailableForDateRange(Rate $rate, string $dateStart, string $dateEnd, ?int $reservationId, int $quantity, bool $isChildReservation = false): void
+    protected function validateMaxAvailableForDateRange(Rate $rate, string $dateStart, string $dateEnd, ?int $reservationId, int $quantity, bool $isChildReservation = false, bool $useLocks = true): void
     {
         if (! $rate->max_available) {
             return;
@@ -371,7 +371,7 @@ class AvailabilityRepository
             ->whereNotIn('status', ReservationStatus::terminal())
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)
-            ->lockForUpdate()
+            ->when($useLocks, fn ($q) => $q->lockForUpdate())
             ->get(['quantity', 'date_start', 'date_end']);
 
         $overlappingChildren = ChildReservation::where('rate_id', $rate->id)
@@ -381,7 +381,7 @@ class AvailabilityRepository
             })
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)
-            ->lockForUpdate()
+            ->when($useLocks, fn ($q) => $q->lockForUpdate())
             ->get(['quantity', 'date_start', 'date_end']);
 
         $allOverlapping = $overlapping->concat($overlappingChildren);

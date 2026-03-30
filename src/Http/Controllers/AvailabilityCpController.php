@@ -19,7 +19,7 @@ class AvailabilityCpController extends Controller
     {
         $resolvedIdentifier = $identifier
             ? AvailabilityRepository::resolveBaseRateId((int) $identifier)
-            : $this->defaultRateIds($statamic_id)[0] ?? null;
+            : Availability::where('statamic_id', $statamic_id)->value('rate_id');
 
         $results = Availability::where('statamic_id', $statamic_id)
             ->when($resolvedIdentifier, function (Builder $query, int $rateId) {
