@@ -101,12 +101,19 @@ class FixedPricingCpController extends Controller
 
     private function rateIdsForEntry(string $statamicId): array
     {
-        $ids = Rate::forEntry($statamicId)
-            ->where('pricing_type', '!=', 'relative')
-            ->pluck('id')
-            ->all();
+        $rates = Rate::forEntry($statamicId)->get(['id', 'pricing_type', 'base_rate_id']);
+
+        $ids = $rates->where('pricing_type', '!=', 'relative')->pluck('id')->all();
 
         if (empty($ids)) {
+            // All rates are relative — resolve their base rate IDs
+            $baseIds = $rates->pluck('base_rate_id')->filter()->unique()->values()->all();
+
+            if (! empty($baseIds)) {
+                return $baseIds;
+            }
+
+            // No rates at all — create a default
             $rate = Rate::findOrCreateDefaultForEntry($statamicId);
 
             return $rate ? [$rate->id] : [];

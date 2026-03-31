@@ -45,9 +45,13 @@ class ProcessDataImport implements ShouldQueue
                 }
 
                 if (! $rateId) {
-                    $rateCount = Rate::forEntry($id)->count();
+                    $baseRateCount = Rate::forEntry($id)
+                        ->get(['id', 'base_rate_id', 'availability_type'])
+                        ->map(fn ($r) => ($r->base_rate_id && $r->isShared()) ? $r->base_rate_id : $r->id)
+                        ->unique()
+                        ->count();
 
-                    if ($rateCount > 1) {
+                    if ($baseRateCount > 1) {
                         Log::warning("Data import: skipping row for entry {$id} — rate_id required when multiple rates exist.");
 
                         return;
@@ -55,6 +59,9 @@ class ProcessDataImport implements ShouldQueue
 
                     if ($defaultRateId === null) {
                         $defaultRateId = Rate::forEntry($id)->value('id');
+                        if ($defaultRateId !== null) {
+                            $defaultRateId = app(AvailabilityRepository::class)->resolveBaseRateId((int) $defaultRateId);
+                        }
                     }
                     if ($defaultRateId === null) {
                         $defaultRate = Rate::findOrCreateDefaultForEntry($id);

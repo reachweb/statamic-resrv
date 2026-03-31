@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Console\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection as BaseCollection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Models\Rate;
@@ -40,6 +41,10 @@ class UpgradeToRates extends Command
 
         $this->updateRateTitlesFromBlueprints();
         $this->detectCrossEntryConnections();
+
+        if (! $this->dryRun) {
+            Cache::forget('resrv_rates_exist');
+        }
 
         $this->newLine();
 

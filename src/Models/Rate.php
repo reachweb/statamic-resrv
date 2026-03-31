@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Database\Factories\RateFactory;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -290,6 +291,7 @@ class Rate extends Model
 
         if ($rate && $rate->trashed()) {
             $rate->restore();
+            Cache::forget('resrv_rates_exist');
             $rate->update([
                 'published' => true,
                 'apply_to_all' => true,
@@ -310,6 +312,7 @@ class Rate extends Model
                 'slug' => 'default',
                 'published' => true,
             ]);
+            Cache::forget('resrv_rates_exist');
         }
 
         // If existing rate is not apply_to_all, attach pivot so forEntry() finds it
