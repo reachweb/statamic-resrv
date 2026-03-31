@@ -251,6 +251,44 @@ class RateMigrationTest extends TestCase
         }
     }
 
+    public function test_fixed_pricing_not_duplicated_for_entry_scoped_rates_that_dont_apply(): void
+    {
+        // entry-aa has both double-room and single-room; entry-bb only has double-room
+        $this->insertEntry('entry-aa', 'hotel');
+        $this->insertEntry('entry-bb', 'hotel');
+        $this->insertAvailability('entry-aa', 'double-room', 100, 2, now()->toDateString());
+        $this->insertAvailability('entry-aa', 'single-room', 75, 3, now()->toDateString());
+        $this->insertAvailability('entry-bb', 'double-room', 120, 1, now()->toDateString());
+
+        $this->insertFixedPricing('entry-aa');
+        $this->insertFixedPricing('entry-bb');
+
+        $this->runDataMigration();
+
+        $doubleRoom = DB::table('resrv_rates')->where('collection', 'hotel')->where('slug', 'double-room')->first();
+        $singleRoom = DB::table('resrv_rates')->where('collection', 'hotel')->where('slug', 'single-room')->first();
+
+        // double-room is apply_to_all, single-room is entry-scoped to entry-aa only
+        $this->assertTrue((bool) $doubleRoom->apply_to_all);
+        $this->assertFalse((bool) $singleRoom->apply_to_all);
+
+        $finalize = include __DIR__.'/../../database/migrations/2026_03_01_000004_finalize_rate_migration.php';
+        $finalize->up();
+
+        // double-room (apply_to_all): should have fixed pricing for both entries
+        $doubleRoomFixed = DB::table('resrv_fixed_pricing')->where('rate_id', $doubleRoom->id)->get();
+        $this->assertCount(2, $doubleRoomFixed);
+        $this->assertEqualsCanonicalizing(
+            ['entry-aa', 'entry-bb'],
+            $doubleRoomFixed->pluck('statamic_id')->toArray()
+        );
+
+        // single-room (entry-scoped): should only have fixed pricing for entry-aa, NOT entry-bb
+        $singleRoomFixed = DB::table('resrv_fixed_pricing')->where('rate_id', $singleRoom->id)->get();
+        $this->assertCount(1, $singleRoomFixed);
+        $this->assertEquals('entry-aa', $singleRoomFixed->first()->statamic_id);
+    }
+
     public function test_migration_is_idempotent(): void
     {
         $this->insertEntry('entry-7');

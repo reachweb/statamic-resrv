@@ -69,7 +69,18 @@ return new class extends Migration
                     continue;
                 }
 
-                foreach ($rows->unique(fn ($r) => $r->statamic_id.'|'.$r->days) as $row) {
+                $uniqueRows = $rows->unique(fn ($r) => $r->statamic_id.'|'.$r->days);
+
+                // Entry-scoped rates: only clone fixed pricing for entries the rate applies to
+                if (! $rate->apply_to_all) {
+                    $rateEntryIds = DB::table('resrv_rate_entries')
+                        ->where('rate_id', $rate->id)
+                        ->pluck('statamic_id');
+
+                    $uniqueRows = $uniqueRows->whereIn('statamic_id', $rateEntryIds);
+                }
+
+                foreach ($uniqueRows as $row) {
                     DB::table('resrv_fixed_pricing')->insert([
                         'statamic_id' => $row->statamic_id,
                         'days' => $row->days,
