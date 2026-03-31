@@ -616,6 +616,46 @@ class AvailabilityResultsTest extends TestCase
         $this->assertEquals((string) $rateToCheckout, $component->get('data.rate'));
     }
 
+    public function test_specific_rate_preserved_in_rates_mode()
+    {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+
+        $anotherRate = Rate::factory()->create([
+            'collection' => 'advanced',
+            'slug' => 'another-rate',
+            'title' => 'Another Rate',
+        ]);
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->addDay()],
+            )
+            ->create([
+                'available' => 1,
+                'price' => 75,
+                'statamic_id' => $entryId,
+                'rate_id' => $anotherRate->id,
+            ]);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => (string) $testRate->id,
+                ]
+            )
+            ->assertSet('data.rate', (string) $testRate->id)
+            ->assertViewHas('availability.data.price')
+            ->assertViewHas('availability.data.rate_id', $testRate->id);
+    }
+
     public function test_gets_options_if_show_options_is_enabled()
     {
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'showOptions' => true])

@@ -518,6 +518,34 @@ class RateMigrationTest extends TestCase
         $this->assertEquals(0, DB::table('resrv_reservations')->whereNull('rate_id')->count());
     }
 
+    public function test_finalize_rollback_backfills_reservation_property_from_rate(): void
+    {
+        $this->insertEntry('entry-rb1');
+        $this->insertAvailability('entry-rb1', 'deluxe', 100, 2, now()->toDateString());
+        $reservationId = $this->insertReservation('entry-rb1', 'deluxe');
+        $this->insertChildReservation($reservationId, 'deluxe');
+
+        $this->runDataMigration();
+
+        // Verify rate_id was assigned
+        $this->assertEquals(0, DB::table('resrv_reservations')->whereNull('rate_id')->count());
+        $this->assertEquals(0, DB::table('resrv_child_reservations')->whereNull('rate_id')->count());
+
+        // Run finalize up (drops property column)
+        $finalize = include __DIR__.'/../../database/migrations/2026_03_01_000004_finalize_rate_migration.php';
+        $finalize->up();
+
+        // Run finalize down (re-adds property column and should backfill)
+        $finalize->down();
+
+        // Property should be backfilled from rate slug, not left as NULL
+        $reservation = DB::table('resrv_reservations')->where('item_id', 'entry-rb1')->first();
+        $this->assertEquals('deluxe', $reservation->property);
+
+        $childReservation = DB::table('resrv_child_reservations')->where('reservation_id', $reservationId)->first();
+        $this->assertEquals('deluxe', $childReservation->property);
+    }
+
     protected function insertAvailability(string $statamicId, string $property, float $price, int $available, string $date): int
     {
         return DB::table('resrv_availabilities')->insertGetId([

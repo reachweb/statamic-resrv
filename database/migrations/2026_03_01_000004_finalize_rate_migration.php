@@ -129,6 +129,24 @@ return new class extends Migration
             $table->string('property')->nullable();
         });
 
+        DB::statement('
+            UPDATE resrv_reservations
+            SET property = (
+                SELECT slug FROM resrv_rates
+                WHERE resrv_rates.id = resrv_reservations.rate_id
+            )
+            WHERE rate_id IS NOT NULL
+        ');
+
+        DB::statement('
+            UPDATE resrv_child_reservations
+            SET property = (
+                SELECT slug FROM resrv_rates
+                WHERE resrv_rates.id = resrv_child_reservations.rate_id
+            )
+            WHERE rate_id IS NOT NULL
+        ');
+
         Schema::table('resrv_fixed_pricing', function (Blueprint $table) {
             $table->dropUnique(['statamic_id', 'days', 'rate_id']);
         });

@@ -431,6 +431,50 @@ class RateSharedAvailabilityTest extends TestCase
         $this->assertTrue($result);
     }
 
+    public function test_shared_independent_rate_does_not_overwrite_base_rate_price()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $dateStart = today()->addDay()->format('Y-m-d');
+        $dateEnd = today()->addDays(3)->format('Y-m-d');
+
+        // Create base rate availability via the CP endpoint
+        $this->post(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $dateStart,
+            'date_end' => $dateEnd,
+            'price' => 100,
+            'available' => 5,
+            'rate_ids' => [$baseRate->id],
+        ])->assertStatus(200);
+
+        // Try to update availability via the shared rate with a different price
+        $this->post(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $dateStart,
+            'date_end' => $dateEnd,
+            'price' => 250,
+            'available' => 5,
+            'rate_ids' => [$sharedRate->id],
+        ])->assertStatus(200);
+
+        // Base rate price must remain unchanged at 100
+        $baseAvailabilities = Availability::where('rate_id', $baseRate->id)->get();
+        $baseAvailabilities->each(function ($avail) {
+            $this->assertEquals('100.00', $avail->price->format());
+        });
+    }
+
     public function test_confirm_availability_rejects_when_shared_rate_cap_exhausted()
     {
         $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 2);

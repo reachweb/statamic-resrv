@@ -1,7 +1,7 @@
 @use(Carbon\Carbon)
 
 <div class="relative">
-    @if ($rates == true)
+    @if ($rates == true && (! $data->rate || $data->rate === 'any'))
     <x-resrv::availability-results-advanced :$availability :entryRates="$this->entryRates" />
     @else
         @if (data_get($availability, 'message.status') === true)

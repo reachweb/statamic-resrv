@@ -71,14 +71,9 @@ class AvailabilityCpController extends Controller
     {
         $resolvedRateId = AvailabilityRepository::resolveBaseRateId($rateId);
 
-        // Shared-relative rates derive their price from the base rate plus a
-        // modifier. Writing the admin-entered price onto the base row would
-        // cause the modifier to be applied twice at checkout.
-        $skipPrice = false;
-        if ($resolvedRateId !== $rateId && ! is_null($data['price'])) {
-            $rate = Rate::withoutGlobalScopes()->find($rateId, ['id', 'pricing_type']);
-            $skipPrice = $rate && $rate->isRelative();
-        }
+        // Shared rates read from the base rate's availability rows. Writing
+        // prices here would overwrite the base rate's data.
+        $skipPrice = ($resolvedRateId !== $rateId);
 
         DB::transaction(function () use ($data, $resolvedRateId, $skipPrice) {
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);

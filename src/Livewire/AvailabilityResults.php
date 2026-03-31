@@ -128,8 +128,12 @@ class AvailabilityResults extends Component
         }
 
         if ($this->rates) {
-            $this->data->rate = 'any';
-            $this->availability = collect($this->queryAvailabilityForAllRates());
+            if (! $this->data->rate || $this->data->rate === 'any') {
+                $this->data->rate = 'any';
+                $this->availability = collect($this->queryAvailabilityForAllRates());
+            } else {
+                $this->availability = collect($this->queryBaseAvailabilityForEntry());
+            }
 
             return;
         }
