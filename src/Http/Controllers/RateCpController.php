@@ -208,7 +208,15 @@ class RateCpController extends Controller
                     ['max:100']
                 ),
             ],
-            'availability_type' => ['required', Rule::in(['independent', 'shared'])],
+            'availability_type' => [
+                'required',
+                Rule::in(['independent', 'shared']),
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value === 'shared' && $request->input('pricing_type') === 'independent') {
+                        $fail('Shared availability requires relative pricing. Independent pricing with shared availability is not supported.');
+                    }
+                },
+            ],
             'max_available' => ['nullable', 'integer', 'min:1'],
             'date_start' => ['nullable', 'date'],
             'date_end' => ['nullable', 'date'],

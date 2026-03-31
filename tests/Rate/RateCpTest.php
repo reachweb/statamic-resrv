@@ -770,7 +770,10 @@ class RateCpTest extends TestCase
             'apply_to_all' => true,
             'title' => 'Shared No Base',
             'slug' => 'shared-no-base',
-            'pricing_type' => 'independent',
+            'pricing_type' => 'relative',
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
             'availability_type' => 'shared',
             'published' => true,
         ];
@@ -791,7 +794,10 @@ class RateCpTest extends TestCase
             'apply_to_all' => true,
             'title' => 'Shared With Base',
             'slug' => 'shared-with-base',
-            'pricing_type' => 'independent',
+            'pricing_type' => 'relative',
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
             'availability_type' => 'shared',
             'base_rate_id' => $baseRate->id,
             'published' => true,
@@ -799,6 +805,30 @@ class RateCpTest extends TestCase
 
         $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
         $response->assertStatus(200);
+    }
+
+    public function test_shared_rate_rejects_independent_pricing()
+    {
+        $this->withExceptionHandling();
+
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create(['collection' => 'pages']);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Shared Independent',
+            'slug' => 'shared-independent',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+            'published' => true,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('availability_type');
     }
 
     public function test_can_update_rate_slug_to_one_used_by_deleted_rate()
@@ -854,7 +884,10 @@ class RateCpTest extends TestCase
             'apply_to_all' => true,
             'title' => 'Chained Shared',
             'slug' => 'chained-shared',
-            'pricing_type' => 'independent',
+            'pricing_type' => 'relative',
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 5,
             'availability_type' => 'shared',
             'base_rate_id' => $sharedRate->id,
             'published' => true,
