@@ -108,6 +108,13 @@ class Reservation extends Model
 
     public function getRateLabel(): string
     {
+        if ($this->isParent()) {
+            return $this->childs
+                ->map(fn ($child) => $child->getRateLabel())
+                ->unique()
+                ->implode(', ');
+        }
+
         return $this->rate?->title ?? 'Default';
     }
 

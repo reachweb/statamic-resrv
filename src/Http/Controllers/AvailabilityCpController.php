@@ -87,6 +87,10 @@ class AvailabilityCpController extends Controller
         // prices here would overwrite the base rate's data.
         $skipPrice = ($resolvedRateId !== $rateId);
 
+        if ($skipPrice && ! is_null($data['price']) && is_null($data['available'])) {
+            abort(422, __('Price cannot be edited directly for shared rates. Edit the base rate instead.'));
+        }
+
         DB::transaction(function () use ($data, $resolvedRateId, $skipPrice) {
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $onlyDays = $data['onlyDays'] ?? null;
