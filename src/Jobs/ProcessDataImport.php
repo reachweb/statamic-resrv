@@ -39,9 +39,12 @@ class ProcessDataImport implements ShouldQueue
             $item->each(function ($data) use ($id, &$defaultRateId) {
                 $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
                 $rateId = $data['rate_id'] ?? null;
+                $isSharedRate = false;
 
                 if ($rateId) {
-                    $rateId = app(AvailabilityRepository::class)->resolveBaseRateId($rateId);
+                    $resolvedId = app(AvailabilityRepository::class)->resolveBaseRateId($rateId);
+                    $isSharedRate = $resolvedId !== (int) $rateId;
+                    $rateId = $resolvedId;
                 }
 
                 if (! $rateId) {
@@ -84,7 +87,9 @@ class ProcessDataImport implements ShouldQueue
                         'rate_id' => $rateId,
                     ];
                 }
-                Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], ['price', 'available']);
+
+                $updateColumns = $isSharedRate ? ['available'] : ['price', 'available'];
+                Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], $updateColumns);
             });
         });
 

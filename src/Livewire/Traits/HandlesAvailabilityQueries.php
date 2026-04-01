@@ -169,7 +169,7 @@ trait HandlesAvailabilityQueries
             'date_start' => $search['dates']['date_start'],
             'date_end' => $search['dates']['date_end'],
             'quantity' => $search['quantity'] ?? 1,
-            'rate_id' => $search['rate_id'] ?? null,
+            'rate_id' => $search['rate'] ?? $search['rate_id'] ?? null,
         ];
     }
 

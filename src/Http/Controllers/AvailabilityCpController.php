@@ -17,9 +17,13 @@ class AvailabilityCpController extends Controller
 {
     public function index(string $statamic_id, ?string $identifier = null): JsonResponse
     {
-        $resolvedIdentifier = $identifier
-            ? AvailabilityRepository::resolveBaseRateId((int) $identifier)
-            : Availability::where('statamic_id', $statamic_id)->value('rate_id');
+        $rate = $identifier
+            ? Rate::withoutGlobalScopes()->find((int) $identifier)
+            : null;
+
+        $resolvedIdentifier = $rate && $rate->isShared() && $rate->base_rate_id
+            ? (int) $rate->base_rate_id
+            : ($rate?->id ?? Availability::where('statamic_id', $statamic_id)->value('rate_id'));
 
         $results = Availability::where('statamic_id', $statamic_id)
             ->when($resolvedIdentifier, function (Builder $query, int $rateId) {
@@ -28,6 +32,14 @@ class AvailabilityCpController extends Controller
             ->get(['statamic_id', 'date', 'price', 'available'])
             ->sortBy('date')
             ->keyBy('date');
+
+        if ($rate && $rate->isShared() && $rate->isRelative()) {
+            $results = $results->map(function ($row) use ($rate) {
+                $row->price = $rate->calculatePrice($row->price)->format();
+
+                return $row;
+            });
+        }
 
         return response()->json($results);
     }
