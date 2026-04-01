@@ -7,16 +7,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class RateMigrationTest extends TestCase
 {
-    /**
-     * Override DatabaseMigrations to skip rollback registration.
-     * We manually manipulate migration state and SQLite in-memory
-     * is destroyed automatically after each test.
-     */
-    public function runDatabaseMigrations(): void
-    {
-        $this->artisan('migrate:fresh');
-    }
-
     protected function setUp(): void
     {
         parent::setUp();

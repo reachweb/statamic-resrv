@@ -25,7 +25,6 @@ class AvailabilitySearchTest extends TestCase
         parent::setUp();
         $this->date = now()->setTime(12, 0, 0);
         $this->entries = $this->createEntries();
-        $this->advancedEntries = $this->createAdvancedEntries();
         $this->travelTo(today()->setHour(12));
     }
 
@@ -372,6 +371,7 @@ class AvailabilitySearchTest extends TestCase
 
     public function test_availability_calendar_with_rate_availability()
     {
+        $this->advancedEntries = $this->createAdvancedEntries();
         $rateId = Rate::forEntry($this->advancedEntries->first()->id())->first()->id;
 
         $component = Livewire::test(AvailabilitySearch::class, [

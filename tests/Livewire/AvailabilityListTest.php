@@ -24,7 +24,6 @@ class AvailabilityListTest extends TestCase
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
         $this->entries = $this->createEntries();
-        $this->advancedEntries = $this->createAdvancedEntries();
         $this->travelTo(today()->setHour(12));
     }
 
@@ -146,6 +145,7 @@ class AvailabilityListTest extends TestCase
 
     public function test_available_dates_returns_grouped_by_rate_id_for_advanced()
     {
+        $this->advancedEntries ??= $this->createAdvancedEntries();
         $entryId = $this->advancedEntries->first()->id();
         $testRate = Rate::forEntry($entryId)->first();
 
@@ -202,6 +202,7 @@ class AvailabilityListTest extends TestCase
 
     public function test_available_dates_returns_only_selected_rate()
     {
+        $this->advancedEntries ??= $this->createAdvancedEntries();
         $entryId = $this->advancedEntries->first()->id();
         $testRate = Rate::forEntry($entryId)->first();
 
@@ -253,6 +254,7 @@ class AvailabilityListTest extends TestCase
 
     public function test_group_by_date_returns_date_first_structure()
     {
+        $this->advancedEntries ??= $this->createAdvancedEntries();
         $entryId = $this->advancedEntries->first()->id();
         $testRate = Rate::forEntry($entryId)->first();
 
@@ -311,6 +313,7 @@ class AvailabilityListTest extends TestCase
 
     public function test_group_by_date_shows_sparse_availability()
     {
+        $this->advancedEntries ??= $this->createAdvancedEntries();
         $entryId = $this->advancedEntries->first()->id();
         $testRate = Rate::forEntry($entryId)->first();
 

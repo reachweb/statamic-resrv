@@ -52,12 +52,27 @@ class FixedPricingCpController extends Controller
 
         $oldPrice = $existing->getRawOriginal('price');
 
-        // Update all rows that share the same identity (synced duplicates across rates)
-        $this->fixedPricing
+        // Find all synced duplicates across rates that we intend to update
+        $toUpdate = $this->fixedPricing
             ->where('statamic_id', $data['statamic_id'])
             ->where('days', $existing->days)
             ->where('price', $oldPrice)
-            ->update(['days' => $data['days'], 'price' => $data['price']]);
+            ->get();
+
+        // If changing days, delete any conflicting rows at the target days value
+        // to avoid unique constraint violations on (statamic_id, days, rate_id)
+        if ((int) $data['days'] !== (int) $existing->days) {
+            $rateIds = $toUpdate->pluck('rate_id')->all();
+
+            $this->fixedPricing
+                ->where('statamic_id', $data['statamic_id'])
+                ->where('days', $data['days'])
+                ->whereIn('rate_id', $rateIds)
+                ->whereNotIn('id', $toUpdate->pluck('id')->all())
+                ->delete();
+        }
+
+        $toUpdate->toQuery()->update(['days' => $data['days'], 'price' => $data['price']]);
 
         return response()->json(['id' => $existing->id]);
     }

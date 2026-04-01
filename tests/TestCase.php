@@ -3,7 +3,7 @@
 namespace Reach\StatamicResrv\Tests;
 
 use Facades\Statamic\Version;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
@@ -27,7 +27,7 @@ use Statamic\Support\Str;
 
 class TestCase extends OrchestraTestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabase;
     use FakesViews;
     use PreventSavingStacheItemsToDisk;
     use WithFaker;
@@ -193,7 +193,7 @@ class TestCase extends OrchestraTestCase
             'resrv_availability' => $data['resrv_availability'] ?? Str::random(6),
         ];
 
-        Collection::make('pages')->routes('/{slug}')->save();
+        $this->ensureCollectionExists('pages');
 
         Entry::make()
             ->collection('pages')
@@ -211,39 +211,7 @@ class TestCase extends OrchestraTestCase
             'resrv_availability' => $data['resrv_availability'] ?? Str::random(6),
         ];
 
-        $collection = Collection::make($collectionHandle)->routes('/{slug}')->save();
-
-        $blueprint = Blueprint::make()->setContents([
-            'sections' => [
-                'main' => [
-                    'fields' => [
-                        [
-                            'handle' => 'title',
-                            'field' => [
-                                'type' => 'text',
-                                'display' => 'Title',
-                            ],
-                        ],
-                        [
-                            'handle' => 'slug',
-                            'field' => [
-                                'type' => 'text',
-                                'display' => 'Slug',
-                            ],
-                        ],
-                        [
-
-                            'handle' => 'resrv_availability',
-                            'field' => [
-                                'type' => 'resrv_availability',
-                                'display' => 'Resrv Availability',
-                            ],
-                        ],
-                    ],
-                ],
-            ],
-        ]);
-        $blueprint->setHandle($collectionHandle)->setNamespace('collections.'.$collection->handle())->save();
+        $this->ensureCollectionWithResrvField($collectionHandle);
 
         Entry::make()
             ->collection($collectionHandle)
@@ -260,7 +228,7 @@ class TestCase extends OrchestraTestCase
             'title' => $data['title'] ?? 'Test Statamic Item',
         ];
 
-        Collection::make('something')->routes('/something/{slug}')->save();
+        $this->ensureCollectionExists('something', '/something/{slug}');
 
         Entry::make()
             ->collection('something')
@@ -269,6 +237,42 @@ class TestCase extends OrchestraTestCase
             ->save();
 
         return Entry::query()->where('slug', $slug)->first();
+    }
+
+    protected function ensureCollectionExists(string $handle, string $route = '/{slug}'): \Statamic\Contracts\Entries\Collection
+    {
+        if ($existing = Collection::findByHandle($handle)) {
+            return $existing;
+        }
+
+        $collection = Collection::make($handle)->routes($route);
+        $collection->save();
+
+        return $collection;
+    }
+
+    protected function ensureCollectionWithResrvField(string $handle): \Statamic\Contracts\Entries\Collection
+    {
+        if ($existing = Collection::findByHandle($handle)) {
+            return $existing;
+        }
+
+        $collection = Collection::make($handle)->routes('/{slug}');
+        $collection->save();
+
+        Blueprint::make()->setContents([
+            'sections' => [
+                'main' => [
+                    'fields' => [
+                        ['handle' => 'title', 'field' => ['type' => 'text', 'display' => 'Title']],
+                        ['handle' => 'slug', 'field' => ['type' => 'text', 'display' => 'Slug']],
+                        ['handle' => 'resrv_availability', 'field' => ['type' => 'resrv_availability', 'display' => 'Resrv Availability']],
+                    ],
+                ],
+            ],
+        ])->setHandle($handle)->setNamespace('collections.'.$handle)->save();
+
+        return $collection;
     }
 
     /**

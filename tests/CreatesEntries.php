@@ -27,9 +27,7 @@ trait CreatesEntries
 
         $slug = Str::slug($entryData['title']);
 
-        $collection = Collection::make($collection)->routes('/{slug}')->save();
-
-        $this->makeBlueprint($collection);
+        $collection = $this->findOrCreateCollection($collection);
 
         $entry = Entry::make()
             ->collection($collection)
@@ -179,6 +177,20 @@ trait CreatesEntries
             ],
             $attributes,
         ));
+    }
+
+    protected function findOrCreateCollection(string $handle): \Statamic\Contracts\Entries\Collection
+    {
+        if ($existing = Collection::findByHandle($handle)) {
+            return $existing;
+        }
+
+        $collection = Collection::make($handle)->routes('/{slug}');
+        $collection->save();
+
+        $this->makeBlueprint($collection);
+
+        return $collection;
     }
 
     protected function makeBlueprint($collection)

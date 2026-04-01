@@ -46,13 +46,6 @@ class ResrvAvailability extends Fieldtype
 
     protected function configFieldItems(): array
     {
-        return [
-            'enable_multi_rate_booking' => [
-                'display' => __('Multi-rate booking'),
-                'instructions' => __('Allow customers to book multiple rates in a single reservation.'),
-                'type' => 'toggle',
-                'default' => false,
-            ],
-        ];
+        return [];
     }
 }
