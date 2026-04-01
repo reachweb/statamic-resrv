@@ -536,6 +536,49 @@ class RateMigrationTest extends TestCase
         $this->assertEquals('deluxe', $childReservation->property);
     }
 
+    public function test_null_property_reservations_without_availability_create_default_rate(): void
+    {
+        $this->insertEntry('entry-np-noavail');
+        $this->insertReservation('entry-np-noavail');
+
+        $this->runDataMigration();
+
+        $defaultRate = DB::table('resrv_rates')
+            ->where('collection', 'rooms')
+            ->where('slug', 'default')
+            ->first();
+
+        $this->assertNotNull($defaultRate, 'A default rate should be created for collections with only historical reservations');
+        $this->assertEquals(
+            1,
+            DB::table('resrv_reservations')
+                ->where('rate_id', $defaultRate->id)
+                ->count()
+        );
+        $this->assertEquals(0, DB::table('resrv_reservations')->whereNull('rate_id')->count());
+    }
+
+    public function test_null_property_reservations_without_availability_create_pivot_entries(): void
+    {
+        $this->insertEntry('entry-np-pivot1');
+        $this->insertEntry('entry-np-pivot2');
+        $this->insertReservation('entry-np-pivot1');
+
+        $this->runDataMigration();
+
+        $defaultRate = DB::table('resrv_rates')
+            ->where('collection', 'rooms')
+            ->where('slug', 'default')
+            ->first();
+
+        $this->assertNotNull($defaultRate);
+
+        // Rate does not apply to all entries (entry-np-pivot2 has no reservation),
+        // so a pivot entry should exist for entry-np-pivot1
+        $this->assertFalse((bool) $defaultRate->apply_to_all);
+        $this->assertEquals(1, DB::table('resrv_rate_entries')->where('rate_id', $defaultRate->id)->count());
+    }
+
     protected function insertAvailability(string $statamicId, string $property, float $price, int $available, string $date): int
     {
         return DB::table('resrv_availabilities')->insertGetId([

@@ -224,14 +224,48 @@ return new class extends Migration
                 $defaultRate = DB::table('resrv_rates')
                     ->where('collection', $collection)
                     ->where('slug', 'default')
-                    ->first()
-                    ?? DB::table('resrv_rates')
-                        ->where('collection', $collection)
-                        ->orderBy('order')
-                        ->first();
+                    ->first();
 
                 if (! $defaultRate) {
-                    continue;
+                    $maxOrder = DB::table('resrv_rates')
+                        ->where('collection', $collection)
+                        ->max('order') ?? -1;
+
+                    $allCollectionEntryIds = DB::table('resrv_entries')
+                        ->where('collection', $collection)
+                        ->pluck('item_id');
+
+                    $statamicIds = $records->pluck('statamic_id')->unique();
+
+                    $applyToAll = $allCollectionEntryIds->isNotEmpty()
+                        && $allCollectionEntryIds->diff($statamicIds)->isEmpty();
+
+                    $defaultRateId = DB::table('resrv_rates')->insertGetId([
+                        'collection' => $collection,
+                        'apply_to_all' => $applyToAll,
+                        'title' => 'Default',
+                        'slug' => 'default',
+                        'pricing_type' => 'independent',
+                        'availability_type' => 'independent',
+                        'refundable' => true,
+                        'order' => $maxOrder + 1,
+                        'published' => true,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    $defaultRate = DB::table('resrv_rates')->find($defaultRateId);
+
+                    if (! $applyToAll) {
+                        foreach ($statamicIds as $statamicId) {
+                            DB::table('resrv_rate_entries')->insert([
+                                'rate_id' => $defaultRateId,
+                                'statamic_id' => $statamicId,
+                                'created_at' => now(),
+                                'updated_at' => now(),
+                            ]);
+                        }
+                    }
                 }
 
                 $statamicIds = $records->pluck('statamic_id')->unique();

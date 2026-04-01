@@ -249,15 +249,15 @@ class AvailabilitySearchTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->set('data.rate', 'something')
-            ->assertSet('data.rate', 'something')
+            ->set('data.rate', 5)
+            ->assertSet('data.rate', 5)
             ->assertDispatched('availability-search-updated', [
                 'dates' => [
                     'date_start' => $this->date->toISOString(),
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'rate' => 'something',
+                'rate' => 5,
                 'customer' => [],
             ])
             ->assertStatus(200);
@@ -266,8 +266,8 @@ class AvailabilitySearchTest extends TestCase
     public function test_cannot_set_rate_without_dates()
     {
         Livewire::test(AvailabilitySearch::class)
-            ->set('data.rate', 'something-else')
-            ->assertSet('data.rate', 'something-else')
+            ->set('data.rate', 7)
+            ->assertSet('data.rate', 7)
             ->assertHasErrors(['data.dates.date_start'])
             ->assertSee('Availability search requires date information to be provided.')
             ->assertNotDispatched('availability-search-updated')
@@ -275,14 +275,14 @@ class AvailabilitySearchTest extends TestCase
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->assertSet('data.rate', 'something-else')
+            ->assertSet('data.rate', 7)
             ->assertDispatched('availability-search-updated', [
                 'dates' => [
                     'date_start' => $this->date->toISOString(),
                     'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'rate' => 'something-else',
+                'rate' => 7,
                 'customer' => [],
             ]);
     }
@@ -413,10 +413,10 @@ class AvailabilitySearchTest extends TestCase
         Livewire::test(AvailabilitySearch::class)
             ->dispatch('availability-date-selected', [
                 'date' => $this->date->copy()->add(5, 'day')->toDateString(),
-                'rate_id' => 'cabin-a',
+                'rate_id' => 3,
             ])
             ->assertSet('data.dates.date_start', $this->date->copy()->add(5, 'day')->toDateString())
-            ->assertSet('data.rate', 'cabin-a')
+            ->assertSet('data.rate', 3)
             ->assertDispatched('availability-search-updated');
     }
 
