@@ -54,6 +54,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['rate_id', 'statamic_id']);
+            $table->index('statamic_id');
         });
     }
 

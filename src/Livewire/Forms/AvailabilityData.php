@@ -35,7 +35,7 @@ class AvailabilityData extends Form
                 'after:dates.date_start',
                 new ResrvAfterToday,
             ],
-            'quantity' => ['sometimes', 'integer', new ResrvMaxQuantity],
+            'quantity' => ['sometimes', 'integer', 'min:1', new ResrvMaxQuantity],
             'rate' => ['nullable', function (string $attribute, mixed $value, \Closure $fail) {
                 if ($value !== 'any' && ! is_numeric($value)) {
                     $fail('The rate must be a valid rate ID or "any".');
