@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Jobs\ProcessDataImport;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -196,7 +197,7 @@ class ProcessDataImportTest extends TestCase
         ]);
     }
 
-    public function test_import_resolves_shared_rate_to_base_rate_id()
+    public function test_import_resolves_shared_rate_to_base_rate_and_updates_availability_only()
     {
         $item = $this->makeStatamicItem();
         $entryId = $item->id();
@@ -213,6 +214,70 @@ class ProcessDataImportTest extends TestCase
 
         $tomorrow = today()->addDay()->isoFormat('YYYY-MM-DD');
 
+        // Pre-seed a base rate row with the correct base price
+        Availability::create([
+            'statamic_id' => $entryId,
+            'date' => $tomorrow,
+            'price' => 200,
+            'available' => 1,
+            'rate_id' => $baseRate->id,
+        ]);
+
+        $fakeImport = new class($entryId, $tomorrow, $sharedRate->id)
+        {
+            public function __construct(private $entryId, private $date, private $rateId) {}
+
+            public function prepare()
+            {
+                return collect([
+                    $this->entryId => collect([
+                        [
+                            'date_start' => $this->date,
+                            'date_end' => $this->date,
+                            'price' => 100,
+                            'available' => 5,
+                            'rate_id' => $this->rateId,
+                        ],
+                    ]),
+                ]);
+            }
+        };
+
+        Cache::put('resrv-data-import', $fakeImport);
+
+        (new ProcessDataImport)->handle();
+
+        // Availability updated on base rate, but price preserved (not overwritten by shared rate price)
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $baseRate->id,
+            'price' => 200,
+            'available' => 5,
+        ]);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'rate_id' => $sharedRate->id,
+        ]);
+    }
+
+    public function test_import_shared_rate_skips_dates_without_existing_base_rate_data()
+    {
+        $item = $this->makeStatamicItem();
+        $entryId = $item->id();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $tomorrow = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        // No pre-existing base rate data — shared rate import should not create rows
         $fakeImport = new class($entryId, $tomorrow, $sharedRate->id)
         {
             public function __construct(private $entryId, private $date, private $rateId) {}
@@ -237,15 +302,9 @@ class ProcessDataImportTest extends TestCase
 
         (new ProcessDataImport)->handle();
 
-        // Should be stored under the base rate, not the shared rate
-        $this->assertDatabaseHas('resrv_availabilities', [
-            'statamic_id' => $entryId,
-            'rate_id' => $baseRate->id,
-            'price' => 100,
-        ]);
-
+        // No rows should be created — shared rate can't seed base rate prices
         $this->assertDatabaseMissing('resrv_availabilities', [
-            'rate_id' => $sharedRate->id,
+            'statamic_id' => $entryId,
         ]);
     }
 

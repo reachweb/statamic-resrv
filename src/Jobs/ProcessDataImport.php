@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Jobs;
 
+use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -77,19 +78,45 @@ class ProcessDataImport implements ShouldQueue
                     return;
                 }
 
-                $dataToAdd = [];
-                foreach ($period as $day) {
-                    $dataToAdd[] = [
-                        'statamic_id' => $id,
-                        'date' => $day->isoFormat('YYYY-MM-DD'),
-                        'price' => $data['price'],
-                        'available' => $data['available'],
-                        'rate_id' => $rateId,
-                    ];
-                }
+                if ($isSharedRate) {
+                    $existingDates = Availability::where('statamic_id', $id)
+                        ->where('rate_id', $rateId)
+                        ->whereBetween('date', [$data['date_start'], $data['date_end']])
+                        ->pluck('date')
+                        ->map(fn ($d) => $d instanceof Carbon ? $d->toDateString() : $d)
+                        ->all();
 
-                $updateColumns = $isSharedRate ? ['available'] : ['price', 'available'];
-                Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], $updateColumns);
+                    $dataToAdd = [];
+                    foreach ($period as $day) {
+                        $dateStr = $day->isoFormat('YYYY-MM-DD');
+                        if (in_array($dateStr, $existingDates)) {
+                            $dataToAdd[] = [
+                                'statamic_id' => $id,
+                                'date' => $dateStr,
+                                'price' => $data['price'],
+                                'available' => $data['available'],
+                                'rate_id' => $rateId,
+                            ];
+                        }
+                    }
+
+                    if (! empty($dataToAdd)) {
+                        Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], ['available']);
+                    }
+                } else {
+                    $dataToAdd = [];
+                    foreach ($period as $day) {
+                        $dataToAdd[] = [
+                            'statamic_id' => $id,
+                            'date' => $day->isoFormat('YYYY-MM-DD'),
+                            'price' => $data['price'],
+                            'available' => $data['available'],
+                            'rate_id' => $rateId,
+                        ];
+                    }
+
+                    Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], ['price', 'available']);
+                }
             });
         });
 

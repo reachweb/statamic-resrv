@@ -96,6 +96,17 @@ return new class extends Migration
 
     public function down(): void
     {
+        // P2: Recreate the legacy advanced availabilities table dropped by up()
+        Schema::create('resrv_advanced_availabilities', function (Blueprint $table) {
+            $table->string('statamic_id')->index();
+            $table->date('date')->index();
+            $table->integer('available');
+            $table->float('price', 8, 2);
+            $table->string('property')->index();
+            $table->unique(['statamic_id', 'date', 'property']);
+            $table->timestamps();
+        });
+
         Schema::table('resrv_availabilities', function (Blueprint $table) {
             $table->dropForeign(['rate_id']);
             $table->dropUnique(['statamic_id', 'date', 'rate_id']);
@@ -106,15 +117,21 @@ return new class extends Migration
             $table->unsignedBigInteger('rate_id')->nullable()->change();
         });
 
-        // Populate property from rate slug to preserve uniqueness before adding constraint
-        DB::statement('
+        // P3: Map default rate slug back to legacy 'none' property value
+        DB::statement("
             UPDATE resrv_availabilities
-            SET property = (
-                SELECT slug FROM resrv_rates
-                WHERE resrv_rates.id = resrv_availabilities.rate_id
-            )
-            WHERE rate_id IS NOT NULL
-        ');
+            SET property = CASE
+                WHEN rate_id IS NOT NULL AND (
+                    SELECT slug FROM resrv_rates
+                    WHERE resrv_rates.id = resrv_availabilities.rate_id
+                ) = 'default' THEN 'none'
+                WHEN rate_id IS NOT NULL THEN (
+                    SELECT slug FROM resrv_rates
+                    WHERE resrv_rates.id = resrv_availabilities.rate_id
+                )
+                ELSE 'none'
+            END
+        ");
 
         Schema::table('resrv_availabilities', function (Blueprint $table) {
             $table->unique(['statamic_id', 'date', 'property']);
@@ -129,23 +146,36 @@ return new class extends Migration
             $table->string('property')->nullable();
         });
 
-        DB::statement('
+        // P3: Default rate maps to NULL property on reservations (legacy behavior)
+        DB::statement("
             UPDATE resrv_reservations
-            SET property = (
-                SELECT slug FROM resrv_rates
-                WHERE resrv_rates.id = resrv_reservations.rate_id
-            )
+            SET property = CASE
+                WHEN rate_id IS NOT NULL AND (
+                    SELECT slug FROM resrv_rates
+                    WHERE resrv_rates.id = resrv_reservations.rate_id
+                ) = 'default' THEN NULL
+                ELSE (
+                    SELECT slug FROM resrv_rates
+                    WHERE resrv_rates.id = resrv_reservations.rate_id
+                )
+            END
             WHERE rate_id IS NOT NULL
-        ');
+        ");
 
-        DB::statement('
+        DB::statement("
             UPDATE resrv_child_reservations
-            SET property = (
-                SELECT slug FROM resrv_rates
-                WHERE resrv_rates.id = resrv_child_reservations.rate_id
-            )
+            SET property = CASE
+                WHEN rate_id IS NOT NULL AND (
+                    SELECT slug FROM resrv_rates
+                    WHERE resrv_rates.id = resrv_child_reservations.rate_id
+                ) = 'default' THEN NULL
+                ELSE (
+                    SELECT slug FROM resrv_rates
+                    WHERE resrv_rates.id = resrv_child_reservations.rate_id
+                )
+            END
             WHERE rate_id IS NOT NULL
-        ');
+        ");
 
         Schema::table('resrv_fixed_pricing', function (Blueprint $table) {
             $table->dropUnique(['statamic_id', 'days', 'rate_id']);
