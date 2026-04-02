@@ -18,6 +18,7 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Repositories\AvailabilityRepository as AvailabilityRepositoryClass;
 use Reach\StatamicResrv\Resources\AvailabilityItemResource;
 use Reach\StatamicResrv\Resources\AvailabilityResource;
+use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesPricing;
@@ -247,16 +248,19 @@ class Availability extends Model implements AvailabilityContract
             ->when($entries, fn ($query) => $query->whereIn('statamic_id', $entries));
 
         $baseRateIds = $filteredAvailable->pluck('rate_id')->unique()->filter()->values();
-        $ratesMap = Rate::withoutGlobalScopes()->whereIn('id', $baseRateIds)->with('entries')->get()->keyBy('id');
+        $ratesMap = Rate::withoutGlobalScope(OrderScope::class)
+            ->whereIn('id', $baseRateIds)
+            ->with('entries')
+            ->get()
+            ->keyBy('id');
 
         // When browsing without a rate_id, find published shared rates that reference the base rates
         $sharedByBase = collect();
         if (! $this->rateId) {
-            $sharedRates = Rate::withoutGlobalScopes()
+            $sharedRates = Rate::withoutGlobalScope(OrderScope::class)
                 ->whereIn('base_rate_id', $baseRateIds)
                 ->where('availability_type', 'shared')
                 ->where('published', true)
-                ->whereNull('deleted_at')
                 ->with('entries')
                 ->get();
 
@@ -293,7 +297,7 @@ class Availability extends Model implements AvailabilityContract
 
                     $baseRate = $ratesMap->get($item->rate_id);
 
-                    if (! $baseRate || ($this->ratePassesRestrictions($baseRate) && $baseRate->appliesToEntry($item->statamic_id))) {
+                    if ($baseRate && $this->ratePassesRestrictions($baseRate) && $baseRate->appliesToEntry($item->statamic_id)) {
                         $processed->push($this->populateAvailability($item));
                     }
 

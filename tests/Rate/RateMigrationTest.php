@@ -241,9 +241,10 @@ class RateMigrationTest extends TestCase
         }
     }
 
-    public function test_fixed_pricing_not_duplicated_for_entry_scoped_rates_that_dont_apply(): void
+    public function test_fixed_pricing_duplicated_for_all_collection_wide_rates(): void
     {
-        // entry-aa has both double-room and single-room; entry-bb only has double-room
+        // entry-aa has both double-room and single-room; entry-bb only has double-room availability
+        // but both rates are collection-wide since blueprint properties apply to all entries
         $this->insertEntry('entry-aa', 'hotel');
         $this->insertEntry('entry-bb', 'hotel');
         $this->insertAvailability('entry-aa', 'double-room', 100, 2, now()->toDateString());
@@ -258,9 +259,9 @@ class RateMigrationTest extends TestCase
         $doubleRoom = DB::table('resrv_rates')->where('collection', 'hotel')->where('slug', 'double-room')->first();
         $singleRoom = DB::table('resrv_rates')->where('collection', 'hotel')->where('slug', 'single-room')->first();
 
-        // double-room is apply_to_all, single-room is entry-scoped to entry-aa only
+        // Both rates are apply_to_all since blueprint properties were collection-wide
         $this->assertTrue((bool) $doubleRoom->apply_to_all);
-        $this->assertFalse((bool) $singleRoom->apply_to_all);
+        $this->assertTrue((bool) $singleRoom->apply_to_all);
 
         $finalize = include __DIR__.'/../../database/migrations/2026_03_01_000004_finalize_rate_migration.php';
         $finalize->up();
@@ -273,10 +274,13 @@ class RateMigrationTest extends TestCase
             $doubleRoomFixed->pluck('statamic_id')->toArray()
         );
 
-        // single-room (entry-scoped): should only have fixed pricing for entry-aa, NOT entry-bb
+        // single-room (apply_to_all): should also have fixed pricing for both entries
         $singleRoomFixed = DB::table('resrv_fixed_pricing')->where('rate_id', $singleRoom->id)->get();
-        $this->assertCount(1, $singleRoomFixed);
-        $this->assertEquals('entry-aa', $singleRoomFixed->first()->statamic_id);
+        $this->assertCount(2, $singleRoomFixed);
+        $this->assertEqualsCanonicalizing(
+            ['entry-aa', 'entry-bb'],
+            $singleRoomFixed->pluck('statamic_id')->toArray()
+        );
     }
 
     public function test_migration_is_idempotent(): void
@@ -321,7 +325,7 @@ class RateMigrationTest extends TestCase
         $this->assertNotNull($rate->updated_at);
     }
 
-    public function test_apply_to_all_false_when_properties_differ_across_entries(): void
+    public function test_all_migrated_rates_are_collection_wide(): void
     {
         $this->insertEntry('entry-aa', 'hotel');
         $this->insertEntry('entry-bb', 'hotel');
@@ -341,17 +345,13 @@ class RateMigrationTest extends TestCase
             ->where('slug', 'single-room')
             ->first();
 
-        // double-room: both entries have it → apply_to_all = true
+        // Both rates are apply_to_all: blueprint properties were collection-wide,
+        // even when not all entries had availability data for every property
         $this->assertTrue((bool) $doubleRoom->apply_to_all);
         $this->assertEquals(0, DB::table('resrv_rate_entries')->where('rate_id', $doubleRoom->id)->count());
 
-        // single-room: only entry-aa has it → apply_to_all = false with pivot
-        $this->assertFalse((bool) $singleRoom->apply_to_all);
-        $this->assertEquals(1, DB::table('resrv_rate_entries')->where('rate_id', $singleRoom->id)->count());
-        $this->assertDatabaseHas('resrv_rate_entries', [
-            'rate_id' => $singleRoom->id,
-            'statamic_id' => 'entry-aa',
-        ]);
+        $this->assertTrue((bool) $singleRoom->apply_to_all);
+        $this->assertEquals(0, DB::table('resrv_rate_entries')->where('rate_id', $singleRoom->id)->count());
     }
 
     public function test_null_property_reservations_get_default_rate(): void
@@ -558,7 +558,7 @@ class RateMigrationTest extends TestCase
         $this->assertEquals(0, DB::table('resrv_reservations')->whereNull('rate_id')->count());
     }
 
-    public function test_null_property_reservations_without_availability_create_pivot_entries(): void
+    public function test_null_property_reservations_without_availability_are_collection_wide(): void
     {
         $this->insertEntry('entry-np-pivot1');
         $this->insertEntry('entry-np-pivot2');
@@ -573,10 +573,10 @@ class RateMigrationTest extends TestCase
 
         $this->assertNotNull($defaultRate);
 
-        // Rate does not apply to all entries (entry-np-pivot2 has no reservation),
-        // so a pivot entry should exist for entry-np-pivot1
-        $this->assertFalse((bool) $defaultRate->apply_to_all);
-        $this->assertEquals(1, DB::table('resrv_rate_entries')->where('rate_id', $defaultRate->id)->count());
+        // Migrated rates are always collection-wide, even when only some entries
+        // had reservation data — the old schema applied properties to all entries
+        $this->assertTrue((bool) $defaultRate->apply_to_all);
+        $this->assertEquals(0, DB::table('resrv_rate_entries')->where('rate_id', $defaultRate->id)->count());
     }
 
     protected function insertAvailability(string $statamicId, string $property, float $price, int $available, string $date): int
