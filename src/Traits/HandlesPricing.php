@@ -14,31 +14,32 @@ trait HandlesPricing
 
     private ?int $cachedRateId = null;
 
-    protected function getRate(): ?Rate
+    protected function getRate(?int $rateId = null): ?Rate
     {
-        if ($this->rateId === null) {
+        $effectiveRateId = $rateId ?? $this->rateId;
+
+        if ($effectiveRateId === null) {
             return null;
         }
 
-        if ($this->cachedRateId !== $this->rateId) {
-            $this->cachedRate = Rate::find($this->rateId);
-            $this->cachedRateId = $this->rateId;
+        if ($this->cachedRateId !== $effectiveRateId) {
+            $this->cachedRate = Rate::find($effectiveRateId);
+            $this->cachedRateId = $effectiveRateId;
         }
 
         return $this->cachedRate;
     }
 
-    protected function getPrices($prices, $id): array
+    protected function getPrices($prices, $id, ?int $rateId = null, ?Rate $rate = null): array
     {
-        // Convert comma separated prices to collection of Price objects
-        $pricesCollection = collect(explode(',', $prices))->transform(fn ($price) => Price::create($price));
+        $effectiveRateId = $rateId ?? $this->rateId;
+        $rate = $rate ?? ($effectiveRateId ? $this->getRate($effectiveRateId) : null);
 
-        // If a rate_id is set and the rate is relative, apply the modifier per day
-        if ($this->rateId) {
-            $rate = $this->getRate();
-            if ($rate?->isRelative()) {
-                $pricesCollection = $pricesCollection->transform(fn ($price) => $rate->calculatePrice($price));
-            }
+        $pricesCollection = $this->createPricesCollection($prices);
+
+        // If a rate is set and is relative, apply the modifier per day
+        if ($rate?->isRelative()) {
+            $pricesCollection = $pricesCollection->transform(fn ($price) => $rate->calculatePrice($price));
         }
 
         $start = Price::create(0);
@@ -47,14 +48,11 @@ trait HandlesPricing
         $reservationPrice = $start->add(...$pricesCollection->toArray());
 
         // If FixedPricing exists, replace the price
-        if ($fixedPrice = FixedPricing::getFixedPricing($id, $this->duration, $this->rateId)) {
+        if ($fixedPrice = FixedPricing::getFixedPricing($id, $this->duration, $effectiveRateId)) {
             $reservationPrice = $fixedPrice;
-        } elseif ($this->rateId) {
-            $rate = $this->getRate();
-            if ($rate?->isRelative() && $rate->base_rate_id) {
-                if ($baseFixedPrice = FixedPricing::getFixedPricing($id, $this->duration, $rate->base_rate_id)) {
-                    $reservationPrice = $rate->calculateTotalPrice($baseFixedPrice, $this->duration);
-                }
+        } elseif ($rate?->isRelative() && $rate->base_rate_id) {
+            if ($baseFixedPrice = FixedPricing::getFixedPricing($id, $this->duration, $rate->base_rate_id)) {
+                $reservationPrice = $rate->calculateTotalPrice($baseFixedPrice, $this->duration);
             }
         }
 

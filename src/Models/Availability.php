@@ -275,57 +275,42 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
-        $originalRateId = $this->rateId;
+        $availableWithPricing = $filteredAvailable
+            ->groupBy('statamic_id')
+            ->map(function ($items) use ($ratesMap, $sharedByBase, $selectedSharedRate) {
+                $processed = collect();
 
-        try {
-            $availableWithPricing = $filteredAvailable
-                ->groupBy('statamic_id')
-                ->map(function ($items) use ($ratesMap, $sharedByBase, $selectedSharedRate, $originalRateId) {
-                    $processed = collect();
-
-                    foreach ($items as $item) {
-                        if ($selectedSharedRate) {
-                            if ($this->ratePassesRestrictions($selectedSharedRate)
-                                && $selectedSharedRate->appliesToEntry($item->statamic_id)
-                            ) {
-                                $this->rateId = $selectedSharedRate->id;
-                                $this->cachedRate = $selectedSharedRate;
-                                $this->cachedRateId = $selectedSharedRate->id;
-                                $processed->push($this->populateAvailability($item));
-                            }
-
-                            continue;
+                foreach ($items as $item) {
+                    if ($selectedSharedRate) {
+                        if ($this->ratePassesRestrictions($selectedSharedRate)
+                            && $selectedSharedRate->appliesToEntry($item->statamic_id)
+                        ) {
+                            $processed->push($this->populateAvailability($item, rateId: $selectedSharedRate->id, rate: $selectedSharedRate));
                         }
 
-                        $this->rateId = $originalRateId;
-                        $baseRate = $ratesMap->get($item->rate_id);
-
-                        if (! $baseRate || ($this->ratePassesRestrictions($baseRate) && $baseRate->appliesToEntry($item->statamic_id))) {
-                            $processed->push($this->populateAvailability($item));
-                        }
-
-                        foreach ($sharedByBase->get($item->rate_id, collect()) as $sharedRate) {
-                            if (! $this->ratePassesRestrictions($sharedRate)) {
-                                continue;
-                            }
-                            if (! $sharedRate->appliesToEntry($item->statamic_id)) {
-                                continue;
-                            }
-                            $this->rateId = $sharedRate->id;
-                            $this->cachedRate = $sharedRate;
-                            $this->cachedRateId = $sharedRate->id;
-                            $processed->push($this->populateAvailability($item));
-                        }
+                        continue;
                     }
 
-                    return $processed->sortBy('price', SORT_NUMERIC);
-                })
-                ->filter(fn ($items) => $items->isNotEmpty());
-        } finally {
-            $this->rateId = $originalRateId;
-            $this->cachedRate = null;
-            $this->cachedRateId = null;
-        }
+                    $baseRate = $ratesMap->get($item->rate_id);
+
+                    if (! $baseRate || ($this->ratePassesRestrictions($baseRate) && $baseRate->appliesToEntry($item->statamic_id))) {
+                        $processed->push($this->populateAvailability($item));
+                    }
+
+                    foreach ($sharedByBase->get($item->rate_id, collect()) as $sharedRate) {
+                        if (! $this->ratePassesRestrictions($sharedRate)) {
+                            continue;
+                        }
+                        if (! $sharedRate->appliesToEntry($item->statamic_id)) {
+                            continue;
+                        }
+                        $processed->push($this->populateAvailability($item, rateId: $sharedRate->id, rate: $sharedRate));
+                    }
+                }
+
+                return $processed->sortBy('price', SORT_NUMERIC);
+            })
+            ->filter(fn ($items) => $items->isNotEmpty());
 
         return new AvailabilityResource($availableWithPricing, $request);
     }
@@ -346,6 +331,8 @@ class Availability extends Model implements AvailabilityContract
             return $this->getMultipleRatesAvailability($resrvEntry, $request);
         }
 
+        $rate = null;
+
         if ($this->rateId) {
             $rate = $this->getRate();
             if (! $rate) {
@@ -363,17 +350,14 @@ class Availability extends Model implements AvailabilityContract
             return new AvailabilityItemResource($availability, $request);
         }
 
-        if (! $this->rateId) {
+        if (! $rate) {
             $rate = $this->resolveRateForResult($results, $resrvEntry);
             if (! $rate) {
                 return new AvailabilityItemResource($availability, $request);
             }
-            $this->rateId = $rate->id;
-            $this->cachedRate = $rate;
-            $this->cachedRateId = $rate->id;
         }
 
-        $availability->push($this->populateAvailability($results));
+        $availability->push($this->populateAvailability($results, rateId: $rate->id, rate: $rate));
 
         return new AvailabilityItemResource($availability, $request);
     }
@@ -408,29 +392,21 @@ class Availability extends Model implements AvailabilityContract
         )->get()->keyBy('rate_id');
 
         $rates = Rate::forEntry($entry->item_id)->published()->get();
-        $originalRateId = $this->rateId;
 
-        try {
-            foreach ($rates as $rate) {
-                $result = ($rate->isShared() && $rate->base_rate_id)
-                    ? $directResults->get($rate->base_rate_id)
-                    : $directResults->get($rate->id);
+        foreach ($rates as $rate) {
+            $result = ($rate->isShared() && $rate->base_rate_id)
+                ? $directResults->get($rate->base_rate_id)
+                : $directResults->get($rate->id);
 
-                if (! $result) {
-                    continue;
-                }
-
-                if (! $this->ratePassesRestrictions($rate)) {
-                    continue;
-                }
-
-                $this->rateId = $rate->id;
-                $this->cachedRate = $rate;
-                $this->cachedRateId = $rate->id;
-                $availability->put($rate->id, $this->populateAvailability($result, $rate->title));
+            if (! $result) {
+                continue;
             }
-        } finally {
-            $this->rateId = $originalRateId;
+
+            if (! $this->ratePassesRestrictions($rate)) {
+                continue;
+            }
+
+            $availability->put($rate->id, $this->populateAvailability($result, $rate->title, rateId: $rate->id, rate: $rate));
         }
 
         return new AvailabilityItemResource($availability->sortBy('price'), $request);
@@ -459,22 +435,17 @@ class Availability extends Model implements AvailabilityContract
         );
     }
 
-    protected function populateAvailability($results, $label = null)
+    protected function populateAvailability($results, $label = null, ?int $rateId = null, ?Rate $rate = null)
     {
-        $rateId = $this->rateId ?? $results->rate_id;
+        $effectiveRateId = $rateId ?? $this->rateId ?? $results->rate_id;
 
-        $savedRateId = $this->rateId;
-        $this->rateId = $rateId;
-
-        $prices = $this->getPrices($results->prices, $results->statamic_id);
-
-        $this->rateId = $savedRateId;
+        $prices = $this->getPrices($results->prices, $results->statamic_id, $effectiveRateId, $rate);
 
         return collect([
             'price' => $prices['reservationPrice']->format(),
             'original_price' => $prices['originalPrice']?->format(),
             'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
-            'rate_id' => $rateId,
+            'rate_id' => $effectiveRateId,
             'rateLabel' => $label,
         ]);
     }
