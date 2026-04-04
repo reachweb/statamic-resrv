@@ -5,6 +5,8 @@ namespace Reach\StatamicResrv\Livewire\Traits;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Livewire\AvailabilityResults;
+use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 
 trait HandlesPricing
@@ -25,8 +27,9 @@ trait HandlesPricing
         $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
 
         $payment = $this->reservation->payment;
+        $paymentSurcharge = $this->reservation->payment_surcharge;
 
-        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'payment'));
+        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'payment', 'paymentSurcharge'));
     }
 
     public function calculateAvailabilityTotals($availabilityTotal): PriceClass
@@ -72,11 +75,11 @@ trait HandlesPricing
         $freeCancellation = config('resrv-config.free_cancellation_period');
         $freeCancellationDays = false;
 
-        if ($this instanceof \Reach\StatamicResrv\Livewire\AvailabilityResults) {
+        if ($this instanceof AvailabilityResults) {
             $dateStart = Carbon::parse($this->data->dates['date_start']);
             $freeCancellationDays = (int) Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay(), true);
         }
-        if ($this instanceof \Reach\StatamicResrv\Livewire\Checkout) {
+        if ($this instanceof Checkout) {
             $dateStart = Carbon::parse($this->reservation->date_start);
             $freeCancellationDays = (int) Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay(), true);
         }

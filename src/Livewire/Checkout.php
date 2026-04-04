@@ -14,7 +14,6 @@ use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
-use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
@@ -91,6 +90,9 @@ class Checkout extends Component
 
     public function goToStep(int $step): void
     {
+        if ($step < 3 && $this->selectedGateway !== '') {
+            $this->resetPaymentState();
+        }
         $this->step = $step;
     }
 
@@ -184,6 +186,7 @@ class Checkout extends Component
         // If only one gateway, auto-select and initialize payment
         if (! $manager->hasMultiple()) {
             $this->selectedGateway = $this->availableGateways[0]['name'];
+            $this->applySurcharge($manager, $this->selectedGateway);
 
             return $this->initializePayment();
         }
@@ -204,16 +207,42 @@ class Checkout extends Component
         }
 
         $this->selectedGateway = $gateway;
+        $this->applySurcharge($manager, $gateway);
 
         return $this->initializePayment();
     }
 
     public function resetPaymentState(): void
     {
+        if ($this->selectedGateway !== '' && ! $this->reservation->payment_surcharge->isZero()) {
+            $reservation = $this->reservation->fresh();
+            $surcharge = $reservation->payment_surcharge;
+
+            $reservation->update([
+                'payment' => $reservation->payment->subtract($surcharge)->format(),
+                'payment_surcharge' => 0,
+            ]);
+            unset($this->reservation);
+        }
+
         $this->selectedGateway = '';
         $this->clientSecret = '';
         $this->publicKey = '';
         $this->paymentView = '';
+    }
+
+    protected function applySurcharge(PaymentGatewayManager $manager, string $gateway): void
+    {
+        $reservation = $this->reservation->fresh();
+        $basePayment = $reservation->payment->subtract($reservation->payment_surcharge);
+        $surcharge = $manager->calculateSurcharge($gateway, $basePayment);
+
+        $reservation->update([
+            'payment' => $basePayment->add($surcharge)->format(),
+            'payment_surcharge' => $surcharge->format(),
+        ]);
+
+        unset($this->reservation);
     }
 
     protected function initializePayment()

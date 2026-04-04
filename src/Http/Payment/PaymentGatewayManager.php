@@ -2,7 +2,9 @@
 
 namespace Reach\StatamicResrv\Http\Payment;
 
+use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 
 class PaymentGatewayManager
 {
@@ -28,6 +30,7 @@ class PaymentGatewayManager
                 $this->gateways[$name] = [
                     'class' => $config['class'],
                     'label' => $config['label'] ?? null,
+                    'surcharge' => $config['surcharge'] ?? null,
                     'instance' => null,
                 ];
             }
@@ -42,6 +45,7 @@ class PaymentGatewayManager
         $this->gateways[$name] = [
             'class' => get_class($instance),
             'label' => $instance->label(),
+            'surcharge' => null,
             'instance' => $instance,
         ];
         $this->defaultName = $name;
@@ -113,6 +117,21 @@ class PaymentGatewayManager
         return $this->gateway($reservation->payment_gateway);
     }
 
+    public function calculateSurcharge(string $gateway, PriceClass $basePayment): PriceClass
+    {
+        $config = $this->gateways[$gateway]['surcharge'] ?? null;
+
+        if (! $config) {
+            return Price::create(0);
+        }
+
+        if ($config['type'] === 'percent') {
+            return Price::create($basePayment->format())->percent($config['amount']);
+        }
+
+        return Price::create($config['amount']);
+    }
+
     public function availableForFrontend(): array
     {
         return collect($this->gateways)->map(function ($config, $name) {
@@ -122,6 +141,7 @@ class PaymentGatewayManager
                 'name' => $name,
                 'label' => $this->gateways[$name]['label'],
                 'redirects' => $instance->redirectsForPayment(),
+                'surcharge' => $this->gateways[$name]['surcharge'] ?? null,
             ];
         })->values()->all();
     }
