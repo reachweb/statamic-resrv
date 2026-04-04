@@ -113,6 +113,16 @@
     </div>
 </div>
 
+<style>
+    .rc-day__label, .rc-day__dot {
+        animation: rc-fade-in 0.3s ease-out;
+    }
+    @keyframes rc-fade-in {
+        from { opacity: 0; transform: translateY(2px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
 @script
 <script>
 Alpine.data('datepicker', () => ({
@@ -147,6 +157,7 @@ Alpine.data('datepicker', () => ({
 
     init() {
         this.$watch('advancedSelected', async () => {
+            if (!this.calendarReady || !this.showAvailabilityOnCalendar) return;
             this.availabilityCalendar = await this.fetchAvailability();
             const calendarEl = this.$refs.calendarInstance;
             if (calendarEl && calendarEl._x_dataStack) {
@@ -157,10 +168,18 @@ Alpine.data('datepicker', () => ({
 
     async openCalendar() {
         if (!this.calendarReady) {
+            this.calendarReady = true;
+            this.isModalOpen = true;
             if (this.showAvailabilityOnCalendar) {
                 this.availabilityCalendar = await this.fetchAvailability();
+                this.$nextTick(() => {
+                    const calendarEl = this.$refs.calendarInstance;
+                    if (calendarEl && calendarEl._x_dataStack) {
+                        Alpine.$data(calendarEl).updateDateMetadata(this.buildDateMetadata());
+                    }
+                });
             }
-            this.calendarReady = true;
+            return;
         }
         this.isModalOpen = true;
     },
@@ -202,7 +221,13 @@ Alpine.data('datepicker', () => ({
 
     dateChanged(detail) {
         const selectedDates = detail.dates;
-        if (!selectedDates || selectedDates.length === 0) return;
+        if (!selectedDates || selectedDates.length === 0) {
+            this.dates = {};
+            this.isModalOpen = false;
+            $wire.clearDates();
+            $dispatch('availability-search-cleared');
+            return;
+        }
 
         const dateStart = dayjs(selectedDates[0].toString());
         let newDates = {};
