@@ -368,7 +368,7 @@ class Availability extends Model implements AvailabilityContract
 
     protected function resolveRateForResult($result, Entry $entry): ?Rate
     {
-        $rates = Rate::forEntry($entry->item_id)->published()->get();
+        $rates = Rate::forEntry($entry->item_id)->published()->with('entries')->get();
 
         foreach ($rates as $rate) {
             $matchesResult = ($rate->isShared() && $rate->base_rate_id)
@@ -632,42 +632,7 @@ class Availability extends Model implements AvailabilityContract
                 : $baseResults;
         }
 
-        $baseGrouped = $baseResults->groupBy('rate_id');
-        $expanded = collect();
-
-        $exhaustedByRate = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRates($rates);
-
-        foreach ($rates as $rate) {
-            $sourceRateId = ($rate->isShared() && $rate->base_rate_id)
-                ? $rate->base_rate_id
-                : $rate->id;
-
-            $sourceRows = $baseGrouped->get($sourceRateId);
-            if (! $sourceRows) {
-                continue;
-            }
-
-            $rateRows = $sourceRows->map(function ($row) use ($rate) {
-                $clone = clone $row;
-                $clone->rate_id = $rate->id;
-                if ($rate->isRelative()) {
-                    $clone->price = $rate->calculatePrice($clone->price);
-                }
-
-                return $clone;
-            });
-
-            $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date) && $rate->meetsBookingLeadTime($row->date));
-
-            $exhaustedDates = $exhaustedByRate->get($rate->id, collect());
-            if ($exhaustedDates->isNotEmpty()) {
-                $rateRows = $rateRows->reject(fn ($row) => $exhaustedDates->contains($row->date));
-            }
-
-            $expanded = $expanded->merge($rateRows);
-        }
-
-        return $expanded;
+        return $this->expandRatesFromBaseResults($baseResults, $rates);
     }
 
     public function getAvailableDatesFromDate(string $id, string $dateStart, int $quantity = 1, ?int $rateId = null, bool $showAllRates = false, bool $groupByDate = false): array
@@ -771,13 +736,19 @@ class Availability extends Model implements AvailabilityContract
     {
         $entry = Entry::whereItemId($entryId);
         $rates = Rate::forEntry($entry->item_id)->published()->get();
+
+        return $this->expandRatesFromBaseResults($baseResults, $rates, $quantity, $dateStart);
+    }
+
+    private function expandRatesFromBaseResults(Collection $baseResults, Collection $rates, int $quantity = 1, ?string $dateStart = null): Collection
+    {
         $baseGrouped = $baseResults->groupBy('rate_id');
         $expanded = collect();
 
         $exhaustedByRate = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRates($rates, $quantity);
 
         foreach ($rates as $rate) {
-            if ($rate->date_end && Carbon::parse($dateStart)->gt($rate->date_end)) {
+            if ($dateStart && $rate->date_end && Carbon::parse($dateStart)->gt($rate->date_end)) {
                 continue;
             }
 

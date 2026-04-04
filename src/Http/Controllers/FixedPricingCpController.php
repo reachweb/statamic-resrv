@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
 
@@ -50,47 +51,51 @@ class FixedPricingCpController extends Controller
             return response()->json(['id' => null]);
         }
 
-        $oldPrice = $existing->getRawOriginal('price');
+        return DB::transaction(function () use ($data, $existing) {
+            $oldPrice = $existing->getRawOriginal('price');
 
-        // Find all synced duplicates across rates that we intend to update
-        $toUpdate = $this->fixedPricing
-            ->where('statamic_id', $data['statamic_id'])
-            ->where('days', $existing->days)
-            ->where('price', $oldPrice)
-            ->get();
-
-        // If changing days, delete any conflicting rows at the target days value
-        // to avoid unique constraint violations on (statamic_id, days, rate_id)
-        if ((int) $data['days'] !== (int) $existing->days) {
-            $rateIds = $toUpdate->pluck('rate_id')->all();
-
-            $this->fixedPricing
+            // Find all synced duplicates across rates that we intend to update
+            $toUpdate = $this->fixedPricing
                 ->where('statamic_id', $data['statamic_id'])
-                ->where('days', $data['days'])
-                ->whereIn('rate_id', $rateIds)
-                ->whereNotIn('id', $toUpdate->pluck('id')->all())
-                ->delete();
-        }
+                ->where('days', $existing->days)
+                ->where('price', $oldPrice)
+                ->get();
 
-        $toUpdate->toQuery()->update(['days' => $data['days'], 'price' => $data['price']]);
+            // If changing days, delete any conflicting rows at the target days value
+            // to avoid unique constraint violations on (statamic_id, days, rate_id)
+            if ((int) $data['days'] !== (int) $existing->days) {
+                $rateIds = $toUpdate->pluck('rate_id')->all();
 
-        return response()->json(['id' => $existing->id]);
+                $this->fixedPricing
+                    ->where('statamic_id', $data['statamic_id'])
+                    ->where('days', $data['days'])
+                    ->whereIn('rate_id', $rateIds)
+                    ->whereNotIn('id', $toUpdate->pluck('id')->all())
+                    ->delete();
+            }
+
+            $toUpdate->toQuery()->update(['days' => $data['days'], 'price' => $data['price']]);
+
+            return response()->json(['id' => $existing->id]);
+        });
     }
 
     private function createForAllRates(array $data): JsonResponse
     {
         $rateIds = $this->rateIdsForEntry($data['statamic_id']);
 
-        $lastId = null;
-        foreach ($rateIds as $rateId) {
-            $row = $this->fixedPricing->updateOrCreate(
-                ['statamic_id' => $data['statamic_id'], 'days' => $data['days'], 'rate_id' => $rateId],
-                ['price' => $data['price']]
-            );
-            $lastId = $row->id;
-        }
+        return DB::transaction(function () use ($data, $rateIds) {
+            $lastId = null;
+            foreach ($rateIds as $rateId) {
+                $row = $this->fixedPricing->updateOrCreate(
+                    ['statamic_id' => $data['statamic_id'], 'days' => $data['days'], 'rate_id' => $rateId],
+                    ['price' => $data['price']]
+                );
+                $lastId = $row->id;
+            }
 
-        return response()->json(['id' => $lastId]);
+            return response()->json(['id' => $lastId]);
+        });
     }
 
     public function delete(Request $request)
