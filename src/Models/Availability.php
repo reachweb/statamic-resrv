@@ -525,20 +525,57 @@ class Availability extends Model implements AvailabilityContract
 
     public function getDynamicPricingsForReservation(Reservation $reservation)
     {
-        $entry = $this->getDefaultSiteEntry($reservation->item_id);
+        if ($reservation->isParent()) {
+            return $this->getDynamicPricingsForParentReservation($reservation);
+        }
 
-        $this->initiateAvailabilityUnsafe([
+        return $this->getDynamicPricingsForDates($reservation->item_id, [
             'date_start' => $reservation->date_start,
             'date_end' => $reservation->date_end,
             'quantity' => $reservation->quantity,
             'rate_id' => $reservation->rate_id,
         ]);
+    }
+
+    protected function getDynamicPricingsForParentReservation(Reservation $reservation): DynamicPricing|false
+    {
+        $allPricings = collect();
+
+        foreach ($reservation->childs as $child) {
+            $result = $this->getDynamicPricingsForDates($reservation->item_id, [
+                'date_start' => $child->date_start,
+                'date_end' => $child->date_end,
+                'quantity' => $child->quantity,
+                'rate_id' => $child->rate_id,
+            ]);
+
+            if ($result && $result->getToApply()) {
+                $allPricings = $allPricings->merge($result->getToApply());
+            }
+        }
+
+        if ($allPricings->isEmpty()) {
+            return false;
+        }
+
+        $dynamicPricing = new DynamicPricing;
+        $dynamicPricing->toApply = $allPricings->unique('id')->values();
+
+        return $dynamicPricing;
+    }
+
+    protected function getDynamicPricingsForDates(string $itemId, array $data): DynamicPricing|false
+    {
+        $entry = $this->getDefaultSiteEntry($itemId);
+
+        $availability = new self;
+        $availability->initiateAvailabilityUnsafe($data);
 
         $dbPrices = AvailabilityRepository::itemPricesBetween(
-            date_start: $this->date_start,
-            date_end: $this->date_end,
+            date_start: $availability->date_start,
+            date_end: $availability->date_end,
             statamic_id: $entry->id(),
-            rateId: $this->rateId,
+            rateId: $availability->rateId,
         )
             ->first();
 
@@ -546,14 +583,14 @@ class Availability extends Model implements AvailabilityContract
             return false;
         }
 
-        $prices = $this->getPrices($dbPrices['prices'], $entry->id());
+        $prices = $availability->getPrices($dbPrices['prices'], $entry->id());
 
         return DynamicPricing::searchForAvailability(
             $entry->id(),
             $prices['originalPrice'] ?? $prices['reservationPrice'],
-            $this->date_start,
-            $this->date_end,
-            $this->duration
+            $availability->date_start,
+            $availability->date_end,
+            $availability->duration
         );
     }
 

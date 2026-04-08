@@ -10,6 +10,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
+use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
@@ -167,6 +168,10 @@ class Reservation extends Model
 
     public function extraCharges()
     {
+        if ($this->isParent()) {
+            return $this->parentExtraCharges();
+        }
+
         $data = $this->buildDataArray();
         $data['item_id'] = $this->item_id;
 
@@ -183,6 +188,29 @@ class Reservation extends Model
         return Price::create(0)->add($optionsCost, $extrasCost);
     }
 
+    protected function parentExtraCharges()
+    {
+        $totalCharges = Price::create(0);
+        $options = $this->options()->get();
+
+        foreach ($this->childs as $child) {
+            $data = $this->buildChildDataArray($child);
+
+            foreach ($options as $option) {
+                $totalCharges->add($option->calculatePrice($data, $option->pivot->value));
+            }
+
+            foreach ($this->extras()->get() as $extra) {
+                // Fresh instance required: Extra::calculatePrice mutates $this->price via dynamic pricing.
+                // withTrashed() preserves the extras() relationship behavior so soft-deleted extras
+                // attached to historical reservations can still be priced.
+                $totalCharges->add(Extra::withTrashed()->find($extra->id)->calculatePrice($data, $extra->pivot->quantity));
+            }
+        }
+
+        return $totalCharges;
+    }
+
     public function getPrices()
     {
         return (new Availability)->getPricing($this->buildDataArray(), $this->item_id);
@@ -192,7 +220,11 @@ class Reservation extends Model
     {
         $this->validateTotal($data, $statamic_id);
 
-        $this->checkMaxQuantity($data['quantity']);
+        if ($this->type === ReservationTypes::PARENT->value) {
+            $this->checkMaxQuantity($this->childs->sum('quantity'));
+        } else {
+            $this->checkMaxQuantity($data['quantity']);
+        }
 
         if ($checkOptions && ! $this->checkForRequiredOptions($statamic_id, $data)) {
             throw new OptionsException(__('There are required options you did not select.'));
@@ -215,6 +247,18 @@ class Reservation extends Model
             'date_end' => $this->date_end,
             'quantity' => $this->quantity,
             'rate_id' => $this->rate_id,
+        ];
+    }
+
+    protected function buildChildDataArray(ChildReservation $child): array
+    {
+        return [
+            'date_start' => $child->date_start,
+            'date_end' => $child->date_end,
+            'quantity' => $child->quantity,
+            'rate_id' => $child->rate_id,
+            'item_id' => $this->item_id,
+            'customer' => $this->customerData,
         ];
     }
 
@@ -245,9 +289,21 @@ class Reservation extends Model
 
     public function validateTotal($data, $statamic_id)
     {
-        $prices = (new Availability)->getPricing($data, $statamic_id);
-
-        $reservationCost = Price::create($prices['price']);
+        if ($this->type === ReservationTypes::PARENT->value) {
+            $reservationCost = Price::create(0);
+            foreach ($this->childs as $child) {
+                $childPrices = (new Availability)->getPricing([
+                    'date_start' => $child->date_start,
+                    'date_end' => $child->date_end,
+                    'quantity' => $child->quantity,
+                    'rate_id' => $child->rate_id,
+                ], $statamic_id);
+                $reservationCost->add(Price::create($childPrices['price']));
+            }
+        } else {
+            $prices = (new Availability)->getPricing($data, $statamic_id);
+            $reservationCost = Price::create($prices['price']);
+        }
 
         $dbTotal = $reservationCost->add($this->validateExtraCharges($data, $statamic_id));
         $frontendTotal = $data['total'];
@@ -261,6 +317,10 @@ class Reservation extends Model
 
     protected function validateExtraCharges($data, $statamic_id)
     {
+        if ($this->isParent()) {
+            return $this->validateParentExtraCharges($data, $statamic_id);
+        }
+
         $extraCharges = Price::create(0);
 
         $optionsCost = Price::create(0);
@@ -282,8 +342,38 @@ class Reservation extends Model
         return $extraCharges->add($optionsCost, $extrasCost);
     }
 
+    protected function validateParentExtraCharges($data, $statamic_id)
+    {
+        $totalCharges = Price::create(0);
+
+        foreach ($this->childs as $child) {
+            $childData = $this->buildChildDataArray($child);
+            if (array_key_exists('customer', $data)) {
+                $childData['customer'] = $data['customer'];
+            }
+
+            if (array_key_exists('options', $data) && $data['options']->count() > 0) {
+                $data['options']->each(function ($option) use ($childData, $totalCharges) {
+                    $totalCharges->add(Option::find($option['id'])->calculatePrice($childData, $option['value']));
+                });
+            }
+
+            if (array_key_exists('extras', $data) && $data['extras']->count() > 0) {
+                $data['extras']->each(function ($extra) use ($childData, $totalCharges) {
+                    $totalCharges->add(Extra::find($extra['id'])->calculatePrice($childData, $extra['quantity']));
+                });
+            }
+        }
+
+        return $totalCharges;
+    }
+
     protected function checkForRequiredExtras($statamic_id, $data)
     {
+        if ($this->isParent()) {
+            return $this->checkForRequiredExtrasForParent($statamic_id, $data);
+        }
+
         $required = (new ExtraCondition)->hasRequiredExtrasSelected($statamic_id, $data);
         if ($required !== true) {
             return $required->transform(function ($messages, $extra_id) {
@@ -292,6 +382,34 @@ class Reservation extends Model
         }
 
         return false;
+    }
+
+    protected function checkForRequiredExtrasForParent($statamic_id, $data)
+    {
+        $allRequired = collect();
+        $extraCondition = new ExtraCondition;
+
+        foreach ($this->childs as $child) {
+            $childData = array_merge($data, [
+                'date_start' => $child->date_start,
+                'date_end' => $child->date_end,
+                'quantity' => $child->quantity,
+                'rate_id' => $child->rate_id,
+            ]);
+
+            $required = $extraCondition->hasRequiredExtrasSelected($statamic_id, $childData);
+            if ($required !== true) {
+                $allRequired = $allRequired->merge($required);
+            }
+        }
+
+        if ($allRequired->isEmpty()) {
+            return false;
+        }
+
+        return $allRequired->unique()->transform(function ($messages, $extra_id) {
+            return 'ID '.$extra_id.' '.$messages->implode(' ');
+        })->implode(', ');
     }
 
     protected function checkForRequiredOptions($statamic_id, $data): bool

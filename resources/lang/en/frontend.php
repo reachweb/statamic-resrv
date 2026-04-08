@@ -73,4 +73,7 @@ return [
     'changePaymentMethod' => 'Change payment method',
     'offlinePaymentDescription' => 'Complete your reservation by confirming below. Payment can be arranged separately.',
     'offlinePaymentAmount' => 'Amount due',
+    'addToBooking' => 'Add to booking',
+    'yourBooking' => 'Your booking',
+    'clear' => 'Clear',
 ];

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Options;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
@@ -142,5 +143,44 @@ class CheckoutOptionsTest extends TestCase
             'option_id' => $option->id,
             'value' => $option->values[0]->id,
         ]);
+    }
+
+    public function test_parent_option_prices_sum_per_child_dates()
+    {
+        // Default OptionValue factory: perday at 22.75/day
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $this->entries->first()->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        // Child 1: 2 days, qty 1
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: 1 day, qty 1
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(4)->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $component = Livewire::test(Options::class, ['reservation' => $reservation]);
+
+        // Per-day option at 22.75/day:
+        // Child 1: 22.75 * 2 days * 1 qty = 45.50
+        // Child 2: 22.75 * 1 day  * 1 qty = 22.75
+        // Total: 68.25
+        // NOT: 22.75 * 5 days * 2 qty = 227.50 (parent collapsed dates + total qty)
+        $this->assertEquals('68.25', $component->options->first()->values->first()->price);
     }
 }

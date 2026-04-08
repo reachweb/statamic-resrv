@@ -616,6 +616,51 @@ class AvailabilityResultsTest extends TestCase
         $this->assertEquals((string) $rateToCheckout, $component->get('data.rate'));
     }
 
+    /**
+     * Regression: with rate selection enabled and rate=any, the all-rates query
+     * must use the user's actual quantity. If it forces quantity=1 the displayed
+     * price is per-unit, then validateAvailabilityAndPrice in checkoutRate()
+     * recomputes with the real quantity and the prices won't match — checkout
+     * fails with a "not available" error even though the booking is valid.
+     */
+    public function test_checkout_rate_succeeds_with_quantity_greater_than_one()
+    {
+        $checkoutPage = $this->createCheckoutEntry();
+
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+
+        Availability::where('statamic_id', $entryId)->update(['available' => 5]);
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 3,
+                    'rate' => 'any',
+                ]
+            );
+
+        // The displayed price for the rate should already include the quantity
+        // multiplier (2 days * 50 * 3 = 300.00), not the per-unit price.
+        $availability = $component->viewData('availability');
+        $this->assertEquals('300.00', data_get($availability, $testRate->id.'.data.price'));
+
+        $component->call('checkoutRate', (string) $testRate->id)
+            ->assertHasNoErrors()
+            ->assertRedirect($checkoutPage->url());
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'item_id' => $entryId,
+            'rate_id' => $testRate->id,
+            'quantity' => 3,
+            'price' => '300.00',
+        ]);
+    }
+
     public function test_specific_rate_preserved_in_rates_mode()
     {
         $entryId = $this->advancedEntries->first()->id();

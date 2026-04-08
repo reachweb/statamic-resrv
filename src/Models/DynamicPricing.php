@@ -298,7 +298,14 @@ class DynamicPricing extends Model
         }
 
         if ($coupon && $this->hasDates($coupon) && $reservation) {
-            if (! $this->datesInRange($coupon, $reservation->date_start, $reservation->date_end)) {
+            if ($reservation->isParent()) {
+                $anyChildInRange = $reservation->childs->contains(
+                    fn ($child) => $this->datesInRange($coupon, $child->date_start, $child->date_end)
+                );
+                if (! $anyChildInRange) {
+                    throw new CouponNotFoundException(__('This coupon does not apply to the dates of your reservation.'));
+                }
+            } elseif (! $this->datesInRange($coupon, $reservation->date_start, $reservation->date_end)) {
                 throw new CouponNotFoundException(__('This coupon does not apply to the dates of your reservation.'));
             }
         }

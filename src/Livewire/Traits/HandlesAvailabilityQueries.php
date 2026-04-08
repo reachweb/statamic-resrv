@@ -6,10 +6,16 @@ use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\CutoffException;
+use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
+use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Repositories\AvailabilityRepository;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\EntryCollection;
 use Statamic\Extensions\Pagination\LengthAwarePaginator;
@@ -81,9 +87,13 @@ trait HandlesAvailabilityQueries
         });
     }
 
-    public function queryAvailabilityForAllRates(): Collection
+    public function queryAvailabilityForAllRates(?int $quantityOverride = null): Collection
     {
         $searchData = array_merge($this->data->toResrvArray(), ['rate_id' => 'any']);
+
+        if ($quantityOverride !== null) {
+            $searchData['quantity'] = $quantityOverride;
+        }
 
         try {
             $result = app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId);
@@ -122,6 +132,169 @@ trait HandlesAvailabilityQueries
 
         if (! app(Availability::class)->confirmAvailabilityAndPrice($searchData, $this->entryId)) {
             throw new AvailabilityException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
+        }
+    }
+
+    public function validateMultiAvailabilityAndPrice(Collection $selections): void
+    {
+        $totalQuantity = $selections->sum('quantity');
+        $maxQuantity = config('resrv-config.maximum_quantity');
+        if ($totalQuantity > $maxQuantity) {
+            throw new AvailabilityException(
+                __('You cannot reserve these many in one reservation.')
+            );
+        }
+
+        // Aggregate overlapping selections (same rate + date range) so the combined
+        // quantity is checked against availability, preventing overbooking.
+        $aggregated = $selections->groupBy(
+            fn ($s) => $s['rate_id'].'|'.$s['date_start'].'|'.$s['date_end']
+        )->map(function ($group) {
+            $first = $group->first();
+
+            return array_merge($first, ['quantity' => $group->sum('quantity')]);
+        });
+
+        foreach ($aggregated as $selection) {
+            $quantity = $selection['quantity'];
+            $perUnitPrice = $selection['price'];
+
+            // Selections store per-unit prices (from the quantity=1 search), but
+            // confirmAvailabilityAndPrice recomputes with the full quantity internally.
+            if ($quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false)) {
+                $expectedPrice = Price::create($perUnitPrice)
+                    ->multiply((string) $quantity)->format();
+            } else {
+                $expectedPrice = $perUnitPrice;
+            }
+
+            $searchData = [
+                'date_start' => $selection['date_start'],
+                'date_end' => $selection['date_end'],
+                'quantity' => $quantity,
+                'rate_id' => $selection['rate_id'],
+                'price' => $expectedPrice,
+            ];
+
+            if (! app(Availability::class)->confirmAvailabilityAndPrice($searchData, $this->entryId)) {
+                throw new AvailabilityException(
+                    __('This item is not available anymore or the price has changed. Please refresh and try searching again!')
+                );
+            }
+        }
+
+        $this->validateCrossSelectionAvailability($selections);
+    }
+
+    /**
+     * Validate that the cumulative per-day demand across all cart selections
+     * does not exceed available stock for any single day.
+     */
+    protected function validateCrossSelectionAvailability(Collection $selections): void
+    {
+        $demandByBaseRate = [];
+        $demandByRate = [];
+        $repository = app(AvailabilityRepository::class);
+
+        foreach ($selections as $selection) {
+            $rateId = $selection['rate_id'];
+            $baseRateId = $repository->resolveBaseRateId($rateId);
+            $start = Carbon::parse($selection['date_start']);
+            $end = Carbon::parse($selection['date_end']);
+
+            // Use exclusive end date (checkout day is not a reserved night),
+            // matching the availability system's date < date_end convention.
+            for ($date = $start->copy(); $date->lt($end); $date->addDay()) {
+                $dateStr = $date->toDateString();
+                $demandByBaseRate[$baseRateId][$dateStr] = ($demandByBaseRate[$baseRateId][$dateStr] ?? 0) + $selection['quantity'];
+                $demandByRate[$rateId][$dateStr] = ($demandByRate[$rateId][$dateStr] ?? 0) + $selection['quantity'];
+            }
+        }
+
+        foreach ($demandByBaseRate as $baseRateId => $dateDemands) {
+            $this->validateStandardAvailabilityForDemand($baseRateId, $dateDemands);
+        }
+
+        foreach ($demandByRate as $rateId => $dateDemands) {
+            $this->validateMaxAvailableForDemand($rateId, $dateDemands);
+        }
+    }
+
+    /**
+     * @param  array<string, int>  $dateDemands  Map of date string => cumulative quantity
+     */
+    protected function validateStandardAvailabilityForDemand(int $rateId, array $dateDemands): void
+    {
+        $resolvedRateId = app(AvailabilityRepository::class)->resolveBaseRateId($rateId);
+
+        $dates = array_keys($dateDemands);
+        $minDate = min($dates);
+        $maxDate = Carbon::parse(max($dates))->addDay()->toDateString();
+
+        $availabilities = Availability::where('statamic_id', $this->entryId)
+            ->where('rate_id', $resolvedRateId)
+            ->where('date', '>=', $minDate)
+            ->where('date', '<', $maxDate)
+            ->get(['date', 'available'])
+            ->mapWithKeys(fn ($row) => [Carbon::parse($row->date)->toDateString() => $row->available]);
+
+        foreach ($dateDemands as $date => $demand) {
+            $available = $availabilities[$date] ?? 0;
+
+            if ($demand > $available) {
+                throw new AvailabilityException(
+                    __('This item is not available anymore or the price has changed. Please refresh and try searching again!')
+                );
+            }
+        }
+    }
+
+    /**
+     * Validate the cart's per-rate demand against the rate's own max_available
+     * cap. Each rate is checked independently — sibling rates that share the
+     * same base may have different caps, so they cannot be lumped into one
+     * "pool cap" without making validation order-dependent. The base-inventory
+     * check (validateStandardAvailabilityForDemand) handles the case where
+     * combined sibling demand exceeds the underlying availability.
+     *
+     * @param  array<string, int>  $dateDemands  Map of date string => cumulative quantity for this rate
+     */
+    protected function validateMaxAvailableForDemand(int $rateId, array $dateDemands): void
+    {
+        $rate = Rate::withoutGlobalScopes()->find($rateId, ['id', 'max_available', 'availability_type']);
+
+        if (! $rate || ! $rate->isShared() || ! $rate->max_available) {
+            return;
+        }
+
+        $dates = array_keys($dateDemands);
+        $minDate = min($dates);
+        $maxDate = Carbon::parse(max($dates))->addDay()->toDateString();
+
+        $overlapping = Reservation::where('rate_id', $rateId)
+            ->whereNotIn('status', ReservationStatus::terminal())
+            ->where('date_start', '<', $maxDate)
+            ->where('date_end', '>', $minDate)
+            ->get(['quantity', 'date_start', 'date_end']);
+
+        $overlappingChildren = ChildReservation::where('rate_id', $rateId)
+            ->whereHas('parent', fn ($q) => $q->whereNotIn('status', ReservationStatus::terminal()))
+            ->where('date_start', '<', $maxDate)
+            ->where('date_end', '>', $minDate)
+            ->get(['quantity', 'date_start', 'date_end']);
+
+        $allOverlapping = $overlapping->concat($overlappingChildren);
+
+        foreach ($dateDemands as $dateStr => $cartDemand) {
+            $existingQuantity = $allOverlapping
+                ->filter(fn ($r) => $r->date_start->toDateString() <= $dateStr && $r->date_end->toDateString() > $dateStr)
+                ->sum('quantity');
+
+            if (($existingQuantity + $cartDemand) > $rate->max_available) {
+                throw new AvailabilityException(
+                    __('The maximum number of bookings for this rate has been reached.')
+                );
+            }
         }
     }
 

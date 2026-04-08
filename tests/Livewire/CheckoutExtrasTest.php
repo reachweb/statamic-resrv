@@ -2,11 +2,20 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Data\ReservationData;
+use Reach\StatamicResrv\Events\CouponUpdated;
+use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
+use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Extras;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\ExtraCategory;
@@ -627,5 +636,670 @@ class CheckoutExtrasTest extends TestCase
 
         // The conditional extra should be required again
         $this->assertTrue($component->extraConditions->get('required')->contains($conditionalExtra->id));
+    }
+
+    public function test_parent_extra_charges_sum_per_child_dates()
+    {
+        $item = $this->entries->first();
+
+        // Per-day extra at 4.65/day (default factory)
+        $extra = $this->extras->first();
+
+        // Parent spanning day 0 - day 5 (5 days), but children are non-contiguous
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        // Child 1: 2 days, qty 1
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: 1 day, qty 1
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(4)->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Attach extra (qty 1) to the reservation
+        $reservation->extras()->sync([$extra->id => ['quantity' => 1, 'price' => '0']]);
+
+        // Per-child calculation:
+        // Child 1: 4.65 * 1 qty * 2 days = 9.30
+        // Child 2: 4.65 * 1 qty * 1 day  = 4.65
+        // Total: 13.95
+        // NOT: 4.65 * 2 qty * 5 days = 46.50 (parent collapsed dates)
+        $this->assertEquals('13.95', $reservation->extraCharges()->format());
+    }
+
+    public function test_parent_extra_charges_handles_soft_deleted_extras()
+    {
+        $item = $this->entries->first();
+
+        // Per-day extra at 4.65/day (default factory)
+        $extra = $this->extras->first();
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+            'price' => '100.00',
+            'payment' => '100.00',
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $reservation->extras()->sync([$extra->id => ['quantity' => 1, 'price' => '0']]);
+
+        // Soft-delete the extra after the reservation is created — historical
+        // reservations must still be priceable.
+        $extra->delete();
+
+        // Should not throw — Extra::withTrashed() finds the deleted extra.
+        // 4.65/day * 1 qty * 2 days = 9.30
+        $this->assertEquals('9.30', $reservation->extraCharges()->format());
+    }
+
+    public function test_parent_extra_charges_with_fixed_type()
+    {
+        $item = $this->entries->first();
+
+        $extra = ResrvExtra::factory()->fixed()->create();
+
+        $entry = ResrvEntry::whereItemId($item->id());
+        $entry->extras()->attach($extra->id);
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 3,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 2,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(4)->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $reservation->extras()->sync([$extra->id => ['quantity' => 1, 'price' => '0']]);
+
+        // Fixed extra at 25.00, qty 1 selected:
+        // Child 1: 25 * 1 * qty_mult(2) = 50
+        // Child 2: 25 * 1 * qty_mult(1) = 25
+        // Total: 75
+        // NOT: 25 * 1 * qty_mult(3) = 75 (coincidentally same for fixed, but via correct path)
+        $this->assertEquals('75.00', $reservation->extraCharges()->format());
+    }
+
+    public function test_coupon_valid_for_child_dates_applies_to_parent()
+    {
+        $item = $this->entries->first();
+
+        // Parent spans day 0 - day 10, but children are non-contiguous
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        // Child 1: day 0 - day 2
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: day 8 - day 10
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(8)->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Coupon valid only for days 0-3 (covers child 1)
+        $coupon = DynamicPricing::factory()->withCoupon()->create([
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(3)->toIso8601String(),
+            'date_include' => 'all',
+        ]);
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $coupon->id,
+            'dynamic_pricing_assignment_id' => $item->id(),
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        Cache::flush();
+        session(['resrv_coupon' => '20OFF']);
+
+        // Should succeed: child 1 (day 0-2) is within coupon range (day 0-3)
+        $result = DynamicPricing::searchForCoupon('20OFF', $reservation->id);
+        $this->assertNotNull($result);
+    }
+
+    public function test_coupon_outside_all_child_dates_is_rejected()
+    {
+        $item = $this->entries->first();
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        // Child 1: day 0 - day 2
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: day 8 - day 10
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(8)->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Coupon valid only for days 4-6 (gap between children — no child covers this)
+        $coupon = DynamicPricing::factory()->withCoupon()->create([
+            'date_start' => today()->addDays(4)->toIso8601String(),
+            'date_end' => today()->addDays(6)->toIso8601String(),
+            'date_include' => 'all',
+        ]);
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $coupon->id,
+            'dynamic_pricing_assignment_id' => $item->id(),
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        Cache::flush();
+        session(['resrv_coupon' => '20OFF']);
+
+        $this->expectException(CouponNotFoundException::class);
+        DynamicPricing::searchForCoupon('20OFF', $reservation->id);
+    }
+
+    public function test_coupon_removal_does_not_crash_when_pivot_row_missing()
+    {
+        $item = $this->entries->first();
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(8)->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $coupon = DynamicPricing::factory()->withCoupon()->create([
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(3)->toIso8601String(),
+            'date_include' => 'all',
+        ]);
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $coupon->id,
+            'dynamic_pricing_assignment_id' => $item->id(),
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        Cache::flush();
+        session(['resrv_coupon' => '20OFF']);
+
+        // Coupon is NOT in the pivot table — removal should not crash
+        CouponUpdated::dispatch($reservation, '20OFF', true);
+
+        $this->assertDatabaseMissing('resrv_reservation_dynamic_pricing', [
+            'reservation_id' => $reservation->id,
+        ]);
+    }
+
+    public function test_dynamic_pricing_attached_per_child_for_parent_reservation()
+    {
+        $item = $this->makeStatamicItemWithAvailability(
+            available: 2,
+            price: 50,
+            customAvailability: [
+                'dates' => collect(range(0, 11))->map(fn ($i) => today()->addDays($i))->all(),
+            ],
+        );
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(8)->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Coupon valid only for days 0-3 (covers child 1 but not parent envelope 0-10)
+        $coupon = DynamicPricing::factory()->withCoupon()->create([
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(3)->toIso8601String(),
+            'date_include' => 'all',
+        ]);
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $coupon->id,
+            'dynamic_pricing_assignment_id' => $item->id(),
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        Cache::flush();
+        session(['resrv_coupon' => '20OFF']);
+
+        // Per-child evaluation should find the coupon via child 1's dates
+        ReservationCreated::dispatch($reservation, new ReservationData(coupon: '20OFF'));
+
+        $this->assertDatabaseHas('resrv_reservation_dynamic_pricing', [
+            'reservation_id' => $reservation->id,
+            'dynamic_pricing_id' => $coupon->id,
+        ]);
+    }
+
+    public function test_parent_extra_duration_condition_does_not_use_envelope()
+    {
+        $item = $this->entries->first();
+
+        $extra = $this->extras->first();
+
+        // Condition: required when duration >= 7 days
+        ExtraCondition::factory()->create([
+            'extra_id' => $extra->id,
+            'conditions' => [[
+                'operation' => 'required',
+                'type' => 'reservation_duration',
+                'comparison' => '>=',
+                'value' => '7',
+            ]],
+        ]);
+
+        // Parent envelope spans 20 days, but each child is only 2 days
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(20)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(18)->toIso8601String(),
+            'date_end' => today()->addDays(20)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $component = Livewire::test(Extras::class, ['reservation' => $reservation]);
+
+        // Neither child is >= 7 days, so the extra should NOT be required
+        $this->assertFalse($component->extraConditions->get('required')->contains($extra->id));
+    }
+
+    public function test_parent_extra_required_when_any_child_matches_duration()
+    {
+        $item = $this->entries->first();
+
+        $extra = $this->extras->first();
+
+        // Condition: required when duration >= 3 days
+        ExtraCondition::factory()->create([
+            'extra_id' => $extra->id,
+            'conditions' => [[
+                'operation' => 'required',
+                'type' => 'reservation_duration',
+                'comparison' => '>=',
+                'value' => '3',
+            ]],
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        // Child 1: 4 days (matches >= 3)
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(4)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: 1 day (does not match >= 3)
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(9)->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $component = Livewire::test(Extras::class, ['reservation' => $reservation]);
+
+        // Child 1 matches, so the extra should be required
+        $this->assertTrue($component->extraConditions->get('required')->contains($extra->id));
+    }
+
+    public function test_parent_extra_hidden_only_when_all_children_match()
+    {
+        $item = $this->entries->first();
+
+        $extra = $this->extras->first();
+
+        // Condition: hidden when dates in range (covers only child 1's dates)
+        ExtraCondition::factory()->create([
+            'extra_id' => $extra->id,
+            'conditions' => [[
+                'operation' => 'hidden',
+                'type' => 'reservation_dates',
+                'date_start' => today()->toIso8601String(),
+                'date_end' => today()->addDays(5)->toIso8601String(),
+            ]],
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(20)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        // Child 1: day 0-2 (within hide range day 0-5)
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: day 18-20 (outside hide range)
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(18)->toIso8601String(),
+            'date_end' => today()->addDays(20)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $component = Livewire::test(Extras::class, ['reservation' => $reservation]);
+
+        // Child 2 is outside the hide range, so the extra should NOT be hidden
+        $this->assertFalse($component->extraConditions->get('hide')->contains($extra->id));
+    }
+
+    public function test_parent_validates_required_extras_per_child_not_envelope()
+    {
+        // Create entry with 20 days of availability to cover all child dates
+        $item = $this->makeStatamicItemWithAvailability(
+            available: 2,
+            price: 50,
+            customAvailability: [
+                'dates' => collect(range(0, 19))->map(fn ($i) => today()->addDays($i))->all(),
+            ],
+        );
+
+        $extra = $this->extras->first();
+        $entry = ResrvEntry::whereItemId($item->id());
+        $entry->extras()->attach($extra->id);
+
+        // Condition: required when duration >= 7
+        ExtraCondition::factory()->create([
+            'extra_id' => $extra->id,
+            'conditions' => [[
+                'operation' => 'required',
+                'type' => 'reservation_duration',
+                'comparison' => '>=',
+                'value' => '7',
+            ]],
+        ]);
+
+        // Parent envelope is 10 days, but each child is only 2 days
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(8)->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $data = [
+            'date_start' => $reservation->date_start,
+            'date_end' => $reservation->date_end,
+            'quantity' => $reservation->quantity,
+            'rate_id' => $reservation->rate_id,
+            'payment' => $reservation->payment,
+            'price' => $reservation->price,
+            'total' => $reservation->price,
+            'extras' => collect(),
+            'options' => collect(),
+            'customer' => collect(),
+        ];
+
+        // Neither child is >= 7 days, so validation should pass without the extra
+        $result = $reservation->validateReservation($data, $item->id(), checkOptions: false);
+        $this->assertTrue($result);
+    }
+
+    public function test_parent_validation_requires_extra_when_any_child_triggers()
+    {
+        $item = $this->makeStatamicItemWithAvailability(
+            available: 2,
+            price: 50,
+            customAvailability: [
+                'dates' => collect(range(0, 19))->map(fn ($i) => today()->addDays($i))->all(),
+            ],
+        );
+
+        $extra = $this->extras->first();
+        $entry = ResrvEntry::whereItemId($item->id());
+        $entry->extras()->attach($extra->id);
+
+        // Condition: required when duration >= 3
+        ExtraCondition::factory()->create([
+            'extra_id' => $extra->id,
+            'conditions' => [[
+                'operation' => 'required',
+                'type' => 'reservation_duration',
+                'comparison' => '>=',
+                'value' => '3',
+            ]],
+        ]);
+
+        // Child 1: 4 days @ 50/day = 200, Child 2: 1 day @ 50/day = 50, Total = 250
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '250.00',
+            'payment' => '250.00',
+        ]);
+
+        // Child 1: 4 days (triggers >= 3)
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(4)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: 1 day (does not trigger)
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(9)->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $data = [
+            'date_start' => $reservation->date_start,
+            'date_end' => $reservation->date_end,
+            'quantity' => $reservation->quantity,
+            'rate_id' => $reservation->rate_id,
+            'payment' => $reservation->payment,
+            'price' => $reservation->price,
+            'total' => $reservation->price,
+            'extras' => collect(),
+            'options' => collect(),
+            'customer' => collect(),
+        ];
+
+        // Child 1 triggers it — validation should fail without the extra
+        $this->expectException(ExtrasException::class);
+        $reservation->validateReservation($data, $item->id(), checkOptions: false);
+    }
+
+    public function test_parent_custom_extra_uses_customer_data_not_session()
+    {
+        $item = $this->entries->first();
+
+        $customer = Customer::factory()->withGuests(3)->create();
+
+        $extra = ResrvExtra::factory()->custom()->create();
+
+        $entry = ResrvEntry::whereItemId($item->id());
+        $entry->extras()->attach($extra->id);
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(4)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+            'customer_id' => $customer->id,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(2)->toIso8601String(),
+            'date_end' => today()->addDays(4)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $reservation->extras()->sync([$extra->id => ['quantity' => 1, 'price' => '0']]);
+
+        // Custom extra with price=10, customer guests=3
+        // Per child: 10 * 3 = 30, two children → 60
+        // NOT: 10 * 1 (session fallback) * 2 = 20
+        $charges = $reservation->extraCharges();
+        $this->assertEquals('60.00', $charges->format());
     }
 }

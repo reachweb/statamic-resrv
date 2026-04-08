@@ -7,6 +7,7 @@ use Livewire\Livewire;
 use Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection;
 use Reach\StatamicResrv\Livewire\AvailabilityControl;
 use Reach\StatamicResrv\Livewire\AvailabilityList;
+use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
 use Reach\StatamicResrv\Livewire\Checkout;
@@ -46,6 +47,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
     {
         Livewire::component('availability-search', AvailabilitySearch::class);
         Livewire::component('availability-results', AvailabilityResults::class);
+        Livewire::component('availability-multi-results', AvailabilityMultiResults::class);
         Livewire::component('availability-list', AvailabilityList::class);
         Livewire::component('availability-control', AvailabilityControl::class);
         Livewire::component('extras', Extras::class);

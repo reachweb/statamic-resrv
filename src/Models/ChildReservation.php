@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Reach\StatamicResrv\Database\Factories\ChildReservationFactory;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 
 class ChildReservation extends Model
 {
@@ -18,6 +19,7 @@ class ChildReservation extends Model
     protected $casts = [
         'date_start' => 'datetime',
         'date_end' => 'datetime',
+        'price' => PriceClass::class,
     ];
 
     protected static function newFactory()
