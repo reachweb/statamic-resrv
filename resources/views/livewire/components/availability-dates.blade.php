@@ -1,4 +1,4 @@
-@props(['calendar', 'disabledDays' => false, 'errors'])
+@props(['calendar', 'disabledDays' => false, 'calendarRules' => [], 'errors'])
 
 <div class="{{ $attributes->get('class') }}">
     <div x-data="datepicker" class="relative w-full">
@@ -17,6 +17,7 @@
                     minRange: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
                     maxRange: {{ config('resrv-config.maximum_reservation_period_in_days', 30) }},
                     @endif
+                    rules: @json($calendarRules),
                     disabledDaysOfWeek: buildDisabledDaysOfWeek(),
                     dateMetadata: buildDateMetadata(),
                     value: getInitialValue(),

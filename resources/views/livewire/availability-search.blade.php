@@ -2,6 +2,7 @@
 
     <x-resrv::availability-dates
         :$calendar
+        :$calendarRules
         :errors="$errors"
     />
 
