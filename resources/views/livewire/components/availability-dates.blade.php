@@ -149,7 +149,7 @@ Alpine.data('datepicker', () => ({
                 date,
                 {
                     label: info?.available > 0 ? '{{ config('resrv-config.currency_symbol') }}' + Math.round(info.price) : '',
-                    availability: (!info || info.available === 0) ? 'unavailable' : 'available',
+                    availability: (!info || !(info.available > 0)) ? 'unavailable' : 'available',
                 }
             ])
         );

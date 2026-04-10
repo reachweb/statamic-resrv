@@ -389,6 +389,26 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(1, $calendar[$key]['available']);
     }
 
+    public function test_availability_calendar_returns_unavailable_dates()
+    {
+        $entry = $this->entries->get('none-available');
+
+        $component = Livewire::test(AvailabilitySearch::class, [
+            'entry' => $entry->id(),
+            'showAvailabilityOnCalendar' => true,
+        ])
+            ->call('availabilityCalendar');
+
+        $calendar = $component->effects['returns'][0];
+
+        $key = $this->date->format('Y-m-d');
+
+        $this->assertIsArray($calendar);
+        $this->assertArrayHasKey($key, $calendar);
+        $this->assertNotNull($calendar[$key], 'Unavailable dates should return a record, not null');
+        $this->assertEquals(0, $calendar[$key]['available']);
+    }
+
     // Test availability calendar returns data when enabled with advanced availability
     public function test_availability_calendar_with_advanced_availability()
     {
