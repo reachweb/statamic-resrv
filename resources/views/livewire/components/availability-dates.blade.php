@@ -144,15 +144,15 @@ Alpine.data('datepicker', () => ({
 
     buildDateMetadata() {
         if (!this.availabilityCalendar || Object.keys(this.availabilityCalendar).length === 0) return {};
-        return Object.fromEntries(
-            Object.entries(this.availabilityCalendar).map(([date, info]) => [
-                date,
-                {
-                    label: info?.available > 0 ? '{{ config('resrv-config.currency_symbol') }}' + Math.round(info.price) : '',
-                    availability: (!info || !(info.available > 0)) ? 'unavailable' : 'available',
-                }
-            ])
-        );
+        const cal = this.availabilityCalendar;
+        const symbol = '{{ config('resrv-config.currency_symbol') }}';
+        return (date) => {
+            const info = cal[date.toISO()];
+            if (info && info.available > 0) {
+                return { label: symbol + Math.round(info.price), availability: 'available' };
+            }
+            return { availability: 'unavailable' };
+        };
     },
 
     buildDisabledDaysOfWeek() {
