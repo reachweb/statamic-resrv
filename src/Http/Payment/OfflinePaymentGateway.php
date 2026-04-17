@@ -31,6 +31,11 @@ class OfflinePaymentGateway implements PaymentInterface
         return $intent;
     }
 
+    public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
+    {
+        //
+    }
+
     public function refund($reservation)
     {
         return true;

@@ -50,6 +50,24 @@ class StripePaymentGateway implements PaymentInterface
         return $paymentIntent;
     }
 
+    public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
+    {
+        Stripe::setApiKey($this->getSecretKey($reservation));
+
+        try {
+            $intent = PaymentIntent::retrieve($paymentId);
+
+            if (in_array($intent->status, ['requires_payment_method', 'requires_confirmation', 'requires_action', 'processing', 'requires_capture'], true)) {
+                $intent->cancel();
+            }
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            Log::warning('Failed to cancel Stripe payment intent: '.$e->getMessage(), [
+                'payment_id' => $paymentId,
+                'reservation_id' => $reservation->id,
+            ]);
+        }
+    }
+
     public function refund($reservation)
     {
         Stripe::setApiKey($this->getSecretKey($reservation));

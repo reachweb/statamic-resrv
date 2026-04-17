@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -188,7 +189,6 @@ class Checkout extends Component
         // If only one gateway, auto-select and initialize payment
         if (! $manager->hasMultiple()) {
             $this->selectedGateway = $this->availableGateways[0]['name'];
-            $this->applySurcharge($manager, $this->selectedGateway);
 
             return $this->initializePayment();
         }
@@ -208,14 +208,18 @@ class Checkout extends Component
             return;
         }
 
+        // A prior gateway selection at this step may have created an intent we're now abandoning.
+        $this->cancelActiveIntent();
+
         $this->selectedGateway = $gateway;
-        $this->applySurcharge($manager, $gateway);
 
         return $this->initializePayment();
     }
 
     public function resetPaymentState(): void
     {
+        $this->cancelActiveIntent();
+
         // Guard on persisted state only — selectedGateway resets on page refresh but payment_surcharge persists in DB
         if (! $this->reservation->payment_surcharge->isZero()) {
             $reservation = $this->reservation->fresh();
@@ -232,6 +236,38 @@ class Checkout extends Component
         $this->clientSecret = '';
         $this->publicKey = '';
         $this->paymentView = '';
+    }
+
+    protected function cancelActiveIntent(): void
+    {
+        $reservation = $this->reservation->fresh();
+
+        if ($reservation->payment_id === '' || empty($reservation->payment_gateway)) {
+            return;
+        }
+
+        $manager = app(PaymentGatewayManager::class);
+
+        if (! $manager->has($reservation->payment_gateway)) {
+            return;
+        }
+
+        $oldPaymentId = $reservation->payment_id;
+        $gateway = $manager->gateway($reservation->payment_gateway);
+
+        // Clear payment_id before calling the gateway so a cancellation webhook from the old intent
+        // can't look up the reservation and fire ReservationCancelled against it.
+        $reservation->update(['payment_id' => '']);
+        unset($this->reservation);
+
+        try {
+            $gateway->cancelPaymentIntent($oldPaymentId, $reservation);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to cancel stale payment intent: '.$e->getMessage(), [
+                'reservation_id' => $reservation->id,
+                'payment_id' => $oldPaymentId,
+            ]);
+        }
     }
 
     protected function applySurcharge(PaymentGatewayManager $manager, string $gateway): void
@@ -257,8 +293,11 @@ class Checkout extends Component
         $manager = app(PaymentGatewayManager::class);
         $payment = $manager->gateway($this->selectedGateway);
 
-        // Save the config key so forReservation() can resolve the correct gateway later
-        $reservation->update(['payment_gateway' => $this->selectedGateway]);
+        // Compute the surcharge against the current base payment without persisting yet —
+        // if the gateway call below throws, the reservation must not be left with an inflated amount.
+        $basePayment = $reservation->payment->subtract($reservation->payment_surcharge);
+        $surcharge = $manager->calculateSurcharge($this->selectedGateway, $basePayment);
+        $totalToCharge = $basePayment->add($surcharge);
 
         // Set the public key
         $this->publicKey = $payment->getPublicKey($reservation);
@@ -266,11 +305,17 @@ class Checkout extends Component
         // Set the payment view
         $this->paymentView = $payment->paymentView();
 
-        // Create a payment intent
-        $paymentIndent = $payment->paymentIntent($reservation->payment, $reservation, $reservation->customerData);
+        // Create a payment intent with the full amount (including surcharge) before touching the DB
+        $paymentIndent = $payment->paymentIntent($totalToCharge, $reservation, $reservation->customerData);
 
-        // Save it in the database
-        $reservation->update(['payment_id' => $paymentIndent->id]);
+        // Intent created successfully — now persist the surcharged amount + intent id together
+        $reservation->update([
+            'payment' => $totalToCharge->format(),
+            'payment_surcharge' => $surcharge->format(),
+            'payment_gateway' => $this->selectedGateway,
+            'payment_id' => $paymentIndent->id,
+        ]);
+        unset($this->reservation);
 
         // If the payment method needs to redirect to another website do so
         if ($payment->redirectsForPayment()) {
