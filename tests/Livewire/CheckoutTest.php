@@ -703,6 +703,35 @@ class CheckoutTest extends TestCase
         $this->assertEquals('105.00', $reservation->payment->format());
     }
 
+    public function test_mount_clears_stale_surcharge_before_sidebar_renders()
+    {
+        Config::set('resrv-config.payment', 'full');
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        // A prior step-3 pass left an inflated payment + surcharge on the reservation.
+        // After a refresh, Livewire's step/selectedGateway are back to defaults, but the
+        // sidebar reads straight from the reservation — the stale surcharge must be gone
+        // before render so the user doesn't see a gateway fee they haven't re-picked yet.
+        $this->reservation->update([
+            'payment' => '104.00',
+            'payment_surcharge' => '4.00',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class);
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+    }
+
     public function test_refresh_after_gateway_selection_recovers_from_stale_surcharge_in_full_mode()
     {
         Config::set('resrv-config.payment', 'full');

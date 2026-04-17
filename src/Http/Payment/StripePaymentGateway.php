@@ -10,6 +10,8 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Models\Reservation;
 use Stripe\Event;
+use Stripe\Exception\ApiErrorException;
+use Stripe\Exception\InvalidRequestException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Exception\UnexpectedValueException;
 use Stripe\PaymentIntent;
@@ -60,7 +62,7 @@ class StripePaymentGateway implements PaymentInterface
             if (in_array($intent->status, ['requires_payment_method', 'requires_confirmation', 'requires_action', 'processing', 'requires_capture'], true)) {
                 $intent->cancel();
             }
-        } catch (\Stripe\Exception\ApiErrorException $e) {
+        } catch (ApiErrorException $e) {
             Log::warning('Failed to cancel Stripe payment intent: '.$e->getMessage(), [
                 'payment_id' => $paymentId,
                 'reservation_id' => $reservation->id,
@@ -76,7 +78,7 @@ class StripePaymentGateway implements PaymentInterface
                 'payment_intent' => $reservation->payment_id,
                 'reverse_transfer' => false,
             ]);
-        } catch (\Stripe\Exception\InvalidRequestException $exception) {
+        } catch (InvalidRequestException $exception) {
             throw new RefundFailedException($exception->getMessage());
         }
 
@@ -155,6 +157,20 @@ class StripePaymentGateway implements PaymentInterface
 
         $reservation = Reservation::findByPaymentId($paymentIntent)->first();
 
+        // payment_id may have been cleared by a concurrent gateway switch / back navigation
+        // (Checkout::cancelActiveIntent). The redirect tag still has the reservation in the
+        // session at this point, so use it to recover.
+        if (! $reservation && ($reservationId = session('resrv_reservation'))) {
+            $reservation = Reservation::find($reservationId);
+        }
+
+        if (! $reservation) {
+            return [
+                'status' => false,
+                'reservation' => [],
+            ];
+        }
+
         $stripe = new StripeClient($this->getSecretKey($reservation));
 
         $status = $stripe->paymentIntents->retrieve($paymentIntent, []);
@@ -162,13 +178,13 @@ class StripePaymentGateway implements PaymentInterface
         if ($status->status === 'succeeded' || $status->status === 'processing') {
             return [
                 'status' => true,
-                'reservation' => $reservation ? $reservation->toArray() : [],
+                'reservation' => $reservation->toArray(),
             ];
         }
 
         return [
             'status' => false,
-            'reservation' => $reservation ? $reservation->toArray() : [],
+            'reservation' => $reservation->toArray(),
         ];
     }
 
@@ -193,6 +209,15 @@ class StripePaymentGateway implements PaymentInterface
         $data = $payload['data']['object'];
 
         $reservation = Reservation::findByPaymentId($data['id'])->first();
+
+        // Checkout::cancelActiveIntent clears payment_id before asking Stripe to cancel the
+        // intent, so a racing .succeeded webhook can no longer reconcile by payment_id. Fall
+        // back to the reservation_id stashed in the intent metadata so the charge isn't lost.
+        $isStaleIntent = false;
+        if (! $reservation && isset($data['metadata']['reservation_id'])) {
+            $reservation = Reservation::find($data['metadata']['reservation_id']);
+            $isStaleIntent = (bool) $reservation;
+        }
 
         if (! $reservation) {
             Log::info('Reservation not found for id '.$data['id']);
@@ -232,12 +257,26 @@ class StripePaymentGateway implements PaymentInterface
         }
 
         if ($event->type === 'payment_intent.succeeded') {
+            if ($isStaleIntent) {
+                Log::warning('Stripe payment intent succeeded after being abandoned by the customer — manual reconciliation may be required.', [
+                    'reservation_id' => $reservation->id,
+                    'payment_intent_id' => $data['id'],
+                    'current_payment_id' => $reservation->payment_id,
+                    'current_payment_gateway' => $reservation->payment_gateway,
+                ]);
+            }
+
             ReservationConfirmed::dispatch($reservation);
 
             return response()->json([], 200);
         }
         if ($event->type === 'payment_intent.payment_failed' || $event->type === 'payment_intent.canceled') {
-            ReservationCancelled::dispatch($reservation);
+            // Stale intents were cancelled deliberately by us (Checkout::cancelActiveIntent);
+            // ignore their failure/cancellation webhooks so we don't cascade-cancel a
+            // reservation the customer is still using.
+            if (! $isStaleIntent) {
+                ReservationCancelled::dispatch($reservation);
+            }
 
             return response()->json([], 200);
         }

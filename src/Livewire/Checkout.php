@@ -68,6 +68,14 @@ class Checkout extends Component
             $this->reservationError = $e->getMessage();
         }
 
+        // A refresh drops step/selectedGateway back to defaults but leaves any prior step-3
+        // payment_surcharge (and active Stripe intent) persisted on the reservation. Roll them
+        // back so the sidebar doesn't render a stale gateway fee / inflated payable-now, and
+        // so a lingering intent doesn't survive into the next pass through checkout.
+        if (! $this->reservationError) {
+            $this->resetPaymentState();
+        }
+
         $this->initializeExtrasAndOptions();
 
         if ($this->enableExtrasStep === false) {
