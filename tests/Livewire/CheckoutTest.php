@@ -590,7 +590,8 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('4.00', $reservation->payment_surcharge->format());
-        $this->assertEquals('104.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
     }
 
     public function test_surcharge_is_removed_on_reset()
@@ -615,7 +616,8 @@ class CheckoutTest extends TestCase
             ->dispatch('gateway-selected', gateway: 'paypal');
 
         $reservation = Reservation::find($this->reservation->id);
-        $this->assertEquals('104.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
 
         $component->call('resetPaymentState');
 
@@ -647,13 +649,15 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('4.00', $reservation->payment_surcharge->format());
-        $this->assertEquals('104.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
 
         $component->dispatch('gateway-selected', gateway: 'stripe');
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('0.00', $reservation->payment_surcharge->format());
         $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->totalToCharge());
     }
 
     public function test_single_gateway_auto_applies_surcharge()
@@ -674,7 +678,8 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('4.00', $reservation->payment_surcharge->format());
-        $this->assertEquals('104.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
     }
 
     public function test_fixed_surcharge_amount()
@@ -700,7 +705,8 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('5.00', $reservation->payment_surcharge->format());
-        $this->assertEquals('105.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('105.00', $reservation->totalToCharge());
     }
 
     public function test_mount_clears_stale_surcharge_before_sidebar_renders()
@@ -714,12 +720,11 @@ class CheckoutTest extends TestCase
             ],
         ]);
 
-        // A prior step-3 pass left an inflated payment + surcharge on the reservation.
-        // After a refresh, Livewire's step/selectedGateway are back to defaults, but the
-        // sidebar reads straight from the reservation — the stale surcharge must be gone
-        // before render so the user doesn't see a gateway fee they haven't re-picked yet.
+        // A prior step-3 pass left a non-zero surcharge on the reservation. After a refresh,
+        // Livewire's step/selectedGateway are back to defaults, but the sidebar reads straight
+        // from the reservation — the stale surcharge must be gone before render so the user
+        // doesn't see a gateway fee they haven't re-picked yet.
         $this->reservation->update([
-            'payment' => '104.00',
             'payment_surcharge' => '4.00',
         ]);
 
@@ -746,7 +751,6 @@ class CheckoutTest extends TestCase
         // Simulate a prior step-3 pass: surcharge was applied, then the user refreshed
         // (Livewire state is gone, but payment_surcharge persists in the DB).
         $this->reservation->update([
-            'payment' => '104.00',
             'payment_surcharge' => '4.00',
         ]);
 
@@ -758,7 +762,8 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('4.00', $reservation->payment_surcharge->format());
-        $this->assertEquals('104.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
     }
 
     public function test_refresh_after_gateway_selection_recovers_from_stale_surcharge_in_everything_mode()
@@ -773,7 +778,6 @@ class CheckoutTest extends TestCase
         ]);
 
         $this->reservation->update([
-            'payment' => '104.00',
             'payment_surcharge' => '4.00',
         ]);
 
@@ -785,7 +789,8 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('4.00', $reservation->payment_surcharge->format());
-        $this->assertEquals('104.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
     }
 
     public function test_coupon_applied_after_gateway_selection_recalculates_surcharge()
@@ -819,7 +824,8 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('4.00', $reservation->payment_surcharge->format());
-        $this->assertEquals('104.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
 
         session(['resrv_coupon' => '20OFF']);
         $component->dispatch('coupon-applied', '20OFF');
@@ -827,7 +833,8 @@ class CheckoutTest extends TestCase
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('80.00', $reservation->price->format());
         $this->assertEquals('3.20', $reservation->payment_surcharge->format());
-        $this->assertEquals('83.20', $reservation->payment->format());
+        $this->assertEquals('80.00', $reservation->payment->format());
+        $this->assertEquals('83.20', $reservation->totalToCharge());
     }
 
     public function test_coupon_applied_without_gateway_leaves_surcharge_zero()

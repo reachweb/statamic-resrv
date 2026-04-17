@@ -230,13 +230,7 @@ class Checkout extends Component
 
         // Guard on persisted state only — selectedGateway resets on page refresh but payment_surcharge persists in DB
         if (! $this->reservation->payment_surcharge->isZero()) {
-            $reservation = $this->reservation->fresh();
-            $surcharge = $reservation->payment_surcharge;
-
-            $reservation->update([
-                'payment' => $reservation->payment->subtract($surcharge)->format(),
-                'payment_surcharge' => 0,
-            ]);
+            $this->reservation->fresh()->update(['payment_surcharge' => 0]);
             unset($this->reservation);
         }
 
@@ -281,11 +275,9 @@ class Checkout extends Component
     protected function applySurcharge(PaymentGatewayManager $manager, string $gateway): void
     {
         $reservation = $this->reservation->fresh();
-        $basePayment = $reservation->payment->subtract($reservation->payment_surcharge);
-        $surcharge = $manager->calculateSurcharge($gateway, $basePayment);
+        $surcharge = $manager->calculateSurcharge($gateway, $reservation->payment);
 
         $reservation->update([
-            'payment' => $basePayment->add($surcharge)->format(),
             'payment_surcharge' => $surcharge->format(),
         ]);
 
@@ -301,11 +293,8 @@ class Checkout extends Component
         $manager = app(PaymentGatewayManager::class);
         $payment = $manager->gateway($this->selectedGateway);
 
-        // Compute the surcharge against the current base payment without persisting yet —
-        // if the gateway call below throws, the reservation must not be left with an inflated amount.
-        $basePayment = $reservation->payment->subtract($reservation->payment_surcharge);
-        $surcharge = $manager->calculateSurcharge($this->selectedGateway, $basePayment);
-        $totalToCharge = $basePayment->add($surcharge);
+        $surcharge = $manager->calculateSurcharge($this->selectedGateway, $reservation->payment);
+        $totalToCharge = $reservation->payment->add($surcharge);
 
         // Set the public key
         $this->publicKey = $payment->getPublicKey($reservation);
@@ -316,9 +305,9 @@ class Checkout extends Component
         // Create a payment intent with the full amount (including surcharge) before touching the DB
         $paymentIndent = $payment->paymentIntent($totalToCharge, $reservation, $reservation->customerData);
 
-        // Intent created successfully — now persist the surcharged amount + intent id together
+        // `payment` stays as the reservation amount (read by CP, API, emails). Only the surcharge
+        // and intent id get persisted — the gateway receives the full total via $totalToCharge above.
         $reservation->update([
-            'payment' => $totalToCharge->format(),
             'payment_surcharge' => $surcharge->format(),
             'payment_gateway' => $this->selectedGateway,
             'payment_id' => $paymentIndent->id,

@@ -42,7 +42,7 @@
                         <livewire:checkout-payment
                             :clientSecret="$clientSecret"
                             :publicKey="$publicKey"
-                            :amount="$this->reservation->fresh()->payment->format()"
+                            :amount="$this->reservation->fresh()->totalToCharge()"
                             :paymentView="$paymentView"
                         />
                     @endif
