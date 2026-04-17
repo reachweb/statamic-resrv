@@ -129,7 +129,11 @@ class PaymentGatewayManager
             return Price::create($basePayment->format())->percent($config['amount']);
         }
 
-        return Price::create($config['amount']);
+        if ($config['type'] === 'fixed') {
+            return Price::create($config['amount']);
+        }
+
+        throw new \InvalidArgumentException("Invalid surcharge type [{$config['type']}] for payment gateway [{$gateway}].");
     }
 
     public function availableForFrontend(): array

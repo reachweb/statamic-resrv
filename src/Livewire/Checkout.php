@@ -433,10 +433,19 @@ class Checkout extends Component
 
         // Get the prices after applying the coupon
         $prices = $this->getUpdatedPrices();
-        // Update the reservation with the new prices
-        $this->reservation->update(['price' => $prices['price'], 'payment' => $prices['payment']]);
+        // Update the reservation with the new prices; clear stale surcharge so it can't desync from payment
+        $this->reservation->update([
+            'price' => $prices['price'],
+            'payment' => $prices['payment'],
+            'payment_surcharge' => 0,
+        ]);
         // Remove the caches
         unset($this->reservation);
+
+        // If a gateway is still selected, recompute the surcharge against the new base payment
+        if ($this->selectedGateway !== '') {
+            $this->applySurcharge(app(PaymentGatewayManager::class), $this->selectedGateway);
+        }
 
         // Calculate and update the total
         $totals = $this->calculateReservationTotals();

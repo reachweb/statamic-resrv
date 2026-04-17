@@ -334,6 +334,24 @@ class PaymentGatewayManagerTest extends TestCase
         $this->assertEquals('5.00', $surcharge->format());
     }
 
+    public function test_calculate_surcharge_throws_for_unknown_type()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percnt', 'amount' => 4],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid surcharge type [percnt] for payment gateway [paypal].');
+
+        $manager->calculateSurcharge('paypal', Price::create(100));
+    }
+
     public function test_available_for_frontend_includes_surcharge()
     {
         Config::set('resrv-config.payment_gateways', [

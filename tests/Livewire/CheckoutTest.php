@@ -703,6 +703,71 @@ class CheckoutTest extends TestCase
         $this->assertEquals('105.00', $reservation->payment->format());
     }
 
+    public function test_coupon_applied_after_gateway_selection_recalculates_surcharge()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->dispatch('gateway-selected', gateway: 'paypal');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('4.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('104.00', $reservation->payment->format());
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('80.00', $reservation->price->format());
+        $this->assertEquals('3.20', $reservation->payment_surcharge->format());
+        $this->assertEquals('83.20', $reservation->payment->format());
+    }
+
+    public function test_coupon_applied_without_gateway_leaves_surcharge_zero()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep');
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('80.00', $reservation->payment->format());
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+    }
+
     public function test_it_updates_reservation_total_when_coupon_is_applied()
     {
         $dynamic = DynamicPricing::factory()->withCoupon()->create();
