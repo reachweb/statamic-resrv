@@ -703,6 +703,62 @@ class CheckoutTest extends TestCase
         $this->assertEquals('105.00', $reservation->payment->format());
     }
 
+    public function test_refresh_after_gateway_selection_recovers_from_stale_surcharge_in_full_mode()
+    {
+        Config::set('resrv-config.payment', 'full');
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        // Simulate a prior step-3 pass: surcharge was applied, then the user refreshed
+        // (Livewire state is gone, but payment_surcharge persists in the DB).
+        $this->reservation->update([
+            'payment' => '104.00',
+            'payment_surcharge' => '4.00',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('4.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('104.00', $reservation->payment->format());
+    }
+
+    public function test_refresh_after_gateway_selection_recovers_from_stale_surcharge_in_everything_mode()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        $this->reservation->update([
+            'payment' => '104.00',
+            'payment_surcharge' => '4.00',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('4.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('104.00', $reservation->payment->format());
+    }
+
     public function test_coupon_applied_after_gateway_selection_recalculates_surcharge()
     {
         Config::set('resrv-config.payment_gateways', [

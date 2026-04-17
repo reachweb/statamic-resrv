@@ -147,6 +147,8 @@ class Checkout extends Component
 
         if (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible()) {
             $toUpdate['payment'] = $totals->get('total')->format();
+            // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
+            $toUpdate['payment_surcharge'] = 0;
         }
 
         // Update the reservation with the total
@@ -214,7 +216,8 @@ class Checkout extends Component
 
     public function resetPaymentState(): void
     {
-        if ($this->selectedGateway !== '' && ! $this->reservation->payment_surcharge->isZero()) {
+        // Guard on persisted state only — selectedGateway resets on page refresh but payment_surcharge persists in DB
+        if (! $this->reservation->payment_surcharge->isZero()) {
             $reservation = $this->reservation->fresh();
             $surcharge = $reservation->payment_surcharge;
 
