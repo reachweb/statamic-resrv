@@ -1,6 +1,9 @@
-import { Calendar } from 'vanilla-calendar-pro';
-import 'vanilla-calendar-pro/styles/index.css';
-window.calendar = Calendar;
+import { calendarPlugin } from '@reachweb/alpine-calendar';
+import '@reachweb/alpine-calendar/css';
+
+document.addEventListener('alpine:init', () => {
+    Alpine.plugin(calendarPlugin);
+});
 
 import dayjs from "dayjs";
 window.dayjs = dayjs;

@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -67,6 +68,14 @@ class Checkout extends Component
             $this->reservationError = $e->getMessage();
         }
 
+        // A refresh drops step/selectedGateway back to defaults but leaves any prior step-3
+        // payment_surcharge (and active Stripe intent) persisted on the reservation. Roll them
+        // back so the sidebar doesn't render a stale gateway fee / inflated payable-now, and
+        // so a lingering intent doesn't survive into the next pass through checkout.
+        if (! $this->reservationError) {
+            $this->resetPaymentState();
+        }
+
         $this->initializeExtrasAndOptions();
 
         if ($this->enableExtrasStep === false) {
@@ -90,6 +99,9 @@ class Checkout extends Component
 
     public function goToStep(int $step): void
     {
+        if ($step < 3 && $this->selectedGateway !== '') {
+            $this->resetPaymentState();
+        }
         $this->step = $step;
     }
 
@@ -144,6 +156,8 @@ class Checkout extends Component
 
         if (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible()) {
             $toUpdate['payment'] = $totals->get('total')->format();
+            // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
+            $toUpdate['payment_surcharge'] = 0;
         }
 
         // Update the reservation with the total
@@ -202,6 +216,9 @@ class Checkout extends Component
             return;
         }
 
+        // A prior gateway selection at this step may have created an intent we're now abandoning.
+        $this->cancelActiveIntent();
+
         $this->selectedGateway = $gateway;
 
         return $this->initializePayment();
@@ -209,10 +226,62 @@ class Checkout extends Component
 
     public function resetPaymentState(): void
     {
+        $this->cancelActiveIntent();
+
+        // Guard on persisted state only — selectedGateway resets on page refresh but payment_surcharge persists in DB
+        if (! $this->reservation->payment_surcharge->isZero()) {
+            $this->reservation->fresh()->update(['payment_surcharge' => 0]);
+            unset($this->reservation);
+        }
+
         $this->selectedGateway = '';
         $this->clientSecret = '';
         $this->publicKey = '';
         $this->paymentView = '';
+    }
+
+    protected function cancelActiveIntent(): void
+    {
+        $reservation = $this->reservation->fresh();
+
+        if ($reservation->payment_id === '' || empty($reservation->payment_gateway)) {
+            return;
+        }
+
+        $manager = app(PaymentGatewayManager::class);
+
+        if (! $manager->has($reservation->payment_gateway)) {
+            return;
+        }
+
+        $oldPaymentId = $reservation->payment_id;
+        $gateway = $manager->gateway($reservation->payment_gateway);
+
+        // Clear payment_id before calling the gateway so a cancellation webhook from the old intent
+        // can't look up the reservation and fire ReservationCancelled against it.
+        $reservation->update(['payment_id' => '']);
+        unset($this->reservation);
+
+        try {
+            $gateway->cancelPaymentIntent($oldPaymentId, $reservation);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to cancel stale payment intent: '.$e->getMessage(), [
+                'reservation_id' => $reservation->id,
+                'payment_id' => $oldPaymentId,
+            ]);
+        }
+    }
+
+    protected function applySurcharge(PaymentGatewayManager $manager, string $gateway): void
+    {
+        $reservation = $this->reservation->fresh();
+        $surcharge = $manager->calculateSurcharge($gateway, $reservation->payment);
+
+        $reservation->update([
+            'payment_surcharge' => $surcharge->format(),
+        ]);
+
+        unset($this->reservation);
     }
 
     protected function initializePayment()
@@ -224,8 +293,8 @@ class Checkout extends Component
         $manager = app(PaymentGatewayManager::class);
         $payment = $manager->gateway($this->selectedGateway);
 
-        // Save the config key so forReservation() can resolve the correct gateway later
-        $reservation->update(['payment_gateway' => $this->selectedGateway]);
+        $surcharge = $manager->calculateSurcharge($this->selectedGateway, $reservation->payment);
+        $totalToCharge = $reservation->payment->add($surcharge);
 
         // Set the public key
         $this->publicKey = $payment->getPublicKey($reservation);
@@ -233,11 +302,17 @@ class Checkout extends Component
         // Set the payment view
         $this->paymentView = $payment->paymentView();
 
-        // Create a payment intent
-        $paymentIndent = $payment->paymentIntent($reservation->payment, $reservation, $reservation->customerData);
+        // Create a payment intent with the full amount (including surcharge) before touching the DB
+        $paymentIndent = $payment->paymentIntent($totalToCharge, $reservation, $reservation->customerData);
 
-        // Save it in the database
-        $reservation->update(['payment_id' => $paymentIndent->id]);
+        // `payment` stays as the reservation amount (read by CP, API, emails). Only the surcharge
+        // and intent id get persisted — the gateway receives the full total via $totalToCharge above.
+        $reservation->update([
+            'payment_surcharge' => $surcharge->format(),
+            'payment_gateway' => $this->selectedGateway,
+            'payment_id' => $paymentIndent->id,
+        ]);
+        unset($this->reservation);
 
         // If the payment method needs to redirect to another website do so
         if ($payment->redirectsForPayment()) {
@@ -403,10 +478,19 @@ class Checkout extends Component
 
         // Get the prices after applying the coupon
         $prices = $this->getUpdatedPrices();
-        // Update the reservation with the new prices
-        $this->reservation->update(['price' => $prices['price'], 'payment' => $prices['payment']]);
+        // Update the reservation with the new prices; clear stale surcharge so it can't desync from payment
+        $this->reservation->update([
+            'price' => $prices['price'],
+            'payment' => $prices['payment'],
+            'payment_surcharge' => 0,
+        ]);
         // Remove the caches
         unset($this->reservation);
+
+        // If a gateway is still selected, recompute the surcharge against the new base payment
+        if ($this->selectedGateway !== '') {
+            $this->applySurcharge(app(PaymentGatewayManager::class), $this->selectedGateway);
+        }
 
         // Calculate and update the total
         $totals = $this->calculateReservationTotals();

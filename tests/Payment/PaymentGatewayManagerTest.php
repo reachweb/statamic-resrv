@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Payment;
 
 use Illuminate\Support\Facades\Config;
+use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Reservation;
@@ -284,5 +285,92 @@ class PaymentGatewayManagerTest extends TestCase
         $manager = app(PaymentGatewayManager::class);
 
         $this->assertEquals('Fake Payment', $manager->label());
+    }
+
+    public function test_calculate_surcharge_returns_zero_when_no_config()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $surcharge = $manager->calculateSurcharge('stripe', Price::create(100));
+        $this->assertEquals('0.00', $surcharge->format());
+    }
+
+    public function test_calculate_surcharge_percentage()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $surcharge = $manager->calculateSurcharge('paypal', Price::create(100));
+        $this->assertEquals('4.00', $surcharge->format());
+    }
+
+    public function test_calculate_surcharge_fixed()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'fixed', 'amount' => 5],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $surcharge = $manager->calculateSurcharge('paypal', Price::create(100));
+        $this->assertEquals('5.00', $surcharge->format());
+    }
+
+    public function test_calculate_surcharge_throws_for_unknown_type()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percnt', 'amount' => 4],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid surcharge type [percnt] for payment gateway [paypal].');
+
+        $manager->calculateSurcharge('paypal', Price::create(100));
+    }
+
+    public function test_available_for_frontend_includes_surcharge()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $available = $manager->availableForFrontend();
+
+        $this->assertNull($available[0]['surcharge']);
+        $this->assertEquals(['type' => 'percent', 'amount' => 4], $available[1]['surcharge']);
     }
 }

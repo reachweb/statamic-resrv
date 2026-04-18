@@ -27,8 +27,9 @@ trait HandlesPricing
         $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
 
         $payment = $this->reservation->payment;
+        $paymentSurcharge = $this->reservation->payment_surcharge;
 
-        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'payment'));
+        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'payment', 'paymentSurcharge'));
     }
 
     public function calculateAvailabilityTotals($availabilityTotal): PriceClass

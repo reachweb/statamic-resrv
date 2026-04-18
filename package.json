@@ -22,11 +22,11 @@
         "@fullcalendar/daygrid": "^6.1.0",
         "@fullcalendar/interaction": "^6.1.0",
         "@fullcalendar/vue": "^6.1.0",
+        "@reachweb/alpine-calendar": "^0.7.0",
         "axios": "^1.6.0",
         "dayjs": "^1.10.4",
         "lodash": "^4.17.21",
         "tailwindcss": "^3.3.0",
-        "vanilla-calendar-pro": "github:afonic/vanilla-calendar-pro",
         "vue-select": "^3.11.2",
         "vuedraggable": "^2.24.3"
     }

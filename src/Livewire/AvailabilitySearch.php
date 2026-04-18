@@ -47,6 +47,9 @@ class AvailabilitySearch extends Component
     public bool $showAvailabilityOnCalendar = false;
 
     #[Locked]
+    public array $calendarRules = [];
+
+    #[Locked]
     public array $overrideRates = [];
 
     public function boot(): void

@@ -257,6 +257,20 @@
                     {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }}
                 </div>
             </div>
+            @if (! $reservation->payment_surcharge->isZero())
+            <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
+                <div>{{ __("Payment surcharge") }}</div>
+                <div class="font-bold">
+                    {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment_surcharge->format() }}
+                </div>
+            </div>
+            <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
+                <div>{{ __("Total charged") }}</div>
+                <div class="font-bold">
+                    {{ config('resrv-config.currency_symbol') }} {{ $reservation->totalToCharge() }}
+                </div>
+            </div>
+            @endif
             <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
                 <div>{{ __("Reservation price") }}</div>
                 <div class="font-bold">

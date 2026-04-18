@@ -82,14 +82,26 @@
                         </span>
                     </div>
                 </div>
-                @if (config('resrv-config.payment') !== 'everything' && $this->freeCancellationPossible())
+                @if ($totals->has('paymentSurcharge') && ! $totals->get('paymentSurcharge')->isZero())
+                <div class="flex justify-between items-center py-3">
+                    <div class="md:text-lg text-gray-900">
+                        {{ trans('statamic-resrv::frontend.paymentSurcharge') }}
+                    </div>
+                    <div class="flex justify-end">
+                        <span class="md:text-lg text-gray-900">
+                            +{{ config('resrv-config.currency_symbol') }} {{ $totals->get('paymentSurcharge')->format() }}
+                        </span>
+                    </div>
+                </div>
+                @endif
+                @if ((config('resrv-config.payment') !== 'everything' && $this->freeCancellationPossible()) || ($totals->has('paymentSurcharge') && ! $totals->get('paymentSurcharge')->isZero()))
                 <div class="flex justify-between items-center pt-3">
                     <div class="md:text-lg text-gray-900">
                         {{ trans('statamic-resrv::frontend.payableNow') }}
                     </div>
                     <div class="flex justify-end">
                         <span class="md:text-lg text-gray-900">
-                            {{ config('resrv-config.currency_symbol') }} {{ $totals->get('payment')->format() }}
+                            {{ config('resrv-config.currency_symbol') }} {{ $totals->get('payment')->add($totals->get('paymentSurcharge'))->format() }}
                         </span>
                     </div>
                 </div>

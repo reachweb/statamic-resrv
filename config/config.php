@@ -1,5 +1,7 @@
 <?php
 
+use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
+
 return [
 
     /**
@@ -84,7 +86,7 @@ return [
      *
      * If you want, you can swap our payment gateway with your own integration.
      */
-    'payment_gateway' => Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
+    'payment_gateway' => StripePaymentGateway::class,
 
     /**
      * Multiple payment gateways (optional).
@@ -103,6 +105,12 @@ return [
      *         'class' => \Reach\StatamicResrv\Http\Payment\StripePaymentGateway::class,
      *         'label' => 'Credit Card',
      *     ],
+     *     // Optional surcharge per gateway (percent or fixed):
+     *     // 'paypal' => [
+     *     //     'class' => YourPaypalGateway::class,
+     *     //     'label' => 'PayPal',
+     *     //     'surcharge' => ['type' => 'percent', 'amount' => 4],
+     *     // ],
      *     'offline' => [
      *         'class' => \Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway::class,
      *         'label' => 'Bank Transfer / Pay at Premises',

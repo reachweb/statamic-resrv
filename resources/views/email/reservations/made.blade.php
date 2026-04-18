@@ -84,6 +84,10 @@
 | {{ __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
 | {{ __("Remaining amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
+@if (! $reservation->payment_surcharge->isZero())
+| {{ __("Payment surcharge") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment_surcharge->format() }} |
+| {{ __("Total charged") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->totalToCharge() }} |
+@endif
 | **{{ __("Total") }}** ({{ __("including taxes") }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->format() }} |
 
 @endcomponent

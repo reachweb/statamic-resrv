@@ -76,4 +76,6 @@ return [
     'addToBooking' => 'Add to booking',
     'yourBooking' => 'Your booking',
     'clear' => 'Clear',
+    'surcharge' => 'surcharge',
+    'paymentSurcharge' => 'Payment surcharge',
 ];

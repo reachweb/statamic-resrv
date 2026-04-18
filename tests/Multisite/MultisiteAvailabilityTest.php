@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Multisite;
 
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\Test;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
@@ -138,7 +139,7 @@ class MultisiteAvailabilityTest extends TestCase
         $blueprint->setHandle($collection->handle())->setNamespace('collections.'.$collection->handle())->save();
     }
 
-    /** @test */
+    #[Test]
     public function it_confirms_origin_and_localized_entries_have_different_ids()
     {
         $this->createMultisiteEntry();
@@ -161,7 +162,7 @@ class MultisiteAvailabilityTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function availability_is_stored_with_origin_entry_id()
     {
         $this->createMultisiteEntry();
@@ -175,7 +176,7 @@ class MultisiteAvailabilityTest extends TestCase
         $this->assertEquals(0, $localizedAvailabilityCount);
     }
 
-    /** @test */
+    #[Test]
     public function availability_results_component_resolves_localized_id_to_origin()
     {
         $this->createMultisiteEntry();
@@ -195,7 +196,7 @@ class MultisiteAvailabilityTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function availability_results_component_finds_availability_when_using_localized_entry()
     {
         $this->createMultisiteEntry();
@@ -217,7 +218,7 @@ class MultisiteAvailabilityTest extends TestCase
             ->assertSet('availability.data.price', '100.00');
     }
 
-    /** @test */
+    #[Test]
     public function availability_results_component_finds_availability_when_using_origin_entry()
     {
         $this->createMultisiteEntry();
@@ -239,7 +240,7 @@ class MultisiteAvailabilityTest extends TestCase
             ->assertSet('availability.data.price', '100.00');
     }
 
-    /** @test */
+    #[Test]
     public function resrv_search_scope_filters_localized_entries_correctly()
     {
         $this->createMultisiteEntry();
@@ -298,7 +299,7 @@ class MultisiteAvailabilityTest extends TestCase
         $this->assertNotContains($noAvailabilityLocalized->id(), $afterScope);
     }
 
-    /** @test */
+    #[Test]
     public function resrv_search_scope_works_on_default_site_with_origin_entries()
     {
         $this->createMultisiteEntry();
@@ -346,7 +347,7 @@ class MultisiteAvailabilityTest extends TestCase
         $this->assertNotContains($noAvailabilityEntry->id(), $afterScope);
     }
 
-    /** @test */
+    #[Test]
     public function resrv_search_scope_handles_quantity_on_multisite()
     {
         $this->createMultisiteEntry();
@@ -417,7 +418,7 @@ class MultisiteAvailabilityTest extends TestCase
         $this->assertNotContains($this->localizedEntry->id(), $afterScope);
     }
 
-    /** @test */
+    #[Test]
     public function availability_hooks_attach_live_availability_to_localized_entries()
     {
         $this->createMultisiteEntry();
@@ -454,7 +455,7 @@ class MultisiteAvailabilityTest extends TestCase
         $this->assertEquals('100.00', $returnedEntries->first()->get('live_availability')['price']);
     }
 
-    /** @test */
+    #[Test]
     public function availability_hooks_attach_live_availability_to_origin_entries()
     {
         $this->createMultisiteEntry();

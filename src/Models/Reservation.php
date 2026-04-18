@@ -34,6 +34,7 @@ class Reservation extends Model
         'date_end' => 'datetime',
         'price' => PriceClass::class,
         'payment' => PriceClass::class,
+        'payment_surcharge' => PriceClass::class,
         'total' => PriceClass::class,
         'abandoned_email_sent_at' => 'datetime',
     ];
@@ -86,6 +87,11 @@ class Reservation extends Model
     }
 
     public function getTotalAttribute($value)
+    {
+        return Price::create($value);
+    }
+
+    public function getPaymentSurchargeAttribute($value)
     {
         return Price::create($value);
     }
@@ -154,6 +160,11 @@ class Reservation extends Model
     public function amountRemaining()
     {
         return $this->total->subtract($this->payment)->format();
+    }
+
+    public function totalToCharge()
+    {
+        return $this->payment->add($this->payment_surcharge)->format();
     }
 
     public function amountRemainingWithoutExtras()
