@@ -182,6 +182,8 @@ trait HandlesReservationQueries
             if ($childPricing['original_price']) {
                 $hasOriginalPrice = true;
                 $totalOriginalPrice->add(Price::create($childPricing['original_price']));
+            } else {
+                $totalOriginalPrice->add(Price::create($childPricing['price']));
             }
         }
 
