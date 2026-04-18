@@ -157,13 +157,12 @@ class StripePaymentGateway implements PaymentInterface
 
         $reservation = Reservation::findByPaymentId($paymentIntent)->first();
 
-        // payment_id may have been cleared by a concurrent gateway switch / back navigation
-        // (Checkout::cancelActiveIntent). The redirect tag still has the reservation in the
-        // session at this point, so use it to recover.
-        if (! $reservation && ($reservationId = session('resrv_reservation'))) {
-            $reservation = Reservation::find($reservationId);
-        }
-
+        // A missing match means payment_id was cleared by Checkout::cancelActiveIntent, which
+        // is exactly the condition verifyPayment() treats as stale and refuses to confirm.
+        // Falling back to the session reservation here would show the customer a success page
+        // for a reservation the webhook will never mark confirmed — hand off to the failure
+        // path so manual reconciliation (via the stale-intent warning log) is the single
+        // source of truth.
         if (! $reservation) {
             return [
                 'status' => false,

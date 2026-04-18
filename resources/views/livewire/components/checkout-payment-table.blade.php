@@ -101,7 +101,7 @@
                     </div>
                     <div class="flex justify-end">
                         <span class="md:text-lg text-gray-900">
-                            {{ config('resrv-config.currency_symbol') }} {{ $totals->get('payment')->format() }}
+                            {{ config('resrv-config.currency_symbol') }} {{ $totals->get('payment')->add($totals->get('paymentSurcharge'))->format() }}
                         </span>
                     </div>
                 </div>
