@@ -13,6 +13,14 @@
                 class="flex items-center justify-between w-full p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
             >
                 <span class="text-base font-medium">{{ $gateway['label'] }}</span>
+                @if (! empty($gateway['surcharge']))
+                    <span class="text-sm text-gray-500 ml-2">
+                        (+{{ $gateway['surcharge']['type'] === 'percent'
+                            ? $gateway['surcharge']['amount'] . '% '
+                            : config('resrv-config.currency_symbol') . ' ' . number_format($gateway['surcharge']['amount'], 2) . ' '
+                        }}{{ trans('statamic-resrv::frontend.surcharge') }})
+                    </span>
+                @endif
                 <svg wire:loading.remove xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-gray-400">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>

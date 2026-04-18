@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Events\CouponUpdated;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
@@ -564,6 +565,299 @@ class CheckoutTest extends TestCase
             ->assertSet('coupon', 'YHCOS')
             ->assertSessionHas('resrv_coupon', 'YHCOS')
             ->assertDispatched('coupon-applied');
+    }
+
+    public function test_surcharge_is_applied_when_gateway_is_selected()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->dispatch('gateway-selected', gateway: 'paypal');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('4.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
+    }
+
+    public function test_surcharge_is_removed_on_reset()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->dispatch('gateway-selected', gateway: 'paypal');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
+
+        $component->call('resetPaymentState');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+    }
+
+    public function test_switching_gateways_updates_surcharge()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->dispatch('gateway-selected', gateway: 'paypal');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('4.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
+
+        $component->dispatch('gateway-selected', gateway: 'stripe');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('100.00', $reservation->totalToCharge());
+    }
+
+    public function test_single_gateway_auto_applies_surcharge()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('4.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
+    }
+
+    public function test_fixed_surcharge_amount()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'fixed', 'amount' => 5],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->dispatch('gateway-selected', gateway: 'paypal');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('5.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('105.00', $reservation->totalToCharge());
+    }
+
+    public function test_mount_clears_stale_surcharge_before_sidebar_renders()
+    {
+        Config::set('resrv-config.payment', 'full');
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        // A prior step-3 pass left a non-zero surcharge on the reservation. After a refresh,
+        // Livewire's step/selectedGateway are back to defaults, but the sidebar reads straight
+        // from the reservation — the stale surcharge must be gone before render so the user
+        // doesn't see a gateway fee they haven't re-picked yet.
+        $this->reservation->update([
+            'payment_surcharge' => '4.00',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class);
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+    }
+
+    public function test_refresh_after_gateway_selection_recovers_from_stale_surcharge_in_full_mode()
+    {
+        Config::set('resrv-config.payment', 'full');
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        // Simulate a prior step-3 pass: surcharge was applied, then the user refreshed
+        // (Livewire state is gone, but payment_surcharge persists in the DB).
+        $this->reservation->update([
+            'payment_surcharge' => '4.00',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('4.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
+    }
+
+    public function test_refresh_after_gateway_selection_recovers_from_stale_surcharge_in_everything_mode()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        $this->reservation->update([
+            'payment_surcharge' => '4.00',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('4.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
+    }
+
+    public function test_coupon_applied_after_gateway_selection_recalculates_surcharge()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'percent', 'amount' => 4],
+            ],
+        ]);
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->dispatch('gateway-selected', gateway: 'paypal');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('4.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('100.00', $reservation->payment->format());
+        $this->assertEquals('104.00', $reservation->totalToCharge());
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('80.00', $reservation->price->format());
+        $this->assertEquals('3.20', $reservation->payment_surcharge->format());
+        $this->assertEquals('80.00', $reservation->payment->format());
+        $this->assertEquals('83.20', $reservation->totalToCharge());
+    }
+
+    public function test_coupon_applied_without_gateway_leaves_surcharge_zero()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep');
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('80.00', $reservation->payment->format());
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
     }
 
     public function test_it_updates_reservation_total_when_coupon_is_applied()

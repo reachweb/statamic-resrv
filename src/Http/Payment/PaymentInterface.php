@@ -14,6 +14,8 @@ interface PaymentInterface
 
     public function paymentIntent($amount, Reservation $reservation, $data);
 
+    public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void;
+
     public function refund(Reservation $reservation);
 
     public function getPublicKey(Reservation $reservation);

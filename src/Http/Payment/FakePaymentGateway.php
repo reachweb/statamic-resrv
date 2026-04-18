@@ -35,6 +35,11 @@ class FakePaymentGateway implements PaymentInterface
         return $data;
     }
 
+    public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
+    {
+        //
+    }
+
     public function refund($reservation)
     {
         if ($this->getPublicKey($reservation)) {
