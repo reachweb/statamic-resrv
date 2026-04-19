@@ -350,8 +350,14 @@ export default {
                 return 'patch'
             }
             return 'post'
+        },
+        amountType() {
+            if (['minimum', 'maximum'].includes(this.submit.amount_operation)) {
+                return this.allAmountTypes.filter(type => type.code === 'fixed')
+            }
+            return this.allAmountTypes
         }
-    },  
+    },
 
     data() {
         return {
@@ -366,9 +372,17 @@ export default {
                 {
                     code: "increase",
                     label: "Increase"
+                },
+                {
+                    code: "minimum",
+                    label: "Minimum"
+                },
+                {
+                    code: "maximum",
+                    label: "Maximum"
                 }
             ],
-            amountType: [
+            allAmountTypes: [
                 {
                     code: "percent",
                     label: "Percent"
@@ -458,6 +472,11 @@ export default {
             } else {
                 this.submit.date_start = ''
                 this.submit.date_end = ''
+            }
+        },
+        'submit.amount_operation'(newValue) {
+            if (['minimum', 'maximum'].includes(newValue)) {
+                this.submit.amount_type = 'fixed'
             }
         }
     },

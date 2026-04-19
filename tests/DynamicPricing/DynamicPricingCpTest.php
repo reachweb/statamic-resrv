@@ -89,7 +89,7 @@ class DynamicPricingCpTest extends TestCase
         $payload = [
             'title' => '10% off for 4 days',
             'amount_type' => 'percent',
-            'amount_operation' => 'subtract',
+            'amount_operation' => 'decrease',
             'amount' => '10',
             'date_start' => today()->toIso8601String(),
             'date_end' => today()->add(60, 'day')->toIso8601String(),
@@ -116,6 +116,73 @@ class DynamicPricingCpTest extends TestCase
             'dynamic_pricing_assignment_id' => $item2->id(),
             'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
         ]);
+    }
+
+    public function test_can_add_dynamic_pricing_with_minimum_operation()
+    {
+        $item1 = $this->makeStatamicItem();
+
+        $dynamic = DynamicPricing::factory()->fixedMinimum()->make()->toArray();
+        $dynamic['entries'] = [$item1->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->postJson(cp_route('resrv.dynamicpricing.create'), $dynamic);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_dynamic_pricing', [
+            'amount_operation' => 'minimum',
+            'amount_type' => 'fixed',
+        ]);
+    }
+
+    public function test_can_add_dynamic_pricing_with_maximum_operation()
+    {
+        $item1 = $this->makeStatamicItem();
+
+        $dynamic = DynamicPricing::factory()->fixedMaximum()->make()->toArray();
+        $dynamic['entries'] = [$item1->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->postJson(cp_route('resrv.dynamicpricing.create'), $dynamic);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_dynamic_pricing', [
+            'amount_operation' => 'maximum',
+            'amount_type' => 'fixed',
+        ]);
+    }
+
+    public function test_rejects_percent_with_minimum_operation()
+    {
+        $this->withExceptionHandling();
+
+        $item1 = $this->makeStatamicItem();
+
+        $dynamic = DynamicPricing::factory()->make()->toArray();
+        $dynamic['amount_operation'] = 'minimum';
+        $dynamic['amount_type'] = 'percent';
+        $dynamic['entries'] = [$item1->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->postJson(cp_route('resrv.dynamicpricing.create'), $dynamic);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['amount_type']);
+    }
+
+    public function test_rejects_unknown_operation()
+    {
+        $this->withExceptionHandling();
+
+        $item1 = $this->makeStatamicItem();
+
+        $dynamic = DynamicPricing::factory()->make()->toArray();
+        $dynamic['amount_operation'] = 'subtract';
+        $dynamic['entries'] = [$item1->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->postJson(cp_route('resrv.dynamicpricing.create'), $dynamic);
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['amount_operation']);
     }
 
     public function test_can_delete_dynamic_pricing()

@@ -150,6 +150,28 @@ class DynamicPricingFactory extends Factory
         });
     }
 
+    public function fixedMinimum()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'amount_type' => 'fixed',
+                'amount_operation' => 'minimum',
+                'amount' => '100',
+            ];
+        });
+    }
+
+    public function fixedMaximum()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'amount_type' => 'fixed',
+                'amount_operation' => 'maximum',
+                'amount' => '100',
+            ];
+        });
+    }
+
     public function expires()
     {
         return $this->state(function (array $attributes) {

@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Validation\Rule;
 use Reach\StatamicResrv\Models\DynamicPricing;
 
 class DynamicPricingCpController extends Controller
@@ -51,8 +52,11 @@ class DynamicPricingCpController extends Controller
             'condition_type' => 'nullable|required_with:condition_comparison,condition_value',
             'condition_comparison' => 'nullable|required_with:condition_type,condition_value',
             'condition_value' => 'nullable|required_with:condition_comparison,condition_type',
-            'amount_operation' => 'required|string',
-            'amount_type' => 'required|string',
+            'amount_operation' => 'required|in:increase,decrease,minimum,maximum',
+            'amount_type' => [
+                'required',
+                Rule::in(in_array($request->input('amount_operation'), ['minimum', 'maximum']) ? ['fixed'] : ['percent', 'fixed']),
+            ],
             'amount' => 'required|numeric',
             'coupon' => 'nullable|regex:/^[\w*-]+$/',
             'expire_at' => 'nullable|date',
@@ -81,8 +85,11 @@ class DynamicPricingCpController extends Controller
             'condition_type' => 'nullable|required_with:condition_comparison,condition_value',
             'condition_comparison' => 'nullable|required_with:condition_type,condition_value',
             'condition_value' => 'nullable|required_with:condition_comparison,condition_type',
-            'amount_operation' => 'required|string',
-            'amount_type' => 'required|string',
+            'amount_operation' => 'required|in:increase,decrease,minimum,maximum',
+            'amount_type' => [
+                'required',
+                Rule::in(in_array($request->input('amount_operation'), ['minimum', 'maximum']) ? ['fixed'] : ['percent', 'fixed']),
+            ],
             'amount' => 'required|numeric',
             'order' => 'required|integer',
             'coupon' => 'nullable|regex:/^[\w*-]+$/',

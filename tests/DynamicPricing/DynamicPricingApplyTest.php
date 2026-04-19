@@ -133,6 +133,74 @@ class DynamicPricingApplyTest extends TestCase
         $this->assertIndexPrice('111.00', '100.92');
     }
 
+    public function test_fixed_minimum_floors_price_when_below()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        // Baseline is 100.92 (25.23 * 4 days). Floor at 200 → price becomes 200.
+        $this->createDynamicPricing('fixedMinimum', ['amount' => '200']);
+
+        $this->assertPrice('200.00', '100.92');
+        $this->assertIndexPrice('200.00', '100.92');
+    }
+
+    public function test_fixed_minimum_leaves_price_when_above()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        // Baseline 100.92 is already above the 50 floor → price unchanged.
+        $this->createDynamicPricing('fixedMinimum', ['amount' => '50']);
+
+        $this->assertPrice('100.92', '100.92');
+        $this->assertIndexPrice('100.92', '100.92');
+    }
+
+    public function test_fixed_maximum_caps_price_when_above()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        // Baseline 100.92 is above the 80 ceiling → price capped at 80.
+        $this->createDynamicPricing('fixedMaximum', ['amount' => '80']);
+
+        $this->assertPrice('80.00', '100.92');
+        $this->assertIndexPrice('80.00', '100.92');
+    }
+
+    public function test_fixed_maximum_leaves_price_when_below()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        // Baseline 100.92 is below the 200 ceiling → unchanged.
+        $this->createDynamicPricing('fixedMaximum', ['amount' => '200']);
+
+        $this->assertPrice('100.92', '100.92');
+        $this->assertIndexPrice('100.92', '100.92');
+    }
+
+    public function test_minimum_applied_after_decrease_in_ordering()
+    {
+        $this->createAvailabilityForEntry($this->entry, 50, 2);
+
+        // Base total: 50 * 4 = 200.
+        $decrease = $this->createDynamicPricing('percentDecrease', [
+            'title' => 'Take 50% off',
+            'amount' => '50',
+        ], false);
+
+        $minimum = $this->createDynamicPricing('fixedMinimum', [
+            'title' => 'Minimum 150',
+            'amount' => '150',
+        ], false);
+
+        // Ensure the decrease runs before the minimum.
+        $decrease->update(['order' => 1]);
+        $minimum->update(['order' => 2]);
+
+        // 200 → 100 after 50% off → floored to 150.
+        $this->assertPrice('150.00', '200.00');
+        $this->assertIndexPrice('150.00', '200.00');
+    }
+
     public function test_dynamic_pricing_date_conditions()
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
