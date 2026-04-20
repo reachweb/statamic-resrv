@@ -196,11 +196,19 @@ class DynamicPricing extends Model
 
     public function fixed(PriceClass $price, $policy)
     {
+        $amount = Price::create($policy->amount);
+
         if ($policy->amount_operation == 'decrease') {
-            return $price->subtract(Price::create($policy->amount));
+            return $price->subtract($amount);
         }
         if ($policy->amount_operation == 'increase') {
-            return $price->add(Price::create($policy->amount));
+            return $price->add($amount);
+        }
+        if ($policy->amount_operation == 'minimum') {
+            return $price->lessThan($amount) ? $amount : $price;
+        }
+        if ($policy->amount_operation == 'maximum') {
+            return $price->greaterThan($amount) ? $amount : $price;
         }
 
         return $price;

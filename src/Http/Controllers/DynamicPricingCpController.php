@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Validation\Rule;
 use Reach\StatamicResrv\Models\DynamicPricing;
 
 class DynamicPricingCpController extends Controller
@@ -51,13 +52,11 @@ class DynamicPricingCpController extends Controller
             'condition_type' => 'nullable|required_with:condition_comparison,condition_value',
             'condition_comparison' => 'nullable|required_with:condition_type,condition_value',
             'condition_value' => 'nullable|required_with:condition_comparison,condition_type',
-            'amount_operation' => 'required|string',
-            'amount_type' => 'required|string',
             'amount' => 'required|numeric',
             'coupon' => 'nullable|regex:/^[\w*-]+$/',
             'expire_at' => 'nullable|date',
             'overrides_all' => 'nullable|boolean',
-        ]);
+        ] + $this->amountOperationRules($request));
 
         $order = $this->dynamicPricing->max('order') + 1;
         $data['order'] = $order;
@@ -81,14 +80,12 @@ class DynamicPricingCpController extends Controller
             'condition_type' => 'nullable|required_with:condition_comparison,condition_value',
             'condition_comparison' => 'nullable|required_with:condition_type,condition_value',
             'condition_value' => 'nullable|required_with:condition_comparison,condition_type',
-            'amount_operation' => 'required|string',
-            'amount_type' => 'required|string',
             'amount' => 'required|numeric',
             'order' => 'required|integer',
             'coupon' => 'nullable|regex:/^[\w*-]+$/',
             'expire_at' => 'nullable|date',
             'overrides_all' => 'nullable|boolean',
-        ]);
+        ] + $this->amountOperationRules($request));
 
         $dynamicPricing = $this->dynamicPricing->findOrFail($id);
         $dynamicPricing->update($data);
@@ -122,5 +119,17 @@ class DynamicPricingCpController extends Controller
         $this->dynamicPricing->destroy($id);
 
         return response(200);
+    }
+
+    private function amountOperationRules(Request $request): array
+    {
+        $allowedTypes = in_array($request->input('amount_operation'), ['minimum', 'maximum'])
+            ? ['fixed']
+            : ['percent', 'fixed'];
+
+        return [
+            'amount_operation' => 'required|in:increase,decrease,minimum,maximum',
+            'amount_type' => ['required', Rule::in($allowedTypes)],
+        ];
     }
 }
