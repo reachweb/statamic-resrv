@@ -173,6 +173,8 @@ class Checkout extends Component
     #[On('checkout-form-submitted')]
     public function handleSecondStep()
     {
+        $this->resetErrorBag('reservation');
+
         // If the payment amount is zero, just show the confirmation page
         if ($this->reservationPaymentIsZero()) {
             return $this->handleReservationWithZeroPayment();
@@ -216,6 +218,8 @@ class Checkout extends Component
     #[On('gateway-selected')]
     public function selectGateway(string $gateway)
     {
+        $this->resetErrorBag('reservation');
+
         $manager = app(PaymentGatewayManager::class);
 
         if (! $manager->has($gateway)) {

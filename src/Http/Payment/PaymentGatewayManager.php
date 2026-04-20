@@ -27,6 +27,12 @@ class PaymentGatewayManager
                     throw new \InvalidArgumentException("Payment gateway [{$name}] must have a 'class' that implements PaymentInterface.");
                 }
 
+                if (isset($config['amount_limits']) && ! is_array($config['amount_limits'])) {
+                    throw new \InvalidArgumentException(
+                        "Payment gateway [{$name}] has invalid amount_limits: must be an array with 'min' and/or 'max' keys, got ".gettype($config['amount_limits']).'.'
+                    );
+                }
+
                 $this->validateAmountLimits($name, $config['amount_limits'] ?? null);
 
                 $this->gateways[$name] = [
