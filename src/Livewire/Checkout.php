@@ -226,6 +226,9 @@ class Checkout extends Component
 
         $reservation = $this->reservation->fresh();
         if (! $manager->isAvailableFor($gateway, $reservation->payment)) {
+            // The clicked gateway is being rejected — cancel any intent carried over from a prior
+            // tab or browser-back copy of step 3 before we re-route, so a later webhook can't act on it.
+            $this->cancelActiveIntent();
             $this->availableGateways = $manager->availableForFrontend($reservation->payment);
 
             // No gateway accepts the current amount — bounce back to step 2 with the no-gateway error
@@ -238,7 +241,6 @@ class Checkout extends Component
 
             // Single surviving gateway — auto-select and initialize payment
             if (count($this->availableGateways) === 1) {
-                $this->cancelActiveIntent();
                 $this->selectedGateway = $this->availableGateways[0]['name'];
 
                 return $this->initializePayment();

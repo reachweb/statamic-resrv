@@ -89,12 +89,26 @@ class CheckoutForm extends Component
             return;
         }
 
+        $data = collect($this->form)->except('email');
+        $reservation = $this->reservation->fresh();
+
+        // If the reservation already has a customer (e.g. retry after a failed step-2 submit),
+        // update that row in place instead of orphaning it.
+        if ($reservation->customer_id && $customer = Customer::find($reservation->customer_id)) {
+            $customer->update([
+                'email' => $email,
+                'data' => $data,
+            ]);
+
+            return;
+        }
+
         $customer = Customer::create([
             'email' => $email,
-            'data' => collect($this->form)->except('email'),
+            'data' => $data,
         ]);
 
-        $this->reservation->update([
+        $reservation->update([
             'customer_id' => $customer->id,
         ]);
     }

@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\CheckoutForm;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -99,6 +100,53 @@ class CheckoutFormTest extends TestCase
         $this->assertDatabaseHas('resrv_customers', [
             'data->first_name' => 'Jerry',
             'data->last_name' => 'Seinfeld',
+        ]);
+    }
+
+    public function test_submit_does_not_create_duplicate_customer_on_retry()
+    {
+        $reservation = Reservation::factory()->create([
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $this->assertNull($reservation->customer_id);
+        $initialCount = Customer::query()->count();
+
+        $formData = [
+            'first_name' => 'Jerry',
+            'last_name' => 'Seinfeld',
+            'email' => 'about@nothing.com',
+            'repeat_email' => 'about@nothing.com',
+            'phone' => '1234567890',
+        ];
+
+        // First submit — creates the customer and attaches it to the reservation.
+        $component = Livewire::test(CheckoutForm::class, ['reservation' => $reservation])
+            ->set('form', $formData)
+            ->call('submit');
+
+        $customerIdAfterFirst = Reservation::find($reservation->id)->customer_id;
+        $this->assertNotNull($customerIdAfterFirst);
+        $this->assertEquals($initialCount + 1, Customer::query()->count());
+
+        // Second submit simulates a retry after a failed step-2 submit (e.g. no gateway
+        // accepts the amount). It must update the existing customer, not orphan it.
+        $component->set('form.first_name', 'George')
+            ->call('submit');
+
+        $this->assertEquals(
+            $initialCount + 1,
+            Customer::query()->count(),
+            'Retry should update the existing customer instead of creating a new row.',
+        );
+        $this->assertEquals($customerIdAfterFirst, Reservation::find($reservation->id)->customer_id);
+        $this->assertDatabaseHas('resrv_customers', [
+            'id' => $customerIdAfterFirst,
+            'email' => 'about@nothing.com',
+            'data->first_name' => 'George',
         ]);
     }
 }
