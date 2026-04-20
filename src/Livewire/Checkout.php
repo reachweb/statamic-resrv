@@ -190,12 +190,20 @@ class Checkout extends Component
         // Reset any stale payment state from a previous pass through checkout
         $this->resetPaymentState();
 
-        // Populate available gateways
+        // Populate available gateways, filtered by the current payment amount
         $manager = app(PaymentGatewayManager::class);
-        $this->availableGateways = $manager->availableForFrontend();
+        $reservation = $this->reservation->fresh();
+        $this->availableGateways = $manager->availableForFrontend($reservation->payment);
 
-        // If only one gateway, auto-select and initialize payment
-        if (! $manager->hasMultiple()) {
+        // No gateway accepts this amount — surface an error and stay on step 2
+        if (empty($this->availableGateways)) {
+            $this->addError('gateway', __('statamic-resrv::frontend.noGatewayAvailableForAmount'));
+
+            return;
+        }
+
+        // If only one surviving gateway, auto-select and initialize payment
+        if (count($this->availableGateways) === 1) {
             $this->selectedGateway = $this->availableGateways[0]['name'];
 
             return $this->initializePayment();
@@ -212,6 +220,14 @@ class Checkout extends Component
 
         if (! $manager->has($gateway)) {
             $this->addError('gateway', __('Invalid payment gateway selected.'));
+
+            return;
+        }
+
+        $reservation = $this->reservation->fresh();
+        if (! $manager->isAvailableFor($gateway, $reservation->payment)) {
+            $this->addError('gateway', __('statamic-resrv::frontend.gatewayNotAvailableForAmount'));
+            $this->availableGateways = $manager->availableForFrontend($reservation->payment);
 
             return;
         }
