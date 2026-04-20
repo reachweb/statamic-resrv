@@ -227,7 +227,7 @@ class MultiplePaymentCheckoutTest extends TestCase
         Livewire::test(Checkout::class)
             ->call('handleSecondStep')
             ->dispatch('gateway-selected', gateway: 'nonexistent')
-            ->assertHasErrors('gateway');
+            ->assertHasErrors('reservation');
     }
 
     public function test_webhook_post_with_invalid_gateway_returns_404()
