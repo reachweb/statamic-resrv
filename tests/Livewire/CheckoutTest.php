@@ -1100,6 +1100,36 @@ class CheckoutTest extends TestCase
             ->assertSet('step', 3);
     }
 
+    public function test_coupon_component_is_hidden_on_gateway_selection_step()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $couponLabel = __('statamic-resrv::frontend.addCoupon');
+
+        $component = Livewire::test(Checkout::class)
+            ->assertSet('step', 1)
+            ->assertSee($couponLabel);
+
+        $component->call('handleFirstStep')
+            ->assertSet('step', 2)
+            ->assertSee($couponLabel);
+
+        $component->dispatch('checkout-form-submitted')
+            ->assertSet('step', 3)
+            ->assertDontSee($couponLabel);
+    }
+
     public function test_amount_limits_compare_payment_not_including_surcharge()
     {
         Config::set('resrv-config.payment_gateways', [

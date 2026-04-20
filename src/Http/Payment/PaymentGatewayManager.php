@@ -61,6 +61,14 @@ class PaymentGatewayManager
             return;
         }
 
+        foreach (['min', 'max'] as $key) {
+            if (isset($limits[$key]) && ! is_numeric($limits[$key])) {
+                throw new \InvalidArgumentException(
+                    "Payment gateway [{$gateway}] has invalid amount_limits: [{$key}] must be numeric, got ".var_export($limits[$key], true).'.'
+                );
+            }
+        }
+
         if (isset($limits['min'], $limits['max']) && $limits['min'] > $limits['max']) {
             throw new \InvalidArgumentException("Payment gateway [{$gateway}] has invalid amount_limits: min ({$limits['min']}) cannot exceed max ({$limits['max']}).");
         }

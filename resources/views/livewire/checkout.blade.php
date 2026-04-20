@@ -58,7 +58,7 @@
                     />
                 </div>
                 <div class="flex flex-col w-full pt-2 md:pt-4">
-                    @if ($this->enableCoupon)
+                    @if ($this->enableCoupon && $step < 3)
                     <x-resrv::checkout-coupon />
                     @endif
                     <x-resrv::checkout-payment-table 

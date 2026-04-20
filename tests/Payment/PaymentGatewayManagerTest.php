@@ -619,4 +619,53 @@ class PaymentGatewayManagerTest extends TestCase
 
         new PaymentGatewayManager;
     }
+
+    public function test_resolve_from_config_throws_when_min_is_not_numeric()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => '€100'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [min] must be numeric, got '€100'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_throws_when_max_is_not_numeric()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => '100 EUR'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [max] must be numeric, got '100 EUR'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_accepts_numeric_string_limits()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => '10', 'max' => '1000'],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertTrue($manager->isAvailableFor('stripe', Price::create(500)));
+        $this->assertFalse($manager->isAvailableFor('stripe', Price::create(5)));
+        $this->assertFalse($manager->isAvailableFor('stripe', Price::create(5000)));
+    }
 }
