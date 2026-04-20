@@ -700,4 +700,52 @@ class PaymentGatewayManagerTest extends TestCase
         $this->assertFalse($manager->isAvailableFor('stripe', Price::create(5)));
         $this->assertFalse($manager->isAvailableFor('stripe', Price::create(5000)));
     }
+
+    public function test_resolve_from_config_throws_when_amount_limits_is_empty_array()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => [],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: must contain 'min' and/or 'max'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_throws_when_amount_limits_has_unknown_keys()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['mn' => 10, 'max' => 1000],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: only 'min' and 'max' keys are allowed, got unknown key(s) [mn].");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_rejects_decimal_min_greater_than_max()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => '10.50', 'max' => '10.49'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Payment gateway [stripe] has invalid amount_limits: min (10.50) cannot exceed max (10.49).');
+
+        new PaymentGatewayManager;
+    }
 }

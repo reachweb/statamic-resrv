@@ -33,13 +33,11 @@ class PaymentGatewayManager
                     );
                 }
 
-                $this->validateAmountLimits($name, $config['amount_limits'] ?? null);
-
                 $this->gateways[$name] = [
                     'class' => $config['class'],
                     'label' => $config['label'] ?? null,
                     'surcharge' => $config['surcharge'] ?? null,
-                    'amount_limits' => $config['amount_limits'] ?? null,
+                    'amount_limits' => $this->validateAmountLimits($name, $config['amount_limits'] ?? null),
                     'instance' => null,
                 ];
             }
@@ -61,11 +59,26 @@ class PaymentGatewayManager
         $this->defaultName = $name;
     }
 
-    protected function validateAmountLimits(string $gateway, ?array $limits): void
+    protected function validateAmountLimits(string $gateway, ?array $limits): ?array
     {
-        if (! $limits) {
-            return;
+        if ($limits === null) {
+            return null;
         }
+
+        $unknownKeys = array_diff(array_keys($limits), ['min', 'max']);
+        if (! empty($unknownKeys)) {
+            throw new \InvalidArgumentException(
+                "Payment gateway [{$gateway}] has invalid amount_limits: only 'min' and 'max' keys are allowed, got unknown key(s) [".implode(', ', $unknownKeys).'].'
+            );
+        }
+
+        if (! isset($limits['min']) && ! isset($limits['max'])) {
+            throw new \InvalidArgumentException(
+                "Payment gateway [{$gateway}] has invalid amount_limits: must contain 'min' and/or 'max'."
+            );
+        }
+
+        $parsed = [];
 
         foreach (['min', 'max'] as $key) {
             if (! isset($limits[$key])) {
@@ -76,7 +89,7 @@ class PaymentGatewayManager
             // leading whitespace), so probe Price::create() — the actual consumer — to keep
             // boot-time validation aligned with what passesAmountLimits() will accept later.
             try {
-                Price::create($limits[$key]);
+                $parsed[$key] = Price::create($limits[$key]);
             } catch (\Throwable $e) {
                 throw new \InvalidArgumentException(
                     "Payment gateway [{$gateway}] has invalid amount_limits: [{$key}] must be a numeric value Price::create() can parse, got ".var_export($limits[$key], true).'.'
@@ -84,9 +97,11 @@ class PaymentGatewayManager
             }
         }
 
-        if (isset($limits['min'], $limits['max']) && $limits['min'] > $limits['max']) {
+        if (isset($parsed['min'], $parsed['max']) && $parsed['min']->greaterThan($parsed['max'])) {
             throw new \InvalidArgumentException("Payment gateway [{$gateway}] has invalid amount_limits: min ({$limits['min']}) cannot exceed max ({$limits['max']}).");
         }
+
+        return $parsed;
     }
 
     protected function passesAmountLimits(string $gateway, PriceClass $amount): bool
@@ -97,11 +112,11 @@ class PaymentGatewayManager
             return true;
         }
 
-        if (isset($limits['min']) && $amount->lessThan(Price::create($limits['min']))) {
+        if (isset($limits['min']) && $amount->lessThan($limits['min'])) {
             return false;
         }
 
-        if (isset($limits['max']) && Price::create($limits['max'])->lessThan($amount)) {
+        if (isset($limits['max']) && $limits['max']->lessThan($amount)) {
             return false;
         }
 
