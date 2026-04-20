@@ -1028,12 +1028,49 @@ class CheckoutTest extends TestCase
             ->call('handleFirstStep')
             ->dispatch('checkout-form-submitted');
 
-        $component->assertHasErrors('gateway')
+        $component->assertHasErrors('reservation')
             ->assertSet('step', 2)
             ->assertSet('selectedGateway', '');
     }
 
-    public function test_select_gateway_rejects_when_amount_outside_limits()
+    public function test_select_gateway_bounces_to_step_2_when_no_gateway_remains()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 50, 'max' => 200],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'amount_limits' => ['min' => 50, 'max' => 200],
+                'surcharge' => ['type' => 'fixed', 'amount' => 5],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertSet('step', 3);
+
+        // Simulate the reservation payment changing between render and click so
+        // every gateway now exceeds its limits.
+        $this->reservation->update(['payment' => '500.00']);
+
+        $component->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertHasErrors('reservation')
+            ->assertSet('selectedGateway', '')
+            ->assertSet('step', 2);
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('', $reservation->payment_id);
+    }
+
+    public function test_select_gateway_auto_selects_when_only_one_remains()
     {
         Config::set('resrv-config.payment_gateways', [
             'stripe' => [
@@ -1055,17 +1092,12 @@ class CheckoutTest extends TestCase
             ->dispatch('checkout-form-submitted')
             ->assertSet('step', 3);
 
-        // Simulate the reservation payment changing between render and click
-        // (e.g. a coupon applied in another tab) so the picked gateway no longer qualifies.
+        // Stale change: paypal no longer qualifies, but stripe (no limits) still does.
         $this->reservation->update(['payment' => '500.00']);
 
         $component->dispatch('gateway-selected', gateway: 'paypal')
-            ->assertHasErrors('gateway')
-            ->assertSet('selectedGateway', '');
-
-        $reservation = Reservation::find($this->reservation->id);
-        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
-        $this->assertEquals('', $reservation->payment_id);
+            ->assertSet('selectedGateway', 'stripe')
+            ->assertSet('step', 3);
     }
 
     public function test_amount_limits_compare_payment_not_including_surcharge()
