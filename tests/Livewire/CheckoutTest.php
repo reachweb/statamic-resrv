@@ -1152,11 +1152,12 @@ class CheckoutTest extends TestCase
             ->dispatch('checkout-form-submitted')
             ->assertSet('step', 3);
 
-        // Simulate a stale intent carried over from another tab or a browser-back copy of step 3,
-        // plus an amount change that disqualifies every gateway.
+        // Simulate a stale intent + surcharge carried over from another tab or a browser-back copy
+        // of step 3, plus an amount change that disqualifies every gateway.
         $this->reservation->update([
             'payment_id' => 'stale_intent_abc',
             'payment_gateway' => 'stripe',
+            'payment_surcharge' => '25.00',
             'payment' => '500.00',
         ]);
 
@@ -1165,6 +1166,7 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('', $reservation->payment_id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
     }
 
     public function test_select_gateway_cancels_stale_intent_when_keeping_picker_open()
@@ -1192,10 +1194,11 @@ class CheckoutTest extends TestCase
             ->dispatch('checkout-form-submitted')
             ->assertSet('step', 3);
 
-        // Stale intent + amount change that only disqualifies offline.
+        // Stale intent + surcharge + amount change that only disqualifies offline.
         $this->reservation->update([
             'payment_id' => 'stale_intent_xyz',
             'payment_gateway' => 'stripe',
+            'payment_surcharge' => '25.00',
             'payment' => '500.00',
         ]);
 
@@ -1206,6 +1209,7 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('', $reservation->payment_id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
     }
 
     public function test_amount_limits_compare_payment_not_including_surcharge()

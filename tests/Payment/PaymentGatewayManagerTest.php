@@ -631,7 +631,7 @@ class PaymentGatewayManagerTest extends TestCase
         ]);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [min] must be numeric, got '€100'.");
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [min] must be a numeric value Price::create() can parse, got '€100'.");
 
         new PaymentGatewayManager;
     }
@@ -647,7 +647,39 @@ class PaymentGatewayManagerTest extends TestCase
         ]);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [max] must be numeric, got '100 EUR'.");
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [max] must be a numeric value Price::create() can parse, got '100 EUR'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_throws_when_min_is_scientific_notation()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => '1e2'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [min] must be a numeric value Price::create() can parse, got '1e2'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_throws_when_max_has_leading_whitespace()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => ' 10'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [max] must be a numeric value Price::create() can parse, got ' 10'.");
 
         new PaymentGatewayManager;
     }

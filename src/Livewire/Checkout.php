@@ -226,9 +226,11 @@ class Checkout extends Component
 
         $reservation = $this->reservation->fresh();
         if (! $manager->isAvailableFor($gateway, $reservation->payment)) {
-            // The clicked gateway is being rejected — cancel any intent carried over from a prior
-            // tab or browser-back copy of step 3 before we re-route, so a later webhook can't act on it.
-            $this->cancelActiveIntent();
+            // The clicked gateway is being rejected — fully reset payment state (intent + surcharge)
+            // carried over from a prior tab or browser-back copy of step 3, so a later webhook can't
+            // act on the stale intent and the sidebar doesn't show an inflated payable-now from the
+            // previous gateway's surcharge.
+            $this->resetPaymentState();
             $this->availableGateways = $manager->availableForFrontend($reservation->payment);
 
             // No gateway accepts the current amount — bounce back to step 2 with the no-gateway error

@@ -62,9 +62,18 @@ class PaymentGatewayManager
         }
 
         foreach (['min', 'max'] as $key) {
-            if (isset($limits[$key]) && ! is_numeric($limits[$key])) {
+            if (! isset($limits[$key])) {
+                continue;
+            }
+
+            // is_numeric() accepts formats BCMath rejects at runtime (scientific notation,
+            // leading whitespace), so probe Price::create() — the actual consumer — to keep
+            // boot-time validation aligned with what passesAmountLimits() will accept later.
+            try {
+                Price::create($limits[$key]);
+            } catch (\Throwable $e) {
                 throw new \InvalidArgumentException(
-                    "Payment gateway [{$gateway}] has invalid amount_limits: [{$key}] must be numeric, got ".var_export($limits[$key], true).'.'
+                    "Payment gateway [{$gateway}] has invalid amount_limits: [{$key}] must be a numeric value Price::create() can parse, got ".var_export($limits[$key], true).'.'
                 );
             }
         }
