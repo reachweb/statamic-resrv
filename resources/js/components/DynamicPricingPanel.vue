@@ -58,7 +58,7 @@
                                         <div class="text-sm font-light"><p>Percentage or fixed price.</p></div>
                                     </div>
                                     <div class="w-full">
-                                        <v-select v-model="submit.amount_type" :options="amountType" :reduce="type => type.code" />
+                                        <v-select v-model="submit.amount_type" :options="availableAmountTypes" :reduce="type => type.code" />
                                     </div>
                                     <div v-if="errors.amount_type" class="w-full mt-2 text-sm text-red-400">
                                         {{ errors.amount_type[0] }}
@@ -351,7 +351,7 @@ export default {
             }
             return 'post'
         },
-        amountType() {
+        availableAmountTypes() {
             if (['minimum', 'maximum'].includes(this.submit.amount_operation)) {
                 return this.allAmountTypes.filter(type => type.code === 'fixed')
             }
