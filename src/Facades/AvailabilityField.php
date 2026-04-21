@@ -9,7 +9,7 @@ use Reach\StatamicResrv\Helpers\AvailabilityFieldHelper;
  * @method static string getHandle(\Statamic\Fields\Blueprint $blueprint)
  * @method static \Statamic\Fields\Field|null getField(\Statamic\Fields\Blueprint $blueprint)
  * @method static bool blueprintHasAvailabilityField(\Statamic\Fields\Blueprint $blueprint)
- * @method static void clearCacheForBlueprint(string $namespace) (used)
+ * @method static void clearCacheForBlueprint(\Statamic\Fields\Blueprint $blueprint) (used)
  *
  * @see AvailabilityFieldHelper
  */
