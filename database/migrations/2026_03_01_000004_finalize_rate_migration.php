@@ -10,6 +10,43 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // SQLite heal: older Laravel versions (pre-12, with DBAL-backed SQLite schema changes)
+        // rebuilt `resrv_availabilities` when 2024_03_10_151910_add_property_field_to_resrv_availabilities_table
+        // ran with its ->after('price'). SQLite renames the table but not its indexes, so the
+        // composite indexes defined by 2024_03_10_152228_add_index_to_resrv_availabilities_table
+        // end up stuck under a `new_` prefix, and the rebuild also auto-creates spurious
+        // single-column indexes on `date` and `property`. Both break the Schema::table calls
+        // below. This block is idempotent and a no-op on installs that never went through the
+        // DBAL rebuild path.
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            // Drop single-column indexes on `date` and `property`. The canonical `date` index
+            // is recreated implicitly by the composite index below; `property` is going away
+            // with the column drop anyway.
+            DB::statement('DROP INDEX IF EXISTS "new_resrv_availabilities_property_index"');
+            DB::statement('DROP INDEX IF EXISTS "new_resrv_availabilities_date_index"');
+            DB::statement('DROP INDEX IF EXISTS "resrv_availabilities_property_index"');
+            DB::statement('DROP INDEX IF EXISTS "resrv_availabilities_date_index"');
+
+            // Rename the two legitimate composite indexes back to their canonical names.
+            // SQLite has no ALTER INDEX RENAME — drop + recreate is the only option.
+            $renames = [
+                'new_resrv_availabilities_statamic_id_date_property_unique' => 'CREATE UNIQUE INDEX "resrv_availabilities_statamic_id_date_property_unique" ON "resrv_availabilities" ("statamic_id", "date", "property")',
+                'new_resrv_availabilities_statamic_id_date_property_available_index' => 'CREATE INDEX "resrv_availabilities_statamic_id_date_property_available_index" ON "resrv_availabilities" ("statamic_id", "date", "property", "available")',
+            ];
+
+            foreach ($renames as $oldName => $createSql) {
+                $exists = DB::selectOne(
+                    "SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?",
+                    [$oldName]
+                );
+
+                if ($exists) {
+                    DB::statement('DROP INDEX "'.$oldName.'"');
+                    DB::statement($createSql);
+                }
+            }
+        }
+
         // Safety: remove availability rows with no rate_id (orphaned records not handled by migration 3)
         $deleted = DB::table('resrv_availabilities')->whereNull('rate_id')->delete();
         if ($deleted > 0) {
