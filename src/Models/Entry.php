@@ -65,9 +65,6 @@ class Entry extends Model
             return;
         }
 
-        $fieldValue = $entry->get($field->handle());
-        error_log('DEBUG syncToDatabase: field='.$field->handle().' value='.var_export($fieldValue, true).' data='.var_export($entry->data()->toArray(), true));
-
         $resrvEntry = static::withTrashed()->updateOrCreate(
             [
                 'item_id' => $entry->id(),
