@@ -8,13 +8,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
+use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\OptionsException;
-use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Exceptions\ReservationDriftException;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Statamic\Contracts\Entries\Entry as EntryContract;
@@ -149,6 +153,37 @@ class Reservation extends Model
         return $query->where('payment_id', $id);
     }
 
+    /**
+     * Returns true when the status changed, false on same-state no-op. Callers MUST gate
+     * event dispatch on the return value — otherwise a duplicate webhook re-fires side
+     * effects (e.g. double IncreaseAvailability). Events are intentionally NOT dispatched
+     * here so the affiliate flow can transition to PARTNER and still dispatch
+     * ReservationConfirmed for side-effect listeners.
+     */
+    public function transitionTo(ReservationStatus $to): bool
+    {
+        return (bool) DB::transaction(function () use ($to) {
+            $fresh = static::query()->lockForUpdate()->findOrFail($this->id);
+
+            if ($fresh->status === $to->value) {
+                return false;
+            }
+
+            $current = ReservationStatus::from($fresh->status);
+
+            if (! $current->canTransitionTo($to)) {
+                throw new InvalidStateTransition($current, $to, $fresh->id);
+            }
+
+            $fresh->status = $to->value;
+            $fresh->save();
+
+            $this->setRawAttributes($fresh->getAttributes(), true);
+
+            return true;
+        });
+    }
+
     public function isParent()
     {
         if ($this->type == 'parent') {
@@ -240,7 +275,7 @@ class Reservation extends Model
     protected function checkMaxQuantity($quantity)
     {
         if ($quantity > config('resrv-config.maximum_quantity')) {
-            throw new ReservationException(__('You cannot reserve these many in one reservation.'));
+            throw new ReservationDriftException(__('You cannot reserve these many in one reservation.'));
         }
     }
 
@@ -258,7 +293,7 @@ class Reservation extends Model
         ], $statamic_id);
 
         if ($checkAvailability == false) {
-            throw new ReservationException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
+            throw new ReservationDriftException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
     }
 
@@ -272,7 +307,7 @@ class Reservation extends Model
         $frontendTotal = $data['total'];
 
         if (! $dbTotal->equals($frontendTotal)) {
-            throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
+            throw new ReservationDriftException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
 
         return true;
@@ -411,19 +446,57 @@ class Reservation extends Model
         return $resolver->resolveForReservation($this);
     }
 
-    public function expire($id)
+    /**
+     * Clear payment_id/payment_gateway BEFORE commit so a racing succeeded webhook cannot
+     * reconcile via findByPaymentId once EXPIRED is committed; call the remote Stripe cancel
+     * AFTER commit so no DB row lock is held across a network call. If remote cancel fails,
+     * local state is already correct — the stray intent is logged for manual reconciliation.
+     */
+    public function expire(): void
     {
-        try {
-            DB::transaction(function () use ($id) {
-                $reservation = $this->findOrFail($id);
-                if ($reservation->status == 'pending') {
-                    $reservation->status = 'expired';
-                    $reservation->save();
-                    ReservationExpired::dispatch($reservation);
-                }
-            });
-        } catch (\Exception $e) {
+        $oldPaymentId = null;
+        $oldGateway = null;
+        $expired = null;
+
+        DB::transaction(function () use (&$oldPaymentId, &$oldGateway, &$expired) {
+            $reservation = static::query()->lockForUpdate()->findOrFail($this->id);
+
+            if ($reservation->status !== ReservationStatus::PENDING->value) {
+                return;
+            }
+
+            $oldPaymentId = $reservation->payment_id !== '' ? $reservation->payment_id : null;
+            $oldGateway = $reservation->payment_gateway !== '' ? $reservation->payment_gateway : null;
+
+            $reservation->payment_id = '';
+            $reservation->payment_gateway = '';
+            $reservation->status = ReservationStatus::EXPIRED->value;
+            $reservation->save();
+
+            $this->setRawAttributes($reservation->getAttributes(), true);
+            $expired = $reservation;
+        });
+
+        if ($expired === null) {
+            return;
         }
+
+        if ($oldPaymentId !== null && $oldGateway !== null) {
+            try {
+                app(PaymentGatewayManager::class)
+                    ->gateway($oldGateway)
+                    ->cancelPaymentIntent($oldPaymentId, $expired);
+            } catch (\Throwable $e) {
+                Log::error('Failed to cancel payment intent during expiration; manual reconciliation may be required.', [
+                    'reservation_id' => $expired->id,
+                    'payment_id' => $oldPaymentId,
+                    'payment_gateway' => $oldGateway,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        ReservationExpired::dispatch($expired);
     }
 
     public function emptyEntry()

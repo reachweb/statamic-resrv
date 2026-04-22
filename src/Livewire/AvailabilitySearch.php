@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
+use Carbon\Carbon;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -144,7 +145,7 @@ class AvailabilitySearch extends Component
     #[On('availability-date-selected')]
     public function availabilityDateSelected(array $data): void
     {
-        $dateStart = \Carbon\Carbon::parse($data['date']);
+        $dateStart = Carbon::parse($data['date']);
         $minimumPeriod = max(1, config('resrv-config.minimum_reservation_period_in_days', 1));
 
         $this->data->dates['date_start'] = $dateStart->toDateString();

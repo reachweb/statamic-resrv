@@ -5,16 +5,21 @@ namespace Reach\StatamicResrv\Tests;
 use Facades\Statamic\Version;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Foundation\Testing\WithFaker;
-use Orchestra\Testbench\TestCase as OrchestraTestCase;
-use Statamic\Extend\Manifest;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
-use Livewire\Mechanisms\HandleRequests\HandleRequests;
+use Livewire\LivewireServiceProvider;
+use MarcoRieser\Livewire\ServiceProvider;
+use Orchestra\Testbench\TestCase as OrchestraTestCase;
+use Reach\StatamicResrv\StatamicResrvServiceProvider;
+use Spatie\LaravelRay\RayServiceProvider;
+use Statamic\Extend\Manifest;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
+use Statamic\Providers\StatamicServiceProvider;
 use Statamic\Stache\Stores\UsersStore;
 use Statamic\Statamic;
 use Statamic\Support\Str;
@@ -78,11 +83,11 @@ class TestCase extends OrchestraTestCase
     protected function getPackageProviders($app)
     {
         return [
-            \Statamic\Providers\StatamicServiceProvider::class,
-            \Livewire\LivewireServiceProvider::class,
-            \MarcoRieser\Livewire\ServiceProvider::class,
-            \Reach\StatamicResrv\StatamicResrvServiceProvider::class,
-            \Spatie\LaravelRay\RayServiceProvider::class,
+            StatamicServiceProvider::class,
+            LivewireServiceProvider::class,
+            ServiceProvider::class,
+            StatamicResrvServiceProvider::class,
+            RayServiceProvider::class,
         ];
     }
 
@@ -165,7 +170,7 @@ class TestCase extends OrchestraTestCase
 
     protected function registerLivewireUpdateRoute($app): void
     {
-        $app->booted(function () use ($app) {
+        $app->booted(function () {
             // Livewire 4 uses dynamic endpoints based on APP_KEY hash
             // We need to set the update route before Statamic's catch-all route is matched
             Livewire::setUpdateRoute(function ($handle) {
@@ -276,7 +281,7 @@ class TestCase extends OrchestraTestCase
      */
     protected function assertDatabaseHasJsonColumn(string $table, array $data, string $jsonColumn, mixed $jsonValue): void
     {
-        $query = \Illuminate\Support\Facades\DB::table($table);
+        $query = DB::table($table);
 
         foreach ($data as $column => $value) {
             $query->where($column, $value);
@@ -284,7 +289,7 @@ class TestCase extends OrchestraTestCase
 
         $jsonString = is_string($jsonValue) ? $jsonValue : json_encode($jsonValue);
 
-        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() === 'pgsql') {
+        if (DB::connection()->getDriverName() === 'pgsql') {
             $query->whereRaw("{$jsonColumn}::text = ?", [$jsonString]);
         } else {
             $query->where($jsonColumn, $jsonString);

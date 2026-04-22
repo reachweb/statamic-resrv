@@ -32,7 +32,7 @@ class Resrv extends Tags
         }
 
         $reservation = Reservation::where('reference', request()->get('ref'))
-            ->where('status', ReservationStatus::CONFIRMED)
+            ->where('status', ReservationStatus::CONFIRMED->value)
             ->firstOrFail();
 
         $expectedHash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));

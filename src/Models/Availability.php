@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Models;
 
+use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -487,7 +488,7 @@ class Availability extends Model implements AvailabilityContract
             })
             ->orderBy('price')
             ->get(['date', 'available', 'price', 'property'])
-            ->groupBy(fn ($item) => \Carbon\Carbon::parse($item->date)->format('Y-m-d'))
+            ->groupBy(fn ($item) => Carbon::parse($item->date)->format('Y-m-d'))
             ->map(fn ($item) => $item->firstWhere('available', '>', 0))
             ->toArray();
     }
@@ -506,7 +507,7 @@ class Availability extends Model implements AvailabilityContract
             ->orderBy('price')
             ->get(['date', 'available', 'price', 'property']);
 
-        $formatDate = fn ($date) => \Carbon\Carbon::parse($date)->format('Y-m-d');
+        $formatDate = fn ($date) => Carbon::parse($date)->format('Y-m-d');
 
         if ($groupByDate) {
             return $results

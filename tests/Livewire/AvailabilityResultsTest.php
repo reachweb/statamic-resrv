@@ -1091,7 +1091,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules disabled
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         // Set options but with cutoff disabled
         $resrvEntry->options = [
@@ -1126,7 +1126,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules enabled (3 hours before 4pm)
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         $resrvEntry->options = [
             'cutoff_rules' => [
@@ -1175,7 +1175,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules and schedules
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         // Set up realistic 2-month schedules
         $currentMonthStart = now()->startOfMonth()->format('Y-m-d');
@@ -1280,7 +1280,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules enabled (3 hours before 4pm)
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         $resrvEntry->options = [
             'cutoff_rules' => [
@@ -1350,7 +1350,7 @@ class AvailabilityResultsTest extends TestCase
 
         // Create an entry with cutoff rules enabled (3 hours before 4pm)
         $entry = $this->makeStatamicItemWithAvailability();
-        $resrvEntry = \Reach\StatamicResrv\Models\Entry::whereItemId($entry->id());
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
 
         $resrvEntry->options = [
             'cutoff_rules' => [

@@ -2,11 +2,15 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Exceptions\ReservationExpiredException;
+use Reach\StatamicResrv\Exceptions\ReservationTerminatedException;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
@@ -19,12 +23,20 @@ trait HandlesReservationQueries
     {
         try {
             $reservation = Reservation::findOrFail(session('resrv_reservation'));
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             throw new ReservationException('Reservation not found in the session.');
         }
 
         if ($reservation->status === ReservationStatus::CONFIRMED->value) {
-            throw new ReservationException('This reservation is already confirmed.');
+            throw new ReservationTerminatedException(ReservationStatus::CONFIRMED, 'This reservation is already confirmed.');
+        }
+
+        if ($reservation->status === ReservationStatus::PARTNER->value) {
+            throw new ReservationTerminatedException(ReservationStatus::PARTNER, 'This reservation is already confirmed.');
+        }
+
+        if ($reservation->status === ReservationStatus::REFUNDED->value) {
+            throw new ReservationTerminatedException(ReservationStatus::REFUNDED, 'This reservation has been cancelled.');
         }
 
         if ($reservation->status === ReservationStatus::WEBHOOK->value) {
@@ -32,7 +44,19 @@ trait HandlesReservationQueries
         }
 
         if ($reservation->status === ReservationStatus::EXPIRED->value) {
-            throw new ReservationException('This reservation has expired. Please start over.');
+            throw new ReservationExpiredException('This reservation has expired. Please start over.');
+        }
+
+        // Time-based expiration at read — don't wait for the background job to run. If the
+        // hold window has elapsed, trigger expire() synchronously (which also cancels the
+        // Stripe intent) and surface the same terminal error.
+        $holdMinutes = config('resrv-config.minutes_to_hold');
+        if ($holdMinutes && $reservation->status === ReservationStatus::PENDING->value) {
+            $expireAt = Carbon::parse($reservation->created_at)->addMinutes($holdMinutes);
+            if ($expireAt <= Carbon::now()) {
+                $reservation->expire();
+                throw new ReservationExpiredException('This reservation has expired. Please start over.');
+            }
         }
 
         return $reservation;

@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Traits\HandlesCutoffRules;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry as StatamicEntry;
 use Statamic\Facades\Blueprint;
+use Statamic\Fields\Field;
 
 class Entry extends Model
 {
@@ -64,6 +65,9 @@ class Entry extends Model
             return;
         }
 
+        $fieldValue = $entry->get($field->handle());
+        error_log('DEBUG syncToDatabase: field='.$field->handle().' value='.var_export($fieldValue, true).' data='.var_export($entry->data()->toArray(), true));
+
         $resrvEntry = static::withTrashed()->updateOrCreate(
             [
                 'item_id' => $entry->id(),
@@ -93,7 +97,7 @@ class Entry extends Model
         return StatamicEntry::find($this->item_id);
     }
 
-    public function getAvailabilityField(): ?\Statamic\Fields\Field
+    public function getAvailabilityField(): ?Field
     {
         return AvailabilityField::getField($this->getBlueprint());
     }

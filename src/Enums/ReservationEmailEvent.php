@@ -8,6 +8,7 @@ enum ReservationEmailEvent: string
     case AdminMade = 'admin_made';
     case CustomerRefunded = 'customer_refunded';
     case CustomerAbandoned = 'customer_abandoned';
+    case AdminOrphanedPayment = 'admin_orphaned_payment';
 
     public static function values(): array
     {

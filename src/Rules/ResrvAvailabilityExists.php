@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Rules;
 use Closure;
 use Illuminate\Contracts\Validation\DataAwareRule;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Translation\PotentiallyTranslatedString;
 use Reach\StatamicResrv\Facades\Availability;
 
 class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
@@ -14,7 +15,7 @@ class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
     /**
      * Run the validation rule.
      *
-     * @param  \Closure(string): \Illuminate\Translation\PotentiallyTranslatedString  $fail
+     * @param  Closure(string): PotentiallyTranslatedString  $fail
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {

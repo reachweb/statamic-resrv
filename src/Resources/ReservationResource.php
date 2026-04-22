@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Blueprints\ReservationBlueprint;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Statamic\Http\Resources\CP\Concerns\HasRequestedColumns;
 
 class ReservationResource extends ResourceCollection
@@ -52,7 +53,7 @@ class ReservationResource extends ResourceCollection
                     'options' => $reservation->options,
                     'property' => $reservation->getPropertyAttributeLabel(),
                     'payment_gateway' => $reservation->payment_gateway
-                        ? app(\Reach\StatamicResrv\Http\Payment\PaymentGatewayManager::class)->label($reservation->payment_gateway)
+                        ? app(PaymentGatewayManager::class)->label($reservation->payment_gateway)
                         : null,
                     'created_at' => $this->formatDate($reservation->created_at),
                     'updated_at' => $this->formatDate($reservation->updated_at),

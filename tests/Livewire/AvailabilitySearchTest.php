@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades;
@@ -457,7 +458,7 @@ class AvailabilitySearchTest extends TestCase
         $entry = $this->entries->first();
 
         // Create availability with different prices for different properties on the same date
-        \Reach\StatamicResrv\Models\Availability::factory()
+        Availability::factory()
             ->create([
                 'statamic_id' => $entry->id(),
                 'date' => today(),
@@ -466,7 +467,7 @@ class AvailabilitySearchTest extends TestCase
                 'property' => 'expensive-cabin',
             ]);
 
-        \Reach\StatamicResrv\Models\Availability::factory()
+        Availability::factory()
             ->create([
                 'statamic_id' => $entry->id(),
                 'date' => today(),

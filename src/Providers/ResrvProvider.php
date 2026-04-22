@@ -5,6 +5,10 @@ namespace Reach\StatamicResrv\Providers;
 use Edalzell\Forma\ConfigController;
 use Edalzell\Forma\Forma;
 use Illuminate\Console\Application as Artisan;
+use Reach\StatamicResrv\Console\Commands\ImportEntries;
+use Reach\StatamicResrv\Console\Commands\InstallResrv;
+use Reach\StatamicResrv\Console\Commands\SendAbandonedReservationEmails;
+use Reach\StatamicResrv\Dictionaries\CountryPhoneCodes;
 use Reach\StatamicResrv\Events\AvailabilityChanged;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\CouponUpdated;
@@ -13,12 +17,18 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
+use Reach\StatamicResrv\Fieldtypes\ResrvAvailability;
+use Reach\StatamicResrv\Fieldtypes\ResrvCutoff;
+use Reach\StatamicResrv\Fieldtypes\ResrvExtras;
+use Reach\StatamicResrv\Fieldtypes\ResrvFixedPricing;
+use Reach\StatamicResrv\Fieldtypes\ResrvOptions;
 use Reach\StatamicResrv\Filters\ReservationEntry;
 use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
@@ -26,9 +36,7 @@ use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\AddResrvEntryToDatabase;
 use Reach\StatamicResrv\Listeners\AssociateAffiliateFromCoupon;
-use Reach\StatamicResrv\Listeners\CancelReservation;
 use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
-use Reach\StatamicResrv\Listeners\ConfirmReservation;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
@@ -39,10 +47,15 @@ use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Listeners\UpdateConnectedAvailabilities;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
+use Reach\StatamicResrv\Tags\Resrv;
+use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
+use Statamic\Events\BlueprintSaved;
+use Statamic\Events\EntrySaved;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
+use Statamic\Tags\Collection\Collection;
 
 class ResrvProvider extends AddonServiceProvider
 {
@@ -60,26 +73,26 @@ class ResrvProvider extends AddonServiceProvider
     ];
 
     protected $commands = [
-        \Reach\StatamicResrv\Console\Commands\InstallResrv::class,
-        \Reach\StatamicResrv\Console\Commands\ImportEntries::class,
-        \Reach\StatamicResrv\Console\Commands\SendAbandonedReservationEmails::class,
+        InstallResrv::class,
+        ImportEntries::class,
+        SendAbandonedReservationEmails::class,
     ];
 
     protected $dictionaries = [
-        \Reach\StatamicResrv\Dictionaries\CountryPhoneCodes::class,
+        CountryPhoneCodes::class,
     ];
 
     protected $fieldtypes = [
-        \Reach\StatamicResrv\Fieldtypes\ResrvAvailability::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvOptions::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvExtras::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvFixedPricing::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvCutoff::class,
+        ResrvAvailability::class,
+        ResrvOptions::class,
+        ResrvExtras::class,
+        ResrvFixedPricing::class,
+        ResrvCutoff::class,
     ];
 
     protected $tags = [
-        \Reach\StatamicResrv\Tags\Resrv::class,
-        \Reach\StatamicResrv\Tags\ResrvCheckoutRedirect::class,
+        Resrv::class,
+        ResrvCheckoutRedirect::class,
     ];
 
     protected $scopes = [
@@ -102,11 +115,9 @@ class ResrvProvider extends AddonServiceProvider
             IncreaseAvailability::class,
         ],
         ReservationConfirmed::class => [
-            ConfirmReservation::class,
             SendNewReservationEmails::class,
         ],
         ReservationCancelled::class => [
-            CancelReservation::class,
             IncreaseAvailability::class,
         ],
         ReservationRefunded::class => [
@@ -123,14 +134,14 @@ class ResrvProvider extends AddonServiceProvider
         AvailabilityChanged::class => [
             UpdateConnectedAvailabilities::class,
         ],
-        \Statamic\Events\EntrySaved::class => [
+        EntrySaved::class => [
             AddResrvEntryToDatabase::class,
         ],
         \Statamic\Events\EntryDeleted::class => [
             EntryDeleted::class,
             SoftDeleteResrvEntryFromDatabase::class,
         ],
-        \Statamic\Events\BlueprintSaved::class => [
+        BlueprintSaved::class => [
             ClearAvailabilityFieldCache::class,
         ],
     ];
@@ -194,7 +205,7 @@ class ResrvProvider extends AddonServiceProvider
         $this->app->bind(PaymentInterface::class, config('resrv-config.payment_gateway'));
 
         if (app()->environment() == 'testing') {
-            $this->app->bind(PaymentInterface::class, \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class);
+            $this->app->bind(PaymentInterface::class, FakePaymentGateway::class);
         }
 
         $this->createNavigation();
@@ -276,7 +287,7 @@ class ResrvProvider extends AddonServiceProvider
     protected function bootHooks(): void
     {
         $this->bootEntriesHooks('fetched-entries', function ($hookName, $callback) {
-            \Statamic\Tags\Collection\Collection::hook($hookName, $callback);
+            Collection::hook($hookName, $callback);
         });
     }
 }

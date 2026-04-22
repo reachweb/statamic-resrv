@@ -4,6 +4,17 @@ namespace Reach\StatamicResrv\Providers;
 
 use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
+use Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection;
+use Reach\StatamicResrv\Livewire\AvailabilityControl;
+use Reach\StatamicResrv\Livewire\AvailabilityList;
+use Reach\StatamicResrv\Livewire\AvailabilityResults;
+use Reach\StatamicResrv\Livewire\AvailabilitySearch;
+use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Livewire\CheckoutForm;
+use Reach\StatamicResrv\Livewire\CheckoutPayment;
+use Reach\StatamicResrv\Livewire\Extras;
+use Reach\StatamicResrv\Livewire\LfAvailabilityFilter;
+use Reach\StatamicResrv\Livewire\Options;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
 use Statamic\Providers\AddonServiceProvider;
 
@@ -33,28 +44,28 @@ class ResrvLivewireProvider extends AddonServiceProvider
 
     protected function bootLivewireComponents(): void
     {
-        Livewire::component('availability-search', \Reach\StatamicResrv\Livewire\AvailabilitySearch::class);
-        Livewire::component('availability-results', \Reach\StatamicResrv\Livewire\AvailabilityResults::class);
-        Livewire::component('availability-list', \Reach\StatamicResrv\Livewire\AvailabilityList::class);
-        Livewire::component('availability-control', \Reach\StatamicResrv\Livewire\AvailabilityControl::class);
-        Livewire::component('extras', \Reach\StatamicResrv\Livewire\Extras::class);
-        Livewire::component('options', \Reach\StatamicResrv\Livewire\Options::class);
-        Livewire::component('checkout', \Reach\StatamicResrv\Livewire\Checkout::class);
-        Livewire::component('checkout-form', \Reach\StatamicResrv\Livewire\CheckoutForm::class);
-        Livewire::component('checkout-payment', \Reach\StatamicResrv\Livewire\CheckoutPayment::class);
-        if (class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {
-            Livewire::component('lf-availability-filter', \Reach\StatamicResrv\Livewire\LfAvailabilityFilter::class);
+        Livewire::component('availability-search', AvailabilitySearch::class);
+        Livewire::component('availability-results', AvailabilityResults::class);
+        Livewire::component('availability-list', AvailabilityList::class);
+        Livewire::component('availability-control', AvailabilityControl::class);
+        Livewire::component('extras', Extras::class);
+        Livewire::component('options', Options::class);
+        Livewire::component('checkout', Checkout::class);
+        Livewire::component('checkout-form', CheckoutForm::class);
+        Livewire::component('checkout-payment', CheckoutPayment::class);
+        if (class_exists(LivewireCollection::class)) {
+            Livewire::component('lf-availability-filter', LfAvailabilityFilter::class);
         }
     }
 
     protected function bootHooks(): void
     {
-        if (! class_exists(\Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::class)) {
+        if (! class_exists(LivewireCollection::class)) {
             return;
         }
 
         $this->bootEntriesHooks('livewire-fetched-entries', function ($hookName, $callback) {
-            \Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection::hook($hookName, $callback);
+            LivewireCollection::hook($hookName, $callback);
         });
     }
 }
