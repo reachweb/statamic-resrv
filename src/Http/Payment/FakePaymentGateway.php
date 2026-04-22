@@ -9,6 +9,11 @@ use Reach\StatamicResrv\Models\Reservation;
 
 class FakePaymentGateway implements PaymentInterface
 {
+    /**
+     * @var array<int, array{payment_id: string, reservation_id: int}>
+     */
+    public static array $cancelledIntents = [];
+
     public function name(): string
     {
         return 'fake';
@@ -37,7 +42,10 @@ class FakePaymentGateway implements PaymentInterface
 
     public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
     {
-        //
+        self::$cancelledIntents[] = [
+            'payment_id' => $paymentId,
+            'reservation_id' => $reservation->id,
+        ];
     }
 
     public function refund($reservation)

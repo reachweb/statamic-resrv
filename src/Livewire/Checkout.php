@@ -142,6 +142,20 @@ class Checkout extends Component
         // Validate data
         $this->validate();
 
+        // Check terminal expiration FIRST. confirmReservationIsValid() below touches
+        // $this->reservation, which re-fires getReservation() and throws a ReservationException
+        // with the exact same "expired" message — if we ran validation first, that throw would
+        // be swallowed by the recoverable ReservationException catch and demoted to an inline
+        // error, never flipping $reservationError. Ordering matches handleSecondStep().
+        try {
+            $this->confirmReservationHasNotExpired();
+        } catch (ReservationException $e) {
+            $this->addError('reservation', $e->getMessage());
+            $this->reservationError = $e->getMessage();
+
+            return;
+        }
+
         // Recoverable validation failures (price/availability drift, max quantity, missing
         // required extras/options) — surface them as inline banner errors so the user can
         // correct and retry. Do NOT flip $reservationError to terminal here.
@@ -157,17 +171,6 @@ class Checkout extends Component
             return;
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
-
-            return;
-        }
-
-        // Time-based expiration is terminal — set $reservationError so render() switches to
-        // the checkout-error view and the error survives the next Livewire roundtrip.
-        try {
-            $this->confirmReservationHasNotExpired();
-        } catch (ReservationException $e) {
-            $this->addError('reservation', $e->getMessage());
-            $this->reservationError = $e->getMessage();
 
             return;
         }

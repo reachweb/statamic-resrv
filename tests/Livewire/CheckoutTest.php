@@ -207,6 +207,27 @@ class CheckoutTest extends TestCase
             ->assertHasErrors('reservation');
     }
 
+    public function test_handle_first_step_time_expired_shows_terminal_error_not_inline()
+    {
+        // Regression guard: confirmReservationIsValid() touches $this->reservation, which
+        // re-fires getReservation() and throws "This reservation has expired" — the exact
+        // same message confirmReservationHasNotExpired() throws. If the expiration check
+        // runs AFTER validation, the recoverable ReservationException catch swallows the
+        // throw and demotes it to an inline banner, leaving $reservationError untouched.
+        // The fix reorders so expiration is checked first — this test fails on the old
+        // ordering and passes after the fix.
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class, ['enableExtrasStep' => true]);
+
+        $this->travel(30)->minutes();
+
+        $component->call('handleFirstStep')
+            ->assertSet('reservationError', 'This reservation has expired. Please start over.')
+            ->assertViewIs('statamic-resrv::livewire.checkout-error')
+            ->assertSee('This reservation has expired');
+    }
+
     public function test_time_expired_pending_reservation_with_extras_step_disabled_shows_error_and_persists_after_roundtrip()
     {
         session(['resrv_reservation' => $this->reservation->id]);
@@ -238,6 +259,8 @@ class CheckoutTest extends TestCase
             ],
         ]);
 
+        FakePaymentGateway::$cancelledIntents = [];
+
         session(['resrv_reservation' => $this->reservation->id]);
 
         $this->travel(30)->minutes();
@@ -248,6 +271,13 @@ class CheckoutTest extends TestCase
 
         // The dangling intent must be cleared so a late webhook cannot confirm the reservation.
         $this->assertEquals('', Reservation::find($this->reservation->id)->payment_id);
+
+        // Gateway cancel must have actually been invoked — clearing payment_id alone would
+        // leave the intent live on Stripe's side and a late .succeeded webhook could still
+        // reconcile via metadata.reservation_id.
+        $this->assertCount(1, FakePaymentGateway::$cancelledIntents);
+        $this->assertEquals('stale_intent_expired', FakePaymentGateway::$cancelledIntents[0]['payment_id']);
+        $this->assertEquals($this->reservation->id, FakePaymentGateway::$cancelledIntents[0]['reservation_id']);
     }
 
     public function test_confirmed_reservation_preserves_payment_id_on_mount()
