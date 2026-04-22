@@ -18,6 +18,7 @@ use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
 {
@@ -74,6 +75,12 @@ class Checkout extends Component
         // so a lingering intent doesn't survive into the next pass through checkout.
         if (! $this->reservationError) {
             $this->resetPaymentState();
+        } elseif ($expiredReservation = Reservation::find(session('resrv_reservation'))) {
+            // Terminal state (time-expired or otherwise) — the reservation object can't be
+            // accessed via $this->reservation because the computed throws. Load directly from
+            // the DB and cancel any dangling step-3 payment intent so a late success webhook
+            // can't confirm an orphaned reservation.
+            $this->cancelActiveIntent($expiredReservation);
         }
 
         $this->initializeExtrasAndOptions();
@@ -130,10 +137,11 @@ class Checkout extends Component
         // Validate data
         $this->validate();
 
-        // Confirm that the reservation data is valid by cross-checking with the database
+        // Recoverable validation failures (price/availability drift, max quantity, missing
+        // required extras/options) — surface them as inline banner errors so the user can
+        // correct and retry. Do NOT flip $reservationError to terminal here.
         try {
             $this->confirmReservationIsValid();
-            $this->confirmReservationHasNotExpired();
         } catch (OptionsException $e) {
             $this->addError('options', $e->getMessage());
 
@@ -144,6 +152,17 @@ class Checkout extends Component
             return;
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
+
+            return;
+        }
+
+        // Time-based expiration is terminal — set $reservationError so render() switches to
+        // the checkout-error view and the error survives the next Livewire roundtrip.
+        try {
+            $this->confirmReservationHasNotExpired();
+        } catch (ReservationException $e) {
+            $this->addError('reservation', $e->getMessage());
+            $this->reservationError = $e->getMessage();
 
             return;
         }
@@ -185,6 +204,7 @@ class Checkout extends Component
             $this->confirmReservationHasNotExpired();
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
+            $this->reservationError = $e->getMessage();
 
             return;
         }
@@ -282,9 +302,9 @@ class Checkout extends Component
         $this->paymentView = '';
     }
 
-    protected function cancelActiveIntent(): void
+    protected function cancelActiveIntent(?Reservation $reservation = null): void
     {
-        $reservation = $this->reservation->fresh();
+        $reservation = $reservation ? $reservation->fresh() : $this->reservation->fresh();
 
         if ($reservation->payment_id === '' || empty($reservation->payment_gateway)) {
             return;
@@ -379,6 +399,7 @@ class Checkout extends Component
             $this->confirmReservationHasNotExpired();
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
+            $this->reservationError = $e->getMessage();
 
             return;
         }

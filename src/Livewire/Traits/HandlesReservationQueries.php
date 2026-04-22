@@ -2,6 +2,8 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Enums\ReservationTypes;
@@ -19,7 +21,7 @@ trait HandlesReservationQueries
     {
         try {
             $reservation = Reservation::findOrFail(session('resrv_reservation'));
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        } catch (ModelNotFoundException $e) {
             throw new ReservationException('Reservation not found in the session.');
         }
 
@@ -32,6 +34,13 @@ trait HandlesReservationQueries
         }
 
         if ($reservation->status === ReservationStatus::EXPIRED->value) {
+            throw new ReservationException('This reservation has expired. Please start over.');
+        }
+
+        $expireAt = Carbon::parse($reservation->created_at)
+            ->add(config('resrv-config.minutes_to_hold'), 'minute');
+
+        if ($expireAt < Carbon::now()) {
             throw new ReservationException('This reservation has expired. Please start over.');
         }
 

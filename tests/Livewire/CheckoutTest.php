@@ -207,6 +207,66 @@ class CheckoutTest extends TestCase
             ->assertHasErrors('reservation');
     }
 
+    public function test_time_expired_pending_reservation_with_extras_step_disabled_shows_error_and_persists_after_roundtrip()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $this->travel(30)->minutes();
+
+        Livewire::test(Checkout::class, ['enableExtrasStep' => false])
+            ->assertViewIs('statamic-resrv::livewire.checkout-error')
+            ->assertSee('This reservation has expired')
+            ->assertSet('reservationError', 'This reservation has expired. Please start over.')
+            ->dispatch('options-updated', [])
+            ->assertViewIs('statamic-resrv::livewire.checkout-error')
+            ->assertSee('This reservation has expired');
+    }
+
+    public function test_time_expired_pending_reservation_cancels_dangling_payment_intent_on_mount()
+    {
+        // Simulate a reservation that reached step 3 (intent + gateway persisted) and then
+        // exceeded minutes_to_hold before the user reopened the checkout.
+        $this->reservation->update([
+            'payment_id' => 'stale_intent_expired',
+            'payment_gateway' => 'fake',
+        ]);
+
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake',
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $this->travel(30)->minutes();
+
+        Livewire::test(Checkout::class, ['enableExtrasStep' => false])
+            ->assertViewIs('statamic-resrv::livewire.checkout-error')
+            ->assertSee('This reservation has expired');
+
+        // The dangling intent must be cleared so a late webhook cannot confirm the reservation.
+        $this->assertEquals('', Reservation::find($this->reservation->id)->payment_id);
+    }
+
+    public function test_handle_first_step_price_mismatch_shows_inline_error_not_terminal_page()
+    {
+        // Force validateTotal() to throw a recoverable ReservationException by desyncing
+        // the reservation's stored price from what Availability::getPricing() returns for
+        // the same dates. This simulates the "price has changed between search and checkout"
+        // scenario — a recoverable validation error, not a terminal expiration.
+        $this->reservation->update(['price' => '999999.00']);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertHasErrors('reservation')
+            ->assertSet('reservationError', false)
+            ->assertViewIs('statamic-resrv::livewire.checkout');
+    }
+
     public function test_it_throws_an_error_if_a_user_takes_too_long_in_the_customer_form()
     {
         session(['resrv_reservation' => $this->reservation->id]);
