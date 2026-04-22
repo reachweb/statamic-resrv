@@ -250,6 +250,37 @@ class CheckoutTest extends TestCase
         $this->assertEquals('', Reservation::find($this->reservation->id)->payment_id);
     }
 
+    public function test_confirmed_reservation_preserves_payment_id_on_mount()
+    {
+        // Customer completed payment (status = confirmed, payment_id persisted) and then
+        // re-landed on the checkout URL — either via back button or a stale bookmark. The
+        // component surfaces the "already confirmed" error, but must NOT clobber payment_id,
+        // which downstream refund / reconciliation paths (StripePaymentGateway::refund) read.
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake',
+            ],
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'status' => 'confirmed',
+            'payment_id' => 'pi_settled_confirmed',
+            'payment_gateway' => 'fake',
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->assertViewIs('statamic-resrv::livewire.checkout-error')
+            ->assertSee('This reservation is already confirmed');
+
+        // payment_id must remain intact so later refunds can locate the Stripe intent.
+        $this->assertEquals('pi_settled_confirmed', Reservation::find($reservation->id)->payment_id);
+        $this->assertEquals('fake', Reservation::find($reservation->id)->payment_gateway);
+    }
+
     public function test_handle_first_step_price_mismatch_shows_inline_error_not_terminal_page()
     {
         // Force validateTotal() to throw a recoverable ReservationException by desyncing

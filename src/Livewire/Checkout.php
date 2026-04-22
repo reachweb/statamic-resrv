@@ -8,6 +8,7 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
@@ -75,11 +76,15 @@ class Checkout extends Component
         // so a lingering intent doesn't survive into the next pass through checkout.
         if (! $this->reservationError) {
             $this->resetPaymentState();
-        } elseif ($expiredReservation = Reservation::find(session('resrv_reservation'))) {
-            // Terminal state (time-expired or otherwise) — the reservation object can't be
-            // accessed via $this->reservation because the computed throws. Load directly from
-            // the DB and cancel any dangling step-3 payment intent so a late success webhook
-            // can't confirm an orphaned reservation.
+        } elseif (
+            ($expiredReservation = Reservation::find(session('resrv_reservation')))
+            && $expiredReservation->status === ReservationStatus::PENDING->value
+        ) {
+            // Only time-expired PENDING reservations land here — getReservation() only throws
+            // for still-pending rows via the new minutes_to_hold check. Cancel the dangling
+            // step-3 intent so a late success webhook can't confirm an orphaned reservation.
+            // Confirmed / webhook-paid / DB-expired reservations keep their payment_id intact
+            // so StripePaymentGateway::refund() and other reconciliation paths still work.
             $this->cancelActiveIntent($expiredReservation);
         }
 
