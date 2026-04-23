@@ -175,25 +175,12 @@ Alpine.data('datepicker', () => ({
         }
 
         const dateStart = dayjs(isoDates[0]);
-        let newDates = {};
+        const newDates = this.mode === 'range'
+            ? { date_start: dateStart.format(), date_end: dayjs(isoDates[1]).format() }
+            : { date_start: dateStart.format(), date_end: dateStart.add(1, 'day').format() };
 
-        if (this.mode === 'range' && isoDates.length === 2) {
-            newDates = {
-                date_start: dateStart.format(),
-                date_end: dayjs(isoDates[1]).format()
-            };
-        } else if (this.mode === 'single') {
-            newDates = {
-                date_start: dateStart.format(),
-                date_end: dateStart.add(1, 'day').format()
-            };
-        }
-
-        if (newDates.date_start && (this.mode === 'single' || newDates.date_end)) {
-            this.dates = newDates;
-            $wire.set('data.dates', newDates);
-            // Calendar auto-closes via closeOnSelect (default true for single/range)
-        }
+        this.dates = newDates;
+        $wire.set('data.dates', newDates);
     },
 
     clearSelection() {
