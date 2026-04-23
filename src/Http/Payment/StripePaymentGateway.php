@@ -260,8 +260,9 @@ class StripePaymentGateway implements PaymentInterface
             // A stale intent means the customer moved on (refresh, back, gateway switch, coupon change)
             // before this webhook arrived. The charge exists on Stripe but no longer matches the
             // reservation's current state — confirming it would send emails/decrease inventory
-            // against an amount or gateway the reservation is no longer tied to. Log and hand off
-            // to manual reconciliation instead.
+            // against an amount or gateway the reservation is no longer tied to. Log and email
+            // admins so the orphan charge can be refunded manually; the reservation itself is
+            // left untouched because the customer is (or may be) still using it.
             if ($isStaleIntent) {
                 Log::warning('Stripe payment intent succeeded after being abandoned by the customer — manual reconciliation may be required.', [
                     'reservation_id' => $reservation->id,
@@ -269,6 +270,8 @@ class StripePaymentGateway implements PaymentInterface
                     'current_payment_id' => $reservation->payment_id,
                     'current_payment_gateway' => $reservation->payment_gateway,
                 ]);
+
+                OrphanedPaymentNotification::dispatchFor($reservation, $data['id']);
 
                 return response()->json([], 200);
             }
