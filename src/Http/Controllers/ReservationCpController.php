@@ -95,6 +95,16 @@ class ReservationCpController extends Controller
             'id' => 'required|integer',
         ]);
         $reservation = $this->reservation->find($data['id']);
+
+        if ($reservation->status === ReservationStatus::REFUNDED->value) {
+            return response()->json(['error' => 'This reservation has already been refunded.'], 409);
+        }
+
+        $currentStatus = ReservationStatus::from($reservation->status);
+        if (! $currentStatus->canTransitionTo(ReservationStatus::REFUNDED)) {
+            return response()->json(['error' => 'Cannot refund a reservation in the '.$reservation->status.' state.'], 422);
+        }
+
         $manager = app(PaymentGatewayManager::class);
         try {
             $payment = $manager->forReservation($reservation);

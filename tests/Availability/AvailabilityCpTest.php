@@ -52,11 +52,7 @@ class AvailabilityCpTest extends TestCase
 
         $item->save();
 
-        // The blueprint's resrv_availability field is registered under handle
-        // 'resrv_availability_field' (see tests/CreatesEntries::makeBlueprint), and the
-        // listener checks the value by that handle — setting it under a different key has no
-        // effect on the stored `enabled` flag.
-        $item->set('resrv_availability_field', 'disabled');
+        $item->set('resrv_availability', 'disabled');
 
         $item->save();
 
