@@ -11,7 +11,7 @@
                     format: 'DD MMM YYYY',
                     inputRef: 'dateInput',
                     months: 2,
-                    mobileMonths: 1,
+                    mobileMonths: 12,
                     minDate: dayjs().add({{ config('resrv-config.minimum_days_before') }}, 'day').format('YYYY-MM-DD'),
                     @if ($calendar === 'range')
                     minRange: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
