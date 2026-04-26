@@ -122,8 +122,8 @@ export default ({
             },
             dateField: 'date_start',
             dateFieldOptions: [
-                { value: 'date_start', label: this.__('Reservation date') },
-                { value: 'created_at', label: this.__('Date created') },
+                { value: 'date_start', label: __('Reservation date') },
+                { value: 'created_at', label: __('Date created') },
             ],
         }
     },

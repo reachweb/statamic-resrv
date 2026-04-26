@@ -49,17 +49,19 @@ class ReportsCpTest extends TestCase
 
     public function test_can_get_report_data_filtered_by_created_at()
     {
+        $this->travelTo(today()->setHour(12));
+
         $item = $this->makeStatamicItem();
 
         Reservation::factory([
             'item_id' => $item->id(),
             'status' => 'confirmed',
-            'date_start' => now()->subYear()->toIso8601String(),
-            'date_end' => now()->subYear()->addDays(2)->toIso8601String(),
+            'date_start' => today()->subYear()->toIso8601String(),
+            'date_end' => today()->subYear()->addDays(2)->toIso8601String(),
         ])->count(3)->create();
 
-        $start = now()->toDateString();
-        $end = now()->addWeek()->toDateString();
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
 
         $this->get(cp_route('resrv.report.index')."?start={$start}&end={$end}&date_field=created_at")
             ->assertStatus(200)
@@ -72,9 +74,10 @@ class ReportsCpTest extends TestCase
 
     public function test_validates_date_field()
     {
+        $this->travelTo(today()->setHour(12));
         $this->withExceptionHandling();
 
-        $this->getJson(cp_route('resrv.report.index').'?start='.now()->toDateString().'&end='.now()->addWeek()->toDateString().'&date_field=bogus')
+        $this->getJson(cp_route('resrv.report.index').'?start='.today()->toDateString().'&end='.today()->addWeek()->toDateString().'&date_field=bogus')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['date_field']);
     }
