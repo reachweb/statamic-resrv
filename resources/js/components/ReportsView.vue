@@ -1,6 +1,15 @@
 <template>
     <div class="card">
-        <div class="flex py-4">
+        <div class="flex flex-wrap items-center py-4 gap-3">
+            <label class="text-sm font-semibold">{{ __('Filter by') }}</label>
+            <div class="min-w-[200px]">
+                <v-select
+                    v-model="dateField"
+                    :options="dateFieldOptions"
+                    :reduce="option => option.value"
+                    :clearable="false"
+                />
+            </div>
             <div class="date-container input-group max-w-xl">
                 <v-date-picker
                     v-model="date"
@@ -19,7 +28,7 @@
                             </div>
                             <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
                                 <input
-                                    class="input-text-minimal p-0 bg-transparent leading-none"
+                                    class="input-text-minimal p-0 bg-transparent leading-none w-24 text-sm"
                                     :value="inputValue.start"
                                     v-on="inputEvents.start"
                                 />
@@ -32,7 +41,7 @@
                             </div>
                             <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
                                 <input
-                                    class="input-text-minimal p-0 bg-transparent leading-none"
+                                    class="input-text-minimal p-0 bg-transparent leading-none w-24 text-sm"
                                     :value="inputValue.end"
                                     v-on="inputEvents.end"
                                 />
@@ -105,12 +114,17 @@ export default ({
 
     data() {
         return {
-            reportData: '',           
+            reportData: '',
             reportDataLoaded: false,
             date: {
                 start: Vue.moment().subtract(7, 'days').toDate(),
                 end: Vue.moment().toDate()
             },
+            dateField: 'date_start',
+            dateFieldOptions: [
+                { value: 'date_start', label: this.__('Reservation date') },
+                { value: 'created_at', label: this.__('Date created') },
+            ],
         }
     },
 
@@ -121,6 +135,9 @@ export default ({
     watch: {
         date() {
             this.getReports()
+        },
+        dateField() {
+            this.getReports()
         }
     },
 
@@ -130,10 +147,10 @@ export default ({
 
     methods: {
         getReports() {
-            axios.get(this.reportsUrl+"?start="+Vue.moment(this.date.start).format('YYYY-MM-DD')+"&end="+Vue.moment(this.date.end).format('YYYY-MM-DD'))
+            axios.get(this.reportsUrl+"?start="+Vue.moment(this.date.start).format('YYYY-MM-DD')+"&end="+Vue.moment(this.date.end).format('YYYY-MM-DD')+"&date_field="+this.dateField)
             .then(response => {
                 this.reportData = response.data
-                this.reportDataLoaded = true       
+                this.reportDataLoaded = true
             })
             .catch(error => {
                 this.$toast.error('Cannot retrieve report data')

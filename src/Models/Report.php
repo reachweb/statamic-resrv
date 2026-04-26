@@ -10,14 +10,17 @@ class Report
 
     protected $date_end;
 
+    protected $dateField;
+
     protected $reservations;
 
-    public function __construct($date_start, $date_end)
+    public function __construct($date_start, $date_end, string $dateField = 'date_start')
     {
         $this->date_start = $date_start;
         $this->date_end = $date_end;
-        $this->reservations = Reservation::whereDate('date_start', '>=', $this->date_start)
-            ->whereDate('date_start', '<=', $this->date_end)
+        $this->dateField = $dateField;
+        $this->reservations = Reservation::whereDate($this->dateField, '>=', $this->date_start)
+            ->whereDate($this->dateField, '<=', $this->date_end)
             ->whereIn('status', ['confirmed', 'partner'])
             ->get();
     }
@@ -82,8 +85,8 @@ class Report
     {
         return Reservation::select('item_id')
             ->addSelect(DB::raw('COUNT(item_id) AS occurrences'))
-            ->whereDate('date_start', '>=', $this->date_start)
-            ->whereDate('date_start', '<=', $this->date_end)
+            ->whereDate($this->dateField, '>=', $this->date_start)
+            ->whereDate($this->dateField, '<=', $this->date_end)
             ->where('status', 'confirmed')
             ->groupBy('item_id')
             ->orderBy('occurrences', 'DESC')
