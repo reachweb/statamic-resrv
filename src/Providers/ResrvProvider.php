@@ -226,6 +226,12 @@ class ResrvProvider extends AddonServiceProvider
                 ->route('resrv.reports.index')
                 ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24" width="24"><g transform="matrix(1,0,0,1,0,0)"><defs></defs><circle fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" cx="7" cy="8.5" r="3.5"></circle><polyline fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" points="7 5 7 8.5 10.5 8.5"></polyline><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M9,22.5a6.979,6.979,0,0,0,1.5-4"></path><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M15,22.5a6.979,6.979,0,0,1-1.5-4"></path><line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" x1="7.499" y1="22.5" x2="16.499" y2="22.5"></line><line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" x1="0.5" y1="15.5" x2="23.5" y2="15.5"></line><rect fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" x="0.5" y="1.5" width="23" height="17" rx="1" ry="1"></rect><polyline fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" points="13.5 7 15 5 18 7.5 20.5 4.5"></polyline><line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" x1="19.5" y1="12.5" x2="19.5" y2="11"></line><line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" x1="17.5" y1="12.5" x2="17.5" y2="10.5"></line><line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" x1="15.5" y1="12.5" x2="15.5" y2="9.5"></line><line fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" x1="13.5" y1="12.5" x2="13.5" y2="11"></line></g></svg>');
 
+            $nav->create(ucfirst(__('Export')))
+                ->section('Resrv')
+                ->can(auth()->user()->can('use resrv'))
+                ->route('resrv.export.index')
+                ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24" width="24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M12 15.75V3.75"/><path d="m7.5 11.25 4.5 4.5 4.5-4.5"/><path d="M21 17.25v3a.75.75 0 0 1-.75.75H3.75A.75.75 0 0 1 3 20.25v-3"/></g></svg>');
+
             $nav->create(ucfirst(__('Calendar')))
                 ->section('Resrv')
                 ->can(auth()->user()->can('use resrv'))
