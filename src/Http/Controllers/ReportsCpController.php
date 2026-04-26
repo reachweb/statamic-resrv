@@ -19,8 +19,13 @@ class ReportsCpController extends Controller
         $data = $request->validate([
             'start' => 'required',
             'end' => 'required',
+            'date_field' => 'sometimes|in:date_start,created_at',
         ]);
-        $report = new Report($data['start'], $data['end']);
+        $report = new Report(
+            $data['start'],
+            $data['end'],
+            $data['date_field'] ?? 'date_start',
+        );
 
         return response()->json(new ReportResource($report));
     }
