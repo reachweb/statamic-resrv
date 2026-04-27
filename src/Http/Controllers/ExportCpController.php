@@ -266,7 +266,7 @@ class ExportCpController extends Controller
             return $value;
         }
 
-        if (in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+        if (in_array($value[0], ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
             return "'".$value;
         }
 
