@@ -32,7 +32,7 @@ class Resrv extends Tags
         }
 
         $reservation = Reservation::where('reference', request()->get('ref'))
-            ->where('status', ReservationStatus::CONFIRMED)
+            ->where('status', ReservationStatus::CONFIRMED->value)
             ->firstOrFail();
 
         if (! $reservation->customer) {
