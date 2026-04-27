@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
@@ -118,6 +119,28 @@ class ExportCpTest extends TestCase
             ->assertJson(['count' => 2]);
     }
 
+    public function test_count_endpoint_filters_by_customer_data_presence()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+        ])->count(2)->withCustomer()->create();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+        ])->count(3)->create();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $this->get(cp_route('resrv.export.count')."?start={$start}&end={$end}&with_customer_data=1")
+            ->assertStatus(200)
+            ->assertJson(['count' => 2]);
+    }
+
     public function test_download_endpoint_returns_csv_with_selected_fields()
     {
         $item = $this->makeStatamicItem(['title' => 'Beach House']);
@@ -218,5 +241,108 @@ class ExportCpTest extends TestCase
         $this->getJson(cp_route('resrv.export.count').'?start=2026-05-10&end=2026-05-01')
             ->assertStatus(422)
             ->assertJsonValidationErrors(['end']);
+    }
+
+    public function test_export_page_lists_custom_customer_keys_discovered_in_database()
+    {
+        Customer::factory()->create([
+            'data' => collect([
+                'first_name' => 'Test',
+                'tax_id' => 'EL123',
+                'company' => 'Acme',
+            ]),
+        ]);
+
+        $response = $this->get(cp_route('resrv.export.index'));
+
+        $response->assertStatus(200);
+        $response->assertSee('customer_tax_id');
+        $response->assertSee('customer_company');
+    }
+
+    public function test_download_includes_dynamically_discovered_customer_field()
+    {
+        $item = $this->makeStatamicItem();
+
+        $customer = Customer::factory()->create([
+            'data' => collect([
+                'first_name' => 'Iosif',
+                'tax_id' => 'EL123456789',
+            ]),
+        ]);
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'reference' => 'TAX001',
+            'customer_id' => $customer->id,
+        ])->create();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $response = $this->get(
+            cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=customer_tax_id"
+        );
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+
+        $this->assertEquals(['Reference', 'Tax Id'], $rows[0]);
+        $this->assertEquals('TAX001', $rows[1][0]);
+        $this->assertEquals('EL123456789', $rows[1][1]);
+    }
+
+    public function test_csv_injection_with_leading_whitespace_is_sanitized()
+    {
+        $item = $this->makeStatamicItem();
+
+        $customer = Customer::factory()->create([
+            'data' => collect([
+                'first_name' => '  =1+1',
+            ]),
+        ]);
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'reference' => 'INJ001',
+            'customer_id' => $customer->id,
+        ])->create();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $response = $this->get(
+            cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=customer_first_name"
+        );
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+
+        $this->assertSame("'  =1+1", $rows[1][0]);
+    }
+
+    public function test_dynamic_discovery_does_not_duplicate_standard_customer_keys()
+    {
+        Customer::factory()->create([
+            'data' => collect([
+                'first_name' => 'Iosif',
+                'last_name' => 'Chatzimichail',
+                'phone' => '123',
+            ]),
+        ]);
+
+        $response = $this->get(cp_route('resrv.export.index'));
+
+        $response->assertStatus(200);
+        $body = $response->getContent();
+
+        $count = substr_count($body, 'customer_first_name');
+        $this->assertSame(1, $count, 'customer_first_name should appear exactly once in the field metadata');
     }
 }

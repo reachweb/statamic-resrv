@@ -57,6 +57,10 @@
                     {{ status }}
                 </label>
             </div>
+            <label class="inline-flex items-center gap-2 text-sm cursor-pointer mt-3">
+                <input type="checkbox" v-model="withCustomerData" />
+                {{ __('Only include reservations with customer details') }}
+            </label>
         </div>
 
         <div class="border-t mt-4 pt-4 flex flex-wrap gap-6">
@@ -153,9 +157,10 @@ export default {
                 type: 'string',
                 mask: 'YYYY-MM-DD',
             },
-            selectedStatuses: [...this.statuses],
+            selectedStatuses: this.statuses.filter(s => ['confirmed', 'partner'].includes(s)),
             selectedEntry: null,
             selectedAffiliate: null,
+            withCustomerData: false,
             selectedFields: this.loadSelectedFields(),
             count: 0,
             countLoading: false,
@@ -182,6 +187,7 @@ export default {
         selectedStatuses() { this.scheduleCount() },
         selectedEntry() { this.scheduleCount() },
         selectedAffiliate() { this.scheduleCount() },
+        withCustomerData() { this.scheduleCount() },
         selectedFields(value) {
             try {
                 window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
@@ -250,6 +256,7 @@ export default {
             this.selectedStatuses.forEach(s => params.append('statuses[]', s))
             if (this.selectedEntry) params.append('item_id', this.selectedEntry)
             if (this.selectedAffiliate) params.append('affiliate_id', this.selectedAffiliate)
+            if (this.withCustomerData) params.append('with_customer_data', '1')
             return params
         },
         allGroupSelected(groupName) {

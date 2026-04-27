@@ -4,19 +4,27 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Facades\Entry as StatamicEntry;
+use Statamic\Facades\Form as StatamicForm;
 
 class ExportCpController extends Controller
 {
     public const STATUSES = ['pending', 'confirmed', 'partner', 'cancelled', 'expired', 'refunded'];
 
-    protected const DEFAULT_FIELDS = ['reference', 'status', 'date_start', 'date_end', 'customer_email', 'total'];
+    protected const STANDARD_CUSTOMER_KEYS = ['email', 'first_name', 'last_name', 'phone', 'address', 'city', 'postal_code', 'country'];
+
+    protected const DEFAULT_FIELDS = ['reference', 'status', 'entry_title', 'quantity', 'date_start', 'date_end', 'customer_email', 'total'];
 
     /** @var array<string, \Statamic\Contracts\Entries\Entry|null> */
     protected array $entryCache = [];
+
+    protected ?array $cachedFieldDefinitions = null;
 
     public function indexCp()
     {
@@ -53,7 +61,7 @@ class ExportCpController extends Controller
 
             $this->baseQuery($data)
                 ->with(['customer', 'extras', 'options.values'])
-                ->lazy(500)
+                ->lazyById(500)
                 ->each(function (Reservation $reservation) use ($handle, $fields) {
                     $row = [];
                     foreach ($fields as $field) {
@@ -90,6 +98,7 @@ class ExportCpController extends Controller
             'statuses.*' => 'in:'.implode(',', self::STATUSES),
             'item_id' => 'sometimes|nullable|string',
             'affiliate_id' => 'sometimes|nullable|integer',
+            'with_customer_data' => 'sometimes|boolean',
         ];
     }
 
@@ -110,7 +119,10 @@ class ExportCpController extends Controller
                     fn ($q) => $q->where('resrv_affiliates.id', $affiliateId)
                 )
             )
-            ->orderBy('date_start');
+            ->when(
+                $data['with_customer_data'] ?? false,
+                fn ($query) => $query->whereNotNull('customer_id')
+            );
     }
 
     protected function fieldMetadata(): array
@@ -128,7 +140,12 @@ class ExportCpController extends Controller
 
     protected function fieldDefinitions(): array
     {
-        return [
+        return $this->cachedFieldDefinitions ??= $this->buildFieldDefinitions();
+    }
+
+    protected function buildFieldDefinitions(): array
+    {
+        $base = [
             'reference' => [
                 'label' => __('Reference'),
                 'group' => __('Reservation'),
@@ -258,6 +275,158 @@ class ExportCpController extends Controller
                     ->implode(', '),
             ],
         ];
+
+        return $base + $this->dynamicCustomerFieldDefinitions($base);
+    }
+
+    /**
+     * Build extra "customer_*" field definitions from keys actually present in
+     * resrv_customers.data, using the configured checkout form(s) for nicer
+     * labels when available.
+     *
+     * @param  array<string, array{label: string, group: string, value: callable}>  $base
+     * @return array<string, array{label: string, group: string, value: callable}>
+     */
+    protected function dynamicCustomerFieldDefinitions(array $base): array
+    {
+        $labels = $this->checkoutFormLabels();
+        $extras = [];
+
+        foreach ($this->discoverCustomerDataKeys() as $key) {
+            if (in_array($key, self::STANDARD_CUSTOMER_KEYS, true)) {
+                continue;
+            }
+
+            $fieldKey = 'customer_'.$key;
+
+            if (isset($base[$fieldKey])) {
+                continue;
+            }
+
+            $extras[$fieldKey] = [
+                'label' => $labels[$key] ?? Str::headline($key),
+                'group' => __('Customer'),
+                'value' => fn (Reservation $r) => $r->customer_data->get($key),
+            ];
+        }
+
+        ksort($extras);
+
+        return $extras;
+    }
+
+    /**
+     * Scan the customers table for every top-level key that has actually been
+     * stored in the `data` JSON column. Driver-agnostic — we let the
+     * AsCollection cast parse each row and dedupe in PHP.
+     *
+     * @return array<int, string>
+     */
+    protected function discoverCustomerDataKeys(): array
+    {
+        $keys = [];
+
+        Customer::query()
+            ->select('data')
+            ->whereNotNull('data')
+            ->lazy(500)
+            ->each(function (Customer $customer) use (&$keys) {
+                if (! $customer->data) {
+                    return;
+                }
+
+                foreach ($customer->data->keys() as $key) {
+                    if (is_string($key) && $key !== '') {
+                        $keys[$key] = true;
+                    }
+                }
+            });
+
+        return array_keys($keys);
+    }
+
+    /**
+     * Build a map of `field handle => display label` by walking every
+     * checkout form referenced in resrv-config (default + per-collection +
+     * per-entry mappings). Used to give discovered customer fields nicer
+     * labels than a humanized handle.
+     *
+     * @return array<string, string>
+     */
+    protected function checkoutFormLabels(): array
+    {
+        $handles = collect();
+
+        $handles->push(
+            config('resrv-config.checkout_forms.default')
+            ?? config('resrv-config.checkout_forms_default')
+            ?? config('resrv-config.form_name', 'checkout')
+        );
+
+        foreach ($this->configMappings('checkout_forms.entries', 'checkout_forms_entries') as $mapping) {
+            $handles->push(data_get($mapping, 'form'));
+        }
+
+        foreach ($this->configMappings('checkout_forms.collections', 'checkout_forms_collections') as $mapping) {
+            $handles->push(data_get($mapping, 'form'));
+        }
+
+        $labels = [];
+
+        $handles
+            ->map(fn ($value) => $this->normalizeFormHandle($value))
+            ->filter()
+            ->unique()
+            ->each(function (string $handle) use (&$labels) {
+                $form = StatamicForm::find($handle);
+                if (! $form) {
+                    return;
+                }
+
+                foreach ($form->fields() as $field) {
+                    $display = $field->config()['display'] ?? null;
+                    if (is_string($display) && $display !== '') {
+                        $labels[$field->handle()] = $display;
+                    }
+                }
+            });
+
+        return $labels;
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    protected function configMappings(string $primary, string $legacy): array
+    {
+        $mappings = config('resrv-config.'.$primary);
+        if (! is_array($mappings) || $mappings === []) {
+            $mappings = config('resrv-config.'.$legacy, []);
+        }
+
+        if (is_array($mappings) && Arr::isAssoc($mappings)) {
+            return collect($mappings)
+                ->map(fn ($form) => ['form' => $form])
+                ->values()
+                ->all();
+        }
+
+        return is_array($mappings) ? $mappings : [];
+    }
+
+    protected function normalizeFormHandle(mixed $value): ?string
+    {
+        if (is_string($value)) {
+            return trim($value) !== '' ? trim($value) : null;
+        }
+
+        if (is_array($value)) {
+            $first = Arr::first($value);
+
+            return is_string($first) && trim($first) !== '' ? trim($first) : null;
+        }
+
+        return null;
     }
 
     protected function sanitizeForCsv(mixed $value): mixed
@@ -266,7 +435,15 @@ class ExportCpController extends Controller
             return $value;
         }
 
-        if (in_array($value[0], ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
+        // Inspect the first non-whitespace char: leading spaces/tabs would
+        // otherwise let crafted input like "  =1+1" slip past the check while
+        // still being interpreted as a formula by some spreadsheet apps.
+        $trimmed = ltrim($value);
+        if ($trimmed === '') {
+            return $value;
+        }
+
+        if (in_array($trimmed[0], ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
             return "'".$value;
         }
 
