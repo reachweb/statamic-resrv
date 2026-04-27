@@ -22,7 +22,7 @@ class ExportCpController extends Controller
 
     protected const STANDARD_CUSTOMER_KEYS = ['email', 'first_name', 'last_name', 'phone', 'address', 'city', 'postal_code', 'country'];
 
-    protected const DEFAULT_FIELDS = ['reference', 'status', 'entry_title', 'entry_property', 'quantity', 'date_start', 'date_end', 'customer_email', 'total'];
+    protected const DEFAULT_FIELDS = ['reference', 'status', 'entry_title', 'entry_property', 'quantity', 'date_start', 'date_end', 'created_at', 'customer_email', 'total'];
 
     /** @var array<string, \Statamic\Contracts\Entries\Entry|null> */
     protected array $entryCache = [];
@@ -165,12 +165,12 @@ class ExportCpController extends Controller
                 'value' => fn (Reservation $r) => $r->quantity,
             ],
             'date_start' => [
-                'label' => __('Check-in'),
+                'label' => __('Date start'),
                 'group' => __('Reservation'),
                 'value' => fn (Reservation $r) => $r->date_start?->format('Y-m-d'),
             ],
             'date_end' => [
-                'label' => __('Check-out'),
+                'label' => __('Date end'),
                 'group' => __('Reservation'),
                 'value' => fn (Reservation $r) => $r->date_end?->format('Y-m-d'),
             ],
