@@ -735,6 +735,7 @@ class Availability extends Model implements AvailabilityContract
             $results = $this->expandSharedRatesForDates($results, $id, $dateStart, $quantity);
         }
 
+
         $formatDate = fn ($date) => Carbon::parse($date)->format('Y-m-d');
 
         if ($groupByDate) {

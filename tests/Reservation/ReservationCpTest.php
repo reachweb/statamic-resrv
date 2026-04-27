@@ -83,6 +83,40 @@ class ReservationCpTest extends TestCase
         Mail::assertSent(ReservationRefunded::class);
     }
 
+    public function test_refund_on_already_refunded_reservation_short_circuits_before_gateway()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'refunded',
+            'payment_id' => 'abcedf',
+        ])->withCustomer()->create();
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(409)->assertSee('already been refunded');
+        Mail::assertNothingSent();
+    }
+
+    public function test_refund_on_expired_reservation_is_rejected_before_gateway()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'payment_id' => 'abcedf',
+        ])->withCustomer()->create();
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(422)->assertSee('Cannot refund');
+        Mail::assertNothingSent();
+    }
+
     public function test_can_query_reservations_calendar_json()
     {
         $item = $this->makeStatamicItem();

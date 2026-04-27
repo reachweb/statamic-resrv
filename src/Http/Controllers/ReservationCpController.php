@@ -5,7 +5,9 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationRefunded;
+use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -93,6 +95,16 @@ class ReservationCpController extends Controller
             'id' => 'required|integer',
         ]);
         $reservation = $this->reservation->find($data['id']);
+
+        if ($reservation->status === ReservationStatus::REFUNDED->value) {
+            return response()->json(['error' => 'This reservation has already been refunded.'], 409);
+        }
+
+        $currentStatus = ReservationStatus::from($reservation->status);
+        if (! $currentStatus->canTransitionTo(ReservationStatus::REFUNDED)) {
+            return response()->json(['error' => 'Cannot refund a reservation in the '.$reservation->status.' state.'], 422);
+        }
+
         $manager = app(PaymentGatewayManager::class);
         try {
             $payment = $manager->forReservation($reservation);
@@ -105,10 +117,15 @@ class ReservationCpController extends Controller
             return response()->json(['error' => $exception->getMessage()], 400);
         }
 
-        $reservation->status = 'refunded';
-        $reservation->save();
+        try {
+            $changed = $reservation->transitionTo(ReservationStatus::REFUNDED);
+        } catch (InvalidStateTransition $e) {
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
 
-        ReservationRefunded::dispatch($reservation);
+        if ($changed) {
+            ReservationRefunded::dispatch($reservation);
+        }
 
         return response()->json($reservation->id);
     }
