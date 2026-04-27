@@ -22,7 +22,7 @@ class ExportCpController extends Controller
 
     protected const STANDARD_CUSTOMER_KEYS = ['email', 'first_name', 'last_name', 'phone', 'address', 'city', 'postal_code', 'country'];
 
-    protected const DEFAULT_FIELDS = ['reference', 'status', 'entry_title', 'quantity', 'date_start', 'date_end', 'customer_email', 'total'];
+    protected const DEFAULT_FIELDS = ['reference', 'status', 'entry_title', 'entry_rate', 'quantity', 'date_start', 'date_end', 'customer_email', 'total'];
 
     /** @var array<string, \Statamic\Contracts\Entries\Entry|null> */
     protected array $entryCache = [];
@@ -259,6 +259,16 @@ class ExportCpController extends Controller
                 'group' => __('Entry'),
                 'value' => fn (Reservation $r) => $this->resolveEntryField($r, 'url'),
             ],
+            'entry_rate' => [
+                'label' => __('Rate'),
+                'group' => __('Entry'),
+                'value' => fn (Reservation $r) => $this->resolveRateLabel($r),
+            ],
+            'entry_rate_slug' => [
+                'label' => __('Rate slug'),
+                'group' => __('Entry'),
+                'value' => fn (Reservation $r) => $this->resolveRateSlug($r),
+            ],
             'extras' => [
                 'label' => __('Extras'),
                 'group' => __('Add-ons'),
@@ -457,6 +467,36 @@ class ExportCpController extends Controller
         }
 
         return $value;
+    }
+
+    protected function resolveRateLabel(Reservation $reservation): string
+    {
+        if ($reservation->type === 'parent') {
+            return $reservation->childs()
+                ->with('rate')
+                ->get()
+                ->map(fn ($child) => $child->rate?->title)
+                ->filter()
+                ->unique()
+                ->implode(', ');
+        }
+
+        return (string) ($reservation->rate?->title ?? '');
+    }
+
+    protected function resolveRateSlug(Reservation $reservation): string
+    {
+        if ($reservation->type === 'parent') {
+            return $reservation->childs()
+                ->with('rate')
+                ->get()
+                ->map(fn ($child) => $child->rate?->slug)
+                ->filter()
+                ->unique()
+                ->implode(',');
+        }
+
+        return (string) ($reservation->rate?->slug ?? '');
     }
 
     protected function resolveEntryField(Reservation $reservation, string $key): string

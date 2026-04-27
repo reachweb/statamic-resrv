@@ -10,12 +10,14 @@ use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ExportCpTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries, RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -328,6 +330,106 @@ class ExportCpTest extends TestCase
         $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
 
         $this->assertSame("'  =1+1", $rows[1][0]);
+    }
+
+    public function test_download_includes_rate_title_and_slug_for_rate_assigned_reservation()
+    {
+        $entries = $this->createRateEntries();
+        $entry = $entries->first();
+        $rate = Rate::where('collection', $entry->collection()->handle())
+            ->where('slug', 'test')
+            ->firstOrFail();
+
+        Reservation::factory([
+            'item_id' => $entry->id(),
+            'status' => 'confirmed',
+            'reference' => 'PROP001',
+            'rate_id' => $rate->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+        ])->withCustomer()->create();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $response = $this->get(
+            cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug"
+        );
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+
+        $this->assertEquals(['Reference', 'Rate', 'Rate slug'], $rows[0]);
+        $this->assertEquals('PROP001', $rows[1][0]);
+        $this->assertEquals($rate->title, $rows[1][1]);
+        $this->assertEquals('test', $rows[1][2]);
+    }
+
+    public function test_download_keeps_rate_columns_when_entry_is_deleted()
+    {
+        $entries = $this->createRateEntries();
+        $entry = $entries->first();
+        $itemId = $entry->id();
+        $rate = Rate::where('collection', $entry->collection()->handle())
+            ->where('slug', 'test')
+            ->firstOrFail();
+
+        Reservation::factory([
+            'item_id' => $itemId,
+            'status' => 'confirmed',
+            'reference' => 'GONE001',
+            'rate_id' => $rate->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+        ])->withCustomer()->create();
+
+        $entry->delete();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $response = $this->get(
+            cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug"
+        );
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+
+        $this->assertEquals('GONE001', $rows[1][0]);
+        $this->assertEquals($rate->title, $rows[1][1]);
+        $this->assertEquals('test', $rows[1][2]);
+    }
+
+    public function test_download_returns_blank_rate_columns_for_reservation_without_rate()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'reference' => 'NOPROP',
+            'rate_id' => null,
+        ])->withCustomer()->create();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $response = $this->get(
+            cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug"
+        );
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+
+        $this->assertEquals('NOPROP', $rows[1][0]);
+        $this->assertSame('', $rows[1][1]);
+        $this->assertSame('', $rows[1][2]);
     }
 
     public function test_dynamic_discovery_does_not_duplicate_standard_customer_keys()
