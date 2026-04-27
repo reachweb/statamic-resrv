@@ -11,11 +11,12 @@ use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ExportCpTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries, RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -328,6 +329,100 @@ class ExportCpTest extends TestCase
         $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
 
         $this->assertSame("'  =1+1", $rows[1][0]);
+    }
+
+    public function test_download_includes_property_label_and_handle_for_advanced_availability()
+    {
+        $entries = $this->createAdvancedEntries();
+        $entry = $entries->first();
+
+        Reservation::factory([
+            'item_id' => $entry->id(),
+            'status' => 'confirmed',
+            'reference' => 'PROP001',
+            'property' => 'test',
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+        ])->withCustomer()->create();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $response = $this->get(
+            cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_property&fields[]=entry_property_handle"
+        );
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+
+        $this->assertEquals(['Reference', 'Property', 'Property handle'], $rows[0]);
+        $this->assertEquals('PROP001', $rows[1][0]);
+        $this->assertEquals('Test Property', $rows[1][1]);
+        $this->assertEquals('test', $rows[1][2]);
+    }
+
+    public function test_download_falls_back_to_property_handle_when_entry_is_deleted()
+    {
+        $entries = $this->createAdvancedEntries();
+        $entry = $entries->first();
+        $itemId = $entry->id();
+
+        Reservation::factory([
+            'item_id' => $itemId,
+            'status' => 'confirmed',
+            'reference' => 'GONE001',
+            'property' => 'test',
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+        ])->withCustomer()->create();
+
+        $entry->delete();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $response = $this->get(
+            cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_property&fields[]=entry_property_handle"
+        );
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+
+        $this->assertEquals('GONE001', $rows[1][0]);
+        $this->assertEquals('test', $rows[1][1]);
+        $this->assertEquals('test', $rows[1][2]);
+    }
+
+    public function test_download_returns_blank_property_for_non_advanced_reservation()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'reference' => 'NOPROP',
+            'property' => null,
+        ])->withCustomer()->create();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $response = $this->get(
+            cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_property&fields[]=entry_property_handle"
+        );
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
+
+        $this->assertEquals('NOPROP', $rows[1][0]);
+        $this->assertSame('', $rows[1][1]);
+        $this->assertSame('', $rows[1][2]);
     }
 
     public function test_dynamic_discovery_does_not_duplicate_standard_customer_keys()
