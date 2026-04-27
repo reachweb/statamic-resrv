@@ -3,6 +3,8 @@
 namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Reach\StatamicResrv\Http\Controllers\ExportCpController;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Extra;
@@ -19,6 +21,7 @@ class ExportCpTest extends TestCase
     {
         parent::setUp();
         $this->signInAdmin();
+        Cache::forget(ExportCpController::CUSTOMER_KEYS_CACHE_KEY);
     }
 
     public function test_can_show_export_page()

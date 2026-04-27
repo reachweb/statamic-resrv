@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Customer;
@@ -16,6 +17,8 @@ use Statamic\Facades\Form as StatamicForm;
 class ExportCpController extends Controller
 {
     public const STATUSES = ['pending', 'confirmed', 'partner', 'cancelled', 'expired', 'refunded'];
+
+    public const CUSTOMER_KEYS_CACHE_KEY = 'resrv.export.customer_data_keys';
 
     protected const STANDARD_CUSTOMER_KEYS = ['email', 'first_name', 'last_name', 'phone', 'address', 'city', 'postal_code', 'country'];
 
@@ -318,31 +321,35 @@ class ExportCpController extends Controller
     /**
      * Scan the customers table for every top-level key that has actually been
      * stored in the `data` JSON column. Driver-agnostic — we let the
-     * AsCollection cast parse each row and dedupe in PHP.
+     * AsCollection cast parse each row and dedupe in PHP. Cached for a short
+     * window to keep validation/page-load constant-time on large installs;
+     * accept ~10 minutes of staleness for newly introduced form fields.
      *
      * @return array<int, string>
      */
     protected function discoverCustomerDataKeys(): array
     {
-        $keys = [];
+        return Cache::remember(self::CUSTOMER_KEYS_CACHE_KEY, now()->addMinutes(10), function () {
+            $keys = [];
 
-        Customer::query()
-            ->select('data')
-            ->whereNotNull('data')
-            ->lazy(500)
-            ->each(function (Customer $customer) use (&$keys) {
-                if (! $customer->data) {
-                    return;
-                }
-
-                foreach ($customer->data->keys() as $key) {
-                    if (is_string($key) && $key !== '') {
-                        $keys[$key] = true;
+            Customer::query()
+                ->select(['id', 'data'])
+                ->whereNotNull('data')
+                ->lazyById(500)
+                ->each(function (Customer $customer) use (&$keys) {
+                    if (! $customer->data) {
+                        return;
                     }
-                }
-            });
 
-        return array_keys($keys);
+                    foreach ($customer->data->keys() as $key) {
+                        if (is_string($key) && $key !== '') {
+                            $keys[$key] = true;
+                        }
+                    }
+                });
+
+            return array_keys($keys);
+        });
     }
 
     /**
@@ -435,15 +442,17 @@ class ExportCpController extends Controller
             return $value;
         }
 
-        // Inspect the first non-whitespace char: leading spaces/tabs would
-        // otherwise let crafted input like "  =1+1" slip past the check while
-        // still being interpreted as a formula by some spreadsheet apps.
+        // Inspect the first non-whitespace char: leading spaces/tabs/newlines
+        // would otherwise let crafted input like "  =1+1" or "\t=1+1" slip
+        // past the check while still being interpreted as a formula by some
+        // spreadsheet apps. ltrim() strips space/tab/CR/LF, so the in_array
+        // list only needs the formula-trigger characters themselves.
         $trimmed = ltrim($value);
         if ($trimmed === '') {
             return $value;
         }
 
-        if (in_array($trimmed[0], ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
+        if (in_array($trimmed[0], ['=', '+', '-', '@'], true)) {
             return "'".$value;
         }
 

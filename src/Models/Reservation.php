@@ -105,7 +105,7 @@ class Reservation extends Model
             return collect();
         }
 
-        $customer = $this->relationLoaded('customer') ? $this->customer : $this->customer()->first();
+        $customer = $this->customer;
 
         if (! $customer) {
             return collect();
