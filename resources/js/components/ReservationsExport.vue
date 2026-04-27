@@ -173,7 +173,7 @@ export default {
             }, {})
         },
         canDownload() {
-            return !this.countLoading && this.count > 0 && this.selectedFields.length > 0
+            return !this.countLoading && this.count > 0 && this.selectedFields.length > 0 && this.selectedStatuses.length > 0
         },
     },
 
@@ -218,6 +218,12 @@ export default {
             this.countDebounce = setTimeout(() => this.fetchCount(), 250)
         },
         fetchCount() {
+            if (this.selectedStatuses.length === 0) {
+                this.count = 0
+                this.countLoading = false
+                this.countError = false
+                return
+            }
             this.countLoading = true
             this.countError = false
             axios.get(this.countUrl + '?' + this.buildParams().toString())

@@ -57,7 +57,7 @@ class ExportCpController extends Controller
                 ->each(function (Reservation $reservation) use ($handle, $fields) {
                     $row = [];
                     foreach ($fields as $field) {
-                        $row[] = ($field['value'])($reservation);
+                        $row[] = $this->sanitizeForCsv(($field['value'])($reservation));
                     }
                     fputcsv($handle, $row);
                 });
@@ -258,6 +258,19 @@ class ExportCpController extends Controller
                     ->implode(', '),
             ],
         ];
+    }
+
+    protected function sanitizeForCsv(mixed $value): mixed
+    {
+        if (! is_string($value) || $value === '') {
+            return $value;
+        }
+
+        if (in_array($value[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+            return "'".$value;
+        }
+
+        return $value;
     }
 
     protected function resolveEntryField(Reservation $reservation, string $key): string
