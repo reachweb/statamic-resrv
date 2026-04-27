@@ -278,7 +278,14 @@ class ResrvProvider extends AddonServiceProvider
                 ->section('Resrv')
                 ->can(auth()->user()->can('use resrv'))
                 ->route('resrv.dataimport.index')
-                ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M.752 2.251a1.5 1.5 0 0 1 1.5-1.5m0 22.5a1.5 1.5 0 0 1-1.5-1.5m22.5 0a1.5 1.5 0 0 1-1.5 1.5m0-22.5a1.5 1.5 0 0 1 1.5 1.5m0 15.75v-1.5m0-3.75v-1.5m0-3.75v-1.5m-22.5 12v-1.5m0-3.75v-1.5m0-3.75v-1.5m5.25-5.25h1.5m3.75 0h1.5m3.75 0h1.5m-12 22.5h1.5m3.75 0h1.5m3.75 0h1.5m-6-5.25v-12m4.5 4.5-4.5-4.5-4.5 4.5"></path></svg>');
+                ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24" width="24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" transform="rotate(180 12 12)"><path d="M12 15.75V3.75"/><path d="m7.5 11.25 4.5 4.5 4.5-4.5"/><path d="M21 17.25v3a.75.75 0 0 1-.75.75H3.75A.75.75 0 0 1 3 20.25v-3"/></g></svg>');
+
+            $nav->create(ucfirst(__('Export')))
+                ->section('Resrv')
+                ->can(auth()->user()->can('use resrv'))
+                ->route('resrv.export.index')
+                ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24" width="24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M12 15.75V3.75"/><path d="m7.5 11.25 4.5 4.5 4.5-4.5"/><path d="M21 17.25v3a.75.75 0 0 1-.75.75H3.75A.75.75 0 0 1 3 20.25v-3"/></g></svg>');
+
         });
     }
 

@@ -78,4 +78,6 @@ return [
     'clear' => 'Clear',
     'surcharge' => 'surcharge',
     'paymentSurcharge' => 'Payment surcharge',
+    'noGatewayAvailableForAmount' => 'No payment method is available for this amount.',
+    'gatewayNotAvailableForAmount' => 'The selected payment method is not available for this amount.',
 ];

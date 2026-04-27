@@ -373,4 +373,379 @@ class PaymentGatewayManagerTest extends TestCase
         $this->assertNull($available[0]['surcharge']);
         $this->assertEquals(['type' => 'percent', 'amount' => 4], $available[1]['surcharge']);
     }
+
+    public function test_available_for_frontend_without_amount_returns_all()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 50, 'max' => 500],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertCount(2, $manager->availableForFrontend());
+    }
+
+    public function test_available_for_frontend_filters_by_min_amount()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 50],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $available = $manager->availableForFrontend(Price::create(20));
+
+        $this->assertCount(1, $available);
+        $this->assertEquals('paypal', $available[0]['name']);
+    }
+
+    public function test_available_for_frontend_filters_by_max_amount()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => 100],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $available = $manager->availableForFrontend(Price::create(500));
+
+        $this->assertCount(1, $available);
+        $this->assertEquals('paypal', $available[0]['name']);
+    }
+
+    public function test_available_for_frontend_filters_by_both_bounds()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 10, 'max' => 1000],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertCount(0, $manager->availableForFrontend(Price::create(5)));
+        $this->assertCount(1, $manager->availableForFrontend(Price::create(500)));
+        $this->assertCount(0, $manager->availableForFrontend(Price::create(5000)));
+    }
+
+    public function test_available_for_frontend_inclusive_at_min_boundary()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 10],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertCount(1, $manager->availableForFrontend(Price::create(10)));
+    }
+
+    public function test_available_for_frontend_inclusive_at_max_boundary()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => 1000],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertCount(1, $manager->availableForFrontend(Price::create(1000)));
+    }
+
+    public function test_available_for_frontend_only_min_configured()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 10],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertCount(0, $manager->availableForFrontend(Price::create(5)));
+        $this->assertCount(1, $manager->availableForFrontend(Price::create(999999)));
+    }
+
+    public function test_available_for_frontend_only_max_configured()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => 1000],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertCount(1, $manager->availableForFrontend(Price::create(0)));
+        $this->assertCount(0, $manager->availableForFrontend(Price::create(1001)));
+    }
+
+    public function test_available_for_frontend_returns_empty_when_all_filtered()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => 100],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'amount_limits' => ['max' => 200],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertCount(0, $manager->availableForFrontend(Price::create(500)));
+    }
+
+    public function test_is_available_for_returns_false_for_unknown_gateway()
+    {
+        $manager = app(PaymentGatewayManager::class);
+
+        $this->assertFalse($manager->isAvailableFor('nonexistent', Price::create(100)));
+    }
+
+    public function test_is_available_for_returns_false_when_below_min()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 50],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertFalse($manager->isAvailableFor('stripe', Price::create(20)));
+    }
+
+    public function test_is_available_for_returns_false_when_above_max()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => 100],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertFalse($manager->isAvailableFor('stripe', Price::create(500)));
+    }
+
+    public function test_is_available_for_returns_true_when_no_limits_configured()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertTrue($manager->isAvailableFor('stripe', Price::create(0)));
+        $this->assertTrue($manager->isAvailableFor('stripe', Price::create(999999)));
+    }
+
+    public function test_is_available_for_returns_true_at_boundaries()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 10, 'max' => 1000],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertTrue($manager->isAvailableFor('stripe', Price::create(10)));
+        $this->assertTrue($manager->isAvailableFor('stripe', Price::create(1000)));
+    }
+
+    public function test_resolve_from_config_throws_when_min_exceeds_max()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 500, 'max' => 100],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Payment gateway [stripe] has invalid amount_limits: min (500) cannot exceed max (100).');
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_throws_when_min_is_not_numeric()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => '€100'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [min] must be a numeric value Price::create() can parse, got '€100'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_throws_when_max_is_not_numeric()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => '100 EUR'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [max] must be a numeric value Price::create() can parse, got '100 EUR'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_throws_when_min_is_scientific_notation()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => '1e2'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [min] must be a numeric value Price::create() can parse, got '1e2'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_throws_when_max_has_leading_whitespace()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => ' 10'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [max] must be a numeric value Price::create() can parse, got ' 10'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_accepts_numeric_string_limits()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => '10', 'max' => '1000'],
+            ],
+        ]);
+
+        $manager = new PaymentGatewayManager;
+
+        $this->assertTrue($manager->isAvailableFor('stripe', Price::create(500)));
+        $this->assertFalse($manager->isAvailableFor('stripe', Price::create(5)));
+        $this->assertFalse($manager->isAvailableFor('stripe', Price::create(5000)));
+    }
+
+    public function test_resolve_from_config_throws_when_amount_limits_is_empty_array()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => [],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: must contain 'min' and/or 'max'.");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_throws_when_amount_limits_has_unknown_keys()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['mn' => 10, 'max' => 1000],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: only 'min' and 'max' keys are allowed, got unknown key(s) [mn].");
+
+        new PaymentGatewayManager;
+    }
+
+    public function test_resolve_from_config_rejects_decimal_min_greater_than_max()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => '10.50', 'max' => '10.49'],
+            ],
+        ]);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Payment gateway [stripe] has invalid amount_limits: min (10.50) cannot exceed max (10.49).');
+
+        new PaymentGatewayManager;
+    }
 }

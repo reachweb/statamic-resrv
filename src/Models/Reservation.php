@@ -103,12 +103,18 @@ class Reservation extends Model
 
     public function getCustomerDataAttribute(): Collection
     {
-        if (! $this->customer_id || ! $this->customer()->exists()) {
+        if (! $this->customer_id) {
             return collect();
         }
 
-        $data = $this->customer->data;
-        $data->put('email', $this->customer->email);
+        $customer = $this->customer;
+
+        if (! $customer) {
+            return collect();
+        }
+
+        $data = $customer->data;
+        $data->put('email', $customer->email);
 
         return $data;
     }

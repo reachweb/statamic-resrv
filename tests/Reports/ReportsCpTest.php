@@ -46,4 +46,39 @@ class ReportsCpTest extends TestCase
             ])
             ->assertSee('Test Statamic Item');
     }
+
+    public function test_can_get_report_data_filtered_by_created_at()
+    {
+        $this->travelTo(today()->setHour(12));
+
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'date_start' => today()->subYear()->toIso8601String(),
+            'date_end' => today()->subYear()->addDays(2)->toIso8601String(),
+        ])->count(3)->create();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $this->get(cp_route('resrv.report.index')."?start={$start}&end={$end}&date_field=created_at")
+            ->assertStatus(200)
+            ->assertJson(['total_confirmed_reservations' => 3]);
+
+        $this->get(cp_route('resrv.report.index')."?start={$start}&end={$end}&date_field=date_start")
+            ->assertStatus(200)
+            ->assertJson(['total_confirmed_reservations' => 0]);
+    }
+
+    public function test_validates_date_field()
+    {
+        $this->travelTo(today()->setHour(12));
+        $this->withExceptionHandling();
+
+        $this->getJson(cp_route('resrv.report.index').'?start='.today()->toDateString().'&end='.today()->addWeek()->toDateString().'&date_field=bogus')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['date_field']);
+    }
 }

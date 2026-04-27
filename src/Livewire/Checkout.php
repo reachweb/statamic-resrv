@@ -173,6 +173,8 @@ class Checkout extends Component
     #[On('checkout-form-submitted')]
     public function handleSecondStep()
     {
+        $this->resetErrorBag('reservation');
+
         // If the payment amount is zero, just show the confirmation page
         if ($this->reservationPaymentIsZero()) {
             return $this->handleReservationWithZeroPayment();
@@ -190,12 +192,20 @@ class Checkout extends Component
         // Reset any stale payment state from a previous pass through checkout
         $this->resetPaymentState();
 
-        // Populate available gateways
+        // Populate available gateways, filtered by the current payment amount
         $manager = app(PaymentGatewayManager::class);
-        $this->availableGateways = $manager->availableForFrontend();
+        $reservation = $this->reservation->fresh();
+        $this->availableGateways = $manager->availableForFrontend($reservation->payment);
 
-        // If only one gateway, auto-select and initialize payment
-        if (! $manager->hasMultiple()) {
+        // No gateway accepts this amount — surface an error and stay on step 2
+        if (empty($this->availableGateways)) {
+            $this->addError('reservation', __('statamic-resrv::frontend.noGatewayAvailableForAmount'));
+
+            return;
+        }
+
+        // If only one surviving gateway, auto-select and initialize payment
+        if (count($this->availableGateways) === 1) {
             $this->selectedGateway = $this->availableGateways[0]['name'];
 
             return $this->initializePayment();
@@ -208,10 +218,42 @@ class Checkout extends Component
     #[On('gateway-selected')]
     public function selectGateway(string $gateway)
     {
+        $this->resetErrorBag('reservation');
+
         $manager = app(PaymentGatewayManager::class);
 
         if (! $manager->has($gateway)) {
-            $this->addError('gateway', __('Invalid payment gateway selected.'));
+            $this->addError('reservation', __('Invalid payment gateway selected.'));
+
+            return;
+        }
+
+        $reservation = $this->reservation->fresh();
+        if (! $manager->isAvailableFor($gateway, $reservation->payment)) {
+            // The clicked gateway is being rejected — fully reset payment state (intent + surcharge)
+            // carried over from a prior tab or browser-back copy of step 3, so a later webhook can't
+            // act on the stale intent and the sidebar doesn't show an inflated payable-now from the
+            // previous gateway's surcharge.
+            $this->resetPaymentState();
+            $this->availableGateways = $manager->availableForFrontend($reservation->payment);
+
+            // No gateway accepts the current amount — bounce back to step 2 with the no-gateway error
+            if (empty($this->availableGateways)) {
+                $this->addError('reservation', __('statamic-resrv::frontend.noGatewayAvailableForAmount'));
+                $this->step = 2;
+
+                return;
+            }
+
+            // Single surviving gateway — auto-select and initialize payment
+            if (count($this->availableGateways) === 1) {
+                $this->selectedGateway = $this->availableGateways[0]['name'];
+
+                return $this->initializePayment();
+            }
+
+            // Multiple still available — keep the picker visible with a contextual error
+            $this->addError('reservation', __('statamic-resrv::frontend.gatewayNotAvailableForAmount'));
 
             return;
         }

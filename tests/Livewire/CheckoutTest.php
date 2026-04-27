@@ -930,4 +930,307 @@ class CheckoutTest extends TestCase
         // The total should now be updated back to original price (100.00)
         $this->assertEquals('100.00', $reservation->total->format());
     }
+
+    public function test_gateway_is_hidden_when_payment_below_min()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 200],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $this->assertCount(1, $component->get('availableGateways'));
+        $this->assertEquals('paypal', $component->get('availableGateways')[0]['name']);
+    }
+
+    public function test_gateway_is_hidden_when_payment_above_max()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => 50],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $this->assertCount(1, $component->get('availableGateways'));
+        $this->assertEquals('paypal', $component->get('availableGateways')[0]['name']);
+    }
+
+    public function test_single_surviving_gateway_after_filter_auto_selects()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 500],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'surcharge' => ['type' => 'fixed', 'amount' => 5],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $component->assertSet('selectedGateway', 'paypal');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('5.00', $reservation->payment_surcharge->format());
+    }
+
+    public function test_error_when_all_gateways_filtered_out()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 500],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'amount_limits' => ['min' => 1000],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $component->assertHasErrors('reservation')
+            ->assertSet('step', 2)
+            ->assertSet('selectedGateway', '');
+    }
+
+    public function test_select_gateway_bounces_to_step_2_when_no_gateway_remains()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 50, 'max' => 200],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'amount_limits' => ['min' => 50, 'max' => 200],
+                'surcharge' => ['type' => 'fixed', 'amount' => 5],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertSet('step', 3);
+
+        // Simulate the reservation payment changing between render and click so
+        // every gateway now exceeds its limits.
+        $this->reservation->update(['payment' => '500.00']);
+
+        $component->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertHasErrors('reservation')
+            ->assertSet('selectedGateway', '')
+            ->assertSet('step', 2);
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('', $reservation->payment_id);
+    }
+
+    public function test_select_gateway_auto_selects_when_only_one_remains()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'amount_limits' => ['min' => 50, 'max' => 200],
+                'surcharge' => ['type' => 'fixed', 'amount' => 5],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertSet('step', 3);
+
+        // Stale change: paypal no longer qualifies, but stripe (no limits) still does.
+        $this->reservation->update(['payment' => '500.00']);
+
+        $component->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertSet('selectedGateway', 'stripe')
+            ->assertSet('step', 3);
+    }
+
+    public function test_coupon_component_is_hidden_on_gateway_selection_step()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $couponLabel = __('statamic-resrv::frontend.addCoupon');
+
+        $component = Livewire::test(Checkout::class)
+            ->assertSet('step', 1)
+            ->assertSee($couponLabel);
+
+        $component->call('handleFirstStep')
+            ->assertSet('step', 2)
+            ->assertSee($couponLabel);
+
+        $component->dispatch('checkout-form-submitted')
+            ->assertSet('step', 3)
+            ->assertDontSee($couponLabel);
+    }
+
+    public function test_select_gateway_cancels_stale_intent_when_bouncing_to_step_2()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['min' => 50, 'max' => 200],
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+                'amount_limits' => ['min' => 50, 'max' => 200],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertSet('step', 3);
+
+        // Simulate a stale intent + surcharge carried over from another tab or a browser-back copy
+        // of step 3, plus an amount change that disqualifies every gateway.
+        $this->reservation->update([
+            'payment_id' => 'stale_intent_abc',
+            'payment_gateway' => 'stripe',
+            'payment_surcharge' => '25.00',
+            'payment' => '500.00',
+        ]);
+
+        $component->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertSet('step', 2);
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('', $reservation->payment_id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+    }
+
+    public function test_select_gateway_cancels_stale_intent_when_keeping_picker_open()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+            'offline' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Offline',
+                'amount_limits' => ['max' => 200],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertSet('step', 3);
+
+        // Stale intent + surcharge + amount change that only disqualifies offline.
+        $this->reservation->update([
+            'payment_id' => 'stale_intent_xyz',
+            'payment_gateway' => 'stripe',
+            'payment_surcharge' => '25.00',
+            'payment' => '500.00',
+        ]);
+
+        $component->dispatch('gateway-selected', gateway: 'offline')
+            ->assertHasErrors('reservation')
+            ->assertSet('step', 3)
+            ->assertSet('selectedGateway', '');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('', $reservation->payment_id);
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+    }
+
+    public function test_amount_limits_compare_payment_not_including_surcharge()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => 100],
+                'surcharge' => ['type' => 'percent', 'amount' => 10],
+            ],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $component->assertSet('selectedGateway', 'stripe');
+
+        $reservation = Reservation::find($this->reservation->id);
+        $this->assertEquals('10.00', $reservation->payment_surcharge->format());
+    }
 }

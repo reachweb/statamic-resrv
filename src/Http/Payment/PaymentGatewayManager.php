@@ -27,10 +27,17 @@ class PaymentGatewayManager
                     throw new \InvalidArgumentException("Payment gateway [{$name}] must have a 'class' that implements PaymentInterface.");
                 }
 
+                if (isset($config['amount_limits']) && ! is_array($config['amount_limits'])) {
+                    throw new \InvalidArgumentException(
+                        "Payment gateway [{$name}] has invalid amount_limits: must be an array with 'min' and/or 'max' keys, got ".gettype($config['amount_limits']).'.'
+                    );
+                }
+
                 $this->gateways[$name] = [
                     'class' => $config['class'],
                     'label' => $config['label'] ?? null,
                     'surcharge' => $config['surcharge'] ?? null,
+                    'amount_limits' => $this->validateAmountLimits($name, $config['amount_limits'] ?? null),
                     'instance' => null,
                 ];
             }
@@ -46,9 +53,79 @@ class PaymentGatewayManager
             'class' => get_class($instance),
             'label' => $instance->label(),
             'surcharge' => null,
+            'amount_limits' => null,
             'instance' => $instance,
         ];
         $this->defaultName = $name;
+    }
+
+    protected function validateAmountLimits(string $gateway, ?array $limits): ?array
+    {
+        if ($limits === null) {
+            return null;
+        }
+
+        $unknownKeys = array_diff(array_keys($limits), ['min', 'max']);
+        if (! empty($unknownKeys)) {
+            throw new \InvalidArgumentException(
+                "Payment gateway [{$gateway}] has invalid amount_limits: only 'min' and 'max' keys are allowed, got unknown key(s) [".implode(', ', $unknownKeys).'].'
+            );
+        }
+
+        if (! isset($limits['min']) && ! isset($limits['max'])) {
+            throw new \InvalidArgumentException(
+                "Payment gateway [{$gateway}] has invalid amount_limits: must contain 'min' and/or 'max'."
+            );
+        }
+
+        $parsed = [];
+
+        foreach (['min', 'max'] as $key) {
+            if (! isset($limits[$key])) {
+                continue;
+            }
+
+            // is_numeric() accepts formats BCMath rejects at runtime (scientific notation,
+            // leading whitespace), so probe Price::create() — the actual consumer — to keep
+            // boot-time validation aligned with what passesAmountLimits() will accept later.
+            try {
+                $parsed[$key] = Price::create($limits[$key]);
+            } catch (\Throwable $e) {
+                throw new \InvalidArgumentException(
+                    "Payment gateway [{$gateway}] has invalid amount_limits: [{$key}] must be a numeric value Price::create() can parse, got ".var_export($limits[$key], true).'.'
+                );
+            }
+        }
+
+        if (isset($parsed['min'], $parsed['max']) && $parsed['min']->greaterThan($parsed['max'])) {
+            throw new \InvalidArgumentException("Payment gateway [{$gateway}] has invalid amount_limits: min ({$limits['min']}) cannot exceed max ({$limits['max']}).");
+        }
+
+        return $parsed;
+    }
+
+    protected function passesAmountLimits(string $gateway, PriceClass $amount): bool
+    {
+        $limits = $this->gateways[$gateway]['amount_limits'] ?? null;
+
+        if (! $limits) {
+            return true;
+        }
+
+        if (isset($limits['min']) && $amount->lessThan($limits['min'])) {
+            return false;
+        }
+
+        if (isset($limits['max']) && $limits['max']->lessThan($amount)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function isAvailableFor(string $gateway, PriceClass $amount): bool
+    {
+        return $this->has($gateway) && $this->passesAmountLimits($gateway, $amount);
     }
 
     protected function resolve(string $name): PaymentInterface
@@ -136,17 +213,19 @@ class PaymentGatewayManager
         throw new \InvalidArgumentException("Invalid surcharge type [{$config['type']}] for payment gateway [{$gateway}].");
     }
 
-    public function availableForFrontend(): array
+    public function availableForFrontend(?PriceClass $amount = null): array
     {
-        return collect($this->gateways)->map(function ($config, $name) {
-            $instance = $this->resolve($name);
+        return collect($this->gateways)
+            ->filter(fn ($config, $name) => $amount === null || $this->passesAmountLimits($name, $amount))
+            ->map(function ($config, $name) {
+                $instance = $this->resolve($name);
 
-            return [
-                'name' => $name,
-                'label' => $this->gateways[$name]['label'],
-                'redirects' => $instance->redirectsForPayment(),
-                'surcharge' => $this->gateways[$name]['surcharge'] ?? null,
-            ];
-        })->values()->all();
+                return [
+                    'name' => $name,
+                    'label' => $this->gateways[$name]['label'],
+                    'redirects' => $instance->redirectsForPayment(),
+                    'surcharge' => $this->gateways[$name]['surcharge'] ?? null,
+                ];
+            })->values()->all();
     }
 }
