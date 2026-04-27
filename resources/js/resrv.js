@@ -9,6 +9,7 @@ import ExtrasList from './components/ExtrasList.vue'
 import ReservationsList from './components/ReservationsList.vue'
 import DynamicPricingList from './components/DynamicPricingList.vue'
 import ReportsView from './components/ReportsView.vue'
+import ReservationsExport from './components/ReservationsExport.vue'
 
 import ReservationsCalendar from './components/ReservationsCalendar.vue'
 
@@ -26,7 +27,8 @@ Statamic.booting(() => {
     Statamic.$components.register('reservations-list', ReservationsList);
     Statamic.$components.register('dynamic-pricing-list', DynamicPricingList);
     Statamic.$components.register('reports-view', ReportsView);
-  
+    Statamic.$components.register('reservations-export', ReservationsExport);
+
     // Calendar
     Statamic.$components.register('reservations-calendar', ReservationsCalendar);
 })
