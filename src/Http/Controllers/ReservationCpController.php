@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -92,16 +93,31 @@ class ReservationCpController extends Controller
             'id' => 'required|integer',
         ]);
         $reservation = $this->reservation->find($data['id']);
-        $manager = app(PaymentGatewayManager::class);
-        try {
-            $payment = $manager->forReservation($reservation);
-        } catch (\InvalidArgumentException $e) {
-            $payment = $manager->gateway();
+
+        $refundableStatuses = [
+            ReservationStatus::CONFIRMED->value,
+            ReservationStatus::PARTNER->value,
+            ReservationStatus::COMPLETED->value,
+        ];
+
+        if (! in_array($reservation->status, $refundableStatuses)) {
+            return response()->json([
+                'error' => 'This reservation cannot be refunded because its status is: '.$reservation->status,
+            ], 400);
         }
-        try {
-            $payment->refund($reservation);
-        } catch (RefundFailedException $exception) {
-            return response()->json(['error' => $exception->getMessage()], 400);
+
+        if ($reservation->payment_id) {
+            $manager = app(PaymentGatewayManager::class);
+            try {
+                $payment = $manager->forReservation($reservation);
+            } catch (\InvalidArgumentException $e) {
+                $payment = $manager->gateway();
+            }
+            try {
+                $payment->refund($reservation);
+            } catch (RefundFailedException $exception) {
+                return response()->json(['error' => $exception->getMessage()], 400);
+            }
         }
 
         $reservation->status = 'refunded';
