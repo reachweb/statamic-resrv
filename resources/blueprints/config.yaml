@@ -78,24 +78,6 @@ tabs:
         instructions: 'Change how the reservation engine behaves.'
         fields:
           -
-            handle: enable_advanced_availability
-            field:
-              display: 'Enable advanced availability'
-              type: toggle
-              localizable: false
-              validate:
-                - required
-              instructions: 'Enables the [advanced availability](https://resrv.dev/availability#advanced-availability) feature.'
-          -
-            handle: enable_connected_availabilities
-            field:
-              display: 'Enable connected advanced availabilities'
-              type: toggle
-              localizable: false
-              validate:
-                - required
-              instructions: 'Enables the [connected availabilities](https://resrv.dev/availability#connected-availabilities) feature.'
-          -
             handle: enable_time
             field:
               display: 'Enable time'

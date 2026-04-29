@@ -41,7 +41,6 @@ class CheckoutTest extends TestCase
         parent::setUp();
         $this->date = now()->add(1, 'day')->setTime(12, 0, 0);
         $this->entries = $this->createEntries();
-        $this->advancedEntries = $this->createAdvancedEntries();
         $this->travelTo(today()->setHour(12));
         // Override the price here because we are getting it from availability
         $this->reservation = Reservation::factory()->create([
@@ -203,8 +202,10 @@ class CheckoutTest extends TestCase
 
         $this->travel(30)->minutes();
 
+        // Time-based expiration is a terminal state, not a recoverable drift — the component
+        // surfaces it via $reservationError (full-page view) rather than addError() banner.
         $component->call('handleFirstStep')
-            ->assertHasErrors('reservation');
+            ->assertSet('reservationError', fn ($value) => is_string($value) && $value !== '');
     }
 
     public function test_it_throws_an_error_if_a_user_takes_too_long_in_the_customer_form()
@@ -216,7 +217,7 @@ class CheckoutTest extends TestCase
         $this->travel(30)->minutes();
 
         $component->dispatch('checkout-form-submitted')
-            ->assertHasErrors('reservation');
+            ->assertSet('reservationError', fn ($value) => is_string($value) && $value !== '');
     }
 
     public function test_it_successfully_applies_a_coupon()

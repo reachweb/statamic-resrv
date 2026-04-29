@@ -24,9 +24,6 @@
                         <div class="flex mb-2 items-center">
                             <input type="radio" id="{{ $collection['handle'] }}" name="collection" value="{{ $collection['handle'] }}">
                             <label for="{{ $collection['handle'] }}" class="ml-1">{{ $collection['title'] }}</label>
-                            @if ($collection['advanced'])
-                            <div class="ml-1 text-2xs text-grey-60">Uses advanced availabity</div>
-                            @endif
                         </div>
                     @endforeach
                 @endif

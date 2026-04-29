@@ -14,7 +14,7 @@ class AvailabilityData extends Form
 
     public int $quantity = 1;
 
-    public ?string $advanced = null;
+    public string|int|null $rate = null;
 
     public ?array $customer = [];
 
@@ -35,13 +35,17 @@ class AvailabilityData extends Form
                 'after:dates.date_start',
                 new ResrvAfterToday,
             ],
-            'quantity' => ['sometimes', 'integer', new ResrvMaxQuantity],
-            'advanced' => ['nullable', 'string'],
+            'quantity' => ['sometimes', 'integer', 'min:1', new ResrvMaxQuantity],
+            'rate' => ['nullable', function (string $attribute, mixed $value, \Closure $fail) {
+                if ($value !== 'any' && ! is_numeric($value)) {
+                    $fail('The rate must be a valid rate ID or "any".');
+                }
+            }],
             'customer' => ['sometimes', 'array'],
         ];
     }
 
-    public function validationAttributes()
+    public function validationAttributes(): array
     {
         return [
             'dates.date_start' => 'starting date',
@@ -49,17 +53,17 @@ class AvailabilityData extends Form
         ];
     }
 
-    public function toResrvArray()
+    public function toResrvArray(): array
     {
         return [
             'date_start' => $this->dates['date_start'] ?? null,
             'date_end' => $this->dates['date_end'] ?? null,
             'quantity' => $this->quantity,
-            'advanced' => $this->advanced,
+            'rate_id' => $this->rate,
         ];
     }
 
-    public function hasDates()
+    public function hasDates(): bool
     {
         return isset($this->dates['date_start']) && isset($this->dates['date_end']);
     }

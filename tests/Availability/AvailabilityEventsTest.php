@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -23,6 +24,7 @@ class AvailabilityEventsTest extends TestCase
     public function test_availability_decreases_on_reservation_created()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->count(2)
@@ -31,10 +33,11 @@ class AvailabilityEventsTest extends TestCase
                 ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
             )
             ->create(
-                ['statamic_id' => $item->id()]
+                ['statamic_id' => $item->id(), 'rate_id' => $rate->id]
             );
 
         $reservation = Reservation::factory()
+            ->withRate($rate->id)
             ->create(
                 ['item_id' => $item->id()]
             );
@@ -50,6 +53,7 @@ class AvailabilityEventsTest extends TestCase
     public function test_availability_increases_on_reservation_expired()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->withPendingArray()
@@ -59,10 +63,11 @@ class AvailabilityEventsTest extends TestCase
                 ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
             )
             ->create(
-                ['statamic_id' => $item->id()]
+                ['statamic_id' => $item->id(), 'rate_id' => $rate->id]
             );
 
         $reservation = Reservation::factory()
+            ->withRate($rate->id)
             ->create(
                 ['item_id' => $item->id()]
             );
@@ -78,6 +83,7 @@ class AvailabilityEventsTest extends TestCase
     public function test_availability_does_increase_multiple_times_on_reservation_expired()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->withPendingArray()
@@ -87,15 +93,17 @@ class AvailabilityEventsTest extends TestCase
                 ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
             )
             ->create(
-                ['statamic_id' => $item->id()]
+                ['statamic_id' => $item->id(), 'rate_id' => $rate->id]
             );
 
         $reservation = Reservation::factory()
+            ->withRate($rate->id)
             ->create(
                 ['item_id' => $item->id()]
             );
 
         $reservation2 = Reservation::factory()
+            ->withRate($rate->id)
             ->create(
                 ['item_id' => $item->id()]
             );

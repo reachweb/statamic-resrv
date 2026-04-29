@@ -8,6 +8,7 @@ use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 use Stripe\Event;
 use Stripe\Exception\ApiErrorException;
@@ -224,7 +225,7 @@ class StripePaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
 
-        if ($reservation->status === ReservationStatus::CONFIRMED) {
+        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
             return response()->json([], 200);
         }
 
@@ -259,8 +260,9 @@ class StripePaymentGateway implements PaymentInterface
             // A stale intent means the customer moved on (refresh, back, gateway switch, coupon change)
             // before this webhook arrived. The charge exists on Stripe but no longer matches the
             // reservation's current state — confirming it would send emails/decrease inventory
-            // against an amount or gateway the reservation is no longer tied to. Log and hand off
-            // to manual reconciliation instead.
+            // against an amount or gateway the reservation is no longer tied to. Log and email
+            // admins so the orphan charge can be refunded manually; the reservation itself is
+            // left untouched because the customer is (or may be) still using it.
             if ($isStaleIntent) {
                 Log::warning('Stripe payment intent succeeded after being abandoned by the customer — manual reconciliation may be required.', [
                     'reservation_id' => $reservation->id,
@@ -269,10 +271,34 @@ class StripePaymentGateway implements PaymentInterface
                     'current_payment_gateway' => $reservation->payment_gateway,
                 ]);
 
+                OrphanedPaymentNotification::dispatchFor($reservation, $data['id']);
+
                 return response()->json([], 200);
             }
 
-            ReservationConfirmed::dispatch($reservation);
+            // Terminal-state reservations cannot be confirmed. A succeeded webhook arriving
+            // after the reservation has been expired, refunded, or flipped to partner means a
+            // real charge exists on Stripe with no live reservation to attach it to. Log and
+            // email admins for manual refund.
+            if (in_array($reservation->status, [
+                ReservationStatus::EXPIRED->value,
+                ReservationStatus::REFUNDED->value,
+                ReservationStatus::PARTNER->value,
+            ], true)) {
+                Log::warning('Stripe succeeded webhook for a terminal reservation — manual refund likely required.', [
+                    'reservation_id' => $reservation->id,
+                    'reservation_status' => $reservation->status,
+                    'payment_intent_id' => $data['id'],
+                ]);
+
+                OrphanedPaymentNotification::dispatchFor($reservation, $data['id']);
+
+                return response()->json([], 200);
+            }
+
+            if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
+                ReservationConfirmed::dispatch($reservation);
+            }
 
             return response()->json([], 200);
         }
@@ -280,7 +306,17 @@ class StripePaymentGateway implements PaymentInterface
             // Stale intents were cancelled deliberately by us (Checkout::cancelActiveIntent);
             // ignore their failure/cancellation webhooks so we don't cascade-cancel a
             // reservation the customer is still using.
-            if (! $isStaleIntent) {
+            if ($isStaleIntent) {
+                return response()->json([], 200);
+            }
+
+            // Only PENDING reservations can be cancelled by a webhook. Anything else is
+            // either already-terminal (expired/refunded/partner) or confirmed — no-op.
+            if ($reservation->status !== ReservationStatus::PENDING->value) {
+                return response()->json([], 200);
+            }
+
+            if ($reservation->transitionTo(ReservationStatus::REFUNDED)) {
                 ReservationCancelled::dispatch($reservation);
             }
 

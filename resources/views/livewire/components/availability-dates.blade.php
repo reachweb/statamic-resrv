@@ -96,8 +96,10 @@ Alpine.data('datepicker', () => ({
     // Livewire & Config Properties
     mode: $wire.calendar,
     dates: $wire.data.dates,
-    advanced: $wire.advanced,
-    advancedSelected: $wire.entangle('data.advanced'),
+    rates: $wire.rates,
+    rateSelected: $wire.entangle('data.rate'),
+    minPeriod: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
+    maxPeriod: {{ config('resrv-config.maximum_reservation_period_in_days', 30) }},
     disabledDays: @json($disabledDays),
     showAvailabilityOnCalendar: $wire.showAvailabilityOnCalendar,
     availabilityCalendar: [],
@@ -107,10 +109,10 @@ Alpine.data('datepicker', () => ({
     },
 
     init() {
-        this.$watch('advancedSelected', async () => {
+        this.$watch('rateSelected', async () => {
             if (!this.showAvailabilityOnCalendar) return;
             // Skip if user has never opened the calendar yet — onCalendarOpen
-            // will fetch with the latest advancedSelected on first open.
+            // will fetch with the latest rateSelected on first open.
             if (!this.availabilityCalendar || Object.keys(this.availabilityCalendar).length === 0) return;
             this.availabilityCalendar = await this.fetchAvailability();
             const cal = Alpine.$data(this.$refs.calendarInstance);
@@ -127,7 +129,7 @@ Alpine.data('datepicker', () => ({
     },
 
     async fetchAvailability() {
-        if (this.advanced !== false && this.advancedSelected === null) {
+        if (this.rates !== false && this.rateSelected === null) {
             return [];
         }
         return await $wire.availabilityCalendar();

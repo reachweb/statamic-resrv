@@ -40,6 +40,16 @@ class Extras extends Component
     #[Locked]
     public $filter = false;
 
+    /**
+     * Opt-in flag for the multi-cart pricing path. Multi-results pages set
+     * this to true so the Extras component aggregates prices/conditions across
+     * the in-progress cart selections instead of the live search payload.
+     * Standard availability-results pages must leave it false, otherwise an
+     * unrelated cart for the same entry would hijack their pricing.
+     */
+    #[Locked]
+    public bool $useMultiSelections = false;
+
     #[Reactive]
     public ?array $errors = null;
 
@@ -66,9 +76,15 @@ class Extras extends Component
     #[Computed(persist: true)]
     public function extras(): Collection
     {
-        $extras = isset($this->reservation)
-            ? $this->getExtrasForReservation()
-            : $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
+        $multiSelections = isset($this->reservation) ? null : $this->getMultiSelectionsFromSession();
+
+        if ($multiSelections !== null) {
+            $extras = $this->getExtrasForSelections($multiSelections, $this->entryId);
+        } else {
+            $extras = isset($this->reservation)
+                ? $this->getExtrasForReservation()
+                : $this->getExtrasForSearch($this->data->toResrvArray(), $this->entryId);
+        }
 
         if (is_string($this->filter)) {
             $extrasToShow = explode('|', $this->filter);
@@ -215,6 +231,21 @@ class Extras extends Component
 
         if ($this->enabledExtras->extras->count() !== 0) {
             $this->updateEnabledExtraPrices();
+            $this->dispatchExtrasUpdated();
+        }
+    }
+
+    #[On('multi-selections-updated')]
+    public function refreshOnSelectionsUpdate(): void
+    {
+        // The cart's selections changed, so any aggregated extra prices/conditions
+        // computed from them are now stale. Force a recompute on next render.
+        unset($this->extras);
+        unset($this->frontendExtras);
+
+        $this->updateExtraConditions();
+
+        if ($this->enabledExtras->extras->count() !== 0) {
             $this->dispatchExtrasUpdated();
         }
     }

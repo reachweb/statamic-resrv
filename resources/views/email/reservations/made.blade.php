@@ -19,10 +19,10 @@
 | {{ __("Vehicle") }}   | {{ $reservation->entry()->title }} |
 @if ($reservation->type !== 'parent')
 @if (config('resrv-config.maximum_quantity') > 1)
-| {{ __("Property") }}  | x {{ $reservation->quantity }} |
+| {{ __("Quantity") }}  | x {{ $reservation->quantity }} |
 @endif
-@if (config('resrv-config.enable_advanced_availability'))
-| {{ __("Property") }} | {{ $reservation->getPropertyAttributeLabel() }} |
+@if ($reservation->rate_id)
+| {{ __("Rate") }} | {{ $reservation->getRateLabel() }} |
 @endif
 @endif
 @endcomponent
@@ -37,8 +37,8 @@
 @if (config('resrv-config.maximum_quantity') > 1)
 | {{ __("Quantity") }}  | x {{ $child->quantity }} |
 @endif
-@if (config('resrv-config.enable_advanced_availability'))
-| {{ __("Property") }} | {{ $child->getPropertyAttributeLabel() }} |
+@if ($child->rate_id)
+| {{ __("Rate") }} | {{ $child->getRateLabel() }} |
 @endif
 @endcomponent
 @endforeach
