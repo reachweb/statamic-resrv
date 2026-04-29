@@ -40,7 +40,9 @@ class RateCpController extends Controller
 
     public function entries(string $collection): JsonResponse
     {
-        $entries = Entry::where('collection', $collection)
+        $entries = DB::table('resrv_entries')
+            ->where('collection', $collection)
+            ->whereNull('deleted_at')
             ->select('item_id as id', 'title')
             ->get();
 
