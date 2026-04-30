@@ -807,10 +807,8 @@ class RateCpTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_shared_rate_rejects_independent_pricing()
+    public function test_shared_rate_accepts_independent_pricing()
     {
-        $this->withExceptionHandling();
-
         $this->makeStatamicItemWithResrvAvailabilityField();
 
         $baseRate = Rate::factory()->create(['collection' => 'pages']);
@@ -827,8 +825,14 @@ class RateCpTest extends TestCase
         ];
 
         $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
-        $response->assertStatus(422)
-            ->assertJsonValidationErrors('availability_type');
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_rates', [
+            'slug' => 'shared-independent',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+        ]);
     }
 
     public function test_can_update_rate_slug_to_one_used_by_deleted_rate()

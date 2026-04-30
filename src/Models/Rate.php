@@ -44,6 +44,7 @@ class Rate extends Model
         'modifier_operation',
         'modifier_amount',
         'availability_type',
+        'require_price_override',
         'max_available',
         'date_start',
         'date_end',
@@ -60,6 +61,7 @@ class Rate extends Model
         'apply_to_all' => 'boolean',
         'published' => 'boolean',
         'refundable' => 'boolean',
+        'require_price_override' => 'boolean',
         'date_start' => 'date',
         'date_end' => 'date',
         'modifier_amount' => 'decimal:2',
@@ -120,6 +122,11 @@ class Rate extends Model
         return $this->hasMany(FixedPricing::class, 'rate_id');
     }
 
+    public function ratePrices(): HasMany
+    {
+        return $this->hasMany(RatePrice::class, 'rate_id');
+    }
+
     public function scopeForEntry(Builder $query, string $entryId): void
     {
         $collection = static::$entryCollectionCache[$entryId]
@@ -153,6 +160,11 @@ class Rate extends Model
     public function isShared(): bool
     {
         return $this->availability_type === 'shared';
+    }
+
+    public function hasIndependentSharedPricing(): bool
+    {
+        return $this->isShared() && ! $this->isRelative();
     }
 
     public function appliesToEntry(string $statamicId): bool

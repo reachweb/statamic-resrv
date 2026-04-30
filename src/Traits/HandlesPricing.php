@@ -2,10 +2,14 @@
 
 namespace Reach\StatamicResrv\Traits;
 
+use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\RatePrice;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 
 trait HandlesPricing
@@ -36,6 +40,16 @@ trait HandlesPricing
         $rate = $rate ?? ($effectiveRateId ? $this->getRate($effectiveRateId) : null);
 
         $pricesCollection = $this->createPricesCollection($prices);
+
+        if ($rate?->hasIndependentSharedPricing()) {
+            $resolved = $this->resolveSharedIndependentPrices($rate, $id);
+
+            if ($resolved === null) {
+                return ['originalPrice' => null, 'reservationPrice' => null];
+            }
+
+            $pricesCollection = $resolved;
+        }
 
         // If a rate is set and is relative, apply the modifier per day
         if ($rate?->isRelative()) {
@@ -70,6 +84,51 @@ trait HandlesPricing
         }
 
         return compact('originalPrice', 'reservationPrice');
+    }
+
+    /**
+     * Returns null when require_price_override is enabled and any day in the
+     * booking range has no override row — signalling the rate is unavailable
+     * for the requested dates.
+     */
+    protected function resolveSharedIndependentPrices(Rate $rate, string $statamicId): ?Collection
+    {
+        $dates = collect($this->getPeriod())->map(fn ($day) => $day->toDateString());
+
+        $overrides = RatePrice::where('rate_id', $rate->id)
+            ->where('statamic_id', $statamicId)
+            ->where('date', '>=', $this->date_start)
+            ->where('date', '<', $this->date_end)
+            ->get()
+            ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString());
+
+        $missingDates = $dates->reject(fn ($date) => $overrides->has($date));
+
+        if ($rate->require_price_override && $missingDates->isNotEmpty()) {
+            return null;
+        }
+
+        $basePrices = collect();
+        if ($missingDates->isNotEmpty() && $rate->base_rate_id) {
+            $basePrices = Availability::where('rate_id', $rate->base_rate_id)
+                ->where('statamic_id', $statamicId)
+                ->where('date', '>=', $this->date_start)
+                ->where('date', '<', $this->date_end)
+                ->get()
+                ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString());
+        }
+
+        return $dates->map(function ($date) use ($overrides, $basePrices) {
+            if ($overrides->has($date)) {
+                return Price::create($overrides->get($date)->getRawOriginal('price'));
+            }
+
+            if ($basePrices->has($date)) {
+                return Price::create($basePrices->get($date)->getRawOriginal('price'));
+            }
+
+            return Price::create(0);
+        })->values();
     }
 
     protected function processDynamicPricing($price, $id)

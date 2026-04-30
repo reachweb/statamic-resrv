@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -9,9 +10,11 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
+use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Requests\AvailabilityCpRequest;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\RatePrice;
 
 class AvailabilityCpController extends Controller
 {
@@ -36,6 +39,26 @@ class AvailabilityCpController extends Controller
         if ($rate && $rate->isShared() && $rate->isRelative()) {
             $results = $results->map(function ($row) use ($rate) {
                 $row->price = $rate->calculatePrice($row->price)->format();
+
+                return $row;
+            });
+        }
+
+        if ($rate && $rate->hasIndependentSharedPricing()) {
+            $overrides = RatePrice::where('rate_id', $rate->id)
+                ->where('statamic_id', $statamic_id)
+                ->get()
+                ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString());
+
+            $results = $results->map(function ($row) use ($overrides) {
+                $key = Carbon::parse($row->date)->toDateString();
+                if ($overrides->has($key)) {
+                    $row->price = Price::create($overrides->get($key)->getRawOriginal('price'))->format();
+                    $row->price_override = true;
+                } else {
+                    $row->price = $row->price->format();
+                    $row->price_override = false;
+                }
 
                 return $row;
             });
@@ -81,17 +104,22 @@ class AvailabilityCpController extends Controller
 
     private function updateAvailability(array $data, int $rateId): void
     {
+        $rate = Rate::withoutGlobalScopes()->find($rateId);
         $resolvedRateId = AvailabilityRepository::resolveBaseRateId($rateId);
 
-        // Shared rates read from the base rate's availability rows. Writing
-        // prices here would overwrite the base rate's data.
-        $skipPrice = ($resolvedRateId !== $rateId);
+        $isSharedIndependent = $rate && $rate->hasIndependentSharedPricing();
+
+        // Shared+relative rates read from the base rate's availability rows.
+        // Writing prices into base rows would overwrite the base rate's data,
+        // and prices on relative rates derive from the modifier — there is no
+        // distinct price to set. Block direct price edits for them.
+        $skipPrice = ($resolvedRateId !== $rateId) && ! $isSharedIndependent;
 
         if ($skipPrice && ! is_null($data['price']) && is_null($data['available'])) {
             abort(422, __('Price cannot be edited directly for shared rates. Edit the base rate instead.'));
         }
 
-        DB::transaction(function () use ($data, $resolvedRateId, $skipPrice) {
+        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $skipPrice, $isSharedIndependent) {
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $onlyDays = $data['onlyDays'] ?? null;
 
@@ -100,9 +128,24 @@ class AvailabilityCpController extends Controller
                     continue;
                 }
 
+                $date = $day->isoFormat('YYYY-MM-DD');
+
+                // Shared+independent rates store per-(rate, entry, date) prices in
+                // resrv_rate_prices. Availability counts continue to live on the
+                // base rate's row.
+                if ($isSharedIndependent && ! is_null($data['price'])) {
+                    RatePrice::updateOrCreate([
+                        'rate_id' => $rateId,
+                        'statamic_id' => $data['statamic_id'],
+                        'date' => $date,
+                    ], [
+                        'price' => $data['price'],
+                    ]);
+                }
+
                 $toUpdate = [];
 
-                if (! is_null($data['price']) && ! $skipPrice) {
+                if (! is_null($data['price']) && ! $skipPrice && ! $isSharedIndependent) {
                     $toUpdate['price'] = $data['price'];
                 }
 
@@ -116,7 +159,7 @@ class AvailabilityCpController extends Controller
 
                 Availability::updateOrCreate([
                     'statamic_id' => $data['statamic_id'],
-                    'date' => $day->isoFormat('YYYY-MM-DD'),
+                    'date' => $date,
                     'rate_id' => $resolvedRateId,
                 ], $toUpdate);
             }
