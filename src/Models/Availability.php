@@ -138,6 +138,10 @@ class Availability extends Model implements AvailabilityContract
 
         $prices = $this->getPrices($results->prices, $entry->id());
 
+        if ($prices['reservationPrice'] === null) {
+            return false;
+        }
+
         if ($onlyPrice) {
             return $prices['reservationPrice']->format();
         }
@@ -487,6 +491,10 @@ class Availability extends Model implements AvailabilityContract
     {
         $prices = $this->getPrices($item->prices, $id);
 
+        if ($prices['reservationPrice'] === null) {
+            return false;
+        }
+
         return [
             'reservation_price' => $prices['reservationPrice']->format(),
             'original_price' => $prices['originalPrice']?->format(),
@@ -599,6 +607,10 @@ class Availability extends Model implements AvailabilityContract
 
         $prices = $availability->getPrices($dbPrices['prices'], $entry->id());
 
+        if ($prices['reservationPrice'] === null) {
+            return false;
+        }
+
         return DynamicPricing::searchForAvailability(
             $entry->id(),
             $prices['originalPrice'] ?? $prices['reservationPrice'],
@@ -631,7 +643,7 @@ class Availability extends Model implements AvailabilityContract
                 return $query->where('rate_id', $resolvedRateId);
             })
             ->orderBy('price')
-            ->get(['date', 'available', 'price', 'rate_id']);
+            ->get(['statamic_id', 'date', 'available', 'price', 'rate_id']);
 
         if ($rate && $resolvedRateId) {
             $rewriteRateId = $resolvedRateId !== $rate->id;
@@ -719,7 +731,7 @@ class Availability extends Model implements AvailabilityContract
             ->when($resolvedRateId, fn ($query) => $query->where('rate_id', $resolvedRateId))
             ->orderBy('date')
             ->orderBy('price')
-            ->get(['date', 'available', 'price', 'rate_id']);
+            ->get(['statamic_id', 'date', 'available', 'price', 'rate_id']);
 
         if ($rateId && ! $showAllRates) {
             $rate = $rateCheck;

@@ -89,15 +89,37 @@ class AvailabilityCpController extends Controller
             'rate_ids' => 'sometimes|array',
         ]);
 
-        $rateIds = ! empty($data['rate_ids'])
-            ? array_map(fn ($id) => AvailabilityRepository::resolveBaseRateId((int) $id), $data['rate_ids'])
+        $requestedRateIds = ! empty($data['rate_ids'])
+            ? array_map(fn ($id) => (int) $id, $data['rate_ids'])
             : $this->defaultRateIds($data['statamic_id']);
 
-        Availability::where('date', '>=', $data['date_start'])
-            ->where('date', '<=', $data['date_end'])
-            ->where('statamic_id', $data['statamic_id'])
-            ->whereIn('rate_id', $rateIds)
-            ->delete();
+        $sharedIndependentRateIds = Rate::withoutGlobalScopes()
+            ->whereIn('id', $requestedRateIds)
+            ->get()
+            ->filter(fn ($rate) => $rate->hasIndependentSharedPricing())
+            ->pluck('id')
+            ->all();
+
+        $rateIds = array_unique(array_map(
+            fn ($id) => AvailabilityRepository::resolveBaseRateId($id),
+            $requestedRateIds
+        ));
+
+        DB::transaction(function () use ($data, $rateIds, $sharedIndependentRateIds) {
+            Availability::where('date', '>=', $data['date_start'])
+                ->where('date', '<=', $data['date_end'])
+                ->where('statamic_id', $data['statamic_id'])
+                ->whereIn('rate_id', $rateIds)
+                ->delete();
+
+            if (! empty($sharedIndependentRateIds)) {
+                RatePrice::where('date', '>=', $data['date_start'])
+                    ->where('date', '<=', $data['date_end'])
+                    ->where('statamic_id', $data['statamic_id'])
+                    ->whereIn('rate_id', $sharedIndependentRateIds)
+                    ->delete();
+            }
+        });
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
