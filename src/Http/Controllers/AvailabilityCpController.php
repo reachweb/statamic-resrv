@@ -179,6 +179,19 @@ class AvailabilityCpController extends Controller
                     continue;
                 }
 
+                if ($isSharedIndependent) {
+                    // Base availability is owned by the base rate. Never insert a
+                    // base row from a child-rate edit — the price column is NOT
+                    // NULL and the child's price lives in resrv_rate_prices.
+                    Availability::where([
+                        'statamic_id' => $data['statamic_id'],
+                        'date' => $date,
+                        'rate_id' => $resolvedRateId,
+                    ])->update($toUpdate);
+
+                    continue;
+                }
+
                 Availability::updateOrCreate([
                     'statamic_id' => $data['statamic_id'],
                     'date' => $date,
