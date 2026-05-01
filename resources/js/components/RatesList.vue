@@ -108,6 +108,7 @@ export default {
                 modifier_operation: null,
                 modifier_amount: null,
                 availability_type: 'independent',
+                require_price_override: false,
                 max_available: null,
                 date_start: null,
                 date_end: null,

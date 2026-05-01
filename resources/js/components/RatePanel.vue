@@ -209,6 +209,15 @@
                                         {{ errors.max_available[0] }}
                                     </div>
                                 </div>
+                                <div class="form-group w-full" v-if="submit.availability_type === 'shared' && submit.pricing_type === 'independent'">
+                                    <div class="mb-1 text-sm">
+                                        <label class="font-semibold" for="require_price_override">Require price override</label>
+                                        <div class="text-sm font-light"><p>When enabled, dates without an explicit price for this rate are unavailable. When disabled, the base rate's price is used as a fallback.</p></div>
+                                    </div>
+                                    <div class="w-full">
+                                        <toggle-input v-model="submit.require_price_override"></toggle-input>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

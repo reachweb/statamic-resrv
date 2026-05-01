@@ -138,6 +138,10 @@ class Availability extends Model implements AvailabilityContract
 
         $prices = $this->getPrices($results->prices, $entry->id());
 
+        if ($prices['reservationPrice'] === null) {
+            return false;
+        }
+
         if ($onlyPrice) {
             return $prices['reservationPrice']->format();
         }
@@ -289,7 +293,9 @@ class Availability extends Model implements AvailabilityContract
                         if ($this->ratePassesRestrictions($selectedSharedRate)
                             && $selectedSharedRate->appliesToEntry($item->statamic_id)
                         ) {
-                            $processed->push($this->populateAvailability($item, rateId: $selectedSharedRate->id, rate: $selectedSharedRate));
+                            if ($populated = $this->populateAvailability($item, rateId: $selectedSharedRate->id, rate: $selectedSharedRate)) {
+                                $processed->push($populated);
+                            }
                         }
 
                         continue;
@@ -298,7 +304,9 @@ class Availability extends Model implements AvailabilityContract
                     $baseRate = $ratesMap->get($item->rate_id);
 
                     if ($baseRate && $this->ratePassesRestrictions($baseRate) && $baseRate->appliesToEntry($item->statamic_id)) {
-                        $processed->push($this->populateAvailability($item));
+                        if ($populated = $this->populateAvailability($item)) {
+                            $processed->push($populated);
+                        }
                     }
 
                     foreach ($sharedByBase->get($item->rate_id, collect()) as $sharedRate) {
@@ -308,7 +316,9 @@ class Availability extends Model implements AvailabilityContract
                         if (! $sharedRate->appliesToEntry($item->statamic_id)) {
                             continue;
                         }
-                        $processed->push($this->populateAvailability($item, rateId: $sharedRate->id, rate: $sharedRate));
+                        if ($populated = $this->populateAvailability($item, rateId: $sharedRate->id, rate: $sharedRate)) {
+                            $processed->push($populated);
+                        }
                     }
                 }
 
@@ -361,7 +371,9 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
-        $availability->push($this->populateAvailability($results, rateId: $rate->id, rate: $rate));
+        if ($populated = $this->populateAvailability($results, rateId: $rate->id, rate: $rate)) {
+            $availability->push($populated);
+        }
 
         return new AvailabilityItemResource($availability, $request);
     }
@@ -410,7 +422,9 @@ class Availability extends Model implements AvailabilityContract
                 continue;
             }
 
-            $availability->put($rate->id, $this->populateAvailability($result, $rate->title, rateId: $rate->id, rate: $rate));
+            if ($populated = $this->populateAvailability($result, $rate->title, rateId: $rate->id, rate: $rate)) {
+                $availability->put($rate->id, $populated);
+            }
         }
 
         return new AvailabilityItemResource($availability->sortBy('price'), $request);
@@ -439,11 +453,15 @@ class Availability extends Model implements AvailabilityContract
         );
     }
 
-    protected function populateAvailability($results, $label = null, ?int $rateId = null, ?Rate $rate = null)
+    protected function populateAvailability($results, $label = null, ?int $rateId = null, ?Rate $rate = null): ?Collection
     {
         $effectiveRateId = $rateId ?? $this->rateId ?? $results->rate_id;
 
         $prices = $this->getPrices($results->prices, $results->statamic_id, $effectiveRateId, $rate);
+
+        if ($prices['reservationPrice'] === null) {
+            return null;
+        }
 
         return collect([
             'price' => $prices['reservationPrice']->format(),
@@ -472,6 +490,10 @@ class Availability extends Model implements AvailabilityContract
     public function getPriceForDates($item, $id)
     {
         $prices = $this->getPrices($item->prices, $id);
+
+        if ($prices['reservationPrice'] === null) {
+            return false;
+        }
 
         return [
             'reservation_price' => $prices['reservationPrice']->format(),
@@ -585,6 +607,10 @@ class Availability extends Model implements AvailabilityContract
 
         $prices = $availability->getPrices($dbPrices['prices'], $entry->id());
 
+        if ($prices['reservationPrice'] === null) {
+            return false;
+        }
+
         return DynamicPricing::searchForAvailability(
             $entry->id(),
             $prices['originalPrice'] ?? $prices['reservationPrice'],
@@ -617,7 +643,7 @@ class Availability extends Model implements AvailabilityContract
                 return $query->where('rate_id', $resolvedRateId);
             })
             ->orderBy('price')
-            ->get(['date', 'available', 'price', 'rate_id']);
+            ->get(['statamic_id', 'date', 'available', 'price', 'rate_id']);
 
         if ($rate && $resolvedRateId) {
             $rewriteRateId = $resolvedRateId !== $rate->id;
@@ -633,6 +659,16 @@ class Availability extends Model implements AvailabilityContract
 
                     return $item;
                 });
+            }
+
+            if ($rate->hasIndependentSharedPricing()) {
+                $overrides = $this->loadRateOverrides($rate, $id, now()->startOfDay()->toDateString());
+                $results = $this->applySharedIndependentOverrides(
+                    $results,
+                    $rate,
+                    $overrides,
+                    fn ($item) => Carbon::parse($item->date)->toDateString(),
+                );
             }
 
             $results = $results->filter(
@@ -695,7 +731,7 @@ class Availability extends Model implements AvailabilityContract
             ->when($resolvedRateId, fn ($query) => $query->where('rate_id', $resolvedRateId))
             ->orderBy('date')
             ->orderBy('price')
-            ->get(['date', 'available', 'price', 'rate_id']);
+            ->get(['statamic_id', 'date', 'available', 'price', 'rate_id']);
 
         if ($rateId && ! $showAllRates) {
             $rate = $rateCheck;
@@ -728,6 +764,16 @@ class Availability extends Model implements AvailabilityContract
 
                     return $item;
                 });
+            }
+
+            if ($rate?->hasIndependentSharedPricing()) {
+                $overrides = $this->loadRateOverrides($rate, $id, $dateStart);
+                $results = $this->applySharedIndependentOverrides(
+                    $results,
+                    $rate,
+                    $overrides,
+                    fn ($item) => Carbon::parse($item->date)->toDateString(),
+                );
             }
         }
 
@@ -785,6 +831,14 @@ class Availability extends Model implements AvailabilityContract
 
         $exhaustedByRate = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRates($rates, $quantity);
 
+        $statamicIds = $baseResults->pluck('statamic_id')->unique()->values()->all();
+
+        $dates = $baseResults->pluck('date')->map(fn ($d) => Carbon::parse($d)->toDateString());
+        $rangeStart = $dates->min();
+        $rangeEnd = $dates->max();
+
+        $overridesByRate = $this->loadRateOverridesForRates($rates, $statamicIds, $rangeStart, $rangeEnd);
+
         foreach ($rates as $rate) {
             if ($dateStart && $rate->date_end && Carbon::parse($dateStart)->gt($rate->date_end)) {
                 continue;
@@ -799,6 +853,8 @@ class Availability extends Model implements AvailabilityContract
                 continue;
             }
 
+            $overrides = $overridesByRate->get($rate->id, collect());
+
             $rateRows = $sourceRows->map(function ($row) use ($rate) {
                 $clone = clone $row;
                 $clone->rate_id = $rate->id;
@@ -808,6 +864,13 @@ class Availability extends Model implements AvailabilityContract
 
                 return $clone;
             });
+
+            $rateRows = $this->applySharedIndependentOverrides(
+                $rateRows,
+                $rate,
+                $overrides,
+                fn ($row) => $row->statamic_id.'|'.Carbon::parse($row->date)->toDateString(),
+            );
 
             $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date) && $rate->meetsBookingLeadTime($row->date));
 
@@ -820,5 +883,60 @@ class Availability extends Model implements AvailabilityContract
         }
 
         return $expanded;
+    }
+
+    protected function loadRateOverrides(Rate $rate, string $statamicId, ?string $dateStart = null, ?string $dateEnd = null): Collection
+    {
+        return RatePrice::where('rate_id', $rate->id)
+            ->where('statamic_id', $statamicId)
+            ->when($dateStart, fn ($q) => $q->where('date', '>=', $dateStart))
+            ->when($dateEnd, fn ($q) => $q->where('date', '<=', $dateEnd))
+            ->get()
+            ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString());
+    }
+
+    protected function loadRateOverridesForRates(Collection $rates, array $statamicIds, ?string $dateStart = null, ?string $dateEnd = null): Collection
+    {
+        $sharedIndependentIds = $rates
+            ->filter(fn ($rate) => $rate->hasIndependentSharedPricing())
+            ->pluck('id')
+            ->unique()
+            ->values();
+
+        if ($sharedIndependentIds->isEmpty() || empty($statamicIds)) {
+            return collect();
+        }
+
+        return RatePrice::whereIn('rate_id', $sharedIndependentIds->all())
+            ->whereIn('statamic_id', $statamicIds)
+            ->when($dateStart, fn ($q) => $q->where('date', '>=', $dateStart))
+            ->when($dateEnd, fn ($q) => $q->where('date', '<=', $dateEnd))
+            ->get()
+            ->groupBy('rate_id')
+            ->map(function ($rows) {
+                return $rows->keyBy(fn ($row) => $row->statamic_id.'|'.Carbon::parse($row->getRawOriginal('date'))->toDateString());
+            });
+    }
+
+    protected function applySharedIndependentOverrides(Collection $results, Rate $rate, Collection $overrides, callable $keyFn): Collection
+    {
+        if (! $rate->hasIndependentSharedPricing()) {
+            return $results;
+        }
+
+        $results = $results->map(function ($item) use ($overrides, $keyFn) {
+            $key = $keyFn($item);
+            if ($overrides->has($key)) {
+                $item->price = Price::create($overrides->get($key)->getRawOriginal('price'));
+            }
+
+            return $item;
+        });
+
+        if ($rate->require_price_override) {
+            $results = $results->filter(fn ($item) => $overrides->has($keyFn($item)));
+        }
+
+        return $results;
     }
 }

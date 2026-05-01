@@ -38,6 +38,8 @@ class TestCase extends OrchestraTestCase
     {
         parent::setUp();
 
+        $this->resetPostgresSequences();
+
         $this->withoutVite();
         $this->preventSavingStacheItemsToDisk();
         $this->withoutExceptionHandling();
@@ -296,5 +298,25 @@ class TestCase extends OrchestraTestCase
         }
 
         $this->assertTrue($query->exists(), "Failed asserting that table [{$table}] has matching record with {$jsonColumn} = {$jsonString}");
+    }
+
+    /**
+     * Reset PostgreSQL sequences to 1 at the start of each test.
+     *
+     * RefreshDatabase rolls back data via transactions, but PG sequences
+     * are non-transactional and keep advancing across tests. Resetting them
+     * makes ID assignment deterministic and matches SQLite/MySQL behavior.
+     */
+    protected function resetPostgresSequences(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        $sequences = DB::select("SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = 'public'");
+
+        foreach ($sequences as $sequence) {
+            DB::statement("ALTER SEQUENCE \"{$sequence->sequence_name}\" RESTART WITH 1");
+        }
     }
 }

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\RatePrice;
 use Reach\StatamicResrv\Repositories\AvailabilityRepository;
 
 class ProcessDataImport implements ShouldQueue
@@ -41,10 +42,16 @@ class ProcessDataImport implements ShouldQueue
                 $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
                 $rateId = $data['rate_id'] ?? null;
                 $isSharedRate = false;
+                $sharedIndependentRateId = null;
 
                 if ($rateId) {
-                    $resolvedId = app(AvailabilityRepository::class)->resolveBaseRateId($rateId);
-                    $isSharedRate = $resolvedId !== (int) $rateId;
+                    $originalRateId = (int) $rateId;
+                    $rate = Rate::withoutGlobalScopes()->find($originalRateId);
+                    $resolvedId = app(AvailabilityRepository::class)->resolveBaseRateId($originalRateId);
+                    $isSharedRate = $resolvedId !== $originalRateId;
+                    if ($rate?->hasIndependentSharedPricing()) {
+                        $sharedIndependentRateId = $originalRateId;
+                    }
                     $rateId = $resolvedId;
                 }
 
@@ -87,6 +94,7 @@ class ProcessDataImport implements ShouldQueue
                         ->all();
 
                     $dataToAdd = [];
+                    $priceOverrides = [];
                     foreach ($period as $day) {
                         $dateStr = $day->isoFormat('YYYY-MM-DD');
                         if (in_array($dateStr, $existingDates)) {
@@ -97,11 +105,23 @@ class ProcessDataImport implements ShouldQueue
                                 'available' => $data['available'],
                                 'rate_id' => $rateId,
                             ];
+                            if ($sharedIndependentRateId !== null) {
+                                $priceOverrides[] = [
+                                    'rate_id' => $sharedIndependentRateId,
+                                    'statamic_id' => $id,
+                                    'date' => $dateStr,
+                                    'price' => $data['price'],
+                                ];
+                            }
                         }
                     }
 
                     if (! empty($dataToAdd)) {
                         Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], ['available']);
+                    }
+
+                    if (! empty($priceOverrides)) {
+                        RatePrice::upsert($priceOverrides, ['rate_id', 'statamic_id', 'date'], ['price']);
                     }
                 } else {
                     $dataToAdd = [];

@@ -127,6 +127,7 @@ class RateCpController extends Controller
         DB::transaction(function () use ($rate) {
             $rate->availabilities()->delete();
             $rate->fixedPricing()->delete();
+            $rate->ratePrices()->delete();
             $rate->delete();
         });
 
@@ -177,7 +178,15 @@ class RateCpController extends Controller
                 })->ignore($ignoreId),
             ],
             'description' => ['nullable', 'string'],
-            'pricing_type' => ['required', Rule::in(['independent', 'relative'])],
+            'pricing_type' => [
+                'required',
+                Rule::in(['independent', 'relative']),
+                function ($attribute, $value, $fail) use ($rate) {
+                    if ($rate && $rate->pricing_type !== $value) {
+                        $fail('Pricing type cannot be changed after the rate is created. Delete and recreate the rate instead.');
+                    }
+                },
+            ],
             'base_rate_id' => [
                 'nullable',
                 Rule::requiredIf(fn () => $request->input('pricing_type') === 'relative' || $request->input('availability_type') === 'shared'),
@@ -213,12 +222,13 @@ class RateCpController extends Controller
             'availability_type' => [
                 'required',
                 Rule::in(['independent', 'shared']),
-                function ($attribute, $value, $fail) use ($request) {
-                    if ($value === 'shared' && $request->input('pricing_type') === 'independent') {
-                        $fail('Shared availability requires relative pricing. Independent pricing with shared availability is not supported.');
+                function ($attribute, $value, $fail) use ($rate) {
+                    if ($rate && $rate->availability_type !== $value) {
+                        $fail('Availability type cannot be changed after the rate is created. Delete and recreate the rate instead.');
                     }
                 },
             ],
+            'require_price_override' => ['nullable', 'boolean'],
             'max_available' => ['nullable', 'integer', 'min:1'],
             'date_start' => ['nullable', 'date'],
             'date_end' => ['nullable', 'date'],
