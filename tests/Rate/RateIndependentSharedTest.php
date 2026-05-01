@@ -389,4 +389,139 @@ class RateIndependentSharedTest extends TestCase
         $this->assertArrayHasKey($startKey, $calendar);
         $this->assertStringContainsString('30', (string) $calendar[$startKey]['price']);
     }
+
+    public function test_cp_update_does_not_create_override_when_base_availability_is_missing()
+    {
+        $setup = $this->createIndependentSharedSetup();
+
+        $datelessDay = $setup['startDate']->copy()->addDays(30)->toDateString();
+
+        $payload = [
+            'statamic_id' => $setup['entry']->id(),
+            'date_start' => $datelessDay,
+            'date_end' => $datelessDay,
+            'price' => '60.00',
+            'available' => 5,
+            'rate_ids' => [$setup['childRate']->id],
+        ];
+
+        $this->postJson(cp_route('resrv.availability.update'), $payload)
+            ->assertStatus(200);
+
+        $this->assertDatabaseMissing('resrv_rate_prices', [
+            'rate_id' => $setup['childRate']->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $datelessDay,
+        ]);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'rate_id' => $setup['baseRate']->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $datelessDay,
+        ]);
+    }
+
+    public function test_cp_delete_removes_sibling_overrides_when_base_availability_is_removed()
+    {
+        $setup = $this->createIndependentSharedSetup();
+
+        $secondChild = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'senior-rate',
+            'title' => 'Senior',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $setup['baseRate']->id,
+        ]);
+
+        $date = $setup['startDate']->toDateString();
+
+        RatePrice::create([
+            'rate_id' => $setup['childRate']->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $date,
+            'price' => 50,
+        ]);
+
+        RatePrice::create([
+            'rate_id' => $secondChild->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $date,
+            'price' => 70,
+        ]);
+
+        $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $setup['entry']->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'rate_ids' => [$setup['baseRate']->id],
+        ])->assertStatus(200);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'rate_id' => $setup['baseRate']->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $date,
+        ]);
+
+        $this->assertDatabaseMissing('resrv_rate_prices', [
+            'rate_id' => $setup['childRate']->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $date,
+        ]);
+
+        $this->assertDatabaseMissing('resrv_rate_prices', [
+            'rate_id' => $secondChild->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $date,
+        ]);
+    }
+
+    public function test_cp_delete_via_child_rate_removes_sibling_overrides_too()
+    {
+        $setup = $this->createIndependentSharedSetup();
+
+        $secondChild = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'senior-rate',
+            'title' => 'Senior',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $setup['baseRate']->id,
+        ]);
+
+        $date = $setup['startDate']->toDateString();
+
+        RatePrice::create([
+            'rate_id' => $setup['childRate']->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $date,
+            'price' => 50,
+        ]);
+
+        RatePrice::create([
+            'rate_id' => $secondChild->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $date,
+            'price' => 70,
+        ]);
+
+        $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $setup['entry']->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'rate_ids' => [$setup['childRate']->id],
+        ])->assertStatus(200);
+
+        $this->assertDatabaseMissing('resrv_rate_prices', [
+            'rate_id' => $setup['childRate']->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $date,
+        ]);
+
+        $this->assertDatabaseMissing('resrv_rate_prices', [
+            'rate_id' => $secondChild->id,
+            'statamic_id' => $setup['entry']->id(),
+            'date' => $date,
+        ]);
+    }
 }

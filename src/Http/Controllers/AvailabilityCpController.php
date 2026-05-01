@@ -93,17 +93,22 @@ class AvailabilityCpController extends Controller
             ? array_map(fn ($id) => (int) $id, $data['rate_ids'])
             : $this->defaultRateIds($data['statamic_id']);
 
-        $sharedIndependentRateIds = Rate::withoutGlobalScopes()
-            ->whereIn('id', $requestedRateIds)
-            ->get()
-            ->filter(fn ($rate) => $rate->hasIndependentSharedPricing())
-            ->pluck('id')
-            ->all();
-
         $rateIds = array_unique(array_map(
             fn ($id) => AvailabilityRepository::resolveBaseRateId($id),
             $requestedRateIds
         ));
+
+        // Override prices for shared+independent rates are tied to the base
+        // row's date. When that base row is removed, every sibling shared+indep
+        // rate hanging off the same base must lose its override too — otherwise
+        // recreating the base row later silently revives the stale child
+        // prices. Always sweep by base_rate_id, not by the requested ids.
+        $sharedIndependentRateIds = Rate::withoutGlobalScopes()
+            ->where('availability_type', 'shared')
+            ->where('pricing_type', 'independent')
+            ->whereIn('base_rate_id', $rateIds)
+            ->pluck('id')
+            ->all();
 
         DB::transaction(function () use ($data, $rateIds, $sharedIndependentRateIds) {
             Availability::where('date', '>=', $data['date_start'])
@@ -152,17 +157,30 @@ class AvailabilityCpController extends Controller
 
                 $date = $day->isoFormat('YYYY-MM-DD');
 
-                // Shared+independent rates store per-(rate, entry, date) prices in
-                // resrv_rate_prices. Availability counts continue to live on the
-                // base rate's row.
-                if ($isSharedIndependent && ! is_null($data['price'])) {
-                    RatePrice::updateOrCreate([
-                        'rate_id' => $rateId,
+                if ($isSharedIndependent) {
+                    // Without a base row there is no inventory for this date —
+                    // writing a price override would be orphaned and the date
+                    // would still show as unavailable. Skip silently; the admin
+                    // must seed base availability via the base rate first.
+                    $baseRowExists = Availability::where([
                         'statamic_id' => $data['statamic_id'],
                         'date' => $date,
-                    ], [
-                        'price' => $data['price'],
-                    ]);
+                        'rate_id' => $resolvedRateId,
+                    ])->exists();
+
+                    if (! $baseRowExists) {
+                        continue;
+                    }
+
+                    if (! is_null($data['price'])) {
+                        RatePrice::updateOrCreate([
+                            'rate_id' => $rateId,
+                            'statamic_id' => $data['statamic_id'],
+                            'date' => $date,
+                        ], [
+                            'price' => $data['price'],
+                        ]);
+                    }
                 }
 
                 $toUpdate = [];
@@ -180,9 +198,6 @@ class AvailabilityCpController extends Controller
                 }
 
                 if ($isSharedIndependent) {
-                    // Base availability is owned by the base rate. Never insert a
-                    // base row from a child-rate edit — the price column is NOT
-                    // NULL and the child's price lives in resrv_rate_prices.
                     Availability::where([
                         'statamic_id' => $data['statamic_id'],
                         'date' => $date,
