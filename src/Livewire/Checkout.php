@@ -8,16 +8,21 @@ use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
+use Reach\StatamicResrv\Exceptions\ReservationDriftException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Exceptions\ReservationExpiredException;
+use Reach\StatamicResrv\Exceptions\ReservationTerminatedException;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
 {
@@ -64,7 +69,14 @@ class Checkout extends Component
     {
         try {
             $this->reservation();
+        } catch (ReservationTerminatedException $e) {
+            // CONFIRMED / PARTNER / REFUNDED → the user already completed the flow (or is
+            // returning via back button after a successful checkout). Redirect to the
+            // checkout-completed entry rather than showing a terminal error page.
+            return $this->redirectToCheckoutComplete(session('resrv_reservation'));
         } catch (ReservationException $e) {
+            // ReservationExpiredException + any other ReservationException land here —
+            // full-page terminal error view.
             $this->reservationError = $e->getMessage();
         }
 
@@ -85,13 +97,29 @@ class Checkout extends Component
         $this->coupon = session('resrv_coupon') ?? null;
     }
 
-    #[Computed(persist: true)]
+    /**
+     * Redirect to the configured checkout-completed entry. Used when the user lands on the
+     * checkout with a reservation that is already in a terminal-confirmed state.
+     */
+    protected function redirectToCheckoutComplete(?int $reservationId = null)
+    {
+        $id = $reservationId ?? (isset($this->reservation) ? $this->reservation->id : null);
+        $url = $this->getCheckoutCompleteEntry()->absoluteUrl();
+
+        if ($id) {
+            $url .= '?payment_pending='.$id;
+        }
+
+        return redirect()->to($url);
+    }
+
+    #[Computed]
     public function reservation()
     {
         return $this->getReservation();
     }
 
-    #[Computed(persist: true)]
+    #[Computed]
     public function entry()
     {
         return $this->getEntry($this->reservation->item_id);
@@ -125,21 +153,34 @@ class Checkout extends Component
         }
     }
 
-    public function handleFirstStep(): void
+    public function handleFirstStep()
     {
         // Validate data
         $this->validate();
 
-        // Confirm that the reservation data is valid by cross-checking with the database
+        // Confirm that the reservation data is valid by cross-checking with the database.
+        // Terminal checks run BEFORE drift checks — otherwise an expired reservation whose
+        // stale data also drifted would get demoted to a recoverable banner because the
+        // drift exception would be thrown first.
         try {
-            $this->confirmReservationIsValid();
             $this->confirmReservationHasNotExpired();
+            $this->confirmReservationIsValid();
+        } catch (ReservationExpiredException $e) {
+            $this->reservationError = $e->getMessage();
+
+            return;
+        } catch (ReservationTerminatedException $e) {
+            return $this->redirectToCheckoutComplete();
         } catch (OptionsException $e) {
             $this->addError('options', $e->getMessage());
 
             return;
         } catch (ExtrasException $e) {
             $this->addError('extras', $e->getMessage());
+
+            return;
+        } catch (ReservationDriftException $e) {
+            $this->addError('reservation', $e->getMessage());
 
             return;
         } catch (ReservationException $e) {
@@ -175,14 +216,23 @@ class Checkout extends Component
     {
         $this->resetErrorBag('reservation');
 
-        // If the payment amount is zero, just show the confirmation page
-        if ($this->reservationPaymentIsZero()) {
-            return $this->handleReservationWithZeroPayment();
-        }
-
-        // Make sure the reservation is not expired
+        // Make sure the reservation is not expired — wrap every subsequent $this->reservation
+        // access too, because the getReservation() time-check inside the computed can itself
+        // throw ReservationExpiredException (the reservation may have aged past
+        // minutes_to_hold between mount and this submit).
         try {
             $this->confirmReservationHasNotExpired();
+
+            // If the payment amount is zero, just show the confirmation page
+            if ($this->reservationPaymentIsZero()) {
+                return $this->handleReservationWithZeroPayment();
+            }
+        } catch (ReservationExpiredException $e) {
+            $this->reservationError = $e->getMessage();
+
+            return;
+        } catch (ReservationTerminatedException $e) {
+            return $this->redirectToCheckoutComplete();
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
 
@@ -259,7 +309,7 @@ class Checkout extends Component
         }
 
         // A prior gateway selection at this step may have created an intent we're now abandoning.
-        $this->cancelActiveIntent();
+        $this->cancelActiveIntent($reservation);
 
         $this->selectedGateway = $gateway;
 
@@ -268,11 +318,20 @@ class Checkout extends Component
 
     public function resetPaymentState(): void
     {
-        $this->cancelActiveIntent();
+        $reservation = $this->reservation->fresh();
 
-        // Guard on persisted state only — selectedGateway resets on page refresh but payment_surcharge persists in DB
-        if (! $this->reservation->payment_surcharge->isZero()) {
-            $this->reservation->fresh()->update(['payment_surcharge' => 0]);
+        // MUST NOT wipe payment_id/gateway or cancel the intent for non-PENDING reservations —
+        // StripePaymentGateway::refund() needs payment_id to call Stripe, and cancelling a
+        // live intent for a confirmed reservation would unwind a completed booking.
+        if ($reservation->status !== ReservationStatus::PENDING->value) {
+            return;
+        }
+
+        $this->cancelActiveIntent($reservation);
+
+        // selectedGateway resets on page refresh but payment_surcharge persists in DB
+        if (! $reservation->payment_surcharge->isZero()) {
+            $reservation->update(['payment_surcharge' => 0]);
             unset($this->reservation);
         }
 
@@ -282,9 +341,16 @@ class Checkout extends Component
         $this->paymentView = '';
     }
 
-    protected function cancelActiveIntent(): void
+    /**
+     * Callers must pass a fresh reservation instance (e.g. via `$this->reservation->fresh()`)
+     * so status and payment-field checks reflect committed DB state.
+     */
+    protected function cancelActiveIntent(Reservation $reservation): void
     {
-        $reservation = $this->reservation->fresh();
+        // Belt-and-braces for future callers that skip the guard in resetPaymentState.
+        if ($reservation->status !== ReservationStatus::PENDING->value) {
+            return;
+        }
 
         if ($reservation->payment_id === '' || empty($reservation->payment_gateway)) {
             return;
@@ -299,9 +365,12 @@ class Checkout extends Component
         $oldPaymentId = $reservation->payment_id;
         $gateway = $manager->gateway($reservation->payment_gateway);
 
-        // Clear payment_id before calling the gateway so a cancellation webhook from the old intent
-        // can't look up the reservation and fire ReservationCancelled against it.
-        $reservation->update(['payment_id' => '']);
+        // Clear payment_id AND payment_gateway together before calling the gateway so a
+        // cancellation webhook from the old intent can't look up the reservation and fire
+        // ReservationCancelled against it. payment_id and payment_gateway must be paired —
+        // a lingering payment_gateway without a payment_id leaves state inconsistent and
+        // can misroute future operations through forReservation().
+        $reservation->update(['payment_id' => '', 'payment_gateway' => '']);
         unset($this->reservation);
 
         try {
@@ -377,6 +446,12 @@ class Checkout extends Component
         // Make sure the reservation is not expired
         try {
             $this->confirmReservationHasNotExpired();
+        } catch (ReservationExpiredException $e) {
+            $this->reservationError = $e->getMessage();
+
+            return;
+        } catch (ReservationTerminatedException $e) {
+            return $this->redirectToCheckoutComplete();
         } catch (ReservationException $e) {
             $this->addError('reservation', $e->getMessage());
 
@@ -393,11 +468,13 @@ class Checkout extends Component
             return;
         }
 
-        // Update the reservation status
-        $reservation->update(['status' => 'partner']);
-        ReservationConfirmed::dispatch($reservation);
+        // Transition to PARTNER (terminal-equivalent for affiliate bookings) and dispatch the
+        // confirmed event for side effects (emails) only if the transition actually happened.
+        if ($reservation->transitionTo(ReservationStatus::PARTNER)) {
+            ReservationConfirmed::dispatch($reservation);
+        }
 
-        return redirect()->to($this->getCheckoutCompleteEntry()->absoluteUrl().'?payment_pending='.$reservation->id);
+        return $this->redirectToCheckoutComplete($reservation->id);
     }
 
     protected function handleReservationWithZeroPayment()
@@ -409,10 +486,11 @@ class Checkout extends Component
             return;
         }
 
-        // Update the reservation status
-        ReservationConfirmed::dispatch($this->reservation);
+        if ($this->reservation->transitionTo(ReservationStatus::CONFIRMED)) {
+            ReservationConfirmed::dispatch($this->reservation);
+        }
 
-        return redirect()->to($this->getCheckoutCompleteEntry()->absoluteUrl().'?payment_pending='.$this->reservation->id);
+        return $this->redirectToCheckoutComplete($this->reservation->id);
     }
 
     protected function confirmReservationIsValid(): void
@@ -436,8 +514,8 @@ class Checkout extends Component
     protected function confirmReservationHasNotExpired(): void
     {
         $expireAt = Carbon::parse($this->reservation->created_at)->add(config('resrv-config.minutes_to_hold'), 'minute');
-        if ($expireAt < Carbon::now() || $this->reservation->fresh()->status === 'expired') {
-            throw new ReservationException('This reservation has expired. Please start over.');
+        if ($expireAt < Carbon::now() || $this->reservation->fresh()->status === ReservationStatus::EXPIRED->value) {
+            throw new ReservationExpiredException('This reservation has expired. Please start over.');
         }
     }
 

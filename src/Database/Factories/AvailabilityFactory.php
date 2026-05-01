@@ -24,18 +24,8 @@ class AvailabilityFactory extends Factory
             'date' => today(),
             'available' => 2,
             'price' => '150',
-            'property' => 'none',
             'pending' => [],
         ];
-    }
-
-    public function advanced()
-    {
-        return $this->state(function (array $attributes) {
-            return [
-                'property' => 'something',
-            ];
-        });
     }
 
     public function withPendingArray()

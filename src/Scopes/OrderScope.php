@@ -15,6 +15,6 @@ class OrderScope implements Scope
      */
     public function apply(Builder $builder, Model $model)
     {
-        $builder->orderBy('order');
+        $builder->orderBy('order')->orderBy($model->getQualifiedKeyName());
     }
 }

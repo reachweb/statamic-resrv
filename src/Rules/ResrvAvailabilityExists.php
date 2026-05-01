@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Rules;
 use Closure;
 use Illuminate\Contracts\Validation\DataAwareRule;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Translation\PotentiallyTranslatedString;
 use Reach\StatamicResrv\Facades\Availability;
 
 class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
@@ -14,20 +15,20 @@ class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
     /**
      * Run the validation rule.
      *
-     * @param  \Closure(string): \Illuminate\Translation\PotentiallyTranslatedString  $fail
+     * @param  Closure(string): PotentiallyTranslatedString  $fail
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         $otherAttribute = $attribute === 'price' ? 'available' : 'price';
 
         if (! is_null($value) && is_null($this->data[$otherAttribute])) {
-            if (array_key_exists('advanced', $this->data)) {
-                foreach ($this->data['advanced'] as $property) {
+            if (array_key_exists('rate_ids', $this->data)) {
+                foreach ($this->data['rate_ids'] as $rateId) {
                     if (! Availability::itemsExistAndHavePrices(
                         $this->data['date_start'],
                         $this->data['date_end'],
                         $this->data['statamic_id'],
-                        [$property['code']]
+                        (int) $rateId
                     )) {
                         $fail(__('The availability does not exist or does not have prices for the selected date range.'));
                     }
@@ -37,7 +38,6 @@ class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
                     $this->data['date_start'],
                     $this->data['date_end'],
                     $this->data['statamic_id'],
-                    ['none']
                 )) {
                     $fail(__('The availability does not exist or does not have prices for the selected date range.'));
                 }

@@ -23,7 +23,7 @@ class Resrv extends Tags
     public function reservationFromUri()
     {
         $validator = Validator::make(request()->all(), [
-            'ref' => 'required|string|max:10',
+            'ref' => 'required|string|max:255',
             'hash' => 'required|string|size:64',
         ]);
 
@@ -32,8 +32,12 @@ class Resrv extends Tags
         }
 
         $reservation = Reservation::where('reference', request()->get('ref'))
-            ->where('status', ReservationStatus::CONFIRMED)
+            ->where('status', ReservationStatus::CONFIRMED->value)
             ->firstOrFail();
+
+        if (! $reservation->customer) {
+            abort(404);
+        }
 
         $expectedHash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));
 

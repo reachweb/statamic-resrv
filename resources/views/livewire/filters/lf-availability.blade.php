@@ -3,6 +3,6 @@
         :$live
         :$calendar 
         :$enableQuantity
-        :advanced="$this->enableAdvanced"
+        :rates="$this->enableRates"
     />
 </div>

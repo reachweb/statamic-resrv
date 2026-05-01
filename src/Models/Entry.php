@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Traits\HandlesCutoffRules;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry as StatamicEntry;
 use Statamic\Facades\Blueprint;
+use Statamic\Fields\Field;
 
 class Entry extends Model
 {
@@ -70,7 +71,7 @@ class Entry extends Model
             ],
             [
                 'title' => $entry->get('title'),
-                'enabled' => $entry->get($field->handle()) === 'disabled' ? false : true,
+                'enabled' => $entry->get($field->handle()) !== 'disabled',
                 'collection' => $entry->collection()->handle(),
                 'handle' => $entry->blueprint()->handle(),
             ]
@@ -88,12 +89,17 @@ class Entry extends Model
         return $this->hasMany(Availability::class, 'statamic_id', 'item_id');
     }
 
+    public function rates(): Builder
+    {
+        return Rate::forEntry($this->item_id);
+    }
+
     public function getStatamicEntry(): StatamicEntry
     {
         return StatamicEntry::find($this->item_id);
     }
 
-    public function getAvailabilityField(): ?\Statamic\Fields\Field
+    public function getAvailabilityField(): ?Field
     {
         return AvailabilityField::getField($this->getBlueprint());
     }

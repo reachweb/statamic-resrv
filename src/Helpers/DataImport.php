@@ -69,8 +69,8 @@ class DataImport
                         $arrayToPush['date_end'] = $dates['date_end'];
                         $arrayToPush['available'] = $row[array_keys($row)[$index + 1]];
                         $arrayToPush['price'] = $value;
-                        if (array_key_exists('advanced', $row)) {
-                            $arrayToPush['advanced'] = $row['advanced'];
+                        if (array_key_exists('rate_id', $row)) {
+                            $arrayToPush['rate_id'] = $row['rate_id'];
                         }
                         $data->push($arrayToPush);
                     }

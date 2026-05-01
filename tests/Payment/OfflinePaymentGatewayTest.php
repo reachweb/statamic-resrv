@@ -321,8 +321,38 @@ class OfflinePaymentGatewayTest extends TestCase
         Event::assertDispatched(ReservationConfirmed::class);
     }
 
-    public function test_confirm_payment_rejects_expired_reservation()
+    public function test_confirm_payment_rejects_reservation_with_expired_status_flag()
     {
+        // Isolate the status-flag guard: reservation is within the hold window but status=expired.
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => [
+                'class' => OfflinePaymentGateway::class,
+                'label' => 'Bank Transfer',
+            ],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $this->reservation->update([
+            'created_at' => now(),
+            'status' => 'expired',
+            'payment_gateway' => 'offline',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(CheckoutPayment::class, [
+            'clientSecret' => 'offline_test',
+            'publicKey' => '',
+            'amount' => 100.00,
+            'paymentView' => 'statamic-resrv::livewire.checkout-payment-offline',
+        ])
+            ->call('confirmPayment')
+            ->assertHasErrors('reservation');
+    }
+
+    public function test_confirm_payment_rejects_reservation_past_minutes_to_hold()
+    {
+        // Isolate the time-based guard: status=pending but created_at past minutes_to_hold.
         Config::set('resrv-config.payment_gateways', [
             'offline' => [
                 'class' => OfflinePaymentGateway::class,
@@ -333,7 +363,7 @@ class OfflinePaymentGatewayTest extends TestCase
 
         $this->reservation->update([
             'created_at' => now()->subHours(2),
-            'status' => 'expired',
+            'status' => 'pending',
             'payment_gateway' => 'offline',
         ]);
 

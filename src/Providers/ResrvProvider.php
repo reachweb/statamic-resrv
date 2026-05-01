@@ -5,7 +5,11 @@ namespace Reach\StatamicResrv\Providers;
 use Edalzell\Forma\ConfigController;
 use Edalzell\Forma\Forma;
 use Illuminate\Console\Application as Artisan;
-use Reach\StatamicResrv\Events\AvailabilityChanged;
+use Reach\StatamicResrv\Console\Commands\ImportEntries;
+use Reach\StatamicResrv\Console\Commands\InstallResrv;
+use Reach\StatamicResrv\Console\Commands\SendAbandonedReservationEmails;
+use Reach\StatamicResrv\Console\Commands\UpgradeToRates;
+use Reach\StatamicResrv\Dictionaries\CountryPhoneCodes;
 use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCancelled;
@@ -13,12 +17,18 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
+use Reach\StatamicResrv\Fieldtypes\ResrvAvailability;
+use Reach\StatamicResrv\Fieldtypes\ResrvCutoff;
+use Reach\StatamicResrv\Fieldtypes\ResrvExtras;
+use Reach\StatamicResrv\Fieldtypes\ResrvFixedPricing;
+use Reach\StatamicResrv\Fieldtypes\ResrvOptions;
 use Reach\StatamicResrv\Filters\ReservationEntry;
 use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
@@ -26,9 +36,7 @@ use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\AddResrvEntryToDatabase;
 use Reach\StatamicResrv\Listeners\AssociateAffiliateFromCoupon;
-use Reach\StatamicResrv\Listeners\CancelReservation;
 use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
-use Reach\StatamicResrv\Listeners\ConfirmReservation;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
@@ -36,13 +44,18 @@ use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
-use Reach\StatamicResrv\Listeners\UpdateConnectedAvailabilities;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
+use Reach\StatamicResrv\Tags\Resrv;
+use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
+use Statamic\Events\BlueprintSaved;
+use Statamic\Events\EntrySaved;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
+use Statamic\Tags\Collection\Collection;
 
 class ResrvProvider extends AddonServiceProvider
 {
@@ -60,26 +73,27 @@ class ResrvProvider extends AddonServiceProvider
     ];
 
     protected $commands = [
-        \Reach\StatamicResrv\Console\Commands\InstallResrv::class,
-        \Reach\StatamicResrv\Console\Commands\ImportEntries::class,
-        \Reach\StatamicResrv\Console\Commands\SendAbandonedReservationEmails::class,
+        InstallResrv::class,
+        ImportEntries::class,
+        UpgradeToRates::class,
+        SendAbandonedReservationEmails::class,
     ];
 
     protected $dictionaries = [
-        \Reach\StatamicResrv\Dictionaries\CountryPhoneCodes::class,
+        CountryPhoneCodes::class,
     ];
 
     protected $fieldtypes = [
-        \Reach\StatamicResrv\Fieldtypes\ResrvAvailability::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvOptions::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvExtras::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvFixedPricing::class,
-        \Reach\StatamicResrv\Fieldtypes\ResrvCutoff::class,
+        ResrvAvailability::class,
+        ResrvOptions::class,
+        ResrvExtras::class,
+        ResrvFixedPricing::class,
+        ResrvCutoff::class,
     ];
 
     protected $tags = [
-        \Reach\StatamicResrv\Tags\Resrv::class,
-        \Reach\StatamicResrv\Tags\ResrvCheckoutRedirect::class,
+        Resrv::class,
+        ResrvCheckoutRedirect::class,
     ];
 
     protected $scopes = [
@@ -102,11 +116,9 @@ class ResrvProvider extends AddonServiceProvider
             IncreaseAvailability::class,
         ],
         ReservationConfirmed::class => [
-            ConfirmReservation::class,
             SendNewReservationEmails::class,
         ],
         ReservationCancelled::class => [
-            CancelReservation::class,
             IncreaseAvailability::class,
         ],
         ReservationRefunded::class => [
@@ -120,17 +132,14 @@ class ResrvProvider extends AddonServiceProvider
         AvailabilitySearch::class => [
             SaveSearchToSession::class,
         ],
-        AvailabilityChanged::class => [
-            UpdateConnectedAvailabilities::class,
-        ],
-        \Statamic\Events\EntrySaved::class => [
+        EntrySaved::class => [
             AddResrvEntryToDatabase::class,
         ],
         \Statamic\Events\EntryDeleted::class => [
             EntryDeleted::class,
             SoftDeleteResrvEntryFromDatabase::class,
         ],
-        \Statamic\Events\BlueprintSaved::class => [
+        BlueprintSaved::class => [
             ClearAvailabilityFieldCache::class,
         ],
     ];
@@ -191,11 +200,12 @@ class ResrvProvider extends AddonServiceProvider
 
         $this->mergeConfigFrom(__DIR__.'/../../config/config.php', 'resrv-config');
 
-        $this->app->bind(PaymentInterface::class, config('resrv-config.payment_gateway'));
-
-        if (app()->environment() == 'testing') {
-            $this->app->bind(PaymentInterface::class, \Reach\StatamicResrv\Http\Payment\FakePaymentGateway::class);
-        }
+        $this->app->bind(
+            PaymentInterface::class,
+            app()->environment('testing')
+                ? FakePaymentGateway::class
+                : config('resrv-config.payment_gateway')
+        );
 
         $this->createNavigation();
 
@@ -204,6 +214,8 @@ class ResrvProvider extends AddonServiceProvider
         $this->bootPermissions();
 
         $this->bootHooks();
+
+        $this->app->terminating(fn () => Rate::resetEntryCollectionCache());
 
         // Register commands if running in console
         Artisan::starting(function ($artisan) {
@@ -239,6 +251,12 @@ class ResrvProvider extends AddonServiceProvider
                     ->route('resrv.affiliates.index')
                     ->icon('<svg xmlns="http://www.w3.org/2000/svg" class="text-grey-80 group-hover:text-blue" viewBox="-0.75 -0.75 36 36" height="24" width="24"><defs></defs><path d="m24.4375 10.091249999999999 4.4677500000000006 -4.436125" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M28.03125 3.59375a2.875 2.875 0 1 0 5.75 0 2.875 2.875 0 1 0 -5.75 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="m25.820375 25.8448125 3.0403125 3.059" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M28.045625 30.90625a2.875 2.875 0 1 0 5.75 0 2.875 2.875 0 1 0 -5.75 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M10.0625 10.091249999999999 5.5961875 5.655125" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M0.71875 3.59375a2.875 2.875 0 1 0 5.75 0 2.875 2.875 0 1 0 -5.75 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="m8.6810625 25.8448125 -3.04175 3.059" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M0.704375 30.90625a2.875 2.875 0 1 0 5.75 0 2.875 2.875 0 1 0 -5.75 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="m23.71875 16.53125 4.3125 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M28.03125 16.53125a2.875 2.875 0 1 0 5.75 0 2.875 2.875 0 1 0 -5.75 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="m10.78125 16.53125 -4.3125 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M0.71875 16.53125a2.875 2.875 0 1 0 5.75 0 2.875 2.875 0 1 0 -5.75 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M10.795625 23.71875a6.46875 6.46875 0 0 1 12.9375 0Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path><path d="M13.31125 11.859375a3.953125 3.953125 0 1 0 7.90625 0 3.953125 3.953125 0 1 0 -7.90625 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>');
             }
+
+            $nav->create(ucfirst(__('Rates')))
+                ->section('Resrv')
+                ->can(auth()->user()->can('use resrv'))
+                ->route('resrv.rates.index')
+                ->icon('<svg viewBox="0 0 24 24" height="24" width="24" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16L16 8"/><circle cx="9" cy="9" r="1.5"/><circle cx="15" cy="15" r="1.5"/><rect x="2" y="2" width="20" height="20" rx="3"/></g></svg>');
 
             $nav->create(ucfirst(__('Extras')))
                 ->section('Resrv')
@@ -283,7 +301,7 @@ class ResrvProvider extends AddonServiceProvider
     protected function bootHooks(): void
     {
         $this->bootEntriesHooks('fetched-entries', function ($hookName, $callback) {
-            \Statamic\Tags\Collection\Collection::hook($hookName, $callback);
+            Collection::hook($hookName, $callback);
         });
     }
 }

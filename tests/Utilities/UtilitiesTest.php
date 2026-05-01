@@ -4,7 +4,9 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Reach\StatamicResrv\Http\Middleware\SetResrvSearchByVariables;
 use Reach\StatamicResrv\Tests\TestCase;
+use Symfony\Component\HttpFoundation\Response;
 
 class UtilitiesTest extends TestCase
 {
@@ -26,9 +28,9 @@ class UtilitiesTest extends TestCase
         ];
 
         // Test normal
-        $response = (new \Reach\StatamicResrv\Http\Middleware\SetResrvSearchByVariables)->handle(
+        $response = (new SetResrvSearchByVariables)->handle(
             Request::create('/'.$item->slug.'?date_start='.$s['date_start'].'&date_end='.$s['date_end'], 'GET'),
-            fn () => new \Symfony\Component\HttpFoundation\Response
+            fn () => new Response
         );
 
         // Again to enable assertion (probably there is a better way to do this)
@@ -39,17 +41,17 @@ class UtilitiesTest extends TestCase
         ]);
 
         // Test normal with duration
-        $response = (new \Reach\StatamicResrv\Http\Middleware\SetResrvSearchByVariables)->handle(
-            Request::create('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&advanced=something', 'GET'),
-            fn () => new \Symfony\Component\HttpFoundation\Response
+        $response = (new SetResrvSearchByVariables)->handle(
+            Request::create('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&rate_id=something', 'GET'),
+            fn () => new Response
         );
 
-        $response = $this->get('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&advanced=something');
+        $response = $this->get('/'.$item->slug.'?date_start='.$s['date_start'].'&duration=5&rate_id=something');
 
         $s = [
             'date_start' => today()->setHour(12)->toISOString(),
             'date_end' => today()->setHour(12)->addDays(5)->toDateString(),
-            'advanced' => 'something',
+            'rate_id' => 'something',
         ];
 
         $response->assertSessionHas([

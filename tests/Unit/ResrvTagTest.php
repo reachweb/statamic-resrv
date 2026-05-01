@@ -4,11 +4,15 @@ namespace Reach\StatamicResrv\Tests\Unit;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Config;
+use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tags\Resrv;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Antlers;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ResrvTagTest extends TestCase
 {
@@ -32,6 +36,74 @@ class ResrvTagTest extends TestCase
         $this->tag = (new Resrv)
             ->setParser(Antlers::parser())
             ->setContext([]);
+    }
+
+    public function test_reservation_from_uri_returns_404_when_customer_is_null()
+    {
+        Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CONFIRMED,
+            'reference' => 'TEST01',
+            'customer_id' => null,
+        ]);
+
+        request()->merge([
+            'ref' => 'TEST01',
+            'hash' => str_repeat('a', 64),
+        ]);
+
+        $this->expectException(NotFoundHttpException::class);
+        $this->tag->reservationFromUri();
+    }
+
+    public function test_reservation_from_uri_returns_reservation_with_valid_customer()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'test@example.com',
+        ]);
+
+        Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CONFIRMED,
+            'reference' => 'TEST02',
+            'customer_id' => $customer->id,
+        ]);
+
+        $expectedHash = hash_hmac('sha256', 'test@example.com', config('app.key'));
+
+        request()->merge([
+            'ref' => 'TEST02',
+            'hash' => $expectedHash,
+        ]);
+
+        $reservation = $this->tag->reservationFromUri();
+        $this->assertEquals('TEST02', $reservation->reference);
+    }
+
+    public function test_reservation_from_uri_accepts_reference_longer_than_10_chars()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'long@example.com',
+        ]);
+
+        $longRef = 'ABCDEFGHIJKLMNO';
+
+        Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CONFIRMED,
+            'reference' => $longRef,
+            'customer_id' => $customer->id,
+        ]);
+
+        $expectedHash = hash_hmac('sha256', 'long@example.com', config('app.key'));
+
+        request()->merge([
+            'ref' => $longRef,
+            'hash' => $expectedHash,
+        ]);
+
+        $reservation = $this->tag->reservationFromUri();
+        $this->assertEquals($longRef, $reservation->reference);
     }
 
     public function test_cutoff_throws_exception_when_no_entry_id()

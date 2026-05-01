@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Extra;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -185,7 +186,7 @@ class AffiliateCpTest extends TestCase
 
         $this->withoutExceptionHandling();
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         $this->post(cp_route('resrv.affiliate.create'), $affiliate2Data);
 
         // Verify the coupon is still only associated with affiliate1
