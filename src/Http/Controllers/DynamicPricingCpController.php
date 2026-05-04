@@ -25,19 +25,75 @@ class DynamicPricingCpController extends Controller
     {
         $query = $this->dynamicPricing->query();
 
-        // Filter to only coupons if requested
+        // Backward-compatible flat-array response used by AffiliatesPanel.
         if ($request->has('coupons_only') && $request->coupons_only == 'true') {
             $query->whereNotNull('coupon')->where('coupon', '!=', '');
+            $dynamic = $query->get();
+            foreach ($dynamic as $pricing) {
+                $pricing['entries'] = $pricing->entries;
+                $pricing['extras'] = $pricing->extras;
+            }
+
+            return response()->json($dynamic);
         }
 
-        $dynamic = $query->get();
+        if ($search = $request->input('search')) {
+            $query->whereRaw('LOWER(title) LIKE ?', ['%'.mb_strtolower($search).'%']);
+        }
 
-        foreach ($dynamic as $pricing) {
+        if ($operation = $request->input('operation')) {
+            if (in_array($operation, ['increase', 'decrease', 'minimum', 'maximum'], true)) {
+                $query->where('amount_operation', $operation);
+            }
+        }
+
+        if ($condition = $request->input('condition')) {
+            if ($condition === 'none') {
+                $query->whereNull('condition_type');
+            } elseif (in_array($condition, ['reservation_duration', 'reservation_price', 'days_to_reservation'], true)) {
+                $query->where('condition_type', $condition);
+            }
+        }
+
+        if ($datesActive = $request->input('dates_active')) {
+            $now = now();
+            switch ($datesActive) {
+                case 'active':
+                    $query->where(function ($q) use ($now) {
+                        $q->whereNull('date_start')->orWhere('date_start', '<=', $now);
+                    })->where(function ($q) use ($now) {
+                        $q->whereNull('date_end')->orWhere('date_end', '>=', $now);
+                    })->where(function ($q) use ($now) {
+                        $q->whereNull('expire_at')->orWhere('expire_at', '>=', $now);
+                    });
+                    break;
+                case 'upcoming':
+                    $query->where('date_start', '>', $now);
+                    break;
+                case 'expired':
+                    $query->where(function ($q) use ($now) {
+                        $q->where('date_end', '<', $now)
+                            ->orWhere('expire_at', '<', $now);
+                    });
+                    break;
+                case 'always':
+                    $query->whereNull('date_start')
+                        ->whereNull('date_end')
+                        ->whereNull('expire_at');
+                    break;
+            }
+        }
+
+        $perPage = (int) ($request->input('per_page') ?? config('statamic.cp.pagination_size', 25));
+        $perPage = max(1, min($perPage, 100));
+        $paginator = $query->paginate($perPage);
+
+        foreach ($paginator->items() as $pricing) {
             $pricing['entries'] = $pricing->entries;
             $pricing['extras'] = $pricing->extras;
         }
 
-        return response()->json($dynamic);
+        return response()->json($paginator);
     }
 
     public function create(Request $request)
@@ -102,7 +158,10 @@ class DynamicPricingCpController extends Controller
             'order' => 'required|integer',
         ]);
 
-        $location = $this->dynamicPricing->findOrFail($data['id'])->changeOrder($data['order']);
+        $count = (int) $this->dynamicPricing->count();
+        $order = max(1, min((int) $data['order'], max($count, 1)));
+
+        $this->dynamicPricing->findOrFail($data['id'])->changeOrder($order);
 
         return response(200);
     }

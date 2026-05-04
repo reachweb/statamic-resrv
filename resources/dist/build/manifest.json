@@ -1,6 +1,6 @@
 {
   "resources/css/resrv.css": {
-    "file": "assets/resrv-77fe4cd1.css",
+    "file": "assets/resrv-d8fadd67.css",
     "isEntry": true,
     "src": "resources/css/resrv.css"
   },
@@ -12,7 +12,7 @@
     "css": [
       "assets/resrv-7563e5e4.css"
     ],
-    "file": "assets/resrv-16ca7b48.js",
+    "file": "assets/resrv-0995ede7.js",
     "isEntry": true,
     "src": "resources/js/resrv.js"
   }
