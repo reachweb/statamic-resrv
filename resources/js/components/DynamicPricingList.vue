@@ -294,10 +294,17 @@ export default {
             this.loading = true
             axios.get('/cp/resrv/dynamicpricing/index', { params })
                 .then(response => {
+                    const lastPage = response.data.last_page || 1
+                    const currentPage = response.data.current_page || 1
+                    if (currentPage > lastPage && (response.data.total || 0) > 0) {
+                        this.currentPage = lastPage
+                        this.fetchPricings()
+                        return
+                    }
                     this.dynamicPricings = response.data.data || []
                     this.total = response.data.total || 0
-                    this.lastPage = response.data.last_page || 1
-                    this.currentPage = response.data.current_page || 1
+                    this.lastPage = lastPage
+                    this.currentPage = currentPage
                     this.dynamicPricingLoaded = true
                 })
                 .catch(() => {

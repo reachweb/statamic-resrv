@@ -38,7 +38,7 @@ class DynamicPricingCpController extends Controller
         }
 
         if ($search = $request->input('search')) {
-            $query->where('title', 'like', '%'.$search.'%');
+            $query->whereRaw('LOWER(title) LIKE ?', ['%'.mb_strtolower($search).'%']);
         }
 
         if ($operation = $request->input('operation')) {
