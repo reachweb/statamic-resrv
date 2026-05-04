@@ -73,18 +73,19 @@ class DynamicPricingCpController extends Controller
                 case 'expired':
                     $query->where(function ($q) use ($now) {
                         $q->where('date_end', '<', $now)
-                          ->orWhere('expire_at', '<', $now);
+                            ->orWhere('expire_at', '<', $now);
                     });
                     break;
                 case 'always':
                     $query->whereNull('date_start')
-                          ->whereNull('date_end')
-                          ->whereNull('expire_at');
+                        ->whereNull('date_end')
+                        ->whereNull('expire_at');
                     break;
             }
         }
 
         $perPage = (int) ($request->input('per_page') ?? config('statamic.cp.pagination_size', 25));
+        $perPage = max(1, min($perPage, 100));
         $paginator = $query->paginate($perPage);
 
         foreach ($paginator->items() as $pricing) {
@@ -157,8 +158,8 @@ class DynamicPricingCpController extends Controller
             'order' => 'required|integer',
         ]);
 
-        $max = (int) $this->dynamicPricing->max('order');
-        $order = max(1, min((int) $data['order'], $max > 0 ? $max : 1));
+        $count = (int) $this->dynamicPricing->count();
+        $order = max(1, min((int) $data['order'], max($count, 1)));
 
         $this->dynamicPricing->findOrFail($data['id'])->changeOrder($order);
 

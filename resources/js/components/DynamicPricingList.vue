@@ -178,6 +178,7 @@ export default {
             total: 0,
             lastPage: 1,
             searchDebounce: null,
+            resetting: false,
             moveDialog: {
                 open: false,
                 mode: null,
@@ -246,22 +247,23 @@ export default {
         },
         resolvedMoveOrder() {
             if (this.moveDialog.mode !== 'page') return null
-            const page = Math.max(1, parseInt(this.moveDialog.value) || 1)
+            const page = Math.min(Math.max(1, parseInt(this.moveDialog.value) || 1), this.lastPage)
             return (page - 1) * this.perPage + 1
         },
     },
 
     watch: {
         searchQuery() {
+            if (this.resetting) return
             clearTimeout(this.searchDebounce)
             this.searchDebounce = setTimeout(() => {
                 this.currentPage = 1
                 this.fetchPricings()
             }, 300)
         },
-        'filters.operation'() { this.currentPage = 1; this.fetchPricings() },
-        'filters.dates_active'() { this.currentPage = 1; this.fetchPricings() },
-        'filters.condition'() { this.currentPage = 1; this.fetchPricings() },
+        'filters.operation'() { if (this.resetting) return; this.currentPage = 1; this.fetchPricings() },
+        'filters.dates_active'() { if (this.resetting) return; this.currentPage = 1; this.fetchPricings() },
+        'filters.condition'() { if (this.resetting) return; this.currentPage = 1; this.fetchPricings() },
     },
 
     mounted() {
@@ -292,14 +294,13 @@ export default {
             if (this.filters.condition) params.condition = this.filters.condition
 
             this.loading = true
-            axios.get('/cp/resrv/dynamicpricing/index', { params })
+            return axios.get('/cp/resrv/dynamicpricing/index', { params })
                 .then(response => {
                     const lastPage = response.data.last_page || 1
                     const currentPage = response.data.current_page || 1
                     if (currentPage > lastPage && (response.data.total || 0) > 0) {
                         this.currentPage = lastPage
-                        this.fetchPricings()
-                        return
+                        return this.fetchPricings()
                     }
                     this.dynamicPricings = response.data.data || []
                     this.total = response.data.total || 0
@@ -315,10 +316,17 @@ export default {
                 })
         },
         resetFilters() {
+            this.resetting = true
+            clearTimeout(this.searchDebounce)
             this.searchQuery = ''
             this.filters.operation = ''
             this.filters.dates_active = ''
             this.filters.condition = ''
+            this.$nextTick(() => {
+                this.resetting = false
+                this.currentPage = 1
+                this.fetchPricings()
+            })
         },
         selectPage(page) {
             this.currentPage = page
@@ -373,7 +381,10 @@ export default {
             this.moveDialog = { open: false, mode: null, item: null, value: 1 }
         },
         submitMove() {
-            const value = Math.max(1, parseInt(this.moveDialog.value) || 1)
+            let value = Math.max(1, parseInt(this.moveDialog.value) || 1)
+            if (this.moveDialog.mode === 'page') {
+                value = Math.min(value, this.lastPage)
+            }
             const order = this.moveDialog.mode === 'page'
                 ? (value - 1) * this.perPage + 1
                 : value
