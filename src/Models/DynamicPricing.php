@@ -169,7 +169,11 @@ class DynamicPricing extends Model
 
     public function apply($price)
     {
-        foreach ($this->toApply as $policy) {
+        [$clamps, $rest] = collect($this->toApply)->partition(
+            fn ($p) => in_array($p->amount_operation, ['minimum', 'maximum'], true)
+        );
+
+        foreach ($rest->merge($clamps) as $policy) {
             $method = $policy->amount_type;
             $price = $this->$method($price, $policy);
         }
@@ -468,11 +472,11 @@ class DynamicPricing extends Model
     protected function hasOverridingPolicy($pricings): bool|Collection
     {
         if ($pricing = $pricings->firstWhere('overrides_all', true)) {
-            if ($coupons = $pricings->whereNotNull('coupon')) {
-                return collect([$pricing])->merge($coupons);
-            }
+            $passthrough = $pricings->filter(fn ($p) => $p->coupon !== null
+                || in_array($p->amount_operation, ['minimum', 'maximum'], true)
+            );
 
-            return collect([$pricing]);
+            return collect([$pricing])->merge($passthrough)->unique('id');
         }
 
         return false;
