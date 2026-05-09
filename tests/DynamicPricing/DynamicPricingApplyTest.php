@@ -201,6 +201,102 @@ class DynamicPricingApplyTest extends TestCase
         $this->assertIndexPrice('150.00', '200.00');
     }
 
+    public function test_minimum_applies_after_overriding_policy()
+    {
+        $this->createAvailabilityForEntry($this->entry, 50, 2);
+
+        // Base total: 50 * 4 = 200. Override drops it 50%, floor lifts it back to 150.
+        $this->createDynamicPricing('overridesAll', [
+            'title' => 'Override 50% off',
+            'amount' => '50',
+        ], false);
+
+        $this->createDynamicPricing('fixedMinimum', [
+            'title' => 'Minimum 150',
+            'amount' => '150',
+        ], false);
+
+        // 200 → 100 after override → floored to 150.
+        $this->assertPrice('150.00', '200.00');
+        $this->assertIndexPrice('150.00', '200.00');
+    }
+
+    public function test_maximum_applies_after_overriding_policy()
+    {
+        $this->createAvailabilityForEntry($this->entry, 50, 2);
+
+        // Base total: 50 * 4 = 200. Override increases 50%, ceiling caps at 250.
+        $this->createDynamicPricing('overridesAll', [
+            'title' => 'Override 50% increase',
+            'amount_operation' => 'increase',
+            'amount' => '50',
+        ], false);
+
+        $this->createDynamicPricing('fixedMaximum', [
+            'title' => 'Maximum 250',
+            'amount' => '250',
+        ], false);
+
+        // 200 → 300 after override → capped at 250.
+        $this->assertPrice('250.00', '200.00');
+        $this->assertIndexPrice('250.00', '200.00');
+    }
+
+    public function test_minimum_runs_last_regardless_of_order()
+    {
+        $this->createAvailabilityForEntry($this->entry, 50, 2);
+
+        // Base total: 50 * 4 = 200.
+        $decrease = $this->createDynamicPricing('percentDecrease', [
+            'title' => 'Take 50% off',
+            'amount' => '50',
+        ], false);
+
+        $minimum = $this->createDynamicPricing('fixedMinimum', [
+            'title' => 'Minimum 150',
+            'amount' => '150',
+        ], false);
+
+        // Order would otherwise place the minimum before the decrease.
+        $minimum->update(['order' => 1]);
+        $decrease->update(['order' => 2]);
+
+        // Without the fix: minimum runs first (no-op), decrease drops to 100.
+        // With the fix: decrease runs first (200 → 100), minimum floors to 150.
+        $this->assertPrice('150.00', '200.00');
+        $this->assertIndexPrice('150.00', '200.00');
+    }
+
+    public function test_minimum_with_coupon_and_override()
+    {
+        $this->createAvailabilityForEntry($this->entry, 50, 2);
+
+        // Coupon-bound 10% decrease.
+        $this->createDynamicPricing('withCoupon', [
+            'title' => 'Coupon X 10% off',
+            'coupon' => 'X',
+            'amount' => '10',
+        ], false);
+
+        // Overrides-all 50% decrease.
+        $this->createDynamicPricing('overridesAll', [
+            'title' => 'Override 50% off',
+            'amount' => '50',
+        ], false);
+
+        // Floor at 150.
+        $this->createDynamicPricing('fixedMinimum', [
+            'title' => 'Minimum 150',
+            'amount' => '150',
+        ], false);
+
+        session(['resrv_coupon' => 'X']);
+
+        // Override + coupon + floor all coexist; floor wins (final 150 from base 200).
+        $this->assertPrice('150.00', '200.00');
+        $this->assertIndexPrice('150.00', '200.00');
+    }
+
     public function test_dynamic_pricing_date_conditions()
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
