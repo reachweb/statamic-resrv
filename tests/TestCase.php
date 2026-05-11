@@ -62,6 +62,10 @@ class TestCase extends OrchestraTestCase
             $this->deleteFakeStacheDirectory();
         }
 
+        if ($this->app && $this->app->bound(\Reach\StatamicResrv\Support\AvailabilityRequestCache::class)) {
+            $this->app->make(\Reach\StatamicResrv\Support\AvailabilityRequestCache::class)->flush();
+        }
+
         parent::tearDown();
     }
 

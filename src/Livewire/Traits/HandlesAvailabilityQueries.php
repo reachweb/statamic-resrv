@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\CutoffException;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Support\AvailabilitySortBuilder;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\EntryCollection;
 use Statamic\Extensions\Pagination\LengthAwarePaginator;
@@ -148,6 +149,24 @@ trait HandlesAvailabilityQueries
         return collect($values)->filter(function ($value, $key) {
             return Str::startsWith($key, 'resrv_search:');
         })->reject(fn ($value) => empty($value) || ! Arr::has($value, 'dates.date_start'));
+    }
+
+    /**
+     * Parse a `resrv_sort` directive (e.g. `price:asc`) from tag values.
+     *
+     * @return array{field: string, direction: string}|null
+     */
+    public function availabilitySortDirective($values): ?array
+    {
+        $values = $values instanceof Collection ? $values->all() : (array) $values;
+
+        $raw = $values['resrv_sort'] ?? null;
+
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+
+        return AvailabilitySortBuilder::parse((string) $raw);
     }
 
     public function toResrvArray($search)

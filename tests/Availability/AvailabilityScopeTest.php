@@ -144,6 +144,41 @@ class AvailabilityScopeTest extends TestCase
         $this->assertNotContains($this->advancedEntries->first()->id(), $afterScope);
     }
 
+    // Sort directive present: scope still filters correctly and the cache is populated.
+    public function test_it_filters_with_sort_directive_present()
+    {
+        $cache = $this->app->make(\Reach\StatamicResrv\Support\AvailabilityRequestCache::class);
+        $cache->flush();
+
+        $query = Entry::query()->where('collection', 'pages');
+
+        $values = [
+            'resrv_search:resrv_availability' => [
+                'dates' => [
+                    'date_start' => $this->date,
+                    'date_end' => $this->date->copy()->add(1, 'day'),
+                ],
+            ],
+            'resrv_sort' => 'price:asc',
+        ];
+
+        (new ResrvSearch)->apply($query, $values);
+
+        $afterScope = $query->get()->pluck('id')->all();
+
+        $this->assertCount(3, $afterScope);
+
+        $cached = $cache->get([
+            'date_start' => $this->date,
+            'date_end' => $this->date->copy()->add(1, 'day'),
+            'quantity' => 1,
+            'advanced' => '',
+        ]);
+
+        $this->assertNotNull($cached);
+        $this->assertNotNull($cached['sortedIds']);
+    }
+
     // Test that it can ge all available when using the 'any' magic property
     public function test_it_can_get_all_availability_with_the_any_magic_word()
     {

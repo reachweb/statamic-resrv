@@ -44,6 +44,30 @@ class AvailabilityHookTest extends TestCase
         $this->assertArrayHasKey('live_availability', $returnedEntries->first()->toArray());
     }
 
+    public function test_hook_reuses_request_cache_populated_by_scope()
+    {
+        $cache = $this->app->make(\Reach\StatamicResrv\Support\AvailabilityRequestCache::class);
+        $cache->flush();
+
+        $this->setTagParameters(['collection' => 'pages', 'query_scope' => 'resrv_search', 'resrv_search:resrv_availability' => [
+            'dates' => [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ],
+        ]]);
+
+        $this->collectionTag->index();
+
+        $cached = $cache->get([
+            'date_start' => $this->date,
+            'date_end' => $this->date->copy()->add(1, 'day'),
+            'quantity' => 1,
+            'advanced' => '',
+        ]);
+
+        $this->assertNotNull($cached, 'Scope should have populated the request cache');
+    }
+
     public function test_that_it_passes_availability_data_to_all_entries()
     {
         $this->setTagParameters(['collection' => 'pages', 'query_scope' => 'resrv_search', 'resrv_search:resrv_availability' => [
