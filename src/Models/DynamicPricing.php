@@ -169,16 +169,41 @@ class DynamicPricing extends Model
 
     public function apply($price)
     {
-        [$clamps, $rest] = collect($this->toApply)->partition(
-            fn ($p) => in_array($p->amount_operation, ['minimum', 'maximum'], true)
-        );
+        return $this->applyClamps($this->applyRest($price));
+    }
 
-        foreach ($rest->merge($clamps) as $policy) {
+    public function applyRest(PriceClass $price): PriceClass
+    {
+        foreach ($this->restPolicies() as $policy) {
             $method = $policy->amount_type;
             $price = $this->$method($price, $policy);
         }
 
         return $price;
+    }
+
+    public function applyClamps(PriceClass $price): PriceClass
+    {
+        foreach ($this->clampPolicies() as $policy) {
+            $method = $policy->amount_type;
+            $price = $this->$method($price, $policy);
+        }
+
+        return $price;
+    }
+
+    protected function clampPolicies(): Collection
+    {
+        return collect($this->toApply)->filter(
+            fn ($p) => in_array($p->amount_operation, ['minimum', 'maximum'], true)
+        );
+    }
+
+    protected function restPolicies(): Collection
+    {
+        return collect($this->toApply)->reject(
+            fn ($p) => in_array($p->amount_operation, ['minimum', 'maximum'], true)
+        );
     }
 
     public function getToApply()

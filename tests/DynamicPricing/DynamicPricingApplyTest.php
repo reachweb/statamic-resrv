@@ -564,4 +564,162 @@ class DynamicPricingApplyTest extends TestCase
             ])
             ->assertSee('23.00');
     }
+
+    public function test_minimum_clamp_floors_total_for_perday_extra()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        $extra = Extra::factory()->create(['price' => '20']);
+
+        $this->assignDynamicPricingToExtra($extra, [
+            'amount_type' => 'fixed',
+            'amount_operation' => 'minimum',
+            'amount' => '100',
+        ]);
+
+        // Old broken behavior: max(20, 100) × 3 = 300. New: max(20 × 3, 100) = 100.
+        $this->assertExtrasPriceSeen('100.00', days: 3);
+    }
+
+    public function test_maximum_clamp_caps_total_for_perday_extra()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        $extra = Extra::factory()->create(['price' => '50']);
+
+        $this->assignDynamicPricingToExtra($extra, [
+            'amount_type' => 'fixed',
+            'amount_operation' => 'maximum',
+            'amount' => '100',
+        ]);
+
+        // Old broken behavior: min(50, 100) × 3 = 150. New: min(50 × 3, 100) = 100.
+        $this->assertExtrasPriceSeen('100.00', days: 3);
+    }
+
+    public function test_decrease_still_applies_to_per_day_rate()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        $extra = Extra::factory()->create(['price' => '50']);
+
+        $this->assignDynamicPricingToExtra($extra, [
+            'amount_type' => 'fixed',
+            'amount_operation' => 'decrease',
+            'amount' => '10',
+        ]);
+
+        // Decrease still pre-multiply: (50 - 10) × 3 = 120.
+        $this->assertExtrasPriceSeen('120.00', days: 3);
+    }
+
+    public function test_decrease_then_minimum_on_perday()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        $extra = Extra::factory()->create(['price' => '50']);
+
+        ResrvEntry::whereItemId($this->entry->id())->extras()->attach($extra->id);
+
+        $decrease = DynamicPricing::factory()->extra()->create([
+            'title' => '50% off',
+            'amount_type' => 'percent',
+            'amount_operation' => 'decrease',
+            'amount' => '50',
+            'order' => 1,
+        ]);
+
+        $minimum = DynamicPricing::factory()->extra()->create([
+            'title' => 'Minimum 100',
+            'amount_type' => 'fixed',
+            'amount_operation' => 'minimum',
+            'amount' => '100',
+            'order' => 2,
+        ]);
+
+        foreach ([$decrease, $minimum] as $dynamic) {
+            DB::table('resrv_dynamic_pricing_assignments')->insert([
+                'dynamic_pricing_id' => $dynamic->id,
+                'dynamic_pricing_assignment_id' => $extra->id,
+                'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Extra',
+            ]);
+        }
+
+        Cache::flush();
+
+        // Decrease pre-multiply: 50 → 25/day → 75 total. Minimum post-multiply floors to 100.
+        $this->assertExtrasPriceSeen('100.00', days: 3);
+    }
+
+    public function test_minimum_clamp_floors_total_for_relative_extra()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        // Relative multiplier 0.2 × availability total (25.23 × 3 = 75.69) = 15.14.
+        $extra = Extra::factory()->relative()->create(['price' => '0.2']);
+
+        $this->assignDynamicPricingToExtra($extra, [
+            'amount_type' => 'fixed',
+            'amount_operation' => 'minimum',
+            'amount' => '100',
+        ]);
+
+        // Clamp now applies to the total, not the multiplier: max(15.14, 100) = 100.
+        $this->assertExtrasPriceSeen('100.00', days: 3);
+    }
+
+    public function test_maximum_clamp_caps_total_for_custom_extra()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        // Custom extra at 50 × (customer adults = 3) = 150.
+        $extra = Extra::factory()->custom()->create(['price' => '50', 'custom' => 'adults']);
+
+        $this->assignDynamicPricingToExtra($extra, [
+            'amount_type' => 'fixed',
+            'amount_operation' => 'maximum',
+            'amount' => '100',
+        ]);
+
+        $price = $extra->priceForDates([
+            'date_start' => $this->date->toISOString(),
+            'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+            'quantity' => 1,
+            'customer' => collect(['adults' => 3]),
+        ]);
+
+        // Clamp now applies to the total, not the multiplier: min(50 × 3, 100) = 100.
+        $this->assertEquals('100.00', $price);
+    }
+
+    private function assignDynamicPricingToExtra(Extra $extra, array $attributes): DynamicPricing
+    {
+        ResrvEntry::whereItemId($this->entry->id())->extras()->attach($extra->id);
+
+        $dynamic = DynamicPricing::factory()->extra()->create($attributes);
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $extra->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Extra',
+        ]);
+
+        Cache::flush();
+
+        return $dynamic;
+    }
+
+    private function assertExtrasPriceSeen(string $expected, int $days): void
+    {
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entry->id(), 'showExtras' => true])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add($days, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'advanced' => null,
+            ])
+            ->assertSee($expected);
+    }
 }
