@@ -106,19 +106,20 @@ class Extra extends Model
     public function priceForDates($data)
     {
         $this->initiateAvailabilityUnsafe($data);
-        $this->applyDynamicPricing();
+
+        $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
+
+        if ($dynamicPricing) {
+            $this->price = $dynamicPricing->applyRest($this->price)->format();
+        }
 
         $basePrice = $this->calculatePriceByType($data);
 
-        return $this->applyQuantityIfNeeded($basePrice)->format();
-    }
-
-    private function applyDynamicPricing()
-    {
-        $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
         if ($dynamicPricing) {
-            $this->price = $dynamicPricing->apply($this->price)->format();
+            $basePrice = $dynamicPricing->applyClamps($basePrice);
         }
+
+        return $this->applyQuantityIfNeeded($basePrice)->format();
     }
 
     private function calculatePriceByType($data)
@@ -184,9 +185,11 @@ class Extra extends Model
     public function calculatePrice($data, $quantity)
     {
         $this->initiateAvailabilityUnsafe($data);
+
         $dynamicPricing = $this->getDynamicPricing($this->id, $this->price);
+
         if ($dynamicPricing) {
-            $this->price = $dynamicPricing->apply($this->price)->format();
+            $this->price = $dynamicPricing->applyRest($this->price)->format();
         }
         if ($this->price_type == 'perday') {
             $price = $this->price->multiply($quantity)->multiply($this->duration);
@@ -199,6 +202,9 @@ class Extra extends Model
         }
         if ($this->price_type == 'custom') {
             $price = $this->price->multiply($this->getCustomPrice($data));
+        }
+        if ($dynamicPricing) {
+            $price = $dynamicPricing->applyClamps($price);
         }
 
         return $this->applyQuantityIfNeeded($price);
