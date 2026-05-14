@@ -14,8 +14,8 @@
                     mobileMonths: 12,
                     minDate: dayjs().add({{ config('resrv-config.minimum_days_before') }}, 'day').format('YYYY-MM-DD'),
                     @if ($calendar === 'range')
-                    minRange: {{ config('resrv-config.minimum_reservation_period_in_days', 0) }},
-                    maxRange: {{ config('resrv-config.maximum_reservation_period_in_days', 30) }},
+                    minRange: {{ config('resrv-config.minimum_reservation_period_in_days', 0) + 1 }},
+                    maxRange: {{ config('resrv-config.maximum_reservation_period_in_days', 30) + 1 }},
                     @endif
                     rules: @json($calendarRules),
                     disabledDaysOfWeek: buildDisabledDaysOfWeek(),

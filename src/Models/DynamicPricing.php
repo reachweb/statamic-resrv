@@ -172,12 +172,41 @@ class DynamicPricing extends Model
 
     public function apply($price)
     {
-        foreach ($this->toApply as $policy) {
+        return $this->applyClamps($this->applyRest($price));
+    }
+
+    public function applyRest(PriceClass $price): PriceClass
+    {
+        foreach ($this->restPolicies() as $policy) {
             $method = $policy->amount_type;
             $price = $this->$method($price, $policy);
         }
 
         return $price;
+    }
+
+    public function applyClamps(PriceClass $price): PriceClass
+    {
+        foreach ($this->clampPolicies() as $policy) {
+            $method = $policy->amount_type;
+            $price = $this->$method($price, $policy);
+        }
+
+        return $price;
+    }
+
+    protected function clampPolicies(): Collection
+    {
+        return collect($this->toApply)->filter(
+            fn ($p) => in_array($p->amount_operation, ['minimum', 'maximum'], true)
+        );
+    }
+
+    protected function restPolicies(): Collection
+    {
+        return collect($this->toApply)->reject(
+            fn ($p) => in_array($p->amount_operation, ['minimum', 'maximum'], true)
+        );
     }
 
     public function getToApply()
@@ -457,11 +486,11 @@ class DynamicPricing extends Model
     protected function hasOverridingPolicy($pricings): bool|Collection
     {
         if ($pricing = $pricings->firstWhere('overrides_all', true)) {
-            if ($coupons = $pricings->whereNotNull('coupon')) {
-                return collect([$pricing])->merge($coupons);
-            }
+            $passthrough = $pricings->filter(fn ($p) => $p->coupon !== null
+                || in_array($p->amount_operation, ['minimum', 'maximum'], true)
+            );
 
-            return collect([$pricing]);
+            return collect([$pricing])->merge($passthrough)->unique('id');
         }
 
         return false;

@@ -211,4 +211,171 @@ class DynamicPricingCpTest extends TestCase
             'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
         ]);
     }
+
+    public function test_index_returns_paginated_shape()
+    {
+        DynamicPricing::factory()->count(3)->create();
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index'));
+
+        $response->assertStatus(200)
+            ->assertJsonStructure(['data', 'total', 'last_page', 'per_page', 'current_page']);
+        $this->assertSame(3, $response->json('total'));
+    }
+
+    public function test_index_search_filters_by_title()
+    {
+        DynamicPricing::factory()->create(['title' => 'Summer special', 'order' => 1]);
+        DynamicPricing::factory()->create(['title' => 'Winter promo', 'order' => 2]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?search=summer');
+
+        $response->assertStatus(200);
+        $this->assertSame(1, $response->json('total'));
+        $this->assertSame('Summer special', $response->json('data.0.title'));
+    }
+
+    public function test_index_filter_by_operation()
+    {
+        DynamicPricing::factory()->percentIncrease()->create(['title' => 'inc', 'order' => 1]);
+        DynamicPricing::factory()->percentDecrease()->create(['title' => 'dec', 'order' => 2]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?operation=increase');
+
+        $this->assertSame(1, $response->json('total'));
+        $this->assertSame('inc', $response->json('data.0.title'));
+    }
+
+    public function test_index_filter_by_condition_none()
+    {
+        DynamicPricing::factory()->create(['title' => 'with', 'order' => 1]);
+        DynamicPricing::factory()->create([
+            'title' => 'without',
+            'condition_type' => null,
+            'condition_comparison' => null,
+            'condition_value' => null,
+            'order' => 2,
+        ]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?condition=none');
+
+        $this->assertSame(1, $response->json('total'));
+        $this->assertSame('without', $response->json('data.0.title'));
+    }
+
+    public function test_index_filter_by_condition_type()
+    {
+        DynamicPricing::factory()->create(['title' => 'duration', 'order' => 1]); // condition_type = reservation_duration
+        DynamicPricing::factory()->daysToReservation()->create(['title' => 'days', 'order' => 2]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?condition=days_to_reservation');
+
+        $this->assertSame(1, $response->json('total'));
+        $this->assertSame('days', $response->json('data.0.title'));
+    }
+
+    public function test_index_filter_dates_active_always()
+    {
+        DynamicPricing::factory()->create(['title' => 'has-dates', 'order' => 1]);
+        DynamicPricing::factory()->noDates()->create(['title' => 'always-on', 'order' => 2]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?dates_active=always');
+
+        $this->assertSame(1, $response->json('total'));
+        $this->assertSame('always-on', $response->json('data.0.title'));
+    }
+
+    public function test_index_filter_dates_active_expired()
+    {
+        DynamicPricing::factory()->create([
+            'title' => 'past',
+            'date_start' => now()->subDays(20)->toIso8601String(),
+            'date_end' => now()->subDays(5)->toIso8601String(),
+            'order' => 1,
+        ]);
+        DynamicPricing::factory()->create(['title' => 'future-active', 'order' => 2]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?dates_active=expired');
+
+        $this->assertSame(1, $response->json('total'));
+        $this->assertSame('past', $response->json('data.0.title'));
+    }
+
+    public function test_index_filter_dates_active_upcoming()
+    {
+        DynamicPricing::factory()->create([
+            'title' => 'soon',
+            'date_start' => now()->addDays(5)->toIso8601String(),
+            'date_end' => now()->addDays(10)->toIso8601String(),
+            'order' => 1,
+        ]);
+        DynamicPricing::factory()->create(['title' => 'now-active', 'order' => 2]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?dates_active=upcoming');
+
+        $this->assertSame(1, $response->json('total'));
+        $this->assertSame('soon', $response->json('data.0.title'));
+    }
+
+    public function test_index_per_page_is_respected()
+    {
+        DynamicPricing::factory()->count(7)->create();
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?per_page=3');
+
+        $this->assertSame(7, $response->json('total'));
+        $this->assertCount(3, $response->json('data'));
+        $this->assertSame(3, $response->json('per_page'));
+    }
+
+    public function test_index_coupons_only_still_returns_flat_array()
+    {
+        DynamicPricing::factory()->create(['title' => 'no-coupon', 'order' => 1]);
+        DynamicPricing::factory()->withCoupon()->create(['title' => 'has-coupon', 'order' => 2]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?coupons_only=true');
+
+        $response->assertStatus(200);
+        $data = $response->json();
+        $this->assertIsArray($data);
+        $this->assertArrayNotHasKey('data', $data);
+        $this->assertCount(1, $data);
+        $this->assertSame('has-coupon', $data[0]['title']);
+    }
+
+    public function test_order_endpoint_clamps_out_of_range_values()
+    {
+        $a = DynamicPricing::factory()->create(['title' => 'a', 'order' => 1]);
+        $b = DynamicPricing::factory()->create(['title' => 'b', 'order' => 2]);
+        $c = DynamicPricing::factory()->create(['title' => 'c', 'order' => 3]);
+
+        // Clamp high
+        $this->patch(cp_route('resrv.dynamicpricing.order'), ['id' => $a->id, 'order' => 999])
+            ->assertStatus(200);
+        $this->assertSame(3, DynamicPricing::find($a->id)->order);
+
+        // Clamp low
+        $this->patch(cp_route('resrv.dynamicpricing.order'), ['id' => $c->id, 'order' => 0])
+            ->assertStatus(200);
+        $this->assertSame(1, DynamicPricing::find($c->id)->order);
+    }
+
+    public function test_neighbour_order_round_trip_across_pages()
+    {
+        // Five pricings in order 1..5. Per-page = 2 → page 2 is items 3,4.
+        $items = collect(range(1, 5))->map(fn ($i) => DynamicPricing::factory()->create([
+            'title' => "p{$i}",
+            'order' => $i,
+        ]));
+
+        // Simulate dragging item at order=4 above item at order=3 on page 2.
+        // Frontend sends neighbour's order (3) as the target.
+        $itemAt4 = $items[3];
+        $this->patch(cp_route('resrv.dynamicpricing.order'), ['id' => $itemAt4->id, 'order' => 3])
+            ->assertStatus(200);
+
+        // After: p4 should have order=3, p3 should have order=4.
+        $this->assertSame(3, DynamicPricing::where('title', 'p4')->value('order'));
+        $this->assertSame(4, DynamicPricing::where('title', 'p3')->value('order'));
+    }
 }
