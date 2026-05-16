@@ -1,4 +1,8 @@
-@import "tailwindcss";
+@import "@statamic/cms/tailwind.css";
+
+@source "../views/**/*.{antlers.html,blade.php}";
+@source "../js/**/*.{vue,js}";
+@source "../../src/**/*.php";
 
 .statamic-resrv-availability {
     .fc-daygrid-day-top {
