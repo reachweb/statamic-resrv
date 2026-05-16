@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 .statamic-resrv-availability {
     .fc-daygrid-day-top {
         flex-direction: column !important;
@@ -26,7 +28,7 @@
 
 .fc .fc-toolbar-title {
     font-size: 1.2rem !important;
-    @screen xl {
+    @media (min-width: 80rem) {
         font-size: 1.75rem !important;
     }
 }

@@ -24,7 +24,6 @@
         "dayjs": "^1.10.4",
         "lodash": "^4.17.21",
         "tailwindcss": "^4.0.0",
-        "vue-select": "^4.0.0-beta.6",
         "vuedraggable": "^4.1"
     }
 }

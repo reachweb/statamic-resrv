@@ -146,8 +146,8 @@ class ResrvProvider extends AddonServiceProvider
 
     protected $vite = [
         'input' => [
-            'resources/js/resrv.js',
-            'resources/css/resrv.css',
+            'resources/js/cp.js',
+            'resources/css/cp.css',
         ],
         'publicDirectory' => 'resources/dist',
         'hotFile' => __DIR__.'/../../resources/dist/hot',
