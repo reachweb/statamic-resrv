@@ -1,4 +1,3 @@
-hide: true
 tabs:
   general_information:
     display: General
@@ -14,6 +13,7 @@ tabs:
               type: text
               width: 50
               localizable: false
+              default: Resrv
               validate:
                 - required
           -
@@ -23,6 +23,7 @@ tabs:
               type: text
               width: 50
               localizable: false
+              default: 'Somestreet 8'
               validate:
                 - required
           -
@@ -32,6 +33,7 @@ tabs:
               type: text
               width: 50
               localizable: false
+              default: '00000 City'
               validate:
                 - required
           -
@@ -41,6 +43,7 @@ tabs:
               type: text
               width: 50
               localizable: false
+              default: Greece
               validate:
                 - required
           -
@@ -50,6 +53,7 @@ tabs:
               type: text
               width: 50
               localizable: false
+              default: '+30 0000 000000'
               validate:
                 - required
           -
@@ -59,6 +63,7 @@ tabs:
               type: text
               width: 50
               localizable: false
+              default: 'resrv@resrv.app'
               validate:
                 - required
           -
@@ -67,6 +72,7 @@ tabs:
               display: Logo
               type: text
               localizable: false
+              default: 'false'
               validate:
                 - required
               instructions: 'Type "false" to use business name or an absolute URL (including https://)'
@@ -83,6 +89,7 @@ tabs:
               display: 'Enable time'
               type: toggle
               localizable: false
+              default: false
               validate:
                 - required
               instructions: 'Require an explicit pick-up and drop-off time for each reservation. Not yet implemented in the frontend.'
@@ -92,6 +99,7 @@ tabs:
               display: 'Enable affiliates'
               type: toggle
               localizable: false
+              default: true
               validate:
                 - required
               instructions: 'Enable the [affiliate system](https://resrv.dev/affiliates).'
@@ -101,6 +109,7 @@ tabs:
               display: 'Enable cutoff rules'
               type: toggle
               localizable: false
+              default: false
               validate:
                 - required
               instructions: 'Enable the ability to set cutoff times for bookings based on starting times and schedules. When enabled, entries can specify how many hours before a scheduled start time bookings must be made.'
@@ -110,6 +119,7 @@ tabs:
               display: 'Minimum days before'
               type: integer
               localizable: false
+              default: 0
               validate:
                 - required
               instructions: "The minimum number of days allowed between the current date and the reservation start date. Useful if you don't want to allow last-minute reservations."
@@ -120,6 +130,7 @@ tabs:
               type: integer
               width: 50
               localizable: false
+              default: 1
               validate:
                 - required
               instructions: 'In scenarios like a hotel where reservations span multiple dates, you can set here the minimum required number of days.'
@@ -130,6 +141,7 @@ tabs:
               type: integer
               width: 50
               localizable: false
+              default: 30
               validate:
                 - required
               instructions: 'The same for maximum reservation period.'
@@ -140,6 +152,7 @@ tabs:
               type: integer
               width: 50
               localizable: false
+              default: 0
               validate:
                 - required
               instructions: 'The number of days before the reservation start date that the user can cancel the reservation. Please note that cancellations are manual; this is mainly used to display that info in the frontend.'
@@ -150,6 +163,7 @@ tabs:
               type: toggle
               width: 50
               localizable: false
+              default: false
               validate:
                 - required
               instructions: "If the free cancellation period has passed when the user makes the reservation, you can require full payment (in case you're not already doing that)."
@@ -160,6 +174,7 @@ tabs:
               type: integer
               width: 50
               localizable: false
+              default: 8
               validate:
                 - required
               instructions: 'The maximum quantity allowed in one reservation.'
@@ -170,6 +185,7 @@ tabs:
               type: toggle
               width: 50
               localizable: false
+              default: false
               validate:
                 - required
               instructions: 'In case you want to keep track of the quantity but not charge extra for it, you can set this to true. For example, you might want to charge $20 for a reservation at a restaurant and allow 20 seats, but not charge extra for each seat.'
@@ -180,6 +196,7 @@ tabs:
               type: toggle
               width: 50
               localizable: false
+              default: false
               validate:
                 - required
               instructions: 'If enable time is enabled, this will charge an extra day if the ending time is after the starting time. For example, if you give a car at 12:00 and it is returned at 18:00, you will charge an extra day. Not yet implemented in the frontend.'
@@ -190,6 +207,7 @@ tabs:
               type: toggle
               width: 50
               localizable: false
+              default: false
               validate:
                 - required
               instructions: 'Tied to the setting before, this will block availability for the final day if the return time is after the starting time.'
@@ -199,9 +217,7 @@ tabs:
               display: 'Admin email'
               type: text
               localizable: false
-              validate:
-                - required
-              instructions: 'Comma-separated list of the emails that should be notified for new reservations or refunds.'
+              instructions: 'Comma-separated list of the emails that should be notified for new reservations or refunds. Leave empty to disable admin notifications.'
   checkout_settings:
     display: Checkout
     sections:
@@ -304,6 +320,7 @@ tabs:
                   key: percent
                   value: 'Charge a percentage of the base price'
               localizable: false
+              default: full
               validate:
                 - required
               instructions: 'Payment required to complete the reservation. You can choose between paying everything (reservation plus any extras and options), the reservation price only, a percentage of the reservation price, or a fixed amount.'
@@ -313,6 +330,7 @@ tabs:
               display: 'Fixed amount'
               type: integer
               localizable: false
+              default: 50
               validate:
                 - required
               instructions: 'The amount that should be charged to complete a reservation.'
@@ -324,6 +342,7 @@ tabs:
               display: Percentage
               type: integer
               localizable: false
+              default: 20
               validate:
                 - required
               instructions: 'The percentage of the reservation price that should be charged.'
@@ -335,6 +354,7 @@ tabs:
               display: 'Minutes to hold'
               type: integer
               localizable: false
+              default: 10
               validate:
                 - required
               instructions: 'When a user initiates a checkout, the availability for their reservation is temporarily blocked for the given number of minutes. This helps to prevent double bookings, especially when availability is low.'
@@ -511,6 +531,7 @@ tabs:
               display: 'Enable abandoned reservation emails'
               type: toggle
               localizable: false
+              default: false
               validate:
                 - required
               instructions: 'When enabled, the `resrv:send-abandoned-emails` command will send recovery emails to customers with expired reservations.'
@@ -538,6 +559,7 @@ tabs:
               display: 'Currency name'
               type: text
               localizable: false
+              default: Euro
               validate:
                 - required
           -
@@ -546,6 +568,7 @@ tabs:
               display: 'Currency ISO code'
               type: text
               localizable: false
+              default: EUR
               validate:
                 - required
           -
@@ -554,6 +577,7 @@ tabs:
               display: 'Currency symbol'
               type: text
               localizable: false
+              default: '€'
               validate:
                 - required
           -
@@ -562,6 +586,6 @@ tabs:
               display: 'Currency delimited'
               type: text
               localizable: false
+              default: ','
               validate:
                 - required
-title: Config

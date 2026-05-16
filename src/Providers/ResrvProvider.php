@@ -2,8 +2,6 @@
 
 namespace Reach\StatamicResrv\Providers;
 
-use Edalzell\Forma\ConfigController;
-use Edalzell\Forma\Forma;
 use Illuminate\Console\Application as Artisan;
 use Reach\StatamicResrv\Console\Commands\ImportEntries;
 use Reach\StatamicResrv\Console\Commands\InstallResrv;
@@ -52,8 +50,10 @@ use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
 use Statamic\Events\BlueprintSaved;
 use Statamic\Events\EntrySaved;
+use Statamic\Facades\Addon;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
+use Statamic\Facades\YAML;
 use Statamic\Providers\AddonServiceProvider;
 use Statamic\Tags\Collection\Collection;
 
@@ -198,6 +198,12 @@ class ResrvProvider extends AddonServiceProvider
 
         $this->mergeConfigFrom(__DIR__.'/../../config/config.php', 'resrv-config');
 
+        $this->registerSettingsBlueprint(
+            YAML::file(__DIR__.'/../../resources/blueprints/settings.yaml')->parse()
+        );
+
+        $this->mergeAddonSettings();
+
         $this->app->bind(
             PaymentInterface::class,
             app()->environment('testing')
@@ -206,8 +212,6 @@ class ResrvProvider extends AddonServiceProvider
         );
 
         $this->createNavigation();
-
-        Forma::add('reachweb/statamic-resrv', ConfigController::class, 'resrv-config');
 
         $this->bootPermissions();
 
@@ -281,6 +285,24 @@ class ResrvProvider extends AddonServiceProvider
                 ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24" width="24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><path d="M12 15.75V3.75"/><path d="m7.5 11.25 4.5 4.5 4.5-4.5"/><path d="M21 17.25v3a.75.75 0 0 1-.75.75H3.75A.75.75 0 0 1 3 20.25v-3"/></g></svg>');
 
         });
+    }
+
+    /**
+     * Layer user-saved settings over config('resrv-config') so existing call sites keep working.
+     * raw() avoids Settings::resolveAntlersValue() stringifying booleans/integers.
+     */
+    protected function mergeAddonSettings(): void
+    {
+        $addon = Addon::get('reachweb/statamic-resrv');
+
+        if (! $addon || ! $addon->hasSettingsBlueprint()) {
+            return;
+        }
+
+        config(['resrv-config' => array_merge(
+            config('resrv-config'),
+            $addon->settings()->raw()
+        )]);
     }
 
     protected function bootPermissions(): void
