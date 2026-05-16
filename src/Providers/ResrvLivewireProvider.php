@@ -23,7 +23,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
 {
     use HandlesAvailabilityHooks;
 
-    public function boot(): void
+    public function bootAddon(): void
     {
         // Define the base path for overridden views
         $overridePath = resource_path('views/vendor/statamic-resrv/livewire/components');
