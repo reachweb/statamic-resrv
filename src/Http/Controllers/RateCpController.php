@@ -9,7 +9,8 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Helpers\ResrvHelper;
 use Reach\StatamicResrv\Models\Entry;
@@ -17,9 +18,9 @@ use Reach\StatamicResrv\Models\Rate;
 
 class RateCpController extends Controller
 {
-    public function indexCp(): View
+    public function indexCp(): InertiaResponse
     {
-        return view('statamic-resrv::cp.rates.index');
+        return Inertia::render('resrv::Rates/Index');
     }
 
     public function index(Request $request): JsonResponse

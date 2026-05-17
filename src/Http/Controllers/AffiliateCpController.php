@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 use Reach\StatamicResrv\Http\Requests\AffiliateCpRequest;
 use Reach\StatamicResrv\Models\Affiliate;
 
@@ -19,7 +20,7 @@ class AffiliateCpController extends Controller
 
     public function indexCp()
     {
-        return view('statamic-resrv::cp.affiliates.index');
+        return Inertia::render('resrv::Affiliates/Index');
     }
 
     public function index()

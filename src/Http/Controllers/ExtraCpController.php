@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Inertia\Inertia;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
 
@@ -19,7 +20,7 @@ class ExtraCpController extends Controller
 
     public function indexCp()
     {
-        return view('statamic-resrv::cp.extras.index');
+        return Inertia::render('resrv::Extras/Index');
     }
 
     public function index()

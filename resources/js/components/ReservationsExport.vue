@@ -10,20 +10,20 @@
             </Field>
 
             <Field :label="__('Status')">
-                <div class="flex flex-wrap gap-3">
-                    <label
+                <CheckboxGroup v-model="selectedStatuses" inline>
+                    <Checkbox
                         v-for="status in statuses"
                         :key="status"
-                        class="inline-flex items-center gap-2 text-sm capitalize cursor-pointer text-gray-700 dark:text-gray-300"
+                        :value="status"
                     >
-                        <Checkbox :value="status" v-model="selectedStatuses" />
-                        {{ status }}
-                    </label>
-                </div>
-                <label class="inline-flex items-center gap-2 text-sm cursor-pointer mt-3 text-gray-700 dark:text-gray-300">
-                    <Checkbox v-model="withCustomerData" />
-                    {{ __('Only include reservations with customer details') }}
-                </label>
+                        <span class="capitalize">{{ status }}</span>
+                    </Checkbox>
+                </CheckboxGroup>
+                <Checkbox
+                    v-model="withCustomerData"
+                    :label="__('Only include reservations with customer details')"
+                    class="mt-3"
+                />
             </Field>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -52,27 +52,27 @@
             </div>
 
             <Field :label="__('Fields to export')">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div v-for="(group, groupName) in fieldsByGroup" :key="groupName">
-                        <div class="flex items-center gap-2 mb-2">
-                            <label class="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">{{ groupName }}</label>
-                            <Button
-                                size="xs"
-                                variant="ghost"
-                                :text="allGroupSelected(groupName) ? __('None') : __('All')"
-                                @click="toggleGroup(groupName)"
+                <CheckboxGroup v-model="selectedFields">
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div v-for="(group, groupName) in fieldsByGroup" :key="groupName" class="space-y-1">
+                            <div class="flex items-center gap-2 mb-2">
+                                <label class="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">{{ groupName }}</label>
+                                <Button
+                                    size="xs"
+                                    variant="ghost"
+                                    :text="allGroupSelected(groupName) ? __('None') : __('All')"
+                                    @click="toggleGroup(groupName)"
+                                />
+                            </div>
+                            <Checkbox
+                                v-for="field in group"
+                                :key="field.key"
+                                :value="field.key"
+                                :label="field.label"
                             />
                         </div>
-                        <label
-                            v-for="field in group"
-                            :key="field.key"
-                            class="flex items-center gap-2 text-sm cursor-pointer py-1 text-gray-700 dark:text-gray-300"
-                        >
-                            <Checkbox :value="field.key" v-model="selectedFields" />
-                            {{ field.label }}
-                        </label>
                     </div>
-                </div>
+                </CheckboxGroup>
             </Field>
 
             <div class="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-200 dark:border-gray-700/80">
@@ -96,7 +96,7 @@
 </template>
 
 <script setup>
-import { Button, Card, Checkbox, Combobox, Field, Header, Input } from '@statamic/cms/ui';
+import { Button, Card, Checkbox, CheckboxGroup, Combobox, Field, Header, Input } from '@statamic/cms/ui';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import dayjs from 'dayjs';

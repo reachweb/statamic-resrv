@@ -7,6 +7,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Entry;
@@ -31,11 +32,13 @@ class ExportCpController extends Controller
 
     public function indexCp()
     {
-        return view('statamic-resrv::cp.export.index', [
+        return Inertia::render('resrv::Export/Index', [
             'fields' => $this->fieldMetadata(),
             'statuses' => self::STATUSES,
             'entries' => Entry::query()->orderBy('title')->get(['item_id', 'title'])->values(),
             'affiliates' => Affiliate::query()->orderBy('name')->get(['id', 'name', 'code'])->values(),
+            'countUrl' => cp_route('resrv.export.count'),
+            'downloadUrl' => cp_route('resrv.export.download'),
         ]);
     }
 

@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 use Reach\StatamicResrv\Models\DynamicPricing;
 
 class DynamicPricingCpController extends Controller
@@ -18,7 +19,9 @@ class DynamicPricingCpController extends Controller
 
     public function indexCp()
     {
-        return view('statamic-resrv::cp.dynamicpricings.index');
+        return Inertia::render('resrv::DynamicPricing/Index', [
+            'timezone' => config('app.timezone', 'UTC'),
+        ]);
     }
 
     public function index(Request $request)

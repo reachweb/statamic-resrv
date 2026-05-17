@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Inertia\Inertia;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
@@ -34,14 +35,21 @@ class ReservationCpController extends Controller
 
     public function indexCp()
     {
-        $filters = Scope::filters('resrv', []);
-
-        return view('statamic-resrv::cp.reservations.index', compact('filters'));
+        return Inertia::render('resrv::Reservations/Index', [
+            'filters' => Scope::filters('resrv', []),
+            'listUrl' => cp_route('resrv.reservation.index'),
+            'showUrlTemplate' => cp_route('resrv.reservation.show', 'RESRVURL'),
+            'refundUrl' => cp_route('resrv.reservation.refund'),
+            'calendarUrl' => cp_route('resrv.reservations.calendar'),
+        ]);
     }
 
     public function calendarCp()
     {
-        return view('statamic-resrv::cp.reservations.calendar');
+        return Inertia::render('resrv::Reservations/Calendar', [
+            'calendarJsonUrl' => cp_route('resrv.reservations.calendar.list'),
+            'reservationsUrl' => cp_route('resrv.reservations.index'),
+        ]);
     }
 
     public function calendar(Request $request)
@@ -83,10 +91,105 @@ class ReservationCpController extends Controller
 
     public function show($id)
     {
-        $reservation = $this->reservation->with('extras', 'options', 'affiliate', 'dynamicPricings')->find($id);
-        $fields = $reservation->checkoutFormFieldsArray(is_array($reservation->entry()) ? null : $reservation->entry()->id());
+        $reservation = $this->reservation
+            ->with(['extras', 'options.values', 'affiliate', 'dynamicPricings', 'childs.rate'])
+            ->findOrFail($id);
 
-        return view('statamic-resrv::cp.reservations.show', compact('reservation', 'fields'));
+        $entry = $reservation->entry();
+        $entryId = is_array($entry) ? null : $entry->id();
+
+        return Inertia::render('resrv::Reservations/Show', [
+            'reservation' => $this->serializeReservation($reservation, $entry),
+            'fields' => $reservation->checkoutFormFieldsArray($entryId),
+            'currencySymbol' => config('resrv-config.currency_symbol'),
+            'maximumQuantity' => (int) config('resrv-config.maximum_quantity'),
+            'backUrl' => cp_route('resrv.reservations.index'),
+            'refundUrl' => cp_route('resrv.reservation.refund'),
+        ]);
+    }
+
+    protected function serializeReservation(Reservation $reservation, $entry): array
+    {
+        $childRateLabels = $reservation->childs->map(fn ($child) => $child->getRateLabel());
+
+        $rateLabel = $reservation->isParent()
+            ? $childRateLabels->unique()->implode(', ')
+            : ($reservation->rate?->title ?? 'Default');
+
+        $entryArray = is_array($entry)
+            ? $entry
+            : $entry->toAugmentedArray(['id', 'title', 'slug', 'url']);
+
+        return [
+            'id' => $reservation->id,
+            'reference' => $reservation->reference,
+            'status' => $reservation->status,
+            'type' => $reservation->type,
+            'created_at' => $reservation->created_at?->format('d-m-Y H:i'),
+            'date_start' => $reservation->date_start?->format('d-m-Y H:i'),
+            'date_end' => $reservation->date_end?->format('d-m-Y H:i'),
+            'quantity' => $reservation->quantity,
+            'rate_id' => $reservation->rate_id,
+            'rate_label' => $rateLabel,
+            'entry' => $entryArray,
+            'customer_data' => $reservation->customer_data->reject(
+                fn ($value) => is_array($value) || $value === null
+            )->all(),
+            'childs' => $reservation->childs->map(fn ($child, $index) => [
+                'id' => $child->id,
+                'date_start' => $child->date_start?->format('d-m-Y H:i'),
+                'date_end' => $child->date_end?->format('d-m-Y H:i'),
+                'quantity' => $child->quantity,
+                'rate_id' => $child->rate_id,
+                'rate_label' => $childRateLabels[$index],
+            ])->values()->all(),
+            'options' => $reservation->options->map(function ($option) {
+                $value = $option->values->firstWhere('id', $option->pivot->value);
+
+                return [
+                    'id' => $option->id,
+                    'name' => $option->name,
+                    'value_name' => $value?->name,
+                    'price_type' => $value?->price_type,
+                    'price_formatted' => $value?->price_type !== 'free' ? $value?->price?->format() : null,
+                ];
+            })->values()->all(),
+            'extras' => $reservation->extras->map(fn ($extra) => [
+                'id' => $extra->id,
+                'name' => $extra->name,
+                'quantity' => $extra->pivot->quantity,
+                'price_formatted' => $extra->priceFromPivot(),
+            ])->values()->all(),
+            'affiliate' => $reservation->affiliate->isNotEmpty() ? (function () use ($reservation) {
+                $affiliate = $reservation->affiliate->first();
+                $fee = (float) $affiliate->pivot->fee;
+
+                return [
+                    'name' => $affiliate->name,
+                    'email' => $affiliate->email,
+                    'fee' => $fee,
+                    'fee_amount_formatted' => $reservation->total->multiply($fee / 100)->format(),
+                ];
+            })() : null,
+            'dynamic_pricings' => $reservation->dynamicPricings->map(fn ($pricing) => [
+                'id' => $pricing->id,
+                'order' => $pricing->order,
+                'title' => $pricing->title,
+                'amount' => $pricing->amount,
+                'amount_type' => $pricing->amount_type,
+                'amount_operation' => $pricing->amount_operation,
+            ])->values()->all(),
+            'payment_gateway' => $reservation->payment_gateway,
+            'payment_gateway_label' => $reservation->payment_gateway
+                ? app(PaymentGatewayManager::class)->label($reservation->payment_gateway)
+                : null,
+            'payment_formatted' => $reservation->payment->format(),
+            'payment_surcharge_is_zero' => $reservation->payment_surcharge->isZero(),
+            'payment_surcharge_formatted' => $reservation->payment_surcharge->format(),
+            'total_to_charge_formatted' => $reservation->totalToCharge(),
+            'price_formatted' => $reservation->price->format(),
+            'total_formatted' => $reservation->total->format(),
+        ];
     }
 
     public function refund(Request $request)

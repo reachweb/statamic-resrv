@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Helpers\ResrvHelper;
 use Reach\StatamicResrv\Jobs\ProcessDataImport;
@@ -15,9 +16,11 @@ class DataImportCpController extends Controller
     public function index()
     {
         Cache::forget('resrv-data-import');
-        $collections = ResrvHelper::collectionsWithResrv();
 
-        return view('statamic-resrv::cp.dataimport.index')->with('collections', $collections);
+        return Inertia::render('resrv::DataImport/Index', [
+            'collections' => ResrvHelper::collectionsWithResrv()->values()->all(),
+            'confirmUrl' => cp_route('resrv.dataimport.confirm'),
+        ]);
     }
 
     public function confirm(Request $request)
@@ -50,25 +53,32 @@ class DataImportCpController extends Controller
         $errors = $dataImport->checkForErrors();
 
         if ($errors->count() > 0) {
-            return view('statamic-resrv::cp.dataimport.confirm')
-                ->with('errors', $errors);
+            return $this->renderConfirm($errors->values()->all());
         }
 
-        $sample = $dataImport->prepare(true)->all();
-
-        return view('statamic-resrv::cp.dataimport.confirm')
-            ->with('sample', $sample);
+        return $this->renderConfirm([], $dataImport->prepare(true)->all());
     }
 
     public function store()
     {
         if (! Cache::has('resrv-data-import')) {
-            return view('statamic-resrv::cp.dataimport.confirm')
-                ->with('errors', collect(['No data import object found in cache, please try again']));
+            return $this->renderConfirm(['No data import object found in cache, please try again']);
         }
 
         ProcessDataImport::dispatch();
 
-        return view('statamic-resrv::cp.dataimport.store');
+        return Inertia::render('resrv::DataImport/Store', [
+            'indexUrl' => cp_route('resrv.dataimport.index'),
+        ]);
+    }
+
+    protected function renderConfirm(array $errors = [], ?array $sample = null)
+    {
+        return Inertia::render('resrv::DataImport/Confirm', [
+            'errors' => $errors,
+            'sample' => $sample,
+            'storeUrl' => cp_route('resrv.dataimport.store'),
+            'indexUrl' => cp_route('resrv.dataimport.index'),
+        ]);
     }
 }
