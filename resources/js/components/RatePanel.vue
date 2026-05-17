@@ -45,7 +45,7 @@
                             <Input v-model="submit.title" @input="slugify" />
                         </Field>
                         <Field :label="__('Slug')" :errors="errors.slug">
-                            <Input v-model="submit.slug" />
+                            <Input v-model="submit.slug" @input="onSlugInput" />
                         </Field>
                     </div>
                     <Field :label="__('Description')" :errors="errors.description">
@@ -97,19 +97,7 @@
             <Panel :heading="__('Restrictions')">
                 <Card>
                     <Field :label="__('Date range')" :instructions="__('Rate is available within this date range.')" :errors="dateRangeErrors">
-                        <template #actions>
-                            <Button
-                                v-if="submit.date_start || submit.date_end"
-                                size="xs"
-                                variant="ghost"
-                                :text="__('Clear')"
-                                @click="clearDate"
-                            />
-                        </template>
-                        <div class="grid grid-cols-2 gap-2">
-                            <Input v-model="submit.date_start" type="date" :placeholder="__('Start date')" />
-                            <Input v-model="submit.date_end" type="date" :placeholder="__('End date')" />
-                        </div>
+                        <DateRangePicker v-model="dateRange" />
                     </Field>
                     <div class="grid grid-cols-1 xl:grid-cols-4 gap-x-4">
                         <Field :label="__('Min days before')" :instructions="__('Minimum advance booking days.')" :errors="errors.min_days_before">
@@ -143,10 +131,12 @@
 </template>
 
 <script setup>
-import { Button, Card, Combobox, Field, Input, Panel, Select, Stack, Switch, Textarea } from '@statamic/cms/ui';
-import { computed, getCurrentInstance, onMounted, reactive, ref, watch } from 'vue';
+import { Button, Card, Combobox, DateRangePicker, Field, Input, Panel, Select, Stack, Switch, Textarea } from '@statamic/cms/ui';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import axios from 'axios';
+import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useFormHandler } from '../composables/useFormHandler.js';
+import { useSlugify } from '../composables/useSlugify.js';
 import { useToast } from '../composables/useToast.js';
 
 const props = defineProps({
@@ -158,11 +148,18 @@ const props = defineProps({
 
 const emit = defineEmits(['closed', 'saved']);
 const toast = useToast();
-const { proxy } = getCurrentInstance();
+const { slugifyFrom, onSlugInput, reset: resetSlugify } = useSlugify();
 
 const submit = reactive({ entries: [] });
 const collectionEntries = ref([]);
 const entriesLoaded = ref(false);
+
+const dateRange = useDateRangeModel(
+    () => submit.date_start,
+    () => submit.date_end,
+    (v) => (submit.date_start = v),
+    (v) => (submit.date_end = v),
+);
 
 const pricingTypes = [
     { value: 'independent', label: 'Independent' },
@@ -271,18 +268,17 @@ function createSubmit() {
     }
     submit.date_start = props.data.date_start || null;
     submit.date_end = props.data.date_end || null;
+    resetSlugify(submit.slug);
     if (isEditing.value) {
         loadAssignedEntries();
     }
 }
 
 function slugify() {
-    submit.slug = proxy.$slug(submit.title);
-}
-
-function clearDate() {
-    submit.date_start = null;
-    submit.date_end = null;
+    const next = slugifyFrom(submit.title);
+    if (next !== undefined) {
+        submit.slug = next;
+    }
 }
 
 function getCollectionEntries(collection) {

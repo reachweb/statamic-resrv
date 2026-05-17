@@ -3,9 +3,8 @@
         <Header :title="__('Export Reservations')" icon="arrow-down" />
         <Card class="space-y-6">
             <Field :label="__('Reservation date range')">
-                <div class="grid grid-cols-2 gap-2 max-w-md">
-                    <Input v-model="dateStart" type="date" :placeholder="__('Start date')" />
-                    <Input v-model="dateEnd" type="date" :placeholder="__('End date')" />
+                <div class="max-w-md">
+                    <DateRangePicker v-model="dateRange" />
                 </div>
             </Field>
 
@@ -96,10 +95,11 @@
 </template>
 
 <script setup>
-import { Button, Card, Checkbox, CheckboxGroup, Combobox, Field, Header, Input } from '@statamic/cms/ui';
+import { Button, Card, Checkbox, CheckboxGroup, Combobox, DateRangePicker, Field, Header } from '@statamic/cms/ui';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import dayjs from 'dayjs';
+import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useToast } from '../composables/useToast.js';
 
 const STORAGE_KEY = 'resrv-export-selected-fields';
@@ -117,6 +117,12 @@ const toast = useToast();
 
 const dateStart = ref(dayjs().subtract(30, 'days').format('YYYY-MM-DD'));
 const dateEnd = ref(dayjs().format('YYYY-MM-DD'));
+const dateRange = useDateRangeModel(
+    () => dateStart.value,
+    () => dateEnd.value,
+    (v) => (dateStart.value = v ?? ''),
+    (v) => (dateEnd.value = v ?? ''),
+);
 const selectedStatuses = ref(props.statuses.filter((s) => ['confirmed', 'partner'].includes(s)));
 const selectedEntry = ref(null);
 const selectedAffiliate = ref(null);

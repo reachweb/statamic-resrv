@@ -18,6 +18,7 @@
         "@fullcalendar/daygrid": "^6.1.0",
         "@fullcalendar/interaction": "^6.1.0",
         "@fullcalendar/vue3": "^6.1.0",
+        "@internationalized/date": "^3.12.1",
         "@reachweb/alpine-calendar": "^1.0.0",
         "@statamic/cms": "file:./vendor/statamic/cms/resources/dist-package",
         "axios": "^1.6.0",

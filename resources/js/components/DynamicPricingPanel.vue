@@ -37,10 +37,7 @@
                         />
                     </Field>
                     <Field :label="__('Date range')" :instructions="__('Select the range of the date condition.')" :errors="dateRangeErrors">
-                        <div class="grid grid-cols-2 gap-2">
-                            <Input v-model="submit.date_start" type="date" />
-                            <Input v-model="submit.date_end" type="date" />
-                        </div>
+                        <DateRangePicker v-model="dateRange" />
                     </Field>
                 </div>
 
@@ -111,9 +108,10 @@
 </template>
 
 <script setup>
-import { Button, Card, Combobox, Field, Input, Select, Stack, Switch } from '@statamic/cms/ui';
+import { Button, Card, Combobox, DateRangePicker, Field, Input, Select, Stack, Switch } from '@statamic/cms/ui';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import axios from 'axios';
+import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useFormHandler } from '../composables/useFormHandler.js';
 import { useToast } from '../composables/useToast.js';
 
@@ -134,6 +132,13 @@ const entries = ref([]);
 const entriesLoaded = ref(false);
 const extras = ref([]);
 const extrasLoaded = ref(false);
+
+const dateRange = useDateRangeModel(
+    () => submit.date_start,
+    () => submit.date_end,
+    (v) => (submit.date_start = v ?? ''),
+    (v) => (submit.date_end = v ?? ''),
+);
 
 const amountOperationOptions = [
     { value: 'decrease', label: 'Decrease' },

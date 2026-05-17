@@ -15,7 +15,7 @@
                     <Input v-model="submit.name" @input="slugify" />
                 </Field>
                 <Field :label="__('Slug')" :errors="errors.slug">
-                    <Input v-model="submit.slug" />
+                    <Input v-model="submit.slug" @input="onSlugInput" />
                 </Field>
                 <Field :label="__('Description')" :errors="errors.description">
                     <Textarea v-model="submit.description" />
@@ -30,8 +30,9 @@
 
 <script setup>
 import { Button, Card, Field, Input, Stack, Switch, Textarea } from '@statamic/cms/ui';
-import { computed, getCurrentInstance, onMounted, reactive, watch } from 'vue';
+import { computed, onMounted, reactive, watch } from 'vue';
 import { useFormHandler } from '../composables/useFormHandler.js';
+import { useSlugify } from '../composables/useSlugify.js';
 
 const props = defineProps({
     data: { type: Object, required: true },
@@ -39,7 +40,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['closed', 'saved']);
-const { proxy } = getCurrentInstance();
+const { slugifyFrom, onSlugInput, reset: resetSlugify } = useSlugify();
 
 const submit = reactive({});
 
@@ -71,9 +72,13 @@ function createSubmit() {
     Object.entries(props.data).forEach(([name, value]) => {
         submit[name] = value;
     });
+    resetSlugify(submit.slug);
 }
 
 function slugify() {
-    submit.slug = proxy.$slug(submit.name);
+    const next = slugifyFrom(submit.name);
+    if (next !== undefined) {
+        submit.slug = next;
+    }
 }
 </script>

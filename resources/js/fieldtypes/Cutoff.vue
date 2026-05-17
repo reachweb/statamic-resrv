@@ -47,10 +47,10 @@
                                 </div>
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                     <Field class="lg:col-span-2" :label="__('Date Range')">
-                                        <div class="grid grid-cols-2 gap-2">
-                                            <Input v-model="schedule.date_start" type="date" :placeholder="__('Start Date')" />
-                                            <Input v-model="schedule.date_end" type="date" :placeholder="__('End Date')" />
-                                        </div>
+                                        <DateRangePicker
+                                            :model-value="scheduleDateRange(index)"
+                                            @update:model-value="updateScheduleDateRange(index, $event)"
+                                        />
                                     </Field>
                                     <Field :label="__('Starting Time')">
                                         <Input v-model="schedule.starting_time" type="time" />
@@ -73,8 +73,9 @@
 
 <script setup>
 import { Fieldtype } from '@statamic/cms';
-import { Alert, Button, Card, Field, Input, Panel, Switch } from '@statamic/cms/ui';
+import { Alert, Button, Card, DateRangePicker, Field, Input, Panel, Switch } from '@statamic/cms/ui';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { toCalendarDate, toIsoString } from '../composables/useDateRangeModel.js';
 
 const emit = defineEmits(Fieldtype.emits);
 const props = defineProps(Fieldtype.props);
@@ -142,6 +143,20 @@ function removeSchedule(index) {
 
 function updateFieldValue() {
     update(enabled.value ? { ...settings, schedules: [...settings.schedules] } : null);
+}
+
+function scheduleDateRange(index) {
+    const row = settings.schedules[index];
+    return {
+        start: toCalendarDate(row.date_start),
+        end: toCalendarDate(row.date_end),
+    };
+}
+
+function updateScheduleDateRange(index, value) {
+    const row = settings.schedules[index];
+    row.date_start = toIsoString(value?.start) ?? '';
+    row.date_end = toIsoString(value?.end) ?? '';
 }
 
 defineExpose(expose);

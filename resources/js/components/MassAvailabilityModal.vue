@@ -15,10 +15,7 @@
             </Field>
 
             <Field :label="__('Select dates')" :errors="dateErrors">
-                <div class="grid grid-cols-2 gap-2">
-                    <Input v-model="dates.start" type="date" :placeholder="__('Start Date')" />
-                    <Input v-model="dates.end" type="date" :placeholder="__('End Date')" />
-                </div>
+                <DateRangePicker v-model="dateRange" />
             </Field>
 
             <div class="grid grid-cols-2 gap-4">
@@ -50,8 +47,9 @@
 </template>
 
 <script setup>
-import { Button, Checkbox, Combobox, Field, Input, Modal } from '@statamic/cms/ui';
+import { Button, Checkbox, Combobox, DateRangePicker, Field, Input, Modal } from '@statamic/cms/ui';
 import { computed, reactive, ref } from 'vue';
+import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useFormHandler } from '../composables/useFormHandler.js';
 
 const props = defineProps({
@@ -73,6 +71,12 @@ const props = defineProps({
 const emit = defineEmits(['cancel', 'saved']);
 
 const dates = reactive({ start: '', end: '' });
+const dateRange = useDateRangeModel(
+    () => dates.start,
+    () => dates.end,
+    (v) => (dates.start = v ?? ''),
+    (v) => (dates.end = v ?? ''),
+);
 const available = ref(null);
 const price = ref(null);
 const onlyDays = ref([]);

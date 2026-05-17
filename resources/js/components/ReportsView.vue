@@ -9,14 +9,9 @@
                         <Select v-model="dateField" :options="dateFieldOptions" :clearable="false" />
                     </Field>
                 </div>
-                <div class="min-w-[200px]">
-                    <Field :label="__('Start date')">
-                        <Input v-model="dateStart" type="date" />
-                    </Field>
-                </div>
-                <div class="min-w-[200px]">
-                    <Field :label="__('End date')">
-                        <Input v-model="dateEnd" type="date" />
+                <div class="min-w-[320px]">
+                    <Field :label="__('Date range')">
+                        <DateRangePicker v-model="dateRange" />
                     </Field>
                 </div>
             </div>
@@ -65,11 +60,12 @@
 </template>
 
 <script setup>
-import { Card, Field, Header, Input, Panel, Select } from '@statamic/cms/ui';
+import { Card, DateRangePicker, Field, Header, Panel, Select } from '@statamic/cms/ui';
 import { onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import ReportsItemsTable from './ReportsItemsTable.vue';
+import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useToast } from '../composables/useToast.js';
 
 const props = defineProps({
@@ -83,6 +79,12 @@ const reportData = ref({});
 const reportDataLoaded = ref(false);
 const dateStart = ref(dayjs().subtract(7, 'days').format('YYYY-MM-DD'));
 const dateEnd = ref(dayjs().format('YYYY-MM-DD'));
+const dateRange = useDateRangeModel(
+    () => dateStart.value,
+    () => dateEnd.value,
+    (v) => (dateStart.value = v ?? ''),
+    (v) => (dateEnd.value = v ?? ''),
+);
 const dateField = ref('date_start');
 const dateFieldOptions = [
     { value: 'date_start', label: __('Reservation date') },

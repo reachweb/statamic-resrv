@@ -15,14 +15,16 @@
                 />
             </Field>
             <div>
-                <div v-if="typeIsDate(index)" class="grid grid-cols-2 gap-2">
-                    <Field :label="__('Date start')" :error="errors['conditions.' + index + '.date_start']?.[0]">
-                        <Input v-model="conditionsForm[index].date_start" type="date" />
-                    </Field>
-                    <Field :label="__('Date end')" :error="errors['conditions.' + index + '.date_end']?.[0]">
-                        <Input v-model="conditionsForm[index].date_end" type="date" />
-                    </Field>
-                </div>
+                <Field
+                    v-if="typeIsDate(index)"
+                    :label="__('Date range')"
+                    :error="rowDateError(index)"
+                >
+                    <DateRangePicker
+                        :model-value="rowDateRange(index)"
+                        @update:model-value="updateRowDateRange(index, $event)"
+                    />
+                </Field>
                 <div v-if="typeIsTime(index)" class="grid grid-cols-2 gap-2">
                     <Field :label="__('Time start')" :error="errors['conditions.' + index + '.time_start']?.[0]">
                         <time-fieldtype v-model:value="conditionsForm[index].time_start" />
@@ -55,9 +57,10 @@
 </template>
 
 <script setup>
-import { Button, Field, Input, Select } from '@statamic/cms/ui';
+import { Button, DateRangePicker, Field, Input, Select } from '@statamic/cms/ui';
 import { computed, onMounted, ref, watch } from 'vue';
 import { normalizeInputOptions } from '../composables/useInputOptions.js';
+import { toCalendarDate, toIsoString } from '../composables/useDateRangeModel.js';
 
 const props = defineProps({
     data: { type: [Array, Object], required: true },
@@ -187,6 +190,28 @@ function handleDates(conditions) {
         }
         return condition;
     });
+}
+
+function rowDateRange(index) {
+    const row = conditionsForm.value[index];
+    return {
+        start: toCalendarDate(row.date_start),
+        end: toCalendarDate(row.date_end),
+    };
+}
+
+function updateRowDateRange(index, value) {
+    const row = conditionsForm.value[index];
+    row.date_start = toIsoString(value?.start) ?? '';
+    row.date_end = toIsoString(value?.end) ?? '';
+}
+
+function rowDateError(index) {
+    return (
+        props.errors['conditions.' + index + '.date_start']?.[0] ||
+        props.errors['conditions.' + index + '.date_end']?.[0] ||
+        null
+    );
 }
 
 function clearValues(index) {
