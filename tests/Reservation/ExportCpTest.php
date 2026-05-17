@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Http\Controllers\ExportCpController;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Customer;
@@ -30,7 +31,8 @@ class ExportCpTest extends TestCase
     {
         $response = $this->get(cp_route('resrv.export.index'));
 
-        $response->assertStatus(200)->assertSee('Export reservations');
+        $response->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('resrv::Export/Index'));
     }
 
     public function test_count_endpoint_returns_matching_reservations()

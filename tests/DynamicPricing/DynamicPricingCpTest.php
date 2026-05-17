@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\DynamicPricing;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -30,7 +31,8 @@ class DynamicPricingCpTest extends TestCase
         $dynamic = DynamicPricing::factory()->create();
 
         $response = $this->get(cp_route('resrv.dynamicpricings.index'));
-        $response->assertStatus(200)->assertSee('dynamic-pricing');
+        $response->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('resrv::DynamicPricing/Index'));
     }
 
     public function test_can_add_dynamic_pricing_for_statamic_item()

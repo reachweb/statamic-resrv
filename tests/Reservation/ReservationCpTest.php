@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Reservation;
@@ -60,7 +61,13 @@ class ReservationCpTest extends TestCase
 
         $response = $this->get(cp_route('resrv.reservation.show', $reservation->id));
 
-        $response->assertStatus(200)->assertSee($child->date_end->format('d-m-Y H:i'))->assertSee('Related reservations')->assertSee($item->title);
+        $response->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('resrv::Reservations/Show')
+                ->has('reservation.childs', 1)
+                ->where('reservation.childs.0.date_end', $child->date_end->format('d-m-Y H:i'))
+                ->where('reservation.entry.title', $item->title)
+            );
     }
 
     public function test_can_refund_reservations()
@@ -135,6 +142,7 @@ class ReservationCpTest extends TestCase
     {
         $response = $this->get(cp_route('resrv.reservations.calendar'));
 
-        $response->assertStatus(200)->assertSee('Reservations Calendar');
+        $response->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('resrv::Reservations/Calendar'));
     }
 }

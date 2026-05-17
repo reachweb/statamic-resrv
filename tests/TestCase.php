@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests;
 
-use Facades\Statamic\Version;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\WithFaker;
 use Illuminate\Support\Facades\DB;
@@ -10,29 +9,27 @@ use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Livewire\LivewireServiceProvider;
 use MarcoRieser\Livewire\ServiceProvider;
-use Orchestra\Testbench\TestCase as OrchestraTestCase;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\StatamicResrvServiceProvider;
 use Spatie\LaravelRay\RayServiceProvider;
-use Statamic\Extend\Manifest;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
-use Statamic\Providers\StatamicServiceProvider;
 use Statamic\Stache\Stores\UsersStore;
 use Statamic\Statamic;
 use Statamic\Support\Str;
+use Statamic\Testing\AddonTestCase;
 
-class TestCase extends OrchestraTestCase
+class TestCase extends AddonTestCase
 {
-    use RefreshDatabase;
     use FakesViews;
     use PreventSavingStacheItemsToDisk;
+    use RefreshDatabase;
     use WithFaker;
 
-    protected $fakeStacheDirectory = __DIR__.'/__fixtures__/dev-null';
+    protected string $addonServiceProvider = StatamicResrvServiceProvider::class;
 
     protected function setUp(): void
     {
@@ -40,13 +37,9 @@ class TestCase extends OrchestraTestCase
 
         $this->resetPostgresSequences();
 
-        $this->withoutVite();
-        $this->preventSavingStacheItemsToDisk();
         $this->withoutExceptionHandling();
 
         Rate::resetEntryCollectionCache();
-
-        Version::shouldReceive('get')->andReturn('5.5.0');
 
         Site::setSites([
             'en' => [
@@ -56,13 +49,6 @@ class TestCase extends OrchestraTestCase
                 'lang' => 'en',
             ],
         ]);
-    }
-
-    protected function tearDown(): void
-    {
-        $this->deleteFakeStacheDirectory();
-
-        parent::tearDown();
     }
 
     protected function setUpFaker()
@@ -77,46 +63,16 @@ class TestCase extends OrchestraTestCase
 
     protected function getPackageProviders($app)
     {
-        return [
-            StatamicServiceProvider::class,
+        return array_merge(parent::getPackageProviders($app), [
             LivewireServiceProvider::class,
             ServiceProvider::class,
-            StatamicResrvServiceProvider::class,
             RayServiceProvider::class,
-        ];
-    }
-
-    protected function getPackageAliases($app)
-    {
-        return ['Statamic' => Statamic::class];
-    }
-
-    protected function getEnvironmentSetUp($app)
-    {
-        parent::getEnvironmentSetUp($app);
-
-        $app->make(Manifest::class)->manifest = [
-            'reach/resrv' => [
-                'id' => 'reach/resrv',
-                'namespace' => 'Reach\\StatamicResrv',
-            ],
-        ];
+        ]);
     }
 
     protected function resolveApplicationConfiguration($app)
     {
         parent::resolveApplicationConfiguration($app);
-
-        $configs = [
-            'assets', 'cp', 'forms', 'routes', 'static_caching',
-            'stache', 'system', 'users',
-        ];
-
-        foreach ($configs as $config) {
-            $app['config']->set("statamic.$config", require (__DIR__."/../vendor/statamic/cms/config/{$config}.php"));
-        }
-
-        // $app['config']->set("resrv-config", require(__DIR__."/../config/config.php"));
 
         // Force the cache driver to be array for testing
         $app['config']->set('cache.default', 'array');
@@ -132,20 +88,11 @@ class TestCase extends OrchestraTestCase
         $app['config']->set('statamic.stache.watcher', false);
         $app['config']->set('statamic.stache.stores.users', [
             'class' => UsersStore::class,
-            'directory' => __DIR__.'/__fixtures/users',
+            'directory' => __DIR__.'/__fixtures__/users',
         ]);
+
         // Set the path for our forms
         $app['config']->set('statamic.forms.forms', __DIR__.'/../resources/forms/');
-
-        // Set the path for our entries
-        $app['config']->set('statamic.stache.stores.taxonomies.directory', __DIR__.'/__fixtures__/content/taxonomies');
-        $app['config']->set('statamic.stache.stores.terms.directory', __DIR__.'/__fixtures__/content/taxonomies');
-        $app['config']->set('statamic.stache.stores.collections.directory', __DIR__.'/__fixtures__/content/collections');
-        $app['config']->set('statamic.stache.stores.entries.directory', __DIR__.'/__fixtures__/content/collections');
-        $app['config']->set('statamic.stache.stores.navigation.directory', __DIR__.'/__fixtures__/content/navigation');
-        $app['config']->set('statamic.stache.stores.globals.directory', __DIR__.'/__fixtures__/content/globals');
-        $app['config']->set('statamic.stache.stores.global-variables.directory', __DIR__.'/__fixtures__/content/globals');
-        $app['config']->set('statamic.stache.stores.asset-containers.directory', __DIR__.'/__fixtures__/content/assets');
 
         // Assume the pro edition within tests
         $app['config']->set('statamic.editions.pro', true);
