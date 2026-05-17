@@ -1,41 +1,32 @@
-// TODO(v6 phase 6k): Re-enable imports + registrations once Vue 2 → Vue 3
-// migration lands. Vue components below contain Vue 2 syntax (Options API
-// without defineComponent, v-model-on-prop, etc.) that the Vue 3 compiler
-// rejects. Phase 6 migrates them tier-by-tier; Phase 6k re-wires this file.
-//
-// import AvailabilityFieldtype from './fieldtypes/Availability.vue'
-// import OptionsFieldtype from './fieldtypes/Options.vue'
-// import ExtrasFieldtype from './fieldtypes/Extras.vue'
-// import FixedPricing from './fieldtypes/FixedPricing.vue'
-// import CutoffFieldtype from './fieldtypes/Cutoff.vue'
-//
-// import AffiliatesList from './components/AffiliatesList.vue'
-// import ExtrasList from './components/ExtrasList.vue'
-// import ReservationsList from './components/ReservationsList.vue'
-// import DynamicPricingList from './components/DynamicPricingList.vue'
-// import ReportsView from './components/ReportsView.vue'
-// import ReservationsExport from './components/ReservationsExport.vue'
-//
-// import RatesList from './components/RatesList.vue'
-// import ReservationsCalendar from './components/ReservationsCalendar.vue'
+import AvailabilityFieldtype from './fieldtypes/Availability.vue';
+import OptionsFieldtype from './fieldtypes/Options.vue';
+import ExtrasFieldtype from './fieldtypes/Extras.vue';
+import FixedPricingFieldtype from './fieldtypes/FixedPricing.vue';
+import CutoffFieldtype from './fieldtypes/Cutoff.vue';
+
+import AffiliatesList from './components/AffiliatesList.vue';
+import ExtrasList from './components/ExtrasList.vue';
+import ReservationsList from './components/ReservationsList.vue';
+import DynamicPricingList from './components/DynamicPricingList.vue';
+import ReportsView from './components/ReportsView.vue';
+import ReservationsExport from './components/ReservationsExport.vue';
+import RatesList from './components/RatesList.vue';
+import ReservationsCalendar from './components/ReservationsCalendar.vue';
 
 Statamic.booting(() => {
-    // Fieldtypes
-    // Statamic.$components.register('resrv_availability-fieldtype', AvailabilityFieldtype);
-    // Statamic.$components.register('resrv_options-fieldtype', OptionsFieldtype);
-    // Statamic.$components.register('resrv_extras-fieldtype', ExtrasFieldtype);
-    // Statamic.$components.register('resrv_fixed_pricing-fieldtype', FixedPricing);
-    // Statamic.$components.register('resrv_cutoff-fieldtype', CutoffFieldtype);
+    Statamic.$components.register('resrv_availability-fieldtype', AvailabilityFieldtype);
+    Statamic.$components.register('resrv_options-fieldtype', OptionsFieldtype);
+    Statamic.$components.register('resrv_extras-fieldtype', ExtrasFieldtype);
+    Statamic.$components.register('resrv_fixed_pricing-fieldtype', FixedPricingFieldtype);
+    Statamic.$components.register('resrv_cutoff-fieldtype', CutoffFieldtype);
 
-    // Lists
-    // Statamic.$components.register('affiliates-list', AffiliatesList);
-    // Statamic.$components.register('extras-list', ExtrasList);
-    // Statamic.$components.register('reservations-list', ReservationsList);
-    // Statamic.$components.register('dynamic-pricing-list', DynamicPricingList);
-    // Statamic.$components.register('rates-list', RatesList);
-    // Statamic.$components.register('reports-view', ReportsView);
-    // Statamic.$components.register('reservations-export', ReservationsExport);
+    Statamic.$components.register('affiliates-list', AffiliatesList);
+    Statamic.$components.register('extras-list', ExtrasList);
+    Statamic.$components.register('reservations-list', ReservationsList);
+    Statamic.$components.register('dynamic-pricing-list', DynamicPricingList);
+    Statamic.$components.register('rates-list', RatesList);
+    Statamic.$components.register('reports-view', ReportsView);
+    Statamic.$components.register('reservations-export', ReservationsExport);
 
-    // Calendar
-    // Statamic.$components.register('reservations-calendar', ReservationsCalendar);
-})
+    Statamic.$components.register('reservations-calendar', ReservationsCalendar);
+});

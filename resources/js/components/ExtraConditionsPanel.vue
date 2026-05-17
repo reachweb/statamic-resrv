@@ -1,113 +1,92 @@
 <template>
-    <stack name="statamic-resrv-extra-conditions" @closed="close">
-        <div slot-scope="{ close }" class="h-full overflow-scroll overflow-x-auto bg-gray-100 dark:bg-dark-600">
-            <header class="flex items-center sticky top-0 inset-x-0 bg-gray-300 dark:bg-dark-600 border-b dark:border-dark-900 shadow px-8 py-2 z-1 h-13">
-                <div class="flex-1 flex items-center text-xl">{{ __('Extra conditions for:') }}  <span class="ml-2 font-bold">{{ data.name }}</span></div>                
-                <button type="button" class="text-gray-700 hover:text-gray-800 dark:text-dark-100 dark:hover:text-dark-175 mr-6 text-sm" @click="close">Cancel</button>
-                <button 
-                    class="btn-primary" 
-                    :disabled="disableSave"
-                    @click="save"
-                >
-                    {{ __('Save') }}
-                </button>
-            </header>
-            <section class="py-4 px-3 md:px-8">
-                <div class="publish-sections">
-                    <div class="publish-sections-section">
-                        <div class="card">
-                            <extra-conditions-form 
-                            :data="conditionsSafe()"
-                            :extras="extras"
-                            :errors="errors"
-                            @updated="createSubmit"                  
-                        />
-                        </div>
-                    </div>
-                </div>
-            </section>        
-        </div>
-    </stack>
+    <Stack
+        :open="true"
+        :title="__('Extra conditions for') + ': ' + data.name"
+        icon="settings"
+        size="half"
+        @closed="onClosed"
+    >
+        <template #header-actions>
+            <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+        </template>
+        <template #default>
+            <Card>
+                <ExtraConditionsForm
+                    :data="conditionsSafe()"
+                    :extras="extras"
+                    :errors="errors"
+                    @updated="createSubmit"
+                />
+            </Card>
+        </template>
+    </Stack>
 </template>
 
-<script>
-import axios from 'axios'
-import FormHandler from '../mixins/FormHandler.vue'
-import ExtraConditionsForm from './ExtraConditionsForm.vue'
+<script setup>
+import { Button, Card, Stack } from '@statamic/cms/ui';
+import { computed, onMounted, ref, watch } from 'vue';
+import axios from 'axios';
+import ExtraConditionsForm from './ExtraConditionsForm.vue';
+import { useFormHandler } from '../composables/useFormHandler.js';
+import { useToast } from '../composables/useToast.js';
 
-export default {
+const props = defineProps({
+    data: { type: Object, required: true },
+    openPanel: { type: Boolean, default: false },
+});
 
-    props: {
-        data: {
-            type: Object,
-            required: true
-        },
-        openPanel: {
-            type: Boolean,
-            default: false
-        },
-    },
+const emit = defineEmits(['closed', 'saved']);
+const toast = useToast();
 
-    mounted() {
-        this.createSubmit([])
-    },
+const submit = ref({ conditions: [] });
+const extras = ref([]);
 
-    watch: {
-        submit: {
-            deep: true,
-            handler(submit) {
-                if (submit.conditions.length > 0) {
-                    this.disableSave = false
-                }
-            }
-        }
-    },
+const postUrl = computed(() => '/cp/resrv/extra/conditions/' + props.data.id);
 
-    data() {
-        return {
-            submit: {},
-            extras: [],
-            method: 'post',
-            successMessage: 'Conditions successfully saved',
-            postUrl: '/cp/resrv/extra/conditions/'+this.data.id,
-            disableSave: true,
-        }
-    },
+const { disableSave, errors, save } = useFormHandler({
+    submit,
+    postUrl,
+    method: 'post',
+    successMessage: 'Conditions successfully saved',
+    emit,
+});
 
-    mixins: [FormHandler],
+disableSave.value = true;
 
-    components: {
-        ExtraConditionsForm
-    },
-
-    mounted() {
-        this.getAllExtras()
-    },
-
-    methods: {
-        close() {
-            this.submit = {}
-            this.$emit('closed')
-        },
-        createSubmit(conditionsForm) {
-            this.submit = {}
-            this.submit.conditions = conditionsForm            
-        },
-        conditionsSafe() {
-            if (this.data.conditions) {
-                return this.data.conditions.conditions
-            }
-            return []
-        },
-        getAllExtras() {
-            axios.get('/cp/resrv/extra')
-                .then(response => {
-                    this.extras = response.data
-                })
-                .catch(error => {
-                    console.log(error)
-                })
-        }
+watch(submit, (value) => {
+    if (value.conditions && value.conditions.length > 0) {
+        disableSave.value = false;
     }
+}, { deep: true });
+
+onMounted(() => {
+    createSubmit([]);
+    getAllExtras();
+});
+
+function onClosed() {
+    submit.value = { conditions: [] };
+    emit('closed');
+}
+
+function createSubmit(conditionsForm) {
+    submit.value = { conditions: conditionsForm };
+}
+
+function conditionsSafe() {
+    if (props.data.conditions) {
+        return props.data.conditions.conditions || [];
+    }
+    return [];
+}
+
+function getAllExtras() {
+    axios.get('/cp/resrv/extra')
+        .then((response) => {
+            extras.value = response.data;
+        })
+        .catch(() => {
+            toast.error('Cannot retrieve extras');
+        });
 }
 </script>

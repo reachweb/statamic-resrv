@@ -1,1 +1,0 @@
-Statamic.booting(()=>{});

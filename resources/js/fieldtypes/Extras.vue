@@ -1,54 +1,33 @@
 <template>
-    <element-container @resized="containerWidth = $event.width">
-    <div class="w-full h-full text-center my-4 text-gray-700 text-lg" v-if="newItem">
-        {{ __('You need to save this entry before you can add extras.') }}
-    </div>
-    <div class="statamic-resrv-extras relative" v-else>
-        <div class="text-sm text-gray-600 mb-2">
-            {{ __('You can only enable or disable extra for this entry here. To edit an extra use') }}
-            <a href="/cp/resrv/extras">{{ __('the appropriate section in the control panel') }}</a>.
+    <element-container>
+        <Alert v-if="newItem" :title="__('You need to save this entry before you can add extras.')" variant="info" />
+        <div class="statamic-resrv-extras relative" v-else>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                {{ __('You can only enable or disable extra for this entry here. To edit an extra use') }}
+                <a href="/cp/resrv/extras" class="text-blue-600 hover:underline dark:text-blue-400">{{ __('the appropriate section in the control panel') }}</a>.
+            </p>
+            <ExtrasList :parent="props.meta.parent" :inside-entry="true" />
         </div>
-        <extras-list
-            :parent="this.meta.parent"
-            :inside-entry="true"        
-        >
-        </extras-list>
-    </div>
     </element-container>
-
 </template>
 
-<script>
-import ExtrasList from '../components/ExtrasList.vue'
+<script setup>
+import { Fieldtype } from '@statamic/cms';
+import { Alert } from '@statamic/cms/ui';
+import { computed, onUpdated } from 'vue';
+import ExtrasList from '../components/ExtrasList.vue';
 
-export default {
+const emit = defineEmits(Fieldtype.emits);
+const props = defineProps(Fieldtype.props);
+const { update, expose } = Fieldtype.use(emit, props);
 
-    mixins: [Fieldtype],
+const newItem = computed(() => props.meta.parent === 'Collection');
 
-    data() {
-        return {
-            containerWidth: null,           
-        }
-    },
+onUpdated(() => {
+    if (!newItem.value) {
+        update(props.meta.parent);
+    }
+});
 
-    components: {
-        ExtrasList,
-    },
-
-    computed: {
-        newItem() {
-            if (this.meta.parent == 'Collection') {
-                return true
-            }
-            return false
-        }
-    },
-
-    updated() {
-        if (! this.newItem) {
-            this.$emit('input', this.meta.parent)
-        }
-    },
-   
-}
+defineExpose(expose);
 </script>

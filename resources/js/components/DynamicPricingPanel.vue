@@ -1,560 +1,279 @@
 <template>
-    <stack name="statamic-resrv-dynamic-pricing" @closed="close">
-        <div slot-scope="{ close }" class="h-full overflow-scroll overflow-x-auto bg-gray-100 dark:bg-dark-600">
-            <header class="flex items-center sticky top-0 inset-x-0 bg-gray-300 dark:bg-dark-600 border-b dark:border-dark-900 shadow px-8 py-2 z-1 h-13">
-                <div class="flex-1 flex items-center text-xl">Add dynamic pricing</div>
-                <button type="button" class="text-gray-700 hover:text-gray-800 dark:text-dark-100 dark:hover:text-dark-175 mr-6 text-sm" @click="close">Cancel</button>
-                <button 
-                    class="btn-primary" 
-                    :disabled="disableSave"
-                    @click="save"
-                >
-                    {{ __('Save') }}
-                </button>
-            </header>
-            <section class="py-4 px-3 md:px-8">
-                <div class="publish-sections">
-                    <div class="publish-sections-section">
-                        <div class="card">
-                            <div class="publish-fields w-full">
-                                <div class="form-group w-full">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Title</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="name" type="text" v-model="submit.title">
-                                    </div>
-                                    <div v-if="errors.title" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.title[0] }}
-                                    </div>  
-                                </div>
-                                <div class="form-group w-full xl:!w-1/3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Amount</label>
-                                        <div class="text-sm font-light"><p>Amount or percentage without the % character.</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="name" type="text" v-model="submit.amount">
-                                    </div>
-                                    <div v-if="errors.amount" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.amount[0] }}
-                                    </div>  
-                                </div>
-                                <div class="form-group w-full xl:!w-1/3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Operation</label>
-                                        <div class="text-sm font-light"><p>Select if the base price will be decreased or increased.</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <v-select v-model="submit.amount_operation" :options="amountOperation" :reduce="type => type.code" />
-                                    </div>
-                                    <div v-if="errors.amount_operation" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.amount_operation[0] }}
-                                    </div>  
-                                </div>
-                                <div class="form-group w-full xl:!w-1/3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Type</label>
-                                        <div class="text-sm font-light"><p>Percentage or fixed price.</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <v-select v-model="submit.amount_type" :options="availableAmountTypes" :reduce="type => type.code" />
-                                    </div>
-                                    <div v-if="errors.amount_type" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.amount_type[0] }}
-                                    </div>  
-                                </div>
-                                
-                                <div class="form-group w-full xl:!w-1/2">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Date condition</label>
-                                        <div class="text-sm font-light"><p>Add a date condition.</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <v-select v-model="submit.date_include" :options="dateCondition" :reduce="type => type.code" @input="removeDate" />
-                                    </div>
-                                    <div v-if="errors.date_include" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.date_include[0] }}
-                                    </div>  
-                                </div>
-                                <div class="form-group w-full xl:!w-1/2">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Date range</label>
-                                        <div class="text-sm font-light"><p>Select the range of the date condition.</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <div class="date-container input-group w-full">
-                                            <v-date-picker
-                                                v-model="date"
-                                                :model-config="modelConfig"
-                                                :popover="{ visibility: 'click' }"
-                                                :masks="{ input: 'YYYY-MM-DD' }"
-                                                :mode="'date'"
-                                                :columns="$screens({ default: 1, lg: 2 })"
-                                                is-range
-                                                >
-                                                <template v-slot="{ inputValue, inputEvents }">
-                                                    <div class="w-full flex items-center">
-                                                    <div class="input-group">
-                                                        <div class="input-group-prepend flex items-center">
-                                                            <svg-icon name="light/calendar" class="w-4 h-4" />
-                                                        </div>
-                                                        <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
-                                                            <input
-                                                                class="input-text-minimal p-0 bg-transparent leading-none"
-                                                                :value="inputValue.start"
-                                                                v-on="inputEvents.start"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div class="icon icon-arrow-right my-sm mx-1 text-grey-60" />
-                                                    <div class="input-group">
-                                                        <div class="input-group-prepend flex items-center">
-                                                            <svg-icon name="light/calendar" class="w-4 h-4" />
-                                                        </div>
-                                                        <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
-                                                            <input
-                                                                class="input-text-minimal p-0 bg-transparent leading-none"
-                                                                :value="inputValue.end"
-                                                                v-on="inputEvents.end"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                </template>
-                                            </v-date-picker>
-                                        </div>
-                                    </div>
-                                    <div v-if="errors.date_start" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.date_start[0] }}
-                                    </div>  
-                                    <div v-if="errors.date_end" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.date_end[0] }}
-                                    </div>  
-                                </div>
-                                <div class="form-group w-full xl:!w-1/3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Reservation condition</label>
-                                        <div class="text-sm font-light"><p>Apply the dynamic pricing when...</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <v-select v-model="submit.condition_type" :options="conditionType" :reduce="type => type.code" />
-                                    </div>
-                                    <div v-if="errors.condition_type" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.condition_type[0] }}
-                                    </div>  
-                                </div>
-                                <div class="form-group w-full xl:!w-1/3">
-                                    <div class="mb-1 text-sm">
-                                        <label for="name">Comparison</label>
-                                        <div class="text-sm font-light"><p>Select the comparion operator</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <v-select v-model="submit.condition_comparison" :options="conditionComparison" :reduce="type => type.code" />
-                                    </div>
-                                    <div v-if="errors.condition_comparison" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.condition_comparison[0] }}
-                                    </div>  
-                                </div>
-                                <div class="form-group w-full xl:!w-1/3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Value</label>
-                                        <div class="text-sm font-light"><p>The value to compare to (days or price).</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="name" type="text" v-model="submit.condition_value">
-                                    </div>
-                                    <div v-if="errors.condition_value" class="w-full mt-1 text-sm text-red-400">
-                                        {{ errors.condition_value[0] }}
-                                    </div>  
-                                </div>
+    <Stack
+        :open="true"
+        :title="isEditing ? __('Edit dynamic pricing') : __('Add dynamic pricing')"
+        icon="money-cashier-price-tag"
+        size="half"
+        @closed="onClosed"
+    >
+        <template #header-actions>
+            <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+        </template>
+        <template #default="{ close }">
+            <Card>
+                <Field v-bind="fieldProps('title', __('Title'))">
+                    <Input v-model="submit.title" />
+                </Field>
 
-                                <div class="form-group w-full 2xl:!w-1/2">
-                                    <div class="flex items-center justify-between mb-1">
-                                        <div class="mr-2">
-                                            <label class="font-semibold" for="name">Entries</label>
-                                            <div class="text-sm font-light"><p>Select the entries that this dynamic pricing applies to</p></div>
-                                        </div>
-                                    <div class="flex justify-end cursor-pointer mt-2">
-                                            <span class="text-xs text-gray-700" @click="selectAllEntries()">Select all</span>
-                                            <span class="text-xs text-gray-700 mx-1">|</span>
-                                            <span class="text-xs text-gray-700" @click="clearAllEntries()">Clear</span>
-                                        </div>
-                                    </div>
-                                    <div class="w-full">
-                                        <v-select 
-                                            v-model="submit.entries"
-                                            label="title"
-                                            multiple="multiple"
-                                            :close-on-select="false"
-                                            :deselectFromDropdown="true"
-                                            :options="entries" 
-                                            :searchable="true"
-                                            :reduce="type => type.item_id" 
-                                        >
-                                            <template #selected-option-container><i class="hidden"></i></template>
-                                            <template #footer="{ deselect }" v-if="entriesLoaded">
-                                                <div class="vs__selected-options-outside flex flex-wrap">
-                                                    <span v-for="id in submit.entries" :key="id" class="vs__selected mt-1">
-                                                        {{ getEntryTitle(id) }}
-                                                        <button 
-                                                            @click="() => submit.entries = submit.entries.filter(entry => entry !== id)" 
-                                                            type="button" 
-                                                            :aria-label="__('Deselect option')" 
-                                                            class="vs__deselect"
-                                                        >
-                                                            <span>×</span>
-                                                        </button>
-                                                    </span>
-                                                </div>
-                                            </template>
-                                        </v-select>
-                                    </div>
-                                    <div v-if="errors.entries" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.entries[0] }}
-                                    </div>  
-                                </div>
-                                
-                                <div class="form-group w-full 2xl:!w-1/2">
-                                    <div class="flex items-center justify-between mb-1">
-                                        <div class="mr-2">
-                                            <label class="font-semibold" for="name">Extras</label>
-                                            <div class="text-sm font-light"><p>Select the extras that this dynamic pricing applies to</p></div>
-                                        </div>
-                                        <div class="flex justify-end cursor-pointer mt-2">
-                                            <span class="text-xs text-gray-700" @click="selectAllExtras()">Select all</span>
-                                            <span class="text-xs text-gray-700 mx-1">|</span>
-                                            <span class="text-xs text-gray-700" @click="clearAllExtras()">Clear</span>
-                                        </div>
-                                    </div>
-                                    <div class="w-full">
-                                        <v-select 
-                                            v-model="submit.extras" 
-                                            label="name"
-                                            multiple="multiple"
-                                            :close-on-select="false"
-                                            :deselectFromDropdown="true"
-                                            :options="extras" 
-                                            :searchable="true"
-                                            :reduce="type => type.id" 
-                                        >
-                                            <template #selected-option-container><i class="hidden"></i></template>
-                                            <template #footer="{ deselect }" v-if="extrasLoaded">
-                                                <div class="vs__selected-options-outside flex flex-wrap">
-                                                    <span v-for="id in submit.extras" :key="id" class="vs__selected mt-1">
-                                                        {{ getExtraTitle(id) }}
-                                                        <button @click="deselect(id)" type="button" :aria-label="__('Deselect option')" class="vs__deselect">
-                                                            <span>×</span>
-                                                        </button>                 
-                                                    </span>
-                                                </div>
-                                            </template>
-                                        </v-select>
-                                    </div>
-                                    <div v-if="errors.extras" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.extras[0] }}
-                                    </div>  
-                                </div>
-
-                                <div class="form-group w-full 2xl:!w-1/2">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Coupon</label>
-                                        <div class="text-sm font-light"><p>Dynamic pricing applied only if coupon is applied during checkout. Coupons get applied even if a another policy is set as overriding.</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="name" type="text" v-model="submit.coupon">
-                                    </div>
-                                    <div v-if="errors.coupon" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.coupon[0] }}
-                                    </div>  
-                                </div>
-
-                                <div class="form-group w-full 2xl:!w-1/2">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Expire at</label>
-                                        <div class="text-sm font-light"><p>Select a date / time that his dynamic pricing will expire.</p></div>
-                                    </div>
-                                    <div class="w-full">
-                                        <div class="date-container input-group w-full">
-                                            <v-date-picker
-                                                v-model="submit.expire_at"
-                                                :model-config="modelConfig"
-                                                :popover="{ visibility: 'click' }"
-                                                :masks="{ input: 'YYYY-MM-DD' }"
-                                                :mode="'dateTime'"
-                                                :timezone="timezone"
-                                                is24hr
-                                                >
-                                                <template v-slot="{ inputValue, inputEvents }">
-                                                    <div class="input-group">
-                                                    <div class="input-group-prepend flex items-center">
-                                                        <svg-icon name="light/calendar" class="w-4 h-4" />
-                                                    </div>
-                                                    <div class="input-text border border-grey-50 border-l-0">
-                                                        <input
-                                                            class="input-text-minimal p-0 bg-transparent leading-none"
-                                                            :value="inputValue"
-                                                            v-on="inputEvents"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                </template>
-                                            </v-date-picker>
-                                        </div>
-                                    </div>
-                                    <div v-if="errors.expire_at" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.expire_at[0] }}
-                                    </div>  
-                                </div>
-
-                                <div class="form-group field-w-full">
-                                    <div class="flex items-center">
-                                        <toggle-input v-model="submit.overrides_all"></toggle-input> 
-                                        <div class="text-sm ml-3">{{ __('Overrides all other dynamic pricing policies') }}</div>
-                                    </div>
-                                </div>                 
-                            </div>
-                        </div>
-                    </div>
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-x-4">
+                    <Field v-bind="fieldProps('amount', __('Amount'), __('Amount or percentage without the % character.'))">
+                        <Input v-model="submit.amount" />
+                    </Field>
+                    <Field v-bind="fieldProps('amount_operation', __('Operation'), __('Select if the base price will be decreased or increased.'))">
+                        <Select v-model="submit.amount_operation" :options="amountOperationOptions" />
+                    </Field>
+                    <Field v-bind="fieldProps('amount_type', __('Type'), __('Percentage or fixed price.'))">
+                        <Select v-model="submit.amount_type" :options="availableAmountTypes" />
+                    </Field>
                 </div>
-            </section>
-        </div>
-    </stack>
+
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-4">
+                    <Field v-bind="fieldProps('date_include', __('Date condition'), __('Add a date condition.'))">
+                        <Select
+                            v-model="submit.date_include"
+                            :options="dateConditionOptions"
+                            :clearable="true"
+                            @update:modelValue="removeDate"
+                        />
+                    </Field>
+                    <Field :label="__('Date range')" :instructions="__('Select the range of the date condition.')" :errors="dateRangeErrors">
+                        <div class="grid grid-cols-2 gap-2">
+                            <Input v-model="submit.date_start" type="date" />
+                            <Input v-model="submit.date_end" type="date" />
+                        </div>
+                    </Field>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-x-4">
+                    <Field v-bind="fieldProps('condition_type', __('Reservation condition'), __('Apply the dynamic pricing when...'))">
+                        <Select v-model="submit.condition_type" :options="conditionTypeOptions" />
+                    </Field>
+                    <Field v-bind="fieldProps('condition_comparison', __('Comparison'), __('Select the comparison operator'))">
+                        <Select v-model="submit.condition_comparison" :options="conditionComparisonOptions" />
+                    </Field>
+                    <Field v-bind="fieldProps('condition_value', __('Value'), __('The value to compare to (days or price).'))">
+                        <Input v-model="submit.condition_value" />
+                    </Field>
+                </div>
+
+                <div class="grid grid-cols-1 2xl:grid-cols-2 gap-x-4">
+                    <Field :label="__('Entries')" :instructions="__('Select the entries that this dynamic pricing applies to')" :errors="errors.entries">
+                        <template #actions>
+                            <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllEntries" />
+                            <span class="text-xs text-gray-400">|</span>
+                            <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllEntries" />
+                        </template>
+                        <Combobox
+                            v-if="entriesLoaded"
+                            v-model="submit.entries"
+                            multiple
+                            :close-on-select="false"
+                            :options="entries"
+                            option-label="title"
+                            option-value="item_id"
+                            :searchable="true"
+                        />
+                    </Field>
+                    <Field :label="__('Extras')" :instructions="__('Select the extras that this dynamic pricing applies to')" :errors="errors.extras">
+                        <template #actions>
+                            <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllExtras" />
+                            <span class="text-xs text-gray-400">|</span>
+                            <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllExtras" />
+                        </template>
+                        <Combobox
+                            v-if="extrasLoaded"
+                            v-model="submit.extras"
+                            multiple
+                            :close-on-select="false"
+                            :options="extras"
+                            option-label="name"
+                            option-value="id"
+                            :searchable="true"
+                        />
+                    </Field>
+                </div>
+
+                <div class="grid grid-cols-1 2xl:grid-cols-2 gap-x-4">
+                    <Field v-bind="fieldProps('coupon', __('Coupon'), __('Dynamic pricing applied only if coupon is applied during checkout. Coupons get applied even if another policy is set as overriding.'))">
+                        <Input v-model="submit.coupon" />
+                    </Field>
+                    <Field v-bind="fieldProps('expire_at', __('Expire at'), __('Select a date / time that this dynamic pricing will expire.'))">
+                        <Input v-model="submit.expire_at" type="datetime-local" />
+                    </Field>
+                </div>
+
+                <Field :label="__('Overrides all other dynamic pricing policies')">
+                    <Switch v-model="submit.overrides_all" />
+                </Field>
+            </Card>
+        </template>
+    </Stack>
 </template>
 
-<script>
-import axios from 'axios'
-import FormHandler from '../mixins/FormHandler.vue'
-import vSelect from 'vue-select'
+<script setup>
+import { Button, Card, Combobox, Field, Input, Select, Stack, Switch } from '@statamic/cms/ui';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import axios from 'axios';
+import { useFormHandler } from '../composables/useFormHandler.js';
+import { useToast } from '../composables/useToast.js';
 
-export default {
+const props = defineProps({
+    data: { type: Object, required: true },
+    timezone: { type: String, required: true },
+    openPanel: { type: Boolean, default: false },
+});
 
-    props: {
-        data: {
-            type: Object,
-            required: true
-        },
-        timezone: {
-            type: String,
-            required: true
-        },
-        openPanel: {
-            type: Boolean,
-            default: false
-        }
-    },
+const emit = defineEmits(['closed', 'saved']);
+const toast = useToast();
 
-    computed: {
-        method() {
-            if (_.has(this.data, 'id')) {
-                return 'patch'
-            }
-            return 'post'
-        },
-        availableAmountTypes() {
-            if (['minimum', 'maximum'].includes(this.submit.amount_operation)) {
-                return this.allAmountTypes.filter(type => type.code === 'fixed')
-            }
-            return this.allAmountTypes
-        }
-    },
+const submit = reactive({
+    entries: [],
+    extras: [],
+});
+const entries = ref([]);
+const entriesLoaded = ref(false);
+const extras = ref([]);
+const extrasLoaded = ref(false);
 
-    data() {
-        return {
-            submit: {},
-            successMessage: 'Dynamic pricing successfully saved',
-            postUrl: '/cp/resrv/dynamicpricing',
-            amountOperation: [
-                {
-                    code: "decrease",
-                    label: "Decrease"
-                },
-                {
-                    code: "increase",
-                    label: "Increase"
-                },
-                {
-                    code: "minimum",
-                    label: "Minimum"
-                },
-                {
-                    code: "maximum",
-                    label: "Maximum"
-                }
-            ],
-            allAmountTypes: [
-                {
-                    code: "percent",
-                    label: "Percent"
-                },
-                {
-                    code: "fixed",
-                    label: "Fixed"
-                }
-            ],
-            conditionType: [
-                {
-                    code: "reservation_duration",
-                    label: "The duration of the reservation is"
-                },
-                {
-                    code: "reservation_price",
-                    label: "The total price of the reservation is"
-                },
-                {
-                    code: "days_to_reservation",
-                    label: "Reservation start date compared to reservation made date"
-                }
-            ],
-            conditionComparison: [
-                {
-                    code: "==",
-                    label: "Equal to"
-                },
-                {
-                    code: "!=",
-                    label: "Not equal to"
-                },
-                {
-                    code: ">",
-                    label: "Greater than"
-                },
-                {
-                    code: "<",
-                    label: "Less than"
-                },
-                {
-                    code: ">=",
-                    label: "Greater or equal to"
-                },
-                {
-                    code: "<=",
-                    label: "Less or equal to"
-                }
-            ],
-            dateCondition: [
-                {
-                    code: "all",
-                    label: "Reservation dates must be inside this date range"
-                },
-                {
-                    code: "start",
-                    label: "Reservation starting date must be inside this date range"
-                },
-                {
-                    code: "most",
-                    label: "Most of the reservation dates must be inside this date range"
-                }
-            ],
-            date: {
-                start: '',
-                end: ''
-            },
-            entries: '',
-            entriesLoaded: false, 
-            extras: '',
-            extrasLoaded: false,            
-        }
-    },
+const amountOperationOptions = [
+    { value: 'decrease', label: 'Decrease' },
+    { value: 'increase', label: 'Increase' },
+    { value: 'minimum', label: 'Minimum' },
+    { value: 'maximum', label: 'Maximum' },
+];
+const allAmountTypes = [
+    { value: 'percent', label: 'Percent' },
+    { value: 'fixed', label: 'Fixed' },
+];
+const conditionTypeOptions = [
+    { value: 'reservation_duration', label: 'The duration of the reservation is' },
+    { value: 'reservation_price', label: 'The total price of the reservation is' },
+    { value: 'days_to_reservation', label: 'Reservation start date compared to reservation made date' },
+];
+const conditionComparisonOptions = [
+    { value: '==', label: 'Equal to' },
+    { value: '!=', label: 'Not equal to' },
+    { value: '>', label: 'Greater than' },
+    { value: '<', label: 'Less than' },
+    { value: '>=', label: 'Greater or equal to' },
+    { value: '<=', label: 'Less or equal to' },
+];
+const dateConditionOptions = [
+    { value: 'all', label: 'Reservation dates must be inside this date range' },
+    { value: 'start', label: 'Reservation starting date must be inside this date range' },
+    { value: 'most', label: 'Most of the reservation dates must be inside this date range' },
+];
 
-    mixins: [FormHandler],
+const availableAmountTypes = computed(() => {
+    if (['minimum', 'maximum'].includes(submit.amount_operation)) {
+        return allAmountTypes.filter((type) => type.value === 'fixed');
+    }
+    return allAmountTypes;
+});
 
-    components: [vSelect],
+const isEditing = computed(() => 'id' in props.data);
+const method = computed(() => (isEditing.value ? 'patch' : 'post'));
+const postUrl = computed(() =>
+    isEditing.value
+        ? '/cp/resrv/dynamicpricing/' + props.data.id
+        : '/cp/resrv/dynamicpricing',
+);
 
-      watch: {
-        data() {
-            this.createSubmit()
-        },
-        date() {
-            if (this.date) {
-                this.submit.date_start = Vue.moment(this.date.start).format('YYYY-MM-DD')
-                this.submit.date_end = Vue.moment(this.date.end).format('YYYY-MM-DD')
-            } else {
-                this.submit.date_start = ''
-                this.submit.date_end = ''
-            }
-        },
-        'submit.amount_operation'(newValue) {
-            if (['minimum', 'maximum'].includes(newValue)) {
-                this.submit.amount_type = 'fixed'
-            }
-        }
-    },
+const { disableSave, errors, save } = useFormHandler({
+    submit,
+    postUrl,
+    method,
+    successMessage: 'Dynamic pricing successfully saved',
+    emit,
+});
 
-    mounted() {
-        this.createSubmit()
-    },
+const dateRangeErrors = computed(() => {
+    const out = [];
+    if (errors.value?.date_start) out.push(...errors.value.date_start);
+    if (errors.value?.date_end) out.push(...errors.value.date_end);
+    return out.length ? out : null;
+});
 
-    created() {
-        this.getEntries()
-        this.getExtras()
-    },
+function fieldProps(key, label, instructions = null) {
+    return {
+        label,
+        instructions,
+        errors: errors.value?.[key],
+    };
+}
 
-    methods: {
-        close() {
-            this.submit = {}
-            this.$emit('closed')
-        },
-        createSubmit() {
-            this.submit = {}
-            _.forEach(this.data, (value, name) => {
-                this.$set(this.submit, name, value)
-            })
-            if (this.data.date_start && this.data.date_end) {
-                this.date = {
-                    start: Vue.moment(this.data.date_start).toDate(),
-                    end: Vue.moment(this.data.date_end).toDate()
-                }
-            }            
-            if (_.has(this.data, 'id')) {
-                this.postUrl = '/cp/resrv/dynamicpricing/'+this.data.id
-            } else {
-                this.postUrl = '/cp/resrv/dynamicpricing'
-            }
-        },
-        getEntries() {
-            axios.get('/cp/resrv/utility/entries')
-            .then(response => {
-                this.entries = response.data
-                this.entriesLoaded = true
-            })
-            .catch(error => {
-                this.$toast.error('Cannot retrieve the entries')
-            })
-        },
-        getExtras() {
-            axios.get('/cp/resrv/extra')
-            .then(response => {
-                this.extras = response.data
-                this.extrasLoaded = true
-            })
-            .catch(error => {
-                this.$toast.error('Cannot retrieve the extras')
-            })
-        },
-        selectAllExtras() {
-            this.submit.extras = _.map(this.extras, (item) => item.id)
-        },
-        selectAllEntries() {
-            this.submit.entries = _.map(this.entries, (item) => item.item_id)
-        },
-        clearAllExtras() {
-            this.submit.extras = []
-        },
-        clearAllEntries() {
-            this.submit.entries = []
-        },
-        getEntryTitle(id) {
-            return this.entries.find(item => item.item_id == id).title
-        },
-        getExtraTitle(id) {
-            return this.extras.find(item => item.id == id).name
-        },
-        removeDate(val) {
-            if (val == null) {
-                this.date = null
-            }            
-        }
+watch(() => props.data, () => createSubmit(), { deep: true });
+
+watch(() => submit.amount_operation, (newValue) => {
+    if (['minimum', 'maximum'].includes(newValue)) {
+        submit.amount_type = 'fixed';
+    }
+});
+
+onMounted(() => {
+    createSubmit();
+    getEntries();
+    getExtras();
+});
+
+function onClosed() {
+    Object.keys(submit).forEach((key) => delete submit[key]);
+    submit.entries = [];
+    submit.extras = [];
+    emit('closed');
+}
+
+function createSubmit() {
+    Object.keys(submit).forEach((key) => delete submit[key]);
+    submit.entries = [];
+    submit.extras = [];
+    Object.entries(props.data).forEach(([name, value]) => {
+        submit[name] = value;
+    });
+}
+
+function getEntries() {
+    axios.get('/cp/resrv/utility/entries')
+        .then((response) => {
+            entries.value = response.data;
+            entriesLoaded.value = true;
+        })
+        .catch(() => {
+            toast.error('Cannot retrieve the entries');
+        });
+}
+
+function getExtras() {
+    axios.get('/cp/resrv/extra')
+        .then((response) => {
+            extras.value = response.data;
+            extrasLoaded.value = true;
+        })
+        .catch(() => {
+            toast.error('Cannot retrieve the extras');
+        });
+}
+
+function selectAllExtras() {
+    submit.extras = extras.value.map((item) => item.id);
+}
+
+function selectAllEntries() {
+    submit.entries = entries.value.map((item) => item.item_id);
+}
+
+function clearAllExtras() {
+    submit.extras = [];
+}
+
+function clearAllEntries() {
+    submit.entries = [];
+}
+
+function removeDate(value) {
+    if (value === null || value === undefined || value === '') {
+        submit.date_start = '';
+        submit.date_end = '';
     }
 }
 </script>

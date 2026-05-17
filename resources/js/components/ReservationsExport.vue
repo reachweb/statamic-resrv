@@ -1,278 +1,232 @@
 <template>
-    <div class="card">
-        <div class="flex flex-wrap items-center py-4 gap-3">
-            <label class="text-sm font-semibold">{{ __('Reservation date range') }}</label>
-            <div class="date-container input-group max-w-xl">
-                <v-date-picker
-                    v-model="date"
-                    :model-config="modelConfig"
-                    :popover="{ visibility: 'click' }"
-                    :masks="{ input: 'YYYY-MM-DD' }"
-                    :mode="'date'"
-                    :columns="$screens({ default: 1, lg: 2 })"
-                    is-range
-                >
-                    <template v-slot="{ inputValue, inputEvents }">
-                        <div class="w-full flex items-center">
-                            <div class="input-group">
-                                <div class="input-group-prepend flex items-center">
-                                    <svg-icon name="light/calendar" class="w-4 h-4" />
-                                </div>
-                                <div class="input-text border border-grey-50 border-l-0">
-                                    <input
-                                        class="input-text-minimal p-0 bg-transparent leading-none w-24 text-sm"
-                                        :value="inputValue.start"
-                                        v-on="inputEvents.start"
-                                    />
-                                </div>
-                            </div>
-                            <div class="icon icon-arrow-right my-sm mx-1 text-grey-60" />
-                            <div class="input-group">
-                                <div class="input-group-prepend flex items-center">
-                                    <svg-icon name="light/calendar" class="w-4 h-4" />
-                                </div>
-                                <div class="input-text border border-grey-50 border-l-0">
-                                    <input
-                                        class="input-text-minimal p-0 bg-transparent leading-none w-24 text-sm"
-                                        :value="inputValue.end"
-                                        v-on="inputEvents.end"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </v-date-picker>
-            </div>
-        </div>
+    <div>
+        <Header :title="__('Export Reservations')" icon="arrow-down" />
+        <Card class="space-y-6">
+            <Field :label="__('Reservation date range')">
+                <div class="grid grid-cols-2 gap-2 max-w-md">
+                    <Input v-model="dateStart" type="date" :placeholder="__('Start date')" />
+                    <Input v-model="dateEnd" type="date" :placeholder="__('End date')" />
+                </div>
+            </Field>
 
-        <div class="border-t mt-4 pt-4">
-            <div class="text-sm font-semibold mb-2">{{ __('Status') }}</div>
-            <div class="flex flex-wrap gap-3">
-                <label
-                    v-for="status in statuses"
-                    :key="status"
-                    class="inline-flex items-center gap-2 text-sm capitalize cursor-pointer"
-                >
-                    <input type="checkbox" :value="status" v-model="selectedStatuses" />
-                    {{ status }}
-                </label>
-            </div>
-            <label class="inline-flex items-center gap-2 text-sm cursor-pointer mt-3">
-                <input type="checkbox" v-model="withCustomerData" />
-                {{ __('Only include reservations with customer details') }}
-            </label>
-        </div>
-
-        <div class="border-t mt-4 pt-4 flex flex-wrap gap-6">
-            <div class="flex-1 min-w-[240px]">
-                <div class="text-sm font-semibold mb-2">{{ __('Item') }}</div>
-                <v-select
-                    v-model="selectedEntry"
-                    :options="entries"
-                    :reduce="option => option.item_id"
-                    label="title"
-                    :placeholder="__('All items')"
-                />
-            </div>
-            <div class="flex-1 min-w-[240px]" v-if="affiliates.length > 0">
-                <div class="text-sm font-semibold mb-2">{{ __('Affiliate') }}</div>
-                <v-select
-                    v-model="selectedAffiliate"
-                    :options="affiliates"
-                    :reduce="option => option.id"
-                    label="name"
-                    :placeholder="__('All affiliates')"
-                />
-            </div>
-        </div>
-
-        <div class="border-t mt-4 pt-4">
-            <div class="text-sm font-semibold mb-2">{{ __('Fields to export') }}</div>
-            <div class="flex flex-wrap gap-6">
-                <div v-for="(group, groupName) in fieldsByGroup" :key="groupName" class="min-w-[200px]">
-                    <div class="flex items-center gap-2 mb-2">
-                        <label class="text-xs uppercase tracking-wide text-grey-70 font-bold">{{ groupName }}</label>
-                        <button
-                            type="button"
-                            class="text-xs text-blue underline"
-                            @click="toggleGroup(groupName)"
-                        >
-                            {{ allGroupSelected(groupName) ? __('None') : __('All') }}
-                        </button>
-                    </div>
+            <Field :label="__('Status')">
+                <div class="flex flex-wrap gap-3">
                     <label
-                        v-for="field in group"
-                        :key="field.key"
-                        class="flex items-center gap-2 text-sm cursor-pointer mb-1"
+                        v-for="status in statuses"
+                        :key="status"
+                        class="inline-flex items-center gap-2 text-sm capitalize cursor-pointer text-gray-700 dark:text-gray-300"
                     >
-                        <input type="checkbox" :value="field.key" v-model="selectedFields" />
-                        {{ field.label }}
+                        <Checkbox :value="status" v-model="selectedStatuses" />
+                        {{ status }}
                     </label>
                 </div>
-            </div>
-        </div>
+                <label class="inline-flex items-center gap-2 text-sm cursor-pointer mt-3 text-gray-700 dark:text-gray-300">
+                    <Checkbox v-model="withCustomerData" />
+                    {{ __('Only include reservations with customer details') }}
+                </label>
+            </Field>
 
-        <div class="border-t mt-4 pt-4 flex flex-wrap items-center gap-4">
-            <div class="text-base">
-                <template v-if="countLoading">{{ __('Counting…') }}</template>
-                <template v-else-if="countError">{{ __('Could not count reservations') }}</template>
-                <template v-else>
-                    <strong>{{ count }}</strong> {{ __('reservations match') }}
-                </template>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Field :label="__('Item')">
+                    <Combobox
+                        v-model="selectedEntry"
+                        :options="entries"
+                        option-label="title"
+                        option-value="item_id"
+                        :clearable="true"
+                        :searchable="true"
+                        :placeholder="__('All items')"
+                    />
+                </Field>
+                <Field v-if="affiliates.length > 0" :label="__('Affiliate')">
+                    <Combobox
+                        v-model="selectedAffiliate"
+                        :options="affiliates"
+                        option-label="name"
+                        option-value="id"
+                        :clearable="true"
+                        :searchable="true"
+                        :placeholder="__('All affiliates')"
+                    />
+                </Field>
             </div>
-            <button
-                type="button"
-                class="btn-primary"
-                :disabled="!canDownload"
-                @click="download"
-            >
-                {{ __('Download CSV') }}
-            </button>
-        </div>
+
+            <Field :label="__('Fields to export')">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div v-for="(group, groupName) in fieldsByGroup" :key="groupName">
+                        <div class="flex items-center gap-2 mb-2">
+                            <label class="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">{{ groupName }}</label>
+                            <Button
+                                size="xs"
+                                variant="ghost"
+                                :text="allGroupSelected(groupName) ? __('None') : __('All')"
+                                @click="toggleGroup(groupName)"
+                            />
+                        </div>
+                        <label
+                            v-for="field in group"
+                            :key="field.key"
+                            class="flex items-center gap-2 text-sm cursor-pointer py-1 text-gray-700 dark:text-gray-300"
+                        >
+                            <Checkbox :value="field.key" v-model="selectedFields" />
+                            {{ field.label }}
+                        </label>
+                    </div>
+                </div>
+            </Field>
+
+            <div class="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-200 dark:border-gray-700/80">
+                <div class="text-sm text-gray-700 dark:text-gray-300 flex-1">
+                    <template v-if="countLoading">{{ __('Counting…') }}</template>
+                    <template v-else-if="countError">{{ __('Could not count reservations') }}</template>
+                    <template v-else>
+                        <strong class="text-gray-900 dark:text-gray-100">{{ count }}</strong> {{ __('reservations match') }}
+                    </template>
+                </div>
+                <Button
+                    :text="__('Download CSV')"
+                    variant="primary"
+                    icon="arrow-down"
+                    :disabled="!canDownload"
+                    @click="download"
+                />
+            </div>
+        </Card>
     </div>
 </template>
 
-<script>
-import axios from 'axios'
+<script setup>
+import { Button, Card, Checkbox, Combobox, Field, Header, Input } from '@statamic/cms/ui';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import axios from 'axios';
+import dayjs from 'dayjs';
+import { useToast } from '../composables/useToast.js';
 
-const STORAGE_KEY = 'resrv-export-selected-fields'
+const STORAGE_KEY = 'resrv-export-selected-fields';
 
-export default {
-    props: {
-        countUrl: { type: String, required: true },
-        downloadUrl: { type: String, required: true },
-        fields: { type: Array, default: () => [] },
-        statuses: { type: Array, default: () => [] },
-        entries: { type: Array, default: () => [] },
-        affiliates: { type: Array, default: () => [] },
-    },
+const props = defineProps({
+    countUrl: { type: String, required: true },
+    downloadUrl: { type: String, required: true },
+    fields: { type: Array, default: () => [] },
+    statuses: { type: Array, default: () => [] },
+    entries: { type: Array, default: () => [] },
+    affiliates: { type: Array, default: () => [] },
+});
 
-    data() {
-        return {
-            date: {
-                start: Vue.moment().subtract(30, 'days').toDate(),
-                end: Vue.moment().toDate(),
-            },
-            modelConfig: {
-                type: 'string',
-                mask: 'YYYY-MM-DD',
-            },
-            selectedStatuses: this.statuses.filter(s => ['confirmed', 'partner'].includes(s)),
-            selectedEntry: null,
-            selectedAffiliate: null,
-            withCustomerData: false,
-            selectedFields: this.loadSelectedFields(),
-            count: 0,
-            countLoading: false,
-            countError: false,
-            countDebounce: null,
+const toast = useToast();
+
+const dateStart = ref(dayjs().subtract(30, 'days').format('YYYY-MM-DD'));
+const dateEnd = ref(dayjs().format('YYYY-MM-DD'));
+const selectedStatuses = ref(props.statuses.filter((s) => ['confirmed', 'partner'].includes(s)));
+const selectedEntry = ref(null);
+const selectedAffiliate = ref(null);
+const withCustomerData = ref(false);
+const selectedFields = ref(loadSelectedFields());
+const count = ref(0);
+const countLoading = ref(false);
+const countError = ref(false);
+let countDebounce = null;
+
+const fieldsByGroup = computed(() =>
+    props.fields.reduce((groups, field) => {
+        (groups[field.group] = groups[field.group] || []).push(field);
+        return groups;
+    }, {}),
+);
+
+const canDownload = computed(() =>
+    !countLoading.value
+    && count.value > 0
+    && selectedFields.value.length > 0
+    && selectedStatuses.value.length > 0,
+);
+
+watch([dateStart, dateEnd, selectedStatuses, selectedEntry, selectedAffiliate, withCustomerData], () => scheduleCount());
+
+watch(selectedFields, (value) => {
+    try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    } catch (e) {
+        /* ignore */
+    }
+}, { deep: true });
+
+onMounted(() => fetchCount());
+onBeforeUnmount(() => clearTimeout(countDebounce));
+
+function loadSelectedFields() {
+    try {
+        const stored = window.localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                const valid = new Set(props.fields.map((f) => f.key));
+                return parsed.filter((k) => valid.has(k));
+            }
         }
-    },
+    } catch (e) {
+        console.warn('Failed to load saved export fields:', e);
+    }
+    return props.fields.filter((f) => f.default).map((f) => f.key);
+}
 
-    computed: {
-        fieldsByGroup() {
-            return this.fields.reduce((groups, field) => {
-                groups[field.group] = groups[field.group] || []
-                groups[field.group].push(field)
-                return groups
-            }, {})
-        },
-        canDownload() {
-            return !this.countLoading && this.count > 0 && this.selectedFields.length > 0 && this.selectedStatuses.length > 0
-        },
-    },
+function scheduleCount() {
+    clearTimeout(countDebounce);
+    countDebounce = setTimeout(() => fetchCount(), 250);
+}
 
-    watch: {
-        date() { this.scheduleCount() },
-        selectedStatuses() { this.scheduleCount() },
-        selectedEntry() { this.scheduleCount() },
-        selectedAffiliate() { this.scheduleCount() },
-        withCustomerData() { this.scheduleCount() },
-        selectedFields(value) {
-            try {
-                window.localStorage.setItem(STORAGE_KEY, JSON.stringify(value))
-            } catch (e) {}
-        },
-    },
+function fetchCount() {
+    if (selectedStatuses.value.length === 0) {
+        count.value = 0;
+        countLoading.value = false;
+        countError.value = false;
+        return;
+    }
+    countLoading.value = true;
+    countError.value = false;
+    axios.get(props.countUrl + '?' + buildParams().toString())
+        .then((response) => {
+            count.value = response.data.count;
+            countLoading.value = false;
+        })
+        .catch(() => {
+            countLoading.value = false;
+            countError.value = true;
+            toast.error('Cannot retrieve reservation count');
+        });
+}
 
-    mounted() {
-        this.fetchCount()
-    },
+function download() {
+    if (!canDownload.value) return;
+    const params = buildParams();
+    selectedFields.value.forEach((f) => params.append('fields[]', f));
+    window.location = props.downloadUrl + '?' + params.toString();
+}
 
-    beforeDestroy() {
-        clearTimeout(this.countDebounce)
-    },
+function buildParams() {
+    const params = new URLSearchParams();
+    params.append('start', dateStart.value);
+    params.append('end', dateEnd.value);
+    selectedStatuses.value.forEach((s) => params.append('statuses[]', s));
+    if (selectedEntry.value) params.append('item_id', selectedEntry.value);
+    if (selectedAffiliate.value) params.append('affiliate_id', selectedAffiliate.value);
+    if (withCustomerData.value) params.append('with_customer_data', '1');
+    return params;
+}
 
-    methods: {
-        loadSelectedFields() {
-            try {
-                const stored = window.localStorage.getItem(STORAGE_KEY)
-                if (stored) {
-                    const parsed = JSON.parse(stored)
-                    if (Array.isArray(parsed)) {
-                        const valid = new Set(this.fields.map(f => f.key))
-                        return parsed.filter(k => valid.has(k))
-                    }
-                }
-            } catch (e) {
-                console.warn('Failed to load saved export fields:', e)
-            }
-            return this.fields.filter(f => f.default).map(f => f.key)
-        },
-        scheduleCount() {
-            clearTimeout(this.countDebounce)
-            this.countDebounce = setTimeout(() => this.fetchCount(), 250)
-        },
-        fetchCount() {
-            if (this.selectedStatuses.length === 0) {
-                this.count = 0
-                this.countLoading = false
-                this.countError = false
-                return
-            }
-            this.countLoading = true
-            this.countError = false
-            axios.get(this.countUrl + '?' + this.buildParams().toString())
-                .then(response => {
-                    this.count = response.data.count
-                    this.countLoading = false
-                })
-                .catch(() => {
-                    this.countLoading = false
-                    this.countError = true
-                    this.$toast.error(this.__('Cannot retrieve reservation count'))
-                })
-        },
-        download() {
-            if (!this.canDownload) return
-            const params = this.buildParams()
-            this.selectedFields.forEach(f => params.append('fields[]', f))
-            window.location = this.downloadUrl + '?' + params.toString()
-        },
-        buildParams() {
-            const params = new URLSearchParams()
-            params.append('start', Vue.moment(this.date.start).format('YYYY-MM-DD'))
-            params.append('end', Vue.moment(this.date.end).format('YYYY-MM-DD'))
-            this.selectedStatuses.forEach(s => params.append('statuses[]', s))
-            if (this.selectedEntry) params.append('item_id', this.selectedEntry)
-            if (this.selectedAffiliate) params.append('affiliate_id', this.selectedAffiliate)
-            if (this.withCustomerData) params.append('with_customer_data', '1')
-            return params
-        },
-        allGroupSelected(groupName) {
-            const groupKeys = this.fieldsByGroup[groupName].map(f => f.key)
-            return groupKeys.every(k => this.selectedFields.includes(k))
-        },
-        toggleGroup(groupName) {
-            const groupKeys = this.fieldsByGroup[groupName].map(f => f.key)
-            if (this.allGroupSelected(groupName)) {
-                this.selectedFields = this.selectedFields.filter(k => !groupKeys.includes(k))
-            } else {
-                const set = new Set(this.selectedFields)
-                groupKeys.forEach(k => set.add(k))
-                this.selectedFields = [...set]
-            }
-        },
-    },
+function allGroupSelected(groupName) {
+    const groupKeys = fieldsByGroup.value[groupName].map((f) => f.key);
+    return groupKeys.every((k) => selectedFields.value.includes(k));
+}
+
+function toggleGroup(groupName) {
+    const groupKeys = fieldsByGroup.value[groupName].map((f) => f.key);
+    if (allGroupSelected(groupName)) {
+        selectedFields.value = selectedFields.value.filter((k) => !groupKeys.includes(k));
+    } else {
+        const set = new Set(selectedFields.value);
+        groupKeys.forEach((k) => set.add(k));
+        selectedFields.value = [...set];
+    }
 }
 </script>

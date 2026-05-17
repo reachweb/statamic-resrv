@@ -1,212 +1,101 @@
 <template>
-    <stack narrow name="statamic-resrv-extras" @closed="close">
-        <div slot-scope="{ close }" class="bg-gray-100 dark:bg-dark-700 h-full overflow-scroll overflow-x-auto flex flex-col">
-            <header class="bg-white dark:bg-dark-550 pl-6 pr-3 py-2 mb-4 border-b dark:border-dark-950 shadow-md text-lg font-medium flex items-center justify-between">
-                Add an extra
-                <button type="button" class="btn-close" @click="close">×</button>
-            </header>
-            <div class="flex-1 overflow-auto px-1">
-                <div class="px-2">
-                    <div class="publish-sections">
-                        <div class="publish-sections-section">
-                            <div class="card">
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Name</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="name" type="text" v-model="submit.name" @input="slugify">
-                                    </div>
-                                    <div v-if="errors.name" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.name[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="slug">Slug</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="slug" type="text" v-model="submit.slug">
-                                    </div>
-                                    <div v-if="errors.slug" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.slug[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="price">Price</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="price" type="text" v-model="submit.price">
-                                    </div>
-                                    <div v-if="errors.price" class="w-full mt-1 text-sm text-red-400">
-                                        {{ errors.price[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="price_type">Price type</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <v-select v-model="submit.price_type" :options="priceType" :reduce="type => type.code" />
-                                    </div>
-                                    <div v-if="errors.price_type" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.price_type[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3" v-if="submit.price_type === 'custom'">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="custom">Custom field</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="custom" type="text" v-model="submit.custom">
-                                    </div>
-                                    <div v-if="errors.custom" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.custom[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="override_label">Override label</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="override_label" type="text" v-model="submit.override_label">
-                                    </div>
-                                    <div v-if="errors.override_label" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.override_label[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3 flex items-center">
-                                    <toggle-input v-model="submit.allow_multiple"></toggle-input> 
-                                    <div class="text-sm ml-3">Can add more than 1</div>
-                                </div>
-                                <div class="pb-3" v-if="submit.allow_multiple">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Maximum number for 1 reservation</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="name" type="text" v-model="submit.maximum">
-                                    </div>
-                                    <div v-if="errors.maximum" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.maximum[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="slug">Description</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <textarea class="input-text" name="description" type="text" v-model="submit.description"></textarea>
-                                    </div>
-                                    <div v-if="errors.description" class="w-full mt-1 text-sm text-red-400">
-                                        {{ errors.description[0] }}
-                                    </div>
-                                </div>
-                                <div class="pb-3 flex items-center">
-                                    <toggle-input v-model="submit.published"></toggle-input> 
-                                    <div class="text-sm ml-3">Published</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-gray-200 dark:bg-dark-500 p-4 border-t dark:border-dark-900 flex items-center justify-between">
-                <div class="w-full">
-                    <button 
-                        class="btn-primary w-full"
-                        :disabled="disableSave"
-                        @click="save"
-                    >
-                    Save
-                    </button>
-                </div>
-            </div>
-        </div>
-    </stack>
+    <Stack
+        :open="true"
+        :title="isEditing ? __('Edit extra') : __('Add an extra')"
+        icon="add-item"
+        size="narrow"
+        @closed="onClosed"
+    >
+        <template #header-actions>
+            <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+        </template>
+        <template #default>
+            <Card>
+                <Field :label="__('Name')" :errors="errors.name">
+                    <Input v-model="submit.name" @input="slugify" />
+                </Field>
+                <Field :label="__('Slug')" :errors="errors.slug">
+                    <Input v-model="submit.slug" />
+                </Field>
+                <Field :label="__('Price')" :errors="errors.price">
+                    <Input v-model="submit.price" />
+                </Field>
+                <Field :label="__('Price type')" :errors="errors.price_type">
+                    <Select v-model="submit.price_type" :options="priceTypeOptions" />
+                </Field>
+                <Field v-if="submit.price_type === 'custom'" :label="__('Custom field')" :errors="errors.custom">
+                    <Input v-model="submit.custom" />
+                </Field>
+                <Field :label="__('Override label')" :errors="errors.override_label">
+                    <Input v-model="submit.override_label" />
+                </Field>
+                <Field :label="__('Can add more than 1')">
+                    <Switch v-model="submit.allow_multiple" />
+                </Field>
+                <Field v-if="submit.allow_multiple" :label="__('Maximum number for 1 reservation')" :errors="errors.maximum">
+                    <Input v-model="submit.maximum" />
+                </Field>
+                <Field :label="__('Description')" :errors="errors.description">
+                    <Textarea v-model="submit.description" />
+                </Field>
+                <Field :label="__('Published')">
+                    <Switch v-model="submit.published" />
+                </Field>
+            </Card>
+        </template>
+    </Stack>
 </template>
 
-<script>
-import FormHandler from '../mixins/FormHandler.vue'
+<script setup>
+import { Button, Card, Field, Input, Select, Stack, Switch, Textarea } from '@statamic/cms/ui';
+import { computed, getCurrentInstance, onMounted, reactive, watch } from 'vue';
+import { useFormHandler } from '../composables/useFormHandler.js';
 
-import vSelect from 'vue-select'
+const props = defineProps({
+    data: { type: Object, required: true },
+    url: { type: String, default: '/cp/resrv/extra' },
+});
 
-export default {
+const emit = defineEmits(['closed', 'saved']);
+const { proxy } = getCurrentInstance();
 
-    props: {
-        data: {
-            type: Object,
-            required: true
-        },
-        url: {
-            type: String,
-            default: '/cp/resrv/extra'
-        }
-    },
+const submit = reactive({});
 
-    computed: {
-        method() {
-            if (_.has(this.data, 'id')) {
-                return 'patch'
-            }
-            return 'post'
-        },
-    },
+const priceTypeOptions = [
+    { value: 'perday', label: 'Per day' },
+    { value: 'fixed', label: 'Fixed' },
+    { value: 'relative', label: 'Relative to the reservation price' },
+    { value: 'custom', label: 'Relative to a checkout form item' },
+];
 
-    watch: {
-        data() {
-            this.createSubmit()
-        }
-    },
+const isEditing = computed(() => 'id' in props.data);
+const method = computed(() => (isEditing.value ? 'patch' : 'post'));
 
-    mounted() {
-        this.createSubmit()
-    },
+const { disableSave, errors, save } = useFormHandler({
+    submit,
+    postUrl: '/cp/resrv/extra',
+    method,
+    successMessage: 'Extra successfully saved',
+    emit,
+});
 
-    data() {
-        return {
-            submit: {},
-            successMessage: 'Extra successfully saved',
-            postUrl: '/cp/resrv/extra',
-            priceType: [
-                {
-                    code: "perday",
-                    label: "Per day"
-                },
-                {
-                    code: "fixed",
-                    label: "Fixed"
-                },
-                {
-                    code: "relative",
-                    label: "Relative to the reservation price"
-                },
-                {
-                    code: "custom",
-                    label: "Relative to a checkout form item"
-                }
-            ]
-        }
-    },
+watch(() => props.data, () => createSubmit(), { deep: true });
 
-    mixins: [FormHandler],
+onMounted(() => createSubmit());
 
-    components: [vSelect],
+function onClosed() {
+    Object.keys(submit).forEach((key) => delete submit[key]);
+    emit('closed');
+}
 
-    methods: {
-        close() {
-            this.submit = {}
-            this.$emit('closed')
-        },
-        createSubmit() {
-            this.submit = {}
-            _.forEach(this.data, (value, name) => {
-                this.$set(this.submit, name, value)
-            })
-        },
-        slugify() {
-            this.submit.slug = this.$slugify(this.submit.name)
-        }
-    }
+function createSubmit() {
+    Object.keys(submit).forEach((key) => delete submit[key]);
+    Object.entries(props.data).forEach(([name, value]) => {
+        submit[name] = value;
+    });
+}
+
+function slugify() {
+    submit.slug = proxy.$slug(submit.name);
 }
 </script>

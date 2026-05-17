@@ -1,139 +1,79 @@
 <template>
-    <stack narrow name="statamic-resrv-options" @closed="close">
-        <div slot-scope="{ close }" class="bg-gray-100 dark:bg-dark-700 h-full overflow-scroll overflow-x-auto flex flex-col">
-            <header class="bg-white dark:bg-dark-550 pl-6 pr-3 py-2 mb-4 border-b dark:border-dark-950 shadow-md text-lg font-medium flex items-center justify-between">
-                Add an option
-                <button type="button" class="btn-close" @click="close">×</button>
-            </header>            
-            <div class="flex-1 overflow-auto px-1">
-                <div class="px-2">
-                    <div class="publish-sections">
-                        <div class="publish-sections-section">
-                            <div class="card">
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Name</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="name" type="text" v-model="submit.name" @input="slugify">
-                                    </div>
-                                    <div v-if="errors.name" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.name[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="slug">Slug</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="slug" type="text" v-model="submit.slug">
-                                    </div>
-                                    <div v-if="errors.slug" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.slug[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="description">Description (optional)</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <textarea class="input-text" name="description" v-model="submit.description"></textarea>
-                                    </div>
-                                    <div v-if="errors.description" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.description[0] }}
-                                    </div>  
-                                </div>
-                                <div class="pb-3 flex items-center">
-                                    <toggle-input v-model="submit.required"></toggle-input> 
-                                    <div class="text-sm ml-3">Required</div>
-                                </div>                                
-                                <div class="pb-3 flex items-center">
-                                    <toggle-input v-model="submit.published"></toggle-input> 
-                                    <div class="text-sm ml-3">Published</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="bg-gray-200 dark:bg-dark-500 p-4 border-t dark:border-dark-900 flex items-center justify-between">
-                <div class="w-full">
-                    <button 
-                        class="btn-primary w-full"
-                        :disabled="disableSave"
-                        @click="save"
-                    >
-                    Save
-                    </button>
-                </div>
-            </div>
-        </div>
-    </stack>
+    <Stack
+        :open="true"
+        :title="isEditing ? __('Edit option') : __('Add an option')"
+        icon="add-item"
+        size="narrow"
+        @closed="onClosed"
+    >
+        <template #header-actions>
+            <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+        </template>
+        <template #default>
+            <Card>
+                <Field :label="__('Name')" :errors="errors.name">
+                    <Input v-model="submit.name" @input="slugify" />
+                </Field>
+                <Field :label="__('Slug')" :errors="errors.slug">
+                    <Input v-model="submit.slug" />
+                </Field>
+                <Field :label="__('Description (optional)')" :errors="errors.description">
+                    <Textarea v-model="submit.description" />
+                </Field>
+                <Field :label="__('Required')">
+                    <Switch v-model="submit.required" />
+                </Field>
+                <Field :label="__('Published')">
+                    <Switch v-model="submit.published" />
+                </Field>
+            </Card>
+        </template>
+    </Stack>
 </template>
 
-<script>
-import FormHandler from '../mixins/FormHandler.vue'
+<script setup>
+import { Button, Card, Field, Input, Stack, Switch, Textarea } from '@statamic/cms/ui';
+import { computed, getCurrentInstance, onMounted, reactive, watch } from 'vue';
+import { useFormHandler } from '../composables/useFormHandler.js';
 
-import vSelect from 'vue-select'
+const props = defineProps({
+    data: { type: Object, required: true },
+    openPanel: { type: Boolean, default: false },
+});
 
-export default {
+const emit = defineEmits(['closed', 'saved']);
+const { proxy } = getCurrentInstance();
 
-    props: {
-        data: {
-            type: Object,
-            required: true
-        },
-        openPanel: {
-            type: Boolean,
-            default: false
-        }
-    },
+const submit = reactive({});
 
-    computed: {
-        method() {
-            if (_.has(this.data, 'id')) {
-                return 'patch'
-            }
-            return 'post'
-        }
-    },
+const isEditing = computed(() => 'id' in props.data);
+const method = computed(() => (isEditing.value ? 'patch' : 'post'));
 
-    watch: {
-        data() {
-            this.createSubmit()
-        }
-    },
+const { disableSave, errors, save } = useFormHandler({
+    submit,
+    postUrl: '/cp/resrv/option',
+    method,
+    successMessage: 'Option successfully saved',
+    emit,
+});
 
-    mounted() {
-        this.createSubmit()
-    },
+watch(() => props.data, () => createSubmit(), { deep: true });
 
-    data() {
-        return {
-            submit: {},
-            successMessage: 'Option successfully saved',
-            postUrl: '/cp/resrv/option',           
-        }
-    },
+onMounted(() => createSubmit());
 
-    mixins: [FormHandler],
+function onClosed() {
+    Object.keys(submit).forEach((key) => delete submit[key]);
+    emit('closed');
+}
 
-    components: [vSelect],
+function createSubmit() {
+    Object.keys(submit).forEach((key) => delete submit[key]);
+    Object.entries(props.data).forEach(([name, value]) => {
+        submit[name] = value;
+    });
+}
 
-    methods: {
-        close() {
-            this.submit = {}
-            this.$emit('closed')
-        },
-        createSubmit() {
-            this.submit = {}
-            _.forEach(this.data, (value, name) => {
-                this.$set(this.submit, name, value)
-            })
-        },
-        slugify() {
-            this.submit.slug = this.$slugify(this.submit.name)
-        }
-    }
+function slugify() {
+    submit.slug = proxy.$slug(submit.name);
 }
 </script>

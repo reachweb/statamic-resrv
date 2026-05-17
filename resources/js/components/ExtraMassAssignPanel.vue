@@ -1,159 +1,118 @@
 <template>
-    <stack name="statamic-resrv-extra-mass-assign" @closed="close">
-        <div slot-scope="{ close }" class="h-full overflow-scroll overflow-x-auto bg-gray-100 dark:bg-dark-600">
-            <header class="flex items-center sticky top-0 inset-x-0 bg-gray-300 dark:bg-dark-600 border-b dark:border-dark-900 shadow px-8 py-2 z-1 h-13">
-                <div class="flex-1 flex items-center text-xl">{{ __('Mass assign') }}  <span class="font-bold ml-2">{{ data.name }}</span></div>                
-                <button type="button" class="text-gray-700 hover:text-gray-800 dark:text-dark-100 dark:hover:text-dark-175 mr-6 text-sm" @click="close">Cancel</button>
-                <button 
-                    class="btn-primary" 
-                    :disabled="disableSave"
-                    @click="save"
-                >
-                    {{ __('Save') }}
-                </button>
-            </header>
-            <section class="py-4 px-3 md:px-8">
-                <div class="publish-sections">
-                    <div class="publish-sections-section">
-                        <div class="card">
-                            <div class="w-full">
-                                <div class="mb-1 text-sm">
-                                    <label class="font-semibold" for="name">Entries</label>
-                                    <div class="text-sm font-light"><p>Select the entries that this extra should apply to.</p></div>
-                                </div>
-                                <div class="w-full" v-if="entriesLoaded && selectedEntriesLoaded">
-                                    <v-select 
-                                        v-model="submit.entries" 
-                                        label="title"
-                                        multiple="multiple"
-                                        :close-on-select="false"
-                                        :options="entries" 
-                                        :searchable="true"
-                                        :reduce="type => type.id" 
-                                    >
-                                        <template #selected-option-container><i class="hidden"></i></template>
-                                        <template #footer="{ deselect }">                    
-                                            <div class="vs__selected-options-outside flex flex-wrap">
-                                                <span v-for="id in submit.entries" :key="id" class="vs__selected mt-1">
-                                                    {{ getEntryTitle(id) }}
-                                                    <button @click="deselect(id)" type="button" :aria-label="__('Deselect option')" class="vs__deselect">
-                                                        <span>×</span>
-                                                    </button>                 
-                                                </span>
-                                            </div>
-                                        </template>
-                                    </v-select>                            
-                                </div>
-                                <div v-if="errors.entries" class="w-full mt-1 text-sm text-red-400">
-                                    {{ errors.entries[0] }}
-                                </div>  
-                            </div>
-                            <div class="flex mt-4">
-                                <button class="btn-flat text-sm" @click="selectAll">{{ __('Select all') }}</button>
-                                <button class="btn-flat text-sm ml-2" @click="removeAll">{{ __('Remove all') }}</button>
-                            </div>
-                        </div>
-                    </div>            
-                </div>
-            </section>
-        </div>
-    </stack>
+    <Stack
+        :open="true"
+        :title="__('Mass assign') + ' — ' + data.name"
+        icon="duplicate"
+        size="narrow"
+        @closed="onClosed"
+    >
+        <template #header-actions>
+            <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+        </template>
+        <template #default>
+            <Card>
+                <Field :label="__('Entries')" :instructions="__('Select the entries that this extra should apply to.')" :errors="errors.entries">
+                    <template #actions>
+                        <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAll" />
+                        <span class="text-xs text-gray-400">|</span>
+                        <Button size="xs" variant="ghost" :text="__('Remove all')" @click="removeAll" />
+                    </template>
+                    <Combobox
+                        v-if="entriesLoaded && selectedEntriesLoaded"
+                        v-model="submit.entries"
+                        multiple
+                        :close-on-select="false"
+                        :options="entries"
+                        option-label="title"
+                        option-value="id"
+                        :searchable="true"
+                    />
+                </Field>
+            </Card>
+        </template>
+    </Stack>
 </template>
 
-<script>
-import FormHandler from '../mixins/FormHandler.vue'
-import axios from 'axios'
+<script setup>
+import { Button, Card, Combobox, Field, Stack } from '@statamic/cms/ui';
+import { computed, onMounted, ref, watch } from 'vue';
+import axios from 'axios';
+import { useFormHandler } from '../composables/useFormHandler.js';
+import { useToast } from '../composables/useToast.js';
 
-export default {
+const props = defineProps({
+    data: { type: Object, required: true },
+    openPanel: { type: Boolean, default: false },
+});
 
-    props: {
-        data: {
-            type: Object,
-            required: true
-        },
-        openPanel: {
-            type: Boolean,
-            default: false
-        },
-    },
+const emit = defineEmits(['closed', 'saved']);
+const toast = useToast();
 
-    created() {
-        this.getSelectedEntries()
-        this.getEntries()
-    },
+const submit = ref({ entries: [] });
+const entries = ref([]);
+const selectedEntries = ref([]);
+const entriesLoaded = ref(false);
+const selectedEntriesLoaded = ref(false);
 
-    watch: {
-        selectedEntriesLoaded() {
-            this.submit.entries = _.map(this.selectedEntries, (item) => item.id)
-        },
-        submit: {
-            deep: true,
-            handler(submit) {
-                if (submit.entries.length > 0) {
-                    this.disableSave = false
-                }
-            }
-        }
-    },
+const postUrl = computed(() => '/cp/resrv/extra/massadd/' + props.data.id);
 
-    data() {
-        return {
-            submit: {
-                entries: []
-            },
-            entries: false,
-            selectedEntries: false,
-            entriesLoaded: false,
-            selectedEntriesLoaded: false,
-            method: 'post',
-            successMessage: 'Extra successfully assigned',
-            postUrl: '/cp/resrv/extra/massadd/'+this.data.id,
-            disableSave: true,
-        }
-    },
+const { disableSave, errors, save } = useFormHandler({
+    submit,
+    postUrl,
+    method: 'post',
+    successMessage: 'Extra successfully assigned',
+    emit,
+});
 
-    mixins: [FormHandler],
+disableSave.value = true;
 
-    methods: {
-        close() {
-            this.submit = {}
-            this.$emit('closed')
-        },
-        selectAll() {
-            this.submit.entries = _.map(this.entries, (item) => item.id)
-        },
-        removeAll() {
-            this.submit.entries = []
-        },
-        entriesSafe() {
-            if (this.selectedEntriesLoaded) {
-                return this.selectedEntries
-            }
-            return []
-        },
-        getSelectedEntries() {
-            axios.get('/cp/resrv/extra/entries/'+this.data.id)
-                .then(response => {
-                    this.selectedEntries = response.data
-                    this.selectedEntriesLoaded = true         
-                })
-                .catch(error => {
-                    this.$toast.error('Cannot retrieve entries for this extra')
-                })            
-        },
-        getEntries() {
-            axios.get('/cp/resrv/utility/entries')
-            .then(response => {
-                this.entries = response.data
-                this.entriesLoaded = true
-            })
-            .catch(error => {
-                this.$toast.error('Cannot retrieve the entries')
-            })
-        },
-        getEntryTitle(id) {
-            return this.entries.find(item => item.id == id).title
-        },
+watch(selectedEntriesLoaded, () => {
+    submit.value.entries = selectedEntries.value.map((item) => item.id);
+});
+
+watch(submit, (value) => {
+    if (value.entries && value.entries.length > 0) {
+        disableSave.value = false;
     }
+}, { deep: true });
+
+onMounted(() => {
+    getSelectedEntries();
+    getEntries();
+});
+
+function onClosed() {
+    submit.value = { entries: [] };
+    emit('closed');
+}
+
+function selectAll() {
+    submit.value.entries = entries.value.map((item) => item.id);
+}
+
+function removeAll() {
+    submit.value.entries = [];
+}
+
+function getSelectedEntries() {
+    axios.get('/cp/resrv/extra/entries/' + props.data.id)
+        .then((response) => {
+            selectedEntries.value = response.data;
+            selectedEntriesLoaded.value = true;
+        })
+        .catch(() => {
+            toast.error('Cannot retrieve entries for this extra');
+        });
+}
+
+function getEntries() {
+    axios.get('/cp/resrv/utility/entries')
+        .then((response) => {
+            entries.value = response.data;
+            entriesLoaded.value = true;
+        })
+        .catch(() => {
+            toast.error('Cannot retrieve the entries');
+        });
 }
 </script>

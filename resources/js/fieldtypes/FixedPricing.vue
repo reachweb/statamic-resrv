@@ -1,49 +1,29 @@
 <template>
-    <element-container @resized="containerWidth = $event.width">
-    <div class="w-full h-full text-center my-4 text-gray-700 text-lg" v-if="newItem">
-       {{  __('You need to save this entry before you can add fixed pricing.' )}}
-    </div>
-    <div class="statamic-resrv-extras relative" v-else>
-        <fixed-pricing-list
-            :parent="this.meta.parent"
-        >
-        </fixed-pricing-list>
-    </div>
+    <element-container>
+        <Alert v-if="newItem" :title="__('You need to save this entry before you can add fixed pricing.')" variant="info" />
+        <div class="statamic-resrv-extras relative" v-else>
+            <FixedPricingList :parent="props.meta.parent" />
+        </div>
     </element-container>
-
 </template>
 
-<script>
-import FixedPricingList from '../components/FixedPricingList.vue'
+<script setup>
+import { Fieldtype } from '@statamic/cms';
+import { Alert } from '@statamic/cms/ui';
+import { computed, onUpdated } from 'vue';
+import FixedPricingList from '../components/FixedPricingList.vue';
 
-export default {
+const emit = defineEmits(Fieldtype.emits);
+const props = defineProps(Fieldtype.props);
+const { update, expose } = Fieldtype.use(emit, props);
 
-    mixins: [Fieldtype],
+const newItem = computed(() => props.meta.parent === 'Collection');
 
-    data() {
-        return {
-            containerWidth: null,           
-        }
-    },
+onUpdated(() => {
+    if (!newItem.value) {
+        update(props.meta.parent);
+    }
+});
 
-    components: {
-        FixedPricingList,
-    },
-
-    computed: {
-        newItem() {
-            if (this.meta.parent == 'Collection') {
-                return true
-            }
-            return false
-        }
-    },
-
-    updated() {
-        if (! this.newItem) {
-            this.$emit('input', this.meta.parent)
-        }
-    },
-   
-}
+defineExpose(expose);
 </script>

@@ -13,38 +13,32 @@
     </button>
 </template>
 
-<script>
-export default {
-    props: {
-        value: {
-            type: [Boolean, String]
-        },
-        parent: {
-            type: String
-        },
+<script setup>
+import { computed } from 'vue';
+
+const props = defineProps({
+    modelValue: {
+        type: [Boolean, String],
     },
-    computed: {
-        stateLiteral() {
-            if (this.value == 'disabled') {
-                return 'false';
-            }
-            return 'true';
-        },
-        state() {
-            if (this.value == 'disabled' || this.value == false) {
-                return false;
-            }
-            return true
-        }
+    parent: {
+        type: String,
     },
-    methods: {
-        toggle() {
-            if (this.value == 'disabled') {
-                this.$emit("input", this.parent)                
-            } else {
-                this.$emit("input", 'disabled')
-            }
-        }
+    readOnly: {
+        type: Boolean,
+        default: false,
+    },
+});
+
+const emit = defineEmits(['update:modelValue']);
+
+const stateLiteral = computed(() => (props.modelValue === 'disabled' ? 'false' : 'true'));
+const state = computed(() => !(props.modelValue === 'disabled' || props.modelValue === false));
+
+function toggle() {
+    if (props.modelValue === 'disabled') {
+        emit('update:modelValue', props.parent);
+    } else {
+        emit('update:modelValue', 'disabled');
     }
 }
 </script>

@@ -1,21 +1,12 @@
 @extends('statamic::layout')
-@section('title', 'Resrv Reservations')
-@section('wrapper_class', 'page-wrapper max-w-full')
+@section('title', 'Reservations')
+@section('wrapper_class', 'max-w-page mx-auto')
 
 @section('content')
-
-    <div class="flex mb-3">
-        <h1 class="flex-1">Reservations</h1>
-    </div>
-
-    <div>
-        <reservations-list
-            reservations-url="{{ cp_route('resrv.reservation.index') }}"
-            show-route="{{ cp_route('resrv.reservation.show', 'RESRVURL') }}"
-            refund-route="{{ cp_route('resrv.reservation.refund') }}"
-            :filters="{{ json_encode($filters) }}"
-        >
-        </reservations-list>
-    </div>
-
+    <reservations-list
+        reservations-url="{{ cp_route('resrv.reservation.index') }}"
+        show-route="{{ cp_route('resrv.reservation.show', 'RESRVURL') }}"
+        refund-route="{{ cp_route('resrv.reservation.refund') }}"
+        :filters="{{ json_encode($filters) }}"
+    ></reservations-list>
 @endsection
