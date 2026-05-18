@@ -15,7 +15,7 @@
             </Field>
 
             <Field :label="__('Select dates')" :errors="dateErrors">
-                <DateRangePicker v-model="dateRange" />
+                <DateRangePicker v-model="dateRange" granularity="day" />
             </Field>
 
             <div class="grid grid-cols-2 gap-4">

@@ -22,6 +22,7 @@
                 >
                     <DateRangePicker
                         :model-value="rowDateRange(index)"
+                        granularity="day"
                         @update:model-value="updateRowDateRange(index, $event)"
                     />
                 </Field>

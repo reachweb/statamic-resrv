@@ -49,6 +49,7 @@
                                     <Field class="lg:col-span-2" :label="__('Date Range')">
                                         <DateRangePicker
                                             :model-value="scheduleDateRange(index)"
+                                            granularity="day"
                                             @update:model-value="updateScheduleDateRange(index, $event)"
                                         />
                                     </Field>

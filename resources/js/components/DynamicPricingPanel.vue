@@ -37,7 +37,7 @@
                         />
                     </Field>
                     <Field :label="__('Date range')" :instructions="__('Select the range of the date condition.')" :errors="dateRangeErrors">
-                        <DateRangePicker v-model="dateRange" />
+                        <DateRangePicker v-model="dateRange" granularity="day" />
                     </Field>
                 </div>
 

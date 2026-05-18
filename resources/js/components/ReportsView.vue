@@ -11,7 +11,7 @@
                 </div>
                 <div class="min-w-[320px]">
                     <Field :label="__('Date range')">
-                        <DateRangePicker v-model="dateRange" />
+                        <DateRangePicker v-model="dateRange" granularity="day" />
                     </Field>
                 </div>
             </div>

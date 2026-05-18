@@ -4,7 +4,7 @@
         <Card class="space-y-6">
             <Field :label="__('Reservation date range')">
                 <div class="max-w-md">
-                    <DateRangePicker v-model="dateRange" />
+                    <DateRangePicker v-model="dateRange" granularity="day" />
                 </div>
             </Field>
 
