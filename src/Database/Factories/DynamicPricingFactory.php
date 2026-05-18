@@ -33,7 +33,17 @@ class DynamicPricingFactory extends Factory
             'condition_comparison' => '>=',
             'condition_value' => '3',
             'order' => '1',
+            'published' => true,
         ];
+    }
+
+    public function unpublished()
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'published' => false,
+            ];
+        });
     }
 
     public function noDates()

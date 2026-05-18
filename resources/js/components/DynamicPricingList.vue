@@ -79,6 +79,7 @@
                             :class="{ 'cursor-move hover:bg-gray-50 dark:hover:bg-gray-800/60': !isFiltered }"
                         >
                             <div class="flex items-center gap-2">
+                                <StatusIndicator :status="dynamic.published ? 'published' : 'draft'" />
                                 <span class="text-xs font-mono px-2 py-0.5 rounded-md bg-gray-150 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :title="__('Order')">#{{ dynamic.order }}</span>
                                 <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="dynamic.title" @click="editPricing(dynamic)"></span>
                                 <Badge v-if="dynamic.overrides_all" :text="__('OVERRIDING')" variant="warning" size="sm" />
@@ -141,7 +142,7 @@
 </template>
 
 <script setup>
-import { Badge, Button, Card, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, Header, Input, Select } from '@statamic/cms/ui';
+import { Badge, Button, Card, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, Header, Input, Select, StatusIndicator } from '@statamic/cms/ui';
 import draggable from 'vuedraggable';
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import axios from 'axios';
@@ -196,6 +197,7 @@ const emptyDynamic = {
     date_start: '', date_end: '', date_include: '',
     condition_type: '', condition_comparison: '', condition_value: '',
     entries: [], extras: [], coupon: '', expire_at: '', overrides_all: false,
+    published: true,
 };
 
 const hasActiveFilters = computed(() =>

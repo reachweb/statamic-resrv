@@ -362,6 +362,56 @@ class DynamicPricingCpTest extends TestCase
         $this->assertSame(1, DynamicPricing::find($c->id)->order);
     }
 
+    public function test_can_create_dynamic_pricing_with_published_false()
+    {
+        $item = $this->makeStatamicItem();
+
+        $dynamic = DynamicPricing::factory()->make(['published' => false])->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->postJson(cp_route('resrv.dynamicpricing.create'), $dynamic);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_dynamic_pricing', [
+            'title' => $dynamic['title'],
+            'published' => false,
+        ]);
+    }
+
+    public function test_can_toggle_published_via_update()
+    {
+        $dynamic = DynamicPricing::factory()->create();
+
+        $payload = array_merge($dynamic->toArray(), [
+            'entries' => [$this->makeStatamicItem()->id()],
+            'extras' => [],
+            'published' => false,
+        ]);
+
+        $this->patchJson(cp_route('resrv.dynamicpricing.update', $dynamic->id), $payload)
+            ->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_dynamic_pricing', [
+            'id' => $dynamic->id,
+            'published' => false,
+        ]);
+    }
+
+    public function test_index_returns_unpublished_dynamic_pricings()
+    {
+        DynamicPricing::factory()->create(['title' => 'on', 'order' => 1]);
+        DynamicPricing::factory()->unpublished()->create(['title' => 'off', 'order' => 2]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index'));
+
+        $response->assertStatus(200);
+        $this->assertSame(2, $response->json('total'));
+        $titles = collect($response->json('data'))->pluck('title')->all();
+        $this->assertContains('on', $titles);
+        $this->assertContains('off', $titles);
+    }
+
     public function test_neighbour_order_round_trip_across_pages()
     {
         // Five pricings in order 1..5. Per-page = 2 → page 2 is items 3,4.

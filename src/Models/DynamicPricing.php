@@ -39,12 +39,14 @@ class DynamicPricing extends Model
         'coupon',
         'expire_at',
         'overrides_all',
+        'published',
     ];
 
     protected $casts = [
         'date_start' => 'datetime',
         'date_end' => 'datetime',
         'expire_at' => 'datetime',
+        'published' => 'boolean',
     ];
 
     protected static function newFactory()
@@ -289,8 +291,15 @@ class DynamicPricing extends Model
         return $this;
     }
 
+    public function scopePublished($query)
+    {
+        $query->where('published', true);
+    }
+
     public function scopeSearchForCoupon($query, $coupon, $reservation_id)
     {
+        $query->published();
+
         $reservation = Reservation::find($reservation_id);
 
         // First try exact match
@@ -302,7 +311,7 @@ class DynamicPricing extends Model
             $query = $query->where('id', $exactMatch->id);
         } else {
             // Try wildcard matching
-            $wildcardCoupons = $this->where('coupon', 'LIKE', '%*')->get();
+            $wildcardCoupons = (clone $query)->where('coupon', 'LIKE', '%*')->get();
 
             if ($wildcardCoupons->count() == 0) {
                 throw new CouponNotFoundException(__('This coupon does not exist'));
@@ -355,7 +364,7 @@ class DynamicPricing extends Model
         $dynamicPricingThatApplies = collect();
 
         $data = Cache::remember('dynamic_pricing_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing')->get()->keyBy('id');
+            return DB::table('resrv_dynamic_pricing')->where('published', true)->get()->keyBy('id');
         });
 
         foreach ($items as $item) {

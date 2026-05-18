@@ -101,6 +101,10 @@
                     <Field :label="__('Overrides all other dynamic pricing policies')">
                         <Switch v-model="submit.overrides_all" />
                     </Field>
+
+                    <Field :label="__('Published')">
+                        <Switch v-model="submit.published" />
+                    </Field>
                 </div>
             </Card>
         </template>

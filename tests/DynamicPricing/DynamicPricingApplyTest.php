@@ -441,6 +441,34 @@ class DynamicPricingApplyTest extends TestCase
         $this->assertPrice('80.74', '100.92');
     }
 
+    public function test_unpublished_dynamic_pricing_is_not_applied()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+        $this->createDynamicPricing('create', ['published' => false]);
+
+        $this->assertPrice('100.92');
+    }
+
+    public function test_unpublished_coupon_does_not_apply()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+        $this->createDynamicPricing('withCoupon', ['published' => false]);
+
+        session(['resrv_coupon' => '20OFF']);
+
+        $this->assertPrice('100.92');
+    }
+
+    public function test_unpublished_wildcard_coupon_does_not_apply()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+        $this->createDynamicPricing('withWildcardCoupon', ['published' => false]);
+
+        session(['resrv_coupon' => 'YHCOSAECZC']);
+
+        $this->assertPrice('100.92');
+    }
+
     public function test_dynamic_pricing_with_wildcard_coupon()
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);

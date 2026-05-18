@@ -115,6 +115,7 @@ class DynamicPricingCpController extends Controller
             'coupon' => 'nullable|regex:/^[\w*-]+$/',
             'expire_at' => 'nullable|date',
             'overrides_all' => 'nullable|boolean',
+            'published' => 'nullable|boolean',
         ] + $this->amountOperationRules($request));
 
         $order = $this->dynamicPricing->max('order') + 1;
@@ -144,6 +145,7 @@ class DynamicPricingCpController extends Controller
             'coupon' => 'nullable|regex:/^[\w*-]+$/',
             'expire_at' => 'nullable|date',
             'overrides_all' => 'nullable|boolean',
+            'published' => 'nullable|boolean',
         ] + $this->amountOperationRules($request));
 
         $dynamicPricing = $this->dynamicPricing->findOrFail($id);
