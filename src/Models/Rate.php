@@ -65,6 +65,7 @@ class Rate extends Model
         'date_start' => 'date',
         'date_end' => 'date',
         'modifier_amount' => 'decimal:2',
+        'base_rate_id' => 'string',
     ];
 
     protected static function newFactory(): RateFactory
@@ -150,6 +151,33 @@ class Rate extends Model
     public function scopeForCollection(Builder $query, string $collection): void
     {
         $query->where('collection', $collection);
+    }
+
+    public function changeOrder(int $order): void
+    {
+        if ((int) $this->order === $order) {
+            return;
+        }
+
+        $items = static::where('collection', $this->collection)
+            ->where('base_rate_id', $this->base_rate_id)
+            ->orderBy('order')
+            ->get()
+            ->keyBy('id');
+
+        $movingItem = $items->pull($this->id);
+        $count = ($order === 1 ? 2 : 1);
+
+        foreach ($items as $item) {
+            if ($count === $order) {
+                $count++;
+            }
+            $item->order = $count;
+            $item->saveOrFail();
+            $count++;
+        }
+        $movingItem->order = $order;
+        $movingItem->saveOrFail();
     }
 
     public function isRelative(): bool

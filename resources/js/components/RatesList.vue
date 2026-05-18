@@ -16,42 +16,122 @@
             </Field>
         </Card>
 
-        <Card v-if="dataLoaded && selectedCollection" inset>
-            <div v-if="rates.length > 0" class="p-3">
-                <draggable
-                    class="space-y-2"
-                    v-model="rates"
-                    item-key="id"
-                    @start="drag = true"
-                    @end="drag = false"
-                    @change="order"
-                >
-                    <template #item="{ element: rate }">
-                        <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80 cursor-move">
+        <div v-if="dataLoaded && selectedCollection">
+            <draggable
+                v-if="tree.length > 0"
+                v-model="tree"
+                item-key="id"
+                :group="{ name: 'rate-parents', pull: false, put: false }"
+                handle=".rate-drag-handle"
+                :animation="200"
+                ghost-class="ghost"
+                :disabled="disableDrag"
+                class="space-y-2"
+                @change="onParentReorder"
+            >
+                <template #item="{ element: parent }">
+                    <div>
+                        <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80">
                             <div class="flex items-center gap-2">
-                                <StatusIndicator :status="rate.published ? 'published' : 'draft'" />
-                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="rate.title" @click="edit(rate)"></span>
-                                <Badge v-if="rate.apply_to_all" :text="__('All entries')" size="sm" />
+                                <button
+                                    type="button"
+                                    class="rate-drag-handle cursor-move text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                                    :aria-label="__('Drag to reorder')"
+                                >
+                                    <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 17">
+                                        <g fill="currentColor" fill-rule="evenodd">
+                                            <rect width="2" height="2" rx="1"/>
+                                            <rect width="2" height="2" y="5" rx="1"/>
+                                            <rect width="2" height="2" y="10" rx="1"/>
+                                            <rect width="2" height="2" y="15" rx="1"/>
+                                            <rect width="2" height="2" x="5" rx="1"/>
+                                            <rect width="2" height="2" x="5" y="5" rx="1"/>
+                                            <rect width="2" height="2" x="5" y="10" rx="1"/>
+                                            <rect width="2" height="2" x="5" y="15" rx="1"/>
+                                        </g>
+                                    </svg>
+                                </button>
+                                <StatusIndicator :status="parent.published ? 'published' : 'draft'" />
+                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="parent.title" @click="edit(parent)"></span>
+                                <Badge v-if="parent.apply_to_all" :text="__('All entries')" size="sm" />
                             </div>
                             <div class="flex items-center gap-2">
-                                <Badge v-if="rate.pricing_type === 'relative'" :text="__('Relative')" size="sm" variant="info" />
-                                <Badge v-if="rate.availability_type === 'shared'" :text="__('Shared')" size="sm" variant="info" />
+                                <Badge
+                                    v-if="parent.children.length > 0"
+                                    :text="__n(':count derived rate|:count derived rates', parent.children.length, { count: parent.children.length })"
+                                    size="sm"
+                                />
                                 <Dropdown>
                                     <DropdownMenu>
-                                        <DropdownItem :text="__('Edit')" icon="pencil" @click="edit(rate)" />
+                                        <DropdownItem :text="__('Edit')" icon="pencil" @click="edit(parent)" />
                                         <DropdownSeparator />
-                                        <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(rate)" />
+                                        <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(parent)" />
                                     </DropdownMenu>
                                 </Dropdown>
                             </div>
                         </div>
-                    </template>
-                </draggable>
-            </div>
-            <div v-else class="p-10 text-center text-gray-500 dark:text-gray-400">
-                {{ __('No rates found for this collection. Add one to get started.') }}
-            </div>
-        </Card>
+                        <div v-if="parent.children.length > 0" class="ms-8 mt-2">
+                            <draggable
+                                v-model="parent.children"
+                                item-key="id"
+                                :group="{ name: 'rate-children-' + parent.id, pull: false, put: false }"
+                                handle=".rate-drag-handle"
+                                :animation="200"
+                                ghost-class="ghost"
+                                :disabled="disableDrag"
+                                class="space-y-2"
+                                @change="onChildReorder"
+                            >
+                                <template #item="{ element: child }">
+                                    <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80">
+                                        <div class="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                class="rate-drag-handle cursor-move text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                                                :aria-label="__('Drag to reorder')"
+                                            >
+                                                <svg class="size-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 17">
+                                                    <g fill="currentColor" fill-rule="evenodd">
+                                                        <rect width="2" height="2" rx="1"/>
+                                                        <rect width="2" height="2" y="5" rx="1"/>
+                                                        <rect width="2" height="2" y="10" rx="1"/>
+                                                        <rect width="2" height="2" y="15" rx="1"/>
+                                                        <rect width="2" height="2" x="5" rx="1"/>
+                                                        <rect width="2" height="2" x="5" y="5" rx="1"/>
+                                                        <rect width="2" height="2" x="5" y="10" rx="1"/>
+                                                        <rect width="2" height="2" x="5" y="15" rx="1"/>
+                                                    </g>
+                                                </svg>
+                                            </button>
+                                            <StatusIndicator :status="child.published ? 'published' : 'draft'" />
+                                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="child.title" @click="edit(child)"></span>
+                                            <Badge v-if="child.apply_to_all" :text="__('All entries')" size="sm" />
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <Badge v-if="child.pricing_type === 'relative'" :text="__('Relative')" size="sm" variant="info" />
+                                            <Badge v-if="child.availability_type === 'shared'" :text="__('Shared')" size="sm" variant="info" />
+                                            <Dropdown>
+                                                <DropdownMenu>
+                                                    <DropdownItem :text="__('Edit')" icon="pencil" @click="edit(child)" />
+                                                    <DropdownSeparator />
+                                                    <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(child)" />
+                                                </DropdownMenu>
+                                            </Dropdown>
+                                        </div>
+                                    </div>
+                                </template>
+                            </draggable>
+                        </div>
+                    </div>
+                </template>
+            </draggable>
+
+            <Card v-else inset>
+                <div class="p-10 text-center text-gray-500 dark:text-gray-400">
+                    {{ __('No rates found for this collection. Add one to get started.') }}
+                </div>
+            </Card>
+        </div>
 
         <RatePanel
             v-if="showPanel"
@@ -86,11 +166,12 @@ const toast = useToast();
 
 const showPanel = ref(false);
 const rates = ref([]);
+const tree = ref([]);
 const collections = ref([]);
 const selectedCollection = ref(null);
 const dataLoaded = ref(false);
 const deleteId = ref(null);
-const drag = ref(false);
+const disableDrag = ref(false);
 const rate = ref({});
 
 const collectionOptions = computed(() =>
@@ -165,11 +246,24 @@ function getRates() {
     axios.get('/cp/resrv/rates/index', { params: { collection: selectedCollection.value } })
         .then((response) => {
             rates.value = response.data;
+            buildTree();
             dataLoaded.value = true;
         })
         .catch(() => {
             toast.error('Cannot retrieve rates');
         });
+}
+
+function buildTree() {
+    const topLevel = rates.value
+        .filter((r) => !r.base_rate_id)
+        .sort((a, b) => a.order - b.order);
+    tree.value = topLevel.map((parent) => ({
+        ...parent,
+        children: rates.value
+            .filter((r) => String(r.base_rate_id) === String(parent.id))
+            .sort((a, b) => a.order - b.order),
+    }));
 }
 
 function confirmDelete(item) {
@@ -193,15 +287,50 @@ function deleteRate() {
         });
 }
 
-function order() {
-    const orderData = rates.value.map((r, index) => ({ id: r.id, order: index + 1 }));
-    axios.post('/cp/resrv/rate/order', orderData)
+function onParentReorder(event) {
+    if (!event.moved) {
+        return;
+    }
+    disableDrag.value = true;
+    const item = event.moved.element;
+    const newOrder = event.moved.newIndex + 1;
+    axios.patch(`/cp/resrv/rate/order/${item.id}`, { order: newOrder })
         .then(() => {
             toast.success('Rates order changed');
-            getRates();
         })
         .catch(() => {
             toast.error('Rates ordering failed');
+        })
+        .finally(() => {
+            getRates();
+            disableDrag.value = false;
+        });
+}
+
+function onChildReorder(event) {
+    if (!event.moved) {
+        return;
+    }
+    disableDrag.value = true;
+    const item = event.moved.element;
+    const newOrder = event.moved.newIndex + 1;
+    axios.patch(`/cp/resrv/rate/order/${item.id}`, { order: newOrder })
+        .then(() => {
+            toast.success('Rates order changed');
+        })
+        .catch(() => {
+            toast.error('Rates ordering failed');
+        })
+        .finally(() => {
+            getRates();
+            disableDrag.value = false;
         });
 }
 </script>
+
+<style scoped>
+.ghost {
+    opacity: 0.5;
+    background: #c8ebfb;
+}
+</style>

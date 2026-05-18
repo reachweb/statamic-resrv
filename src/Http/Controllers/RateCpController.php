@@ -31,7 +31,12 @@ class RateCpController extends Controller
             $query->forCollection($request->input('collection'));
         }
 
-        return response()->json($query->orderBy('order')->with('entries')->get());
+        return response()->json(
+            $query->orderBy('order')
+                ->with(['entries', 'baseRate:id,title'])
+                ->withCount('dependentRates')
+                ->get()
+        );
     }
 
     public function collections(): JsonResponse
@@ -65,7 +70,9 @@ class RateCpController extends Controller
 
         $entries = Arr::pull($data, 'entries', []);
 
-        $data['order'] = Rate::where('collection', $data['collection'])->max('order') + 1;
+        $data['order'] = Rate::where('collection', $data['collection'])
+            ->where('base_rate_id', $data['base_rate_id'] ?? null)
+            ->max('order') + 1;
 
         Rate::renameTrashedSlugs($data['collection'], $data['slug']);
 
@@ -137,16 +144,13 @@ class RateCpController extends Controller
         return response()->json(['message' => 'Rate deleted.']);
     }
 
-    public function order(Request $request): JsonResponse
+    public function order(Request $request, Rate $rate): JsonResponse
     {
         $data = $request->validate([
-            '*.id' => 'required|integer',
-            '*.order' => 'required|integer',
+            'order' => ['required', 'integer'],
         ]);
 
-        foreach ($data as $item) {
-            Rate::withoutGlobalScopes()->where('id', $item['id'])->update(['order' => $item['order']]);
-        }
+        $rate->changeOrder($data['order']);
 
         return response()->json(['message' => 'Order updated.']);
     }

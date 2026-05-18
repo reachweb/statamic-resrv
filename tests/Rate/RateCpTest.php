@@ -400,24 +400,60 @@ class RateCpTest extends TestCase
         $rate1 = Rate::factory()->create([
             'collection' => 'pages',
             'slug' => 'rate-1',
-            'order' => 0,
+            'order' => 1,
         ]);
         $rate2 = Rate::factory()->create([
             'collection' => 'pages',
             'slug' => 'rate-2',
+            'order' => 2,
+        ]);
+
+        $response = $this->patchJson(cp_route('resrv.rate.order', $rate1->id), ['order' => 2]);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_rates', ['id' => $rate1->id, 'order' => 2]);
+        $this->assertDatabaseHas('resrv_rates', ['id' => $rate2->id, 'order' => 1]);
+    }
+
+    public function test_reorder_keeps_child_within_parent()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $parent = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'parent',
+            'order' => 1,
+        ]);
+        $otherParent = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'other-parent',
+            'order' => 2,
+        ]);
+        $child1 = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'slug' => 'child-1',
+            'base_rate_id' => $parent->id,
+            'order' => 1,
+        ]);
+        $child2 = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'slug' => 'child-2',
+            'base_rate_id' => $parent->id,
+            'order' => 2,
+        ]);
+        $otherChild = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'slug' => 'other-child',
+            'base_rate_id' => $otherParent->id,
             'order' => 1,
         ]);
 
-        $payload = [
-            ['id' => $rate1->id, 'order' => 1],
-            ['id' => $rate2->id, 'order' => 0],
-        ];
-
-        $response = $this->post(cp_route('resrv.rate.order'), $payload);
+        $response = $this->patchJson(cp_route('resrv.rate.order', $child1->id), ['order' => 2]);
         $response->assertStatus(200);
 
-        $this->assertDatabaseHas('resrv_rates', ['id' => $rate1->id, 'order' => 1]);
-        $this->assertDatabaseHas('resrv_rates', ['id' => $rate2->id, 'order' => 0]);
+        $this->assertDatabaseHas('resrv_rates', ['id' => $child1->id, 'base_rate_id' => $parent->id, 'order' => 2]);
+        $this->assertDatabaseHas('resrv_rates', ['id' => $child2->id, 'base_rate_id' => $parent->id, 'order' => 1]);
+        $this->assertDatabaseHas('resrv_rates', ['id' => $otherChild->id, 'base_rate_id' => $otherParent->id, 'order' => 1]);
     }
 
     public function test_calculate_price_percent_decrease()

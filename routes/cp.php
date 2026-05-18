@@ -13,9 +13,9 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/rates/entries/{collection}', 'RateCpController@entries')->name('rate.entries');
         Route::get('/resrv/rates/for-entry/{statamic_id}', 'RateCpController@forEntry')->name('rate.forEntry');
         Route::post('/resrv/rate', 'RateCpController@store')->name('rate.store');
+        Route::patch('/resrv/rate/order/{rate}', 'RateCpController@order')->name('rate.order');
         Route::patch('/resrv/rate/{rate}', 'RateCpController@update')->name('rate.update');
         Route::delete('/resrv/rate/{rate}', 'RateCpController@destroy')->name('rate.destroy');
-        Route::post('/resrv/rate/order', 'RateCpController@order')->name('rate.order');
 
         Route::get('/resrv/extras', 'ExtraCpController@indexCp')->name('extras.index');
         Route::get('/resrv/extra', 'ExtraCpController@index')->name('extra.index');

@@ -104,7 +104,7 @@
                         <Field :label="__('Date range')" :instructions="__('Rate is available within this date range.')" :errors="dateRangeErrors">
                             <DateRangePicker v-model="dateRange" granularity="day" />
                         </Field>
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-x-4 gap-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                             <Field :label="__('Min days before')" :instructions="__('Minimum advance booking days.')" :errors="errors.min_days_before">
                                 <Input v-model="submit.min_days_before" type="number" />
                             </Field>

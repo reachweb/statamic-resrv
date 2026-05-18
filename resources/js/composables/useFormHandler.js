@@ -5,10 +5,10 @@ import { useToast } from './useToast.js';
 export function useFormHandler({ submit, postUrl, method = 'post', successMessage = 'Success', emit }) {
     const toast = useToast();
     const disableSave = ref(false);
-    const errors = ref('');
+    const errors = ref({});
 
     function clearErrors() {
-        errors.value = '';
+        errors.value = {};
     }
 
     function handleSuccess() {
@@ -18,8 +18,15 @@ export function useFormHandler({ submit, postUrl, method = 'post', successMessag
     }
 
     function handleErrors(response) {
-        errors.value = response.data.errors;
         disableSave.value = false;
+
+        if (response?.status === 422 && response.data?.errors) {
+            errors.value = response.data.errors;
+            return;
+        }
+
+        errors.value = {};
+        toast.error(response?.data?.message || 'Something went wrong. Please try again.');
     }
 
     function save() {
