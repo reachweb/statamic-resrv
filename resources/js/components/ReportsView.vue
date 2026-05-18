@@ -17,7 +17,7 @@
             </div>
         </Card>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <Card class="text-center">
                 <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">{{ __('Reservations') }}</div>
                 <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">{{ reportData.total_confirmed_reservations ?? 0 }}</div>
