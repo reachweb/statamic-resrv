@@ -11,18 +11,20 @@
         </template>
         <template #default>
             <Card>
-                <Field :label="__('Name')" :errors="errors.name">
-                    <Input v-model="submit.name" @input="slugify" />
-                </Field>
-                <Field :label="__('Slug')" :errors="errors.slug">
-                    <Input v-model="submit.slug" @input="onSlugInput" />
-                </Field>
-                <Field :label="__('Description')" :errors="errors.description">
-                    <Textarea v-model="submit.description" />
-                </Field>
-                <Field :label="__('Published')">
-                    <Switch v-model="submit.published" />
-                </Field>
+                <div class="space-y-6">
+                    <Field :label="__('Name')" :errors="errors.name">
+                        <Input v-model="submit.name" @input="slugify" />
+                    </Field>
+                    <Field :label="__('Slug')" :errors="errors.slug">
+                        <Input v-model="submit.slug" @input="onSlugInput" />
+                    </Field>
+                    <Field :label="__('Description')" :errors="errors.description">
+                        <Textarea v-model="submit.description" />
+                    </Field>
+                    <Field :label="__('Published')">
+                        <Switch v-model="submit.published" />
+                    </Field>
+                </div>
             </Card>
         </template>
     </Stack>

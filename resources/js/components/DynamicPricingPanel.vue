@@ -11,97 +11,98 @@
         </template>
         <template #default="{ close }">
             <Card>
-                <Field v-bind="fieldProps('title', __('Title'))">
-                    <Input v-model="submit.title" />
-                </Field>
+                <div class="space-y-6">
+                    <Field v-bind="fieldProps('title', __('Title'))">
+                        <Input v-model="submit.title" />
+                    </Field>
 
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-x-4">
-                    <Field v-bind="fieldProps('amount', __('Amount'), __('Amount or percentage without the % character.'))">
-                        <Input v-model="submit.amount" />
-                    </Field>
-                    <Field v-bind="fieldProps('amount_operation', __('Operation'), __('Select if the base price will be decreased or increased.'))">
-                        <Select v-model="submit.amount_operation" :options="amountOperationOptions" />
-                    </Field>
-                    <Field v-bind="fieldProps('amount_type', __('Type'), __('Percentage or fixed price.'))">
-                        <Select v-model="submit.amount_type" :options="availableAmountTypes" />
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-x-4 gap-y-6">
+                        <Field v-bind="fieldProps('amount', __('Amount'), __('Amount or percentage without the % character.'))">
+                            <Input v-model="submit.amount" />
+                        </Field>
+                        <Field v-bind="fieldProps('amount_operation', __('Operation'), __('Select if the base price will be decreased or increased.'))">
+                            <Select v-model="submit.amount_operation" :options="amountOperationOptions" />
+                        </Field>
+                        <Field v-bind="fieldProps('amount_type', __('Type'), __('Percentage or fixed price.'))">
+                            <Select v-model="submit.amount_type" :options="availableAmountTypes" />
+                        </Field>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-4 gap-y-6">
+                        <Field v-bind="fieldProps('date_include', __('Date condition'), __('Add a date condition.'))">
+                            <Select
+                                v-model="submit.date_include"
+                                :options="dateConditionOptions"
+                                :clearable="true"
+                                @update:modelValue="removeDate"
+                            />
+                        </Field>
+                        <Field :label="__('Date range')" :instructions="__('Select the range of the date condition.')" :errors="dateRangeErrors">
+                            <DateRangePicker v-model="dateRange" granularity="day" />
+                        </Field>
+                    </div>
+
+                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-x-4 gap-y-6">
+                        <Field v-bind="fieldProps('condition_type', __('Reservation condition'), __('Apply the dynamic pricing when...'))">
+                            <Select v-model="submit.condition_type" :options="conditionTypeOptions" />
+                        </Field>
+                        <Field v-bind="fieldProps('condition_comparison', __('Comparison'), __('Select the comparison operator'))">
+                            <Select v-model="submit.condition_comparison" :options="conditionComparisonOptions" />
+                        </Field>
+                        <Field v-bind="fieldProps('condition_value', __('Value'), __('The value to compare to (days or price).'))">
+                            <Input v-model="submit.condition_value" />
+                        </Field>
+                    </div>
+
+                    <div class="grid grid-cols-1 2xl:grid-cols-2 gap-x-4 gap-y-6">
+                        <Field :label="__('Entries')" :instructions="__('Select the entries that this dynamic pricing applies to')" :errors="errors.entries">
+                            <EntriesStackPicker
+                                v-if="entriesLoaded"
+                                v-model="submit.entries"
+                                :options="entries"
+                                option-label="title"
+                                option-value="item_id"
+                                :stack-title="__('Select entries')"
+                            >
+                                <template #actions>
+                                    <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllEntries" />
+                                    <span class="text-xs text-gray-400">|</span>
+                                    <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllEntries" />
+                                </template>
+                            </EntriesStackPicker>
+                        </Field>
+                        <Field :label="__('Extras')" :instructions="__('Select the extras that this dynamic pricing applies to')" :errors="errors.extras">
+                            <template #actions>
+                                <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllExtras" />
+                                <span class="text-xs text-gray-400">|</span>
+                                <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllExtras" />
+                            </template>
+                            <Combobox
+                                v-if="extrasLoaded"
+                                v-model="submit.extras"
+                                multiple
+                                :close-on-select="false"
+                                :options="extras"
+                                option-label="name"
+                                option-value="id"
+                                :searchable="true"
+                            />
+                        </Field>
+                    </div>
+
+                    <div class="grid grid-cols-1 2xl:grid-cols-2 gap-x-4 gap-y-6">
+                        <Field v-bind="fieldProps('coupon', __('Coupon'), __('Dynamic pricing applied only if coupon is applied during checkout. Coupons get applied even if another policy is set as overriding.'))">
+                            <Input v-model="submit.coupon" />
+                        </Field>
+                        <Field v-bind="fieldProps('expire_at', __('Expire at'), __('Select a date / time that this dynamic pricing will expire.'))">
+                            <Input v-model="submit.expire_at" type="datetime-local" />
+                        </Field>
+                    </div>
+
+                    <Field :label="__('Overrides all other dynamic pricing policies')">
+                        <Switch v-model="submit.overrides_all" />
                     </Field>
                 </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-4">
-                    <Field v-bind="fieldProps('date_include', __('Date condition'), __('Add a date condition.'))">
-                        <Select
-                            v-model="submit.date_include"
-                            :options="dateConditionOptions"
-                            :clearable="true"
-                            @update:modelValue="removeDate"
-                        />
-                    </Field>
-                    <Field :label="__('Date range')" :instructions="__('Select the range of the date condition.')" :errors="dateRangeErrors">
-                        <DateRangePicker v-model="dateRange" granularity="day" />
-                    </Field>
-                </div>
-
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-x-4">
-                    <Field v-bind="fieldProps('condition_type', __('Reservation condition'), __('Apply the dynamic pricing when...'))">
-                        <Select v-model="submit.condition_type" :options="conditionTypeOptions" />
-                    </Field>
-                    <Field v-bind="fieldProps('condition_comparison', __('Comparison'), __('Select the comparison operator'))">
-                        <Select v-model="submit.condition_comparison" :options="conditionComparisonOptions" />
-                    </Field>
-                    <Field v-bind="fieldProps('condition_value', __('Value'), __('The value to compare to (days or price).'))">
-                        <Input v-model="submit.condition_value" />
-                    </Field>
-                </div>
-
-                <div class="grid grid-cols-1 2xl:grid-cols-2 gap-x-4">
-                    <Field :label="__('Entries')" :instructions="__('Select the entries that this dynamic pricing applies to')" :errors="errors.entries">
-                        <template #actions>
-                            <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllEntries" />
-                            <span class="text-xs text-gray-400">|</span>
-                            <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllEntries" />
-                        </template>
-                        <Combobox
-                            v-if="entriesLoaded"
-                            v-model="submit.entries"
-                            multiple
-                            :close-on-select="false"
-                            :options="entries"
-                            option-label="title"
-                            option-value="item_id"
-                            :searchable="true"
-                        />
-                    </Field>
-                    <Field :label="__('Extras')" :instructions="__('Select the extras that this dynamic pricing applies to')" :errors="errors.extras">
-                        <template #actions>
-                            <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllExtras" />
-                            <span class="text-xs text-gray-400">|</span>
-                            <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllExtras" />
-                        </template>
-                        <Combobox
-                            v-if="extrasLoaded"
-                            v-model="submit.extras"
-                            multiple
-                            :close-on-select="false"
-                            :options="extras"
-                            option-label="name"
-                            option-value="id"
-                            :searchable="true"
-                        />
-                    </Field>
-                </div>
-
-                <div class="grid grid-cols-1 2xl:grid-cols-2 gap-x-4">
-                    <Field v-bind="fieldProps('coupon', __('Coupon'), __('Dynamic pricing applied only if coupon is applied during checkout. Coupons get applied even if another policy is set as overriding.'))">
-                        <Input v-model="submit.coupon" />
-                    </Field>
-                    <Field v-bind="fieldProps('expire_at', __('Expire at'), __('Select a date / time that this dynamic pricing will expire.'))">
-                        <Input v-model="submit.expire_at" type="datetime-local" />
-                    </Field>
-                </div>
-
-                <Field :label="__('Overrides all other dynamic pricing policies')">
-                    <Switch v-model="submit.overrides_all" />
-                </Field>
             </Card>
         </template>
     </Stack>
@@ -111,6 +112,7 @@
 import { Button, Card, Combobox, DateRangePicker, Field, Input, Select, Stack, Switch } from '@statamic/cms/ui';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import axios from 'axios';
+import EntriesStackPicker from './EntriesStackPicker.vue';
 import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useFormHandler } from '../composables/useFormHandler.js';
 import { useToast } from '../composables/useToast.js';

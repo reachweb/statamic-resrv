@@ -11,25 +11,27 @@
         </template>
         <template #default>
             <Card>
-                <Field :label="__('Name')" :errors="errors.name">
-                    <Input v-model="submit.name" />
-                </Field>
-                <Field :label="__('Price type')" :errors="errors.price_type">
-                    <Select
-                        v-model="submit.price_type"
-                        :options="priceTypeOptions"
-                        @update:modelValue="togglePrice"
-                    />
-                </Field>
-                <Field v-if="showPrice" :label="__('Price')" :errors="errors.price">
-                    <Input v-model="submit.price" />
-                </Field>
-                <Field :label="__('Description (optional)')" :errors="errors.description">
-                    <Textarea v-model="submit.description" />
-                </Field>
-                <Field :label="__('Published')">
-                    <Switch v-model="submit.published" />
-                </Field>
+                <div class="space-y-6">
+                    <Field :label="__('Name')" :errors="errors.name">
+                        <Input v-model="submit.name" />
+                    </Field>
+                    <Field :label="__('Price type')" :errors="errors.price_type">
+                        <Select
+                            v-model="submit.price_type"
+                            :options="priceTypeOptions"
+                            @update:modelValue="togglePrice"
+                        />
+                    </Field>
+                    <Field v-if="showPrice" :label="__('Price')" :errors="errors.price">
+                        <Input v-model="submit.price" />
+                    </Field>
+                    <Field :label="__('Description (optional)')" :errors="errors.description">
+                        <Textarea v-model="submit.description" />
+                    </Field>
+                    <Field :label="__('Published')">
+                        <Switch v-model="submit.published" />
+                    </Field>
+                </div>
             </Card>
         </template>
     </Stack>

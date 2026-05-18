@@ -17,7 +17,7 @@
 
                 <Panel :heading="__('Default Settings')">
                     <Card>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                             <Field :label="__('Default Starting Time')" :instructions="__('When does your activity/service typically start?')">
                                 <Input v-model="settings.default_starting_time" type="time" />
                             </Field>
@@ -36,16 +36,16 @@
                         <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
                             {{ __('Configure different starting times and cutoff periods for specific date ranges.') }}
                         </p>
-                        <div v-if="settings.schedules && settings.schedules.length > 0" class="space-y-3">
+                        <div v-if="settings.schedules && settings.schedules.length > 0" class="space-y-4">
                             <div
                                 v-for="(schedule, index) in settings.schedules"
                                 :key="index"
-                                class="border border-gray-200 dark:border-gray-700/80 rounded-lg p-3 bg-white dark:bg-gray-900/40"
+                                class="border border-gray-200 dark:border-gray-700/80 rounded-lg p-4 bg-white dark:bg-gray-900/40"
                             >
                                 <div class="flex items-center justify-end">
                                     <Button icon="trash" variant="ghost" size="sm" :aria-label="__('Remove')" @click="removeSchedule(index)" />
                                 </div>
-                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-6">
                                     <Field class="lg:col-span-2" :label="__('Date Range')">
                                         <DateRangePicker
                                             :model-value="scheduleDateRange(index)"

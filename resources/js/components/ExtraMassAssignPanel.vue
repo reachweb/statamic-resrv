@@ -11,32 +11,34 @@
         </template>
         <template #default>
             <Card>
-                <Field :label="__('Entries')" :instructions="__('Select the entries that this extra should apply to.')" :errors="errors.entries">
-                    <template #actions>
-                        <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAll" />
-                        <span class="text-xs text-gray-400">|</span>
-                        <Button size="xs" variant="ghost" :text="__('Remove all')" @click="removeAll" />
-                    </template>
-                    <Combobox
-                        v-if="entriesLoaded && selectedEntriesLoaded"
-                        v-model="submit.entries"
-                        multiple
-                        :close-on-select="false"
-                        :options="entries"
-                        option-label="title"
-                        option-value="id"
-                        :searchable="true"
-                    />
-                </Field>
+                <div class="space-y-6">
+                    <Field :label="__('Entries')" :instructions="__('Select the entries that this extra should apply to.')" :errors="errors.entries">
+                        <EntriesStackPicker
+                            v-if="entriesLoaded && selectedEntriesLoaded"
+                            v-model="submit.entries"
+                            :options="entries"
+                            option-label="title"
+                            option-value="id"
+                            :stack-title="__('Select entries')"
+                        >
+                            <template #actions>
+                                <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAll" />
+                                <span class="text-xs text-gray-400">|</span>
+                                <Button size="xs" variant="ghost" :text="__('Remove all')" @click="removeAll" />
+                            </template>
+                        </EntriesStackPicker>
+                    </Field>
+                </div>
             </Card>
         </template>
     </Stack>
 </template>
 
 <script setup>
-import { Button, Card, Combobox, Field, Stack } from '@statamic/cms/ui';
+import { Button, Card, Field, Stack } from '@statamic/cms/ui';
 import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
+import EntriesStackPicker from './EntriesStackPicker.vue';
 import { useFormHandler } from '../composables/useFormHandler.js';
 import { useToast } from '../composables/useToast.js';
 

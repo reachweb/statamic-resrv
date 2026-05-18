@@ -1,94 +1,96 @@
 <template>
     <div>
         <Header :title="__('Export Reservations')" icon="arrow-down" />
-        <Card class="space-y-6">
-            <Field :label="__('Reservation date range')">
-                <div class="max-w-md">
-                    <DateRangePicker v-model="dateRange" granularity="day" />
-                </div>
-            </Field>
+        <Card>
+            <div class="space-y-6">
+                <Field :label="__('Reservation date range')">
+                    <div class="max-w-md">
+                        <DateRangePicker v-model="dateRange" granularity="day" />
+                    </div>
+                </Field>
 
-            <Field :label="__('Status')">
-                <CheckboxGroup v-model="selectedStatuses" inline>
+                <Field :label="__('Status')">
+                    <CheckboxGroup v-model="selectedStatuses" inline>
+                        <Checkbox
+                            v-for="status in statuses"
+                            :key="status"
+                            :value="status"
+                        >
+                            <span class="capitalize">{{ status }}</span>
+                        </Checkbox>
+                    </CheckboxGroup>
                     <Checkbox
-                        v-for="status in statuses"
-                        :key="status"
-                        :value="status"
-                    >
-                        <span class="capitalize">{{ status }}</span>
-                    </Checkbox>
-                </CheckboxGroup>
-                <Checkbox
-                    v-model="withCustomerData"
-                    :label="__('Only include reservations with customer details')"
-                    class="mt-3"
-                />
-            </Field>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field :label="__('Item')">
-                    <Combobox
-                        v-model="selectedEntry"
-                        :options="entries"
-                        option-label="title"
-                        option-value="item_id"
-                        :clearable="true"
-                        :searchable="true"
-                        :placeholder="__('All items')"
+                        v-model="withCustomerData"
+                        :label="__('Only include reservations with customer details')"
+                        class="mt-3"
                     />
                 </Field>
-                <Field v-if="affiliates.length > 0" :label="__('Affiliate')">
-                    <Combobox
-                        v-model="selectedAffiliate"
-                        :options="affiliates"
-                        option-label="name"
-                        option-value="id"
-                        :clearable="true"
-                        :searchable="true"
-                        :placeholder="__('All affiliates')"
-                    />
-                </Field>
-            </div>
 
-            <Field :label="__('Fields to export')">
-                <CheckboxGroup v-model="selectedFields">
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div v-for="(group, groupName) in fieldsByGroup" :key="groupName" class="space-y-1">
-                            <div class="flex items-center gap-2 mb-2">
-                                <label class="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">{{ groupName }}</label>
-                                <Button
-                                    size="xs"
-                                    variant="ghost"
-                                    :text="allGroupSelected(groupName) ? __('None') : __('All')"
-                                    @click="toggleGroup(groupName)"
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+                    <Field :label="__('Item')">
+                        <Combobox
+                            v-model="selectedEntry"
+                            :options="entries"
+                            option-label="title"
+                            option-value="item_id"
+                            :clearable="true"
+                            :searchable="true"
+                            :placeholder="__('All items')"
+                        />
+                    </Field>
+                    <Field v-if="affiliates.length > 0" :label="__('Affiliate')">
+                        <Combobox
+                            v-model="selectedAffiliate"
+                            :options="affiliates"
+                            option-label="name"
+                            option-value="id"
+                            :clearable="true"
+                            :searchable="true"
+                            :placeholder="__('All affiliates')"
+                        />
+                    </Field>
+                </div>
+
+                <Field :label="__('Fields to export')">
+                    <CheckboxGroup v-model="selectedFields">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div v-for="(group, groupName) in fieldsByGroup" :key="groupName" class="space-y-1">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <label class="text-xs uppercase tracking-wide font-semibold text-gray-500 dark:text-gray-400">{{ groupName }}</label>
+                                    <Button
+                                        size="xs"
+                                        variant="ghost"
+                                        :text="allGroupSelected(groupName) ? __('None') : __('All')"
+                                        @click="toggleGroup(groupName)"
+                                    />
+                                </div>
+                                <Checkbox
+                                    v-for="field in group"
+                                    :key="field.key"
+                                    :value="field.key"
+                                    :label="field.label"
                                 />
                             </div>
-                            <Checkbox
-                                v-for="field in group"
-                                :key="field.key"
-                                :value="field.key"
-                                :label="field.label"
-                            />
                         </div>
-                    </div>
-                </CheckboxGroup>
-            </Field>
+                    </CheckboxGroup>
+                </Field>
 
-            <div class="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-200 dark:border-gray-700/80">
-                <div class="text-sm text-gray-700 dark:text-gray-300 flex-1">
-                    <template v-if="countLoading">{{ __('Counting…') }}</template>
-                    <template v-else-if="countError">{{ __('Could not count reservations') }}</template>
-                    <template v-else>
-                        <strong class="text-gray-900 dark:text-gray-100">{{ count }}</strong> {{ __('reservations match') }}
-                    </template>
+                <div class="flex flex-wrap items-center gap-4 pt-2 border-t border-gray-200 dark:border-gray-700/80">
+                    <div class="text-sm text-gray-700 dark:text-gray-300 flex-1">
+                        <template v-if="countLoading">{{ __('Counting…') }}</template>
+                        <template v-else-if="countError">{{ __('Could not count reservations') }}</template>
+                        <template v-else>
+                            <strong class="text-gray-900 dark:text-gray-100">{{ count }}</strong> {{ __('reservations match') }}
+                        </template>
+                    </div>
+                    <Button
+                        :text="__('Download CSV')"
+                        variant="primary"
+                        icon="arrow-down"
+                        :disabled="!canDownload"
+                        @click="download"
+                    />
                 </div>
-                <Button
-                    :text="__('Download CSV')"
-                    variant="primary"
-                    icon="arrow-down"
-                    :disabled="!canDownload"
-                    @click="download"
-                />
             </div>
         </Card>
     </div>

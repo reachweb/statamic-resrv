@@ -1,13 +1,13 @@
 <template>
     <div>
         <Modal :open="true" :title="__('Change availability')" icon="calendar-date" @dismissed="emit('cancel')">
-            <div class="space-y-3 p-2">
+            <div class="space-y-6 p-2">
                 <div v-if="rate" class="text-sm text-gray-700 dark:text-gray-300">
                     <span class="text-gray-500">{{ __('For') }}:</span> {{ rate.label }}
                 </div>
                 <div class="text-sm text-gray-700 dark:text-gray-300">{{ __('From') }} {{ date_start }} {{ __('to') }} {{ date_end }}</div>
 
-                <div class="grid grid-cols-2 gap-4 pt-2">
+                <div class="grid grid-cols-2 gap-x-4 gap-y-6">
                     <Field :label="__('Available')" :errors="errors.available">
                         <Input v-model="available" @keyup="handleEnterKey" />
                     </Field>

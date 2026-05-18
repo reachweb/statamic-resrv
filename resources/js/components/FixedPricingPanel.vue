@@ -11,12 +11,14 @@
         </template>
         <template #default>
             <Card>
-                <Field :label="__('Days')" :errors="errors.days">
-                    <Input v-model="submit.days" />
-                </Field>
-                <Field :label="__('Price')" :errors="errors.price">
-                    <Input v-model="submit.price" />
-                </Field>
+                <div class="space-y-6">
+                    <Field :label="__('Days')" :errors="errors.days">
+                        <Input v-model="submit.days" />
+                    </Field>
+                    <Field :label="__('Price')" :errors="errors.price">
+                        <Input v-model="submit.price" />
+                    </Field>
+                </div>
             </Card>
         </template>
     </Stack>

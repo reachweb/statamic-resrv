@@ -11,36 +11,38 @@
         </template>
         <template #default>
             <Card>
-                <Field :label="__('Name')" :errors="errors.name">
-                    <Input v-model="submit.name" @input="slugify" />
-                </Field>
-                <Field :label="__('Slug')" :errors="errors.slug">
-                    <Input v-model="submit.slug" @input="onSlugInput" />
-                </Field>
-                <Field :label="__('Price')" :errors="errors.price">
-                    <Input v-model="submit.price" />
-                </Field>
-                <Field :label="__('Price type')" :errors="errors.price_type">
-                    <Select v-model="submit.price_type" :options="priceTypeOptions" />
-                </Field>
-                <Field v-if="submit.price_type === 'custom'" :label="__('Custom field')" :errors="errors.custom">
-                    <Input v-model="submit.custom" />
-                </Field>
-                <Field :label="__('Override label')" :errors="errors.override_label">
-                    <Input v-model="submit.override_label" />
-                </Field>
-                <Field :label="__('Can add more than 1')">
-                    <Switch v-model="submit.allow_multiple" />
-                </Field>
-                <Field v-if="submit.allow_multiple" :label="__('Maximum number for 1 reservation')" :errors="errors.maximum">
-                    <Input v-model="submit.maximum" />
-                </Field>
-                <Field :label="__('Description')" :errors="errors.description">
-                    <Textarea v-model="submit.description" />
-                </Field>
-                <Field :label="__('Published')">
-                    <Switch v-model="submit.published" />
-                </Field>
+                <div class="space-y-6">
+                    <Field :label="__('Name')" :errors="errors.name">
+                        <Input v-model="submit.name" @input="slugify" />
+                    </Field>
+                    <Field :label="__('Slug')" :errors="errors.slug">
+                        <Input v-model="submit.slug" @input="onSlugInput" />
+                    </Field>
+                    <Field :label="__('Price')" :errors="errors.price">
+                        <Input v-model="submit.price" />
+                    </Field>
+                    <Field :label="__('Price type')" :errors="errors.price_type">
+                        <Select v-model="submit.price_type" :options="priceTypeOptions" />
+                    </Field>
+                    <Field v-if="submit.price_type === 'custom'" :label="__('Custom field')" :errors="errors.custom">
+                        <Input v-model="submit.custom" />
+                    </Field>
+                    <Field :label="__('Override label')" :errors="errors.override_label">
+                        <Input v-model="submit.override_label" />
+                    </Field>
+                    <Field :label="__('Can add more than 1')">
+                        <Switch v-model="submit.allow_multiple" />
+                    </Field>
+                    <Field v-if="submit.allow_multiple" :label="__('Maximum number for 1 reservation')" :errors="errors.maximum">
+                        <Input v-model="submit.maximum" />
+                    </Field>
+                    <Field :label="__('Description')" :errors="errors.description">
+                        <Textarea v-model="submit.description" />
+                    </Field>
+                    <Field :label="__('Published')">
+                        <Switch v-model="submit.published" />
+                    </Field>
+                </div>
             </Card>
         </template>
     </Stack>

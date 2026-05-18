@@ -1,6 +1,6 @@
 <template>
     <Modal :open="true" :title="__('Change availability')" icon="calendar-date" @dismissed="emit('cancel')">
-        <div class="space-y-3 p-2">
+        <div class="space-y-6 p-2">
             <Field v-if="rate" :label="__('Rates')">
                 <template #actions>
                     <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllRates" />
@@ -18,7 +18,7 @@
                 <DateRangePicker v-model="dateRange" granularity="day" />
             </Field>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-x-4 gap-y-6">
                 <Field :label="__('Available')" :errors="errors.available">
                     <Input v-model="available" />
                 </Field>

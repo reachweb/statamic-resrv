@@ -11,45 +11,47 @@
         </template>
         <template #default>
             <Card>
-                <Field :label="__('Name')" :errors="errors.name">
-                    <Input v-model="submit.name" />
-                </Field>
-                <Field :label="__('Code')" :errors="errors.code">
-                    <Input v-model="submit.code" />
-                </Field>
-                <Field :label="__('Email')" :errors="errors.email">
-                    <Input v-model="submit.email" type="email" />
-                </Field>
-                <Field :label="__('Cookie duration in days')" :errors="errors.cookie_duration">
-                    <Input v-model="submit.cookie_duration" type="number" />
-                </Field>
-                <Field :label="__('Fee')" :errors="errors.fee">
-                    <Input v-model="submit.fee" />
-                </Field>
-                <Field :label="__('Coupons')" :instructions="__('Select any coupons that would make a reservation credited to this affiliate.')" :errors="errors.coupons">
-                    <template #actions>
-                        <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllCoupons" />
-                    </template>
-                    <Combobox
-                        v-if="couponsLoaded"
-                        v-model="submit.coupons"
-                        multiple
-                        :close-on-select="false"
-                        :options="coupons"
-                        option-label="title"
-                        option-value="id"
-                        :searchable="true"
-                    />
-                </Field>
-                <Field :label="__('Allow skipping payment')">
-                    <Switch v-model="submit.allow_skipping_payment" />
-                </Field>
-                <Field :label="__('Send reservation email')">
-                    <Switch v-model="submit.send_reservation_email" />
-                </Field>
-                <Field :label="__('Published')">
-                    <Switch v-model="submit.published" />
-                </Field>
+                <div class="space-y-6">
+                    <Field :label="__('Name')" :errors="errors.name">
+                        <Input v-model="submit.name" />
+                    </Field>
+                    <Field :label="__('Code')" :errors="errors.code">
+                        <Input v-model="submit.code" />
+                    </Field>
+                    <Field :label="__('Email')" :errors="errors.email">
+                        <Input v-model="submit.email" type="email" />
+                    </Field>
+                    <Field :label="__('Cookie duration in days')" :errors="errors.cookie_duration">
+                        <Input v-model="submit.cookie_duration" type="number" />
+                    </Field>
+                    <Field :label="__('Fee')" :errors="errors.fee">
+                        <Input v-model="submit.fee" />
+                    </Field>
+                    <Field :label="__('Coupons')" :instructions="__('Select any coupons that would make a reservation credited to this affiliate.')" :errors="errors.coupons">
+                        <template #actions>
+                            <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllCoupons" />
+                        </template>
+                        <Combobox
+                            v-if="couponsLoaded"
+                            v-model="submit.coupons"
+                            multiple
+                            :close-on-select="false"
+                            :options="coupons"
+                            option-label="title"
+                            option-value="id"
+                            :searchable="true"
+                        />
+                    </Field>
+                    <Field :label="__('Allow skipping payment')">
+                        <Switch v-model="submit.allow_skipping_payment" />
+                    </Field>
+                    <Field :label="__('Send reservation email')">
+                        <Switch v-model="submit.send_reservation_email" />
+                    </Field>
+                    <Field :label="__('Published')">
+                        <Switch v-model="submit.published" />
+                    </Field>
+                </div>
             </Card>
         </template>
     </Stack>

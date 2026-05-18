@@ -3,7 +3,7 @@
         <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {{ __('Select when to show, hide or make this extra required. When adding multiple conditions for an operation, all of them have to apply.') }}
         </p>
-        <div v-for="(condition, index) in conditionsForm" :key="index" class="grid grid-cols-1 lg:grid-cols-[1fr_1fr_2fr_auto] gap-3 items-end py-4 border-b border-gray-200 dark:border-gray-700/80 last:border-b-0">
+        <div v-for="(condition, index) in conditionsForm" :key="index" class="grid grid-cols-1 lg:grid-cols-[1fr_1fr_2fr_auto] gap-x-3 gap-y-6 items-end py-5 border-b border-gray-200 dark:border-gray-700/80 last:border-b-0">
             <Field :label="__('Operation')" :error="errors['conditions.' + index + '.operation']?.[0]">
                 <Select v-model="conditionsForm[index].operation" :options="operationOptions" />
             </Field>
@@ -26,7 +26,7 @@
                         @update:model-value="updateRowDateRange(index, $event)"
                     />
                 </Field>
-                <div v-if="typeIsTime(index)" class="grid grid-cols-2 gap-2">
+                <div v-if="typeIsTime(index)" class="grid grid-cols-2 gap-x-4 gap-y-6">
                     <Field :label="__('Time start')" :error="errors['conditions.' + index + '.time_start']?.[0]">
                         <time-fieldtype v-model:value="conditionsForm[index].time_start" />
                     </Field>
@@ -34,7 +34,7 @@
                         <time-fieldtype v-model:value="conditionsForm[index].time_end" />
                     </Field>
                 </div>
-                <div v-if="typeIsValue(index)" class="grid grid-cols-2 gap-2">
+                <div v-if="typeIsValue(index)" class="grid grid-cols-2 gap-x-4 gap-y-6">
                     <Field :label="__('Comparison')" :error="errors['conditions.' + index + '.comparison']?.[0]">
                         <Select v-model="conditionsForm[index].comparison" :options="comparisonOptions" />
                     </Field>
