@@ -52,7 +52,7 @@
             <Button icon="trash" variant="ghost" :aria-label="__('Remove')" @click="remove(index)" />
         </div>
         <div class="pt-4">
-            <Button :text="__('Add condition')" variant="default" icon="add" @click="add" />
+            <Button :text="__('Add condition')" variant="default" icon="plus" @click="add" />
         </div>
     </div>
 </template>

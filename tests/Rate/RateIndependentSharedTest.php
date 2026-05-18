@@ -182,7 +182,7 @@ class RateIndependentSharedTest extends TestCase
 
         $response->assertStatus(200);
 
-        $data = collect($response->json());
+        $data = collect($response->json('data'));
         $this->assertCount(3, $data);
 
         $startKey = $setup['startDate']->toDateString();

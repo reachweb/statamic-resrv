@@ -1,7 +1,7 @@
 <template>
     <div v-if="categoriesLoaded" ref="sections">
         <Header v-if="!insideEntry" :title="__('Extras')" icon="add-item">
-            <Button :text="__('Add a new category')" variant="primary" icon="add" @click.prevent="addCategory" />
+            <Button :text="__('Add a new category')" variant="primary" icon="plus" @click.prevent="addCategory" />
         </Header>
 
         <draggable

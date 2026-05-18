@@ -2,9 +2,10 @@
     <element-container @resized="renderAgain">
         <Alert v-if="newItem" :title="__('You need to save this entry before you can add availability information.')" variant="info" />
         <div class="statamic-resrv-availability relative" v-else>
-            <Field :label="__('Enable reservations')">
-                <Toggle v-model="enabled" :parent="props.meta.parent" @update:modelValue="changeAvailability" />
-            </Field>
+            <div class="flex items-center justify-between pb-4">
+                <Label :text="__('Enable reservations')" />
+                <Switch v-model="reservationsEnabled" @update:modelValue="changeAvailability" />
+            </div>
             <Field v-if="hasRates" :label="__('Rate')" class="mb-3">
                 <Select :placeholder="__('Select rate')" v-model="rateId" :options="rateOptions" />
             </Field>
@@ -37,7 +38,7 @@
 
 <script setup>
 import { Fieldtype } from '@statamic/cms';
-import { Alert, Button, Field, Select } from '@statamic/cms/ui';
+import { Alert, Button, Field, Label, Select, Switch } from '@statamic/cms/ui';
 import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -46,7 +47,6 @@ import axios from 'axios';
 import dayjs from 'dayjs';
 import AvailabilityModal from '../components/AvailabilityModal.vue';
 import MassAvailabilityModal from '../components/MassAvailabilityModal.vue';
-import Toggle from '../components/Toggle.vue';
 import Loader from '../components/Loader.vue';
 import { useToast } from '../composables/useToast.js';
 
@@ -56,6 +56,7 @@ const { update, expose } = Fieldtype.use(emit, props);
 const toast = useToast();
 
 const enabled = ref(props.value || 'disabled');
+const reservationsEnabled = ref(enabled.value !== 'disabled');
 const showModal = ref(false);
 const selectedDates = ref(false);
 const calendarRef = ref(null);
@@ -68,6 +69,7 @@ const ratesLoaded = ref(false);
 
 const newItem = computed(() => props.meta.parent === 'Collection');
 const hasRates = computed(() => rates.value.length > 1);
+const maxAvailable = ref(0);
 const rateOptions = computed(() => rates.value.map((r) => ({ label: r.title, value: r.id })));
 const rateForChild = computed(() => {
     if (!rateId.value) {
@@ -83,38 +85,45 @@ function handleSelect(date) {
 }
 
 function renderDay(arg) {
-    const arrayOfDomNodes = [];
     const day = dayjs(arg.date).format('YYYY-MM-DD');
-    const defaultClasses = ['p-2', 'text-xs', 'text-white', 'bg-green-700'];
+    const arrayOfDomNodes = [];
 
     const dayLabel = document.createElement('div');
-    dayLabel.classList.add('mt-1', 'mb-1');
+    dayLabel.className = 'resrv-day-number';
     dayLabel.innerHTML = arg.dayNumberText;
     arrayOfDomNodes.push(dayLabel);
 
-    if (!availability.value) {
+    const data = availability.value && availability.value[day];
+    if (!data) {
         return { domNodes: arrayOfDomNodes };
     }
 
-    if (hasAvailable(day)) {
-        const avail = document.createElement('div');
-        if (hasAvailable(day) > 0) {
-            avail.classList.add(...defaultClasses, 'bg-green-700');
-        }
-        avail.innerHTML = '# ' + hasAvailable(day);
-        arrayOfDomNodes.push(avail);
+    if (data.available !== undefined && data.available !== null) {
+        const count = Number(data.available);
+        const cell = document.createElement('div');
+        cell.className = `resrv-cell ${availabilityModifier(count, maxAvailable.value)}`;
+        cell.innerHTML = count === 0 ? window.__('Sold out') : `# ${count}`;
+        arrayOfDomNodes.push(cell);
     }
 
-    if (hasPrice(day)) {
-        const price = document.createElement('div');
-        if (hasPrice(day) > 0) {
-            price.classList.add(...defaultClasses, 'bg-gray-700');
-        }
-        price.innerHTML = props.meta.currency_symbol + ' ' + hasPrice(day);
-        arrayOfDomNodes.push(price);
+    if (data.price !== undefined && data.price !== null && data.price !== '') {
+        const cell = document.createElement('div');
+        cell.className = 'resrv-cell resrv-cell-price';
+        cell.innerHTML = `${props.meta.currency_symbol} ${data.price}`;
+        arrayOfDomNodes.push(cell);
     }
 
     return { domNodes: arrayOfDomNodes };
+}
+
+function availabilityModifier(count, max) {
+    if (count <= 0) return 'resrv-cell-sold-out';
+    // With tiny inventories (yacht / single-unit rentals, ≤ 3 total) every
+    // remaining unit is already meaningful — skip the amber "low" state so
+    // 1/1 doesn't visually read as "running out".
+    if (max <= 3) return 'resrv-cell-good';
+    if (count <= Math.max(1, Math.ceil(max * 0.3))) return 'resrv-cell-low';
+    return 'resrv-cell-good';
 }
 
 const calendarOptions = {
@@ -167,24 +176,6 @@ function renderAgain() {
     window.dispatchEvent(new Event('resize'));
 }
 
-function hasAvailable(day) {
-    if (day in availability.value) {
-        if (availability.value[day].available) {
-            return availability.value[day].available;
-        }
-    }
-    return false;
-}
-
-function hasPrice(day) {
-    if (day in availability.value) {
-        if (availability.value[day].price) {
-            return availability.value[day].price;
-        }
-    }
-    return false;
-}
-
 function availabilitySaved() {
     toggleAvailability();
     toggleModal();
@@ -218,7 +209,8 @@ function getAvailability() {
     }
     axios.get(url)
         .then((response) => {
-            availability.value = response.data;
+            availability.value = response.data.data ?? {};
+            maxAvailable.value = response.data.max_available ?? 0;
             calendar.render();
             toggleAvailability();
         })
@@ -229,16 +221,14 @@ function getAvailability() {
 
 function clearAvailability() {
     availability.value = '';
+    maxAvailable.value = 0;
     calendar.render();
     toggleAvailability();
 }
 
 function changeAvailability(newValue) {
-    if (newValue === 'disabled') {
-        update('disabled');
-    } else {
-        update(props.meta.parent);
-    }
+    enabled.value = newValue ? props.meta.parent : 'disabled';
+    update(enabled.value);
 }
 
 defineExpose(expose);

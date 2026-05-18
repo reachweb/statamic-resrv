@@ -28,12 +28,14 @@
             </div>
 
             <Field :label="__('Only apply to specific days of the week (optional)')">
-                <div class="flex flex-wrap gap-3">
-                    <label v-for="(day, index) in weekdays" :key="index" class="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
-                        <Checkbox v-model="onlyDays" :value="index" />
-                        <span>{{ day }}</span>
-                    </label>
-                </div>
+                <CheckboxGroup v-model="onlyDays" inline>
+                    <Checkbox
+                        v-for="(day, index) in weekdays"
+                        :key="index"
+                        :value="index"
+                        :label="day"
+                    />
+                </CheckboxGroup>
             </Field>
         </div>
 
@@ -47,7 +49,7 @@
 </template>
 
 <script setup>
-import { Button, Checkbox, Combobox, DateRangePicker, Field, Input, Modal } from '@statamic/cms/ui';
+import { Button, Checkbox, CheckboxGroup, Combobox, DateRangePicker, Field, Input, Modal } from '@statamic/cms/ui';
 import { computed, reactive, ref } from 'vue';
 import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useFormHandler } from '../composables/useFormHandler.js';

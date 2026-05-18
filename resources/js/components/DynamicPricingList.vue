@@ -4,7 +4,7 @@
             <Button
                 :text="__('Add Dynamic Pricing')"
                 variant="primary"
-                icon="add"
+                icon="plus"
                 @click="addPricing"
             />
         </Header>

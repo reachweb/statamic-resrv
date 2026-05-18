@@ -33,7 +33,7 @@
             </draggable>
         </div>
         <div class="mt-3">
-            <Button :text="__('Add option')" variant="primary" icon="add" @click="add" />
+            <Button :text="__('Add option')" variant="primary" icon="plus" @click="add" />
         </div>
         <OptionsPanel v-if="showPanel" :data="option" @closed="togglePanel" @saved="dataSaved" />
         <confirmation-modal

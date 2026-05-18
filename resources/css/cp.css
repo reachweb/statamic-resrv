@@ -21,6 +21,59 @@
     :is(.dark .fc-theme-standard) .fc-scrollgrid {
         @apply border border-neutral-700;
     }
+
+    .resrv-day-number {
+        @apply mt-1 mb-1 text-xs font-medium text-gray-700;
+    }
+    :is(.dark .resrv-day-number) {
+        @apply text-gray-300;
+    }
+
+    .resrv-cell {
+        @apply mx-1 mb-0.5 px-1.5 py-0.5 text-xs font-medium rounded text-center leading-tight;
+    }
+
+    .resrv-cell-good {
+        @apply bg-emerald-100 text-emerald-800;
+    }
+    :is(.dark .resrv-cell-good) {
+        @apply bg-emerald-900/40 text-emerald-200;
+    }
+
+    .resrv-cell-low {
+        @apply bg-amber-100 text-amber-900;
+    }
+    :is(.dark .resrv-cell-low) {
+        @apply bg-amber-900/40 text-amber-100;
+    }
+
+    .resrv-cell-sold-out {
+        @apply text-gray-500 italic;
+        background-image: repeating-linear-gradient(
+            -45deg,
+            rgb(243 244 246),
+            rgb(243 244 246) 4px,
+            rgb(229 231 235) 4px,
+            rgb(229 231 235) 8px
+        );
+    }
+    :is(.dark .resrv-cell-sold-out) {
+        @apply text-gray-400;
+        background-image: repeating-linear-gradient(
+            -45deg,
+            rgb(31 41 55),
+            rgb(31 41 55) 4px,
+            rgb(55 65 81) 4px,
+            rgb(55 65 81) 8px
+        );
+    }
+
+    .resrv-cell-price {
+        @apply bg-gray-100 text-gray-700;
+    }
+    :is(.dark .resrv-cell-price) {
+        @apply bg-gray-800 text-gray-200;
+    }
 }
 
 .fade-enter-active, .fade-leave-active {

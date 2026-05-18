@@ -58,7 +58,7 @@
             </template>
         </draggable>
         <div class="mt-3" v-if="!insideEntry">
-            <Button variant="default" :text="__('Add extra')" icon="add" @click="addExtra" />
+            <Button variant="default" :text="__('Add extra')" icon="plus" @click="addExtra" />
         </div>
         <ExtrasPanel
             v-if="showPanel"

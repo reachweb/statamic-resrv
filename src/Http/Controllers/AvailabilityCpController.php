@@ -64,7 +64,10 @@ class AvailabilityCpController extends Controller
             });
         }
 
-        return response()->json($results);
+        return response()->json([
+            'data' => $results,
+            'max_available' => (int) ($results->max('available') ?? 0),
+        ]);
     }
 
     public function update(AvailabilityCpRequest $request): JsonResponse

@@ -31,7 +31,7 @@
             </draggable>
         </div>
         <div class="mt-2">
-            <Button size="sm" :text="__('Add value')" variant="default" icon="add" @click="add" />
+            <Button size="sm" :text="__('Add value')" variant="default" icon="plus" @click="add" />
         </div>
         <OptionValuesPanel
             v-if="showPanel"

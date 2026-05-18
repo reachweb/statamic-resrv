@@ -25,8 +25,8 @@
             </div>
         </div>
         <div class="flex flex-wrap gap-2 mt-3">
-            <Button :text="__('Add fixed pricing')" variant="primary" icon="add" @click="addFixedPricing" />
-            <Button v-if="!hasExtraDayPricing" :text="__('Add extra day price')" variant="default" icon="add" @click="addFixedExtraPricing" />
+            <Button :text="__('Add fixed pricing')" variant="primary" icon="plus" @click="addFixedPricing" />
+            <Button v-if="!hasExtraDayPricing" :text="__('Add extra day price')" variant="default" icon="plus" @click="addFixedExtraPricing" />
         </div>
         <FixedPricingPanel
             v-if="showPanel"

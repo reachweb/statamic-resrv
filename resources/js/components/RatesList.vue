@@ -1,7 +1,7 @@
 <template>
     <div>
         <Header :title="__('Rates')" icon="money-cashier-price-tag">
-            <Button v-if="selectedCollection" :text="__('Add rate')" variant="primary" icon="add" @click="add" />
+            <Button v-if="selectedCollection" :text="__('Add rate')" variant="primary" icon="plus" @click="add" />
         </Header>
 
         <Card class="mb-6">

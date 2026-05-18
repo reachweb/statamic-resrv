@@ -1,7 +1,7 @@
 <template>
     <div>
         <Header :title="__('Affiliates')" icon="fieldtype-users">
-            <Button :text="__('Add a new affiliate')" variant="primary" icon="add" @click="addAffiliate" />
+            <Button :text="__('Add a new affiliate')" variant="primary" icon="plus" @click="addAffiliate" />
         </Header>
 
         <Card v-if="affiliatesLoaded" inset>

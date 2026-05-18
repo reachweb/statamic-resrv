@@ -5,9 +5,10 @@
             {{ __('Cutoff rules are currently disabled in the global configuration. Enable them in the Resrv settings to use this feature.') }}
         </Alert>
         <div class="statamic-resrv-cutoff relative" v-else>
-            <Field :label="__('Enable Cutoff Rules')">
+            <div class="flex items-center justify-between pb-6">
+                <Label :text="__('Enable Cutoff Rules')" />
                 <Switch v-model="enabled" @update:modelValue="toggleCutoff" />
-            </Field>
+            </div>
 
             <div v-if="enabled" class="space-y-6">
                 <Alert variant="info">
@@ -22,7 +23,7 @@
                                 <Input v-model="settings.default_starting_time" type="time" />
                             </Field>
                             <Field :label="__('Default Cutoff Hours')" :instructions="__('Hours before starting time to stop accepting bookings')">
-                                <Input v-model="settings.default_cutoff_hours" type="number" inputAttrs="min='0' max='240'" />
+                                <Input v-model="settings.default_cutoff_hours" type="number" min="0" max="240" />
                             </Field>
                         </div>
                     </Card>
@@ -30,7 +31,7 @@
 
                 <Panel :heading="__('Schedules')">
                     <template #header-actions>
-                        <Button size="sm" :text="__('Add Schedule')" icon="add" @click="addSchedule" />
+                        <Button size="sm" :text="__('Add Schedule')" icon="plus" @click="addSchedule" />
                     </template>
                     <Card>
                         <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
@@ -57,7 +58,7 @@
                                         <Input v-model="schedule.starting_time" type="time" />
                                     </Field>
                                     <Field :label="__('Cutoff Hours')">
-                                        <Input v-model="schedule.cutoff_hours" type="number" inputAttrs="min='0' max='240'" />
+                                        <Input v-model="schedule.cutoff_hours" type="number" min="0" max="240" />
                                     </Field>
                                 </div>
                             </div>
@@ -74,7 +75,7 @@
 
 <script setup>
 import { Fieldtype } from '@statamic/cms';
-import { Alert, Button, Card, DateRangePicker, Field, Input, Panel, Switch } from '@statamic/cms/ui';
+import { Alert, Button, Card, DateRangePicker, Field, Input, Label, Panel, Switch } from '@statamic/cms/ui';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { toCalendarDate, toIsoString } from '../composables/useDateRangeModel.js';
 
