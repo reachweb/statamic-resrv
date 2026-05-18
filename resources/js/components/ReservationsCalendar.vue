@@ -8,7 +8,9 @@
         </Header>
 
         <Card>
-            <FullCalendar ref="fullCalendarRef" :options="calendarOptions" />
+            <div class="statamic-resrv-reservations">
+                <FullCalendar ref="fullCalendarRef" :options="calendarOptions" />
+            </div>
         </Card>
     </div>
 </template>
@@ -27,11 +29,41 @@ const props = defineProps({
 const onlyStart = ref(false);
 const fullCalendarRef = ref(null);
 
+function appendSpan(parent, className, text) {
+    const span = document.createElement('span');
+    span.className = className;
+    span.textContent = text;
+    parent.appendChild(span);
+}
+
+function renderEvent(arg) {
+    const { reservationId, entryTitle, rateLabel, quantity } = arg.event.extendedProps;
+    const card = document.createElement('div');
+    card.className = 'resrv-event-card';
+
+    appendSpan(card, 'resrv-event-dot', '');
+
+    if (reservationId) {
+        appendSpan(card, 'resrv-event-id', '#' + reservationId);
+    }
+    if (arg.timeText) {
+        appendSpan(card, 'resrv-event-time', arg.timeText);
+    }
+
+    const bodyText = rateLabel ? `${entryTitle} - ${rateLabel}` : entryTitle;
+    appendSpan(card, 'resrv-event-title', bodyText);
+
+    if (quantity) {
+        appendSpan(card, 'resrv-event-qty', '×' + quantity);
+    }
+
+    return { domNodes: [card] };
+}
+
 const calendarOptions = {
     plugins: [dayGridPlugin, interactionPlugin],
     initialView: 'dayGridMonth',
     navLinks: true,
-    eventColor: '#5b21b6',
     events: {
         url: props.calendarJsonUrl,
         extraParams: () => {
@@ -52,6 +84,7 @@ const calendarOptions = {
         center: 'title',
         right: 'dayGridMonth,dayGridDay',
     },
+    eventContent: renderEvent,
 };
 
 watch(onlyStart, () => {

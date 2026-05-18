@@ -4,28 +4,28 @@
             <Button :text="__('Add a new affiliate')" variant="primary" icon="plus" @click="addAffiliate" />
         </Header>
 
-        <Card v-if="affiliatesLoaded" inset>
+        <Card inset>
             <div v-if="affiliates.length > 0" class="p-3 space-y-2">
                 <div
-                    v-for="affiliate in affiliates"
-                    :key="affiliate.id"
+                    v-for="item in affiliates"
+                    :key="item.id"
                     class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80"
                 >
                     <div class="flex items-center gap-2">
-                        <StatusIndicator :status="affiliate.published ? 'published' : 'draft'" />
-                        <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="affiliate.name" @click="editAffiliate(affiliate)"></span>
+                        <StatusIndicator :status="item.published ? 'published' : 'draft'" />
+                        <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="item.name" @click="editAffiliate(item)"></span>
                         <span class="text-sm text-gray-600 dark:text-gray-400 ml-2">
-                            {{ affiliate.email }}
+                            {{ item.email }}
                         </span>
-                        <Badge :text="`${__('Fee')}: ${affiliate.fee}%`" size="sm" />
+                        <Badge :text="`${__('Fee')}: ${item.fee}%`" size="sm" />
                     </div>
                     <div>
                         <Dropdown>
                             <DropdownMenu>
-                                <DropdownItem :text="__('Edit')" icon="pencil" @click="editAffiliate(affiliate)" />
-                                <DropdownItem :text="__('Copy affiliate link')" icon="clipboard" @click="copyLink(affiliate)" />
+                                <DropdownItem :text="__('Edit')" icon="pencil" @click="editAffiliate(item)" />
+                                <DropdownItem :text="__('Copy affiliate link')" icon="clipboard" @click="copyLink(item)" />
                                 <DropdownSeparator />
-                                <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(affiliate)" />
+                                <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(item)" />
                             </DropdownMenu>
                         </Dropdown>
                     </div>
@@ -40,7 +40,7 @@
             v-if="showPanel"
             :data="affiliate"
             @closed="togglePanel"
-            @saved="affiliateSaved"
+            @saved="togglePanel"
         />
         <confirmation-modal
             v-if="deleteId"
@@ -56,16 +56,19 @@
 
 <script setup>
 import { Badge, Button, Card, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, Header, StatusIndicator } from '@statamic/cms/ui';
-import { onMounted, ref } from 'vue';
+import { router } from '@statamic/cms/inertia';
+import { ref } from 'vue';
 import axios from 'axios';
 import AffiliatesPanel from './AffiliatesPanel.vue';
 import { useToast } from '../composables/useToast.js';
 
+defineProps({
+    affiliates: { type: Array, default: () => [] },
+});
+
 const toast = useToast();
 
 const showPanel = ref(false);
-const affiliates = ref([]);
-const affiliatesLoaded = ref(false);
 const deleteId = ref(null);
 const affiliate = ref({});
 
@@ -79,8 +82,6 @@ const emptyAffiliate = {
     send_reservation_email: false,
     published: true,
 };
-
-onMounted(() => getAllAffiliates());
 
 function togglePanel() {
     showPanel.value = !showPanel.value;
@@ -106,20 +107,12 @@ function copyLink(item) {
     }
 }
 
-function affiliateSaved() {
-    togglePanel();
-    getAllAffiliates();
-}
-
-function getAllAffiliates() {
-    axios.get('/cp/resrv/affiliate')
-        .then((response) => {
-            affiliates.value = response.data;
-            affiliatesLoaded.value = true;
-        })
-        .catch(() => {
-            toast.error('Cannot retrieve affiliates');
-        });
+function refreshAffiliates() {
+    router.reload({
+        only: ['affiliates'],
+        preserveState: true,
+        preserveScroll: true,
+    });
 }
 
 function confirmDelete(item) {
@@ -131,7 +124,7 @@ function deleteAffiliate() {
         .then(() => {
             toast.success('Affiliate deleted');
             deleteId.value = null;
-            getAllAffiliates();
+            refreshAffiliates();
         })
         .catch(() => {
             toast.error('Cannot delete affiliate');

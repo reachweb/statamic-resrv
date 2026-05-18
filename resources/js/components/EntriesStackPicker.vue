@@ -1,6 +1,6 @@
 <template>
     <div>
-        <div v-if="selectedItems.length" class="rounded-lg border border-gray-200 dark:border-gray-700/80 divide-y divide-gray-200 dark:divide-gray-700/80 bg-white dark:bg-gray-900/40">
+        <div v-if="selectedItems.length" class="rounded-lg border border-gray-200 dark:border-gray-700/80 divide-y divide-gray-200 dark:divide-gray-700/80 bg-white dark:bg-gray-900">
             <div
                 v-for="item in selectedItems"
                 :key="item.value"
@@ -54,12 +54,12 @@
                     </p>
                     <div
                         v-else
-                        class="rounded-lg border border-gray-200 dark:border-gray-700/80 divide-y divide-gray-200 dark:divide-gray-700/80 bg-white dark:bg-gray-900/40 max-h-[60vh] overflow-y-auto"
+                        class="rounded-lg border border-gray-200 dark:border-gray-700/80 divide-y divide-gray-200 dark:divide-gray-700/80 bg-white dark:bg-gray-900 max-h-[60vh] overflow-y-auto"
                     >
                         <div
                             v-for="option in filteredOptions"
                             :key="option[optionValue]"
-                            class="py-2.5 px-4 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                            class="py-2.5 px-4 hover:bg-gray-50 dark:hover:bg-gray-800"
                         >
                             <Checkbox
                                 :model-value="picked.includes(option[optionValue])"

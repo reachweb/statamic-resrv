@@ -6,27 +6,27 @@
         @closed="onClosed"
     >
         <template #header-actions>
-            <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+            <Button :text="__('Save')" variant="primary" :disabled="form.processing" @click="save" />
         </template>
         <template #default>
             <Panel :heading="__('General')">
                 <Card>
                     <div class="space-y-6">
-                        <Field :label="__('Collection')" :instructions="__('The collection this rate applies to.')" :errors="errors.collection">
+                        <Field :label="__('Collection')" :instructions="__('The collection this rate applies to.')" :errors="form.errors.collection">
                             <Select
-                                v-model="submit.collection"
+                                v-model="form.collection"
                                 :options="collectionOptions"
                                 :clearable="false"
                                 :disabled="isEditing"
                             />
                         </Field>
                         <Field :label="__('Apply to all entries in collection')">
-                            <Switch v-model="submit.apply_to_all" />
+                            <Switch v-model="form.apply_to_all" />
                         </Field>
-                        <Field v-if="!submit.apply_to_all" :label="__('Entries')" :instructions="__('Select the entries this rate should apply to.')" :errors="errors.entries">
+                        <Field v-if="!form.apply_to_all" :label="__('Entries')" :instructions="__('Select the entries this rate should apply to.')" :errors="form.errors.entries">
                             <EntriesStackPicker
                                 v-if="entriesLoaded"
-                                v-model="submit.entries"
+                                v-model="form.entries"
                                 :options="collectionEntries"
                                 option-label="title"
                                 option-value="id"
@@ -40,15 +40,15 @@
                             </EntriesStackPicker>
                         </Field>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                            <Field :label="__('Title')" :errors="errors.title">
-                                <Input v-model="submit.title" @input="slugify" />
+                            <Field :label="__('Title')" :errors="form.errors.title">
+                                <Input v-model="form.title" @input="slugify" />
                             </Field>
-                            <Field :label="__('Slug')" :errors="errors.slug">
-                                <Input v-model="submit.slug" @input="onSlugInput" />
+                            <Field :label="__('Slug')" :errors="form.errors.slug">
+                                <Input v-model="form.slug" @input="onSlugInput" />
                             </Field>
                         </div>
-                        <Field :label="__('Description')" :errors="errors.description">
-                            <Textarea v-model="submit.description" />
+                        <Field :label="__('Description')" :errors="form.errors.description">
+                            <Textarea v-model="form.description" />
                         </Field>
                     </div>
                 </Card>
@@ -58,22 +58,22 @@
                 <Card>
                     <div class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                            <Field :label="__('Pricing type')" :instructions="__('Independent rates have their own pricing. Relative rates derive pricing from a base rate.')" :errors="errors.pricing_type">
-                                <Select v-model="submit.pricing_type" :options="pricingTypes" />
+                            <Field :label="__('Pricing type')" :instructions="__('Independent rates have their own pricing. Relative rates derive pricing from a base rate.')" :errors="form.errors.pricing_type">
+                                <Select v-model="form.pricing_type" :options="pricingTypes" />
                             </Field>
-                            <Field v-if="needsBaseRate" :label="__('Base rate')" :instructions="baseRateDescription" :errors="errors.base_rate_id">
-                                <Select v-model="submit.base_rate_id" :options="availableBaseRates" />
+                            <Field v-if="needsBaseRate" :label="__('Base rate')" :instructions="baseRateDescription" :errors="form.errors.base_rate_id">
+                                <Select v-model="form.base_rate_id" :options="availableBaseRates" />
                             </Field>
                         </div>
-                        <div v-if="submit.pricing_type === 'relative'" class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
-                            <Field :label="__('Modifier type')" :instructions="__('Percentage or fixed amount.')" :errors="errors.modifier_type">
-                                <Select v-model="submit.modifier_type" :options="modifierTypes" />
+                        <div v-if="form.pricing_type === 'relative'" class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
+                            <Field :label="__('Modifier type')" :instructions="__('Percentage or fixed amount.')" :errors="form.errors.modifier_type">
+                                <Select v-model="form.modifier_type" :options="modifierTypes" />
                             </Field>
-                            <Field :label="__('Modifier operation')" :instructions="__('Increase or decrease from base rate.')" :errors="errors.modifier_operation">
-                                <Select v-model="submit.modifier_operation" :options="modifierOperations" />
+                            <Field :label="__('Modifier operation')" :instructions="__('Increase or decrease from base rate.')" :errors="form.errors.modifier_operation">
+                                <Select v-model="form.modifier_operation" :options="modifierOperations" />
                             </Field>
-                            <Field :label="__('Modifier amount')" :instructions="__('Amount or percentage without the % character.')" :errors="errors.modifier_amount">
-                                <Input v-model="submit.modifier_amount" />
+                            <Field :label="__('Modifier amount')" :instructions="__('Amount or percentage without the % character.')" :errors="form.errors.modifier_amount">
+                                <Input v-model="form.modifier_amount" />
                             </Field>
                         </div>
                     </div>
@@ -84,15 +84,15 @@
                 <Card>
                     <div class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                            <Field :label="__('Availability type')" :instructions="__('Independent rates have their own inventory. Shared rates share inventory with the base rate.')" :errors="errors.availability_type">
-                                <Select v-model="submit.availability_type" :options="availabilityTypes" />
+                            <Field :label="__('Availability type')" :instructions="__('Independent rates have their own inventory. Shared rates share inventory with the base rate.')" :errors="form.errors.availability_type">
+                                <Select v-model="form.availability_type" :options="availabilityTypes" />
                             </Field>
-                            <Field v-if="submit.availability_type === 'shared'" :label="__('Max available')" :instructions="__('Maximum number of units available for this rate.')" :errors="errors.max_available">
-                                <Input v-model="submit.max_available" type="number" />
+                            <Field v-if="form.availability_type === 'shared'" :label="__('Max available')" :instructions="__('Maximum number of units available for this rate.')" :errors="form.errors.max_available">
+                                <Input v-model="form.max_available" type="number" />
                             </Field>
                         </div>
-                        <Field v-if="submit.availability_type === 'shared' && submit.pricing_type === 'independent'" :label="__('Require price override')" :instructions="__('When enabled, dates without an explicit price for this rate are unavailable. When disabled, the base rate\'s price is used as a fallback.')">
-                            <Switch v-model="submit.require_price_override" />
+                        <Field v-if="form.availability_type === 'shared' && form.pricing_type === 'independent'" :label="__('Require price override')" :instructions="__('When enabled, dates without an explicit price for this rate are unavailable. When disabled, the base rate\'s price is used as a fallback.')">
+                            <Switch v-model="form.require_price_override" />
                         </Field>
                     </div>
                 </Card>
@@ -105,17 +105,17 @@
                             <DateRangePicker v-model="dateRange" granularity="day" />
                         </Field>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                            <Field :label="__('Min days before')" :instructions="__('Minimum advance booking days.')" :errors="errors.min_days_before">
-                                <Input v-model="submit.min_days_before" type="number" />
+                            <Field :label="__('Min days before')" :instructions="__('Minimum advance booking days.')" :errors="form.errors.min_days_before">
+                                <Input v-model="form.min_days_before" type="number" />
                             </Field>
-                            <Field :label="__('Max days before')" :instructions="__('Maximum advance booking days.')" :errors="errors.max_days_before">
-                                <Input v-model="submit.max_days_before" type="number" />
+                            <Field :label="__('Max days before')" :instructions="__('Maximum advance booking days.')" :errors="form.errors.max_days_before">
+                                <Input v-model="form.max_days_before" type="number" />
                             </Field>
-                            <Field :label="__('Min stay')" :instructions="__('Minimum number of nights.')" :errors="errors.min_stay">
-                                <Input v-model="submit.min_stay" type="number" />
+                            <Field :label="__('Min stay')" :instructions="__('Minimum number of nights.')" :errors="form.errors.min_stay">
+                                <Input v-model="form.min_stay" type="number" />
                             </Field>
-                            <Field :label="__('Max stay')" :instructions="__('Maximum number of nights.')" :errors="errors.max_stay">
-                                <Input v-model="submit.max_stay" type="number" />
+                            <Field :label="__('Max stay')" :instructions="__('Maximum number of nights.')" :errors="form.errors.max_stay">
+                                <Input v-model="form.max_stay" type="number" />
                             </Field>
                         </div>
                     </div>
@@ -126,10 +126,10 @@
                 <Card>
                     <div class="space-y-6">
                         <Field :label="__('Refundable')">
-                            <Switch v-model="submit.refundable" />
+                            <Switch v-model="form.refundable" />
                         </Field>
                         <Field :label="__('Published')">
-                            <Switch v-model="submit.published" />
+                            <Switch v-model="form.published" />
                         </Field>
                     </div>
                 </Card>
@@ -140,11 +140,11 @@
 
 <script setup>
 import { Button, Card, DateRangePicker, Field, Input, Panel, Select, Stack, Switch, Textarea } from '@statamic/cms/ui';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useForm } from '@statamic/cms/inertia';
+import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import EntriesStackPicker from './EntriesStackPicker.vue';
 import { useDateRangeModel } from '../composables/useDateRangeModel.js';
-import { useFormHandler } from '../composables/useFormHandler.js';
 import { useSlugify } from '../composables/useSlugify.js';
 import { useToast } from '../composables/useToast.js';
 
@@ -159,15 +159,39 @@ const emit = defineEmits(['closed', 'saved']);
 const toast = useToast();
 const { slugifyFrom, onSlugInput, reset: resetSlugify } = useSlugify();
 
-const submit = reactive({ entries: [] });
 const collectionEntries = ref([]);
 const entriesLoaded = ref(false);
 
+const form = useForm({
+    collection: null,
+    apply_to_all: true,
+    entries: [],
+    title: '',
+    slug: '',
+    description: '',
+    pricing_type: 'independent',
+    base_rate_id: null,
+    modifier_type: null,
+    modifier_operation: null,
+    modifier_amount: null,
+    availability_type: 'independent',
+    require_price_override: false,
+    max_available: null,
+    date_start: null,
+    date_end: null,
+    min_days_before: null,
+    max_days_before: null,
+    min_stay: null,
+    max_stay: null,
+    refundable: true,
+    published: true,
+});
+
 const dateRange = useDateRangeModel(
-    () => submit.date_start,
-    () => submit.date_end,
-    (v) => (submit.date_start = v),
-    (v) => (submit.date_end = v),
+    () => form.date_start,
+    () => form.date_end,
+    (v) => (form.date_start = v),
+    (v) => (form.date_end = v),
 );
 
 const pricingTypes = [
@@ -191,11 +215,7 @@ const collectionOptions = computed(() =>
     props.collections.map((c) => ({ value: c.handle, label: c.title })),
 );
 
-const isEditing = computed(() => 'id' in props.data);
-const method = computed(() => (isEditing.value ? 'patch' : 'post'));
-const postUrl = computed(() =>
-    isEditing.value ? '/cp/resrv/rate/' + props.data.id : '/cp/resrv/rate',
-);
+const isEditing = computed(() => 'id' in props.data && !!props.data.id);
 
 const availableBaseRates = computed(() =>
     props.allRates
@@ -204,89 +224,91 @@ const availableBaseRates = computed(() =>
 );
 
 const needsBaseRate = computed(() =>
-    submit.pricing_type === 'relative' || submit.availability_type === 'shared',
+    form.pricing_type === 'relative' || form.availability_type === 'shared',
 );
 
 const baseRateDescription = computed(() => {
-    if (submit.pricing_type === 'relative' && submit.availability_type === 'shared') {
+    if (form.pricing_type === 'relative' && form.availability_type === 'shared') {
         return __('Derive pricing and share inventory with this rate.');
     }
-    if (submit.pricing_type === 'relative') {
+    if (form.pricing_type === 'relative') {
         return __('The rate to derive pricing from.');
     }
     return __('The rate to share inventory with.');
 });
 
-const { disableSave, errors, save } = useFormHandler({
-    submit,
-    postUrl,
-    method,
-    successMessage: 'Rate successfully saved',
-    emit,
-});
-
 const dateRangeErrors = computed(() => {
     const out = [];
-    if (errors.value?.date_start) out.push(...errors.value.date_start);
-    if (errors.value?.date_end) out.push(...errors.value.date_end);
+    if (form.errors.date_start) out.push(form.errors.date_start);
+    if (form.errors.date_end) out.push(form.errors.date_end);
     return out.length ? out : null;
 });
 
-watch(() => props.data, () => createSubmit(), { deep: true });
+watch(() => props.data, hydrateForm, { deep: true });
 
-watch(() => submit.collection, (newVal) => {
+watch(() => form.collection, (newVal) => {
     if (newVal) {
         getCollectionEntries(newVal);
     }
 });
 
-watch(() => submit.pricing_type, () => {
-    if (!needsBaseRate.value) {
-        submit.base_rate_id = null;
+watch(needsBaseRate, (needed) => {
+    if (!needed) {
+        form.base_rate_id = null;
     }
 });
 
-watch(() => submit.availability_type, () => {
-    if (!needsBaseRate.value) {
-        submit.base_rate_id = null;
-    }
-});
-
-watch(() => submit.apply_to_all, (newVal) => {
+watch(() => form.apply_to_all, (newVal) => {
     if (newVal) {
-        submit.entries = [];
+        form.entries = [];
     }
 });
 
-onMounted(() => createSubmit());
+onMounted(hydrateForm);
+
+function hydrateForm() {
+    const d = props.data;
+    form.collection = d.collection ?? null;
+    form.apply_to_all = d.apply_to_all ?? true;
+    form.title = d.title ?? '';
+    form.slug = d.slug ?? '';
+    form.description = d.description ?? '';
+    form.pricing_type = d.pricing_type ?? 'independent';
+    form.base_rate_id = d.base_rate_id ?? null;
+    form.modifier_type = d.modifier_type ?? null;
+    form.modifier_operation = d.modifier_operation ?? null;
+    form.modifier_amount = d.modifier_amount ?? null;
+    form.availability_type = d.availability_type ?? 'independent';
+    form.require_price_override = d.require_price_override ?? false;
+    form.max_available = d.max_available ?? null;
+    form.date_start = d.date_start ?? null;
+    form.date_end = d.date_end ?? null;
+    form.min_days_before = d.min_days_before ?? null;
+    form.max_days_before = d.max_days_before ?? null;
+    form.min_stay = d.min_stay ?? null;
+    form.max_stay = d.max_stay ?? null;
+    form.refundable = d.refundable ?? true;
+    form.published = d.published ?? true;
+
+    if (Array.isArray(d.entries) && d.entries.length > 0) {
+        form.entries = d.entries.map((e) => e.item_id || e.id);
+    } else {
+        form.entries = [];
+    }
+
+    resetSlugify(form.slug);
+    form.clearErrors();
+}
 
 function onClosed() {
-    Object.keys(submit).forEach((key) => delete submit[key]);
-    submit.entries = [];
+    form.clearErrors();
     emit('closed');
 }
 
-function createSubmit() {
-    Object.keys(submit).forEach((key) => delete submit[key]);
-    submit.entries = [];
-    Object.entries(props.data).forEach(([name, value]) => {
-        submit[name] = value;
-    });
-    if (!('entries' in submit) || submit.entries === undefined || submit.entries === null) {
-        submit.entries = [];
-    }
-    submit.date_start = props.data.date_start || null;
-    submit.date_end = props.data.date_end || null;
-    resetSlugify(submit.slug);
-    if (isEditing.value) {
-        loadAssignedEntries();
-    }
-}
-
 function slugify() {
-    const next = slugifyFrom(submit.title);
+    const next = slugifyFrom(form.title);
     if (next !== undefined) {
-        submit.slug = next;
+        form.slug = next;
     }
 }
 
@@ -301,17 +323,32 @@ function getCollectionEntries(collection) {
         });
 }
 
-function loadAssignedEntries() {
-    if (props.data.entries && props.data.entries.length > 0) {
-        submit.entries = props.data.entries.map((e) => e.item_id || e.id);
-    }
-}
-
 function selectAllEntries() {
-    submit.entries = collectionEntries.value.map((e) => e.id);
+    form.entries = collectionEntries.value.map((e) => e.id);
 }
 
 function removeAllEntries() {
-    submit.entries = [];
+    form.entries = [];
+}
+
+function save() {
+    const url = isEditing.value
+        ? '/cp/resrv/rate/' + props.data.id
+        : '/cp/resrv/rate';
+    const method = isEditing.value ? 'patch' : 'post';
+
+    form[method](url, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            toast.success(__('Rate successfully saved'));
+            emit('saved');
+        },
+        onError: (errors) => {
+            if (!Object.keys(errors).length) {
+                toast.error(__('Something went wrong. Please try again.'));
+            }
+        },
+    });
 }
 </script>

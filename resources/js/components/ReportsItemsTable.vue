@@ -1,12 +1,12 @@
 <template>
     <Card inset class="overflow-x-auto">
         <table class="w-full text-sm rounded-xl overflow-hidden">
-            <thead>
-                <tr class="border-b border-gray-200 dark:border-gray-700/80 bg-gray-50 dark:bg-gray-900/40">
+            <thead class="bg-gray-50 dark:bg-gray-800">
+                <tr class="border-b border-gray-200 dark:border-gray-700/80">
                     <th
                         v-for="column in columns[tableColumns]"
                         :key="column.field"
-                        class="text-left px-4 py-3 font-medium text-xs uppercase tracking-wide text-gray-600 dark:text-gray-400"
+                        class="text-left px-4 py-3 font-medium text-xs uppercase tracking-wide text-gray-600 dark:text-gray-300"
                     >
                         {{ __(column.label) }}
                     </th>

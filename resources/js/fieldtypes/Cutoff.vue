@@ -41,7 +41,7 @@
                             <div
                                 v-for="(schedule, index) in settings.schedules"
                                 :key="index"
-                                class="border border-gray-200 dark:border-gray-700/80 rounded-lg p-4 bg-white dark:bg-gray-900/40"
+                                class="border border-gray-200 dark:border-gray-700/80 rounded-lg p-4 bg-white dark:bg-gray-900"
                             >
                                 <div class="flex items-center justify-end">
                                     <Button icon="trash" variant="ghost" size="sm" :aria-label="__('Remove')" @click="removeSchedule(index)" />

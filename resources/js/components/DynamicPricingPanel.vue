@@ -6,31 +6,31 @@
         @closed="onClosed"
     >
         <template #header-actions>
-            <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+            <Button :text="__('Save')" variant="primary" :disabled="form.processing" @click="save" />
         </template>
-        <template #default="{ close }">
+        <template #default>
             <Card>
                 <div class="space-y-6">
                     <Field v-bind="fieldProps('title', __('Title'))">
-                        <Input v-model="submit.title" />
+                        <Input v-model="form.title" />
                     </Field>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
                         <Field v-bind="fieldProps('amount', __('Amount'), __('Amount or percentage without the % character.'))">
-                            <Input v-model="submit.amount" />
+                            <Input v-model="form.amount" />
                         </Field>
                         <Field v-bind="fieldProps('amount_operation', __('Operation'), __('Select if the base price will be decreased or increased.'))">
-                            <Select v-model="submit.amount_operation" :options="amountOperationOptions" />
+                            <Select v-model="form.amount_operation" :options="amountOperationOptions" />
                         </Field>
                         <Field v-bind="fieldProps('amount_type', __('Type'), __('Percentage or fixed price.'))">
-                            <Select v-model="submit.amount_type" :options="availableAmountTypes" />
+                            <Select v-model="form.amount_type" :options="availableAmountTypes" />
                         </Field>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                         <Field v-bind="fieldProps('date_include', __('Date condition'), __('Add a date condition.'))">
                             <Select
-                                v-model="submit.date_include"
+                                v-model="form.date_include"
                                 :options="dateConditionOptions"
                                 :clearable="true"
                                 @update:modelValue="removeDate"
@@ -43,21 +43,21 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
                         <Field v-bind="fieldProps('condition_type', __('Reservation condition'), __('Apply the dynamic pricing when...'))">
-                            <Select v-model="submit.condition_type" :options="conditionTypeOptions" />
+                            <Select v-model="form.condition_type" :options="conditionTypeOptions" />
                         </Field>
                         <Field v-bind="fieldProps('condition_comparison', __('Comparison'), __('Select the comparison operator'))">
-                            <Select v-model="submit.condition_comparison" :options="conditionComparisonOptions" />
+                            <Select v-model="form.condition_comparison" :options="conditionComparisonOptions" />
                         </Field>
                         <Field v-bind="fieldProps('condition_value', __('Value'), __('The value to compare to (days or price).'))">
-                            <Input v-model="submit.condition_value" />
+                            <Input v-model="form.condition_value" />
                         </Field>
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-6">
-                        <Field :label="__('Entries')" :instructions="__('Select the entries that this dynamic pricing applies to')" :errors="errors.entries">
+                        <Field :label="__('Entries')" :instructions="__('Select the entries that this dynamic pricing applies to')" :errors="form.errors.entries">
                             <EntriesStackPicker
                                 v-if="entriesLoaded"
-                                v-model="submit.entries"
+                                v-model="form.entries"
                                 :options="entries"
                                 option-label="title"
                                 option-value="item_id"
@@ -70,7 +70,7 @@
                                 </template>
                             </EntriesStackPicker>
                         </Field>
-                        <Field :label="__('Extras')" :instructions="__('Select the extras that this dynamic pricing applies to')" :errors="errors.extras">
+                        <Field :label="__('Extras')" :instructions="__('Select the extras that this dynamic pricing applies to')" :errors="form.errors.extras">
                             <template #actions>
                                 <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllExtras" />
                                 <span class="text-xs text-gray-400">|</span>
@@ -78,7 +78,7 @@
                             </template>
                             <Combobox
                                 v-if="extrasLoaded"
-                                v-model="submit.extras"
+                                v-model="form.extras"
                                 multiple
                                 :close-on-select="false"
                                 :options="extras"
@@ -91,19 +91,19 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                         <Field v-bind="fieldProps('coupon', __('Coupon'), __('Dynamic pricing applied only if coupon is applied during checkout. Coupons get applied even if another policy is set as overriding.'))">
-                            <Input v-model="submit.coupon" />
+                            <Input v-model="form.coupon" />
                         </Field>
                         <Field v-bind="fieldProps('expire_at', __('Expire at'), __('Select a date / time that this dynamic pricing will expire.'))">
-                            <Input v-model="submit.expire_at" type="datetime-local" />
+                            <Input v-model="form.expire_at" type="datetime-local" />
                         </Field>
                     </div>
 
                     <Field :label="__('Overrides all other dynamic pricing policies')">
-                        <Switch v-model="submit.overrides_all" />
+                        <Switch v-model="form.overrides_all" />
                     </Field>
 
                     <Field :label="__('Published')">
-                        <Switch v-model="submit.published" />
+                        <Switch v-model="form.published" />
                     </Field>
                 </div>
             </Card>
@@ -113,36 +113,51 @@
 
 <script setup>
 import { Button, Card, Combobox, DateRangePicker, Field, Input, Select, Stack, Switch } from '@statamic/cms/ui';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useForm } from '@statamic/cms/inertia';
+import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import EntriesStackPicker from './EntriesStackPicker.vue';
 import { useDateRangeModel } from '../composables/useDateRangeModel.js';
-import { useFormHandler } from '../composables/useFormHandler.js';
 import { useToast } from '../composables/useToast.js';
 
 const props = defineProps({
     data: { type: Object, required: true },
     timezone: { type: String, required: true },
-    openPanel: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['closed', 'saved']);
 const toast = useToast();
 
-const submit = reactive({
-    entries: [],
-    extras: [],
-});
 const entries = ref([]);
 const entriesLoaded = ref(false);
 const extras = ref([]);
 const extrasLoaded = ref(false);
 
+const form = useForm({
+    title: '',
+    amount: '',
+    amount_type: '',
+    amount_operation: '',
+    date_start: '',
+    date_end: '',
+    date_include: '',
+    condition_type: '',
+    condition_comparison: '',
+    condition_value: '',
+    entries: [],
+    extras: [],
+    coupon: '',
+    expire_at: '',
+    overrides_all: false,
+    published: true,
+    order: null,
+});
+
 const dateRange = useDateRangeModel(
-    () => submit.date_start,
-    () => submit.date_end,
-    (v) => (submit.date_start = v ?? ''),
-    (v) => (submit.date_end = v ?? ''),
+    () => form.date_start,
+    () => form.date_end,
+    (v) => (form.date_start = v ?? ''),
+    (v) => (form.date_end = v ?? ''),
 );
 
 const amountOperationOptions = [
@@ -175,32 +190,18 @@ const dateConditionOptions = [
 ];
 
 const availableAmountTypes = computed(() => {
-    if (['minimum', 'maximum'].includes(submit.amount_operation)) {
+    if (['minimum', 'maximum'].includes(form.amount_operation)) {
         return allAmountTypes.filter((type) => type.value === 'fixed');
     }
     return allAmountTypes;
 });
 
-const isEditing = computed(() => 'id' in props.data);
-const method = computed(() => (isEditing.value ? 'patch' : 'post'));
-const postUrl = computed(() =>
-    isEditing.value
-        ? '/cp/resrv/dynamicpricing/' + props.data.id
-        : '/cp/resrv/dynamicpricing',
-);
-
-const { disableSave, errors, save } = useFormHandler({
-    submit,
-    postUrl,
-    method,
-    successMessage: 'Dynamic pricing successfully saved',
-    emit,
-});
+const isEditing = computed(() => 'id' in props.data && !!props.data.id);
 
 const dateRangeErrors = computed(() => {
     const out = [];
-    if (errors.value?.date_start) out.push(...errors.value.date_start);
-    if (errors.value?.date_end) out.push(...errors.value.date_end);
+    if (form.errors.date_start) out.push(form.errors.date_start);
+    if (form.errors.date_end) out.push(form.errors.date_end);
     return out.length ? out : null;
 });
 
@@ -208,38 +209,53 @@ function fieldProps(key, label, instructions = null) {
     return {
         label,
         instructions,
-        errors: errors.value?.[key],
+        errors: form.errors[key],
     };
 }
 
-watch(() => props.data, () => createSubmit(), { deep: true });
+watch(() => props.data, hydrateForm, { deep: true });
 
-watch(() => submit.amount_operation, (newValue) => {
+watch(() => form.amount_operation, (newValue) => {
     if (['minimum', 'maximum'].includes(newValue)) {
-        submit.amount_type = 'fixed';
+        form.amount_type = 'fixed';
     }
 });
 
 onMounted(() => {
-    createSubmit();
+    hydrateForm();
     getEntries();
     getExtras();
 });
 
-function onClosed() {
-    Object.keys(submit).forEach((key) => delete submit[key]);
-    submit.entries = [];
-    submit.extras = [];
-    emit('closed');
+function hydrateForm() {
+    const d = props.data;
+    form.title = d.title ?? '';
+    form.amount = d.amount ?? '';
+    form.amount_type = d.amount_type ?? '';
+    form.amount_operation = d.amount_operation ?? '';
+    form.date_start = d.date_start ?? '';
+    form.date_end = d.date_end ?? '';
+    form.date_include = d.date_include ?? '';
+    form.condition_type = d.condition_type ?? '';
+    form.condition_comparison = d.condition_comparison ?? '';
+    form.condition_value = d.condition_value ?? '';
+    form.entries = Array.isArray(d.entries)
+        ? d.entries.map((e) => (typeof e === 'object' ? (e.item_id ?? e.id) : e))
+        : [];
+    form.extras = Array.isArray(d.extras)
+        ? d.extras.map((e) => (typeof e === 'object' ? e.id : e))
+        : [];
+    form.coupon = d.coupon ?? '';
+    form.expire_at = d.expire_at ?? '';
+    form.overrides_all = d.overrides_all ?? false;
+    form.published = d.published ?? true;
+    form.order = d.order ?? null;
+    form.clearErrors();
 }
 
-function createSubmit() {
-    Object.keys(submit).forEach((key) => delete submit[key]);
-    submit.entries = [];
-    submit.extras = [];
-    Object.entries(props.data).forEach(([name, value]) => {
-        submit[name] = value;
-    });
+function onClosed() {
+    form.clearErrors();
+    emit('closed');
 }
 
 function getEntries() {
@@ -265,25 +281,46 @@ function getExtras() {
 }
 
 function selectAllExtras() {
-    submit.extras = extras.value.map((item) => item.id);
+    form.extras = extras.value.map((item) => item.id);
 }
 
 function selectAllEntries() {
-    submit.entries = entries.value.map((item) => item.item_id);
+    form.entries = entries.value.map((item) => item.item_id);
 }
 
 function clearAllExtras() {
-    submit.extras = [];
+    form.extras = [];
 }
 
 function clearAllEntries() {
-    submit.entries = [];
+    form.entries = [];
 }
 
 function removeDate(value) {
     if (value === null || value === undefined || value === '') {
-        submit.date_start = '';
-        submit.date_end = '';
+        form.date_start = '';
+        form.date_end = '';
     }
+}
+
+function save() {
+    const url = isEditing.value
+        ? '/cp/resrv/dynamicpricing/' + props.data.id
+        : '/cp/resrv/dynamicpricing';
+    const method = isEditing.value ? 'patch' : 'post';
+
+    form[method](url, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            toast.success(__('Dynamic pricing successfully saved'));
+            emit('saved');
+        },
+        onError: (errors) => {
+            if (!Object.keys(errors).length) {
+                toast.error(__('Something went wrong. Please try again.'));
+            }
+        },
+    });
 }
 </script>

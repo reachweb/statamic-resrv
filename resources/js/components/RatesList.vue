@@ -16,7 +16,7 @@
             </Field>
         </Card>
 
-        <div v-if="dataLoaded && selectedCollection">
+        <div v-if="selectedCollection">
             <draggable
                 v-if="tree.length > 0"
                 v-model="tree"
@@ -27,7 +27,7 @@
                 ghost-class="ghost"
                 :disabled="disableDrag"
                 class="space-y-2"
-                @change="onParentReorder"
+                @change="reorderRate"
             >
                 <template #item="{ element: parent }">
                     <div>
@@ -80,7 +80,7 @@
                                 ghost-class="ghost"
                                 :disabled="disableDrag"
                                 class="space-y-2"
-                                @change="onChildReorder"
+                                @change="reorderRate"
                             >
                                 <template #item="{ element: child }">
                                     <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80">
@@ -136,11 +136,11 @@
         <RatePanel
             v-if="showPanel"
             :data="rate"
-            :all-rates="rates"
-            :collections="collections"
+            :all-rates="props.rates"
+            :collections="props.collections"
             :selected-collection="selectedCollection"
             @closed="togglePanel"
-            @saved="dataSaved"
+            @saved="togglePanel"
         />
         <confirmation-modal
             v-if="deleteId"
@@ -156,29 +156,33 @@
 
 <script setup>
 import { Badge, Button, Card, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, Field, Header, Select, StatusIndicator } from '@statamic/cms/ui';
+import { router } from '@statamic/cms/inertia';
 import draggable from 'vuedraggable';
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import axios from 'axios';
 import RatePanel from './RatePanel.vue';
 import { useToast } from '../composables/useToast.js';
 
+const props = defineProps({
+    collections: { type: Array, required: true },
+    initialSelectedCollection: { type: String, default: null },
+    rates: { type: Array, default: () => [] },
+});
+
 const toast = useToast();
 
 const showPanel = ref(false);
-const rates = ref([]);
 const tree = ref([]);
-const collections = ref([]);
-const selectedCollection = ref(null);
-const dataLoaded = ref(false);
+const selectedCollection = ref(props.initialSelectedCollection);
 const deleteId = ref(null);
 const disableDrag = ref(false);
 const rate = ref({});
 
 const collectionOptions = computed(() =>
-    collections.value.map((c) => ({ value: c.handle, label: c.title })),
+    props.collections.map((c) => ({ value: c.handle, label: c.title })),
 );
 
-onMounted(() => getCollections());
+watch(() => props.rates, buildTree, { immediate: true });
 
 function togglePanel() {
     showPanel.value = !showPanel.value;
@@ -217,50 +221,28 @@ function edit(item) {
     togglePanel();
 }
 
-function dataSaved() {
-    togglePanel();
-    getRates();
-}
-
-function getCollections() {
-    axios.get('/cp/resrv/rates/collections')
-        .then((response) => {
-            collections.value = response.data;
-            if (collections.value.length > 0) {
-                selectedCollection.value = collections.value[0].handle;
-                getRates();
-            }
-        })
-        .catch(() => {
-            toast.error('Cannot retrieve collections');
-        });
-}
-
 function collectionChanged() {
     if (selectedCollection.value) {
-        getRates();
+        refreshRates();
     }
 }
 
-function getRates() {
-    axios.get('/cp/resrv/rates/index', { params: { collection: selectedCollection.value } })
-        .then((response) => {
-            rates.value = response.data;
-            buildTree();
-            dataLoaded.value = true;
-        })
-        .catch(() => {
-            toast.error('Cannot retrieve rates');
-        });
+function refreshRates() {
+    router.reload({
+        only: ['rates'],
+        data: { collection: selectedCollection.value },
+        preserveState: true,
+        preserveScroll: true,
+    });
 }
 
 function buildTree() {
-    const topLevel = rates.value
+    const topLevel = (props.rates ?? [])
         .filter((r) => !r.base_rate_id)
         .sort((a, b) => a.order - b.order);
     tree.value = topLevel.map((parent) => ({
         ...parent,
-        children: rates.value
+        children: (props.rates ?? [])
             .filter((r) => String(r.base_rate_id) === String(parent.id))
             .sort((a, b) => a.order - b.order),
     }));
@@ -275,7 +257,7 @@ function deleteRate() {
         .then(() => {
             toast.success('Rate deleted');
             deleteId.value = null;
-            getRates();
+            refreshRates();
         })
         .catch((error) => {
             if (error.response && error.response.status === 422) {
@@ -287,7 +269,7 @@ function deleteRate() {
         });
 }
 
-function onParentReorder(event) {
+function reorderRate(event) {
     if (!event.moved) {
         return;
     }
@@ -302,27 +284,7 @@ function onParentReorder(event) {
             toast.error('Rates ordering failed');
         })
         .finally(() => {
-            getRates();
-            disableDrag.value = false;
-        });
-}
-
-function onChildReorder(event) {
-    if (!event.moved) {
-        return;
-    }
-    disableDrag.value = true;
-    const item = event.moved.element;
-    const newOrder = event.moved.newIndex + 1;
-    axios.patch(`/cp/resrv/rate/order/${item.id}`, { order: newOrder })
-        .then(() => {
-            toast.success('Rates order changed');
-        })
-        .catch(() => {
-            toast.error('Rates ordering failed');
-        })
-        .finally(() => {
-            getRates();
+            refreshRates();
             disableDrag.value = false;
         });
 }

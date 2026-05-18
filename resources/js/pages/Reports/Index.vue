@@ -3,7 +3,8 @@ import { Head } from '@statamic/cms/inertia';
 import ReportsView from '../../components/ReportsView.vue';
 
 defineProps({
-    reportsUrl: { type: String, required: true },
+    report: { type: Object, default: () => ({}) },
+    filters: { type: Object, default: () => ({}) },
     currency: { type: String, default: '' },
 });
 </script>
@@ -12,6 +13,10 @@ defineProps({
     <div class="max-w-page mx-auto">
         <Head :title="__('Reports')" />
 
-        <ReportsView :reports-url="reportsUrl" :currency="currency" />
+        <ReportsView
+            :report="report"
+            :filters="filters"
+            :currency="currency"
+        />
     </div>
 </template>

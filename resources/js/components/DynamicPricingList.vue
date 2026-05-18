@@ -52,11 +52,11 @@
                 />
             </div>
 
-            <p v-if="isFiltered" class="text-xs text-gray-600 dark:text-gray-400 px-4 pt-3">
+            <p v-if="hasActiveFilters" class="text-xs text-gray-600 dark:text-gray-400 px-4 pt-3">
                 {{ __('Drag to reorder is disabled while filters are active. Use "Move to position" or reset filters.') }}
             </p>
 
-            <div class="relative" v-if="dynamicPricingLoaded">
+            <div class="relative">
                 <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-gray-900/60 rounded-b-xl">
                     <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('Loading…') }}</span>
                 </div>
@@ -68,7 +68,7 @@
                     class="p-4 space-y-2"
                     v-model="dynamicPricings"
                     item-key="id"
-                    :disabled="isFiltered"
+                    :disabled="hasActiveFilters"
                     @start="drag = true"
                     @end="drag = false"
                     @change="onDragChange"
@@ -76,7 +76,7 @@
                     <template #item="{ element: dynamic }">
                         <div
                             class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 border-gray-200 dark:border-gray-700/80 transition-colors"
-                            :class="{ 'cursor-move hover:bg-gray-50 dark:hover:bg-gray-800/60': !isFiltered }"
+                            :class="{ 'cursor-move hover:bg-gray-50 dark:hover:bg-gray-800': !hasActiveFilters }"
                         >
                             <div class="flex items-center gap-2">
                                 <StatusIndicator :status="dynamic.published ? 'published' : 'draft'" />
@@ -99,7 +99,6 @@
                     </template>
                 </draggable>
             </div>
-            <div v-else class="p-10 text-center text-gray-500 dark:text-gray-400">{{ __('Loading…') }}</div>
         </Card>
 
         <DynamicPricingPanel
@@ -107,7 +106,7 @@
             :data="dynamic"
             :timezone="timezone"
             @closed="togglePanel"
-            @saved="dynamicSaved"
+            @saved="togglePanel"
         />
         <confirmation-modal
             v-if="deleteId"
@@ -143,31 +142,40 @@
 
 <script setup>
 import { Badge, Button, Card, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, Header, Input, Select, StatusIndicator } from '@statamic/cms/ui';
+import { router } from '@statamic/cms/inertia';
 import draggable from 'vuedraggable';
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import axios from 'axios';
 import DynamicPricingPanel from './DynamicPricingPanel.vue';
 import { useToast } from '../composables/useToast.js';
 
 const props = defineProps({
     timezone: { type: String, required: true, default: 'UTC' },
+    filters: { type: Object, default: () => ({}) },
+    pricings: {
+        type: Object,
+        default: () => ({ data: [], current_page: 1, last_page: 1, per_page: 25, total: 0 }),
+    },
 });
 
 const toast = useToast();
 
 const showPanel = ref(false);
-const dynamicPricings = ref([]);
-const dynamicPricingLoaded = ref(false);
+const dynamicPricings = ref(props.pricings.data ?? []);
 const loading = ref(false);
 const deleteId = ref(null);
 const dynamic = ref({});
 const drag = ref(false);
-const searchQuery = ref('');
-const filters = reactive({ operation: '', dates_active: '', condition: '' });
-const currentPage = ref(1);
-const perPage = ref(25);
-const total = ref(0);
-const lastPage = ref(1);
+const searchQuery = ref(props.filters.search ?? '');
+const filters = reactive({
+    operation: props.filters.operation ?? '',
+    dates_active: props.filters.dates_active ?? '',
+    condition: props.filters.condition ?? '',
+});
+const currentPage = ref(props.pricings.current_page ?? 1);
+const perPage = ref(props.pricings.per_page ?? 25);
+const total = computed(() => props.pricings.total ?? 0);
+const lastPage = computed(() => props.pricings.last_page ?? 1);
 const resetting = ref(false);
 let searchDebounce = null;
 
@@ -203,19 +211,18 @@ const emptyDynamic = {
 const hasActiveFilters = computed(() =>
     !!searchQuery.value || !!filters.operation || !!filters.dates_active || !!filters.condition,
 );
-const isFiltered = computed(() => hasActiveFilters.value);
-const paginationMeta = computed(() => ({
-    current_page: currentPage.value,
-    last_page: lastPage.value,
-    per_page: perPage.value,
-    total: total.value,
-    from: total.value === 0 ? 0 : (currentPage.value - 1) * perPage.value + 1,
-    to: Math.min(currentPage.value * perPage.value, total.value),
-}));
 const resolvedMoveOrder = computed(() => {
     if (moveDialog.mode !== 'page') return null;
     const page = Math.min(Math.max(1, parseInt(moveDialog.value) || 1), lastPage.value);
     return (page - 1) * perPage.value + 1;
+});
+
+watch(() => props.pricings?.data, (newData) => {
+    dynamicPricings.value = newData ?? [];
+});
+
+watch(() => props.pricings?.current_page, (val) => {
+    if (val !== undefined) currentPage.value = val;
 });
 
 watch(searchQuery, () => {
@@ -223,15 +230,15 @@ watch(searchQuery, () => {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(() => {
         currentPage.value = 1;
-        fetchPricings();
+        applyFilters();
     }, 300);
 });
 
-watch(() => filters.operation, () => { if (!resetting.value) { currentPage.value = 1; fetchPricings(); } });
-watch(() => filters.dates_active, () => { if (!resetting.value) { currentPage.value = 1; fetchPricings(); } });
-watch(() => filters.condition, () => { if (!resetting.value) { currentPage.value = 1; fetchPricings(); } });
-
-onMounted(() => fetchPricings());
+watch(filters, () => {
+    if (resetting.value) return;
+    currentPage.value = 1;
+    applyFilters();
+});
 
 function togglePanel() {
     showPanel.value = !showPanel.value;
@@ -247,39 +254,24 @@ function editPricing(item) {
     togglePanel();
 }
 
-function dynamicSaved() {
-    togglePanel();
-    fetchPricings();
-}
+function applyFilters() {
+    const data = {
+        page: currentPage.value,
+        per_page: perPage.value,
+    };
+    if (searchQuery.value) data.search = searchQuery.value;
+    if (filters.operation) data.operation = filters.operation;
+    if (filters.dates_active) data.dates_active = filters.dates_active;
+    if (filters.condition) data.condition = filters.condition;
 
-function fetchPricings() {
-    const params = { page: currentPage.value, per_page: perPage.value };
-    if (searchQuery.value) params.search = searchQuery.value;
-    if (filters.operation) params.operation = filters.operation;
-    if (filters.dates_active) params.dates_active = filters.dates_active;
-    if (filters.condition) params.condition = filters.condition;
-
-    loading.value = true;
-    return axios.get('/cp/resrv/dynamicpricing/index', { params })
-        .then((response) => {
-            const newLastPage = response.data.last_page || 1;
-            const newCurrentPage = response.data.current_page || 1;
-            if (newCurrentPage > newLastPage && (response.data.total || 0) > 0) {
-                currentPage.value = newLastPage;
-                return fetchPricings();
-            }
-            dynamicPricings.value = response.data.data || [];
-            total.value = response.data.total || 0;
-            lastPage.value = newLastPage;
-            currentPage.value = newCurrentPage;
-            dynamicPricingLoaded.value = true;
-        })
-        .catch(() => {
-            toast.error('Cannot retrieve dynamic pricing');
-        })
-        .then(() => {
-            loading.value = false;
-        });
+    router.reload({
+        only: ['pricings', 'filters'],
+        data,
+        preserveState: true,
+        preserveScroll: true,
+        onStart: () => { loading.value = true; },
+        onFinish: () => { loading.value = false; },
+    });
 }
 
 function resetFilters() {
@@ -289,22 +281,11 @@ function resetFilters() {
     filters.operation = '';
     filters.dates_active = '';
     filters.condition = '';
+    currentPage.value = 1;
     nextTick(() => {
         resetting.value = false;
-        currentPage.value = 1;
-        fetchPricings();
+        applyFilters();
     });
-}
-
-function selectPage(page) {
-    currentPage.value = page;
-    fetchPricings();
-}
-
-function changePerPage(value) {
-    perPage.value = value;
-    currentPage.value = 1;
-    fetchPricings();
 }
 
 function confirmDelete(item) {
@@ -316,7 +297,7 @@ function deleteDynamic() {
         .then(() => {
             toast.success('Dynamic pricing deleted');
             deleteId.value = null;
-            fetchPricings();
+            applyFilters();
         })
         .catch(() => {
             toast.error('Cannot delete dynamic pricing');
@@ -343,7 +324,7 @@ function patchOrder(id, order) {
     axios.patch('/cp/resrv/dynamicpricing/order', { id, order })
         .then(() => {
             toast.success('Dynamic pricing order changed');
-            fetchPricings();
+            applyFilters();
         })
         .catch(() => {
             toast.error('Dynamic pricing ordering failed');

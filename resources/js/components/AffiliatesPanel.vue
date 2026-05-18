@@ -7,33 +7,33 @@
         @closed="onClosed"
     >
         <template #header-actions>
-            <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+            <Button :text="__('Save')" variant="primary" :disabled="form.processing" @click="save" />
         </template>
         <template #default>
             <Card>
                 <div class="space-y-6">
-                    <Field :label="__('Name')" :errors="errors.name">
-                        <Input v-model="submit.name" />
+                    <Field :label="__('Name')" :errors="form.errors.name">
+                        <Input v-model="form.name" />
                     </Field>
-                    <Field :label="__('Code')" :errors="errors.code">
-                        <Input v-model="submit.code" />
+                    <Field :label="__('Code')" :errors="form.errors.code">
+                        <Input v-model="form.code" />
                     </Field>
-                    <Field :label="__('Email')" :errors="errors.email">
-                        <Input v-model="submit.email" type="email" />
+                    <Field :label="__('Email')" :errors="form.errors.email">
+                        <Input v-model="form.email" type="email" />
                     </Field>
-                    <Field :label="__('Cookie duration in days')" :errors="errors.cookie_duration">
-                        <Input v-model="submit.cookie_duration" type="number" />
+                    <Field :label="__('Cookie duration in days')" :errors="form.errors.cookie_duration">
+                        <Input v-model="form.cookie_duration" type="number" />
                     </Field>
-                    <Field :label="__('Fee')" :errors="errors.fee">
-                        <Input v-model="submit.fee" />
+                    <Field :label="__('Fee')" :errors="form.errors.fee">
+                        <Input v-model="form.fee" />
                     </Field>
-                    <Field :label="__('Coupons')" :instructions="__('Select any coupons that would make a reservation credited to this affiliate.')" :errors="errors.coupons">
+                    <Field :label="__('Coupons')" :instructions="__('Select any coupons that would make a reservation credited to this affiliate.')" :errors="form.errors.coupons">
                         <template #actions>
                             <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllCoupons" />
                         </template>
                         <Combobox
                             v-if="couponsLoaded"
-                            v-model="submit.coupons"
+                            v-model="form.coupons"
                             multiple
                             :close-on-select="false"
                             :options="coupons"
@@ -43,13 +43,13 @@
                         />
                     </Field>
                     <Field :label="__('Allow skipping payment')">
-                        <Switch v-model="submit.allow_skipping_payment" />
+                        <Switch v-model="form.allow_skipping_payment" />
                     </Field>
                     <Field :label="__('Send reservation email')">
-                        <Switch v-model="submit.send_reservation_email" />
+                        <Switch v-model="form.send_reservation_email" />
                     </Field>
                     <Field :label="__('Published')">
-                        <Switch v-model="submit.published" />
+                        <Switch v-model="form.published" />
                     </Field>
                 </div>
             </Card>
@@ -59,58 +59,60 @@
 
 <script setup>
 import { Button, Card, Combobox, Field, Input, Stack, Switch } from '@statamic/cms/ui';
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useForm } from '@statamic/cms/inertia';
+import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
-import { useFormHandler } from '../composables/useFormHandler.js';
 import { useToast } from '../composables/useToast.js';
 
 const props = defineProps({
     data: { type: Object, required: true },
-    openPanel: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['closed', 'saved']);
 const toast = useToast();
 
-const submit = reactive({ coupons: [] });
 const coupons = ref([]);
 const couponsLoaded = ref(false);
 
-const method = computed(() => ('id' in props.data ? 'patch' : 'post'));
-const postUrl = computed(() =>
-    'id' in props.data ? '/cp/resrv/affiliate/' + props.data.id : '/cp/resrv/affiliate',
-);
-const title = computed(() => ('id' in props.data ? __('Edit affiliate') : __('Add a new affiliate')));
-
-const { disableSave, errors, save } = useFormHandler({
-    submit,
-    postUrl,
-    method,
-    successMessage: 'Affiliate successfully saved',
-    emit,
+const form = useForm({
+    name: '',
+    code: '',
+    email: '',
+    cookie_duration: '',
+    fee: '',
+    coupons: [],
+    allow_skipping_payment: false,
+    send_reservation_email: false,
+    published: true,
 });
 
-watch(() => props.data, () => createSubmit(), { deep: true });
+const isEditing = computed(() => 'id' in props.data && !!props.data.id);
+const title = computed(() => (isEditing.value ? __('Edit affiliate') : __('Add a new affiliate')));
+
+watch(() => props.data, hydrateForm, { deep: true });
 
 onMounted(() => {
-    createSubmit();
+    hydrateForm();
     getCoupons();
 });
 
-function onClosed() {
-    Object.keys(submit).forEach((key) => delete submit[key]);
-    submit.coupons = [];
-    emit('closed');
+function hydrateForm() {
+    const d = props.data;
+    form.name = d.name ?? '';
+    form.code = d.code ?? '';
+    form.email = d.email ?? '';
+    form.cookie_duration = d.cookie_duration ?? '';
+    form.fee = d.fee ?? '';
+    form.allow_skipping_payment = d.allow_skipping_payment ?? false;
+    form.send_reservation_email = d.send_reservation_email ?? false;
+    form.published = d.published ?? true;
+    form.coupons = Array.isArray(d.coupons_ids) ? [...d.coupons_ids] : [];
+    form.clearErrors();
 }
 
-function createSubmit() {
-    Object.keys(submit).forEach((key) => delete submit[key]);
-    Object.entries(props.data).forEach(([name, value]) => {
-        if (name !== 'coupons') {
-            submit[name] = value;
-        }
-    });
-    submit.coupons = props.data.coupons_ids || [];
+function onClosed() {
+    form.clearErrors();
+    emit('closed');
 }
 
 function getCoupons() {
@@ -125,6 +127,27 @@ function getCoupons() {
 }
 
 function clearAllCoupons() {
-    submit.coupons = [];
+    form.coupons = [];
+}
+
+function save() {
+    const url = isEditing.value
+        ? '/cp/resrv/affiliate/' + props.data.id
+        : '/cp/resrv/affiliate';
+    const method = isEditing.value ? 'patch' : 'post';
+
+    form[method](url, {
+        preserveScroll: true,
+        preserveState: true,
+        onSuccess: () => {
+            toast.success(__('Affiliate successfully saved'));
+            emit('saved');
+        },
+        onError: (errors) => {
+            if (!Object.keys(errors).length) {
+                toast.error(__('Something went wrong. Please try again.'));
+            }
+        },
+    });
 }
 </script>

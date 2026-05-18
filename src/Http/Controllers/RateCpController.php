@@ -2,7 +2,9 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
@@ -18,25 +20,37 @@ use Reach\StatamicResrv\Models\Rate;
 
 class RateCpController extends Controller
 {
-    public function indexCp(): InertiaResponse
+    public function indexCp(Request $request): InertiaResponse
     {
-        return Inertia::render('resrv::Rates/Index');
+        $collections = ResrvHelper::collectionsWithResrv()->values();
+        $selectedCollection = $request->query('collection', $collections->first()['handle'] ?? null);
+
+        return Inertia::render('resrv::Rates/Index', [
+            'collections' => $collections,
+            'selectedCollection' => $selectedCollection,
+            'rates' => $this->ratesForCollection($selectedCollection),
+        ]);
     }
 
     public function index(Request $request): JsonResponse
     {
+        $collection = $request->input('collection');
+
+        return response()->json($this->ratesForCollection($collection));
+    }
+
+    protected function ratesForCollection(?string $collection): EloquentCollection
+    {
         $query = Rate::query();
 
-        if ($request->has('collection')) {
-            $query->forCollection($request->input('collection'));
+        if ($collection !== null) {
+            $query->forCollection($collection);
         }
 
-        return response()->json(
-            $query->orderBy('order')
-                ->with(['entries', 'baseRate:id,title'])
-                ->withCount('dependentRates')
-                ->get()
-        );
+        return $query->orderBy('order')
+            ->with(['entries', 'baseRate:id,title'])
+            ->withCount('dependentRates')
+            ->get();
     }
 
     public function collections(): JsonResponse
@@ -64,7 +78,7 @@ class RateCpController extends Controller
         return response()->json($rates);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(Request $request): JsonResponse|RedirectResponse
     {
         $data = $request->validate($this->validationRules($request));
 
@@ -84,10 +98,14 @@ class RateCpController extends Controller
 
         Cache::forget('resrv_rates_exist');
 
+        if ($request->inertia()) {
+            return back();
+        }
+
         return response()->json(['id' => $rate->id]);
     }
 
-    public function update(Request $request, Rate $rate): JsonResponse
+    public function update(Request $request, Rate $rate): JsonResponse|RedirectResponse
     {
         $data = $request->validate($this->validationRules($request, $rate));
 
@@ -104,6 +122,10 @@ class RateCpController extends Controller
             $rate->entries()->detach();
         } elseif ($hasEntries) {
             $rate->entries()->sync($entries);
+        }
+
+        if ($request->inertia()) {
+            return back();
         }
 
         return response()->json(['id' => $rate->id]);

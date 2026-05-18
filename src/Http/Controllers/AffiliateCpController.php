@@ -2,10 +2,14 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 use Reach\StatamicResrv\Http\Requests\AffiliateCpRequest;
 use Reach\StatamicResrv\Models\Affiliate;
 
@@ -18,12 +22,19 @@ class AffiliateCpController extends Controller
         $this->affiliate = $affiliate;
     }
 
-    public function indexCp()
+    public function indexCp(): InertiaResponse
     {
-        return Inertia::render('resrv::Affiliates/Index');
+        return Inertia::render('resrv::Affiliates/Index', [
+            'affiliates' => $this->allAffiliates(),
+        ]);
     }
 
-    public function index()
+    public function index(): JsonResponse
+    {
+        return response()->json($this->allAffiliates());
+    }
+
+    protected function allAffiliates(): EloquentCollection
     {
         $affiliates = $this->affiliate->with('coupons')->get();
 
@@ -31,10 +42,10 @@ class AffiliateCpController extends Controller
             $affiliate->coupons_ids = $affiliate->coupons->pluck('id')->values()->toArray();
         }
 
-        return response()->json($affiliates);
+        return $affiliates;
     }
 
-    public function create(AffiliateCpRequest $request)
+    public function create(AffiliateCpRequest $request): JsonResponse|RedirectResponse
     {
         $data = $request->validated();
         $coupons = $data['coupons'] ?? [];
@@ -46,10 +57,14 @@ class AffiliateCpController extends Controller
             $affiliate->coupons()->sync($coupons);
         }
 
+        if ($request->inertia()) {
+            return back();
+        }
+
         return response()->json(['id' => $affiliate->id]);
     }
 
-    public function update(AffiliateCpRequest $request, Affiliate $affiliate)
+    public function update(AffiliateCpRequest $request, Affiliate $affiliate): JsonResponse|RedirectResponse
     {
         $data = $request->validated();
         $coupons = $data['coupons'] ?? [];
@@ -58,6 +73,10 @@ class AffiliateCpController extends Controller
         $affiliate->update($data);
 
         $affiliate->coupons()->sync($coupons);
+
+        if ($request->inertia()) {
+            return back();
+        }
 
         return response()->json(['id' => $affiliate->id]);
     }
