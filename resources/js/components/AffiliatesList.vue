@@ -12,7 +12,7 @@
                     class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80"
                 >
                     <div class="flex items-center gap-2">
-                        <StatusIndicator :variant="affiliate.published ? 'success' : 'inactive'" />
+                        <StatusIndicator :status="affiliate.published ? 'published' : 'draft'" />
                         <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="affiliate.name" @click="editAffiliate(affiliate)"></span>
                         <span class="text-sm text-gray-600 dark:text-gray-400 ml-2">
                             {{ affiliate.email }}
@@ -75,9 +75,9 @@ const emptyAffiliate = {
     email: '',
     cookie_duration: '',
     fee: '',
-    allow_skipping_payment: 0,
-    send_reservation_email: 0,
-    published: 1,
+    allow_skipping_payment: false,
+    send_reservation_email: false,
+    published: true,
 };
 
 onMounted(() => getAllAffiliates());

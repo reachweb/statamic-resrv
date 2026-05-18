@@ -21,7 +21,7 @@
             <template #item="{ element: extra }">
                 <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80">
                     <div class="flex items-center gap-2">
-                        <StatusIndicator :variant="extraEnabled(extra) ? 'success' : 'inactive'" />
+                        <StatusIndicator :status="extraEnabled(extra) ? 'published' : 'draft'" />
                         <span class="font-medium text-gray-900 dark:text-gray-200" :class="{ 'cursor-pointer hover:underline': !insideEntry }" v-html="extra.name" @click="editExtra(extra)"></span>
                         <span class="text-sm text-gray-700 dark:text-gray-400">{{ extra.price }} <span class="text-xs text-gray-500" v-html="priceLabel(extra.price_type)"></span></span>
                     </div>
@@ -125,11 +125,11 @@ const emptyExtra = {
     category_id: null,
     price: '',
     price_type: '',
-    allow_multiple: 0,
+    allow_multiple: false,
     custom: '',
     override_label: '',
     maximum: 0,
-    published: 1,
+    published: true,
 };
 
 const newItem = computed(() => props.parent === 'Collection');
@@ -203,7 +203,7 @@ function extraEnabled(item) {
     if (props.insideEntry) {
         return item.enabled;
     }
-    return item.published === true;
+    return !!item.published;
 }
 
 function extraHasConditions(item) {

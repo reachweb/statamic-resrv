@@ -12,7 +12,7 @@
                 <template #item="{ element: option }">
                     <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80">
                         <div class="flex items-center gap-2">
-                            <StatusIndicator :variant="option.published === true ? 'success' : 'inactive'" />
+                            <StatusIndicator :status="option.published ? 'published' : 'draft'" />
                             <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="option.name" @click="edit(option)"></span>
                         </div>
                         <div class="flex items-center gap-2">
@@ -76,8 +76,8 @@ const emptyOption = {
     slug: '',
     item_id: props.parent,
     description: '',
-    required: 0,
-    published: 1,
+    required: false,
+    published: true,
 };
 
 const newItem = computed(() => props.parent === 'Collection');

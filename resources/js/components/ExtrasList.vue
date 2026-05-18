@@ -40,7 +40,7 @@
                                         </g>
                                     </svg>
                                 </button>
-                                <StatusIndicator v-if="category.id !== null" :variant="categoryEnabled(category) ? 'success' : 'inactive'" />
+                                <StatusIndicator v-if="category.id !== null" :status="categoryEnabled(category) ? 'published' : 'draft'" />
                                 <a
                                     v-if="category.id !== null && !insideEntry"
                                     class="flex-1 font-medium text-gray-900 dark:text-gray-200 hover:underline cursor-pointer"
@@ -116,7 +116,7 @@ const emptyCategory = {
     name: '',
     description: '',
     slug: '',
-    published: 1,
+    published: true,
 };
 
 const newItem = computed(() => props.parent === 'Collection');

@@ -11,7 +11,7 @@
                 <template #item="{ element: value }">
                     <div class="w-full flex items-center text-sm justify-between px-3 py-2 border-t border-gray-200 dark:border-gray-700/80">
                         <div class="flex items-center gap-2">
-                            <StatusIndicator :variant="value.published === true ? 'success' : 'inactive'" />
+                            <StatusIndicator :status="value.published ? 'published' : 'draft'" />
                             <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="value.name" @click="edit(value)"></span>
                             <span v-if="value.price_type !== 'free'" class="text-gray-700 dark:text-gray-400">
                                 {{ value.price }}
@@ -82,7 +82,7 @@ const emptyValue = {
     price_type: '',
     option_id: props.parent,
     description: '',
-    published: 1,
+    published: true,
 };
 
 function initialValues() {

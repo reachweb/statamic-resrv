@@ -29,7 +29,7 @@
                     <template #item="{ element: rate }">
                         <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80 cursor-move">
                             <div class="flex items-center gap-2">
-                                <StatusIndicator :variant="rate.published === true ? 'success' : 'inactive'" />
+                                <StatusIndicator :status="rate.published ? 'published' : 'draft'" />
                                 <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="rate.title" @click="edit(rate)"></span>
                                 <Badge v-if="rate.apply_to_all" :text="__('All entries')" size="sm" />
                             </div>

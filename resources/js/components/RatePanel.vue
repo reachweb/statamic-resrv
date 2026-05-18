@@ -3,7 +3,6 @@
         :open="true"
         :title="isEditing ? __('Edit rate') : __('Add rate')"
         icon="money-cashier-price-tag"
-        size="half"
         @closed="onClosed"
     >
         <template #header-actions>
@@ -40,7 +39,7 @@
                                 </template>
                             </EntriesStackPicker>
                         </Field>
-                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-4 gap-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                             <Field :label="__('Title')" :errors="errors.title">
                                 <Input v-model="submit.title" @input="slugify" />
                             </Field>
@@ -58,7 +57,7 @@
             <Panel :heading="__('Pricing')">
                 <Card>
                     <div class="space-y-6">
-                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-4 gap-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                             <Field :label="__('Pricing type')" :instructions="__('Independent rates have their own pricing. Relative rates derive pricing from a base rate.')" :errors="errors.pricing_type">
                                 <Select v-model="submit.pricing_type" :options="pricingTypes" />
                             </Field>
@@ -66,7 +65,7 @@
                                 <Select v-model="submit.base_rate_id" :options="availableBaseRates" />
                             </Field>
                         </div>
-                        <div v-if="submit.pricing_type === 'relative'" class="grid grid-cols-1 xl:grid-cols-3 gap-x-4 gap-y-6">
+                        <div v-if="submit.pricing_type === 'relative'" class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
                             <Field :label="__('Modifier type')" :instructions="__('Percentage or fixed amount.')" :errors="errors.modifier_type">
                                 <Select v-model="submit.modifier_type" :options="modifierTypes" />
                             </Field>
@@ -84,7 +83,7 @@
             <Panel :heading="__('Availability')">
                 <Card>
                     <div class="space-y-6">
-                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-4 gap-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                             <Field :label="__('Availability type')" :instructions="__('Independent rates have their own inventory. Shared rates share inventory with the base rate.')" :errors="errors.availability_type">
                                 <Select v-model="submit.availability_type" :options="availabilityTypes" />
                             </Field>
@@ -105,7 +104,7 @@
                         <Field :label="__('Date range')" :instructions="__('Rate is available within this date range.')" :errors="dateRangeErrors">
                             <DateRangePicker v-model="dateRange" granularity="day" />
                         </Field>
-                        <div class="grid grid-cols-1 xl:grid-cols-4 gap-x-4 gap-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-x-4 gap-y-6">
                             <Field :label="__('Min days before')" :instructions="__('Minimum advance booking days.')" :errors="errors.min_days_before">
                                 <Input v-model="submit.min_days_before" type="number" />
                             </Field>

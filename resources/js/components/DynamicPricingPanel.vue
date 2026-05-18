@@ -3,7 +3,6 @@
         :open="true"
         :title="isEditing ? __('Edit dynamic pricing') : __('Add dynamic pricing')"
         icon="money-cashier-price-tag"
-        size="half"
         @closed="onClosed"
     >
         <template #header-actions>
@@ -16,7 +15,7 @@
                         <Input v-model="submit.title" />
                     </Field>
 
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-x-4 gap-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
                         <Field v-bind="fieldProps('amount', __('Amount'), __('Amount or percentage without the % character.'))">
                             <Input v-model="submit.amount" />
                         </Field>
@@ -28,7 +27,7 @@
                         </Field>
                     </div>
 
-                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-4 gap-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                         <Field v-bind="fieldProps('date_include', __('Date condition'), __('Add a date condition.'))">
                             <Select
                                 v-model="submit.date_include"
@@ -42,7 +41,7 @@
                         </Field>
                     </div>
 
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-x-4 gap-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
                         <Field v-bind="fieldProps('condition_type', __('Reservation condition'), __('Apply the dynamic pricing when...'))">
                             <Select v-model="submit.condition_type" :options="conditionTypeOptions" />
                         </Field>
@@ -54,7 +53,7 @@
                         </Field>
                     </div>
 
-                    <div class="grid grid-cols-1 2xl:grid-cols-2 gap-x-4 gap-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-6">
                         <Field :label="__('Entries')" :instructions="__('Select the entries that this dynamic pricing applies to')" :errors="errors.entries">
                             <EntriesStackPicker
                                 v-if="entriesLoaded"
@@ -90,7 +89,7 @@
                         </Field>
                     </div>
 
-                    <div class="grid grid-cols-1 2xl:grid-cols-2 gap-x-4 gap-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                         <Field v-bind="fieldProps('coupon', __('Coupon'), __('Dynamic pricing applied only if coupon is applied during checkout. Coupons get applied even if another policy is set as overriding.'))">
                             <Input v-model="submit.coupon" />
                         </Field>
