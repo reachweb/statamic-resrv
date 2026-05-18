@@ -380,7 +380,6 @@ class ExportCpController extends Controller
         $handles->push(
             config('resrv-config.checkout_forms.default')
             ?? config('resrv-config.checkout_forms_default')
-            ?? config('resrv-config.form_name', 'checkout')
         );
 
         foreach ($this->configMappings('checkout_forms.entries', 'checkout_forms_entries') as $mapping) {

@@ -226,14 +226,6 @@ tabs:
         instructions: 'Modify the checkout process.'
         fields:
           -
-            handle: form_name
-            field:
-              max_items: 1
-              type: form
-              display: 'Legacy checkout form (deprecated)'
-              instructions: 'Deprecated. Used only as a fallback when no checkout form is configured below.'
-              localizable: false
-          -
             handle: checkout_forms_default
             field:
               max_items: 1
@@ -241,6 +233,8 @@ tabs:
               display: 'Default checkout form'
               instructions: 'Used when no entry-specific or collection-specific mapping matches.'
               localizable: false
+              validate:
+                - required
           -
             handle: checkout_forms_collections
             field:
@@ -332,7 +326,7 @@ tabs:
               localizable: false
               default: 50
               validate:
-                - required
+                - 'required_if:payment,fixed'
               instructions: 'The amount that should be charged to complete a reservation.'
               if:
                 payment: 'equals fixed'
@@ -344,7 +338,7 @@ tabs:
               localizable: false
               default: 20
               validate:
-                - required
+                - 'required_if:payment,percent'
               instructions: 'The percentage of the reservation price that should be charged.'
               if:
                 payment: 'equals percent'

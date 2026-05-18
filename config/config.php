@@ -57,7 +57,6 @@ return [
 
     /**
      * Checkout settings.
-     * form_name: DEPRECATED. Kept for backwards compatibility and used only if checkout_forms_default is not set.
      * checkout_forms_default: default checkout form handle used when no entry/collection mapping matches
      * checkout_forms_collections: list of collection-specific checkout forms (rows: collection, form)
      * checkout_forms_entries: list of entry-specific checkout forms (rows: entry, form)
@@ -66,7 +65,6 @@ return [
      * percent_amount: the percentage of the reservation to charge as an amount
      * minutes_to_hold: how much time the user has the complete the checkout until availability is reset.
      */
-    'form_name' => 'checkout',
     'checkout_forms_default' => null,
     'checkout_forms_collections' => [],
     'checkout_forms_entries' => [],
