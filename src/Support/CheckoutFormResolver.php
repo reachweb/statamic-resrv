@@ -187,8 +187,7 @@ class CheckoutFormResolver
     protected function defaultFormHandle(): string
     {
         $default = config('resrv-config.checkout_forms.default')
-            ?? config('resrv-config.checkout_forms_default')
-            ?? config('resrv-config.form_name'); // deprecated: legacy pre-v6 config key
+            ?? config('resrv-config.checkout_forms_default');
 
         $handle = $this->extractFormHandle($default);
 

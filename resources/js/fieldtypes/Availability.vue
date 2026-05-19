@@ -172,9 +172,6 @@ onUpdated(() => {
 watch(rateId, () => {
     if (rateId.value !== null) {
         getAvailability();
-    } else {
-        clearAvailability();
-        calendar?.destroy();
     }
     renderAgain();
 });
