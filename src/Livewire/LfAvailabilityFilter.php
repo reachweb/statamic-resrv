@@ -31,9 +31,15 @@ class LfAvailabilityFilter extends Component
     public bool $live = true;
 
     #[Computed(persist: true)]
-    public function enableRates(): string|false
+    public function ratesEnabled(): bool
     {
-        return $this->rates ? $this->collection.'.'.$this->blueprint : false;
+        return $this->rates;
+    }
+
+    #[Computed(persist: true)]
+    public function ratesBlueprint(): ?string
+    {
+        return $this->rates ? $this->collection.'.'.$this->blueprint : null;
     }
 
     public function initiateField(): void

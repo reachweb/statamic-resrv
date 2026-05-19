@@ -1,8 +1,9 @@
 <div>
-    <livewire:availability-search 
+    <livewire:availability-search
         :$live
-        :$calendar 
+        :$calendar
         :$enableQuantity
-        :rates="$this->enableRates"
+        :rates="$this->ratesEnabled"
+        :ratesBlueprint="$this->ratesBlueprint"
     />
 </div>

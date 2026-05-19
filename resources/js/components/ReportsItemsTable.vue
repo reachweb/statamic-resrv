@@ -6,9 +6,15 @@
                     <th
                         v-for="column in columns[tableColumns]"
                         :key="column.field"
-                        class="text-left px-4 py-3 font-medium text-xs uppercase tracking-wide text-gray-600 dark:text-gray-300"
+                        scope="col"
+                        :aria-sort="ariaSortFor(column.field)"
+                        class="text-left px-4 py-3 font-medium text-xs uppercase tracking-wide text-gray-600 dark:text-gray-300 cursor-pointer select-none"
+                        @click="toggleSort(column.field)"
                     >
                         {{ __(column.label) }}
+                        <span v-if="sortColumn === column.field" aria-hidden="true">
+                            {{ sortDirection === 'asc' ? '▲' : '▼' }}
+                        </span>
                     </th>
                 </tr>
             </thead>
@@ -46,7 +52,7 @@
 
 <script setup>
 import { Card } from '@statamic/cms/ui';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     items: { type: Array, required: true, default: () => [] },
@@ -68,10 +74,36 @@ const columns = {
     ],
 };
 
+const sortColumn = ref('reservations');
+const sortDirection = ref('desc');
+
+function toggleSort(field) {
+    if (sortColumn.value === field) {
+        sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortColumn.value = field;
+        sortDirection.value = 'desc';
+    }
+}
+
+function ariaSortFor(field) {
+    if (sortColumn.value !== field) return 'none';
+    return sortDirection.value === 'asc' ? 'ascending' : 'descending';
+}
+
 const sortedItems = computed(() => {
     if (!Array.isArray(props.items)) {
         return [];
     }
-    return [...props.items].sort((a, b) => (b.reservations || 0) - (a.reservations || 0));
+    const key = sortColumn.value;
+    const dir = sortDirection.value === 'asc' ? 1 : -1;
+    return [...props.items].sort((a, b) => {
+        const av = a[key];
+        const bv = b[key];
+        if (typeof av === 'number' && typeof bv === 'number') {
+            return (av - bv) * dir;
+        }
+        return String(av ?? '').localeCompare(String(bv ?? '')) * dir;
+    });
 });
 </script>

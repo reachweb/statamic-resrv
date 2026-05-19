@@ -29,6 +29,9 @@ class AvailabilitySearch extends Component
     public bool $rates = false;
 
     #[Locked]
+    public ?string $ratesBlueprint = null;
+
+    #[Locked]
     public bool $anyRate = false;
 
     #[Locked]

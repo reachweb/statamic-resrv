@@ -1,33 +1,22 @@
 import { defineConfig } from 'vite';
-import tailwindcss from 'tailwindcss';
-import autoprefixer from 'autoprefixer';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
+    plugins: [
+        tailwindcss(),
+    ],
     build: {
         outDir: 'resources/frontend',
         emptyOutDir: false,
         rollupOptions: {
             input: {
-                main: 'resources/js/resrv-frontend.js',
-                tailwind: 'resources/css/resrv-tailwind.css'
+                'resrv-frontend': 'resources/js/resrv-frontend.js',
+                'resrv-tailwind': 'resources/css/resrv-tailwind.css',
             },
             output: {
-                entryFileNames: 'js/resrv-frontend.js',
-                assetFileNames: (assetInfo) => {
-                    if (assetInfo.name.includes('resrv-tailwind.css')) {
-                        return 'css/resrv-tailwind.css'; 
-                    } 
-                    return 'css/[name].[ext]';
-                },
-            }
-        }
-    },
-    css: {
-        postcss: {
-            plugins: [
-                tailwindcss('./tailwind-frontend.config.js'),
-                autoprefixer(),
-            ],
+                entryFileNames: 'js/[name].js',
+                assetFileNames: 'css/[name][extname]',
+            },
         },
     },
 });

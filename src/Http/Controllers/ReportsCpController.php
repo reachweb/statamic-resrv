@@ -31,7 +31,7 @@ class ReportsCpController extends Controller
                 'end' => $end,
                 'dateField' => $dateField,
             ],
-            'report' => new ReportResource($report),
+            'report' => (new ReportResource($report))->resolve($request),
         ]);
     }
 
