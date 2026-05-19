@@ -4,8 +4,11 @@ namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityCpTest extends TestCase
@@ -544,5 +547,265 @@ class AvailabilityCpTest extends TestCase
         ]);
 
         $this->assertDatabaseCount('resrv_availabilities', 3);
+    }
+
+    public function test_update_rejects_when_pending_reservation_overlaps()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'available' => 8,
+            'pending' => [42],
+        ]);
+
+        Reservation::factory()->create([
+            'id' => 42,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 10,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('resrv_availabilities', ['available' => 8]);
+    }
+
+    public function test_update_succeeds_for_price_only_change_with_pending_reservation()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'available' => 8,
+            'pending' => [42],
+        ]);
+
+        Reservation::factory()->create([
+            'id' => 42,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'price' => 999,
+            'available' => null,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('resrv_availabilities', ['available' => 8]);
+    }
+
+    public function test_delete_rejects_when_pending_reservation_overlaps()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'available' => 6,
+            'pending' => [42],
+        ]);
+
+        Reservation::factory()->create([
+            'id' => 42,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_delete_succeeds_when_pending_reservation_is_terminal()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+        ]);
+
+        // Reservation exists but is expired (terminal) — should not block.
+        Reservation::factory()->expired()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+        ]);
+
+        $response = $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_clear_stuck_pending_removes_terminal_holds_and_restores_quantity()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $reservation = Reservation::factory()->expired()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+        ]);
+
+        $availability = Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 4,
+            'pending' => [$reservation->id],
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $item->id(),
+            'date' => $date,
+            'rate_id' => $rate->id,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['cleared' => 1, 'still_active' => []]);
+
+        $availability->refresh();
+        $this->assertEquals(6, $availability->available);
+        $this->assertEquals([], $availability->pending);
+    }
+
+    public function test_clear_stuck_pending_leaves_active_holds_by_default()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $availability = Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 4,
+            'pending' => [$reservation->id],
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $item->id(),
+            'date' => $date,
+            'rate_id' => $rate->id,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'cleared' => 0,
+                'still_active' => [$reservation->id],
+            ]);
+
+        $availability->refresh();
+        $this->assertEquals(4, $availability->available);
+        $this->assertEquals([$reservation->id], $availability->pending);
+    }
+
+    public function test_clear_stuck_pending_force_mode_clears_active_holds_and_logs()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 3,
+            'status' => 'pending',
+        ]);
+
+        $availability = Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 2,
+            'pending' => [$reservation->id],
+        ]);
+
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('Resrv: admin force-cleared active holds from availability row', \Mockery::on(fn ($ctx) => in_array($reservation->id, $ctx['forced_ids'])));
+
+        $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $item->id(),
+            'date' => $date,
+            'rate_id' => $rate->id,
+            'force' => true,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['cleared' => 1, 'still_active' => []]);
+
+        $availability->refresh();
+        $this->assertEquals(5, $availability->available);
+        $this->assertEquals([], $availability->pending);
     }
 }

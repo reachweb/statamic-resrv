@@ -184,7 +184,9 @@ class RateCpController extends Controller
         $ignoreId = $rate?->id;
 
         return [
-            'collection' => ['required', 'string'],
+            'collection' => $rate
+                ? ['required', 'string', Rule::in([$rate->collection])]
+                : ['required', 'string'],
             'apply_to_all' => ['required', 'boolean'],
             'entries' => ['nullable', 'array'],
             'entries.*' => [

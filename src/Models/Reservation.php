@@ -352,10 +352,16 @@ class Reservation extends Model
                     'quantity' => $child->quantity,
                     'rate_id' => $child->rate_id,
                 ], $statamic_id);
+                if ($childPrices === false) {
+                    throw new ReservationDriftException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
+                }
                 $reservationCost->add(Price::create($childPrices['price']));
             }
         } else {
             $prices = (new Availability)->getPricing($data, $statamic_id);
+            if ($prices === false) {
+                throw new ReservationDriftException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
+            }
             $reservationCost = Price::create($prices['price']);
         }
 

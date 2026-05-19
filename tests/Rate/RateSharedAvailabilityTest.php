@@ -333,6 +333,41 @@ class RateSharedAvailabilityTest extends TestCase
         }
     }
 
+    public function test_exhausted_dates_treats_checkout_date_as_exclusive()
+    {
+        // Regression: getExhaustedDatesForRate was iterating with Carbon::daysUntil which is
+        // inclusive of date_end, causing the checkout day to be flagged as exhausted and
+        // blocking legitimate back-to-back bookings. date_end is exclusive across the engine.
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'status' => 'pending',
+        ]);
+
+        $exhausted = AvailabilityRepository::getExhaustedDatesForRate($setup['sharedRate']);
+
+        $this->assertContains(
+            $setup['startDate']->toDateString(),
+            $exhausted->all(),
+            'first night should be exhausted'
+        );
+        $this->assertContains(
+            $setup['startDate']->copy()->addDay()->toDateString(),
+            $exhausted->all(),
+            'second night should be exhausted'
+        );
+        $this->assertNotContains(
+            $setup['startDate']->copy()->addDays(2)->toDateString(),
+            $exhausted->all(),
+            'checkout day (date_end) must remain bookable for back-to-back reservations'
+        );
+    }
+
     public function test_max_available_counts_quantity_not_rows()
     {
         $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 3);

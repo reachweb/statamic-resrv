@@ -38,6 +38,7 @@ use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
+use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
 use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
@@ -109,8 +110,8 @@ class ResrvProvider extends AddonServiceProvider
         ReservationCreated::class => [
             AddAffiliateToReservation::class,
             AddDynamicPricingsToReservation::class,
-            AddReservationIdToSession::class,
             DecreaseAvailability::class,
+            AddReservationIdToSession::class,
         ],
         ReservationExpired::class => [
             IncreaseAvailability::class,
@@ -134,6 +135,9 @@ class ResrvProvider extends AddonServiceProvider
         ],
         EntrySaved::class => [
             AddResrvEntryToDatabase::class,
+        ],
+        \Statamic\Events\EntryDeleting::class => [
+            PreventEntryDeletionWithActiveReservations::class,
         ],
         \Statamic\Events\EntryDeleted::class => [
             EntryDeleted::class,

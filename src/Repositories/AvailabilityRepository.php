@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Repositories;
 
 use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
@@ -344,7 +345,8 @@ class AvailabilityRepository
 
             $dateCounts = [];
             foreach ($all as $res) {
-                $period = Carbon::parse($res->date_start)->daysUntil(Carbon::parse($res->date_end));
+                // date_end is exclusive across the engine — the checkout day is free for the next guest.
+                $period = CarbonPeriod::create($res->date_start, $res->date_end, CarbonPeriod::EXCLUDE_END_DATE);
                 foreach ($period as $date) {
                     $dateStr = $date->toDateString();
                     $dateCounts[$dateStr] = ($dateCounts[$dateStr] ?? 0) + $res->quantity;
@@ -386,7 +388,7 @@ class AvailabilityRepository
 
         $allOverlapping = $overlapping->concat($overlappingChildren);
 
-        $period = Carbon::parse($dateStart)->daysUntil(Carbon::parse($dateEnd));
+        $period = CarbonPeriod::create($dateStart, $dateEnd, CarbonPeriod::EXCLUDE_END_DATE);
 
         foreach ($period as $date) {
             $dateStr = $date->toDateString();

@@ -7,6 +7,11 @@
                 </div>
                 <div class="text-sm text-gray-700 dark:text-gray-300">{{ __('From') }} {{ date_start }} {{ __('to') }} {{ date_end }}</div>
 
+                <Alert v-if="canClearStuckPending" :title="__('Stuck holds detected')" variant="warning">
+                    <div>{{ stuckHoldsMessage }}</div>
+                    <Button class="mt-2" size="sm" variant="default" :text="__('Clear stuck holds')" :disabled="clearingPending" @click="clearStuckHolds(false)" />
+                </Alert>
+
                 <div class="grid grid-cols-2 gap-x-4 gap-y-6">
                     <Field :label="__('Available')" :errors="errors.available">
                         <Input v-model="available" @keyup="handleEnterKey" />
@@ -28,20 +33,30 @@
             </template>
         </Modal>
 
-        <confirmation-modal
-            v-if="deleteId"
+        <ConfirmationModal
+            :open="!!deleteId"
             :title="__('Delete availability')"
             :danger="true"
             @confirm="deleteAvailability"
             @cancel="deleteId = null"
         >
             {{ __('Are you sure you want to clear availability date for those dates?') }}
-        </confirmation-modal>
+        </ConfirmationModal>
+
+        <ConfirmationModal
+            :open="stillActiveIds.length > 0"
+            :title="__('Force clear active holds?')"
+            :danger="true"
+            @confirm="clearStuckHolds(true)"
+            @cancel="stillActiveIds = []"
+        >
+            {{ __('The following reservations are still active and will be removed from the pending list anyway: :ids. This can desynchronise inventory accounting — proceed only if those reservations have already been resolved out-of-band.', { ids: stillActiveIds.join(', ') }) }}
+        </ConfirmationModal>
     </div>
 </template>
 
 <script setup>
-import { Button, Field, Input, Modal } from '@statamic/cms/ui';
+import { Alert, Button, ConfirmationModal, Field, Input, Modal } from '@statamic/cms/ui';
 import { computed, ref } from 'vue';
 import axios from 'axios';
 import dayjs from 'dayjs';
@@ -61,6 +76,10 @@ const props = defineProps({
         type: Object,
         required: false,
     },
+    pendingByDate: {
+        type: Object,
+        default: () => ({}),
+    },
 });
 
 const emit = defineEmits(['cancel', 'saved']);
@@ -69,9 +88,33 @@ const toast = useToast();
 const available = ref(null);
 const price = ref(null);
 const deleteId = ref(null);
+const stillActiveIds = ref([]);
+const clearingPending = ref(false);
 
 const date_start = computed(() => dayjs(props.dates.start).format('YYYY-MM-DD'));
 const date_end = computed(() => dayjs(props.dates.end).subtract(1, 'day').format('YYYY-MM-DD'));
+
+const datesWithPending = computed(() => {
+    return Object.entries(props.pendingByDate)
+        .filter(([, ids]) => Array.isArray(ids) && ids.length > 0)
+        .map(([date]) => date);
+});
+
+const totalHoldsCount = computed(() => {
+    return Object.values(props.pendingByDate)
+        .reduce((sum, ids) => sum + (Array.isArray(ids) ? ids.length : 0), 0);
+});
+
+const canClearStuckPending = computed(() => datesWithPending.value.length > 0 && props.rate);
+
+const stuckHoldsMessage = computed(() => {
+    const holds = totalHoldsCount.value;
+    const days = datesWithPending.value.length;
+    if (days === 1) {
+        return __(':count reservation hold(s) are recorded on this date. Inventory edits/deletes are blocked while holds exist.', { count: holds });
+    }
+    return __(':count reservation hold(s) across :days date(s) in this range. Inventory edits/deletes are blocked while holds exist.', { count: holds, days });
+});
 
 const submit = computed(() => {
     const fields = {
@@ -122,6 +165,51 @@ function deleteAvailability() {
 function handleEnterKey(event) {
     if (event.key === 'Enter') {
         save();
+    }
+}
+
+async function clearStuckHolds(force) {
+    if (clearingPending.value) return;
+    clearingPending.value = true;
+    let totalCleared = 0;
+    const stillActive = new Set();
+
+    try {
+        const responses = await Promise.all(
+            datesWithPending.value.map((date) => axios.post('/cp/resrv/availability/clear-stuck-pending', {
+                statamic_id: props.parentId,
+                date,
+                rate_id: props.rate.code,
+                force: !!force,
+            }))
+        );
+
+        for (const response of responses) {
+            const data = response.data || {};
+            totalCleared += data.cleared || 0;
+            if (!force && Array.isArray(data.still_active)) {
+                data.still_active.forEach((id) => stillActive.add(id));
+            }
+        }
+
+        if (!force && stillActive.size > 0) {
+            stillActiveIds.value = [...stillActive];
+            if (totalCleared > 0) {
+                toast.success(`${totalCleared} stuck hold(s) cleared. Active holds need confirmation.`);
+            }
+            return;
+        }
+
+        if (force) {
+            stillActiveIds.value = [];
+        }
+        toast.success(`${totalCleared} hold(s) cleared`);
+        emit('saved');
+    } catch (e) {
+        console.error(e);
+        toast.error('Failed to clear stuck holds');
+    } finally {
+        clearingPending.value = false;
     }
 }
 </script>

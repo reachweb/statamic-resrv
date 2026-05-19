@@ -6,6 +6,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/availability/{statamic_id}/{identifier?}', 'AvailabilityCpController@index')->name('availability.index');
         Route::post('/resrv/availability', 'AvailabilityCpController@update')->name('availability.update');
         Route::delete('/resrv/availability', 'AvailabilityCpController@delete')->name('availability.delete');
+        Route::post('/resrv/availability/clear-stuck-pending', 'AvailabilityCpController@clearStuckPending')->name('availability.clearStuckPending');
 
         Route::get('/resrv/rates', 'RateCpController@indexCp')->name('rates.index');
         Route::get('/resrv/rates/index', 'RateCpController@index')->name('rate.index');

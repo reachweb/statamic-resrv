@@ -5,16 +5,22 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Requests\AvailabilityCpRequest;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\RatePrice;
+use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ActiveReservationsGuard;
 
 class AvailabilityCpController extends Controller
 {
@@ -32,7 +38,7 @@ class AvailabilityCpController extends Controller
             ->when($resolvedIdentifier, function (Builder $query, int $rateId) {
                 $query->where('rate_id', $rateId);
             })
-            ->get(['statamic_id', 'date', 'price', 'available'])
+            ->get(['statamic_id', 'date', 'price', 'available', 'pending'])
             ->sortBy('date')
             ->keyBy('date');
 
@@ -101,6 +107,14 @@ class AvailabilityCpController extends Controller
             $requestedRateIds
         ));
 
+        if (ActiveReservationsGuard::hasActiveReservationsForRange(
+            $data['statamic_id'], $data['date_start'], $data['date_end'], $rateIds
+        )) {
+            return response()->json([
+                'message' => __('Cannot delete availability while reservations are pending for this date range.'),
+            ], 422);
+        }
+
         // Override prices for shared+independent rates are tied to the base
         // row's date. When that base row is removed, every sibling shared+indep
         // rate hanging off the same base must lose its override too — otherwise
@@ -132,6 +146,110 @@ class AvailabilityCpController extends Controller
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
 
+    /**
+     * Admin escape hatch: clear pending reservation IDs that should have been removed by the
+     * regular increment/expire path but somehow stuck (queue worker died, transient DB error,
+     * etc.). Default mode only clears IDs whose reservation is in a terminal status. Force mode
+     * clears every ID and logs the active ones for audit.
+     */
+    public function clearStuckPending(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'statamic_id' => ['required', 'string'],
+            'date' => ['required', 'date'],
+            'rate_id' => ['required', 'integer'],
+            'force' => ['sometimes', 'boolean'],
+        ]);
+
+        $force = (bool) ($data['force'] ?? false);
+
+        return DB::transaction(function () use ($data, $force) {
+            $row = Availability::where([
+                'statamic_id' => $data['statamic_id'],
+                'rate_id' => $data['rate_id'],
+            ])
+                ->whereDate('date', $data['date'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $pending = $row->pending ?? [];
+            if (empty($pending)) {
+                return response()->json(['cleared' => 0, 'still_active' => []]);
+            }
+
+            $terminal = ReservationStatus::terminal();
+            $terminalIds = [];
+            $activeIds = [];
+            $quantityById = [];
+
+            foreach (Reservation::whereIn('id', $pending)->get(['id', 'status', 'quantity']) as $parent) {
+                $quantityById[$parent->id] = (int) $parent->quantity;
+                if (in_array($parent->status, $terminal, true)) {
+                    $terminalIds[] = $parent->id;
+                } else {
+                    $activeIds[] = $parent->id;
+                }
+            }
+
+            $children = ChildReservation::whereIn('resrv_child_reservations.id', $pending)
+                ->join('resrv_reservations', 'resrv_child_reservations.reservation_id', '=', 'resrv_reservations.id')
+                ->get([
+                    'resrv_child_reservations.id',
+                    'resrv_child_reservations.quantity',
+                    'resrv_reservations.status as parent_status',
+                ]);
+
+            foreach ($children as $child) {
+                $quantityById[$child->id] = (int) $child->quantity;
+                if (in_array($child->parent_status, $terminal, true)) {
+                    $terminalIds[] = $child->id;
+                } else {
+                    $activeIds[] = $child->id;
+                }
+            }
+
+            // IDs not found in either table are vanished — treat as terminal but with quantity 0
+            // (the original quantity is unrecoverable; admin will have to reset `available` manually
+            // if accounting drifts).
+            $vanished = array_values(array_diff($pending, array_keys($quantityById)));
+            foreach ($vanished as $id) {
+                $terminalIds[] = $id;
+                $quantityById[$id] = 0;
+            }
+
+            $toClear = $force ? $pending : $terminalIds;
+
+            if (empty($toClear)) {
+                return response()->json([
+                    'cleared' => 0,
+                    'still_active' => array_values($activeIds),
+                ]);
+            }
+
+            $restoredQuantity = 0;
+            foreach ($toClear as $id) {
+                $restoredQuantity += $quantityById[$id] ?? 0;
+            }
+
+            $row->update([
+                'available' => $row->available + $restoredQuantity,
+                'pending' => array_values(array_diff($pending, $toClear)),
+            ]);
+
+            if ($force && ! empty($activeIds)) {
+                Log::warning('Resrv: admin force-cleared active holds from availability row', [
+                    'availability_id' => $row->id,
+                    'forced_ids' => array_values($activeIds),
+                ]);
+            }
+
+            return response()->json([
+                'cleared' => count($toClear),
+                'still_active' => $force ? [] : array_values($activeIds),
+            ]);
+        });
+    }
+
     private function updateAvailability(array $data, int $rateId): void
     {
         $rate = Rate::withoutGlobalScopes()->find($rateId);
@@ -147,6 +265,16 @@ class AvailabilityCpController extends Controller
 
         if ($skipPrice && ! is_null($data['price']) && is_null($data['available'])) {
             abort(422, __('Price cannot be edited directly for shared rates. Edit the base rate instead.'));
+        }
+
+        // Only block when inventory is being changed — price-only edits don't disturb the
+        // available/pending invariant maintained by AvailabilityRepository.
+        if (! is_null($data['available']) && ActiveReservationsGuard::hasActiveReservationsForRange(
+            $data['statamic_id'], $data['date_start'], $data['date_end'], [$resolvedRateId]
+        )) {
+            throw new HttpResponseException(response()->json([
+                'message' => __('Cannot edit availability while reservations are pending for this date range.'),
+            ], 422));
         }
 
         DB::transaction(function () use ($data, $rateId, $resolvedRateId, $skipPrice, $isSharedIndependent) {

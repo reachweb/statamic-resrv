@@ -21,6 +21,7 @@
                 :dates="selectedDates"
                 :parent-id="props.meta.parent"
                 :rate="rateForChild"
+                :pending-by-date="pendingByDateForSelection"
                 @cancel="toggleModal"
                 @saved="availabilitySaved"
             />
@@ -77,6 +78,24 @@ const rateForChild = computed(() => {
     }
     const found = rates.value.find((r) => r.id === rateId.value);
     return found ? { label: found.title, code: found.id } : null;
+});
+
+const pendingByDateForSelection = computed(() => {
+    if (!selectedDates.value || !availability.value) return {};
+    const start = dayjs(selectedDates.value.start);
+    // FullCalendar gives an exclusive end; iterate up to (but not including) it.
+    const endExclusive = dayjs(selectedDates.value.end);
+    const result = {};
+    let cursor = start;
+    while (cursor.isBefore(endExclusive)) {
+        const key = cursor.format('YYYY-MM-DD');
+        const row = availability.value[key];
+        if (row?.pending && row.pending.length) {
+            result[key] = row.pending;
+        }
+        cursor = cursor.add(1, 'day');
+    }
+    return result;
 });
 
 function handleSelect(date) {
