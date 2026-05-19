@@ -243,12 +243,14 @@ class Reservation extends Model
     protected function parentExtraCharges()
     {
         $totalCharges = Price::create(0);
-        $options = $this->options()->get();
 
         foreach ($this->childs as $child) {
             $data = $this->buildChildDataArray($child);
 
-            foreach ($options as $option) {
+            // Fresh instances required per child: OptionValue::calculatePrice mutates $this->price
+            // via Price::multiply() for perday/fixed types, so re-using the same Option (and its
+            // eager-loaded values) across child iterations compounds the multiplication.
+            foreach ($this->options()->with('values')->get() as $option) {
                 $totalCharges->add($option->calculatePrice($data, $option->pivot->value));
             }
 
@@ -451,7 +453,10 @@ class Reservation extends Model
 
             $required = $extraCondition->hasRequiredExtrasSelected($statamic_id, $childData);
             if ($required !== true) {
-                $allRequired = $allRequired->merge($required);
+                // union (not merge) preserves integer keys so $extra_id stays the real DB id;
+                // first-wins on collision is fine — the same extra_id from different children
+                // means the same missing prerequisite extra.
+                $allRequired = $allRequired->union($required);
             }
         }
 
@@ -459,7 +464,7 @@ class Reservation extends Model
             return false;
         }
 
-        return $allRequired->unique()->transform(function ($messages, $extra_id) {
+        return $allRequired->transform(function ($messages, $extra_id) {
             return 'ID '.$extra_id.' '.$messages->implode(' ');
         })->implode(', ');
     }

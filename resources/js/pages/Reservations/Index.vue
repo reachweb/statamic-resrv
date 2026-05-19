@@ -11,7 +11,7 @@ import {
     DropdownItem,
     ConfirmationModal,
 } from '@statamic/cms/ui';
-import { useToast } from '@/composables/useToast';
+import { useToast } from '../../composables/useToast.js';
 
 const props = defineProps({
     filters: { type: Array, default: () => [] },

@@ -99,6 +99,14 @@
                     </template>
                 </draggable>
             </div>
+            <Pagination
+                v-if="lastPage > 1"
+                class="px-4 py-3 border-t border-gray-200 dark:border-gray-700/80"
+                :per-page="perPage"
+                :resource-meta="props.pricings"
+                @page-selected="onPageSelected"
+                @per-page-changed="onPerPageChanged"
+            />
         </Card>
 
         <DynamicPricingPanel
@@ -141,7 +149,7 @@
 </template>
 
 <script setup>
-import { Badge, Button, Card, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, Header, Input, Select, StatusIndicator } from '@statamic/cms/ui';
+import { Badge, Button, Card, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, Header, Input, Pagination, Select, StatusIndicator } from '@statamic/cms/ui';
 import { router } from '@statamic/cms/inertia';
 import draggable from 'vuedraggable';
 import { computed, nextTick, reactive, ref, watch } from 'vue';
@@ -286,6 +294,17 @@ function resetFilters() {
         resetting.value = false;
         applyFilters();
     });
+}
+
+function onPageSelected(page) {
+    currentPage.value = page;
+    applyFilters();
+}
+
+function onPerPageChanged(size) {
+    perPage.value = size;
+    currentPage.value = 1;
+    applyFilters();
 }
 
 function confirmDelete(item) {

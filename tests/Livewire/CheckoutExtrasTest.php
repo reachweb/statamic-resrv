@@ -20,6 +20,8 @@ use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\ExtraCategory;
 use Reach\StatamicResrv\Models\ExtraCondition;
+use Reach\StatamicResrv\Models\Option;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -1301,5 +1303,132 @@ class CheckoutExtrasTest extends TestCase
         // NOT: 10 * 1 (session fallback) * 2 = 20
         $charges = $reservation->extraCharges();
         $this->assertEquals('60.00', $charges->format());
+    }
+
+    public function test_parent_perday_option_does_not_compound_across_children()
+    {
+        $item = $this->entries->first();
+
+        // Default OptionValueFactory: perday at 22.75/day. Quantity stays at 1 so
+        // OptionValue::calculatePrice() exercises the bare ->price->multiply($duration) path.
+        $option = Option::factory()->create(['item_id' => $item->id()]);
+        $value = OptionValue::factory()->create(['option_id' => $option->id]);
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        // Child 1: 2 days
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: 1 day
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(4)->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $reservation->options()->attach($option->id, ['value' => $value->id]);
+
+        // Expected: 22.75 * 2 + 22.75 * 1 = 68.25
+        // Compounded bug (option/value re-used across children): 22.75 * 2 then 45.50 * 1 = 91.00
+        $this->assertEquals('68.25', $reservation->extraCharges()->format());
+    }
+
+    public function test_parent_required_extras_error_uses_real_extra_ids()
+    {
+        $item = $this->makeStatamicItemWithAvailability(
+            available: 2,
+            price: 50,
+            customAvailability: [
+                'dates' => collect(range(0, 19))->map(fn ($i) => today()->addDays($i))->all(),
+            ],
+        );
+
+        // Fresh extra with an explicit non-trivial id (ExtraFactory defaults id=1,
+        // which would clash with setUp()'s extra). A distinctive id makes the
+        // assertion strict: "ID 0" / "ID 1" in the message would only appear if
+        // the merge bug renumbered keys positionally.
+        $extra = ResrvExtra::factory()->create(['id' => 5]);
+        $entry = ResrvEntry::whereItemId($item->id());
+        $entry->extras()->attach($extra->id);
+
+        // Required when duration >= 2 — both children below trigger it.
+        ExtraCondition::factory()->create([
+            'extra_id' => $extra->id,
+            'conditions' => [[
+                'operation' => 'required',
+                'type' => 'reservation_duration',
+                'comparison' => '>=',
+                'value' => '2',
+            ]],
+        ]);
+
+        // 3 + 3 days @ 50/day = 300
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '300.00',
+            'payment' => '300.00',
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(3)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(5)->toIso8601String(),
+            'date_end' => today()->addDays(8)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $data = [
+            'date_start' => $reservation->date_start,
+            'date_end' => $reservation->date_end,
+            'quantity' => $reservation->quantity,
+            'rate_id' => $reservation->rate_id,
+            'payment' => $reservation->payment,
+            'price' => $reservation->price,
+            'total' => $reservation->price,
+            'extras' => collect(),
+            'options' => collect(),
+            'customer' => collect(),
+        ];
+
+        try {
+            $reservation->validateReservation($data, $item->id(), checkOptions: false);
+            $this->fail('Expected ExtrasException for missing required extra.');
+        } catch (ExtrasException $e) {
+            $message = $e->getMessage();
+
+            // The real extra id (e.g. "ID 2") must appear; the buggy merge() path
+            // would emit "ID 0" / "ID 1" instead (positional indices after array_merge
+            // renumbered the integer keys).
+            $this->assertStringContainsString('ID '.$extra->id.' ', $message);
+            $this->assertEquals(
+                1,
+                substr_count($message, 'ID '),
+                'Expected exactly one extra-id segment after dedup, got: '.$message,
+            );
+        }
     }
 }
