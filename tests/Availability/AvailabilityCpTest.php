@@ -790,9 +790,7 @@ class AvailabilityCpTest extends TestCase
             'pending' => [$reservation->id],
         ]);
 
-        Log::shouldReceive('warning')
-            ->once()
-            ->with('Resrv: admin force-cleared active holds from availability row', \Mockery::on(fn ($ctx) => in_array($reservation->id, $ctx['forced_ids'])));
+        Log::spy();
 
         $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
             'statamic_id' => $item->id(),
@@ -803,6 +801,10 @@ class AvailabilityCpTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJson(['cleared' => 1, 'still_active' => []]);
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->with('Resrv: admin force-cleared active holds from availability row', \Mockery::on(fn ($ctx) => in_array($reservation->id, $ctx['forced_ids'])));
 
         $availability->refresh();
         $this->assertEquals(5, $availability->available);
