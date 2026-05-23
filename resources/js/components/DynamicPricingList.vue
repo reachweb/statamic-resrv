@@ -117,7 +117,7 @@
             @saved="togglePanel"
         />
         <confirmation-modal
-            v-if="deleteId"
+            :open="deleteId !== null"
             :title="__('Delete dynamic pricing')"
             :danger="true"
             @confirm="deleteDynamic"
@@ -126,7 +126,7 @@
             {{ __('Are you sure you want to delete this dynamic pricing?') }} <strong>{{ __('This cannot be undone.') }}</strong>
         </confirmation-modal>
         <confirmation-modal
-            v-if="moveDialog.open"
+            :open="moveDialog.open"
             :title="moveDialog.mode === 'position' ? __('Move to position') : __('Move to page')"
             :button-text="__('Move')"
             @confirm="submitMove"

@@ -35,7 +35,7 @@
             @saved="fixedPricingSaved"
         />
         <confirmation-modal
-            v-if="deleteId"
+            :open="deleteId !== null"
             :title="__('Delete')"
             :danger="true"
             @confirm="deleteFixedPricing"

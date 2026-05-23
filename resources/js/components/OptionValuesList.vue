@@ -41,7 +41,7 @@
             @saved="dataSaved"
         />
         <confirmation-modal
-            v-if="deleteId"
+            :open="deleteId !== null"
             :title="__('Delete value')"
             :danger="true"
             @confirm="deleteValue"

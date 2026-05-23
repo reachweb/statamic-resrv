@@ -76,7 +76,7 @@
             @saved="categorySaved"
         />
         <confirmation-modal
-            v-if="deleteId"
+            :open="deleteId !== null"
             :title="__('Delete category')"
             :danger="true"
             @confirm="deleteCategory"

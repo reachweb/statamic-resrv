@@ -37,7 +37,7 @@
         </div>
         <OptionsPanel v-if="showPanel" :data="option" @closed="togglePanel" @saved="dataSaved" />
         <confirmation-modal
-            v-if="deleteId"
+            :open="deleteId !== null"
             :title="__('Delete option')"
             :danger="true"
             @confirm="deleteOption"

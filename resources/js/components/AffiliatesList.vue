@@ -43,7 +43,7 @@
             @saved="togglePanel"
         />
         <confirmation-modal
-            v-if="deleteId"
+            :open="deleteId !== null"
             :title="__('Delete affiliate')"
             :danger="true"
             @confirm="deleteAffiliate"

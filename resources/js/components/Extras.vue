@@ -79,7 +79,7 @@
             @saved="toggleMassAssignPanel"
         />
         <confirmation-modal
-            v-if="deleteId"
+            :open="deleteId !== null"
             :title="__('Delete extra')"
             :danger="true"
             @confirm="deleteExtra"
