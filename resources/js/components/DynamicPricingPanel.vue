@@ -54,7 +54,7 @@
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-6">
-                        <Field :label="__('Entries')" :instructions="__('Select the entries that this dynamic pricing applies to')" :errors="form.errors.entries">
+                        <Field :label="__('Entries')" :instructions="__('Select the entries that this dynamic pricing applies to')" :error="form.errors.entries">
                             <EntriesStackPicker
                                 v-if="entriesLoaded"
                                 v-model="form.entries"
@@ -70,7 +70,7 @@
                                 </template>
                             </EntriesStackPicker>
                         </Field>
-                        <Field :label="__('Extras')" :instructions="__('Select the extras that this dynamic pricing applies to')" :errors="form.errors.extras">
+                        <Field :label="__('Extras')" :instructions="__('Select the extras that this dynamic pricing applies to')" :error="form.errors.extras">
                             <template #actions>
                                 <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllExtras" />
                                 <span class="text-xs text-gray-400">|</span>

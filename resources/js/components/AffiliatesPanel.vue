@@ -12,22 +12,22 @@
         <template #default>
             <Card>
                 <div class="space-y-6">
-                    <Field :label="__('Name')" :errors="form.errors.name">
+                    <Field :label="__('Name')" :error="form.errors.name">
                         <Input v-model="form.name" />
                     </Field>
-                    <Field :label="__('Code')" :errors="form.errors.code">
+                    <Field :label="__('Code')" :error="form.errors.code">
                         <Input v-model="form.code" />
                     </Field>
-                    <Field :label="__('Email')" :errors="form.errors.email">
+                    <Field :label="__('Email')" :error="form.errors.email">
                         <Input v-model="form.email" type="email" />
                     </Field>
-                    <Field :label="__('Cookie duration in days')" :errors="form.errors.cookie_duration">
+                    <Field :label="__('Cookie duration in days')" :error="form.errors.cookie_duration">
                         <Input v-model="form.cookie_duration" type="number" />
                     </Field>
-                    <Field :label="__('Fee')" :errors="form.errors.fee">
+                    <Field :label="__('Fee')" :error="form.errors.fee">
                         <Input v-model="form.fee" />
                     </Field>
-                    <Field :label="__('Coupons')" :instructions="__('Select any coupons that would make a reservation credited to this affiliate.')" :errors="form.errors.coupons">
+                    <Field :label="__('Coupons')" :instructions="__('Select any coupons that would make a reservation credited to this affiliate.')" :error="form.errors.coupons">
                         <template #actions>
                             <Button size="xs" variant="ghost" :text="__('Clear')" @click="clearAllCoupons" />
                         </template>

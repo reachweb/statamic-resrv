@@ -12,7 +12,7 @@
             <Panel :heading="__('General')">
                 <Card>
                     <div class="space-y-6">
-                        <Field :label="__('Collection')" :instructions="__('The collection this rate applies to.')" :errors="form.errors.collection">
+                        <Field :label="__('Collection')" :instructions="__('The collection this rate applies to.')" :error="form.errors.collection">
                             <Select
                                 v-model="form.collection"
                                 :options="collectionOptions"
@@ -23,7 +23,7 @@
                         <Field :label="__('Apply to all entries in collection')">
                             <Switch v-model="form.apply_to_all" />
                         </Field>
-                        <Field v-if="!form.apply_to_all" :label="__('Entries')" :instructions="__('Select the entries this rate should apply to.')" :errors="form.errors.entries">
+                        <Field v-if="!form.apply_to_all" :label="__('Entries')" :instructions="__('Select the entries this rate should apply to.')" :error="form.errors.entries">
                             <EntriesStackPicker
                                 v-if="entriesLoaded"
                                 v-model="form.entries"
@@ -40,14 +40,14 @@
                             </EntriesStackPicker>
                         </Field>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                            <Field :label="__('Title')" :errors="form.errors.title">
+                            <Field :label="__('Title')" :error="form.errors.title">
                                 <Input v-model="form.title" @input="slugify" />
                             </Field>
-                            <Field :label="__('Slug')" :errors="form.errors.slug">
+                            <Field :label="__('Slug')" :error="form.errors.slug">
                                 <Input v-model="form.slug" @input="onSlugInput" />
                             </Field>
                         </div>
-                        <Field :label="__('Description')" :errors="form.errors.description">
+                        <Field :label="__('Description')" :error="form.errors.description">
                             <Textarea v-model="form.description" />
                         </Field>
                     </div>
@@ -57,17 +57,17 @@
             <Panel :heading="__('Pricing')">
                 <Card>
                     <div class="space-y-6">
-                        <Field :label="__('Pricing type')" :instructions="__('Independent rates have their own pricing. Relative rates derive pricing from a base rate.')" :errors="form.errors.pricing_type">
+                        <Field :label="__('Pricing type')" :instructions="__('Independent rates have their own pricing. Relative rates derive pricing from a base rate.')" :error="form.errors.pricing_type">
                             <Select v-model="form.pricing_type" :options="pricingTypes" />
                         </Field>
                         <div v-if="form.pricing_type === 'relative'" class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
-                            <Field :label="__('Modifier type')" :instructions="__('Percentage or fixed amount.')" :errors="form.errors.modifier_type">
+                            <Field :label="__('Modifier type')" :instructions="__('Percentage or fixed amount.')" :error="form.errors.modifier_type">
                                 <Select v-model="form.modifier_type" :options="modifierTypes" />
                             </Field>
-                            <Field :label="__('Modifier operation')" :instructions="__('Increase or decrease from base rate.')" :errors="form.errors.modifier_operation">
+                            <Field :label="__('Modifier operation')" :instructions="__('Increase or decrease from base rate.')" :error="form.errors.modifier_operation">
                                 <Select v-model="form.modifier_operation" :options="modifierOperations" />
                             </Field>
-                            <Field :label="__('Modifier amount')" :instructions="__('Amount or percentage without the % character.')" :errors="form.errors.modifier_amount">
+                            <Field :label="__('Modifier amount')" :instructions="__('Amount or percentage without the % character.')" :error="form.errors.modifier_amount">
                                 <Input v-model="form.modifier_amount" />
                             </Field>
                         </div>
@@ -79,10 +79,10 @@
                 <Card>
                     <div class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                            <Field :label="__('Availability type')" :instructions="__('Independent rates have their own inventory. Shared rates share inventory with the base rate.')" :errors="form.errors.availability_type">
+                            <Field :label="__('Availability type')" :instructions="__('Independent rates have their own inventory. Shared rates share inventory with the base rate.')" :error="form.errors.availability_type">
                                 <Select v-model="form.availability_type" :options="availabilityTypes" />
                             </Field>
-                            <Field v-if="form.availability_type === 'shared'" :label="__('Max available')" :instructions="__('Maximum number of units available for this rate.')" :errors="form.errors.max_available">
+                            <Field v-if="form.availability_type === 'shared'" :label="__('Max available')" :instructions="__('Maximum number of units available for this rate.')" :error="form.errors.max_available">
                                 <Input v-model="form.max_available" type="number" />
                             </Field>
                         </div>
@@ -99,7 +99,7 @@
                         <Alert variant="info">
                             <div>{{ baseRateExplanation }}</div>
                         </Alert>
-                        <Field :label="__('Base rate')" :instructions="__('Only published, non-shared, non-relative rates in the same collection can be selected.')" :errors="form.errors.base_rate_id">
+                        <Field :label="__('Base rate')" :instructions="__('Only published, non-shared, non-relative rates in the same collection can be selected.')" :error="form.errors.base_rate_id">
                             <Select v-model="form.base_rate_id" :options="availableBaseRates" />
                         </Field>
                     </div>
@@ -113,16 +113,16 @@
                             <DateRangePicker v-model="dateRange" granularity="day" />
                         </Field>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                            <Field :label="__('Min days before')" :instructions="__('Minimum advance booking days.')" :errors="form.errors.min_days_before">
+                            <Field :label="__('Min days before')" :instructions="__('Minimum advance booking days.')" :error="form.errors.min_days_before">
                                 <Input v-model="form.min_days_before" type="number" />
                             </Field>
-                            <Field :label="__('Max days before')" :instructions="__('Maximum advance booking days.')" :errors="form.errors.max_days_before">
+                            <Field :label="__('Max days before')" :instructions="__('Maximum advance booking days.')" :error="form.errors.max_days_before">
                                 <Input v-model="form.max_days_before" type="number" />
                             </Field>
-                            <Field :label="__('Min stay')" :instructions="__('Minimum number of nights.')" :errors="form.errors.min_stay">
+                            <Field :label="__('Min stay')" :instructions="__('Minimum number of nights.')" :error="form.errors.min_stay">
                                 <Input v-model="form.min_stay" type="number" />
                             </Field>
-                            <Field :label="__('Max stay')" :instructions="__('Maximum number of nights.')" :errors="form.errors.max_stay">
+                            <Field :label="__('Max stay')" :instructions="__('Maximum number of nights.')" :error="form.errors.max_stay">
                                 <Input v-model="form.max_stay" type="number" />
                             </Field>
                         </div>
