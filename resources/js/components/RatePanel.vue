@@ -57,14 +57,9 @@
             <Panel :heading="__('Pricing')">
                 <Card>
                     <div class="space-y-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                            <Field :label="__('Pricing type')" :instructions="__('Independent rates have their own pricing. Relative rates derive pricing from a base rate.')" :errors="form.errors.pricing_type">
-                                <Select v-model="form.pricing_type" :options="pricingTypes" />
-                            </Field>
-                            <Field v-if="needsBaseRate" :label="__('Base rate')" :instructions="baseRateDescription" :errors="form.errors.base_rate_id">
-                                <Select v-model="form.base_rate_id" :options="availableBaseRates" />
-                            </Field>
-                        </div>
+                        <Field :label="__('Pricing type')" :instructions="__('Independent rates have their own pricing. Relative rates derive pricing from a base rate.')" :errors="form.errors.pricing_type">
+                            <Select v-model="form.pricing_type" :options="pricingTypes" />
+                        </Field>
                         <div v-if="form.pricing_type === 'relative'" class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
                             <Field :label="__('Modifier type')" :instructions="__('Percentage or fixed amount.')" :errors="form.errors.modifier_type">
                                 <Select v-model="form.modifier_type" :options="modifierTypes" />
@@ -93,6 +88,19 @@
                         </div>
                         <Field v-if="form.availability_type === 'shared' && form.pricing_type === 'independent'" :label="__('Require price override')" :instructions="__('When enabled, dates without an explicit price for this rate are unavailable. When disabled, the base rate\'s price is used as a fallback.')">
                             <Switch v-model="form.require_price_override" />
+                        </Field>
+                    </div>
+                </Card>
+            </Panel>
+
+            <Panel v-if="needsBaseRate" :heading="__('Base rate')">
+                <Card>
+                    <div class="space-y-6">
+                        <Alert variant="info">
+                            <div>{{ baseRateExplanation }}</div>
+                        </Alert>
+                        <Field :label="__('Base rate')" :instructions="__('Only published, non-shared, non-relative rates in the same collection can be selected.')" :errors="form.errors.base_rate_id">
+                            <Select v-model="form.base_rate_id" :options="availableBaseRates" />
                         </Field>
                     </div>
                 </Card>
@@ -139,7 +147,7 @@
 </template>
 
 <script setup>
-import { Button, Card, DateRangePicker, Field, Input, Panel, Select, Stack, Switch, Textarea } from '@statamic/cms/ui';
+import { Alert, Button, Card, DateRangePicker, Field, Input, Panel, Select, Stack, Switch, Textarea } from '@statamic/cms/ui';
 import { useForm } from '@statamic/cms/inertia';
 import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
@@ -227,14 +235,16 @@ const needsBaseRate = computed(() =>
     form.pricing_type === 'relative' || form.availability_type === 'shared',
 );
 
-const baseRateDescription = computed(() => {
-    if (form.pricing_type === 'relative' && form.availability_type === 'shared') {
-        return __('Derive pricing and share inventory with this rate.');
+const baseRateExplanation = computed(() => {
+    const relative = form.pricing_type === 'relative';
+    const shared = form.availability_type === 'shared';
+    if (relative && shared) {
+        return __('This rate derives its pricing from the selected base rate using the modifier configured in the Pricing section, and shares its inventory with the base rate.');
     }
-    if (form.pricing_type === 'relative') {
-        return __('The rate to derive pricing from.');
+    if (relative) {
+        return __('This rate derives its pricing from the selected base rate using the modifier configured in the Pricing section. Inventory is managed independently.');
     }
-    return __('The rate to share inventory with.');
+    return __('This rate shares its inventory with the selected base rate. Pricing is managed independently — set this rate\'s own prices in the Availability calendar.');
 });
 
 const dateRangeErrors = computed(() => {
