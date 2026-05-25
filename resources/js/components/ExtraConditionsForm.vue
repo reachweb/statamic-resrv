@@ -1,9 +1,9 @@
 <template>
-    <div>
+    <div class="@container">
         <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {{ __('Select when to show, hide or make this extra required. When adding multiple conditions for an operation, all of them have to apply.') }}
         </p>
-        <div v-for="(condition, index) in conditionsForm" :key="index" class="grid grid-cols-1 lg:grid-cols-[1fr_1fr_2fr_auto] gap-x-3 gap-y-6 items-end py-5 border-b border-gray-200 dark:border-gray-700/80 last:border-b-0">
+        <div v-for="(condition, index) in conditionsForm" :key="index" class="grid grid-cols-1 @2xl:grid-cols-[1fr_1fr_2fr_auto] gap-x-3 gap-y-6 items-end py-5 border-b border-gray-200 dark:border-gray-700/80 last:border-b-0">
             <Field :label="__('Operation')" :error="errors['conditions.' + index + '.operation']?.[0]">
                 <Select v-model="conditionsForm[index].operation" :options="operationOptions" />
             </Field>

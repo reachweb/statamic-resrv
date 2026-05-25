@@ -2,8 +2,8 @@
     <Stack
         :open="true"
         :title="__('Extra conditions for') + ': ' + data.name"
-        icon="settings"
-        size="half"
+        icon="workflow"
+        size="full"
         @closed="onClosed"
     >
         <template #header-actions>

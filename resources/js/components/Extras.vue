@@ -48,7 +48,7 @@
                             <DropdownMenu>
                                 <DropdownItem :text="__('Edit')" icon="pencil" @click="editExtra(extra)" />
                                 <DropdownItem :text="__('Mass assign')" icon="duplicate" @click="massAssign(extra)" />
-                                <DropdownItem :text="__('Conditions')" icon="settings" @click="editConditions(extra)" />
+                                <DropdownItem :text="__('Conditions')" icon="workflow" @click="editConditions(extra)" />
                                 <DropdownSeparator />
                                 <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(extra)" />
                             </DropdownMenu>
