@@ -8,6 +8,7 @@ use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
 use Livewire\Component;
+use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
@@ -45,6 +46,9 @@ class AvailabilityResults extends Component
 
     #[Locked]
     public bool $rates = false;
+
+    #[Locked]
+    public string $rateSorting = 'order';
 
     #[Locked]
     public $showExtras = false;
@@ -139,6 +143,11 @@ class AvailabilityResults extends Component
         }
 
         $this->availability = collect($this->queryBaseAvailabilityForEntry());
+    }
+
+    protected function resolveRateSorting(): RateSorting
+    {
+        return RateSorting::fromValue($this->rateSorting);
     }
 
     public function checkout(): void

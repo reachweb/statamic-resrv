@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\RatePrice;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -1478,5 +1479,134 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.0.data.price', '50.00')
             // Tomorrow should work
             ->assertViewHas('availability.+1.data.price', '50.00');
+    }
+
+    /**
+     * Entry on the 'pages' collection with a base rate (order 0, 100/day) and a
+     * cheaper shared-independent rate (order 1, 30/day via RatePrice overrides),
+     * with availability for the next four days. Returns [entry, baseRate, sharedRate].
+     */
+    protected function makeEntryWithCheaperHigherOrderRate(): array
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'rate-sorting-base',
+            'title' => 'Base',
+            'order' => 0,
+        ]);
+
+        $sharedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'rate-sorting-shared',
+            'title' => 'Shared',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+            'order' => 1,
+        ]);
+
+        Availability::factory()
+            ->count(4)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->addDay()],
+                ['date' => today()->addDays(2)],
+                ['date' => today()->addDays(3)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        foreach (range(0, 3) as $offset) {
+            RatePrice::create([
+                'rate_id' => $sharedRate->id,
+                'statamic_id' => $entry->id(),
+                'date' => today()->addDays($offset)->toDateString(),
+                'price' => 30,
+            ]);
+        }
+
+        return [$entry, $baseRate, $sharedRate];
+    }
+
+    protected function dispatchSearch($component, ?string $rate = null)
+    {
+        return $component->dispatch('availability-search-updated', [
+            'dates' => [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+            ],
+            'quantity' => 1,
+            'rate' => $rate,
+        ]);
+    }
+
+    public function test_can_set_rate_sorting_parameter()
+    {
+        Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id(), 'rateSorting' => 'price'])
+            ->assertSet('rateSorting', 'price')
+            ->assertStatus(200);
+    }
+
+    public function test_base_path_returns_lowest_order_rate_by_default()
+    {
+        [$entry, $baseRate] = $this->makeEntryWithCheaperHigherOrderRate();
+
+        $this->dispatchSearch(Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()]))
+            ->assertViewHas('availability.data.rate_id', $baseRate->id)
+            ->assertViewHas('availability.data.price', '200.00');
+    }
+
+    public function test_base_path_returns_cheapest_rate_when_sorting_by_price()
+    {
+        [$entry, , $sharedRate] = $this->makeEntryWithCheaperHigherOrderRate();
+
+        $this->dispatchSearch(Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'rateSorting' => 'price']))
+            ->assertViewHas('availability.data.rate_id', $sharedRate->id)
+            ->assertViewHas('availability.data.price', '60.00');
+    }
+
+    public function test_unknown_rate_sorting_value_falls_back_to_order()
+    {
+        [$entry, $baseRate] = $this->makeEntryWithCheaperHigherOrderRate();
+
+        $this->dispatchSearch(Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'rateSorting' => 'garbage']))
+            ->assertViewHas('availability.data.rate_id', $baseRate->id)
+            ->assertViewHas('availability.data.price', '200.00');
+    }
+
+    public function test_rate_sorting_is_threaded_through_extra_days()
+    {
+        [$entry, , $sharedRate] = $this->makeEntryWithCheaperHigherOrderRate();
+
+        // With extraDays the center period (key 0) must still resolve to the
+        // cheapest rate, proving the param reaches the per-date query.
+        $this->dispatchSearch(Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'extraDays' => 1, 'rateSorting' => 'price']))
+            ->assertViewHas('availability.0.data.rate_id', $sharedRate->id)
+            ->assertViewHas('availability.0.data.price', '60.00');
+    }
+
+    public function test_show_all_rates_path_is_unaffected_by_rate_sorting()
+    {
+        [$entry, $baseRate, $sharedRate] = $this->makeEntryWithCheaperHigherOrderRate();
+
+        // rates=true + rate='any' drives the all-rates path, which must return
+        // every rate keyed by id regardless of the rateSorting value.
+        $component = $this->dispatchSearch(
+            Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'rates' => true, 'rateSorting' => 'price']),
+            rate: 'any'
+        );
+
+        $availability = $component->viewData('availability');
+
+        $this->assertArrayHasKey($baseRate->id, $availability->toArray());
+        $this->assertArrayHasKey($sharedRate->id, $availability->toArray());
+        $this->assertEquals('200.00', data_get($availability, $baseRate->id.'.data.price'));
+        $this->assertEquals('60.00', data_get($availability, $sharedRate->id.'.data.price'));
     }
 }

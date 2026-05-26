@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
@@ -44,6 +45,8 @@ class Availability extends Model implements AvailabilityContract
         'pending' => 'array',
     ];
 
+    protected RateSorting $rateSorting = RateSorting::Order;
+
     protected static function newFactory()
     {
         return AvailabilityFactory::new();
@@ -73,12 +76,13 @@ class Availability extends Model implements AvailabilityContract
         return $this->getAvailabilityCollection($entries)->resolve();
     }
 
-    public function getAvailabilityForEntry($data, $statamic_id, bool $expireReservations = true)
+    public function getAvailabilityForEntry($data, $statamic_id, bool $expireReservations = true, RateSorting $rateSorting = RateSorting::Order)
     {
         if ($expireReservations) {
             ExpireReservations::dispatchSync();
         }
 
+        $this->rateSorting = $rateSorting;
         $this->initiateAvailability($data);
 
         return $this->getSpecificItemCollection($statamic_id)->resolve();
@@ -358,6 +362,10 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
+        if (! $rate && $this->rateSorting === RateSorting::Price) {
+            return $this->getCheapestRateAvailability($resrvEntry, $request);
+        }
+
         $results = $this->getResultsForItem($resrvEntry)->first();
 
         if (! $results) {
@@ -395,7 +403,7 @@ class Availability extends Model implements AvailabilityContract
         return null;
     }
 
-    protected function getMultipleRatesAvailability(Entry $entry, $request)
+    protected function buildRatesAvailabilityCollection(Entry $entry): Collection
     {
         $availability = collect();
 
@@ -427,7 +435,38 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
-        return new AvailabilityItemResource($availability->sortBy('price'), $request);
+        return $availability;
+    }
+
+    protected function getMultipleRatesAvailability(Entry $entry, $request)
+    {
+        return new AvailabilityItemResource(
+            $this->buildRatesAvailabilityCollection($entry)->sortBy('price', SORT_NUMERIC),
+            $request
+        );
+    }
+
+    protected function getCheapestRateAvailability(Entry $entry, $request)
+    {
+        // buildRatesAvailabilityCollection() yields rates in OrderScope order (order, then id).
+        // Scan for the lowest price and keep the FIRST rate that reaches it (strict lessThan),
+        // so a price tie resolves to the lowest-order rate — the same rate the default "order"
+        // sorting surfaces. This is deterministic by construction: it depends only on the
+        // iteration order, not on sortBy() being a stable sort. Comparison goes through Price
+        // (integer-cents) rather than float casts to stay decimal-safe.
+        $cheapest = $this->buildRatesAvailabilityCollection($entry)
+            ->reduce(function ($cheapest, $rate) {
+                if ($cheapest === null) {
+                    return $rate;
+                }
+
+                return Price::create($rate->get('price'))->lessThan(Price::create($cheapest->get('price'))) ? $rate : $cheapest;
+            });
+
+        return new AvailabilityItemResource(
+            $cheapest === null ? collect() : collect([$cheapest]),
+            $request
+        );
     }
 
     protected function ratePassesRestrictions(Rate $rate): bool
@@ -780,7 +819,6 @@ class Availability extends Model implements AvailabilityContract
         if ($showAllRates) {
             $results = $this->expandSharedRatesForDates($results, $id, $dateStart, $quantity);
         }
-
 
         $formatDate = fn ($date) => Carbon::parse($date)->format('Y-m-d');
 
