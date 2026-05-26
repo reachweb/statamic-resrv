@@ -2,13 +2,15 @@
 
 namespace Reach\StatamicResrv\Contracts\Models;
 
+use Reach\StatamicResrv\Enums\RateSorting;
+
 interface AvailabilityContract
 {
     public function getPriceAttribute($value);
 
     public function getAvailable(array $data);
 
-    public function getAvailabilityForEntry(array $data, string $statamic_id);
+    public function getAvailabilityForEntry(array $data, string $statamic_id, bool $expireReservations = true, RateSorting $rateSorting = RateSorting::Order);
 
     public function confirmAvailabilityAndPrice(array $data, string $statamic_id);
 

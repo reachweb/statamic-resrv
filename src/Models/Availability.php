@@ -449,17 +449,18 @@ class Availability extends Model implements AvailabilityContract
     protected function getCheapestRateAvailability(Entry $entry, $request)
     {
         // buildRatesAvailabilityCollection() yields rates in OrderScope order (order, then id).
-        // Scan for the lowest price and keep the FIRST rate that reaches it (strict <), so a
-        // price tie resolves to the lowest-order rate — the same rate the default "order"
+        // Scan for the lowest price and keep the FIRST rate that reaches it (strict lessThan),
+        // so a price tie resolves to the lowest-order rate — the same rate the default "order"
         // sorting surfaces. This is deterministic by construction: it depends only on the
-        // iteration order, not on sortBy() being a stable sort.
+        // iteration order, not on sortBy() being a stable sort. Comparison goes through Price
+        // (integer-cents) rather than float casts to stay decimal-safe.
         $cheapest = $this->buildRatesAvailabilityCollection($entry)
             ->reduce(function ($cheapest, $rate) {
                 if ($cheapest === null) {
                     return $rate;
                 }
 
-                return (float) $rate->get('price') < (float) $cheapest->get('price') ? $rate : $cheapest;
+                return Price::create($rate->get('price'))->lessThan(Price::create($cheapest->get('price'))) ? $rate : $cheapest;
             });
 
         return new AvailabilityItemResource(
