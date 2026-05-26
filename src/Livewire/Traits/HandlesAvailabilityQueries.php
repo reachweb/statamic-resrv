@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\CutoffException;
@@ -54,10 +55,20 @@ trait HandlesAvailabilityQueries
         )->toArray();
     }
 
+    /**
+     * The rate sorting used to resolve the representative ("from") price when no
+     * specific rate is selected. Components that don't expose the option default
+     * to ordering by the rate's "order" column.
+     */
+    protected function resolveRateSorting(): RateSorting
+    {
+        return RateSorting::Order;
+    }
+
     public function queryBaseAvailabilityForEntry(): array
     {
         try {
-            return app(Availability::class)->getAvailabilityForEntry($this->data->toResrvArray(), $this->entryId);
+            return app(Availability::class)->getAvailabilityForEntry($this->data->toResrvArray(), $this->entryId, rateSorting: $this->resolveRateSorting());
         } catch (AvailabilityException $exception) {
             $this->addError('availability', $exception->getMessage());
 
@@ -74,7 +85,7 @@ trait HandlesAvailabilityQueries
             try {
                 $this->validateCutoffRules($searchData['date_start']);
 
-                return app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId, expireReservations: false);
+                return app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId, expireReservations: false, rateSorting: $this->resolveRateSorting());
             } catch (AvailabilityException|CutoffException $exception) {
                 return [
                     'message' => [

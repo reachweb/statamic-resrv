@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
@@ -44,6 +45,8 @@ class Availability extends Model implements AvailabilityContract
         'pending' => 'array',
     ];
 
+    protected RateSorting $rateSorting = RateSorting::Order;
+
     protected static function newFactory()
     {
         return AvailabilityFactory::new();
@@ -73,12 +76,13 @@ class Availability extends Model implements AvailabilityContract
         return $this->getAvailabilityCollection($entries)->resolve();
     }
 
-    public function getAvailabilityForEntry($data, $statamic_id, bool $expireReservations = true)
+    public function getAvailabilityForEntry($data, $statamic_id, bool $expireReservations = true, RateSorting $rateSorting = RateSorting::Order)
     {
         if ($expireReservations) {
             ExpireReservations::dispatchSync();
         }
 
+        $this->rateSorting = $rateSorting;
         $this->initiateAvailability($data);
 
         return $this->getSpecificItemCollection($statamic_id)->resolve();
@@ -358,6 +362,10 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
+        if (! $rate && $this->rateSorting === RateSorting::Price) {
+            return $this->getCheapestRateAvailability($resrvEntry, $request);
+        }
+
         $results = $this->getResultsForItem($resrvEntry)->first();
 
         if (! $results) {
@@ -395,7 +403,7 @@ class Availability extends Model implements AvailabilityContract
         return null;
     }
 
-    protected function getMultipleRatesAvailability(Entry $entry, $request)
+    protected function buildRatesAvailabilityCollection(Entry $entry): Collection
     {
         $availability = collect();
 
@@ -427,7 +435,29 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
-        return new AvailabilityItemResource($availability->sortBy('price'), $request);
+        return $availability;
+    }
+
+    protected function getMultipleRatesAvailability(Entry $entry, $request)
+    {
+        return new AvailabilityItemResource(
+            $this->buildRatesAvailabilityCollection($entry)->sortBy('price', SORT_NUMERIC),
+            $request
+        );
+    }
+
+    protected function getCheapestRateAvailability(Entry $entry, $request)
+    {
+        // buildRatesAvailabilityCollection() returns rates in OrderScope order (order, then id),
+        // and sortBy() is a stable sort, so when several rates tie on the cheapest price the
+        // lowest-order one is kept — i.e. ties resolve to the same rate the default "order"
+        // sorting would surface. Keep the sort stable if this is ever refactored.
+        $cheapest = $this->buildRatesAvailabilityCollection($entry)
+            ->sortBy('price', SORT_NUMERIC)
+            ->values()
+            ->take(1);
+
+        return new AvailabilityItemResource($cheapest, $request);
     }
 
     protected function ratePassesRestrictions(Rate $rate): bool
@@ -780,7 +810,6 @@ class Availability extends Model implements AvailabilityContract
         if ($showAllRates) {
             $results = $this->expandSharedRatesForDates($results, $id, $dateStart, $quantity);
         }
-
 
         $formatDate = fn ($date) => Carbon::parse($date)->format('Y-m-d');
 
