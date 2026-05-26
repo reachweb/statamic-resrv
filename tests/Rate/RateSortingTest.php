@@ -276,24 +276,26 @@ class RateSortingTest extends TestCase
         $this->assertEquals('200.00', $result['data']['price']);
     }
 
-    public function test_price_sorting_breaks_ties_by_rate_order()
+    public function test_price_sorting_breaks_ties_by_rate_order_not_id()
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
         $startDate = now()->startOfDay();
 
-        $firstRate = Rate::factory()->create([
+        // Created first, so it gets the LOWER id but the HIGHER order.
+        $higherOrderRate = Rate::factory()->create([
             'collection' => 'pages',
-            'slug' => 'first-rate',
-            'order' => 0,
-        ]);
-
-        $secondRate = Rate::factory()->create([
-            'collection' => 'pages',
-            'slug' => 'second-rate',
+            'slug' => 'higher-order-rate',
             'order' => 1,
         ]);
 
-        foreach ([$firstRate, $secondRate] as $rate) {
+        // Created second, so it gets the HIGHER id but the LOWER order.
+        $lowerOrderRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'lower-order-rate',
+            'order' => 0,
+        ]);
+
+        foreach ([$higherOrderRate, $lowerOrderRate] as $rate) {
             Availability::factory()
                 ->count(2)
                 ->sequence(
@@ -314,8 +316,10 @@ class RateSortingTest extends TestCase
             rateSorting: RateSorting::Price,
         );
 
-        // Equal prices resolve deterministically to the lowest-order rate.
-        $this->assertEquals($firstRate->id, $result['data']['rate_id']);
+        // Equal prices resolve to the lowest-ORDER rate (order 0) even though it has the
+        // higher id — proving the tie-break follows rate order, not id/insertion, and does
+        // not depend on sort stability.
+        $this->assertEquals($lowerOrderRate->id, $result['data']['rate_id']);
         $this->assertEquals('160.00', $result['data']['price']);
     }
 
