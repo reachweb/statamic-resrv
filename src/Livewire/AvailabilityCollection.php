@@ -58,15 +58,12 @@ class AvailabilityCollection extends Component
     #[Session('resrv-search')]
     public AvailabilityData $data;
 
-    // False when the last availability-search-updated payload failed validation, so
-    // rows() does not query availability with invalid (e.g. unparseable) dates —
-    // hasDates() only checks for key presence, not that the dates are valid.
+    // False when the last search failed validation, so rows() skips querying with
+    // invalid dates (hasDates() only checks key presence, not validity).
     #[Locked]
     public bool $searchIsValid = true;
 
-    // Transient state, set only by the per-entry checkout branch in select() so the
-    // reused single-entry trait methods (queryBaseAvailabilityForEntry, createReservation)
-    // have the entry/availability they expect. Never read for the listing itself.
+    // Set only by select()'s direct-booking branch, for the reused single-entry traits.
     #[Locked]
     public string $entryId = '';
 
@@ -108,7 +105,7 @@ class AvailabilityCollection extends Component
 
         $this->searchIsValid = true;
 
-        // Bust the memoized computed results so the next access re-queries.
+        // Bust the memoized computeds so the next access re-queries.
         unset($this->resolvedEntries, $this->rows);
 
         $this->runHooks('availability-results-updated', $this->rows);
@@ -126,10 +123,9 @@ class AvailabilityCollection extends Component
         }
 
         if (! empty($this->entries)) {
-            // Accept either current-site ids or origin ids. On a non-default site the
-            // configured origin ids belong to the default-site entries, while the
-            // localizations we actually want carry their own ids and reference the origin.
-            // Group the OR so the site/published filters below still AND against it.
+            // Match either the passed ids or the origin they localize: on a non-default
+            // site the configured ids are the default-site origins, but the localizations
+            // we want carry their own ids. Grouped so the filters below still AND against it.
             $query->where(function ($query) {
                 $query->whereIn('id', $this->entries)
                     ->orWhereIn('origin', $this->entries);
@@ -140,22 +136,15 @@ class AvailabilityCollection extends Component
             $query->where('site', Site::current()->handle());
         }
 
-        // whereStatus('published') (not where('published', true)) so dated collections
-        // with private future/past behavior exclude scheduled/expired entries — a raw
-        // published === true entry can still be private and must not be listed or booked.
-        // The collection clause above must precede this per Statamic's query builder.
+        // whereStatus (not where('published', true)) so dated collections exclude
+        // private scheduled/expired entries that are still published === true.
         $query->whereStatus('published');
 
         if ($this->sort === 'title') {
             $query->orderBy('title');
         } elseif ($this->sort === 'order' && $this->collection) {
-            // 'order' means the collection's configured order. Without an explicit
-            // orderBy the Stache returns entries in storage order, not collection order,
-            // so mirror what Statamic's own {{ collection }} tag does and sort by the
-            // collection's sortField/sortDirection ('order' asc for ordered/structured
-            // collections, 'date' desc for dated, 'title' asc otherwise). Only resolvable
-            // in collection mode — an explicit `entries` list has no single collection order.
-            // FQN: `Collection` is already aliased to Illuminate\Support\Collection here.
+            // Honour the collection's configured order, as Statamic's {{ collection }} tag
+            // does; without an explicit orderBy the Stache returns raw storage order.
             if ($collection = \Statamic\Facades\Collection::findByHandle($this->collection)) {
                 $query->orderBy($collection->sortField(), $collection->sortDirection());
             }
@@ -167,10 +156,9 @@ class AvailabilityCollection extends Component
     }
 
     /**
-     * One row per entry, each carrying the resolved Statamic entry plus a
-     * `live_availability`-compatible payload (a single "from" row and the full
-     * set of available rate rows). Availability is fetched in a single batched
-     * query for the whole (possibly paginated) set.
+     * One row per entry, each carrying the entry plus a `live_availability`-compatible
+     * payload (a "from" row and the available rate rows). Availability for the whole
+     * (possibly paginated) set is fetched in a single batched query.
      */
     #[Computed]
     public function rows(): Collection
@@ -191,10 +179,9 @@ class AvailabilityCollection extends Component
 
         $response = $this->getAvailability($this->searchPayload(), $entries);
 
-        // An availability-level rejection (e.g. a range the model rejects but the
-        // form rules let through) comes back as message.error with no data key.
-        // Surface it through the same channel the view renders instead of silently
-        // collapsing to an empty "no availability" state.
+        // An availability-level rejection (a range the model rejects but the form rules
+        // allow) returns message.error with no data — surface it rather than show "no
+        // availability".
         if ($error = data_get($response, 'message.error')) {
             if (! $this->getErrorBag()->has('availability')) {
                 $this->addError('availability', $error);
@@ -206,7 +193,7 @@ class AvailabilityCollection extends Component
         $availability = data_get($response, 'data');
 
         $rows = $items->map(function ($entry) use ($availability) {
-            // Availability is stored against the origin entry id in multisite.
+            // Availability is keyed by the origin id in multisite.
             $lookupId = $entry->hasOrigin() ? $entry->origin()->id() : $entry->id();
             $rates = $availability instanceof Collection ? $availability->get($lookupId) : null;
 
@@ -231,8 +218,8 @@ class AvailabilityCollection extends Component
     }
 
     /**
-     * Rate id => label map for every rate surfaced in the current rows. Resolved
-     * in one query (rate labels are not populated on the batched availability rows).
+     * Rate id => label map for the rates in the current rows, resolved in one query
+     * (the batched availability rows carry no labels).
      */
     #[Computed]
     public function rateLabels(): array
@@ -272,18 +259,16 @@ class AvailabilityCollection extends Component
             $this->data->rate = (string) $rateId;
         }
 
-        // If the entry has its own detail page, persist the search (the #[Session]
-        // attribute carries date/rate/quantity) and send the visitor there, where
-        // the single-entry availability components take over.
+        // If the entry has a detail page, send the visitor there — the #[Session] search
+        // carries over and the single-entry components take the booking from there.
         if ($entry->url()) {
             $this->redirect($entry->url());
 
             return;
         }
 
-        // No detail page: book directly and go to checkout, reusing the exact
-        // single-entry path. queryBaseAvailabilityForEntry() shapes $this->availability
-        // with the flat `data.price` that validateAvailabilityAndPrice()/createReservation() expect.
+        // No detail page: book directly via the single-entry path. queryBaseAvailabilityForEntry()
+        // shapes $this->availability with the flat data.price the reservation methods expect.
         $this->entryId = $this->getDefaultSiteEntry($entryId)->id();
         $this->availability = collect($this->queryBaseAvailabilityForEntry());
 
@@ -295,11 +280,9 @@ class AvailabilityCollection extends Component
             return;
         }
 
-        // select() may be called without a rate (the argument is nullable, e.g. from a
-        // custom view). queryBaseAvailabilityForEntry() above resolves a concrete rate,
-        // but createReservation() reads the rate from $this->data — so persist it here,
-        // otherwise the reservation saves rate_id = null and the availability decrement
-        // runs unscoped across every rate row. Mirrors AvailabilityResults::checkout().
+        // select() may be called without a rate. createReservation() reads the rate from
+        // $this->data, so persist the one resolved above — otherwise rate_id saves as null
+        // and the availability decrement runs unscoped. Mirrors AvailabilityResults::checkout().
         if (! $this->data->rate || $this->data->rate === 'any') {
             if ($resolvedRate = data_get($this->availability, 'data.rate_id')) {
                 $this->data->rate = (string) $resolvedRate;
@@ -307,9 +290,7 @@ class AvailabilityCollection extends Component
         }
 
         try {
-            // CutoffException does not extend AvailabilityException, so it must be
-            // caught explicitly — surfaced through the same 'availability' error
-            // channel the view renders.
+            // CutoffException does not extend AvailabilityException, so catch it explicitly.
             $this->validateCutoffRules();
             $this->validateAvailabilityAndPrice();
             $this->createReservation();
@@ -331,15 +312,12 @@ class AvailabilityCollection extends Component
 
     protected function isEntryInScope($entry): bool
     {
-        // Mirror the listing's whereStatus('published') filter: a private (scheduled
-        // or expired) entry is published === true but must not be bookable directly.
+        // select() is callable with any id, so re-apply the listing's filters here to
+        // reject stale or forged ids: published-and-public, current-site, in-scope.
         if (! $entry || ! $entry->published() || $entry->private()) {
             return false;
         }
 
-        // Mirror the listing's where('site', …) filter so an entry from another site —
-        // one that never appeared in the current-site listing — cannot be selected via
-        // a stale or forged call (the rendered rows only ever pass current-site ids).
         if (Site::hasMultiple() && $entry->locale() !== Site::current()->handle()) {
             return false;
         }

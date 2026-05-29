@@ -68,8 +68,7 @@ class AvailabilityCollectionTest extends TestCase
 
     public function test_requires_a_collection_or_entries()
     {
-        // The InvalidArgumentException thrown in mount() surfaces wrapped in a
-        // ViewException during Livewire's initial render, so assert on the message.
+        // mount()'s InvalidArgumentException surfaces wrapped during render, so assert the message.
         try {
             Livewire::test(AvailabilityCollection::class);
             $this->fail('Expected the component to require a collection or entries.');
@@ -88,7 +87,7 @@ class AvailabilityCollectionTest extends TestCase
             Livewire::test(AvailabilityCollection::class, ['collection' => 'pages'])
         );
 
-        // One booking button per available entry, each showing its (2-night) total.
+        // One booking button per available entry, each showing its 2-night total.
         $this->assertEquals(3, substr_count($component->html(), 'Book now'));
         $component->assertSee('100.00')->assertSee('60.00')->assertSee('90.00');
     }
@@ -181,10 +180,8 @@ class AvailabilityCollectionTest extends TestCase
 
     public function test_orders_entries_by_collection_order_by_default()
     {
-        // Created out of alphabetical order. With the default sort ('order'), the listing
-        // must honour the collection's configured order — 'pages' has no custom sort or
-        // structure, so it falls back to title asc — rather than Stache storage order
-        // (which would render them in creation order: Gamma, Alpha, Beta).
+        // 'pages' has no custom sort, so the default 'order' sort falls back to title asc —
+        // not Stache storage (creation) order, which would be Gamma, Alpha, Beta.
         $this->pagesEntry(price: 50, title: 'Gamma room');
         $this->pagesEntry(price: 30, title: 'Alpha room');
         $this->pagesEntry(price: 45, title: 'Beta room');
@@ -198,14 +195,12 @@ class AvailabilityCollectionTest extends TestCase
 
     public function test_orders_dated_collections_newest_first_by_default()
     {
-        // A dated collection's configured order is date desc. The default 'order' sort
-        // must apply it (newest first) rather than leaving entries in storage order.
+        // A dated collection's configured order is date desc; the default 'order' sort applies it.
         $collection = Collection::make('events')->routes('/{slug}')->dated(true);
         $collection->save();
         $this->makeBlueprint($collection);
 
-        // Created oldest-first so storage order (creation order) is the opposite of the
-        // expected date-desc order.
+        // Created oldest-first, so storage order is the opposite of the expected date-desc order.
         $oldest = $this->makeStatamicItemWithAvailability(collection: 'events', price: 50, title: 'Oldest event');
         $oldest->date(now()->subDays(3))->save();
 
@@ -278,9 +273,8 @@ class AvailabilityCollectionTest extends TestCase
 
     public function test_select_books_directly_and_redirects_to_checkout_when_no_detail_page()
     {
-        // A route-less collection (no ->routes()) => entries have no URL, but it
-        // still needs the resrv_availability blueprint so entries are mirrored into
-        // resrv_entries (which the per-entry booking path reads).
+        // Route-less collection => entries have no URL, so select() books directly. Still
+        // needs the blueprint so entries are mirrored into resrv_entries.
         $collection = Collection::make('tickets')->save();
         $this->makeBlueprint($collection);
 
@@ -406,9 +400,8 @@ class AvailabilityCollectionTest extends TestCase
 
         Site::setCurrent('el');
 
-        // The component is configured with the ORIGIN (default-site) entry id, but
-        // we're browsing the Greek site whose localization carries a different id.
-        // The query must still resolve the localization via its origin reference.
+        // Configured with the ORIGIN id while browsing the Greek site: the query must
+        // still resolve the localization (a different id) via its origin reference.
         $component = $this->search(
             Livewire::test(AvailabilityCollection::class, ['entries' => [$origin->id()]])
         );
@@ -461,8 +454,7 @@ class AvailabilityCollectionTest extends TestCase
             Livewire::test(AvailabilityCollection::class, ['collection' => 'rooms'])
         );
 
-        // The English origin entry never appears in the Greek listing, so selecting it
-        // (a forged/stale call) must be rejected rather than redirecting cross-site.
+        // The English origin never appears in the Greek listing, so selecting it must be rejected.
         $component->call('select', $origin->id())
             ->assertHasErrors('availability')
             ->assertNoRedirect();
@@ -480,9 +472,8 @@ class AvailabilityCollectionTest extends TestCase
 
         $entry = $this->makeStatamicItemWithAvailability(collection: 'tickets', price: 50);
 
-        // Cutoff rules live on the resrv_entries mirror's options column, not on the
-        // Statamic entry. A 48h window before the searched (tomorrow) date is already
-        // in the past relative to "now" (today noon, per setUp), so booking is blocked.
+        // Cutoff rules live on the resrv_entries mirror. A 48h cutoff before the searched
+        // (tomorrow) date already lies in the past relative to now (today noon), so it blocks.
         $resrvEntry = ResrvEntry::whereItemId($entry->id());
         $resrvEntry->options = [
             'cutoff_rules' => [
@@ -503,8 +494,7 @@ class AvailabilityCollectionTest extends TestCase
             Livewire::test(AvailabilityCollection::class, ['collection' => 'tickets', 'rates' => true])
         );
 
-        // The searched (tomorrow) dates fall inside the 24h cutoff window, so the
-        // direct booking is blocked: an error is shown and no reservation is created.
+        // The searched dates fall inside the cutoff window, so the direct booking is blocked.
         $component->call('select', $entry->id(), $rateId)
             ->assertHasErrors('availability')
             ->assertNoRedirect();
@@ -514,11 +504,9 @@ class AvailabilityCollectionTest extends TestCase
 
     public function test_keeps_pagination_visible_when_the_current_page_is_empty()
     {
-        // Page 1 holds two sold-out entries; an available entry sits on page 2.
-        // Entries are paginated before availability is filtered, so page 1 renders
-        // empty — but the pagination links must still appear so page 2 is reachable.
-        // Titles are explicit so the default collection (title-asc) order is deterministic:
-        // the two sold-out entries sort first (page 1), the available one last (page 2).
+        // Entries are paginated before availability is filtered. Titles force title-asc order
+        // so the two sold-out entries land on page 1 (rendering empty) and the available one
+        // on page 2 — the pagination links must still appear so page 2 is reachable.
         $this->pagesEntry(price: 50, available: 0, title: 'A sold out room');
         $this->pagesEntry(price: 30, available: 0, title: 'B sold out room');
         $this->pagesEntry(price: 45, available: 1, title: 'C available room');
@@ -527,11 +515,10 @@ class AvailabilityCollectionTest extends TestCase
             Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'paginate' => 2])
         );
 
-        // The current (first) page is empty...
+        // The current page is empty, but the pagination control still renders.
         $component->assertSee('No availability');
         $this->assertEquals(0, substr_count($component->html(), 'Book now'));
 
-        // ...but the pagination control is still rendered so later pages are reachable.
         $this->assertTrue($component->instance()->resolvedEntries()->hasPages());
         $component->assertSeeHtml('gotoPage(2');
     }
@@ -543,15 +530,13 @@ class AvailabilityCollectionTest extends TestCase
         $collection->save();
         $this->makeBlueprint($collection);
 
-        // Public entry: dated in the past (past behavior defaults to public).
         $public = $this->makeStatamicItemWithAvailability(collection: 'events', price: 50);
         $public->date(now()->subDay())->save();
 
-        // Scheduled entry: future date => private even though published === true.
+        // Future date => private even though published === true.
         $scheduled = $this->makeStatamicItemWithAvailability(collection: 'events', price: 30);
         $scheduled->date(now()->addDays(10))->save();
 
-        // Sanity: the scheduled entry really is published-but-private.
         $fresh = Entry::find($scheduled->id());
         $this->assertTrue($fresh->published());
         $this->assertTrue($fresh->private());
@@ -560,7 +545,7 @@ class AvailabilityCollectionTest extends TestCase
             Livewire::test(AvailabilityCollection::class, ['collection' => 'events'])
         );
 
-        // Only the public entry is listed and bookable.
+        // Only the public entry is listed.
         $this->assertEquals(1, substr_count($component->html(), 'Book now'));
         $component->assertSee('resrv-collection-'.$public->id())
             ->assertDontSee('resrv-collection-'.$scheduled->id());
@@ -579,7 +564,7 @@ class AvailabilityCollectionTest extends TestCase
             Livewire::test(AvailabilityCollection::class, ['collection' => 'events'])
         );
 
-        // A stale/forged client cannot book the hidden entry directly.
+        // A stale/forged call cannot book the hidden entry directly.
         $component->call('select', $scheduled->id())
             ->assertHasErrors('availability')
             ->assertNoRedirect();
@@ -589,9 +574,8 @@ class AvailabilityCollectionTest extends TestCase
 
     public function test_surfaces_availability_errors_instead_of_an_empty_state()
     {
-        // calculate_days_using_time makes the model add a day for a later drop-off
-        // time, so a range the form's duration rule accepts (2 calendar days) can
-        // still exceed the model's max — an error only the availability model raises.
+        // calculate_days_using_time adds a day for the later drop-off time, so a range the
+        // form's duration rule accepts can still exceed the max — an error only the model raises.
         Config::set('resrv-config.calculate_days_using_time', true);
         Config::set('resrv-config.maximum_reservation_period_in_days', 2);
 
@@ -612,9 +596,8 @@ class AvailabilityCollectionTest extends TestCase
     {
         $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50);
 
-        // Both date keys are present (so hasDates() passes) but unparseable, so
-        // validation fails. Without the searchIsValid guard, rows() still queries
-        // and Carbon::parse() throws an uncaught exception while rendering.
+        // Both date keys are present (hasDates() passes) but unparseable. Without the
+        // searchIsValid guard, rows() would query and Carbon::parse() would throw on render.
         $component = Livewire::test(AvailabilityCollection::class, ['collection' => 'pages'])
             ->dispatch('availability-search-updated', [
                 'dates' => [
@@ -625,7 +608,6 @@ class AvailabilityCollectionTest extends TestCase
                 'rate' => null,
             ]);
 
-        // Rendering completed (no uncaught exception) and the error is surfaced.
         $component->assertStatus(200)
             ->assertHasErrors('availability');
     }
@@ -647,10 +629,8 @@ class AvailabilityCollectionTest extends TestCase
             Livewire::test(AvailabilityCollection::class, ['collection' => 'tickets', 'rates' => true])
         );
 
-        // select() is called WITHOUT a rate (the argument is nullable, e.g. from a
-        // custom view). The availability query resolves a concrete rate, which must be
-        // persisted — otherwise rate_id is saved as null and the availability decrement
-        // runs unscoped across every rate row for the entry/date range.
+        // select() called WITHOUT a rate: the resolved rate must be persisted, otherwise
+        // rate_id saves as null and the availability decrement runs unscoped.
         $component->call('select', $entry->id())
             ->assertRedirect($checkout->url());
 
