@@ -438,4 +438,76 @@ class AvailabilityCollectionTest extends TestCase
         $this->assertTrue($component->instance()->resolvedEntries()->hasPages());
         $component->assertSeeHtml('gotoPage(2');
     }
+
+    public function test_excludes_private_scheduled_entries_from_the_listing()
+    {
+        // Dated collection where future-dated entries are private (scheduled).
+        $collection = Collection::make('events')->routes('/{slug}')->dated(true)->futureDateBehavior('private');
+        $collection->save();
+        $this->makeBlueprint($collection);
+
+        // Public entry: dated in the past (past behavior defaults to public).
+        $public = $this->makeStatamicItemWithAvailability(collection: 'events', price: 50);
+        $public->date(now()->subDay())->save();
+
+        // Scheduled entry: future date => private even though published === true.
+        $scheduled = $this->makeStatamicItemWithAvailability(collection: 'events', price: 30);
+        $scheduled->date(now()->addDays(10))->save();
+
+        // Sanity: the scheduled entry really is published-but-private.
+        $fresh = Entry::find($scheduled->id());
+        $this->assertTrue($fresh->published());
+        $this->assertTrue($fresh->private());
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'events'])
+        );
+
+        // Only the public entry is listed and bookable.
+        $this->assertEquals(1, substr_count($component->html(), 'Book now'));
+        $component->assertSee('resrv-collection-'.$public->id())
+            ->assertDontSee('resrv-collection-'.$scheduled->id());
+    }
+
+    public function test_select_rejects_a_private_scheduled_entry()
+    {
+        $collection = Collection::make('events')->routes('/{slug}')->dated(true)->futureDateBehavior('private');
+        $collection->save();
+        $this->makeBlueprint($collection);
+
+        $scheduled = $this->makeStatamicItemWithAvailability(collection: 'events', price: 30);
+        $scheduled->date(now()->addDays(10))->save();
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'events'])
+        );
+
+        // A stale/forged client cannot book the hidden entry directly.
+        $component->call('select', $scheduled->id())
+            ->assertHasErrors('availability')
+            ->assertNoRedirect();
+
+        $this->assertDatabaseCount('resrv_reservations', 0);
+    }
+
+    public function test_surfaces_availability_errors_instead_of_an_empty_state()
+    {
+        // calculate_days_using_time makes the model add a day for a later drop-off
+        // time, so a range the form's duration rule accepts (2 calendar days) can
+        // still exceed the model's max — an error only the availability model raises.
+        Config::set('resrv-config.calculate_days_using_time', true);
+        Config::set('resrv-config.maximum_reservation_period_in_days', 2);
+
+        $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50);
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages']),
+            start: now()->add(1, 'day')->setTime(9, 0, 0),
+            end: now()->add(3, 'day')->setTime(17, 0, 0),
+        );
+
+        // The real reason is surfaced rather than a silent "no availability" state.
+        $component->assertHasErrors('availability')
+            ->assertSee('exceeds the maximum allowed reservation period');
+    }
 }

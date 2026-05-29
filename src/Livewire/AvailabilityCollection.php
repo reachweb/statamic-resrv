@@ -131,7 +131,11 @@ class AvailabilityCollection extends Component
             $query->where('site', Site::current()->handle());
         }
 
-        $query->where('published', true);
+        // whereStatus('published') (not where('published', true)) so dated collections
+        // with private future/past behavior exclude scheduled/expired entries — a raw
+        // published === true entry can still be private and must not be listed or booked.
+        // The collection clause above must precede this per Statamic's query builder.
+        $query->whereStatus('published');
 
         if ($this->sort === 'title') {
             $query->orderBy('title');
@@ -165,7 +169,21 @@ class AvailabilityCollection extends Component
             return collect();
         }
 
-        $availability = data_get($this->getAvailability($this->searchPayload(), $entries), 'data');
+        $response = $this->getAvailability($this->searchPayload(), $entries);
+
+        // An availability-level rejection (e.g. a range the model rejects but the
+        // form rules let through) comes back as message.error with no data key.
+        // Surface it through the same channel the view renders instead of silently
+        // collapsing to an empty "no availability" state.
+        if ($error = data_get($response, 'message.error')) {
+            if (! $this->getErrorBag()->has('availability')) {
+                $this->addError('availability', $error);
+            }
+
+            return collect();
+        }
+
+        $availability = data_get($response, 'data');
 
         $rows = $items->map(function ($entry) use ($availability) {
             // Availability is stored against the origin entry id in multisite.
@@ -282,7 +300,9 @@ class AvailabilityCollection extends Component
 
     protected function isEntryInScope($entry): bool
     {
-        if (! $entry || ! $entry->published()) {
+        // Mirror the listing's whereStatus('published') filter: a private (scheduled
+        // or expired) entry is published === true but must not be bookable directly.
+        if (! $entry || ! $entry->published() || $entry->private()) {
             return false;
         }
 
