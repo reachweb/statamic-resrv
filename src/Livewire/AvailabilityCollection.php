@@ -306,6 +306,13 @@ class AvailabilityCollection extends Component
             return false;
         }
 
+        // Mirror the listing's where('site', …) filter so an entry from another site —
+        // one that never appeared in the current-site listing — cannot be selected via
+        // a stale or forged call (the rendered rows only ever pass current-site ids).
+        if (Site::hasMultiple() && $entry->locale() !== Site::current()->handle()) {
+            return false;
+        }
+
         if ($this->collection && $entry->collection()->handle() !== $this->collection) {
             return false;
         }

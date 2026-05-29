@@ -89,7 +89,7 @@ Passing both narrows to the given IDs **within** that collection:
 Publish the views to override:
 
 ```bash
-php artisan vendor:publish --tag=statamic-resrv-views
+php artisan vendor:publish --tag=resrv-checkout-views
 ```
 
 …then edit `resources/views/vendor/statamic-resrv/livewire/availability-collection.blade.php`.

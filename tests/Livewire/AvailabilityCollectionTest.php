@@ -375,6 +375,58 @@ class AvailabilityCollectionTest extends TestCase
         $this->assertEquals(1, substr_count($component->html(), 'Book now'));
     }
 
+    public function test_select_rejects_an_entry_from_another_site()
+    {
+        Site::setSites([
+            'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en_US', 'lang' => 'en'],
+            'el' => ['name' => 'Greek', 'url' => 'http://localhost/el/', 'locale' => 'el_GR', 'lang' => 'el'],
+        ]);
+        Site::setCurrent('en');
+
+        $collection = Collection::make('rooms')->routes('/{slug}')->sites(['en', 'el'])->save();
+        $this->makeBlueprint($collection);
+
+        $origin = Entry::make()->collection('rooms')->locale('en')->slug('room-en')
+            ->data(['title' => 'Room', 'resrv_availability' => Str::random(6)]);
+        $origin->save();
+        $origin = Entry::query()->where('slug', 'room-en')->first();
+
+        $localized = $origin->makeLocalization('el');
+        $localized->slug('room-el');
+        $localized->save();
+
+        $rate = Rate::factory()->create(['collection' => 'rooms', 'slug' => 'default', 'title' => 'Default']);
+        Availability::factory()
+            ->count(4)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->addDay()],
+                ['date' => today()->addDays(2)],
+                ['date' => today()->addDays(3)],
+            )
+            ->create([
+                'statamic_id' => $origin->id(),
+                'available' => 1,
+                'price' => 50,
+                'rate_id' => $rate->id,
+            ]);
+
+        // Browsing the Greek site: only the Greek localization is listed.
+        Site::setCurrent('el');
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'rooms'])
+        );
+
+        // The English origin entry never appears in the Greek listing, so selecting it
+        // (a forged/stale call) must be rejected rather than redirecting cross-site.
+        $component->call('select', $origin->id())
+            ->assertHasErrors('availability')
+            ->assertNoRedirect();
+
+        $this->assertDatabaseCount('resrv_reservations', 0);
+    }
+
     public function test_select_enforces_cutoff_rules_on_the_direct_booking_path()
     {
         Config::set('resrv-config.enable_cutoff_rules', true);
