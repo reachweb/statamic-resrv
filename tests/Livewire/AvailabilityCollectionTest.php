@@ -562,4 +562,57 @@ class AvailabilityCollectionTest extends TestCase
         $component->assertHasErrors('availability')
             ->assertSee('exceeds the maximum allowed reservation period');
     }
+
+    public function test_does_not_query_availability_after_an_invalid_search()
+    {
+        $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50);
+
+        // Both date keys are present (so hasDates() passes) but unparseable, so
+        // validation fails. Without the searchIsValid guard, rows() still queries
+        // and Carbon::parse() throws an uncaught exception while rendering.
+        $component = Livewire::test(AvailabilityCollection::class, ['collection' => 'pages'])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => 'not-a-real-date',
+                    'date_end' => 'also-not-a-real-date',
+                ],
+                'quantity' => 1,
+                'rate' => null,
+            ]);
+
+        // Rendering completed (no uncaught exception) and the error is surfaced.
+        $component->assertStatus(200)
+            ->assertHasErrors('availability');
+    }
+
+    public function test_select_persists_the_resolved_rate_when_booking_directly_without_one()
+    {
+        // Route-less collection => entries have no URL, so select() books directly.
+        $collection = Collection::make('tickets')->save();
+        $this->makeBlueprint($collection);
+
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'tickets', price: 50);
+        $rateId = Rate::where('collection', 'tickets')->where('slug', 'default')->first()->id;
+
+        $checkout = $this->createCheckoutEntry();
+
+        $this->assertNull($entry->url());
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'tickets', 'rates' => true])
+        );
+
+        // select() is called WITHOUT a rate (the argument is nullable, e.g. from a
+        // custom view). The availability query resolves a concrete rate, which must be
+        // persisted — otherwise rate_id is saved as null and the availability decrement
+        // runs unscoped across every rate row for the entry/date range.
+        $component->call('select', $entry->id())
+            ->assertRedirect($checkout->url());
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'item_id' => $entry->id(),
+            'rate_id' => $rateId,
+            'status' => 'pending',
+        ]);
+    }
 }

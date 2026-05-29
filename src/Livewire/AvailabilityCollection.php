@@ -58,6 +58,12 @@ class AvailabilityCollection extends Component
     #[Session('resrv-search')]
     public AvailabilityData $data;
 
+    // False when the last availability-search-updated payload failed validation, so
+    // rows() does not query availability with invalid (e.g. unparseable) dates —
+    // hasDates() only checks for key presence, not that the dates are valid.
+    #[Locked]
+    public bool $searchIsValid = true;
+
     // Transient state, set only by the per-entry checkout branch in select() so the
     // reused single-entry trait methods (queryBaseAvailabilityForEntry, createReservation)
     // have the entry/availability they expect. Never read for the listing itself.
@@ -93,11 +99,14 @@ class AvailabilityCollection extends Component
             $this->data->validate();
             $this->runHooks('availability-search-updated', $this->data);
         } catch (\Exception $exception) {
+            $this->searchIsValid = false;
             $this->dispatch('availability-results-updated');
             $this->addError('availability', $exception->getMessage());
 
             return;
         }
+
+        $this->searchIsValid = true;
 
         // Bust the memoized computed results so the next access re-queries.
         unset($this->resolvedEntries, $this->rows);
@@ -155,7 +164,7 @@ class AvailabilityCollection extends Component
     #[Computed]
     public function rows(): Collection
     {
-        if (! $this->data->hasDates()) {
+        if (! $this->searchIsValid || ! $this->data->hasDates()) {
             return collect();
         }
 
@@ -273,6 +282,17 @@ class AvailabilityCollection extends Component
             }
 
             return;
+        }
+
+        // select() may be called without a rate (the argument is nullable, e.g. from a
+        // custom view). queryBaseAvailabilityForEntry() above resolves a concrete rate,
+        // but createReservation() reads the rate from $this->data — so persist it here,
+        // otherwise the reservation saves rate_id = null and the availability decrement
+        // runs unscoped across every rate row. Mirrors AvailabilityResults::checkout().
+        if (! $this->data->rate || $this->data->rate === 'any') {
+            if ($resolvedRate = data_get($this->availability, 'data.rate_id')) {
+                $this->data->rate = (string) $resolvedRate;
+            }
         }
 
         try {
