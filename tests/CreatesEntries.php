@@ -18,10 +18,11 @@ trait CreatesEntries
         ?int $price = null,
         ?string $rateSlug = null,
         ?array $customAvailability = null,
-        ?int $rateId = null
+        ?int $rateId = null,
+        ?string $title = null
     ) {
         $entryData = [
-            'title' => fake()->sentence(),
+            'title' => $title ?? fake()->sentence(),
             'resrv_availability' => fake()->uuid(),
         ];
 
