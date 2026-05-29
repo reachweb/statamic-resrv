@@ -10,6 +10,7 @@ use Livewire\Attributes\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
+use Reach\StatamicResrv\Exceptions\CutoffException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
@@ -116,7 +117,14 @@ class AvailabilityCollection extends Component
         }
 
         if (! empty($this->entries)) {
-            $query->whereIn('id', $this->entries);
+            // Accept either current-site ids or origin ids. On a non-default site the
+            // configured origin ids belong to the default-site entries, while the
+            // localizations we actually want carry their own ids and reference the origin.
+            // Group the OR so the site/published filters below still AND against it.
+            $query->where(function ($query) {
+                $query->whereIn('id', $this->entries)
+                    ->orWhereIn('origin', $this->entries);
+            });
         }
 
         if (Site::hasMultiple()) {
@@ -250,11 +258,15 @@ class AvailabilityCollection extends Component
         }
 
         try {
+            // CutoffException does not extend AvailabilityException, so it must be
+            // caught explicitly — surfaced through the same 'availability' error
+            // channel the view renders.
+            $this->validateCutoffRules();
             $this->validateAvailabilityAndPrice();
             $this->createReservation();
 
             $this->redirect($this->getCheckoutEntry()->url());
-        } catch (AvailabilityException $exception) {
+        } catch (AvailabilityException|CutoffException $exception) {
             $this->addError('availability', $exception->getMessage());
         }
     }

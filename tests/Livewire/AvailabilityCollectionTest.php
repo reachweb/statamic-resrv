@@ -7,6 +7,7 @@ use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityCollection;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -322,5 +323,119 @@ class AvailabilityCollectionTest extends TestCase
         $component->assertSee('resrv-collection-'.$localized->id())
             ->assertSee('100.00');
         $this->assertEquals(1, substr_count($component->html(), 'Book now'));
+    }
+
+    public function test_finds_availability_for_explicit_origin_entry_ids_on_a_non_default_site()
+    {
+        Site::setSites([
+            'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en_US', 'lang' => 'en'],
+            'el' => ['name' => 'Greek', 'url' => 'http://localhost/el/', 'locale' => 'el_GR', 'lang' => 'el'],
+        ]);
+        Site::setCurrent('en');
+
+        $collection = Collection::make('rooms')->routes('/{slug}')->sites(['en', 'el'])->save();
+        $this->makeBlueprint($collection);
+
+        $origin = Entry::make()->collection('rooms')->locale('en')->slug('room-en')
+            ->data(['title' => 'Room', 'resrv_availability' => Str::random(6)]);
+        $origin->save();
+        $origin = Entry::query()->where('slug', 'room-en')->first();
+
+        $localized = $origin->makeLocalization('el');
+        $localized->slug('room-el');
+        $localized->save();
+
+        $rate = Rate::factory()->create(['collection' => 'rooms', 'slug' => 'default', 'title' => 'Default']);
+        Availability::factory()
+            ->count(4)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->addDay()],
+                ['date' => today()->addDays(2)],
+                ['date' => today()->addDays(3)],
+            )
+            ->create([
+                'statamic_id' => $origin->id(),
+                'available' => 1,
+                'price' => 50,
+                'rate_id' => $rate->id,
+            ]);
+
+        Site::setCurrent('el');
+
+        // The component is configured with the ORIGIN (default-site) entry id, but
+        // we're browsing the Greek site whose localization carries a different id.
+        // The query must still resolve the localization via its origin reference.
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['entries' => [$origin->id()]])
+        );
+
+        $component->assertSee('resrv-collection-'.$localized->id())
+            ->assertSee('100.00');
+        $this->assertEquals(1, substr_count($component->html(), 'Book now'));
+    }
+
+    public function test_select_enforces_cutoff_rules_on_the_direct_booking_path()
+    {
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        // Route-less collection => entries have no detail URL, so select() books directly.
+        $collection = Collection::make('tickets')->save();
+        $this->makeBlueprint($collection);
+
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'tickets', price: 50);
+
+        // Cutoff rules live on the resrv_entries mirror's options column, not on the
+        // Statamic entry. A 48h window before the searched (tomorrow) date is already
+        // in the past relative to "now" (today noon, per setUp), so booking is blocked.
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
+        $resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => '09:00',
+                'default_cutoff_hours' => 48,
+            ],
+        ];
+        $resrvEntry->save();
+
+        $rateId = Rate::where('collection', 'tickets')->where('slug', 'default')->first()->id;
+
+        $this->createCheckoutEntry();
+
+        $this->assertNull($entry->url());
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'tickets', 'rates' => true])
+        );
+
+        // The searched (tomorrow) dates fall inside the 24h cutoff window, so the
+        // direct booking is blocked: an error is shown and no reservation is created.
+        $component->call('select', $entry->id(), $rateId)
+            ->assertHasErrors('availability')
+            ->assertNoRedirect();
+
+        $this->assertDatabaseCount('resrv_reservations', 0);
+    }
+
+    public function test_keeps_pagination_visible_when_the_current_page_is_empty()
+    {
+        // Page 1 holds two sold-out entries; an available entry sits on page 2.
+        // Entries are paginated before availability is filtered, so page 1 renders
+        // empty — but the pagination links must still appear so page 2 is reachable.
+        $this->pagesEntry(price: 50, available: 0);
+        $this->pagesEntry(price: 30, available: 0);
+        $this->pagesEntry(price: 45, available: 1);
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'paginate' => 2])
+        );
+
+        // The current (first) page is empty...
+        $component->assertSee('No availability');
+        $this->assertEquals(0, substr_count($component->html(), 'Book now'));
+
+        // ...but the pagination control is still rendered so later pages are reachable.
+        $this->assertTrue($component->instance()->resolvedEntries()->hasPages());
+        $component->assertSeeHtml('gotoPage(2');
     }
 }

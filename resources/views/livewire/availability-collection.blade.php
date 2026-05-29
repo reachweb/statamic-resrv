@@ -3,13 +3,14 @@
     <div class="flex flex-col py-4">
         <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.pleaseSelectDates') }}</dt>
     </div>
-    @elseif ($this->rows->isEmpty())
-    <div class="flex flex-col py-4">
-        <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.noAvailability') }}</dt>
-        <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.tryAdjustingYourSearch') }}</dd>
-    </div>
     @else
-    <div class="grid grid-cols-1 gap-4" role="list">
+        @if ($this->rows->isEmpty())
+        <div class="flex flex-col py-4">
+            <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.noAvailability') }}</dt>
+            <dd class="mb-1 text-gray-500">{{ trans('statamic-resrv::frontend.tryAdjustingYourSearch') }}</dd>
+        </div>
+        @else
+        <div class="grid grid-cols-1 gap-4" role="list">
         @foreach ($this->rows as $row)
             @php($entry = $row['entry'])
             <div
@@ -77,6 +78,7 @@
             </div>
         @endforeach
     </div>
+        @endif
 
     @if ($paginate)
     <div class="mt-6">
