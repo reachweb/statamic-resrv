@@ -148,6 +148,17 @@ class AvailabilityCollection extends Component
 
         if ($this->sort === 'title') {
             $query->orderBy('title');
+        } elseif ($this->sort === 'order' && $this->collection) {
+            // 'order' means the collection's configured order. Without an explicit
+            // orderBy the Stache returns entries in storage order, not collection order,
+            // so mirror what Statamic's own {{ collection }} tag does and sort by the
+            // collection's sortField/sortDirection ('order' asc for ordered/structured
+            // collections, 'date' desc for dated, 'title' asc otherwise). Only resolvable
+            // in collection mode — an explicit `entries` list has no single collection order.
+            // FQN: `Collection` is already aliased to Illuminate\Support\Collection here.
+            if ($collection = \Statamic\Facades\Collection::findByHandle($this->collection)) {
+                $query->orderBy($collection->sortField(), $collection->sortDirection());
+            }
         }
 
         return $this->paginate

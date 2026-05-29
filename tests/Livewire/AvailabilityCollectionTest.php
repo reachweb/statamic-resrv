@@ -42,9 +42,9 @@ class AvailabilityCollectionTest extends TestCase
         ]);
     }
 
-    protected function pagesEntry(int $price, int $available = 1): \Statamic\Entries\Entry
+    protected function pagesEntry(int $price, int $available = 1, ?string $title = null): \Statamic\Entries\Entry
     {
-        return $this->makeStatamicItemWithAvailability(collection: 'pages', available: $available, price: $price);
+        return $this->makeStatamicItemWithAvailability(collection: 'pages', available: $available, price: $price, title: $title);
     }
 
     protected function createCheckoutEntry(): \Statamic\Entries\Entry
@@ -177,6 +177,49 @@ class AvailabilityCollectionTest extends TestCase
         // Both rate prices are listed, each with its own booking button.
         $component->assertSee('60.00')->assertSee('100.00');
         $this->assertEquals(2, substr_count($component->html(), 'Book now'));
+    }
+
+    public function test_orders_entries_by_collection_order_by_default()
+    {
+        // Created out of alphabetical order. With the default sort ('order'), the listing
+        // must honour the collection's configured order — 'pages' has no custom sort or
+        // structure, so it falls back to title asc — rather than Stache storage order
+        // (which would render them in creation order: Gamma, Alpha, Beta).
+        $this->pagesEntry(price: 50, title: 'Gamma room');
+        $this->pagesEntry(price: 30, title: 'Alpha room');
+        $this->pagesEntry(price: 45, title: 'Beta room');
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages'])
+        );
+
+        $component->assertSeeInOrder(['Alpha room', 'Beta room', 'Gamma room']);
+    }
+
+    public function test_orders_dated_collections_newest_first_by_default()
+    {
+        // A dated collection's configured order is date desc. The default 'order' sort
+        // must apply it (newest first) rather than leaving entries in storage order.
+        $collection = Collection::make('events')->routes('/{slug}')->dated(true);
+        $collection->save();
+        $this->makeBlueprint($collection);
+
+        // Created oldest-first so storage order (creation order) is the opposite of the
+        // expected date-desc order.
+        $oldest = $this->makeStatamicItemWithAvailability(collection: 'events', price: 50, title: 'Oldest event');
+        $oldest->date(now()->subDays(3))->save();
+
+        $middle = $this->makeStatamicItemWithAvailability(collection: 'events', price: 30, title: 'Middle event');
+        $middle->date(now()->subDays(2))->save();
+
+        $newest = $this->makeStatamicItemWithAvailability(collection: 'events', price: 45, title: 'Newest event');
+        $newest->date(now()->subDay())->save();
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'events'])
+        );
+
+        $component->assertSeeInOrder(['Newest event', 'Middle event', 'Oldest event']);
     }
 
     public function test_sorts_by_price_when_requested()
@@ -474,9 +517,11 @@ class AvailabilityCollectionTest extends TestCase
         // Page 1 holds two sold-out entries; an available entry sits on page 2.
         // Entries are paginated before availability is filtered, so page 1 renders
         // empty — but the pagination links must still appear so page 2 is reachable.
-        $this->pagesEntry(price: 50, available: 0);
-        $this->pagesEntry(price: 30, available: 0);
-        $this->pagesEntry(price: 45, available: 1);
+        // Titles are explicit so the default collection (title-asc) order is deterministic:
+        // the two sold-out entries sort first (page 1), the available one last (page 2).
+        $this->pagesEntry(price: 50, available: 0, title: 'A sold out room');
+        $this->pagesEntry(price: 30, available: 0, title: 'B sold out room');
+        $this->pagesEntry(price: 45, available: 1, title: 'C available room');
 
         $component = $this->search(
             Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'paginate' => 2])
