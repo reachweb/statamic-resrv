@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Providers;
 use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
 use Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection;
+use Reach\StatamicResrv\Livewire\AvailabilityCollection;
 use Reach\StatamicResrv\Livewire\AvailabilityControl;
 use Reach\StatamicResrv\Livewire\AvailabilityList;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
@@ -49,6 +50,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
         Livewire::component('availability-results', AvailabilityResults::class);
         Livewire::component('availability-multi-results', AvailabilityMultiResults::class);
         Livewire::component('availability-list', AvailabilityList::class);
+        Livewire::component('availability-collection', AvailabilityCollection::class);
         Livewire::component('availability-control', AvailabilityControl::class);
         Livewire::component('extras', Extras::class);
         Livewire::component('options', Options::class);
