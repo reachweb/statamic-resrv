@@ -85,7 +85,7 @@ class RateSharedAvailabilityTest extends TestCase
         // Base rate's availability should be decremented, not shared rate's
         foreach ($this->getBaseRateAvailabilities($setup) as $availability) {
             $this->assertEquals(4, $availability->available);
-            $this->assertContains(1, $availability->pending);
+            $this->assertContains('r1', $availability->pending);
         }
     }
 
@@ -164,7 +164,7 @@ class RateSharedAvailabilityTest extends TestCase
         // Should be back to original
         foreach ($this->getBaseRateAvailabilities($setup) as $availability) {
             $this->assertEquals(5, $availability->available);
-            $this->assertNotContains(1, $availability->pending);
+            $this->assertNotContains('r1', $availability->pending);
         }
     }
 
