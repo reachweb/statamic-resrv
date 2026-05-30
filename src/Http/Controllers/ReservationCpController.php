@@ -67,6 +67,7 @@ class ReservationCpController extends Controller
         $reservations = $this->reservation->whereDate('date_start', '>=', $start)
             ->whereDate('date_end', '<=', $end)
             ->whereIn('status', ['confirmed', 'partner'])
+            ->with(['rate', 'childs.rate'])
             ->orderBy('date_start')
             ->get();
 
@@ -238,7 +239,9 @@ class ReservationCpController extends Controller
         $sortOrder = request('order') ?? 'desc';
         $sortBy = request('sort') ?? 'created_at';
 
-        $this->reservation = $this->reservation->orderBy($sortBy, $sortOrder);
+        $this->reservation = $this->reservation
+            ->with(['customer', 'rate', 'extras', 'options', 'childs.rate'])
+            ->orderBy($sortBy, $sortOrder);
 
         if (! request()->filled('search')) {
             return $this->reservation;

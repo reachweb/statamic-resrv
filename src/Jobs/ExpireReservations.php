@@ -27,16 +27,20 @@ class ExpireReservations implements ShouldQueue
         if (session()->has('resrv_reservation')) {
             $this->expireSafely((new Reservation)->newQuery()->find(session('resrv_reservation')));
         }
-        if (config('resrv-config.minutes_to_hold', false) == false) {
+        $holdMinutes = config('resrv-config.minutes_to_hold', false);
+
+        if ($holdMinutes == false) {
             return;
         }
-        $pending = Reservation::where('status', ReservationStatus::PENDING->value)->get();
-        foreach ($pending as $reservation) {
-            $expireAt = Carbon::parse($reservation->created_at)->add(config('resrv-config.minutes_to_hold'), 'minute');
-            if ($expireAt < Carbon::now()) {
-                $this->expireSafely($reservation);
-            }
-        }
+
+        // Only load rows that are already past their hold window instead of pulling every PENDING
+        // row and filtering in PHP. This prune runs synchronously on every availability search, so
+        // keeping the work proportional to the (usually empty) set of stale holds matters here.
+        // created_at + holdMinutes < now  <=>  created_at < now - holdMinutes.
+        Reservation::where('status', ReservationStatus::PENDING->value)
+            ->where('created_at', '<', Carbon::now()->subMinutes($holdMinutes))
+            ->get()
+            ->each(fn (Reservation $reservation) => $this->expireSafely($reservation));
     }
 
     /**

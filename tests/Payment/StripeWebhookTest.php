@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class StripeWebhookTest extends TestCase
 {
@@ -30,12 +31,41 @@ class StripeWebhookTest extends TestCase
         Config::set('resrv-config.stripe_secret_key', 'sk_test');
     }
 
+    protected function tearDown(): void
+    {
+        unset($_SERVER['HTTP_STRIPE_SIGNATURE']);
+
+        parent::tearDown();
+    }
+
     private function succeededWebhookRequest(string $paymentIntentId): Request
     {
         return Request::create('/resrv/api/webhook', 'POST', [], [], [], [], json_encode([
             'type' => 'payment_intent.succeeded',
             'data' => ['object' => ['id' => $paymentIntentId]],
         ]));
+    }
+
+    /**
+     * Builds a succeeded-webhook request whose Stripe-Signature header is a valid HMAC for the
+     * given secret. With an empty secret this is exactly what an attacker can compute themselves,
+     * so it lets us assert the gateway refuses to verify against an unconfigured secret.
+     */
+    private function forgedSucceededWebhookRequest(string $paymentIntentId, string $secret): Request
+    {
+        $payload = json_encode([
+            'type' => 'payment_intent.succeeded',
+            'data' => ['object' => ['id' => $paymentIntentId]],
+        ]);
+
+        $timestamp = 1700000000;
+        $_SERVER['HTTP_STRIPE_SIGNATURE'] = sprintf(
+            't=%d,v1=%s',
+            $timestamp,
+            hash_hmac('sha256', "{$timestamp}.{$payload}", $secret)
+        );
+
+        return Request::create('/resrv/api/webhook', 'POST', [], [], [], [], $payload);
     }
 
     /**
@@ -193,5 +223,36 @@ class StripeWebhookTest extends TestCase
 
         $this->assertEquals('confirmed', $reservation->fresh()->status);
         Event::assertDispatchedTimes(ReservationConfirmed::class, 1);
+    }
+
+    public function test_verify_payment_rejects_forged_webhook_when_secret_is_not_configured()
+    {
+        Event::fake([ReservationConfirmed::class]);
+
+        // Mirrors the shipped default in config/config.php (env RESRV_STRIPE_WEBHOOK_SECRET => '').
+        Config::set('resrv-config.stripe_webhook_secret', '');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_empty_secret',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        // An attacker who knows the secret is empty can compute a valid v1 signature themselves;
+        // before the guard this forged webhook would confirm the reservation without payment.
+        $request = $this->forgedSucceededWebhookRequest('pi_test_empty_secret', '');
+
+        $gateway = app(StripePaymentGateway::class);
+
+        try {
+            $gateway->verifyPayment($request);
+            $this->fail('verifyPayment should abort when the Stripe webhook secret is not configured.');
+        } catch (HttpException $e) {
+            $this->assertEquals(500, $e->getStatusCode());
+        }
+
+        $this->assertEquals('pending', $reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationConfirmed::class);
     }
 }

@@ -178,57 +178,76 @@ class AvailabilityCpController extends Controller
             }
 
             $terminal = ReservationStatus::terminal();
-            $terminalIds = [];
+
+            // Pending entries are namespaced by type ('r'<id> for reservations, 'c'<id> for child
+            // reservations) because the two tables are independent id sequences. A bare integer is a
+            // legacy entry whose type is unknown, so it is resolved against both tables.
+            $parsed = collect($pending)->map(function ($entry) {
+                if (is_string($entry) && preg_match('/^([rc])(\d+)$/', $entry, $matches)) {
+                    return ['key' => $entry, 'type' => $matches[1] === 'c' ? 'child' : 'normal', 'id' => (int) $matches[2]];
+                }
+
+                return ['key' => $entry, 'type' => 'legacy', 'id' => (int) $entry];
+            });
+
+            $normalIds = $parsed->whereIn('type', ['normal', 'legacy'])->pluck('id')->unique();
+            $childIds = $parsed->whereIn('type', ['child', 'legacy'])->pluck('id')->unique();
+
+            $reservations = $normalIds->isEmpty()
+                ? collect()
+                : Reservation::whereIn('id', $normalIds->all())->get(['id', 'status', 'quantity'])->keyBy('id');
+
+            $childReservations = $childIds->isEmpty()
+                ? collect()
+                : ChildReservation::whereIn('resrv_child_reservations.id', $childIds->all())
+                    ->join('resrv_reservations', 'resrv_child_reservations.reservation_id', '=', 'resrv_reservations.id')
+                    ->get([
+                        'resrv_child_reservations.id',
+                        'resrv_child_reservations.quantity',
+                        'resrv_reservations.status as parent_status',
+                    ])
+                    ->keyBy('id');
+
+            $terminalKeys = [];
             $activeIds = [];
-            $quantityById = [];
+            $quantityByKey = [];
 
-            foreach (Reservation::whereIn('id', $pending)->get(['id', 'status', 'quantity']) as $parent) {
-                $quantityById[$parent->id] = (int) $parent->quantity;
-                if (in_array($parent->status, $terminal, true)) {
-                    $terminalIds[] = $parent->id;
+            foreach ($parsed as $entry) {
+                $status = null;
+                $quantity = 0;
+
+                if ($entry['type'] !== 'child' && $reservations->has($entry['id'])) {
+                    $status = $reservations[$entry['id']]->status;
+                    $quantity = (int) $reservations[$entry['id']]->quantity;
+                } elseif ($entry['type'] !== 'normal' && $childReservations->has($entry['id'])) {
+                    $status = $childReservations[$entry['id']]->parent_status;
+                    $quantity = (int) $childReservations[$entry['id']]->quantity;
+                }
+
+                $quantityByKey[$entry['key']] = $quantity;
+
+                // A null status means the holder vanished from both tables — treat it as terminal
+                // (clearable) with quantity 0, since the original hold is unrecoverable.
+                if ($status === null || in_array($status, $terminal, true)) {
+                    $terminalKeys[] = $entry['key'];
                 } else {
-                    $activeIds[] = $parent->id;
+                    $activeIds[] = $entry['id'];
                 }
             }
 
-            $children = ChildReservation::whereIn('resrv_child_reservations.id', $pending)
-                ->join('resrv_reservations', 'resrv_child_reservations.reservation_id', '=', 'resrv_reservations.id')
-                ->get([
-                    'resrv_child_reservations.id',
-                    'resrv_child_reservations.quantity',
-                    'resrv_reservations.status as parent_status',
-                ]);
-
-            foreach ($children as $child) {
-                $quantityById[$child->id] = (int) $child->quantity;
-                if (in_array($child->parent_status, $terminal, true)) {
-                    $terminalIds[] = $child->id;
-                } else {
-                    $activeIds[] = $child->id;
-                }
-            }
-
-            // IDs not found in either table are vanished — treat as terminal but with quantity 0
-            // (the original quantity is unrecoverable; admin will have to reset `available` manually
-            // if accounting drifts).
-            $vanished = array_values(array_diff($pending, array_keys($quantityById)));
-            foreach ($vanished as $id) {
-                $terminalIds[] = $id;
-                $quantityById[$id] = 0;
-            }
-
-            $toClear = $force ? $pending : $terminalIds;
+            $activeIds = array_values(array_unique($activeIds));
+            $toClear = $force ? array_values($pending) : $terminalKeys;
 
             if (empty($toClear)) {
                 return response()->json([
                     'cleared' => 0,
-                    'still_active' => array_values($activeIds),
+                    'still_active' => $activeIds,
                 ]);
             }
 
             $restoredQuantity = 0;
-            foreach ($toClear as $id) {
-                $restoredQuantity += $quantityById[$id] ?? 0;
+            foreach ($toClear as $key) {
+                $restoredQuantity += $quantityByKey[$key] ?? 0;
             }
 
             $row->update([
@@ -239,13 +258,13 @@ class AvailabilityCpController extends Controller
             if ($force && ! empty($activeIds)) {
                 Log::warning('Resrv: admin force-cleared active holds from availability row', [
                     'availability_id' => $row->id,
-                    'forced_ids' => array_values($activeIds),
+                    'forced_ids' => $activeIds,
                 ]);
             }
 
             return response()->json([
                 'cleared' => count($toClear),
-                'still_active' => $force ? [] : array_values($activeIds),
+                'still_active' => $force ? [] : $activeIds,
             ]);
         });
     }

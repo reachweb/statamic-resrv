@@ -142,8 +142,16 @@ class Reservation extends Model
 
     public function getEntryAttribute()
     {
-        $entry = Entry::find($this->item_id);
+        return $this->entryToArray(Entry::find($this->item_id));
+    }
 
+    /**
+     * Builds the augmented entry array used by the CP list/calendar resources. Accepting an
+     * already-resolved entry lets those resources batch-resolve every row's entry in a single
+     * stache query instead of one Entry::find() per row.
+     */
+    public function entryToArray(?EntryContract $entry): array
+    {
         return $entry ? $entry->toAugmentedArray(['id', 'title', 'slug', 'url']) : $this->emptyEntry();
     }
 

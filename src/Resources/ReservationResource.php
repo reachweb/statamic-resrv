@@ -9,11 +9,12 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Blueprints\ReservationBlueprint;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
 use Statamic\Http\Resources\CP\Concerns\HasRequestedColumns;
 
 class ReservationResource extends ResourceCollection
 {
-    use HasRequestedColumns;
+    use HasRequestedColumns, ResolvesReservationEntries;
 
     protected $blueprint;
 
@@ -37,14 +38,16 @@ class ReservationResource extends ResourceCollection
     {
         $this->setColumns();
 
+        $entries = $this->resolveReservationEntries($this->collection);
+
         return [
-            'data' => $this->collection->transform(function ($reservation) {
+            'data' => $this->collection->transform(function ($reservation) use ($entries) {
                 return [
                     'id' => $reservation->id,
                     'reference' => $reservation->reference,
                     'type' => Str::ucfirst($reservation->type),
                     'status' => $reservation->status,
-                    'entry' => $reservation->entry,
+                    'entry' => $reservation->entryToArray($entries->get($reservation->item_id)),
                     'quantity' => $reservation->quantity,
                     'payment' => config('resrv-config.currency_symbol').' '.$reservation->payment->format(),
                     'price' => config('resrv-config.currency_symbol').' '.$reservation->price->format(),

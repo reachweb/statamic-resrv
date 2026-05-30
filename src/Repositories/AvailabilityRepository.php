@@ -164,7 +164,7 @@ class AvailabilityRepository
             }
         }
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId) {
+        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $rateId);
 
             foreach ($availabilities as $availability) {
@@ -173,26 +173,26 @@ class AvailabilityRepository
                 }
             }
 
-            $this->addToPending($availabilities, $reservationId, $quantity);
+            $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
     }
 
-    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId): void
+    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false): void
     {
         if ($rateId) {
             $rate = Rate::findOrFail($rateId);
 
             if ($rate->isShared()) {
-                $this->incrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId);
+                $this->incrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation);
 
                 return;
             }
         }
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId) {
+        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $rateId);
 
-            $this->removeFromPending($availabilities, $reservationId, $quantity);
+            $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
     }
 
@@ -220,18 +220,18 @@ class AvailabilityRepository
 
             $this->validateMaxAvailableForDateRange($rate, $date_start, $date_end, $reservationId, $quantity, $isChildReservation);
 
-            $this->addToPending($availabilities, $reservationId, $quantity);
+            $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
     }
 
-    protected function incrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId): void
+    protected function incrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false): void
     {
         $baseRateId = $rate->base_rate_id ?? $rate->id;
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $reservationId) {
+        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $baseRateId);
 
-            $this->removeFromPending($availabilities, $reservationId, $quantity);
+            $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
     }
 
@@ -246,38 +246,65 @@ class AvailabilityRepository
             ->get();
     }
 
-    protected function addToPending($availabilities, int $reservationId, int $quantity): void
+    /**
+     * Namespaces a pending entry by reservation type. Normal reservations (resrv_reservations) and
+     * child reservations (resrv_child_reservations) are independent auto-increment sequences, so a
+     * bare integer id cannot tell a normal id=5 apart from a child id=5. Storing both in the same
+     * availability row's pending list silently dropped the second decrement (overbooking) and
+     * restored the wrong holder's stock on release.
+     */
+    protected function pendingKey(int $reservationId, bool $isChildReservation): string
     {
+        return ($isChildReservation ? 'c' : 'r').$reservationId;
+    }
+
+    protected function addToPending($availabilities, int $reservationId, int $quantity, bool $isChildReservation = false): void
+    {
+        $key = $this->pendingKey($reservationId, $isChildReservation);
+
         foreach ($availabilities as $availability) {
             $pending = $availability->pending ?? [];
 
-            if (in_array($reservationId, $pending)) {
-                Log::error("Reservation ID $reservationId was already found in pending list for availability ID {$availability->id}");
+            if (in_array($key, $pending, true)) {
+                Log::error("Reservation key $key was already found in pending list for availability ID {$availability->id}");
 
                 continue;
             }
 
             $availability->update([
                 'available' => $availability->available - $quantity,
-                'pending' => array_merge($pending, [$reservationId]),
+                'pending' => array_merge($pending, [$key]),
             ]);
         }
     }
 
-    protected function removeFromPending($availabilities, int $reservationId, int $quantity): void
+    protected function removeFromPending($availabilities, int $reservationId, int $quantity, bool $isChildReservation = false): void
     {
+        $key = $this->pendingKey($reservationId, $isChildReservation);
+
         foreach ($availabilities as $availability) {
             $pending = $availability->pending ?? [];
 
-            if (! in_array($reservationId, $pending)) {
-                Log::error("Reservation ID $reservationId not found in pending list for availability ID {$availability->id}");
+            // Prefer the namespaced key; fall back to the legacy bare-integer form for entries
+            // written before pending keys were namespaced by reservation type, so in-flight
+            // reservations still restore their stock after an upgrade.
+            $position = array_search($key, $pending, true);
+
+            if ($position === false) {
+                $position = array_search($reservationId, $pending, true);
+            }
+
+            if ($position === false) {
+                Log::error("Reservation key $key not found in pending list for availability ID {$availability->id}");
 
                 continue;
             }
 
+            unset($pending[$position]);
+
             $availability->update([
                 'available' => $availability->available + $quantity,
-                'pending' => array_values(array_diff($pending, [$reservationId])),
+                'pending' => array_values($pending),
             ]);
         }
     }

@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
@@ -31,6 +32,49 @@ class ReservationCpTest extends TestCase
         $response = $this->get(cp_route('resrv.reservation.index'));
 
         $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title);
+    }
+
+    public function test_reservation_listing_eager_loads_relations_without_n_plus_one()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
+
+        // Warm framework/config caches (blueprint, resrv_rates_exist) so the two measurements
+        // below differ only by per-row relation loading, not first-hit caching.
+        $this->get(cp_route('resrv.reservation.index'))->assertOk();
+
+        $queriesForOneRow = $this->countQueries(
+            fn () => $this->get(cp_route('resrv.reservation.index'))->assertOk()
+        );
+
+        Reservation::factory(3, ['item_id' => $item->id()])->withCustomer()->create();
+
+        $queriesForFourRows = $this->countQueries(
+            fn () => $this->get(cp_route('resrv.reservation.index'))->assertOk()
+        );
+
+        // With eager loading the query count is independent of the number of rows. An N+1
+        // regression would make the four-row listing run several extra queries per added row
+        // (customer, extras, options, childs.rate).
+        $this->assertSame(
+            $queriesForOneRow,
+            $queriesForFourRows,
+            'The reservations listing should run a constant number of queries regardless of row count.'
+        );
+    }
+
+    private function countQueries(\Closure $callback): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $callback();
+
+        $count = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $count;
     }
 
     public function test_can_show_reservations()

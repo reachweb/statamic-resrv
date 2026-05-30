@@ -4,9 +4,15 @@ namespace Reach\StatamicResrv\Resources;
 
 use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\ResourceCollection;
+use Illuminate\Support\Collection;
+use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
 
 class ReservationCalendarResource extends ResourceCollection
 {
+    use ResolvesReservationEntries;
+
+    protected Collection $entries;
+
     public function __construct($resource)
     {
         parent::__construct($resource);
@@ -16,6 +22,7 @@ class ReservationCalendarResource extends ResourceCollection
     {
         $onlyStart = $request->query('onlyStart') == 1;
         $childs = collect();
+        $this->entries = $this->resolveReservationEntries($this->collection);
         $reservations = $this->collection->transform(function ($reservation) use ($onlyStart, &$childs) {
             if ($reservation->type === 'parent') {
                 $childs->push($this->buildChildReservationArray($reservation, $onlyStart)->toArray());
@@ -71,7 +78,7 @@ class ReservationCalendarResource extends ResourceCollection
         bool $onlyStart,
         bool $isChild = false,
     ): array {
-        $entryTitle = $reservation->entry['title'];
+        $entryTitle = $reservation->entryToArray($this->entries->get($reservation->item_id))['title'];
         $showQuantity = config('resrv-config.maximum_quantity') > 1;
         $titleParts = ['#'.$reservation->id, $entryTitle];
         if ($rateLabel) {

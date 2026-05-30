@@ -231,6 +231,20 @@ class StripePaymentGateway implements PaymentInterface
 
         Stripe::setApiKey($this->getSecretKey($reservation));
 
+        // An empty or null webhook secret reduces the HMAC verification to a publicly-known key
+        // (hash_hmac with an empty secret), letting anyone forge a valid Stripe-Signature on this
+        // CSRF-exempt endpoint. Refuse to verify when the secret is missing: config/config.php
+        // defaults it to '' and the multisite array form returns null for an unmapped collection.
+        $webhookSecret = $this->getWebhookSecret($reservation);
+
+        if (! is_string($webhookSecret) || $webhookSecret === '') {
+            Log::error('Stripe webhook secret is not configured; rejecting webhook to prevent signature forgery.', [
+                'reservation_id' => $reservation->id,
+            ]);
+
+            abort(500);
+        }
+
         try {
             $event = Event::constructFrom(json_decode($request->getContent(), true));
         } catch (\UnexpectedValueException $e) {
@@ -244,7 +258,7 @@ class StripePaymentGateway implements PaymentInterface
             $event = Webhook::constructEvent(
                 $request->getContent(),
                 $sig_header,
-                $this->getWebhookSecret($reservation),
+                $webhookSecret,
                 null,
                 false
             );
