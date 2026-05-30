@@ -15,9 +15,16 @@ class PreventEntryDeletionWithActiveReservations
             return true;
         }
 
-        if (ActiveReservationsGuard::hasActiveReservationsForEntry($event->entry->id())) {
+        // Reservations are stored against the origin entry id, so resolve localizations
+        // to their origin before checking — otherwise deleting a localization of a booked
+        // item (Statamic fires EntryDeleting per descendant) would slip past the guard.
+        $entryId = $event->entry->hasOrigin()
+            ? $event->entry->origin()->id()
+            : $event->entry->id();
+
+        if (ActiveReservationsGuard::hasActiveReservationsForEntry($entryId)) {
             Log::warning('Resrv: blocked Statamic entry deletion (active reservations exist)', [
-                'entry_id' => $event->entry->id(),
+                'entry_id' => $entryId,
             ]);
 
             return false;

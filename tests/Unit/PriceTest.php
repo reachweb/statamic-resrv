@@ -102,4 +102,47 @@ class PriceTest extends TestCase
         $this->assertFalse($price1->lessThan($price2));
         $this->assertTrue($price2->lessThan($price1));
     }
+
+    public function test_price_round_trips_for_zero_decimal_currency()
+    {
+        config(['resrv-config.currency_isoCode' => 'JPY']);
+
+        $price = Price::create(1000);
+
+        // JPY has no minor unit, so 1000 yen must stay 1000 (the old *100 produced 100000).
+        $this->assertSame('1000', $price->format());
+        $this->assertSame('1000', $price->raw());
+    }
+
+    public function test_price_round_trips_for_three_decimal_currency()
+    {
+        config(['resrv-config.currency_isoCode' => 'BHD']);
+
+        $price = Price::create(100);
+
+        // BHD has 3 decimal places, so 100 dinars is 100000 fils (the old *100 gave 10.000).
+        $this->assertSame('100.000', $price->format());
+        $this->assertSame('100000', $price->raw());
+    }
+
+    public function test_price_arithmetic_for_zero_decimal_currency()
+    {
+        config(['resrv-config.currency_isoCode' => 'JPY']);
+
+        $result = Price::create(1000)->add(Price::create(500));
+        $this->assertSame('1500', $result->format());
+
+        $discounted = Price::create(1000)->percent(30);
+        $this->assertSame('300', $discounted->format());
+    }
+
+    public function test_price_round_trips_for_two_decimal_currency()
+    {
+        config(['resrv-config.currency_isoCode' => 'USD']);
+
+        $price = Price::create(22.76);
+
+        $this->assertSame('22.76', $price->format());
+        $this->assertSame('2276', $price->raw());
+    }
 }

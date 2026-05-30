@@ -444,7 +444,7 @@ class DynamicPricing extends Model
             }
         }
         if ($pricing->condition_type == 'days_to_reservation') {
-            if ($this->compare((int) Carbon::parse($date_start)->diffInDays(now()->setHour(0), true), $pricing->condition_comparison, $pricing->condition_value)) {
+            if ($this->compare((int) Carbon::parse($date_start)->startOfDay()->diffInDays(now()->startOfDay(), true), $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }
         }
