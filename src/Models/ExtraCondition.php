@@ -255,10 +255,21 @@ class ExtraCondition extends Model
     protected function checkTime($condition, $date)
     {
         $time_start = Carbon::createFromTimeString($condition->time_start);
-        $time_end = Carbon::createFromTimeString($condition->time_end)->addDay();
+        $time_end = Carbon::createFromTimeString($condition->time_end);
         $payload = new Carbon($date);
 
-        return $payload->setDateFrom(today())->between($time_start, $time_end);
+        $start_minutes = $time_start->hour * 60 + $time_start->minute;
+        $end_minutes = $time_end->hour * 60 + $time_end->minute;
+        $payload_minutes = $payload->hour * 60 + $payload->minute;
+
+        // An overnight window (e.g. 21:00 -> 08:00) wraps past midnight, so a time
+        // is in range when it is after the start OR before the end.
+        if ($end_minutes < $start_minutes) {
+            return $payload_minutes >= $start_minutes || $payload_minutes <= $end_minutes;
+        }
+
+        // A same-day window (e.g. 09:00 -> 17:00) requires the time to fall within both bounds.
+        return $payload_minutes >= $start_minutes && $payload_minutes <= $end_minutes;
     }
 
     protected function checkDates($condition, $data)

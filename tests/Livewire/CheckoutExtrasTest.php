@@ -224,6 +224,111 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
+    // Test that a negative extra quantity is rejected server-side (it would otherwise undercharge the booking).
+    // Form-object validation errors surface under the form property prefix, hence enabledExtras.extras.*.
+    public function test_it_rejects_a_negative_extra_quantity()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => -1,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasErrors(['enabledExtras.extras.'.$extra->id.'.quantity'])
+            ->assertSet('step', 1);
+
+        // The bypass attempt must not have written the extra to the reservation.
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'status' => 'pending',
+        ]);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+    }
+
+    // Test that a zero extra quantity is rejected server-side
+    public function test_it_rejects_a_zero_extra_quantity()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 0,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasErrors(['enabledExtras.extras.'.$extra->id.'.quantity'])
+            ->assertSet('step', 1);
+    }
+
+    // Test that an extra quantity above the configured per-extra maximum is rejected server-side
+    public function test_it_rejects_an_extra_quantity_above_the_maximum()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        // The extra created in setUp uses the factory default maximum of 3.
+        $extra = $this->extras->first();
+        $this->assertSame(3, $extra->maximum);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 4,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasErrors(['enabledExtras.extras.'.$extra->id.'.quantity'])
+            ->assertSet('step', 1);
+    }
+
+    // Test that a valid extra quantity within the maximum is accepted. The payload price is the
+    // per-unit price (the component multiplies by quantity), matching the backend drift check.
+    public function test_it_accepts_an_extra_quantity_within_the_maximum()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 3,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors(['enabledExtras.extras.'.$extra->id.'.quantity'])
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+            'quantity' => 3,
+        ]);
+    }
+
     // Test that it handles extras that are required when a specific other extra is selected
     public function test_it_handles_extra_that_is_required_when_another_is_selected()
     {

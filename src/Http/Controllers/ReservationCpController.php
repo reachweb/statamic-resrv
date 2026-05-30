@@ -256,13 +256,15 @@ class ReservationCpController extends Controller
         $searchTerm = "%{$search}%";
 
         return $this->reservation->where(function ($query) use ($searchTerm) {
-            $query->where('customer', 'like', $searchTerm)
-                ->orWhere('id', 'like', $searchTerm)
+            $query->where('id', 'like', $searchTerm)
                 ->orWhere('reference', 'like', $searchTerm)
                 ->orWhere('status', 'like', $searchTerm)
                 ->orWhere('created_at', 'like', $searchTerm)
                 ->orWhere('date_start', 'like', $searchTerm)
-                ->orWhere('date_end', 'like', $searchTerm);
+                ->orWhere('date_end', 'like', $searchTerm)
+                ->orWhereHas('customer', function ($customerQuery) use ($searchTerm) {
+                    $customerQuery->where('email', 'like', $searchTerm);
+                });
         });
     }
 }

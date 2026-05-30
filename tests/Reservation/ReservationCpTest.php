@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
 use Reach\StatamicResrv\Models\ChildReservation;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -32,6 +33,57 @@ class ReservationCpTest extends TestCase
         $response = $this->get(cp_route('resrv.reservation.index'));
 
         $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title);
+    }
+
+    public function test_can_search_reservations_by_reference()
+    {
+        $item = $this->makeStatamicItem();
+
+        $match = Reservation::factory([
+            'item_id' => $item->id(),
+            'reference' => 'FINDME',
+        ])->withCustomer()->create();
+
+        $other = Reservation::factory([
+            'item_id' => $item->id(),
+            'reference' => 'SOMETHINGELSE',
+        ])->withCustomer()->create();
+
+        $response = $this->getJson(cp_route('resrv.reservation.index').'?search=FINDME');
+
+        $response->assertStatus(200)
+            ->assertJsonFragment(['id' => $match->id])
+            ->assertJsonMissing(['id' => $other->id]);
+    }
+
+    public function test_can_search_reservations_by_customer_email()
+    {
+        $item = $this->makeStatamicItem();
+
+        $match = Reservation::factory(['item_id' => $item->id()])
+            ->for(Customer::factory(['email' => 'searchable@example.com']))
+            ->create();
+
+        $other = Reservation::factory(['item_id' => $item->id()])
+            ->for(Customer::factory(['email' => 'someone-else@example.com']))
+            ->create();
+
+        $response = $this->getJson(cp_route('resrv.reservation.index').'?search=searchable@example.com');
+
+        $response->assertStatus(200)
+            ->assertJsonFragment(['id' => $match->id])
+            ->assertJsonMissing(['id' => $other->id]);
+    }
+
+    public function test_searching_reservations_with_no_matches_returns_an_empty_result()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
+
+        $response = $this->getJson(cp_route('resrv.reservation.index').'?search=nonexistentterm');
+
+        $response->assertStatus(200)->assertJsonFragment(['total' => 0]);
     }
 
     public function test_reservation_listing_eager_loads_relations_without_n_plus_one()
@@ -62,6 +114,50 @@ class ReservationCpTest extends TestCase
             $queriesForFourRows,
             'The reservations listing should run a constant number of queries regardless of row count.'
         );
+    }
+
+    public function test_parent_reservation_listing_eager_loads_child_rates_without_n_plus_one()
+    {
+        $item = $this->makeStatamicItem();
+
+        $this->makeParentReservationWithChild($item->id());
+
+        // Warm framework/config caches so the two measurements differ only by per-row relation loading.
+        $this->get(cp_route('resrv.reservation.index'))->assertOk();
+
+        $queriesForOneParent = $this->countQueries(
+            fn () => $this->get(cp_route('resrv.reservation.index'))->assertOk()
+        );
+
+        foreach (range(1, 3) as $i) {
+            $this->makeParentReservationWithChild($item->id());
+        }
+
+        $queriesForFourParents = $this->countQueries(
+            fn () => $this->get(cp_route('resrv.reservation.index'))->assertOk()
+        );
+
+        // getRateLabel() on a parent walks $reservation->childs and each child's ->rate. Without
+        // eager loading childs.rate, every extra parent row would add per-row queries.
+        $this->assertSame(
+            $queriesForOneParent,
+            $queriesForFourParents,
+            'The reservations listing should run a constant number of queries regardless of parent/child row count.'
+        );
+    }
+
+    private function makeParentReservationWithChild(string $itemId): Reservation
+    {
+        $reservation = Reservation::factory([
+            'type' => 'parent',
+            'item_id' => $itemId,
+        ])->withCustomer()->create();
+
+        ChildReservation::factory([
+            'reservation_id' => $reservation->id,
+        ])->create();
+
+        return $reservation;
     }
 
     private function countQueries(\Closure $callback): int
