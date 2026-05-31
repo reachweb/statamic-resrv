@@ -305,7 +305,7 @@ class Availability extends Model implements AvailabilityContract
         // queries, so the per-(item × rate) capacity check below is an in-memory lookup instead of
         // a reservation-overlap query per rate. getExhaustedDatesForRates ignores uncapped rates.
         $exhaustedByRate = app(AvailabilityRepositoryClass::class)
-            ->getExhaustedDatesForRates($ratesMap->values(), $this->quantity);
+            ->getExhaustedDatesForRates($ratesMap->values(), $this->quantity, $this->date_start, $this->date_end);
 
         $availableWithPricing = $filteredAvailable
             ->groupBy('statamic_id')
@@ -785,7 +785,8 @@ class Availability extends Model implements AvailabilityContract
             );
 
             if ($rate->isShared() && $rate->max_available) {
-                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate);
+                [$rangeStart, $rangeEnd] = $this->exhaustedDateWindow($results);
+                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, 1, $rangeStart, $rangeEnd);
                 if ($exhaustedDates->isNotEmpty()) {
                     $results = $results->reject(fn ($item) => $exhaustedDates->contains($item->date));
                 }
@@ -854,7 +855,8 @@ class Availability extends Model implements AvailabilityContract
             }
 
             if ($rate?->isShared() && $rate->max_available) {
-                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, $quantity);
+                [$rangeStart, $rangeEnd] = $this->exhaustedDateWindow($results);
+                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, $quantity, $rangeStart, $rangeEnd);
                 if ($exhaustedDates->isNotEmpty()) {
                     $results = $results->reject(fn ($item) => $exhaustedDates->contains($item->date));
                 }
@@ -932,18 +934,42 @@ class Availability extends Model implements AvailabilityContract
         return $this->expandRatesFromBaseResults($baseResults, $rates, $quantity, $dateStart);
     }
 
+    /**
+     * Derives an exclusive [start, end) window from a set of availability rows so the shared-rate
+     * exhausted-date lookup only loads reservations overlapping the rendered dates instead of the
+     * rate's whole booking history (M5). The end is pushed one day past the last night because
+     * date_end is exclusive across the engine. Returns [null, null] for an empty set, leaving the
+     * lookup unbounded.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function exhaustedDateWindow(Collection $results): array
+    {
+        $dates = $results->pluck('date')->filter()->map(fn ($d) => Carbon::parse($d)->toDateString());
+
+        if ($dates->isEmpty()) {
+            return [null, null];
+        }
+
+        return [$dates->min(), Carbon::parse($dates->max())->addDay()->toDateString()];
+    }
+
     private function expandRatesFromBaseResults(Collection $baseResults, Collection $rates, int $quantity = 1, ?string $dateStart = null): Collection
     {
         $baseGrouped = $baseResults->groupBy('rate_id');
         $expanded = collect();
-
-        $exhaustedByRate = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRates($rates, $quantity);
 
         $statamicIds = $baseResults->pluck('statamic_id')->unique()->values()->all();
 
         $dates = $baseResults->pluck('date')->map(fn ($d) => Carbon::parse($d)->toDateString());
         $rangeStart = $dates->min();
         $rangeEnd = $dates->max();
+
+        // date_end is exclusive across the engine, so bound the exhausted-date lookup one day past
+        // the last rendered night — otherwise a reservation starting on that night would be missed (M5).
+        $exhaustedRangeEnd = $rangeEnd ? Carbon::parse($rangeEnd)->addDay()->toDateString() : null;
+
+        $exhaustedByRate = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRates($rates, $quantity, $rangeStart, $exhaustedRangeEnd);
 
         $overridesByRate = $this->loadRateOverridesForRates($rates, $statamicIds, $rangeStart, $rangeEnd);
 

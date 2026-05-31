@@ -180,13 +180,28 @@ trait HandlesReservationQueries
         ];
     }
 
+    private ?array $updatedPricesCache = null;
+
+    private ?Reservation $updatedPricesCacheReservation = null;
+
     public function getUpdatedPrices(): array
     {
-        if ($this->reservation->type === ReservationTypes::PARENT->value) {
-            return $this->getUpdatedPricesForParent();
+        // Memoise per request: the sidebar binding (calculateReservationTotals) plus the coupon/step
+        // action handlers all call this within a single Livewire render, and for a parent cart it
+        // issues one getPricing() DB query per child. The cache is tied to the current reservation
+        // object identity, so it invalidates automatically whenever the reservation is reloaded —
+        // every price-changing path calls unset($this->reservation), which yields a fresh instance.
+        if ($this->updatedPricesCache !== null && $this->updatedPricesCacheReservation === $this->reservation) {
+            return $this->updatedPricesCache;
         }
 
-        return (new Availability)->getPricing($this->getAvailabilityDataFromReservation(), $this->reservation->item_id);
+        $this->updatedPricesCacheReservation = $this->reservation;
+
+        if ($this->reservation->type === ReservationTypes::PARENT->value) {
+            return $this->updatedPricesCache = $this->getUpdatedPricesForParent();
+        }
+
+        return $this->updatedPricesCache = (new Availability)->getPricing($this->getAvailabilityDataFromReservation(), $this->reservation->item_id);
     }
 
     protected function getUpdatedPricesForParent(): array

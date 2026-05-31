@@ -177,6 +177,28 @@ class DynamicPricingApplyTest extends TestCase
         $this->assertIndexPrice('100.92', '100.92');
     }
 
+    public function test_fixed_decrease_above_base_floors_price_at_zero()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        // Baseline is 100.92. A 500 fixed decrease would be -399.08 without a floor.
+        $this->createDynamicPricing('fixedDecrease', ['amount' => '500']);
+
+        $this->assertPrice('0.00', '100.92');
+        $this->assertIndexPrice('0.00', '100.92');
+    }
+
+    public function test_percent_decrease_over_100_floors_price_at_zero()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        // Baseline is 100.92. A 150% decrease multiplies by -0.5 → -50.46 without a floor.
+        $this->createDynamicPricing('percentDecrease', ['amount' => '150']);
+
+        $this->assertPrice('0.00', '100.92');
+        $this->assertIndexPrice('0.00', '100.92');
+    }
+
     public function test_minimum_applied_after_decrease_in_ordering()
     {
         $this->createAvailabilityForEntry($this->entry, 50, 2);
@@ -674,6 +696,29 @@ class DynamicPricingApplyTest extends TestCase
 
         // Decrease still pre-multiply: (50 - 10) × 3 = 120.
         $this->assertExtrasPriceSeen('120.00', days: 3);
+    }
+
+    public function test_decrease_above_base_floors_extra_price_at_zero()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        $extra = Extra::factory()->create(['price' => '20']);
+
+        // Decrease (500) exceeds the 20 base, so per-day expansion would be deeply negative without
+        // a floor. The extras path finalises through applyClamps(), so it must floor to 0 too.
+        $this->assignDynamicPricingToExtra($extra, [
+            'amount_type' => 'fixed',
+            'amount_operation' => 'decrease',
+            'amount' => '500',
+        ]);
+
+        $price = $extra->priceForDates([
+            'date_start' => $this->date->toISOString(),
+            'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+            'quantity' => 1,
+        ]);
+
+        $this->assertEquals('0.00', $price);
     }
 
     public function test_decrease_then_minimum_on_perday()

@@ -369,6 +369,97 @@ class RateSharedAvailabilityTest extends TestCase
         );
     }
 
+    public function test_get_exhausted_dates_is_bounded_to_the_requested_range()
+    {
+        // M5 regression: the exhausted-date lookup must only consider reservations overlapping the
+        // requested [start, end) window. A booking far outside the window must not be loaded or
+        // counted — if the SQL date bound were dropped, its exhausted night would leak into the
+        // returned set (and the whole booking history would be scanned on every search).
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        // In-window booking: exhausts the first searched night (max_available = 1).
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDay()->toDateString(),
+            'quantity' => 1,
+            'status' => 'confirmed',
+        ]);
+
+        // Out-of-window booking a year in the past.
+        $pastStart = $setup['startDate']->copy()->subYear();
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $pastStart->toDateString(),
+            'date_end' => $pastStart->copy()->addDay()->toDateString(),
+            'quantity' => 1,
+            'status' => 'confirmed',
+        ]);
+
+        $exhausted = AvailabilityRepository::getExhaustedDatesForRate(
+            $setup['sharedRate'],
+            1,
+            $setup['startDate']->toDateString(),
+            $setup['startDate']->copy()->addDays(3)->toDateString(),
+        );
+
+        $this->assertContains(
+            $setup['startDate']->toDateString(),
+            $exhausted->all(),
+            'in-range exhausted night should be returned'
+        );
+
+        $this->assertNotContains(
+            $pastStart->toDateString(),
+            $exhausted->all(),
+            'a reservation outside the requested window must not leak into the exhausted dates'
+        );
+    }
+
+    public function test_get_exhausted_dates_treats_the_window_end_as_exclusive()
+    {
+        // M5: callers derive the window end one day past the last rendered night because date_end is
+        // exclusive across the engine. This locks that boundary — a booking on the last night must
+        // only be counted when the window reaches the following day, otherwise the night would be
+        // wrongly dropped from the lookup (and stay bookable past capacity).
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        $lastNight = $setup['startDate']->copy()->addDays(2);
+
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $lastNight->toDateString(),
+            'date_end' => $lastNight->copy()->addDay()->toDateString(),
+            'quantity' => 1,
+            'status' => 'confirmed',
+        ]);
+
+        $rangeStart = $setup['startDate']->toDateString();
+
+        // Exclusive end one day past the last night (what the callers pass): the night is counted.
+        $withExclusiveEnd = AvailabilityRepository::getExhaustedDatesForRate(
+            $setup['sharedRate'], 1, $rangeStart, $lastNight->copy()->addDay()->toDateString()
+        );
+        $this->assertContains(
+            $lastNight->toDateString(),
+            $withExclusiveEnd->all(),
+            'last night must be counted when the window end is exclusive (last night + 1 day)'
+        );
+
+        // Ending the window on the last night itself drops the booking (date_start < end is false).
+        $withTooNarrowEnd = AvailabilityRepository::getExhaustedDatesForRate(
+            $setup['sharedRate'], 1, $rangeStart, $lastNight->toDateString()
+        );
+        $this->assertNotContains(
+            $lastNight->toDateString(),
+            $withTooNarrowEnd->all(),
+            'a window ending on the last night excludes a booking that starts that night'
+        );
+    }
+
     public function test_max_available_counts_quantity_not_rows()
     {
         $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 3);

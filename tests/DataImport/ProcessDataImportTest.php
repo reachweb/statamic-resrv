@@ -118,6 +118,118 @@ class ProcessDataImportTest extends TestCase
         ]);
     }
 
+    public function test_import_skips_row_with_non_numeric_price()
+    {
+        $item = $this->makeStatamicItem();
+        $entryId = $item->id();
+
+        $tomorrow = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $fakeImport = new class($entryId, $tomorrow)
+        {
+            public function __construct(private $entryId, private $date) {}
+
+            public function prepare()
+            {
+                return collect([
+                    $this->entryId => collect([
+                        [
+                            'date_start' => $this->date,
+                            'date_end' => $this->date,
+                            'price' => 'not-a-number',
+                            'available' => 1,
+                        ],
+                    ]),
+                ]);
+            }
+        };
+
+        Cache::put('resrv-data-import', $fakeImport);
+        Log::shouldReceive('warning')->once();
+
+        (new ProcessDataImport)->handle();
+
+        // Invalid cell is skipped before any write (and before a default rate is created).
+        $this->assertDatabaseCount('resrv_availabilities', 0);
+        $this->assertDatabaseCount('resrv_rates', 0);
+    }
+
+    public function test_import_skips_row_with_negative_availability()
+    {
+        $item = $this->makeStatamicItem();
+        $entryId = $item->id();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $tomorrow = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $fakeImport = new class($entryId, $tomorrow, $rate->id)
+        {
+            public function __construct(private $entryId, private $date, private $rateId) {}
+
+            public function prepare()
+            {
+                return collect([
+                    $this->entryId => collect([
+                        [
+                            'date_start' => $this->date,
+                            'date_end' => $this->date,
+                            'price' => 100,
+                            'available' => -5,
+                            'rate_id' => $this->rateId,
+                        ],
+                    ]),
+                ]);
+            }
+        };
+
+        Cache::put('resrv-data-import', $fakeImport);
+        Log::shouldReceive('warning')->once();
+
+        (new ProcessDataImport)->handle();
+
+        $this->assertDatabaseCount('resrv_availabilities', 0);
+    }
+
+    public function test_import_coerces_numeric_string_values()
+    {
+        $item = $this->makeStatamicItem();
+        $entryId = $item->id();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $tomorrow = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $fakeImport = new class($entryId, $tomorrow, $rate->id)
+        {
+            public function __construct(private $entryId, private $date, private $rateId) {}
+
+            public function prepare()
+            {
+                return collect([
+                    $this->entryId => collect([
+                        [
+                            'date_start' => $this->date,
+                            'date_end' => $this->date,
+                            'price' => '99.50',
+                            'available' => '3',
+                            'rate_id' => $this->rateId,
+                        ],
+                    ]),
+                ]);
+            }
+        };
+
+        Cache::put('resrv-data-import', $fakeImport);
+
+        (new ProcessDataImport)->handle();
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $rate->id,
+            'price' => 99.5,
+            'available' => 3,
+        ]);
+    }
+
     public function test_import_skips_row_when_multi_rate_entry_and_no_rate_id()
     {
         $item = $this->makeStatamicItem();

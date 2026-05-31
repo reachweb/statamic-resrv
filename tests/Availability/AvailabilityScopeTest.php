@@ -79,6 +79,30 @@ class AvailabilityScopeTest extends TestCase
         $this->assertEmpty($afterScope);
     }
 
+    // Test that an invalid/out-of-range search (here a past date) filters out everything
+    // instead of leaking the whole collection as bookable (the availability lookup throws).
+    public function test_it_returns_nothing_for_an_invalid_search()
+    {
+        $query = Entry::query()->where('collection', 'pages');
+
+        // Sanity: the collection is non-empty before the scope is applied.
+        $this->assertCount(5, $query->get()->pluck('id')->all());
+
+        $values = ['resrv_search:resrv_availability' => [
+            'dates' => [
+                'date_start' => now()->subDays(5)->setTime(12, 0, 0),
+                'date_end' => now()->subDays(4)->setTime(12, 0, 0),
+            ],
+        ]];
+
+        (new ResrvSearch)->apply($query, $values);
+
+        $afterScope = $query->get()->pluck('id')->all();
+
+        $this->assertCount(0, $afterScope);
+        $this->assertEmpty($afterScope);
+    }
+
     // Test that it returns the correct Entry when asking for a quantity of 2
     public function test_it_returns_the_correct_one_for_quantity_2()
     {

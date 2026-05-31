@@ -331,19 +331,26 @@ class AvailabilityRepository
         }
     }
 
-    public function getExhaustedDatesForRate(Rate $rate, int $quantity = 1): SupportCollection
+    public function getExhaustedDatesForRate(Rate $rate, int $quantity = 1, ?string $rangeStart = null, ?string $rangeEnd = null): SupportCollection
     {
         if (! $rate->isShared() || ! $rate->max_available) {
             return collect();
         }
 
-        $result = $this->getExhaustedDatesForRates(collect([$rate]), $quantity);
+        $result = $this->getExhaustedDatesForRates(collect([$rate]), $quantity, $rangeStart, $rangeEnd);
 
         return $result->get($rate->id, collect());
     }
 
-    /** @return SupportCollection<int, SupportCollection<int, string>> keyed by rate ID */
-    public function getExhaustedDatesForRates(SupportCollection $rates, int $quantity = 1): SupportCollection
+    /**
+     * @return SupportCollection<int, SupportCollection<int, string>> keyed by rate ID
+     *
+     * When $rangeStart/$rangeEnd are given they bound the reservation lookup to an exclusive
+     * [rangeStart, rangeEnd) window — mirroring validateMaxAvailableForDateRange() — so a search
+     * only loads reservations overlapping the rendered dates instead of the rate's entire booking
+     * history. When null the lookup is unbounded.
+     */
+    public function getExhaustedDatesForRates(SupportCollection $rates, int $quantity = 1, ?string $rangeStart = null, ?string $rangeEnd = null): SupportCollection
     {
         $sharedRates = $rates->filter(fn (Rate $rate) => $rate->isShared() && $rate->max_available);
 
@@ -355,10 +362,14 @@ class AvailabilityRepository
 
         $overlapping = Reservation::whereIn('rate_id', $rateIds)
             ->whereNotIn('status', ReservationStatus::terminal())
+            ->when($rangeEnd, fn ($q) => $q->where('date_start', '<', $rangeEnd))
+            ->when($rangeStart, fn ($q) => $q->where('date_end', '>', $rangeStart))
             ->get(['rate_id', 'quantity', 'date_start', 'date_end']);
 
         $overlappingChildren = ChildReservation::whereIn('rate_id', $rateIds)
             ->whereHas('parent', fn ($q) => $q->whereNotIn('status', ReservationStatus::terminal()))
+            ->when($rangeEnd, fn ($q) => $q->where('date_start', '<', $rangeEnd))
+            ->when($rangeStart, fn ($q) => $q->where('date_end', '>', $rangeStart))
             ->get(['rate_id', 'quantity', 'date_start', 'date_end']);
 
         $allByRate = $overlapping->concat($overlappingChildren)->groupBy('rate_id');

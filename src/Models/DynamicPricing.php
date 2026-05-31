@@ -194,7 +194,13 @@ class DynamicPricing extends Model
             $price = $this->$method($price, $policy);
         }
 
-        return $price;
+        // Final safety floor: a misconfigured decrease (a fixed amount above the base price, or a
+        // percent decrease > 100%) can drive the result below zero, which moneyphp permits. Dynamic
+        // pricing must never emit a negative price/total/payment. This runs after the operator
+        // min/max clamps, so a configured minimum still takes precedence for values between zero and
+        // that minimum. Both the reservation path (apply()) and the extras path (Extra.php) finish
+        // through applyClamps(), so flooring here covers every dynamic-pricing consumer.
+        return $price->lessThan(Price::create(0)) ? Price::create(0) : $price;
     }
 
     protected function clampPolicies(): Collection

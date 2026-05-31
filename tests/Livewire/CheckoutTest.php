@@ -82,6 +82,31 @@ class CheckoutTest extends TestCase
             ->assertStatus(200);
     }
 
+    public function test_get_updated_prices_is_memoised_until_the_reservation_reloads()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $checkout = Livewire::test(Checkout::class)->instance();
+
+        // Force a fresh reservation instance so the next call must recompute — this mirrors the
+        // unset($this->reservation) that every price-changing action performs.
+        unset($checkout->reservation);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $first = $checkout->getUpdatedPrices();
+        $firstCount = count(DB::getQueryLog());
+
+        DB::flushQueryLog();
+        $second = $checkout->getUpdatedPrices();
+        $secondCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertGreaterThan(0, $firstCount, 'first call after a reservation reload must compute prices from the DB');
+        $this->assertSame(0, $secondCount, 'subsequent calls within the request must reuse the memoised prices, not re-query');
+        $this->assertEquals($first, $second);
+    }
+
     public function test_loads_reservation_and_entry()
     {
         session(['resrv_reservation' => $this->reservation->id]);

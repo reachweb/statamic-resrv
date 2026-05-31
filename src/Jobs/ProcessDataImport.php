@@ -39,6 +39,20 @@ class ProcessDataImport implements ShouldQueue
             $defaultRateId = null;
 
             $item->each(function ($data) use ($id, &$defaultRateId) {
+                // CSV cells reach us unvalidated and upsert() bypasses Eloquent casts/mutators, so
+                // coerce and validate before writing: a non-numeric, blank, or negative price/
+                // availability would otherwise be written straight to the tables and silently
+                // corrupt pricing/inventory. Skip + log the row, mirroring the rate_id guard below.
+                if (! is_numeric($data['price'] ?? null) || (float) $data['price'] < 0
+                    || ! is_numeric($data['available'] ?? null) || (int) $data['available'] < 0) {
+                    Log::warning("Data import: skipping row for entry {$id} — non-numeric or negative price/availability.");
+
+                    return;
+                }
+
+                $price = (float) $data['price'];
+                $available = (int) $data['available'];
+
                 $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
                 $rateId = $data['rate_id'] ?? null;
                 $isSharedRate = false;
@@ -101,8 +115,8 @@ class ProcessDataImport implements ShouldQueue
                             $dataToAdd[] = [
                                 'statamic_id' => $id,
                                 'date' => $dateStr,
-                                'price' => $data['price'],
-                                'available' => $data['available'],
+                                'price' => $price,
+                                'available' => $available,
                                 'rate_id' => $rateId,
                             ];
                             if ($sharedIndependentRateId !== null) {
@@ -110,7 +124,7 @@ class ProcessDataImport implements ShouldQueue
                                     'rate_id' => $sharedIndependentRateId,
                                     'statamic_id' => $id,
                                     'date' => $dateStr,
-                                    'price' => $data['price'],
+                                    'price' => $price,
                                 ];
                             }
                         }
@@ -129,8 +143,8 @@ class ProcessDataImport implements ShouldQueue
                         $dataToAdd[] = [
                             'statamic_id' => $id,
                             'date' => $day->isoFormat('YYYY-MM-DD'),
-                            'price' => $data['price'],
-                            'available' => $data['available'],
+                            'price' => $price,
+                            'available' => $available,
                             'rate_id' => $rateId,
                         ];
                     }

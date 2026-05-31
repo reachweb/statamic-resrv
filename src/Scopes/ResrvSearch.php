@@ -26,9 +26,12 @@ class ResrvSearch extends Scope
 
         $result = $this->getAvailability($searchData);
 
-        // TODO: throw an exception here
+        // An invalid/out-of-range search (past dates, pickup after drop-off, too long/short a stay,
+        // quantity over the max, lead-time violation) makes getAvailability() return an error payload
+        // with no 'data' key. Exclude every entry rather than leaking the whole collection as bookable.
+        // The normal "nothing available" path keeps an (empty) 'data' key and is handled below.
         if (! isset($result['data']) && $result['message']['status'] === false) {
-            return $query;
+            return $query->whereIn('id', []);
         }
 
         $originIds = $result['data']->keys()->toArray();
