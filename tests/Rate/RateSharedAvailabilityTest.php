@@ -1214,4 +1214,82 @@ class RateSharedAvailabilityTest extends TestCase
         // This confirms the batched in-memory capacity check matches per-rate checkMaxAvailable.
         $this->assertFalse(app(Availability::class)->getAvailable($searchData)['message']['status']);
     }
+
+    public function test_browse_collection_rejects_shared_rate_when_quantity_exceeds_cap()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Only the shared rate is a browse candidate (base rate unpublished), capped at 1.
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-capped',
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 1,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(3)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+                ['date' => $startDate->copy()->addDays(2)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // No reservations exist, so the pre-computed exhausted-date set is empty. A quantity of 2
+        // still cannot fit a cap of 1 on any date, so the rate must not be offered — matching the
+        // per-rate checkMaxAvailable() path's (0 + quantity) > max_available rejection.
+        $searchData = [
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 2,
+        ];
+
+        $this->assertFalse(app(Availability::class)->getAvailable($searchData)['message']['status']);
+
+        // The same dates with a quantity that fits the cap are still bookable.
+        $searchData['quantity'] = 1;
+        $this->assertTrue(app(Availability::class)->getAvailable($searchData)['message']['status']);
+    }
+
+    public function test_empty_calendar_result_skips_unbounded_exhausted_date_scan()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 5, maxAvailable: 1);
+
+        // Search a window that has no availability rows for the rate, so the result set is empty
+        // after filtering. The exhausted-date lookup should be skipped rather than falling back to
+        // the unbounded all-history reservation scan (M5).
+        $emptyWindowStart = $setup['startDate']->copy()->addDays(30)->toDateString();
+
+        DB::enableQueryLog();
+
+        $result = app(Availability::class)->getAvailableDatesFromDate(
+            $setup['entry']->id(),
+            $emptyWindowStart,
+            1,
+            $setup['sharedRate']->id,
+        );
+
+        $reservationQueries = collect(DB::getQueryLog())
+            ->filter(fn ($entry) => str_contains($entry['query'], 'resrv_reservations'));
+
+        DB::disableQueryLog();
+
+        $this->assertEmpty($result);
+        $this->assertCount(0, $reservationQueries, 'No reservation-overlap query should run for an empty result set.');
+    }
 }

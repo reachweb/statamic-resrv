@@ -190,6 +190,56 @@ class ProcessDataImportTest extends TestCase
         $this->assertDatabaseCount('resrv_availabilities', 0);
     }
 
+    public function test_import_skips_row_with_fractional_availability()
+    {
+        // available is an integer inventory count, so 1.9 must be skipped rather than silently
+        // truncated to 1 by the (int) cast.
+        $this->assertFractionalAvailabilityIsSkipped(1.9);
+    }
+
+    public function test_import_skips_row_with_negative_fractional_availability()
+    {
+        // -0.5 passes is_numeric and (int) truncates it to 0 (>= 0), so without an integer check it
+        // would be imported as available = 0 instead of being skipped.
+        $this->assertFractionalAvailabilityIsSkipped(-0.5);
+    }
+
+    protected function assertFractionalAvailabilityIsSkipped($available): void
+    {
+        $item = $this->makeStatamicItem();
+        $entryId = $item->id();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $tomorrow = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $fakeImport = new class($entryId, $tomorrow, $rate->id, $available)
+        {
+            public function __construct(private $entryId, private $date, private $rateId, private $available) {}
+
+            public function prepare()
+            {
+                return collect([
+                    $this->entryId => collect([
+                        [
+                            'date_start' => $this->date,
+                            'date_end' => $this->date,
+                            'price' => 100,
+                            'available' => $this->available,
+                            'rate_id' => $this->rateId,
+                        ],
+                    ]),
+                ]);
+            }
+        };
+
+        Cache::put('resrv-data-import', $fakeImport);
+        Log::shouldReceive('warning')->once();
+
+        (new ProcessDataImport)->handle();
+
+        $this->assertDatabaseCount('resrv_availabilities', 0);
+    }
+
     public function test_import_coerces_numeric_string_values()
     {
         $item = $this->makeStatamicItem();

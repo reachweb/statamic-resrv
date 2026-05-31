@@ -43,9 +43,13 @@ class ProcessDataImport implements ShouldQueue
                 // coerce and validate before writing: a non-numeric, blank, or negative price/
                 // availability would otherwise be written straight to the tables and silently
                 // corrupt pricing/inventory. Skip + log the row, mirroring the rate_id guard below.
+                // resrv_availabilities.available is an integer inventory count, so a fractional
+                // value (e.g. 1.9 or -0.5) is invalid — reject it instead of letting the (int) cast
+                // below silently truncate it toward zero (1.9 → 1, -0.5 → 0).
                 if (! is_numeric($data['price'] ?? null) || (float) $data['price'] < 0
-                    || ! is_numeric($data['available'] ?? null) || (int) $data['available'] < 0) {
-                    Log::warning("Data import: skipping row for entry {$id} — non-numeric or negative price/availability.");
+                    || ! is_numeric($data['available'] ?? null) || (float) $data['available'] < 0
+                    || floor((float) $data['available']) !== (float) $data['available']) {
+                    Log::warning("Data import: skipping row for entry {$id} — non-numeric, negative, or fractional price/availability.");
 
                     return;
                 }

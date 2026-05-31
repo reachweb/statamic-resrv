@@ -526,6 +526,16 @@ class Availability extends Model implements AvailabilityContract
             return true;
         }
 
+        // A search quantity larger than the cap can never be satisfied on any date — not even one
+        // with zero existing bookings. The pre-computed exhausted-date set only flags dates that
+        // already carry a reservation (getExhaustedDatesForRates never inspects zero-reservation
+        // dates), so without this guard such a request would slip through as bookable. Rejecting up
+        // front also keeps the in-memory path consistent with checkMaxAvailable()'s
+        // (0 + quantity) > max_available check below.
+        if ($this->quantity > $rate->max_available) {
+            return false;
+        }
+
         // The multi-entry browse path pre-computes exhausted dates for every candidate rate in a
         // single query (getExhaustedDatesForRates) and passes them in, so capacity is tested in
         // memory instead of issuing a reservation-overlap query per (item × rate).
@@ -784,7 +794,10 @@ class Availability extends Model implements AvailabilityContract
                 fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date)
             );
 
-            if ($rate->isShared() && $rate->max_available) {
+            // Skip the lookup entirely for an empty set: there are no dates to reject, and
+            // exhaustedDateWindow() would hand getExhaustedDatesForRate() a null range, falling
+            // back to the unbounded all-history reservation scan that M5 removed.
+            if ($results->isNotEmpty() && $rate->isShared() && $rate->max_available) {
                 [$rangeStart, $rangeEnd] = $this->exhaustedDateWindow($results);
                 $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, 1, $rangeStart, $rangeEnd);
                 if ($exhaustedDates->isNotEmpty()) {
@@ -854,7 +867,10 @@ class Availability extends Model implements AvailabilityContract
                 $results = $results->filter(fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date));
             }
 
-            if ($rate?->isShared() && $rate->max_available) {
+            // Skip the lookup entirely for an empty set: there are no dates to reject, and
+            // exhaustedDateWindow() would hand getExhaustedDatesForRate() a null range, falling
+            // back to the unbounded all-history reservation scan that M5 removed.
+            if ($results->isNotEmpty() && $rate?->isShared() && $rate->max_available) {
                 [$rangeStart, $rangeEnd] = $this->exhaustedDateWindow($results);
                 $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, $quantity, $rangeStart, $rangeEnd);
                 if ($exhaustedDates->isNotEmpty()) {
@@ -956,6 +972,13 @@ class Availability extends Model implements AvailabilityContract
 
     private function expandRatesFromBaseResults(Collection $baseResults, Collection $rates, int $quantity = 1, ?string $dateStart = null): Collection
     {
+        // With no base rows there is nothing to expand, and computing an exhausted-date range below
+        // would yield a null window — sending getExhaustedDatesForRates() into the unbounded
+        // all-history scan that M5 removed. Bail before that.
+        if ($baseResults->isEmpty()) {
+            return collect();
+        }
+
         $baseGrouped = $baseResults->groupBy('rate_id');
         $expanded = collect();
 
