@@ -35,6 +35,42 @@ class ReservationCpTest extends TestCase
         $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title);
     }
 
+    public function test_index_payload_exposes_entry_url_for_the_listing_link()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
+
+        $response = $this->getJson(cp_route('resrv.reservation.index'));
+
+        // The listing template links the entry via reservation.entry.url. entryToArray() selects
+        // 'url' (not 'permalink'), so the payload must carry a usable url for the link to render.
+        $response->assertStatus(200)
+            ->assertJsonPath('data.0.entry.url', $item->url());
+
+        $entry = $response->json('data.0.entry');
+        $this->assertArrayHasKey('url', $entry);
+        $this->assertNotEmpty($entry['url']);
+        $this->assertArrayNotHasKey('permalink', $entry);
+    }
+
+    public function test_index_payload_renders_deleted_entry_as_plain_text()
+    {
+        Reservation::factory(['item_id' => 'deleted-entry-id'])->withCustomer()->create();
+
+        $response = $this->getJson(cp_route('resrv.reservation.index'));
+
+        // A reservation whose entry no longer exists falls back to emptyEntry(), which mirrors the
+        // real shape with a null url so the template renders plain text instead of a broken link.
+        $response->assertStatus(200)
+            ->assertJsonPath('data.0.entry.title', '## Entry deleted ##');
+
+        $entry = $response->json('data.0.entry');
+        $this->assertArrayHasKey('url', $entry);
+        $this->assertNull($entry['url']);
+        $this->assertArrayNotHasKey('permalink', $entry);
+    }
+
     public function test_can_search_reservations_by_reference()
     {
         $item = $this->makeStatamicItem();

@@ -398,6 +398,56 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.+1.request.date_start', $this->date->copy()->addDays(2)->format('Y-m-d'));
     }
 
+    public function test_extra_days_search_does_not_re_query_entry_and_rates_per_period()
+    {
+        $entryId = $this->entries->first()->id();
+
+        // Count how often the date-independent entry row and rate set are queried for a given
+        // number of extra-day periods. Both runs go through queryExtraAvailabilityForEntry(), so a
+        // memoized resolver keeps these counts equal even though extraDays=3 generates 7 periods
+        // versus extraDays=1's 3. Without memoization the counts would scale with the period count.
+        $countMetadataQueries = function (int $extraDays) use ($entryId) {
+            // Start from a clean session so mount() does not replay a previous run's search from
+            // #[Session('resrv-search')]; this isolates the per-period query behaviour.
+            session()->forget(['resrv-search', 'resrv-extras', 'resrv-options']);
+
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'extraDays' => $extraDays])
+                ->dispatch('availability-search-updated', [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => null,
+                ]);
+
+            // Count only the date-independent entry/rate metadata lookups. The per-period
+            // availability query lives on resrv_availabilities (and merely JOINs resrv_rates), so it
+            // is excluded — it must run once per period and is not what this test guards.
+            $count = collect(DB::getQueryLog())
+                ->filter(fn ($query) => (str_contains($query['query'], 'resrv_entries') || str_contains($query['query'], 'resrv_rates'))
+                    && ! str_contains($query['query'], 'resrv_availabilities'))
+                ->count();
+
+            DB::disableQueryLog();
+
+            return $count;
+        };
+
+        // extraDays=1 generates 3 periods and extraDays=3 generates 7, but the entry row and the
+        // published rate set are identical for every period, so a single reused+memoized
+        // Availability instance resolves them once. The metadata query count must therefore stay
+        // equal rather than scale with the number of periods.
+        $this->assertSame(
+            $countMetadataQueries(1),
+            $countMetadataQueries(3),
+            'Entry/rate queries must not scale with the number of extra-day periods.'
+        );
+    }
+
     public function test_returns_availability_for_specific_rate()
     {
         $rateId = $this->getFirstAdvancedEntryRateId();

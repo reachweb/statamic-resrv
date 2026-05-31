@@ -20,6 +20,7 @@ use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Money\Price;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -56,6 +57,20 @@ class ReservationCheckoutTest extends TestCase
         $this->entry->save();
 
         Config::set('resrv-config.checkout_completed_entry', $this->entry->id());
+    }
+
+    public function test_reading_total_before_checkout_returns_zero_price_without_error()
+    {
+        $reservation = $this->reservation->fresh();
+
+        // total is nullable with no default and is only populated at checkout, so before then the
+        // raw column is null.
+        $this->assertNull($reservation->getRawOriginal('total'));
+
+        // Reading it through the Price accessor must yield a zero Price rather than warning or
+        // throwing (the decimal parser maps the empty string from (string) null to a zero Money).
+        $this->assertInstanceOf(Price::class, $reservation->total);
+        $this->assertSame('0.00', $reservation->total->format());
     }
 
     // Test if the checkout completed page loads correctly

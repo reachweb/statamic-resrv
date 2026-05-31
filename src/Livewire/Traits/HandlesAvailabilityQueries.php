@@ -80,12 +80,17 @@ trait HandlesAvailabilityQueries
     {
         ExpireReservations::dispatchSync();
 
-        return $this->generateDatePeriods($this->data)->map(function ($period) {
+        // Reuse a single Availability instance across every generated period. The entry row and the
+        // entry's published rate set are identical for all periods (only the dates change), so the
+        // instance memoizes them once instead of re-querying them 2*extraDays+1 times.
+        $availability = app(Availability::class);
+
+        return $this->generateDatePeriods($this->data)->map(function ($period) use ($availability) {
             $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'rate_id']));
             try {
                 $this->validateCutoffRules($searchData['date_start']);
 
-                return app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId, expireReservations: false, rateSorting: $this->resolveRateSorting());
+                return $availability->getAvailabilityForEntry($searchData, $this->entryId, expireReservations: false, rateSorting: $this->resolveRateSorting());
             } catch (AvailabilityException|CutoffException $exception) {
                 return [
                     'message' => [

@@ -136,6 +136,20 @@ class PriceTest extends TestCase
         $this->assertSame('300', $discounted->format());
     }
 
+    public function test_price_create_handles_null_as_zero()
+    {
+        config(['resrv-config.currency_isoCode' => 'EUR']);
+
+        // Nullable Price columns (e.g. reservations.total before checkout) are read through the
+        // accessors as Price::create(null). The decimal parser maps the resulting empty string to
+        // a zero Money, so this must not warn or throw on PHP 8.5+/9.
+        $price = Price::create(null);
+
+        $this->assertInstanceOf(PriceClass::class, $price);
+        $this->assertSame('0.00', $price->format());
+        $this->assertSame('0', $price->raw());
+    }
+
     public function test_price_round_trips_for_two_decimal_currency()
     {
         config(['resrv-config.currency_isoCode' => 'USD']);

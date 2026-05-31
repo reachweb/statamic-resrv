@@ -255,12 +255,14 @@ class StripePaymentGateway implements PaymentInterface
         $sig_header = $_SERVER['HTTP_STRIPE_SIGNATURE'];
 
         try {
+            // Keep Stripe's default 300s timestamp tolerance. constructEvent() only accepts
+            // ($payload, $sigHeader, $secret, $tolerance); passing null for $tolerance previously
+            // disabled the replay-window check entirely (null > 0 is false in WebhookSignature),
+            // and the trailing false was a silently-ignored 5th argument.
             $event = Webhook::constructEvent(
                 $request->getContent(),
                 $sig_header,
-                $webhookSecret,
-                null,
-                false
+                $webhookSecret
             );
         } catch (SignatureVerificationException $e) {
             // Invalid signature

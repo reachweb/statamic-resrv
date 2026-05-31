@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Rate;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
@@ -986,5 +987,140 @@ class RateSharedAvailabilityTest extends TestCase
             rateId: $setup['sharedRate']->id,
             reservationId: $newReservation->id,
         );
+    }
+
+    public function test_browse_collection_batches_shared_rate_capacity_checks_across_entries()
+    {
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        // A collection-wide shared rate with a cap: every browsed entry evaluates it, so before the
+        // fix each entry triggered its own reservation-overlap query.
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-capped',
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 5,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        $addEntryWithAvailability = function () use ($baseRate, $startDate) {
+            $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+            Availability::factory()
+                ->count(3)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                    ['date' => $startDate->copy()->addDays(2)],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $baseRate->id,
+                    'price' => 100,
+                    'available' => 10,
+                ]);
+        };
+
+        $searchData = [
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ];
+
+        $countReservationQueries = function () use ($searchData) {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            $result = app(Availability::class)->getAvailable($searchData);
+            $this->assertTrue($result['message']['status']);
+
+            $count = collect(DB::getQueryLog())
+                ->filter(fn ($query) => str_contains($query['query'], 'resrv_reservations') || str_contains($query['query'], 'resrv_child_reservations'))
+                ->count();
+
+            DB::disableQueryLog();
+
+            return $count;
+        };
+
+        $addEntryWithAvailability();
+        $addEntryWithAvailability();
+        $queriesForTwoEntries = $countReservationQueries();
+
+        $addEntryWithAvailability();
+        $addEntryWithAvailability();
+        $queriesForFourEntries = $countReservationQueries();
+
+        // The capped shared rate's exhausted dates are resolved once per search, so the number of
+        // reservation-overlap queries is independent of how many entries are browsed. Before the
+        // fix this scaled with the entry count (a checkMaxAvailable query per item).
+        $this->assertSame(
+            $queriesForTwoEntries,
+            $queriesForFourEntries,
+            'Shared-rate capacity checks must not issue a reservation query per browsed entry.'
+        );
+    }
+
+    public function test_browse_collection_excludes_exhausted_shared_rate_capacity()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Only the shared rate is a browse candidate (base rate unpublished), and it is capped at 1.
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-capped',
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 1,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(3)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+                ['date' => $startDate->copy()->addDays(2)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        $searchData = [
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ];
+
+        // With the single slot free, the browse offers the shared rate.
+        $this->assertTrue(app(Availability::class)->getAvailable($searchData)['message']['status']);
+
+        // An active reservation fills the single slot for the searched dates.
+        Reservation::factory()->create([
+            'item_id' => $entry->id(),
+            'rate_id' => $sharedRate->id,
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'status' => 'confirmed',
+        ]);
+
+        // The only candidate rate is now exhausted, so the entry drops out of the browse results.
+        // This confirms the batched in-memory capacity check matches per-rate checkMaxAvailable.
+        $this->assertFalse(app(Availability::class)->getAvailable($searchData)['message']['status']);
     }
 }

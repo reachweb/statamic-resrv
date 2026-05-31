@@ -53,12 +53,23 @@ class StripeWebhookTest extends TestCase
      */
     private function forgedSucceededWebhookRequest(string $paymentIntentId, string $secret): Request
     {
+        // The fixed timestamp is irrelevant here: the empty-secret guard rejects before the
+        // timestamp tolerance check runs, so any valid HMAC shape exercises the secret guard.
+        return $this->signedSucceededWebhookRequest($paymentIntentId, $secret, 1700000000);
+    }
+
+    /**
+     * Builds a succeeded-webhook request signed with a real HMAC for the given secret and the
+     * given timestamp, mirroring Stripe's `t=...,v1=...` Stripe-Signature header. A timestamp far
+     * from now() lets us assert the gateway honours Stripe's replay (timestamp tolerance) window.
+     */
+    private function signedSucceededWebhookRequest(string $paymentIntentId, string $secret, int $timestamp): Request
+    {
         $payload = json_encode([
             'type' => 'payment_intent.succeeded',
             'data' => ['object' => ['id' => $paymentIntentId]],
         ]);
 
-        $timestamp = 1700000000;
         $_SERVER['HTTP_STRIPE_SIGNATURE'] = sprintf(
             't=%d,v1=%s',
             $timestamp,
@@ -254,5 +265,56 @@ class StripeWebhookTest extends TestCase
 
         $this->assertEquals('pending', $reservation->fresh()->status);
         Event::assertNotDispatched(ReservationConfirmed::class);
+    }
+
+    public function test_verify_payment_rejects_replayed_webhook_outside_timestamp_tolerance()
+    {
+        Event::fake([ReservationConfirmed::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_replay',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        // Correctly signed with the configured secret, but timestamped well outside Stripe's 300s
+        // tolerance — i.e. a captured event being replayed later. Replay protection must reject it.
+        $request = $this->signedSucceededWebhookRequest('pi_test_replay', 'whsec_test', time() - 600);
+
+        $gateway = app(StripePaymentGateway::class);
+
+        try {
+            $gateway->verifyPayment($request);
+            $this->fail('verifyPayment should reject a webhook whose timestamp is outside the tolerance window.');
+        } catch (HttpException $e) {
+            $this->assertEquals(403, $e->getStatusCode());
+        }
+
+        $this->assertEquals('pending', $reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationConfirmed::class);
+    }
+
+    public function test_verify_payment_accepts_freshly_signed_webhook_within_tolerance()
+    {
+        Event::fake([ReservationConfirmed::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_fresh',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        // A genuine, freshly-signed event within the tolerance window must still verify and confirm,
+        // proving the tolerance fix did not break the happy path.
+        $request = $this->signedSucceededWebhookRequest('pi_test_fresh', 'whsec_test', time());
+
+        $gateway = app(StripePaymentGateway::class);
+        $response = $gateway->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('confirmed', $reservation->fresh()->status);
+        Event::assertDispatched(ReservationConfirmed::class, fn ($e) => $e->reservation->id === $reservation->id);
     }
 }

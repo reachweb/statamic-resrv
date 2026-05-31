@@ -92,7 +92,7 @@ const refund = async () => {
             </template>
 
             <template #cell-entry="{ row: reservation }">
-                <a v-if="reservation.entry?.permalink" :href="reservation.entry.permalink" target="_blank">
+                <a v-if="reservation.entry?.url" :href="reservation.entry.url" target="_blank">
                     {{ reservation.entry.title }}
                 </a>
                 <span v-else>{{ reservation.entry?.title }}</span>

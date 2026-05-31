@@ -622,11 +622,14 @@ class Reservation extends Model
 
     public function emptyEntry()
     {
+        // Mirror the keys produced by the real augmented entry path (entryToArray) so consumers
+        // see a consistent shape whether or not the entry still exists. A null url means deleted
+        // entries render as plain text instead of a broken link.
         return [
             'id' => null,
             'title' => '## Entry deleted ##',
-            'api_url' => '## Entry deleted ##',
-            'permalink' => '#',
+            'slug' => null,
+            'url' => null,
         ];
     }
 }
