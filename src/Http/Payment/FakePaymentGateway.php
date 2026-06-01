@@ -5,7 +5,6 @@ namespace Reach\StatamicResrv\Http\Payment;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
@@ -181,13 +180,10 @@ class FakePaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
         if ($request->get('status') === 'fail') {
-            if ($reservation->status !== ReservationStatus::PENDING->value) {
-                return response()->json([], 200);
-            }
-
-            if ($reservation->transitionTo(ReservationStatus::REFUNDED)) {
-                ReservationCancelled::dispatch($reservation);
-            }
+            // Mirror StripePaymentGateway: a failed attempt is retryable, so leave it PENDING.
+            Log::info('Fake gateway payment failure; leaving reservation PENDING for retry.', [
+                'reservation_id' => $reservation->id,
+            ]);
 
             return response()->json([], 200);
         }

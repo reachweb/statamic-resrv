@@ -5,7 +5,6 @@ namespace Reach\StatamicResrv\Http\Payment;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
@@ -302,19 +301,29 @@ class StripePaymentGateway implements PaymentInterface
 
             return response()->json([], 200);
         }
-        if ($event->type === 'payment_intent.payment_failed' || $event->type === 'payment_intent.canceled') {
+        if ($event->type === 'payment_intent.payment_failed') {
+            // A failed attempt is retryable: keep the reservation PENDING so the customer can retry
+            // the same intent. ExpireReservations reclaims the hold if they abandon.
+            if ($isStaleIntent) {
+                return response()->json([], 200);
+            }
+
+            Log::info('Stripe payment_intent.payment_failed; leaving reservation PENDING for retry.', [
+                'reservation_id' => $reservation->id,
+                'payment_intent_id' => $data['id'],
+            ]);
+
+            return response()->json([], 200);
+        }
+        if ($event->type === 'payment_intent.canceled') {
             // Stale intent cancelled by us — ignore so we don't cascade-cancel an active reservation.
             if ($isStaleIntent) {
                 return response()->json([], 200);
             }
 
-            // Only cancel PENDING reservations; terminal/confirmed states are a no-op.
-            if ($reservation->status !== ReservationStatus::PENDING->value) {
-                return response()->json([], 200);
-            }
-
-            if ($reservation->transitionTo(ReservationStatus::REFUNDED)) {
-                ReservationCancelled::dispatch($reservation);
+            // A dead intent is EXPIRED, not REFUNDED — no money moved. expire() releases the hold.
+            if ($reservation->status === ReservationStatus::PENDING->value) {
+                $reservation->expire();
             }
 
             return response()->json([], 200);

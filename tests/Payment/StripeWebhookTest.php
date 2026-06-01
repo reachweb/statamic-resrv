@@ -6,8 +6,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Mockery;
+use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
@@ -61,8 +65,28 @@ class StripeWebhookTest extends TestCase
      */
     private function signedSucceededWebhookRequest(string $paymentIntentId, string $secret, int $timestamp): Request
     {
+        return $this->signedWebhookRequest('payment_intent.succeeded', $paymentIntentId, $secret, $timestamp);
+    }
+
+    private function signedFailedWebhookRequest(string $paymentIntentId, string $secret, int $timestamp): Request
+    {
+        return $this->signedWebhookRequest('payment_intent.payment_failed', $paymentIntentId, $secret, $timestamp);
+    }
+
+    private function signedCanceledWebhookRequest(string $paymentIntentId, string $secret, int $timestamp): Request
+    {
+        return $this->signedWebhookRequest('payment_intent.canceled', $paymentIntentId, $secret, $timestamp);
+    }
+
+    /**
+     * Builds a request signed with a real HMAC for the given Stripe event type, mirroring
+     * Stripe's `t=...,v1=...` header. The signature covers the raw payload, so it stays valid
+     * for any event type.
+     */
+    private function signedWebhookRequest(string $type, string $paymentIntentId, string $secret, int $timestamp): Request
+    {
         $payload = json_encode([
-            'type' => 'payment_intent.succeeded',
+            'type' => $type,
             'data' => ['object' => ['id' => $paymentIntentId]],
         ]);
 
@@ -85,6 +109,14 @@ class StripeWebhookTest extends TestCase
         return Request::create('/resrv/api/webhook', 'POST', [
             'reservation_id' => $reservationId,
             'status' => 'success',
+        ]);
+    }
+
+    private function fakeGatewayFailRequest(int $reservationId): Request
+    {
+        return Request::create('/resrv/api/webhook', 'POST', [
+            'reservation_id' => $reservationId,
+            'status' => 'fail',
         ]);
     }
 
@@ -307,6 +339,126 @@ class StripeWebhookTest extends TestCase
         $response = $gateway->verifyPayment($request);
 
         $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('confirmed', $reservation->fresh()->status);
+        Event::assertDispatched(ReservationConfirmed::class, fn ($e) => $e->reservation->id === $reservation->id);
+    }
+
+    public function test_stripe_payment_failed_webhook_leaves_reservation_pending_and_does_not_release_hold()
+    {
+        // A failed attempt is retryable: stay PENDING. No ReservationCancelled/ReservationExpired
+        // means the hold is not released (IncreaseAvailability only listens to those events).
+        Event::fake([ReservationCancelled::class, ReservationConfirmed::class, ReservationExpired::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_failed',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $gateway = app(StripePaymentGateway::class);
+        $response = $gateway->verifyPayment($this->signedFailedWebhookRequest('pi_test_failed', 'whsec_test', time()));
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('pending', $reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationCancelled::class);
+        Event::assertNotDispatched(ReservationExpired::class);
+    }
+
+    public function test_stripe_succeeded_webhook_after_payment_failed_confirms_reservation()
+    {
+        // Retry path: a declined attempt then a success on the same intent must confirm.
+        Event::fake([ReservationCancelled::class, ReservationConfirmed::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_retry',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $gateway = app(StripePaymentGateway::class);
+
+        // First attempt fails — stays PENDING.
+        $failed = $gateway->verifyPayment($this->signedFailedWebhookRequest('pi_test_retry', 'whsec_test', time()));
+        $this->assertEquals(200, $failed->getStatusCode());
+        $this->assertEquals('pending', $reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationCancelled::class);
+
+        // Retry on the same intent succeeds.
+        $succeeded = $gateway->verifyPayment($this->signedSucceededWebhookRequest('pi_test_retry', 'whsec_test', time()));
+        $this->assertEquals(200, $succeeded->getStatusCode());
+        $this->assertEquals('confirmed', $reservation->fresh()->status);
+        Event::assertDispatched(ReservationConfirmed::class, fn ($e) => $e->reservation->id === $reservation->id);
+    }
+
+    public function test_stripe_canceled_webhook_expires_pending_reservation_without_refunding()
+    {
+        // A genuinely-canceled intent is dead: expire (not refund) the reservation.
+        Event::fake([ReservationExpired::class, ReservationCancelled::class, ReservationConfirmed::class]);
+
+        // Stub the manager so expire()'s remote cancel never reaches the real Stripe SDK.
+        $stubGateway = Mockery::mock(StripePaymentGateway::class);
+        $stubGateway->shouldReceive('cancelPaymentIntent')->andReturnNull();
+        $manager = Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldReceive('gateway')->andReturn($stubGateway);
+        $this->instance(PaymentGatewayManager::class, $manager);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_canceled',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $gateway = app(StripePaymentGateway::class);
+        $response = $gateway->verifyPayment($this->signedCanceledWebhookRequest('pi_test_canceled', 'whsec_test', time()));
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('expired', $reservation->fresh()->status);
+        Event::assertDispatched(ReservationExpired::class, fn ($e) => $e->reservation->id === $reservation->id);
+        Event::assertNotDispatched(ReservationCancelled::class);
+    }
+
+    public function test_fake_gateway_failed_payment_leaves_reservation_pending_and_does_not_release_hold()
+    {
+        Event::fake([ReservationCancelled::class, ReservationConfirmed::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_fake_fail',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $gateway = app(FakePaymentGateway::class);
+        $response = $gateway->verifyPayment($this->fakeGatewayFailRequest($reservation->id));
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('pending', $reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationCancelled::class);
+    }
+
+    public function test_fake_gateway_succeeded_webhook_after_failed_payment_confirms_reservation()
+    {
+        Event::fake([ReservationCancelled::class, ReservationConfirmed::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_fake_retry',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $gateway = app(FakePaymentGateway::class);
+
+        $failed = $gateway->verifyPayment($this->fakeGatewayFailRequest($reservation->id));
+        $this->assertEquals(200, $failed->getStatusCode());
+        $this->assertEquals('pending', $reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationCancelled::class);
+
+        $succeeded = $gateway->verifyPayment($this->fakeGatewaySuccessRequest($reservation->id));
+        $this->assertEquals(200, $succeeded->getStatusCode());
         $this->assertEquals('confirmed', $reservation->fresh()->status);
         Event::assertDispatched(ReservationConfirmed::class, fn ($e) => $e->reservation->id === $reservation->id);
     }

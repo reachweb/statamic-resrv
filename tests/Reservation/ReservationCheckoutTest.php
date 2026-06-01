@@ -148,8 +148,8 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
-    // Test if the webhook will cancel a reservation for failed status
-    public function test_webhook_can_cancel_reservation()
+    // A failed payment attempt is retryable: leave the reservation PENDING, don't cancel it.
+    public function test_webhook_failed_payment_keeps_reservation_pending()
     {
         Mail::fake();
         Event::fake();
@@ -157,9 +157,12 @@ class ReservationCheckoutTest extends TestCase
         $this->post(route('resrv.webhook.store', ['reservation_id' => $this->reservation->id, 'status' => 'fail']))
             ->assertOk(200);
 
-        Event::assertDispatched(ReservationCancelled::class, function ($event) {
-            return $event->reservation->id === $this->reservation->id;
-        });
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'status' => 'pending',
+        ]);
+
+        Event::assertNotDispatched(ReservationCancelled::class);
     }
 
     // Test if email is sent when reservation is confirmed

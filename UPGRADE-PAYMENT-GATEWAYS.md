@@ -233,7 +233,7 @@ The `{gateway}` segment routes the webhook to the correct gateway class. Your `v
 
 1. Verify the webhook signature/authenticity
 2. Find the reservation via `payment_id`
-3. Dispatch `ReservationConfirmed` or `ReservationCancelled`
+3. Dispatch `ReservationConfirmed` on success. Leave a failed *attempt* PENDING — a declined card is retryable, so don't cancel it or release the hold.
 4. Return a 200 response
 
 ```php
@@ -255,11 +255,10 @@ public function verifyPayment($request)
         return response()->json([], 200);
     }
 
-    // 3. Dispatch appropriate event
+    // 3. Confirm on success. A failed ATTEMPT is retryable, so leave the reservation
+    //    PENDING; ExpireReservations reclaims the hold if the customer abandons.
     if ($event['type'] === 'payment.completed') {
         ReservationConfirmed::dispatch($reservation);
-    } elseif ($event['type'] === 'payment.failed') {
-        ReservationCancelled::dispatch($reservation);
     }
 
     // 4. Respond
@@ -425,7 +424,6 @@ Here is a complete skeleton for a redirect-based gateway (like PayPal or Mollie)
 namespace App\Payment;
 
 use Illuminate\Support\Str;
-use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -541,10 +539,9 @@ class PayPalPaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
 
+        // A denied capture is a failed attempt — leave the reservation PENDING (retryable).
         if ($payload['event_type'] === 'PAYMENT.CAPTURE.COMPLETED') {
             ReservationConfirmed::dispatch($reservation);
-        } elseif ($payload['event_type'] === 'PAYMENT.CAPTURE.DENIED') {
-            ReservationCancelled::dispatch($reservation);
         }
 
         return response()->json([], 200);
@@ -591,7 +588,6 @@ And here is a complete skeleton for an inline gateway (like Square or Braintree)
 namespace App\Payment;
 
 use Illuminate\Support\Str;
-use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -759,7 +755,7 @@ Understanding the flow helps when debugging custom gateways.
 1. Provider sends POST to `/resrv/api/webhook/{config_key}`.
 2. `WebhookController::store()` resolves the gateway from the URL segment.
 3. Calls `verifyPayment($request)` on that gateway.
-4. Gateway verifies signature, finds reservation, dispatches `ReservationConfirmed` or `ReservationCancelled`.
+4. Gateway verifies signature, finds reservation, and dispatches `ReservationConfirmed` on success (a failed attempt stays PENDING for retry).
 
 ### Refund flow
 
@@ -782,7 +778,7 @@ Before deploying your custom gateway:
 - [ ] `paymentIntent()` returns an object with `->id` and either `->client_secret` (inline) or `->redirectTo` (redirect)
 - [ ] `redirectsForPayment()` returns the correct boolean for your gateway type
 - [ ] `handleRedirectBack()` checks `handlePaymentPending()` first, then returns the correct status array
-- [ ] `verifyPayment()` verifies the webhook signature and dispatches `ReservationConfirmed` or `ReservationCancelled`
+- [ ] `verifyPayment()` verifies the webhook signature and dispatches `ReservationConfirmed` on success (a failed attempt stays PENDING for retry)
 - [ ] `refund()` throws `RefundFailedException` on failure
 - [ ] Gateway is registered in `config/resrv-config.php` under `payment_gateways`
 - [ ] Webhook URL configured in provider's dashboard with the correct config key segment
@@ -896,12 +892,13 @@ public function verifyPayment($request)
         ReservationConfirmed::dispatch($reservation);
     }
 
-    if ($eventType === 'failed' || $eventType === 'canceled') {
-        // Stale intents were cancelled deliberately by us; ignore their failure / cancellation
-        // webhooks so we don't cascade-cancel a reservation the customer is still using.
-        if (! $isStaleIntent) {
-            ReservationCancelled::dispatch($reservation);
-        }
+    // A failed ATTEMPT is retryable: do nothing, leaving the reservation PENDING so the customer
+    // can retry the same intent (ExpireReservations reclaims the hold if abandoned).
+
+    if ($eventType === 'canceled' && ! $isStaleIntent) {
+        // A genuinely-canceled intent is dead — expire (EXPIRED, not REFUNDED: no money moved).
+        // Stale intents were cancelled by us, so skip them. expire() no-ops if not PENDING.
+        $reservation->expire();
     }
 
     return response()->json([], 200);
