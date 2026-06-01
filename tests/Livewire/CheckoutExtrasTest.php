@@ -11,6 +11,7 @@ use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
+use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Extras;
 use Reach\StatamicResrv\Models\ChildReservation;
@@ -1518,6 +1519,30 @@ class CheckoutExtrasTest extends TestCase
 
         // Should not throw, and must price using the trashed value.
         $this->assertEquals('45.50', $reservation->extraCharges()->format());
+    }
+
+    public function test_extra_charges_rejects_an_option_value_that_does_not_exist()
+    {
+        $item = $this->entries->first();
+
+        $option = Option::factory()->create(['item_id' => $item->id()]);
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+            'price' => '100.00',
+            'payment' => '100.00',
+        ]);
+
+        // A value id that never belonged to this option (e.g. a tampered payload) must fail
+        // rather than silently price as free, even with withTrashed().
+        $reservation->options()->attach($option->id, ['value' => 99999]);
+
+        $this->expectException(OptionsException::class);
+
+        $reservation->extraCharges();
     }
 
     public function test_parent_required_extras_error_uses_real_extra_ids()

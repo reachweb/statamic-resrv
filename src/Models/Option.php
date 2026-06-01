@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Reach\StatamicResrv\Database\Factories\OptionFactory;
-use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
 
@@ -52,13 +52,14 @@ class Option extends Model
 
     public function calculatePrice($data, $value)
     {
-        // Resolve the value tolerating soft-deletes: a historical reservation can reference an
-        // option value that has since been trashed and must still be priced (mirrors the Extra
-        // path in Reservation::extraCharges). Guard null so a missing row can't crash pricing.
+        // withTrashed() so historical reservations referencing a soft-deleted value still price
+        // (mirrors the Extra path in Reservation::extraCharges). A value that is still unresolved
+        // is invalid input (e.g. a tampered checkout payload) and must fail validation, not be
+        // priced as free — otherwise a required/paid option could be synced at no charge.
         $value = $this->values()->withTrashed()->find($value);
 
         if (! $value) {
-            return Price::create(0);
+            throw new OptionsException(__('The selected option value is not valid.'));
         }
 
         return $value->calculatePrice($data);

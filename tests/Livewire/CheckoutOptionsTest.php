@@ -145,6 +145,37 @@ class CheckoutOptionsTest extends TestCase
         ]);
     }
 
+    // A tampered payload that submits a required, paid option with a non-existent value id at a
+    // zero price must be rejected at step 1 — the invalid value cannot be priced as free and synced.
+    public function test_it_rejects_a_required_option_submitted_with_an_invalid_value()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // setUp's option is the only required option. Submitting its id satisfies the
+        // required-option check, but at a zero price with a value that does not belong to it —
+        // the bypass we are guarding against. Base price (100) == reservation price, so under the
+        // buggy zero-pricing the total would match and the option would sync free.
+        $option = $this->options->first();
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [$option->id => [
+                'id' => $option->id,
+                'value' => 99999, // value id that does not belong to this option
+                'price' => '0.00',
+                'optionName' => $option->name,
+                'valueName' => 'Tampered',
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasErrors('options')
+            ->assertSet('step', 1);
+
+        // The option must not have been synced at no charge.
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $option->id,
+        ]);
+    }
+
     public function test_parent_option_prices_sum_per_child_dates()
     {
         // Default OptionValue factory: perday at 22.75/day
