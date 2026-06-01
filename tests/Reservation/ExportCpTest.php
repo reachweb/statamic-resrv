@@ -4,9 +4,11 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Http\Controllers\ExportCpController;
 use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
@@ -432,6 +434,65 @@ class ExportCpTest extends TestCase
         $this->assertEquals('NOPROP', $rows[1][0]);
         $this->assertSame('', $rows[1][1]);
         $this->assertSame('', $rows[1][2]);
+    }
+
+    public function test_download_does_not_query_child_rates_per_parent_reservation()
+    {
+        $entries = $this->createRateEntries();
+        $entry = $entries->first();
+        $rate = Rate::where('collection', $entry->collection()->handle())
+            ->where('slug', 'test')
+            ->firstOrFail();
+
+        $makeParent = function (string $ref) use ($entry, $rate) {
+            $parent = Reservation::factory([
+                'item_id' => $entry->id(),
+                'status' => 'confirmed',
+                'reference' => $ref,
+                'type' => 'parent',
+                'date_start' => today()->toIso8601String(),
+                'date_end' => today()->addDays(2)->toIso8601String(),
+            ])->withCustomer()->create();
+
+            ChildReservation::factory()->withRate($rate->id)->count(2)->create([
+                'reservation_id' => $parent->id,
+            ]);
+        };
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+        $url = cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug";
+
+        $countChildQueries = function () use ($url) {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            $this->get($url)->streamedContent();
+
+            $count = collect(DB::getQueryLog())
+                ->filter(fn ($query) => str_contains($query['query'], 'resrv_child_reservations'))
+                ->count();
+
+            DB::disableQueryLog();
+
+            return $count;
+        };
+
+        $makeParent('PARENT1');
+        $makeParent('PARENT2');
+        $twoParents = $countChildQueries();
+
+        $makeParent('PARENT3');
+        $makeParent('PARENT4');
+        $fourParents = $countChildQueries();
+
+        // Child rates are eager-loaded once per chunk, not re-queried per parent row.
+        $this->assertSame(
+            $twoParents,
+            $fourParents,
+            'Export must not issue a child-reservation query per parent reservation row.'
+        );
     }
 
     public function test_dynamic_discovery_does_not_duplicate_standard_customer_keys()

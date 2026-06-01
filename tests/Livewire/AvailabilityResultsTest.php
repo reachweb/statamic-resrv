@@ -1269,6 +1269,41 @@ class AvailabilityResultsTest extends TestCase
             ->assertDispatched('availability-results-updated');
     }
 
+    public function test_cutoff_does_not_block_when_enabled_but_no_schedule_or_default()
+    {
+        // Enable cutoff rules globally
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        // Entry opts into cutoff but has no matching schedule and no default starting time —
+        // there is no cutoff to enforce, so a same-day search must not be falsely blocked.
+        $entry = $this->makeStatamicItemWithAvailability();
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
+
+        $resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => null,
+                'default_cutoff_hours' => null,
+            ],
+        ];
+        $resrvEntry->save();
+
+        $this->travelTo(now()->setTime(14, 0, 0));
+        $today = now()->startOfDay();
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $today->toISOString(),
+                    'date_end' => $today->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => null,
+            ])
+            ->assertHasNoErrors()
+            ->assertDispatched('availability-results-updated');
+    }
+
     public function test_cutoff_enforces_correct_schedule_based_on_date()
     {
         // Enable cutoff rules globally

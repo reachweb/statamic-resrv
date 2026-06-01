@@ -20,6 +20,8 @@ class ProcessDataImport implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public function __construct(protected string $cacheKey = 'resrv-data-import') {}
+
     /**
      * Execute the job.
      *
@@ -27,7 +29,7 @@ class ProcessDataImport implements ShouldQueue
      */
     public function handle()
     {
-        $dataImport = Cache::get('resrv-data-import');
+        $dataImport = Cache::get($this->cacheKey);
 
         if (! $dataImport) {
             Log::warning('Data import job fired but cache entry was missing.');
@@ -170,7 +172,7 @@ class ProcessDataImport implements ShouldQueue
             });
         });
 
-        Cache::forget('resrv-data-import');
+        Cache::forget($this->cacheKey);
 
         return true;
     }

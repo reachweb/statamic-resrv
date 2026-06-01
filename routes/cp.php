@@ -77,7 +77,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
 
         Route::get('/resrv/dataimport', 'DataImportCpController@index')->name('dataimport.index');
         Route::post('/resrv/dataimport', 'DataImportCpController@confirm')->name('dataimport.confirm');
-        Route::get('/resrv/dataimport/store', 'DataImportCpController@store')->name('dataimport.store');
+        Route::post('/resrv/dataimport/store', 'DataImportCpController@store')->name('dataimport.store');
 
         Route::get('/resrv/utility/entries', 'UtilityCpController@entries')->name('utilities.entries');
 

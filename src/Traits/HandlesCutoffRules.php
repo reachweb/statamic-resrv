@@ -41,10 +41,17 @@ trait HandlesCutoffRules
             }
         }
 
+        // No schedule matched. Only fall back to a default when one is actually configured;
+        // otherwise return null so callers treat it as "no cutoff applies" instead of computing
+        // a bogus midnight cutoff from a null starting_time and throwing a false CutoffException.
+        if (empty($rules['default_starting_time'])) {
+            return null;
+        }
+
         return [
-            'starting_time' => $rules['default_starting_time'] ?? null,
+            'starting_time' => $rules['default_starting_time'],
             'cutoff_hours' => $rules['default_cutoff_hours'] ?? null,
-            'schedule_name' => $rules['default_starting_time'] ? 'Default Schedule' : 'No Schedule Provided',
+            'schedule_name' => 'Default Schedule',
         ];
     }
 

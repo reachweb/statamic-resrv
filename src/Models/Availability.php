@@ -304,9 +304,17 @@ class Availability extends Model implements AvailabilityContract
         $exhaustedByRate = app(AvailabilityRepositoryClass::class)
             ->getExhaustedDatesForRates($ratesMap->values(), $this->quantity, $this->date_start, $this->date_end);
 
+        // Pre-load shared-independent pricing (rate overrides + base-rate prices) for every grouped
+        // entry in one query each, so resolveSharedIndependentPrices() does no per-item queries below.
+        $statamicIds = $filteredAvailable->pluck('statamic_id')->unique()->values()->all();
+        $prefetchedPricing = [
+            'overrides' => $this->loadRateOverridesForRates($ratesMap->values(), $statamicIds, $this->date_start, $this->date_end),
+            'basePrices' => $this->loadBasePricesForRates($ratesMap->values(), $statamicIds, $this->date_start, $this->date_end),
+        ];
+
         $availableWithPricing = $filteredAvailable
             ->groupBy('statamic_id')
-            ->map(function ($items) use ($ratesMap, $sharedByBase, $selectedSharedRate, $exhaustedByRate) {
+            ->map(function ($items) use ($ratesMap, $sharedByBase, $selectedSharedRate, $exhaustedByRate, $prefetchedPricing) {
                 $processed = collect();
 
                 foreach ($items as $item) {
@@ -314,7 +322,7 @@ class Availability extends Model implements AvailabilityContract
                         if ($this->ratePassesRestrictions($selectedSharedRate, $exhaustedByRate->get($selectedSharedRate->id, collect()))
                             && $selectedSharedRate->appliesToEntry($item->statamic_id)
                         ) {
-                            if ($populated = $this->populateAvailability($item, rateId: $selectedSharedRate->id, rate: $selectedSharedRate)) {
+                            if ($populated = $this->populateAvailability($item, rateId: $selectedSharedRate->id, rate: $selectedSharedRate, prefetchedPricing: $prefetchedPricing)) {
                                 $processed->push($populated);
                             }
                         }
@@ -337,7 +345,7 @@ class Availability extends Model implements AvailabilityContract
                         if (! $sharedRate->appliesToEntry($item->statamic_id)) {
                             continue;
                         }
-                        if ($populated = $this->populateAvailability($item, rateId: $sharedRate->id, rate: $sharedRate)) {
+                        if ($populated = $this->populateAvailability($item, rateId: $sharedRate->id, rate: $sharedRate, prefetchedPricing: $prefetchedPricing)) {
                             $processed->push($populated);
                         }
                     }
@@ -558,11 +566,11 @@ class Availability extends Model implements AvailabilityContract
         return false;
     }
 
-    protected function populateAvailability($results, $label = null, ?int $rateId = null, ?Rate $rate = null): ?Collection
+    protected function populateAvailability($results, $label = null, ?int $rateId = null, ?Rate $rate = null, ?array $prefetchedPricing = null): ?Collection
     {
         $effectiveRateId = $rateId ?? $this->rateId ?? $results->rate_id;
 
-        $prices = $this->getPrices($results->prices, $results->statamic_id, $effectiveRateId, $rate);
+        $prices = $this->getPrices($results->prices, $results->statamic_id, $effectiveRateId, $rate, $prefetchedPricing);
 
         if ($prices['reservationPrice'] === null) {
             return null;
@@ -1058,6 +1066,33 @@ class Availability extends Model implements AvailabilityContract
             ->whereIn('statamic_id', $statamicIds)
             ->when($dateStart, fn ($q) => $q->where('date', '>=', $dateStart))
             ->when($dateEnd, fn ($q) => $q->where('date', '<=', $dateEnd))
+            ->get()
+            ->groupBy('rate_id')
+            ->map(function ($rows) {
+                return $rows->keyBy(fn ($row) => $row->statamic_id.'|'.Carbon::parse($row->getRawOriginal('date'))->toDateString());
+            });
+    }
+
+    /**
+     * Batch-loads base-rate availability prices, keyed by base rate id then "statamic_id|date",
+     * for every shared-independent rate that falls back to its base rate on un-overridden dates.
+     */
+    protected function loadBasePricesForRates(Collection $rates, array $statamicIds, ?string $dateStart = null, ?string $dateEnd = null): Collection
+    {
+        $baseRateIds = $rates
+            ->filter(fn ($rate) => $rate->hasIndependentSharedPricing() && $rate->base_rate_id)
+            ->pluck('base_rate_id')
+            ->unique()
+            ->values();
+
+        if ($baseRateIds->isEmpty() || empty($statamicIds)) {
+            return collect();
+        }
+
+        return Availability::whereIn('rate_id', $baseRateIds->all())
+            ->whereIn('statamic_id', $statamicIds)
+            ->when($dateStart, fn ($q) => $q->where('date', '>=', $dateStart))
+            ->when($dateEnd, fn ($q) => $q->where('date', '<', $dateEnd))
             ->get()
             ->groupBy('rate_id')
             ->map(function ($rows) {

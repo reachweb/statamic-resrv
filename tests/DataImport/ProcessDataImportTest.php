@@ -68,6 +68,39 @@ class ProcessDataImportTest extends TestCase
         ]);
     }
 
+    // Imports are cached per user, so the job must read (and clear) the key it was dispatched with.
+    public function test_import_reads_and_clears_the_provided_cache_key()
+    {
+        $item = $this->makeStatamicItem();
+        $entryId = $item->id();
+        $tomorrow = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $fakeImport = new class($entryId, $tomorrow)
+        {
+            public function __construct(private $entryId, private $date) {}
+
+            public function prepare()
+            {
+                return collect([
+                    $this->entryId => collect([
+                        ['date_start' => $this->date, 'date_end' => $this->date, 'price' => 100, 'available' => 1],
+                    ]),
+                ]);
+            }
+        };
+
+        Cache::put('resrv-data-import-1', $fakeImport);
+
+        (new ProcessDataImport('resrv-data-import-1'))->handle();
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'price' => 100,
+            'available' => 1,
+        ]);
+        $this->assertFalse(Cache::has('resrv-data-import-1'));
+    }
+
     public function test_import_uses_existing_rate_when_rate_id_omitted()
     {
         $item = $this->makeStatamicItem();

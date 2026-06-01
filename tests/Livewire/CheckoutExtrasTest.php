@@ -224,6 +224,49 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
+    // An unpublished extra can't be shown or selected by the customer, so the server-side
+    // required-extras gate must not keep blocking checkout for it.
+    public function test_it_does_not_require_an_unpublished_extra()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+
+        ExtraCondition::factory()->requiredAlways()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        ResrvExtra::whereKey($extra->id)->update(['published' => false]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertHasNoErrors(['extras'])
+            ->assertSet('step', 2);
+    }
+
+    // A soft-deleted extra likewise can't be selected; the gate must skip it instead of blocking.
+    public function test_it_does_not_require_a_soft_deleted_extra()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+
+        ExtraCondition::factory()->requiredAlways()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        ResrvExtra::destroy($extra->id);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertHasNoErrors(['extras'])
+            ->assertSet('step', 2);
+    }
+
     // Negative quantity must be rejected server-side (would undercharge); errors surface under enabledExtras.extras.*.
     public function test_it_rejects_a_negative_extra_quantity()
     {
@@ -1445,6 +1488,36 @@ class CheckoutExtrasTest extends TestCase
         // Expected: 22.75 * 2 + 22.75 * 1 = 68.25
         // Compounded bug (option/value re-used across children): 22.75 * 2 then 45.50 * 1 = 91.00
         $this->assertEquals('68.25', $reservation->extraCharges()->format());
+    }
+
+    public function test_extra_charges_prices_a_soft_deleted_option_value()
+    {
+        $item = $this->entries->first();
+
+        // Default OptionValueFactory: perday at 22.75/day.
+        $option = Option::factory()->create(['item_id' => $item->id()]);
+        $value = OptionValue::factory()->create(['option_id' => $option->id]);
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+            'price' => '100.00',
+            'payment' => '100.00',
+        ]);
+
+        $reservation->options()->attach($option->id, ['value' => $value->id]);
+
+        // Baseline with the value live: 22.75/day * 2 days = 45.50.
+        $this->assertEquals('45.50', $reservation->extraCharges()->format());
+
+        // Soft-delete the value after the reservation is created — historical reservations
+        // must still be priceable (mirrors the soft-deleted Extra path).
+        $value->delete();
+
+        // Should not throw, and must price using the trashed value.
+        $this->assertEquals('45.50', $reservation->extraCharges()->format());
     }
 
     public function test_parent_required_extras_error_uses_real_extra_ids()

@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\RatePrice;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -1146,6 +1147,103 @@ class RateSharedAvailabilityTest extends TestCase
             $queriesForFourEntries,
             'Shared-rate capacity checks must not issue a reservation query per browsed entry.'
         );
+    }
+
+    public function test_browse_collection_batches_shared_independent_pricing_queries_across_entries()
+    {
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        // Shared rate with its own per-date price overrides (independent pricing).
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-independent',
+            'base_rate_id' => $baseRate->id,
+            'require_price_override' => false,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        // Each entry overrides only the first night, so the resolver must also fall back to the
+        // base-rate price for the second night — exercising both per-item queries pre-batching.
+        $addEntryWithAvailability = function () use ($baseRate, $sharedRate, $startDate) {
+            $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+            Availability::factory()
+                ->count(2)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $baseRate->id,
+                    'price' => 100,
+                    'available' => 10,
+                ]);
+
+            RatePrice::create([
+                'rate_id' => $sharedRate->id,
+                'statamic_id' => $entry->id(),
+                'date' => $startDate->toDateString(),
+                'price' => 50,
+            ]);
+
+            return $entry;
+        };
+
+        $searchData = [
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ];
+
+        $countPricingQueries = function () use ($searchData) {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            $result = app(Availability::class)->getAvailable($searchData);
+            $this->assertTrue($result['message']['status']);
+
+            $log = collect(DB::getQueryLog());
+            $counts = [
+                'rate_prices' => $log->filter(fn ($query) => str_contains($query['query'], 'resrv_rate_prices'))->count(),
+                'availabilities' => $log->filter(fn ($query) => str_contains($query['query'], 'select') && str_contains($query['query'], 'resrv_availabilities'))->count(),
+            ];
+
+            DB::disableQueryLog();
+
+            return [$counts, $result];
+        };
+
+        $addEntryWithAvailability();
+        $addEntryWithAvailability();
+        [$twoEntryCounts, $twoEntryResult] = $countPricingQueries();
+
+        $addEntryWithAvailability();
+        $addEntryWithAvailability();
+        [$fourEntryCounts] = $countPricingQueries();
+
+        // Override and base-price lookups are batched once per search, not once per browsed entry.
+        $this->assertSame(
+            $twoEntryCounts['rate_prices'],
+            $fourEntryCounts['rate_prices'],
+            'Shared-independent override lookups must not issue a rate-price query per browsed entry.'
+        );
+        $this->assertSame(
+            $twoEntryCounts['availabilities'],
+            $fourEntryCounts['availabilities'],
+            'Base-rate price fallback must not issue an availability query per browsed entry.'
+        );
+
+        // Pricing is unchanged: first night uses the 50 override, second night falls back to base 100.
+        $firstEntryId = $twoEntryResult['data']->keys()->first();
+        $sharedOption = $twoEntryResult['data'][$firstEntryId]->firstWhere('rate_id', $sharedRate->id);
+        $this->assertNotNull($sharedOption);
+        $this->assertEquals('150.00', $sharedOption['price']);
     }
 
     public function test_browse_collection_excludes_exhausted_shared_rate_capacity()
