@@ -55,21 +55,18 @@ class ProcessDataImport implements ShouldQueue
                 }
 
                 // date_start/date_end come straight from the CSV header (DataImport::getDatesFromHeader)
-                // and bypass the numeric coercion above. A blank range parses to "now" and writes an
-                // unintended row, an unparseable value makes CarbonPeriod::create() throw and abort the
-                // whole import, and a reversed range yields an empty period that writes nothing without
-                // a trace. Validate parseability and order, then skip+log the row like the guard above.
-                if (blank($data['date_start'] ?? null) || blank($data['date_end'] ?? null)) {
-                    Log::warning("Data import: skipping row for entry {$id} — blank date range.");
+                // and bypass the numeric coercion above. Headers are expected to carry strict
+                // YYYY-MM-DD dates, but Carbon::parse() is too lenient: it normalizes overflow
+                // (2024-02-30 → 2024-03-01) and accepts relative strings ("next monday"), either of
+                // which would silently write availability for an unintended date. parseImportDate()
+                // enforces the exact format, so a blank, malformed, or reversed range is skipped +
+                // logged per row like the price/availability guard above instead of corrupting data
+                // or — for unparseable input reaching CarbonPeriod::create() — aborting the import.
+                $periodStart = $this->parseImportDate($data['date_start'] ?? null);
+                $periodEnd = $this->parseImportDate($data['date_end'] ?? null);
 
-                    return;
-                }
-
-                try {
-                    $periodStart = Carbon::parse($data['date_start']);
-                    $periodEnd = Carbon::parse($data['date_end']);
-                } catch (\Throwable $e) {
-                    Log::warning("Data import: skipping row for entry {$id} — unparseable date range.");
+                if (! $periodStart || ! $periodEnd) {
+                    Log::warning("Data import: skipping row for entry {$id} — blank or invalid date range (expected YYYY-MM-DD).");
 
                     return;
                 }
@@ -187,5 +184,26 @@ class ProcessDataImport implements ShouldQueue
         Cache::forget('resrv-data-import');
 
         return true;
+    }
+
+    /**
+     * Strictly parse a CSV header date as YYYY-MM-DD, returning null for anything else. The
+     * exact-format parse rejects wrong separators and relative strings ("next monday"), while the
+     * round-trip comparison rejects overflow dates Carbon would otherwise silently normalize
+     * (e.g. 2024-02-30 → 2024-03-01, 2023-02-29 → 2023-03-01).
+     */
+    private function parseImportDate($value): ?Carbon
+    {
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        try {
+            $date = Carbon::createFromFormat('!Y-m-d', $value);
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return $date && $date->format('Y-m-d') === $value ? $date : null;
     }
 }

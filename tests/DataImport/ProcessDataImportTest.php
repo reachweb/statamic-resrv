@@ -262,6 +262,27 @@ class ProcessDataImportTest extends TestCase
         $this->assertInvalidDateRangeIsSkipped($start, $end);
     }
 
+    public function test_import_skips_row_with_overflow_date()
+    {
+        // Carbon::parse() would normalize 2024-02-30 to 2024-03-01 and write availability for the
+        // wrong date. Strict YYYY-MM-DD parsing must reject it instead.
+        $this->assertInvalidDateRangeIsSkipped('2024-02-30', '2024-03-15');
+    }
+
+    public function test_import_skips_row_with_relative_date_string()
+    {
+        // Relative strings like "next monday" are valid to Carbon::parse() but are not real header
+        // dates — strict YYYY-MM-DD parsing must reject them.
+        $this->assertInvalidDateRangeIsSkipped('next monday', 'next friday');
+    }
+
+    public function test_import_skips_row_with_non_iso_date_separator()
+    {
+        // Headers are expected to use YYYY-MM-DD; a slash-separated date is rejected rather than
+        // silently coerced, so the row is skipped + logged instead of corrupting availability.
+        $this->assertInvalidDateRangeIsSkipped('2024/01/15', '2024/01/20');
+    }
+
     protected function assertInvalidDateRangeIsSkipped($dateStart, $dateEnd): void
     {
         $item = $this->makeStatamicItem();
