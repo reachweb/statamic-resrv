@@ -240,6 +240,62 @@ class ProcessDataImportTest extends TestCase
         $this->assertDatabaseCount('resrv_availabilities', 0);
     }
 
+    public function test_import_skips_row_with_blank_date_range()
+    {
+        // A blank header date silently parses to "now" via Carbon, which would write an unintended
+        // availability row for today instead of being skipped.
+        $this->assertInvalidDateRangeIsSkipped('', '');
+    }
+
+    public function test_import_skips_row_with_unparseable_date_range()
+    {
+        // A garbage date would otherwise make CarbonPeriod::create() throw and abort the whole import;
+        // it must be skipped + logged per row instead.
+        $this->assertInvalidDateRangeIsSkipped('not-a-date', 'also-not-a-date');
+    }
+
+    public function test_import_skips_row_with_reversed_date_range()
+    {
+        // date_start after date_end yields an empty CarbonPeriod that writes nothing without a trace.
+        $start = today()->addDays(5)->isoFormat('YYYY-MM-DD');
+        $end = today()->addDay()->isoFormat('YYYY-MM-DD');
+        $this->assertInvalidDateRangeIsSkipped($start, $end);
+    }
+
+    protected function assertInvalidDateRangeIsSkipped($dateStart, $dateEnd): void
+    {
+        $item = $this->makeStatamicItem();
+        $entryId = $item->id();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $fakeImport = new class($entryId, $dateStart, $dateEnd, $rate->id)
+        {
+            public function __construct(private $entryId, private $dateStart, private $dateEnd, private $rateId) {}
+
+            public function prepare()
+            {
+                return collect([
+                    $this->entryId => collect([
+                        [
+                            'date_start' => $this->dateStart,
+                            'date_end' => $this->dateEnd,
+                            'price' => 100,
+                            'available' => 2,
+                            'rate_id' => $this->rateId,
+                        ],
+                    ]),
+                ]);
+            }
+        };
+
+        Cache::put('resrv-data-import', $fakeImport);
+        Log::shouldReceive('warning')->once();
+
+        (new ProcessDataImport)->handle();
+
+        $this->assertDatabaseCount('resrv_availabilities', 0);
+    }
+
     public function test_import_coerces_numeric_string_values()
     {
         $item = $this->makeStatamicItem();

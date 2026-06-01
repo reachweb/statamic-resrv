@@ -1315,6 +1315,26 @@ class RateSharedAvailabilityTest extends TestCase
         $this->assertNotEmpty($fitsCap);
     }
 
+    public function test_selected_rate_calendar_rejects_shared_rate_when_quantity_exceeds_cap()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 5, maxAvailable: 1);
+
+        // No reservations exist, so getExhaustedDatesForRate() returns an empty set. Requesting the
+        // shared rate directly (rateId set, showAllRates = false) with a quantity above the cap must
+        // still drop every date — otherwise the selected-rate calendar advertises dates that
+        // checkout/search reject, matching the browse/all-rates paths.
+        $exceedsCap = app(Availability::class)->getAvailableDatesFromDate(
+            $setup['entry']->id(), $setup['startDate']->toDateString(), 2, $setup['sharedRate']->id,
+        );
+        $this->assertEmpty($exceedsCap);
+
+        // A quantity that fits the cap still renders the calendar dates.
+        $fitsCap = app(Availability::class)->getAvailableDatesFromDate(
+            $setup['entry']->id(), $setup['startDate']->toDateString(), 1, $setup['sharedRate']->id,
+        );
+        $this->assertNotEmpty($fitsCap);
+    }
+
     public function test_empty_calendar_result_skips_unbounded_exhausted_date_scan()
     {
         $setup = $this->createSharedSetup(baseAvailable: 5, maxAvailable: 1);

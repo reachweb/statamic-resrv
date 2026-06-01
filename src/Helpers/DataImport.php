@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Helpers;
 
-use Carbon\Carbon;
 use Spatie\SimpleExcel\SimpleExcelReader;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Site;
@@ -89,11 +88,17 @@ class DataImport
 
     private function getDatesFromHeader($header)
     {
-        $dates = explode('|', explode(':', $header)[1]);
+        // Headers look like "price:2024-01-01|2024-01-10". Parse defensively and hand back the raw
+        // date strings rather than Carbon instances: a malformed header (missing ":"/"|" segment,
+        // blank, or unparseable date) must not throw here — that would abort the entire import before
+        // ProcessDataImport's per-row validation can skip+log just the offending row. Blanks are left
+        // blank so that guard can detect them instead of Carbon silently coercing "" to today.
+        $afterColon = explode(':', $header, 2)[1] ?? '';
+        $dates = explode('|', $afterColon);
 
         return [
-            'date_start' => Carbon::create($dates[0]),
-            'date_end' => Carbon::create($dates[1]),
+            'date_start' => trim($dates[0] ?? ''),
+            'date_end' => trim($dates[1] ?? ''),
         ];
     }
 

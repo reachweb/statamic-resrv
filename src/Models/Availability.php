@@ -867,6 +867,15 @@ class Availability extends Model implements AvailabilityContract
                 $results = $results->filter(fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date));
             }
 
+            // A requested quantity larger than the cap can never be satisfied on any date — not even
+            // one with zero bookings. getExhaustedDatesForRate() below only flags dates that already
+            // carry a reservation, so it would miss this and the calendar would advertise dates that
+            // checkout/search reject. Mirror rateHasCapacity() and expandRatesFromBaseResults(): drop
+            // every date for the rate up front.
+            if ($rate?->isShared() && $rate->max_available && $quantity > $rate->max_available) {
+                return [];
+            }
+
             // Skip the lookup entirely for an empty set: there are no dates to reject, and
             // exhaustedDateWindow() would hand getExhaustedDatesForRate() a null range, falling
             // back to the unbounded all-history reservation scan that M5 removed.

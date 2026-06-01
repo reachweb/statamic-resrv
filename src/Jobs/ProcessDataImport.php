@@ -54,10 +54,36 @@ class ProcessDataImport implements ShouldQueue
                     return;
                 }
 
+                // date_start/date_end come straight from the CSV header (DataImport::getDatesFromHeader)
+                // and bypass the numeric coercion above. A blank range parses to "now" and writes an
+                // unintended row, an unparseable value makes CarbonPeriod::create() throw and abort the
+                // whole import, and a reversed range yields an empty period that writes nothing without
+                // a trace. Validate parseability and order, then skip+log the row like the guard above.
+                if (blank($data['date_start'] ?? null) || blank($data['date_end'] ?? null)) {
+                    Log::warning("Data import: skipping row for entry {$id} — blank date range.");
+
+                    return;
+                }
+
+                try {
+                    $periodStart = Carbon::parse($data['date_start']);
+                    $periodEnd = Carbon::parse($data['date_end']);
+                } catch (\Throwable $e) {
+                    Log::warning("Data import: skipping row for entry {$id} — unparseable date range.");
+
+                    return;
+                }
+
+                if ($periodStart->gt($periodEnd)) {
+                    Log::warning("Data import: skipping row for entry {$id} — reversed date range (start after end).");
+
+                    return;
+                }
+
                 $price = (float) $data['price'];
                 $available = (int) $data['available'];
 
-                $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
+                $period = CarbonPeriod::create($periodStart, $periodEnd);
                 $rateId = $data['rate_id'] ?? null;
                 $isSharedRate = false;
                 $sharedIndependentRateId = null;
@@ -106,7 +132,7 @@ class ProcessDataImport implements ShouldQueue
                 if ($isSharedRate) {
                     $existingDates = Availability::where('statamic_id', $id)
                         ->where('rate_id', $rateId)
-                        ->whereBetween('date', [$data['date_start'], $data['date_end']])
+                        ->whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])
                         ->pluck('date')
                         ->map(fn ($d) => $d instanceof Carbon ? $d->toDateString() : $d)
                         ->all();
