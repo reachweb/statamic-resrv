@@ -5,7 +5,10 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
 use Reach\StatamicResrv\Livewire\Extras;
@@ -320,6 +323,46 @@ class AvailabilityMultiResultsTest extends TestCase
         ]);
     }
 
+    public function test_multi_checkout_rolls_back_parent_and_children_when_a_side_effect_fails()
+    {
+        $this->createCheckoutEntry();
+
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry();
+
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload());
+
+        $component
+            ->call('updateRateQuantity', $adultsRate->id, 2)
+            ->call('updateRateQuantity', $childrenRate->id, 2)
+            ->call('addSelections');
+
+        // Simulate a child decrement failing partway through the ReservationCreated chain.
+        Event::listen(ReservationCreated::class, function () {
+            throw new AvailabilityException(__('Not enough availability for this rate.'));
+        });
+
+        $component->call('checkout')
+            ->assertHasErrors('availability');
+
+        // Neither the parent nor any child rows may survive, and stock must not be left
+        // partially decremented.
+        $this->assertDatabaseCount('resrv_reservations', 0);
+        $this->assertDatabaseCount('resrv_child_reservations', 0);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $adultsRate->id,
+            'date' => $this->date->startOfDay(),
+            'available' => 5,
+        ]);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $childrenRate->id,
+            'date' => $this->date->startOfDay(),
+            'available' => 5,
+        ]);
+    }
+
     public function test_multi_date_checkout()
     {
         $this->createCheckoutEntry();
@@ -408,6 +451,35 @@ class AvailabilityMultiResultsTest extends TestCase
         foreach ($availabilities as $avail) {
             $this->assertEquals(2, $avail->available);
         }
+    }
+
+    public function test_multi_rate_checkout_decrements_each_rate_by_its_own_quantity()
+    {
+        $this->createCheckoutEntry();
+
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry(available: 5);
+
+        Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 2)
+            ->call('updateRateQuantity', $childrenRate->id, 3)
+            ->call('addSelections')
+            ->call('checkout');
+
+        // The parent must decrement each rate by its own child quantity (decreaseMultiple),
+        // not the whole cart total against every rate (the normal-reservation branch).
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $adultsRate->id,
+            'date' => $this->date->startOfDay(),
+            'available' => 3,
+        ]);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $childrenRate->id,
+            'date' => $this->date->startOfDay(),
+            'available' => 2,
+        ]);
     }
 
     public function test_checkout_errors_without_selections()

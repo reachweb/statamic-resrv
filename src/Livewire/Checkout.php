@@ -204,9 +204,12 @@ class Checkout extends Component
         // Update the reservation with the total
         $this->reservation->update($toUpdate);
 
-        // Sync extras & options to the database
-        $this->assignExtras();
-        $this->assignOptions();
+        // Sync extras & options to the database. Don't advance if either fails —
+        // the total was already written above, so proceeding would let the user pay
+        // an amount that doesn't match the extras/options actually attached.
+        if (! $this->assignExtras() || ! $this->assignOptions()) {
+            return;
+        }
 
         $this->step = 2;
     }
@@ -555,7 +558,7 @@ class Checkout extends Component
         $this->enabledOptions->options = collect($options);
     }
 
-    protected function assignExtras(): void
+    protected function assignExtras(): bool
     {
         if ($this->enabledExtras->extras->count() > 0) {
             try {
@@ -563,12 +566,14 @@ class Checkout extends Component
             } catch (\Exception $e) {
                 $this->addError('extras', 'There was an error assigning the extras. Please try again.');
 
-                return;
+                return false;
             }
         }
+
+        return true;
     }
 
-    protected function assignOptions(): void
+    protected function assignOptions(): bool
     {
         if ($this->enabledOptions->options->count() > 0) {
             try {
@@ -576,9 +581,11 @@ class Checkout extends Component
             } catch (\Exception $e) {
                 $this->addError('options', 'There was an error assigning the options. Please try again.');
 
-                return;
+                return false;
             }
         }
+
+        return true;
     }
 
     #[On('coupon-applied'), On('coupon-removed')]

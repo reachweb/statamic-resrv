@@ -133,7 +133,9 @@ watch(conditionsForm, (conditions) => {
 
 onMounted(() => {
     if (props.data) {
-        conditionsForm.value = Array.isArray(props.data) ? props.data : [];
+        // Clone so add/remove/v-model edits don't mutate the parent extra's
+        // conditions array in place before the user saves (or when they cancel).
+        conditionsForm.value = Array.isArray(props.data) ? props.data.map((condition) => ({ ...condition })) : [];
     }
     if (conditionsForm.value.length > 0) {
         emit('updated', handleDates(conditionsForm.value));

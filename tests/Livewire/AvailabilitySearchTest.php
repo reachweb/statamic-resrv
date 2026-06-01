@@ -308,6 +308,40 @@ class AvailabilitySearchTest extends TestCase
                 ])->assertStatus(200);
     }
 
+    public function test_reset_on_boot_resets_data_and_searches_on_initial_load()
+    {
+        // Seed the session with a previous search that set a rate and quantity.
+        Livewire::test(AvailabilitySearch::class)
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->set('data.quantity', 3)
+            ->set('data.rate', 5);
+
+        // A fresh load with resetOnBoot should clear the rate/quantity restored
+        // from the session and dispatch a fresh search.
+        Livewire::test(AvailabilitySearch::class, ['resetOnBoot' => true])
+            ->assertSet('data.quantity', 1)
+            ->assertSet('data.rate', null)
+            ->assertDispatched('availability-search-updated');
+    }
+
+    public function test_reset_on_boot_does_not_reset_data_on_subsequent_requests()
+    {
+        // With the reset logic in boot() it would re-run on every request and wipe
+        // the user's selection; in mount() it runs only on the initial load.
+        Livewire::test(AvailabilitySearch::class, ['resetOnBoot' => true])
+            ->set('data.rate', 5)
+            ->set('data.quantity', 3)
+            ->assertSet('data.rate', 5)
+            ->assertSet('data.quantity', 3)
+            // A later request that doesn't touch rate/quantity must leave them intact.
+            ->set('data.customer.adults', 2)
+            ->assertSet('data.rate', 5)
+            ->assertSet('data.quantity', 3);
+    }
+
     public function test_can_return_rates_if_set()
     {
         $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'overrideRates' => ['something']])

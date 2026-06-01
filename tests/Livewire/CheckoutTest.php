@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
@@ -149,6 +150,30 @@ class CheckoutTest extends TestCase
             'quantity' => 1,
             'price' => '9.30',
         ]);
+    }
+
+    public function test_first_step_does_not_advance_when_assigning_extras_fails()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $extras = ResrvExtra::getPriceForDates($this->reservation);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extras->first()->id => [
+                'id' => $extras->first()->id,
+                'quantity' => 1,
+                'price' => $extras->first()->price->format(),
+                'name' => $extras->first()->name,
+            ]]);
+
+        // Simulate a database failure during the extras sync (e.g. deadlock/constraint).
+        // The flow must surface the error and stay on step 1 rather than advancing to
+        // payment with a total that doesn't match the (unattached) extras.
+        Schema::drop('resrv_reservation_extra');
+
+        $component->call('handleFirstStep')
+            ->assertSet('step', 1)
+            ->assertHasErrors('extras');
     }
 
     public function test_it_handles_second_step()

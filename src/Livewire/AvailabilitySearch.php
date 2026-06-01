@@ -55,8 +55,10 @@ class AvailabilitySearch extends Component
     #[Locked]
     public array $overrideRates = [];
 
-    public function boot(): void
+    public function mount(): void
     {
+        // mount() runs once per component lifecycle; boot() would re-run on every
+        // subsequent request, resetting the user's rate/quantity selection each time.
         if ($this->resetOnBoot) {
             $this->data->quantity = 1;
             $this->data->rate = null;

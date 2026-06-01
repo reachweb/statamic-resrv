@@ -4,7 +4,10 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
@@ -1090,6 +1093,41 @@ class AvailabilityResultsTest extends TestCase
         // Call checkout and get a validation error
         $component->call('checkout')
             ->assertHasErrors('availability');
+    }
+
+    public function test_checkout_does_not_leave_an_orphan_reservation_when_a_side_effect_fails()
+    {
+        $this->createCheckoutEntry();
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => null,
+                ]
+            );
+
+        // Simulate a failure during the synchronous ReservationCreated chain (e.g. the
+        // locked decrement throwing when stock ran out in the TOCTOU window).
+        Event::listen(ReservationCreated::class, function () {
+            throw new AvailabilityException(__('Not enough availability for this rate.'));
+        });
+
+        $component->call('checkout')
+            ->assertHasErrors('availability');
+
+        // The reservation must be rolled back rather than left as an orphan PENDING row,
+        // and the availability the chain already decremented must be restored.
+        $this->assertDatabaseCount('resrv_reservations', 0);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $this->entries->first()->id(),
+            'date' => $this->date->startOfDay(),
+            'available' => 1,
+        ]);
     }
 
     public function test_starts_checkout_correctly_when_extra_quantity_is_ignored_for_pricing()
