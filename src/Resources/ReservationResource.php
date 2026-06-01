@@ -53,7 +53,7 @@ class ReservationResource extends ResourceCollection
                     'price' => config('resrv-config.currency_symbol').' '.$reservation->price->format(),
                     'date_start' => $this->formatDate($reservation->date_start),
                     'date_end' => $this->formatDate($reservation->date_end),
-                    'customer' => $reservation->customer,
+                    'customer' => ['email' => $reservation->customer?->email],
                     'extras' => $reservation->extras,
                     'options' => $reservation->options,
                     'rate' => $reservation->getRateLabel(),

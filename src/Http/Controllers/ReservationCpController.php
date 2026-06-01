@@ -54,10 +54,9 @@ class ReservationCpController extends Controller
 
     public function calendar(Request $request)
     {
-        // TODO: better validation
         $data = $request->validate([
-            'start' => 'required',
-            'end' => 'required',
+            'start' => 'required|date',
+            'end' => 'required|date',
         ]);
 
         // Parse dates using Carbon to handle various formats including ISO8601
@@ -198,7 +197,7 @@ class ReservationCpController extends Controller
         $data = $request->validate([
             'id' => 'required|integer',
         ]);
-        $reservation = $this->reservation->find($data['id']);
+        $reservation = $this->reservation->findOrFail($data['id']);
 
         if ($reservation->status === ReservationStatus::REFUNDED->value) {
             return response()->json(['error' => 'This reservation has already been refunded.'], 409);

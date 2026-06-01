@@ -53,6 +53,24 @@ class ReservationCpTest extends TestCase
         $this->assertArrayNotHasKey('permalink', $entry);
     }
 
+    public function test_index_payload_only_exposes_customer_email_not_full_pii()
+    {
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
+        $customer = $reservation->customer;
+
+        $response = $this->getJson(cp_route('resrv.reservation.index'));
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.0.customer.email', $customer->email);
+
+        // Only the email is exposed — not the id, timestamps, or the PII `data` blob.
+        $customerPayload = $response->json('data.0.customer');
+        $this->assertSame(['email'], array_keys($customerPayload));
+        $response->assertDontSee($customer->data->get('phone'));
+    }
+
     public function test_index_payload_renders_deleted_entry_as_plain_text()
     {
         Reservation::factory(['item_id' => 'deleted-entry-id'])->withCustomer()->create();
@@ -294,6 +312,17 @@ class ReservationCpTest extends TestCase
         Mail::assertNothingSent();
     }
 
+    public function test_refunding_a_non_existent_reservation_returns_404()
+    {
+        Mail::fake();
+        $this->withExceptionHandling();
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => 99999]));
+
+        $response->assertNotFound();
+        Mail::assertNothingSent();
+    }
+
     public function test_can_query_reservations_calendar_json()
     {
         $item = $this->makeStatamicItem();
@@ -306,6 +335,15 @@ class ReservationCpTest extends TestCase
         $response = $this->get(cp_route('resrv.reservations.calendar.list').'?start='.urlencode(now()->toIso8601String()).'&end='.urlencode(now()->addMonth()->toIso8601String()));
 
         $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title);
+    }
+
+    public function test_calendar_rejects_invalid_dates()
+    {
+        $this->withExceptionHandling();
+
+        $response = $this->getJson(cp_route('resrv.reservations.calendar.list').'?start=notadate&end=notadate');
+
+        $response->assertStatus(422);
     }
 
     public function test_can_show_reservations_calendar()

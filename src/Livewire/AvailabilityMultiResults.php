@@ -364,12 +364,15 @@ class AvailabilityMultiResults extends Component
         }
 
         $selectionDataArrays = $this->buildSelectionDataArrays();
+        $extras = Extra::findMany($this->enabledExtras->extras->pluck('id'))->keyBy('id');
 
-        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($selectionDataArrays) {
+        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($selectionDataArrays, $extras) {
             $totalPrice = Price::create(0);
 
             foreach ($selectionDataArrays as $selectionData) {
-                $totalPrice->add(Price::create(Extra::find($extra['id'])->priceForDates($selectionData)));
+                // Clone per call: Extra::priceForDates() mutates $this->price for dynamic
+                // pricing, so each selection must start from the freshly-loaded base price.
+                $totalPrice->add(Price::create((clone $extras->get($extra['id']))->priceForDates($selectionData)));
             }
 
             $extra['price'] = $totalPrice->format();
@@ -385,12 +388,13 @@ class AvailabilityMultiResults extends Component
         }
 
         $selectionDataArrays = $this->buildSelectionDataArrays();
+        $values = OptionValue::findMany($this->enabledOptions->options->pluck('value'))->keyBy('id');
 
-        $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($selectionDataArrays) {
+        $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($selectionDataArrays, $values) {
             $totalPrice = Price::create(0);
 
             foreach ($selectionDataArrays as $selectionData) {
-                $totalPrice->add(Price::create(OptionValue::find($option['value'])->priceForDates($selectionData)));
+                $totalPrice->add(Price::create($values->get($option['value'])->priceForDates($selectionData)));
             }
 
             $option['price'] = $totalPrice->format();

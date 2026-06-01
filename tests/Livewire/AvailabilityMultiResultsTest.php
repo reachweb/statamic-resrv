@@ -2,7 +2,9 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
@@ -12,6 +14,7 @@ use Reach\StatamicResrv\Livewire\Traits\HandlesExtrasQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesOptionsQueries;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Option;
@@ -769,6 +772,42 @@ class AvailabilityMultiResultsTest extends TestCase
         $extras = $component->get('enabledExtras.extras');
         // Extra is 4.65/day perday. 2 selections × 2 days each × 4.65 = 18.60
         $this->assertEquals('18.60', $extras->first()['price']);
+    }
+
+    public function test_extras_dynamic_pricing_is_applied_per_selection_not_compounded()
+    {
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry();
+
+        $extra = ResrvExtra::factory()->create(); // 4.65/day perday
+        ResrvEntry::whereItemId($entryId)->extras()->attach($extra->id);
+
+        // Fixed -2 per-unit decrease when reservation_duration >= 2 (the extra() factory state).
+        $dynamic = DynamicPricing::factory()->extra()->create();
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $extra->id,
+            'dynamic_pricing_assignment_type' => ResrvExtra::class,
+        ]);
+        Cache::flush();
+
+        // Two selections over identical 2-day dates. Each: (4.65 - 2)/day × 2 days = 5.30.
+        $price = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('updateRateQuantity', $childrenRate->id, 1)
+            ->call('addSelections')
+            ->dispatch('extras-updated', [[
+                'id' => $extra->id,
+                'price' => '0',
+                'name' => $extra->name,
+                'quantity' => 1,
+            ]])
+            ->get('enabledExtras.extras')->first()['price'];
+
+        // 2 × 5.30 = 10.60. Not 18.60 (proves dynamic pricing fired), and not 6.60 — which
+        // is what selection 2 would cost if priceForDates()'s price mutation leaked from
+        // selection 1 (5.30 + (2.65 - 2)/day × 2 days = 5.30 + 1.30).
+        $this->assertEquals('10.60', $price);
     }
 
     public function test_extras_price_recalculated_on_remove_selection()

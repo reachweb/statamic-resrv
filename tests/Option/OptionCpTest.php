@@ -229,4 +229,35 @@ class OptionCpTest extends TestCase
             'order' => 2,
         ]);
     }
+
+    public function test_updating_a_non_existent_option_returns_404()
+    {
+        $this->withExceptionHandling();
+
+        $payload = [
+            'id' => 99999,
+            'name' => 'This option does not exist',
+            'slug' => 'this-option-does-not-exist',
+            'item_id' => 'some-item',
+            'required' => false,
+            'order' => 1,
+            'published' => true,
+        ];
+
+        $response = $this->patch(cp_route('resrv.option.update'), $payload);
+        $response->assertNotFound();
+    }
+
+    public function test_reordering_a_non_existent_option_returns_404()
+    {
+        $this->withExceptionHandling();
+
+        $payload = [
+            'id' => 99999,
+            'order' => 3,
+        ];
+
+        $response = $this->patch(cp_route('resrv.option.order'), $payload);
+        $response->assertNotFound();
+    }
 }
