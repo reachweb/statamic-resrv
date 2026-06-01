@@ -33,10 +33,7 @@ class ExpireReservations implements ShouldQueue
             return;
         }
 
-        // Only load rows that are already past their hold window instead of pulling every PENDING
-        // row and filtering in PHP. This prune runs synchronously on every availability search, so
-        // keeping the work proportional to the (usually empty) set of stale holds matters here.
-        // created_at + holdMinutes < now  <=>  created_at < now - holdMinutes.
+        // Filter in SQL (not PHP) — this prune runs on every availability search.
         Reservation::where('status', ReservationStatus::PENDING->value)
             ->where('created_at', '<', Carbon::now()->subMinutes($holdMinutes))
             ->get()
@@ -44,9 +41,7 @@ class ExpireReservations implements ShouldQueue
     }
 
     /**
-     * Call expire() on a reservation and log any failure without aborting the batch. Bad rows
-     * (e.g. intent cancel failures bubbling up) shouldn't stop other pending reservations from
-     * being expired. Reservation::expire() no longer swallows exceptions itself.
+     * Expire a reservation, logging failures without aborting the batch.
      */
     protected function expireSafely(?Reservation $reservation): void
     {

@@ -23,7 +23,6 @@ class MultisiteEntryDeletionTest extends TestCase
     {
         parent::setUp();
 
-        // Configure multisite with English (default) and Greek
         Site::setSites([
             'en' => [
                 'name' => 'English',
@@ -63,7 +62,6 @@ class MultisiteEntryDeletionTest extends TestCase
             ]);
         $this->originEntry->save();
 
-        // The localization carries a different id than its origin.
         $this->localizedEntry = $this->originEntry->makeLocalization('el');
         $this->localizedEntry->slug('test-room-el');
         $this->localizedEntry->data([
@@ -78,7 +76,7 @@ class MultisiteEntryDeletionTest extends TestCase
             'title' => 'Default',
         ]);
 
-        // Availability and reservations are always stored against the ORIGIN id.
+        // Availability is always stored against the origin id, not the localization id.
         Availability::factory()->create([
             'statamic_id' => $this->originEntry->id(),
             'rate_id' => $rate->id,
@@ -122,8 +120,7 @@ class MultisiteEntryDeletionTest extends TestCase
 
         $localizedId = $this->localizedEntry->id();
 
-        // Statamic deletes localizations first (deleteDescendants -> delete()), firing
-        // EntryDeleting with the localized id. The guard must resolve it to the origin.
+        // Statamic fires EntryDeleting with the localized id; the guard must resolve it to the origin.
         $result = $this->localizedEntry->delete();
 
         $this->assertFalse($result, 'Deleting a localization of a booked item should be halted by the EntryDeleting listener');

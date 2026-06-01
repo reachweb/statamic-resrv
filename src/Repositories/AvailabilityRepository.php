@@ -247,11 +247,8 @@ class AvailabilityRepository
     }
 
     /**
-     * Namespaces a pending entry by reservation type. Normal reservations (resrv_reservations) and
-     * child reservations (resrv_child_reservations) are independent auto-increment sequences, so a
-     * bare integer id cannot tell a normal id=5 apart from a child id=5. Storing both in the same
-     * availability row's pending list silently dropped the second decrement (overbooking) and
-     * restored the wrong holder's stock on release.
+     * Prefixes the id with 'r' or 'c' so normal and child reservations (independent sequences)
+     * don't collide in the pending list.
      */
     protected function pendingKey(int $reservationId, bool $isChildReservation): string
     {
@@ -285,9 +282,8 @@ class AvailabilityRepository
         foreach ($availabilities as $availability) {
             $pending = $availability->pending ?? [];
 
-            // Prefer the namespaced key; fall back to the legacy bare-integer form for entries
-            // written before pending keys were namespaced by reservation type, so in-flight
-            // reservations still restore their stock after an upgrade.
+            // Fall back to legacy bare-integer key for entries written before namespacing,
+            // so in-flight reservations still restore their stock after an upgrade.
             $position = array_search($key, $pending, true);
 
             if ($position === false) {
@@ -345,10 +341,8 @@ class AvailabilityRepository
     /**
      * @return SupportCollection<int, SupportCollection<int, string>> keyed by rate ID
      *
-     * When $rangeStart/$rangeEnd are given they bound the reservation lookup to an exclusive
-     * [rangeStart, rangeEnd) window — mirroring validateMaxAvailableForDateRange() — so a search
-     * only loads reservations overlapping the rendered dates instead of the rate's entire booking
-     * history. When null the lookup is unbounded.
+     * $rangeStart/$rangeEnd bound the lookup to an exclusive [rangeStart, rangeEnd) window so only
+     * overlapping reservations are loaded; when null the lookup is unbounded.
      */
     public function getExhaustedDatesForRates(SupportCollection $rates, int $quantity = 1, ?string $rangeStart = null, ?string $rangeEnd = null): SupportCollection
     {
@@ -383,7 +377,7 @@ class AvailabilityRepository
 
             $dateCounts = [];
             foreach ($all as $res) {
-                // date_end is exclusive across the engine — the checkout day is free for the next guest.
+                // date_end is exclusive — the checkout day is free for the next guest.
                 $period = CarbonPeriod::create($res->date_start, $res->date_end, CarbonPeriod::EXCLUDE_END_DATE);
                 foreach ($period as $date) {
                     $dateStr = $date->toDateString();

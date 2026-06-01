@@ -26,7 +26,6 @@ class AvailabilityScopeTest extends TestCase
         $this->rateEntries = $this->createRateEntries();
     }
 
-    // Test that it can filter Entries based on availability
     public function test_it_can_filter_entries()
     {
         $query = Entry::query()->where('collection', 'pages');
@@ -58,7 +57,6 @@ class AvailabilityScopeTest extends TestCase
         $this->assertContains($this->entries->get('half-price')->id(), $afterScope);
     }
 
-    // Test that it correctly filters everything if no availability exists for that period
     public function test_it_returns_nothing_for_7_days()
     {
         $query = Entry::query()->where('collection', 'pages');
@@ -79,13 +77,11 @@ class AvailabilityScopeTest extends TestCase
         $this->assertEmpty($afterScope);
     }
 
-    // Test that an invalid/out-of-range search (here a past date) filters out everything
-    // instead of leaking the whole collection as bookable (the availability lookup throws).
+    // An invalid/past-date search must filter everything rather than leak the full collection.
     public function test_it_returns_nothing_for_an_invalid_search()
     {
         $query = Entry::query()->where('collection', 'pages');
 
-        // Sanity: the collection is non-empty before the scope is applied.
         $this->assertCount(5, $query->get()->pluck('id')->all());
 
         $values = ['resrv_search:resrv_availability' => [
@@ -103,7 +99,6 @@ class AvailabilityScopeTest extends TestCase
         $this->assertEmpty($afterScope);
     }
 
-    // Test that it returns the correct Entry when asking for a quantity of 2
     public function test_it_returns_the_correct_one_for_quantity_2()
     {
         $query = Entry::query()->where('collection', 'pages');
@@ -124,7 +119,6 @@ class AvailabilityScopeTest extends TestCase
         $this->assertContains($this->entries->get('two-available')->id(), $afterScope);
     }
 
-    // Test that it filters by rate_id
     public function test_it_filters_by_rate_entry()
     {
         $query = Entry::query()->where('collection', 'advanced');
@@ -148,7 +142,6 @@ class AvailabilityScopeTest extends TestCase
         $this->assertContains($this->rateEntries->first()->id(), $afterScope);
     }
 
-    // Test that it filters by rate_id and quantity
     public function test_it_filters_by_rate_entry_and_quantity()
     {
         $query = Entry::query()->where('collection', 'advanced');
@@ -173,7 +166,6 @@ class AvailabilityScopeTest extends TestCase
         $this->assertNotContains($this->rateEntries->first()->id(), $afterScope);
     }
 
-    // Test that it can get all available when using the 'any' magic value
     public function test_it_can_get_all_availability_with_the_any_magic_word()
     {
         $query = Entry::query()->where('collection', 'advanced');

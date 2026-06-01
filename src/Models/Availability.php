@@ -48,10 +48,8 @@ class Availability extends Model implements AvailabilityContract
     protected RateSorting $rateSorting = RateSorting::Order;
 
     /**
-     * Per-instance caches for the date-independent lookups in getSpecificItemCollection(). The
-     * extra-days search reuses a single Availability instance across every generated period (only
-     * the dates change), so the entry row and the entry's published rate set are resolved once and
-     * reused instead of being re-queried 2*extraDays+1 times.
+     * Per-instance caches for entry/rate lookups. The extra-days search reuses one Availability
+     * instance across every date period, so these avoid repeated queries for the same static data.
      *
      * @var array<string, Entry>
      */
@@ -301,9 +299,8 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
-        // Pre-compute exhausted dates for every candidate capped shared rate in a single pair of
-        // queries, so the per-(item × rate) capacity check below is an in-memory lookup instead of
-        // a reservation-overlap query per rate. getExhaustedDatesForRates ignores uncapped rates.
+        // Pre-compute exhausted dates for all capped shared rates in one query; capacity checks
+        // below become in-memory lookups. getExhaustedDatesForRates ignores uncapped rates.
         $exhaustedByRate = app(AvailabilityRepositoryClass::class)
             ->getExhaustedDatesForRates($ratesMap->values(), $this->quantity, $this->date_start, $this->date_end);
 
@@ -354,8 +351,7 @@ class Availability extends Model implements AvailabilityContract
     }
 
     /**
-     * Resolves (and memoizes) the resrv entry mirror row for a Statamic id. The row is the same
-     * for every date period in a single search, so this collapses the per-period entry lookup.
+     * Returns (and memoizes) the resrv entry mirror row for a Statamic id.
      */
     protected function resolveResrvEntry($statamic_id): Entry
     {
@@ -363,8 +359,8 @@ class Availability extends Model implements AvailabilityContract
     }
 
     /**
-     * Resolves (and memoizes) an entry's published rate set. The set is date-independent, so the
-     * per-period date-restriction checks downstream still run while the query itself runs once.
+     * Returns (and memoizes) an entry's published rate set. Date-restriction checks still run
+     * per call; only the DB query is cached.
      */
     protected function publishedRatesForEntry($itemId, bool $withEntries = false): Collection
     {
@@ -490,12 +486,8 @@ class Availability extends Model implements AvailabilityContract
 
     protected function getCheapestRateAvailability(Entry $entry, $request)
     {
-        // buildRatesAvailabilityCollection() yields rates in OrderScope order (order, then id).
-        // Scan for the lowest price and keep the FIRST rate that reaches it (strict lessThan),
-        // so a price tie resolves to the lowest-order rate — the same rate the default "order"
-        // sorting surfaces. This is deterministic by construction: it depends only on the
-        // iteration order, not on sortBy() being a stable sort. Comparison goes through Price
-        // (integer-cents) rather than float casts to stay decimal-safe.
+        // Scan for the lowest price; keep the FIRST rate that reaches it (strict lessThan) so
+        // ties resolve to lowest-order rate. Comparison goes through Price (integer cents).
         $cheapest = $this->buildRatesAvailabilityCollection($entry)
             ->reduce(function ($cheapest, $rate) {
                 if ($cheapest === null) {
@@ -526,19 +518,13 @@ class Availability extends Model implements AvailabilityContract
             return true;
         }
 
-        // A search quantity larger than the cap can never be satisfied on any date — not even one
-        // with zero existing bookings. The pre-computed exhausted-date set only flags dates that
-        // already carry a reservation (getExhaustedDatesForRates never inspects zero-reservation
-        // dates), so without this guard such a request would slip through as bookable. Rejecting up
-        // front also keeps the in-memory path consistent with checkMaxAvailable()'s
-        // (0 + quantity) > max_available check below.
+        // A quantity above the cap can never be satisfied; the exhausted-date set only flags
+        // already-booked dates, so reject it up front.
         if ($this->quantity > $rate->max_available) {
             return false;
         }
 
-        // The multi-entry browse path pre-computes exhausted dates for every candidate rate in a
-        // single query (getExhaustedDatesForRates) and passes them in, so capacity is tested in
-        // memory instead of issuing a reservation-overlap query per (item × rate).
+        // Use the pre-computed exhausted-date set when available (browse path).
         if ($exhaustedDates !== null) {
             return ! $this->periodIntersectsExhaustedDates($exhaustedDates);
         }
@@ -552,8 +538,8 @@ class Availability extends Model implements AvailabilityContract
     }
 
     /**
-     * Returns true when any night in the searched range [date_start, date_end) falls in the rate's
-     * pre-computed exhausted-date set. date_end is exclusive — the checkout day is free.
+     * Returns true when any night in [date_start, date_end) is in the exhausted-date set.
+     * date_end is exclusive — the checkout day is free.
      */
     private function periodIntersectsExhaustedDates(Collection $exhaustedDates): bool
     {
@@ -794,9 +780,7 @@ class Availability extends Model implements AvailabilityContract
                 fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date)
             );
 
-            // Skip the lookup entirely for an empty set: there are no dates to reject, and
-            // exhaustedDateWindow() would hand getExhaustedDatesForRate() a null range, falling
-            // back to the unbounded all-history reservation scan that M5 removed.
+            // Skip for empty set: no dates to reject, and a null range would cause an unbounded scan.
             if ($results->isNotEmpty() && $rate->isShared() && $rate->max_available) {
                 [$rangeStart, $rangeEnd] = $this->exhaustedDateWindow($results);
                 $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, 1, $rangeStart, $rangeEnd);
@@ -867,18 +851,13 @@ class Availability extends Model implements AvailabilityContract
                 $results = $results->filter(fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date));
             }
 
-            // A requested quantity larger than the cap can never be satisfied on any date — not even
-            // one with zero bookings. getExhaustedDatesForRate() below only flags dates that already
-            // carry a reservation, so it would miss this and the calendar would advertise dates that
-            // checkout/search reject. Mirror rateHasCapacity() and expandRatesFromBaseResults(): drop
-            // every date for the rate up front.
+            // A quantity above the cap can never be satisfied; the exhausted-date set only flags
+            // already-booked dates so it would miss this. Drop every date up front.
             if ($rate?->isShared() && $rate->max_available && $quantity > $rate->max_available) {
                 return [];
             }
 
-            // Skip the lookup entirely for an empty set: there are no dates to reject, and
-            // exhaustedDateWindow() would hand getExhaustedDatesForRate() a null range, falling
-            // back to the unbounded all-history reservation scan that M5 removed.
+            // Skip for empty set: no dates to reject, and a null range would cause an unbounded scan.
             if ($results->isNotEmpty() && $rate?->isShared() && $rate->max_available) {
                 [$rangeStart, $rangeEnd] = $this->exhaustedDateWindow($results);
                 $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, $quantity, $rangeStart, $rangeEnd);
@@ -960,11 +939,9 @@ class Availability extends Model implements AvailabilityContract
     }
 
     /**
-     * Derives an exclusive [start, end) window from a set of availability rows so the shared-rate
-     * exhausted-date lookup only loads reservations overlapping the rendered dates instead of the
-     * rate's whole booking history (M5). The end is pushed one day past the last night because
-     * date_end is exclusive across the engine. Returns [null, null] for an empty set, leaving the
-     * lookup unbounded.
+     * Exclusive [start, end) window covering the given availability rows, so the exhausted-date
+     * lookup only loads overlapping reservations. End is pushed one day past the last night
+     * (date_end is exclusive). Returns [null, null] for an empty set.
      *
      * @return array{0: ?string, 1: ?string}
      */
@@ -981,9 +958,8 @@ class Availability extends Model implements AvailabilityContract
 
     private function expandRatesFromBaseResults(Collection $baseResults, Collection $rates, int $quantity = 1, ?string $dateStart = null): Collection
     {
-        // With no base rows there is nothing to expand, and computing an exhausted-date range below
-        // would yield a null window — sending getExhaustedDatesForRates() into the unbounded
-        // all-history scan that M5 removed. Bail before that.
+        // With no base rows there is nothing to expand, and an empty set would produce a null
+        // date window causing an unbounded exhausted-date scan.
         if ($baseResults->isEmpty()) {
             return collect();
         }
@@ -997,8 +973,7 @@ class Availability extends Model implements AvailabilityContract
         $rangeStart = $dates->min();
         $rangeEnd = $dates->max();
 
-        // date_end is exclusive across the engine, so bound the exhausted-date lookup one day past
-        // the last rendered night — otherwise a reservation starting on that night would be missed (M5).
+        // date_end is exclusive, so push the bound one day past the last night.
         $exhaustedRangeEnd = $rangeEnd ? Carbon::parse($rangeEnd)->addDay()->toDateString() : null;
 
         $exhaustedByRate = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRates($rates, $quantity, $rangeStart, $exhaustedRangeEnd);
@@ -1040,9 +1015,8 @@ class Availability extends Model implements AvailabilityContract
 
             $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date) && $rate->meetsBookingLeadTime($row->date));
 
-            // Mirror rateHasCapacity(): a requested quantity larger than the cap can never fit on any
-            // date, and the exhausted-date set below only flags dates that already carry a booking, so
-            // it would miss this. Drop every row for the rate up front.
+            // A quantity above the cap can never be satisfied; the exhausted-date set only flags
+            // already-booked dates so it would miss this. Drop every row for the rate up front.
             if ($rate->isShared() && $rate->max_available && $quantity > $rate->max_available) {
                 continue;
             }

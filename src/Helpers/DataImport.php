@@ -88,11 +88,8 @@ class DataImport
 
     private function getDatesFromHeader($header)
     {
-        // Headers look like "price:2024-01-01|2024-01-10". Parse defensively and hand back the raw
-        // date strings rather than Carbon instances: a malformed header (missing ":"/"|" segment,
-        // blank, or unparseable date) must not throw here — that would abort the entire import before
-        // ProcessDataImport's per-row validation can skip+log just the offending row. Blanks are left
-        // blank so that guard can detect them instead of Carbon silently coercing "" to today.
+        // Parse "price:2024-01-01|2024-01-10" headers without throwing; blanks are passed through
+        // so ProcessDataImport's per-row validation can skip them rather than aborting the import.
         $afterColon = explode(':', $header, 2)[1] ?? '';
         $dates = explode('|', $afterColon);
 

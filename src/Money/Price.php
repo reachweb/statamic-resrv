@@ -23,16 +23,14 @@ class Price implements CastsAttributes
 
         $value = (string) $price;
 
-        // The decimal parser silently trims surrounding whitespace, but the previous
-        // BCMath-based implementation rejected it. Keep create() a strict gate, since
-        // callers (e.g. PaymentGatewayManager) rely on it throwing for malformed values.
+        // The decimal parser trims whitespace silently; reject it explicitly to match the
+        // previous BCMath behaviour that callers (e.g. PaymentGatewayManager) rely on.
         if (trim($value) !== $value) {
             throw new \InvalidArgumentException(sprintf('Cannot parse "%s" to a Price.', $value));
         }
 
-        // Parse the decimal value using the currency's real subunit count (the inverse of
-        // the DecimalMoneyFormatter used in format()), so create()/format() round-trip for
-        // every currency — including non-2-decimal ones like JPY (0) and BHD (3).
+        // Uses the currency's real subunit count (inverse of DecimalMoneyFormatter) so
+        // create()/format() round-trip correctly for all currencies (e.g. JPY, BHD).
         $parser = new DecimalMoneyParser(new ISOCurrencies);
         $class->money = $parser->parse($value, new Currency(config('resrv-config.currency_isoCode')));
 

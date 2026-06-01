@@ -147,11 +147,8 @@ trait HandlesPricing
             $price = $price['reservation_price'];
         }
 
-        // Wrap the percent calculation in a fresh Price so it does not mutate the caller's
-        // reservation price in place (Price::percent()/multiply() mutate $this). Without this,
-        // correctness would depend on the array-literal evaluation order at the call sites and
-        // reading reservationPrice again afterwards would yield the deposit. Mirrors the
-        // non-mutating pattern in HandlesReservationQueries::createReservation().
+        // Use a fresh Price for percent so it doesn't mutate the caller's reservation price in place —
+        // reading reservationPrice after this call would otherwise yield the deposit amount.
         return match (config('resrv-config.payment')) {
             'fixed' => Price::create(config('resrv-config.fixed_amount')),
             'percent' => Price::create($price->format())->percent(config('resrv-config.percent_amount')),

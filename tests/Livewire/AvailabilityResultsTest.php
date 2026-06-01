@@ -402,13 +402,9 @@ class AvailabilityResultsTest extends TestCase
     {
         $entryId = $this->entries->first()->id();
 
-        // Count how often the date-independent entry row and rate set are queried for a given
-        // number of extra-day periods. Both runs go through queryExtraAvailabilityForEntry(), so a
-        // memoized resolver keeps these counts equal even though extraDays=3 generates 7 periods
-        // versus extraDays=1's 3. Without memoization the counts would scale with the period count.
+        // Guard that entry/rate metadata queries don't scale with the number of extra-day periods (memoized).
         $countMetadataQueries = function (int $extraDays) use ($entryId) {
-            // Start from a clean session so mount() does not replay a previous run's search from
-            // #[Session('resrv-search')]; this isolates the per-period query behaviour.
+            // Clear session so mount() doesn't replay a previous search.
             session()->forget(['resrv-search', 'resrv-extras', 'resrv-options']);
 
             DB::flushQueryLog();
@@ -424,9 +420,7 @@ class AvailabilityResultsTest extends TestCase
                     'rate' => null,
                 ]);
 
-            // Count only the date-independent entry/rate metadata lookups. The per-period
-            // availability query lives on resrv_availabilities (and merely JOINs resrv_rates), so it
-            // is excluded — it must run once per period and is not what this test guards.
+            // Count only entry/rate metadata lookups; exclude per-period availability queries.
             $count = collect(DB::getQueryLog())
                 ->filter(fn ($query) => (str_contains($query['query'], 'resrv_entries') || str_contains($query['query'], 'resrv_rates'))
                     && ! str_contains($query['query'], 'resrv_availabilities'))
@@ -437,10 +431,6 @@ class AvailabilityResultsTest extends TestCase
             return $count;
         };
 
-        // extraDays=1 generates 3 periods and extraDays=3 generates 7, but the entry row and the
-        // published rate set are identical for every period, so a single reused+memoized
-        // Availability instance resolves them once. The metadata query count must therefore stay
-        // equal rather than scale with the number of periods.
         $this->assertSame(
             $countMetadataQueries(1),
             $countMetadataQueries(3),

@@ -181,7 +181,6 @@ class DynamicPricingApplyTest extends TestCase
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
 
-        // Baseline is 100.92. A 500 fixed decrease would be -399.08 without a floor.
         $this->createDynamicPricing('fixedDecrease', ['amount' => '500']);
 
         $this->assertPrice('0.00', '100.92');
@@ -192,7 +191,6 @@ class DynamicPricingApplyTest extends TestCase
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
 
-        // Baseline is 100.92. A 150% decrease multiplies by -0.5 → -50.46 without a floor.
         $this->createDynamicPricing('percentDecrease', ['amount' => '150']);
 
         $this->assertPrice('0.00', '100.92');
@@ -405,9 +403,7 @@ class DynamicPricingApplyTest extends TestCase
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
 
-        // Travel to a time with non-zero minutes/seconds. The condition compares against
-        // the start of "today", so a naive setHour(0) (leaving minutes/seconds) would
-        // shave a fractional day off and report one day fewer than reality.
+        // Travel to a time with non-zero minutes/seconds to avoid fractional-day rounding errors.
         $this->travelTo(today()->setTime(15, 30, 45));
 
         // "20% off when days_to_reservation <= 2", isolated from any date-range constraint.
@@ -417,7 +413,7 @@ class DynamicPricingApplyTest extends TestCase
             'date_include' => null,
         ]);
 
-        // A reservation 3 calendar days out must NOT qualify for a "<= 2 days" rule.
+        // 3 days out: must NOT qualify.
         $threeDaysOut = [
             'date_start' => today()->addDays(3)->setTime(12, 0, 0)->toISOString(),
             'date_end' => today()->addDays(7)->setTime(12, 0, 0)->toISOString(),
@@ -426,7 +422,7 @@ class DynamicPricingApplyTest extends TestCase
         $this->assertPrice('100.92', null, $threeDaysOut);
         $this->assertIndexPrice('100.92', null, $threeDaysOut);
 
-        // A reservation exactly 2 calendar days out qualifies.
+        // 2 days out: must qualify.
         $twoDaysOut = [
             'date_start' => today()->addDays(2)->setTime(12, 0, 0)->toISOString(),
             'date_end' => today()->addDays(6)->setTime(12, 0, 0)->toISOString(),
@@ -704,8 +700,7 @@ class DynamicPricingApplyTest extends TestCase
 
         $extra = Extra::factory()->create(['price' => '20']);
 
-        // Decrease (500) exceeds the 20 base, so per-day expansion would be deeply negative without
-        // a floor. The extras path finalises through applyClamps(), so it must floor to 0 too.
+        // Decrease exceeds the base; applyClamps() must floor to 0 for extras too.
         $this->assignDynamicPricingToExtra($extra, [
             'amount_type' => 'fixed',
             'amount_operation' => 'decrease',

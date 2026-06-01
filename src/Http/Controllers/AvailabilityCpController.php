@@ -115,11 +115,8 @@ class AvailabilityCpController extends Controller
             ], 422);
         }
 
-        // Override prices for shared+independent rates are tied to the base
-        // row's date. When that base row is removed, every sibling shared+indep
-        // rate hanging off the same base must lose its override too — otherwise
-        // recreating the base row later silently revives the stale child
-        // prices. Always sweep by base_rate_id, not by the requested ids.
+        // Sweep shared+independent rate price overrides by base_rate_id: removing the base row
+        // must also remove sibling overrides, or recreating the base later revives stale prices.
         $sharedIndependentRateIds = Rate::withoutGlobalScopes()
             ->where('availability_type', 'shared')
             ->where('pricing_type', 'independent')
@@ -179,9 +176,7 @@ class AvailabilityCpController extends Controller
 
             $terminal = ReservationStatus::terminal();
 
-            // Pending entries are namespaced by type ('r'<id> for reservations, 'c'<id> for child
-            // reservations) because the two tables are independent id sequences. A bare integer is a
-            // legacy entry whose type is unknown, so it is resolved against both tables.
+            // Keys are namespaced ('r'<id> / 'c'<id>); bare integers are legacy entries resolved against both tables.
             $parsed = collect($pending)->map(function ($entry) {
                 if (is_string($entry) && preg_match('/^([rc])(\d+)$/', $entry, $matches)) {
                     return ['key' => $entry, 'type' => $matches[1] === 'c' ? 'child' : 'normal', 'id' => (int) $matches[2]];
@@ -226,8 +221,7 @@ class AvailabilityCpController extends Controller
 
                 $quantityByKey[$entry['key']] = $quantity;
 
-                // A null status means the holder vanished from both tables — treat it as terminal
-                // (clearable) with quantity 0, since the original hold is unrecoverable.
+                // Null status means the holder is gone from both tables — treat as terminal with quantity 0.
                 if ($status === null || in_array($status, $terminal, true)) {
                     $terminalKeys[] = $entry['key'];
                 } else {
@@ -276,18 +270,14 @@ class AvailabilityCpController extends Controller
 
         $isSharedIndependent = $rate && $rate->hasIndependentSharedPricing();
 
-        // Shared+relative rates read from the base rate's availability rows.
-        // Writing prices into base rows would overwrite the base rate's data,
-        // and prices on relative rates derive from the modifier — there is no
-        // distinct price to set. Block direct price edits for them.
+        // Shared+relative rates derive their price from the modifier — block direct price edits.
         $skipPrice = ($resolvedRateId !== $rateId) && ! $isSharedIndependent;
 
         if ($skipPrice && ! is_null($data['price']) && is_null($data['available'])) {
             abort(422, __('Price cannot be edited directly for shared rates. Edit the base rate instead.'));
         }
 
-        // Only block when inventory is being changed — price-only edits don't disturb the
-        // available/pending invariant maintained by AvailabilityRepository.
+        // Only block on inventory changes — price-only edits don't disturb the available/pending invariant.
         if (! is_null($data['available']) && ActiveReservationsGuard::hasActiveReservationsForRange(
             $data['statamic_id'], $data['date_start'], $data['date_end'], [$resolvedRateId]
         )) {
@@ -308,10 +298,7 @@ class AvailabilityCpController extends Controller
                 $date = $day->isoFormat('YYYY-MM-DD');
 
                 if ($isSharedIndependent) {
-                    // Without a base row there is no inventory for this date —
-                    // writing a price override would be orphaned and the date
-                    // would still show as unavailable. Skip silently; the admin
-                    // must seed base availability via the base rate first.
+                    // No base row = no inventory; a price override here would be orphaned. Skip silently.
                     $baseRowExists = Availability::where([
                         'statamic_id' => $data['statamic_id'],
                         'date' => $date,

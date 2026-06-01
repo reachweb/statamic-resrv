@@ -39,13 +39,8 @@ class ProcessDataImport implements ShouldQueue
             $defaultRateId = null;
 
             $item->each(function ($data) use ($id, &$defaultRateId) {
-                // CSV cells reach us unvalidated and upsert() bypasses Eloquent casts/mutators, so
-                // coerce and validate before writing: a non-numeric, blank, or negative price/
-                // availability would otherwise be written straight to the tables and silently
-                // corrupt pricing/inventory. Skip + log the row, mirroring the rate_id guard below.
-                // resrv_availabilities.available is an integer inventory count, so a fractional
-                // value (e.g. 1.9 or -0.5) is invalid — reject it instead of letting the (int) cast
-                // below silently truncate it toward zero (1.9 → 1, -0.5 → 0).
+                // upsert() bypasses Eloquent casts, so validate before writing. Fractional
+                // availability (e.g. 1.9) is rejected rather than silently truncated to 1.
                 if (! is_numeric($data['price'] ?? null) || (float) $data['price'] < 0
                     || ! is_numeric($data['available'] ?? null) || (float) $data['available'] < 0
                     || floor((float) $data['available']) !== (float) $data['available']) {
@@ -54,14 +49,8 @@ class ProcessDataImport implements ShouldQueue
                     return;
                 }
 
-                // date_start/date_end come straight from the CSV header (DataImport::getDatesFromHeader)
-                // and bypass the numeric coercion above. Headers are expected to carry strict
-                // YYYY-MM-DD dates, but Carbon::parse() is too lenient: it normalizes overflow
-                // (2024-02-30 → 2024-03-01) and accepts relative strings ("next monday"), either of
-                // which would silently write availability for an unintended date. parseImportDate()
-                // enforces the exact format, so a blank, malformed, or reversed range is skipped +
-                // logged per row like the price/availability guard above instead of corrupting data
-                // or — for unparseable input reaching CarbonPeriod::create() — aborting the import.
+                // Use parseImportDate() instead of Carbon::parse(): it enforces strict YYYY-MM-DD
+                // and rejects overflow dates (2024-02-30) and relative strings ("next monday").
                 $periodStart = $this->parseImportDate($data['date_start'] ?? null);
                 $periodEnd = $this->parseImportDate($data['date_end'] ?? null);
 
@@ -187,10 +176,8 @@ class ProcessDataImport implements ShouldQueue
     }
 
     /**
-     * Strictly parse a CSV header date as YYYY-MM-DD, returning null for anything else. The
-     * exact-format parse rejects wrong separators and relative strings ("next monday"), while the
-     * round-trip comparison rejects overflow dates Carbon would otherwise silently normalize
-     * (e.g. 2024-02-30 → 2024-03-01, 2023-02-29 → 2023-03-01).
+     * Parse a date string as strict YYYY-MM-DD, returning null for anything else.
+     * The round-trip check rejects overflow dates Carbon would silently normalize.
      */
     private function parseImportDate($value): ?Carbon
     {

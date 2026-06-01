@@ -15,9 +15,8 @@ class PreventEntryDeletionWithActiveReservations
             return true;
         }
 
-        // Reservations are stored against the origin entry id, so resolve localizations
-        // to their origin before checking — otherwise deleting a localization of a booked
-        // item (Statamic fires EntryDeleting per descendant) would slip past the guard.
+        // Reservations are keyed to the origin entry, so resolve localizations to their origin first —
+        // otherwise deleting a localization of a booked item would slip past the guard.
         $entryId = $event->entry->hasOrigin()
             ? $event->entry->origin()->id()
             : $event->entry->id();

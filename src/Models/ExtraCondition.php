@@ -262,13 +262,12 @@ class ExtraCondition extends Model
         $end_minutes = $time_end->hour * 60 + $time_end->minute;
         $payload_minutes = $payload->hour * 60 + $payload->minute;
 
-        // An overnight window (e.g. 21:00 -> 08:00) wraps past midnight, so a time
-        // is in range when it is after the start OR before the end.
+        // Overnight window (e.g. 21:00 -> 08:00): in range if after start OR before end.
         if ($end_minutes < $start_minutes) {
             return $payload_minutes >= $start_minutes || $payload_minutes <= $end_minutes;
         }
 
-        // A same-day window (e.g. 09:00 -> 17:00) requires the time to fall within both bounds.
+        // Same-day window: must fall within both bounds.
         return $payload_minutes >= $start_minutes && $payload_minutes <= $end_minutes;
     }
 
@@ -350,12 +349,10 @@ class ExtraCondition extends Model
             return false;
         }
 
-        // Get all extras in the specified category
         $categoryExtras = Extra::where('category_id', $condition->value)
             ->where('published', true)
             ->pluck('id');
 
-        // Check if any of the extras in the data array are in the category
         $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
             return $categoryExtras->contains($extraId);
         });
@@ -366,15 +363,13 @@ class ExtraCondition extends Model
     protected function checkNoExtraInCategorySelected($condition, $data)
     {
         if (! Arr::exists($data, 'extras')) {
-            return true; // If no extras are provided at all, then no extras in the category are selected
+            return true; // No extras provided → none in category selected
         }
 
-        // Get all extras in the specified category
         $categoryExtras = Extra::where('category_id', $condition->value)
             ->where('published', true)
             ->pluck('id');
 
-        // Check if none of the extras in the data array are in the category
         $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
             return $categoryExtras->contains($extraId);
         });

@@ -80,9 +80,8 @@ trait HandlesAvailabilityQueries
     {
         ExpireReservations::dispatchSync();
 
-        // Reuse a single Availability instance across every generated period. The entry row and the
-        // entry's published rate set are identical for all periods (only the dates change), so the
-        // instance memoizes them once instead of re-querying them 2*extraDays+1 times.
+        // Reuse one Availability instance: the entry and rate set are identical across all periods,
+        // so the instance memoizes them instead of re-querying for each date shift.
         $availability = app(Availability::class);
 
         return $this->generateDatePeriods($this->data)->map(function ($period) use ($availability) {

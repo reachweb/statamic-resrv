@@ -9,10 +9,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class CalculatePaymentTest extends TestCase
 {
-    /**
-     * Invoke the protected HandlesPricing::calculatePayment() (used by the Availability model)
-     * with a reservation Price.
-     */
+    /** Invoke the protected HandlesPricing::calculatePayment() via reflection. */
     private function calculatePayment(PriceClass $price): PriceClass
     {
         $method = new \ReflectionMethod(Availability::class, 'calculatePayment');
@@ -39,9 +36,7 @@ class CalculatePaymentTest extends TestCase
         $price = Price::create(100);
         $this->calculatePayment($price);
 
-        // The reservation price must stay intact. Before the fix, percent() mutated $price in
-        // place and returned it, so the caller's reservationPrice silently became the deposit
-        // (30.00) — correctness then hinged on the array-literal evaluation order at the call sites.
+        // percent() must not mutate the input; previously it returned the same object, silently overwriting the reservation price.
         $this->assertSame('100.00', $price->format());
     }
 

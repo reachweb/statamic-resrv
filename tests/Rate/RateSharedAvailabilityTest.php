@@ -371,10 +371,7 @@ class RateSharedAvailabilityTest extends TestCase
 
     public function test_get_exhausted_dates_is_bounded_to_the_requested_range()
     {
-        // M5 regression: the exhausted-date lookup must only consider reservations overlapping the
-        // requested [start, end) window. A booking far outside the window must not be loaded or
-        // counted — if the SQL date bound were dropped, its exhausted night would leak into the
-        // returned set (and the whole booking history would be scanned on every search).
+        // Only reservations overlapping the requested window should be loaded; out-of-window bookings must not leak in.
         $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
 
         // In-window booking: exhausts the first searched night (max_available = 1).
@@ -420,10 +417,7 @@ class RateSharedAvailabilityTest extends TestCase
 
     public function test_get_exhausted_dates_treats_the_window_end_as_exclusive()
     {
-        // M5: callers derive the window end one day past the last rendered night because date_end is
-        // exclusive across the engine. This locks that boundary — a booking on the last night must
-        // only be counted when the window reaches the following day, otherwise the night would be
-        // wrongly dropped from the lookup (and stay bookable past capacity).
+        // date_end is exclusive: a booking on the last night is only counted when the window end is that night + 1 day.
         $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
 
         $lastNight = $setup['startDate']->copy()->addDays(2);
@@ -1087,8 +1081,7 @@ class RateSharedAvailabilityTest extends TestCase
             'slug' => 'base-rate',
         ]);
 
-        // A collection-wide shared rate with a cap: every browsed entry evaluates it, so before the
-        // fix each entry triggered its own reservation-overlap query.
+        // Collection-wide shared rate with a cap; previously triggered a per-entry reservation query.
         Rate::factory()->shared()->create([
             'collection' => 'pages',
             'slug' => 'shared-capped',
@@ -1147,9 +1140,7 @@ class RateSharedAvailabilityTest extends TestCase
         $addEntryWithAvailability();
         $queriesForFourEntries = $countReservationQueries();
 
-        // The capped shared rate's exhausted dates are resolved once per search, so the number of
-        // reservation-overlap queries is independent of how many entries are browsed. Before the
-        // fix this scaled with the entry count (a checkMaxAvailable query per item).
+        // Exhausted dates are resolved once per search, not once per entry.
         $this->assertSame(
             $queriesForTwoEntries,
             $queriesForFourEntries,
@@ -1161,7 +1152,7 @@ class RateSharedAvailabilityTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
-        // Only the shared rate is a browse candidate (base rate unpublished), and it is capped at 1.
+        // Base rate unpublished, so only the shared rate (capped at 1) is a browse candidate.
         $baseRate = Rate::factory()->create([
             'collection' => 'pages',
             'slug' => 'base-rate',
@@ -1210,8 +1201,7 @@ class RateSharedAvailabilityTest extends TestCase
             'status' => 'confirmed',
         ]);
 
-        // The only candidate rate is now exhausted, so the entry drops out of the browse results.
-        // This confirms the batched in-memory capacity check matches per-rate checkMaxAvailable.
+        // Cap exhausted — entry drops out of browse results.
         $this->assertFalse(app(Availability::class)->getAvailable($searchData)['message']['status']);
     }
 
@@ -1219,7 +1209,7 @@ class RateSharedAvailabilityTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
-        // Only the shared rate is a browse candidate (base rate unpublished), capped at 1.
+        // Base rate unpublished, so only the shared rate (capped at 1) is a browse candidate.
         $baseRate = Rate::factory()->create([
             'collection' => 'pages',
             'slug' => 'base-rate',
@@ -1250,9 +1240,7 @@ class RateSharedAvailabilityTest extends TestCase
                 'available' => 5,
             ]);
 
-        // No reservations exist, so the pre-computed exhausted-date set is empty. A quantity of 2
-        // still cannot fit a cap of 1 on any date, so the rate must not be offered — matching the
-        // per-rate checkMaxAvailable() path's (0 + quantity) > max_available rejection.
+        // quantity 2 exceeds cap of 1, so the rate must be rejected even with no reservations.
         $searchData = [
             'date_start' => $startDate->toDateString(),
             'date_end' => $startDate->copy()->addDays(2)->toDateString(),
@@ -1270,7 +1258,7 @@ class RateSharedAvailabilityTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
-        // Only the shared rate is a calendar candidate (base rate unpublished), capped at 1.
+        // Base rate unpublished, so only the shared rate (capped at 1) is a calendar candidate.
         $baseRate = Rate::factory()->create([
             'collection' => 'pages',
             'slug' => 'base-rate',
@@ -1301,8 +1289,7 @@ class RateSharedAvailabilityTest extends TestCase
                 'available' => 5,
             ]);
 
-        // No reservations exist, so the exhausted-date set is empty. Asking for 2 against a cap of 1
-        // must drop the rate from the all-rates calendar — matching the browse/checkout paths.
+        // quantity 2 exceeds cap of 1; all-rates calendar must return nothing.
         $exceedsCap = app(Availability::class)->getAvailableDatesFromDate(
             $entry->id(), $startDate->toDateString(), 2, null, true,
         );
@@ -1319,10 +1306,7 @@ class RateSharedAvailabilityTest extends TestCase
     {
         $setup = $this->createSharedSetup(baseAvailable: 5, maxAvailable: 1);
 
-        // No reservations exist, so getExhaustedDatesForRate() returns an empty set. Requesting the
-        // shared rate directly (rateId set, showAllRates = false) with a quantity above the cap must
-        // still drop every date — otherwise the selected-rate calendar advertises dates that
-        // checkout/search reject, matching the browse/all-rates paths.
+        // No reservations; quantity 2 still exceeds cap of 1 — selected-rate calendar must return nothing.
         $exceedsCap = app(Availability::class)->getAvailableDatesFromDate(
             $setup['entry']->id(), $setup['startDate']->toDateString(), 2, $setup['sharedRate']->id,
         );
@@ -1339,9 +1323,7 @@ class RateSharedAvailabilityTest extends TestCase
     {
         $setup = $this->createSharedSetup(baseAvailable: 5, maxAvailable: 1);
 
-        // Search a window that has no availability rows for the rate, so the result set is empty
-        // after filtering. The exhausted-date lookup should be skipped rather than falling back to
-        // the unbounded all-history reservation scan (M5).
+        // Window with no availability rows — exhausted-date lookup must be skipped entirely.
         $emptyWindowStart = $setup['startDate']->copy()->addDays(30)->toDateString();
 
         DB::enableQueryLog();

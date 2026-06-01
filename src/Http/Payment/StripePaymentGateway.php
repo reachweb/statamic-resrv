@@ -158,12 +158,8 @@ class StripePaymentGateway implements PaymentInterface
 
         $reservation = Reservation::findByPaymentId($paymentIntent)->first();
 
-        // A missing match means payment_id was cleared by Checkout::cancelActiveIntent, which
-        // is exactly the condition verifyPayment() treats as stale and refuses to confirm.
-        // Falling back to the session reservation here would show the customer a success page
-        // for a reservation the webhook will never mark confirmed — hand off to the failure
-        // path so manual reconciliation (via the stale-intent warning log) is the single
-        // source of truth.
+        // payment_id may have been cleared by Checkout::cancelActiveIntent; return failure
+        // so verifyPayment()'s stale-intent path handles reconciliation.
         if (! $reservation) {
             return [
                 'status' => false,
@@ -210,9 +206,8 @@ class StripePaymentGateway implements PaymentInterface
 
         $reservation = Reservation::findByPaymentId($data['id'])->first();
 
-        // Checkout::cancelActiveIntent clears payment_id before asking Stripe to cancel the
-        // intent, so a racing .succeeded webhook can no longer reconcile by payment_id. Fall
-        // back to the reservation_id stashed in the intent metadata so the charge isn't lost.
+        // Checkout::cancelActiveIntent clears payment_id, so fall back to metadata reservation_id
+        // for a racing .succeeded webhook.
         $isStaleIntent = false;
         if (! $reservation && isset($data['metadata']['reservation_id'])) {
             $reservation = Reservation::find($data['metadata']['reservation_id']);
@@ -231,10 +226,8 @@ class StripePaymentGateway implements PaymentInterface
 
         Stripe::setApiKey($this->getSecretKey($reservation));
 
-        // An empty or null webhook secret reduces the HMAC verification to a publicly-known key
-        // (hash_hmac with an empty secret), letting anyone forge a valid Stripe-Signature on this
-        // CSRF-exempt endpoint. Refuse to verify when the secret is missing: config/config.php
-        // defaults it to '' and the multisite array form returns null for an unmapped collection.
+        // Refuse verification when the webhook secret is missing — an empty secret makes the HMAC
+        // forgeable by anyone on this CSRF-exempt endpoint.
         $webhookSecret = $this->getWebhookSecret($reservation);
 
         if (! is_string($webhookSecret) || $webhookSecret === '') {
@@ -255,10 +248,7 @@ class StripePaymentGateway implements PaymentInterface
         $sig_header = $_SERVER['HTTP_STRIPE_SIGNATURE'];
 
         try {
-            // Keep Stripe's default 300s timestamp tolerance. constructEvent() only accepts
-            // ($payload, $sigHeader, $secret, $tolerance); passing null for $tolerance previously
-            // disabled the replay-window check entirely (null > 0 is false in WebhookSignature),
-            // and the trailing false was a silently-ignored 5th argument.
+            // Omit $tolerance to keep Stripe's default 300s replay-window check.
             $event = Webhook::constructEvent(
                 $request->getContent(),
                 $sig_header,
@@ -273,12 +263,8 @@ class StripePaymentGateway implements PaymentInterface
         }
 
         if ($event->type === 'payment_intent.succeeded') {
-            // A stale intent means the customer moved on (refresh, back, gateway switch, coupon change)
-            // before this webhook arrived. The charge exists on Stripe but no longer matches the
-            // reservation's current state — confirming it would send emails/decrease inventory
-            // against an amount or gateway the reservation is no longer tied to. Log and email
-            // admins so the orphan charge can be refunded manually; the reservation itself is
-            // left untouched because the customer is (or may be) still using it.
+            // Stale intent: the customer moved on and this charge is now orphaned. Notify
+            // admins for manual refund; leave the reservation untouched.
             if ($isStaleIntent) {
                 Log::warning('Stripe payment intent succeeded after being abandoned by the customer — manual reconciliation may be required.', [
                     'reservation_id' => $reservation->id,
@@ -292,10 +278,8 @@ class StripePaymentGateway implements PaymentInterface
                 return response()->json([], 200);
             }
 
-            // Terminal-state reservations cannot be confirmed. A succeeded webhook arriving
-            // after the reservation has been expired, refunded, or flipped to partner means a
-            // real charge exists on Stripe with no live reservation to attach it to. Log and
-            // email admins for manual refund.
+            // Succeeded webhook for a terminal reservation — charge exists with no live reservation;
+            // notify admins for manual refund.
             if (in_array($reservation->status, [
                 ReservationStatus::EXPIRED->value,
                 ReservationStatus::REFUNDED->value,
@@ -319,15 +303,12 @@ class StripePaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
         if ($event->type === 'payment_intent.payment_failed' || $event->type === 'payment_intent.canceled') {
-            // Stale intents were cancelled deliberately by us (Checkout::cancelActiveIntent);
-            // ignore their failure/cancellation webhooks so we don't cascade-cancel a
-            // reservation the customer is still using.
+            // Stale intent cancelled by us — ignore so we don't cascade-cancel an active reservation.
             if ($isStaleIntent) {
                 return response()->json([], 200);
             }
 
-            // Only PENDING reservations can be cancelled by a webhook. Anything else is
-            // either already-terminal (expired/refunded/partner) or confirmed — no-op.
+            // Only cancel PENDING reservations; terminal/confirmed states are a no-op.
             if ($reservation->status !== ReservationStatus::PENDING->value) {
                 return response()->json([], 200);
             }

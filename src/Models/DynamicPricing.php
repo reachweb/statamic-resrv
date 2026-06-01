@@ -76,10 +76,7 @@ class DynamicPricing extends Model
         );
     }
 
-    /**
-     * Get extras count in a PostgreSQL-compatible way.
-     * PostgreSQL requires explicit type casting for bigint = varchar comparison.
-     */
+    /** PostgreSQL requires explicit bigint→text cast for this join; SQLite does not. */
     public function extrasCount(): int
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
@@ -96,10 +93,7 @@ class DynamicPricing extends Model
         return $this->extras()->count();
     }
 
-    /**
-     * Get extras in a PostgreSQL-compatible way.
-     * PostgreSQL requires explicit type casting for bigint = varchar comparison.
-     */
+    /** PostgreSQL requires explicit bigint→text cast for this join; SQLite does not. */
     public function getExtras()
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
@@ -194,12 +188,8 @@ class DynamicPricing extends Model
             $price = $this->$method($price, $policy);
         }
 
-        // Final safety floor: a misconfigured decrease (a fixed amount above the base price, or a
-        // percent decrease > 100%) can drive the result below zero, which moneyphp permits. Dynamic
-        // pricing must never emit a negative price/total/payment. This runs after the operator
-        // min/max clamps, so a configured minimum still takes precedence for values between zero and
-        // that minimum. Both the reservation path (apply()) and the extras path (Extra.php) finish
-        // through applyClamps(), so flooring here covers every dynamic-pricing consumer.
+        // Safety floor: a misconfigured decrease can drive the result below zero (moneyphp allows it).
+        // Runs after the min/max clamps so a configured minimum still wins.
         return $price->lessThan(Price::create(0)) ? Price::create(0) : $price;
     }
 

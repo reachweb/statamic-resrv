@@ -88,8 +88,7 @@ class CheckoutTest extends TestCase
 
         $checkout = Livewire::test(Checkout::class)->instance();
 
-        // Force a fresh reservation instance so the next call must recompute — this mirrors the
-        // unset($this->reservation) that every price-changing action performs.
+        // Mirrors the unset($this->reservation) that every price-changing action performs.
         unset($checkout->reservation);
 
         DB::flushQueryLog();

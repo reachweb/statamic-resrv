@@ -26,10 +26,8 @@ class ResrvSearch extends Scope
 
         $result = $this->getAvailability($searchData);
 
-        // An invalid/out-of-range search (past dates, pickup after drop-off, too long/short a stay,
-        // quantity over the max, lead-time violation) makes getAvailability() return an error payload
-        // with no 'data' key. Exclude every entry rather than leaking the whole collection as bookable.
-        // The normal "nothing available" path keeps an (empty) 'data' key and is handled below.
+        // Invalid searches (bad dates, over-limit quantity, lead-time violation, etc.) return no 'data' key —
+        // exclude all entries rather than surfacing the full collection as bookable.
         if (! isset($result['data']) && $result['message']['status'] === false) {
             return $query->whereIn('id', []);
         }
@@ -62,9 +60,7 @@ class ResrvSearch extends Scope
             return $originIds;
         }
 
-        // Batch fetch localized entries for the current site in a single query.
-        // Statamic stores origin references, so we query entries in the current site
-        // whose origin is one of our origin IDs.
+        // Batch-fetch localized entries for the current site whose origin matches our IDs.
         $localizedEntries = Entry::query()
             ->where('site', $currentSite)
             ->whereIn('origin', $originIds)

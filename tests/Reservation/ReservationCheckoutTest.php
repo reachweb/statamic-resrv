@@ -63,12 +63,10 @@ class ReservationCheckoutTest extends TestCase
     {
         $reservation = $this->reservation->fresh();
 
-        // total is nullable with no default and is only populated at checkout, so before then the
-        // raw column is null.
+        // total is nullable and unpopulated before checkout.
         $this->assertNull($reservation->getRawOriginal('total'));
 
-        // Reading it through the Price accessor must yield a zero Price rather than warning or
-        // throwing (the decimal parser maps the empty string from (string) null to a zero Money).
+        // The Price accessor must return zero (not warn/throw) when the column is null.
         $this->assertInstanceOf(Price::class, $reservation->total);
         $this->assertSame('0.00', $reservation->total->format());
     }

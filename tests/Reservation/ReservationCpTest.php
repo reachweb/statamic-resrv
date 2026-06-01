@@ -43,8 +43,7 @@ class ReservationCpTest extends TestCase
 
         $response = $this->getJson(cp_route('resrv.reservation.index'));
 
-        // The listing template links the entry via reservation.entry.url. entryToArray() selects
-        // 'url' (not 'permalink'), so the payload must carry a usable url for the link to render.
+        // entryToArray() uses 'url', not 'permalink'.
         $response->assertStatus(200)
             ->assertJsonPath('data.0.entry.url', $item->url());
 
@@ -60,8 +59,7 @@ class ReservationCpTest extends TestCase
 
         $response = $this->getJson(cp_route('resrv.reservation.index'));
 
-        // A reservation whose entry no longer exists falls back to emptyEntry(), which mirrors the
-        // real shape with a null url so the template renders plain text instead of a broken link.
+        // Deleted entries fall back to emptyEntry() with a null url.
         $response->assertStatus(200)
             ->assertJsonPath('data.0.entry.title', '## Entry deleted ##');
 
@@ -128,8 +126,7 @@ class ReservationCpTest extends TestCase
 
         Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
 
-        // Warm framework/config caches (blueprint, resrv_rates_exist) so the two measurements
-        // below differ only by per-row relation loading, not first-hit caching.
+        // Warm caches so measurements differ only by per-row relation loading.
         $this->get(cp_route('resrv.reservation.index'))->assertOk();
 
         $queriesForOneRow = $this->countQueries(
@@ -142,9 +139,7 @@ class ReservationCpTest extends TestCase
             fn () => $this->get(cp_route('resrv.reservation.index'))->assertOk()
         );
 
-        // With eager loading the query count is independent of the number of rows. An N+1
-        // regression would make the four-row listing run several extra queries per added row
-        // (customer, extras, options, childs.rate).
+        // Eager loading keeps query count constant; an N+1 regression would scale with rows.
         $this->assertSame(
             $queriesForOneRow,
             $queriesForFourRows,
@@ -158,7 +153,7 @@ class ReservationCpTest extends TestCase
 
         $this->makeParentReservationWithChild($item->id());
 
-        // Warm framework/config caches so the two measurements differ only by per-row relation loading.
+        // Warm caches so measurements differ only by per-row relation loading.
         $this->get(cp_route('resrv.reservation.index'))->assertOk();
 
         $queriesForOneParent = $this->countQueries(
@@ -173,8 +168,7 @@ class ReservationCpTest extends TestCase
             fn () => $this->get(cp_route('resrv.reservation.index'))->assertOk()
         );
 
-        // getRateLabel() on a parent walks $reservation->childs and each child's ->rate. Without
-        // eager loading childs.rate, every extra parent row would add per-row queries.
+        // getRateLabel() walks childs→rate; without eager loading each parent row adds extra queries.
         $this->assertSame(
             $queriesForOneParent,
             $queriesForFourParents,

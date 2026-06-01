@@ -47,21 +47,17 @@ class StripeWebhookTest extends TestCase
     }
 
     /**
-     * Builds a succeeded-webhook request whose Stripe-Signature header is a valid HMAC for the
-     * given secret. With an empty secret this is exactly what an attacker can compute themselves,
-     * so it lets us assert the gateway refuses to verify against an unconfigured secret.
+     * Builds a request with a valid HMAC for the given secret (fixed timestamp; empty-secret guard
+     * fires before the timestamp tolerance check).
      */
     private function forgedSucceededWebhookRequest(string $paymentIntentId, string $secret): Request
     {
-        // The fixed timestamp is irrelevant here: the empty-secret guard rejects before the
-        // timestamp tolerance check runs, so any valid HMAC shape exercises the secret guard.
         return $this->signedSucceededWebhookRequest($paymentIntentId, $secret, 1700000000);
     }
 
     /**
-     * Builds a succeeded-webhook request signed with a real HMAC for the given secret and the
-     * given timestamp, mirroring Stripe's `t=...,v1=...` Stripe-Signature header. A timestamp far
-     * from now() lets us assert the gateway honours Stripe's replay (timestamp tolerance) window.
+     * Builds a request signed with a real HMAC, mirroring Stripe's `t=...,v1=...` header.
+     * Pass a stale timestamp to exercise the replay-protection window.
      */
     private function signedSucceededWebhookRequest(string $paymentIntentId, string $secret, int $timestamp): Request
     {
@@ -240,7 +236,7 @@ class StripeWebhookTest extends TestCase
     {
         Event::fake([ReservationConfirmed::class]);
 
-        // Mirrors the shipped default in config/config.php (env RESRV_STRIPE_WEBHOOK_SECRET => '').
+        // Empty string is the shipped default for RESRV_STRIPE_WEBHOOK_SECRET.
         Config::set('resrv-config.stripe_webhook_secret', '');
 
         $reservation = Reservation::factory()->withCustomer()->create([
@@ -250,8 +246,7 @@ class StripeWebhookTest extends TestCase
             'payment_gateway' => 'stripe',
         ]);
 
-        // An attacker who knows the secret is empty can compute a valid v1 signature themselves;
-        // before the guard this forged webhook would confirm the reservation without payment.
+        // An attacker can compute a valid v1 HMAC when the secret is empty; the guard must reject this.
         $request = $this->forgedSucceededWebhookRequest('pi_test_empty_secret', '');
 
         $gateway = app(StripePaymentGateway::class);
@@ -278,8 +273,7 @@ class StripeWebhookTest extends TestCase
             'payment_gateway' => 'stripe',
         ]);
 
-        // Correctly signed with the configured secret, but timestamped well outside Stripe's 300s
-        // tolerance — i.e. a captured event being replayed later. Replay protection must reject it.
+        // Correctly signed but timestamped 600s ago — outside Stripe's 300s replay-protection window.
         $request = $this->signedSucceededWebhookRequest('pi_test_replay', 'whsec_test', time() - 600);
 
         $gateway = app(StripePaymentGateway::class);
@@ -306,8 +300,7 @@ class StripeWebhookTest extends TestCase
             'payment_gateway' => 'stripe',
         ]);
 
-        // A genuine, freshly-signed event within the tolerance window must still verify and confirm,
-        // proving the tolerance fix did not break the happy path.
+        // Freshly-signed event within the tolerance window — happy path must still confirm.
         $request = $this->signedSucceededWebhookRequest('pi_test_fresh', 'whsec_test', time());
 
         $gateway = app(StripePaymentGateway::class);

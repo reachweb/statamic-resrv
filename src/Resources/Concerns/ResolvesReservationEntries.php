@@ -8,12 +8,8 @@ use Statamic\Facades\Entry;
 trait ResolvesReservationEntries
 {
     /**
-     * Resolves every reservation row's Statamic entry in a single stache query, keyed by id.
-     *
-     * The Reservation `entry` accessor calls Entry::find() per row (a stache query each), so a
-     * paginated CP list/calendar would otherwise run one lookup per row. EntryRepository::find()
-     * is itself just query()->where('id', ...)->first(), making a batched whereIn() semantically
-     * identical while collapsing N lookups into one.
+     * Batch-resolves entries for all reservation rows in one stache query (keyed by id),
+     * avoiding one Entry::find() per row.
      */
     protected function resolveReservationEntries(Collection $reservations): Collection
     {

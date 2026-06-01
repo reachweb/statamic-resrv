@@ -224,8 +224,7 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
-    // Test that a negative extra quantity is rejected server-side (it would otherwise undercharge the booking).
-    // Form-object validation errors surface under the form property prefix, hence enabledExtras.extras.*.
+    // Negative quantity must be rejected server-side (would undercharge); errors surface under enabledExtras.extras.*.
     public function test_it_rejects_a_negative_extra_quantity()
     {
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
@@ -245,7 +244,6 @@ class CheckoutExtrasTest extends TestCase
             ->assertHasErrors(['enabledExtras.extras.'.$extra->id.'.quantity'])
             ->assertSet('step', 1);
 
-        // The bypass attempt must not have written the extra to the reservation.
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $this->reservation->id,
             'status' => 'pending',
@@ -257,7 +255,6 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
-    // Test that a zero extra quantity is rejected server-side
     public function test_it_rejects_a_zero_extra_quantity()
     {
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
@@ -278,12 +275,11 @@ class CheckoutExtrasTest extends TestCase
             ->assertSet('step', 1);
     }
 
-    // Test that an extra quantity above the configured per-extra maximum is rejected server-side
     public function test_it_rejects_an_extra_quantity_above_the_maximum()
     {
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
 
-        // The extra created in setUp uses the factory default maximum of 3.
+        // Factory default maximum is 3.
         $extra = $this->extras->first();
         $this->assertSame(3, $extra->maximum);
 
@@ -301,8 +297,7 @@ class CheckoutExtrasTest extends TestCase
             ->assertSet('step', 1);
     }
 
-    // Test that a valid extra quantity within the maximum is accepted. The payload price is the
-    // per-unit price (the component multiplies by quantity), matching the backend drift check.
+    // Payload price is per-unit; the component multiplies by quantity for the backend drift check.
     public function test_it_accepts_an_extra_quantity_within_the_maximum()
     {
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');

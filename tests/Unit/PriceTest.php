@@ -109,7 +109,7 @@ class PriceTest extends TestCase
 
         $price = Price::create(1000);
 
-        // JPY has no minor unit, so 1000 yen must stay 1000 (the old *100 produced 100000).
+        // JPY has no minor unit; old *100 logic produced 100000.
         $this->assertSame('1000', $price->format());
         $this->assertSame('1000', $price->raw());
     }
@@ -120,7 +120,7 @@ class PriceTest extends TestCase
 
         $price = Price::create(100);
 
-        // BHD has 3 decimal places, so 100 dinars is 100000 fils (the old *100 gave 10.000).
+        // BHD has 3 decimal places; old *100 logic gave 10.000 instead of 100.000.
         $this->assertSame('100.000', $price->format());
         $this->assertSame('100000', $price->raw());
     }
@@ -140,9 +140,7 @@ class PriceTest extends TestCase
     {
         config(['resrv-config.currency_isoCode' => 'EUR']);
 
-        // Nullable Price columns (e.g. reservations.total before checkout) are read through the
-        // accessors as Price::create(null). The decimal parser maps the resulting empty string to
-        // a zero Money, so this must not warn or throw on PHP 8.5+/9.
+        // Price::create(null) (nullable column before checkout) must return zero without warnings on PHP 8.5+.
         $price = Price::create(null);
 
         $this->assertInstanceOf(PriceClass::class, $price);

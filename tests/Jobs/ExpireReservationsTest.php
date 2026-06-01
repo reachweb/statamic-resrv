@@ -87,8 +87,7 @@ class ExpireReservationsTest extends TestCase
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        // The prune SELECT must constrain both status and created_at; loading every PENDING row
-        // (the previous behaviour) would produce a select with no created_at bound.
+        // The prune query must constrain created_at in SQL, not load all PENDING rows first.
         $hasFilteredPrune = collect($queries)->contains(fn ($query) => str_contains($query['query'], 'resrv_reservations')
             && str_contains($query['query'], 'status')
             && str_contains($query['query'], 'created_at')

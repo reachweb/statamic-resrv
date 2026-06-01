@@ -7,9 +7,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ExtraConditionTimeTest extends TestCase
 {
-    /**
-     * Invoke the protected ExtraCondition::checkTime() with a time window and a payload datetime.
-     */
+    /** Invoke the protected ExtraCondition::checkTime() via reflection. */
     private function checkTime(string $timeStart, string $timeEnd, string $payload): bool
     {
         $condition = (object) ['time_start' => $timeStart, 'time_end' => $timeEnd];
@@ -27,8 +25,7 @@ class ExtraConditionTimeTest extends TestCase
 
     public function test_same_day_window_does_not_match_a_time_after_the_range()
     {
-        // 20:00 is outside the 09:00-17:00 window. The previous implementation wrongly
-        // returned true because it added a day to the end, stretching the span to ~32h.
+        // Previous bug: adding a day to the end stretched the span to ~32 h, so 20:00 matched.
         $this->assertFalse($this->checkTime('09:00', '17:00', '2026-06-15 20:00:00'));
     }
 
@@ -50,8 +47,7 @@ class ExtraConditionTimeTest extends TestCase
 
     public function test_overnight_window_matches_an_early_morning_time()
     {
-        // 07:00 falls inside the overnight 21:00-08:00 window. The previous implementation
-        // wrongly returned false because it pinned the payload to "today", below the start.
+        // Previous bug: pinning the payload to "today" placed 07:00 below the 21:00 start.
         $this->assertTrue($this->checkTime('21:00', '08:00', '2026-06-15 07:00:00'));
     }
 
@@ -73,7 +69,7 @@ class ExtraConditionTimeTest extends TestCase
 
     public function test_time_window_is_evaluated_by_time_of_day_regardless_of_the_date()
     {
-        // The same time of day on different calendar dates yields the same result.
+        // Same time-of-day on different calendar dates must yield the same result.
         $this->assertTrue($this->checkTime('09:00', '17:00', '2020-01-01 10:00:00'));
         $this->assertTrue($this->checkTime('09:00', '17:00', '2099-12-31 10:00:00'));
         $this->assertFalse($this->checkTime('09:00', '17:00', '2099-12-31 18:00:00'));

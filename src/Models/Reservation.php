@@ -146,9 +146,8 @@ class Reservation extends Model
     }
 
     /**
-     * Builds the augmented entry array used by the CP list/calendar resources. Accepting an
-     * already-resolved entry lets those resources batch-resolve every row's entry in a single
-     * stache query instead of one Entry::find() per row.
+     * Accepts a pre-resolved entry so CP resources can batch all lookups via resolveReservationEntries()
+     * instead of one Entry::find() per row.
      */
     public function entryToArray(?EntryContract $entry): array
     {
@@ -172,10 +171,9 @@ class Reservation extends Model
 
     /**
      * Returns true when the status changed, false on same-state no-op. Callers MUST gate
-     * event dispatch on the return value — otherwise a duplicate webhook re-fires side
-     * effects (e.g. double IncreaseAvailability). Events are intentionally NOT dispatched
-     * here so the affiliate flow can transition to PARTNER and still dispatch
-     * ReservationConfirmed for side-effect listeners.
+     * event dispatch on the return value to prevent duplicate side effects (e.g. double
+     * IncreaseAvailability). Events are not dispatched here so callers can choose which event
+     * to fire (e.g. PARTNER still triggers ReservationConfirmed).
      */
     public function transitionTo(ReservationStatus $to): bool
     {
@@ -255,17 +253,15 @@ class Reservation extends Model
         foreach ($this->childs as $child) {
             $data = $this->buildChildDataArray($child);
 
-            // Fresh instances required per child: OptionValue::calculatePrice mutates $this->price
-            // via Price::multiply() for perday/fixed types, so re-using the same Option (and its
-            // eager-loaded values) across child iterations compounds the multiplication.
+            // Fresh instances per child: OptionValue::calculatePrice mutates $this->price via
+            // Price::multiply(), so reusing the same Option across children compounds the result.
             foreach ($this->options()->with('values')->get() as $option) {
                 $totalCharges->add($option->calculatePrice($data, $option->pivot->value));
             }
 
             foreach ($this->extras()->get() as $extra) {
-                // Fresh instance required: Extra::calculatePrice mutates $this->price via dynamic pricing.
-                // withTrashed() preserves the extras() relationship behavior so soft-deleted extras
-                // attached to historical reservations can still be priced.
+                // Fresh instance via withTrashed(): Extra::calculatePrice mutates price,
+                // and soft-deleted extras on historical reservations must still be priced.
                 $totalCharges->add(Extra::withTrashed()->find($extra->id)->calculatePrice($data, $extra->pivot->quantity));
             }
         }
@@ -467,9 +463,7 @@ class Reservation extends Model
 
             $required = $extraCondition->hasRequiredExtrasSelected($statamic_id, $childData);
             if ($required !== true) {
-                // union (not merge) preserves integer keys so $extra_id stays the real DB id;
-                // first-wins on collision is fine — the same extra_id from different children
-                // means the same missing prerequisite extra.
+                // union() preserves integer keys (real DB ids); first-wins on collision is fine.
                 $allRequired = $allRequired->union($required);
             }
         }
@@ -568,10 +562,9 @@ class Reservation extends Model
     }
 
     /**
-     * Clear payment_id/payment_gateway BEFORE commit so a racing succeeded webhook cannot
-     * reconcile via findByPaymentId once EXPIRED is committed; call the remote Stripe cancel
-     * AFTER commit so no DB row lock is held across a network call. If remote cancel fails,
-     * local state is already correct — the stray intent is logged for manual reconciliation.
+     * Clears payment_id/payment_gateway before commit (blocks racing webhooks), then cancels
+     * the remote intent after commit (no lock held across the network call). If remote cancel
+     * fails, local state is already correct; the error is logged for manual reconciliation.
      */
     public function expire(): void
     {
@@ -622,9 +615,7 @@ class Reservation extends Model
 
     public function emptyEntry()
     {
-        // Mirror the keys produced by the real augmented entry path (entryToArray) so consumers
-        // see a consistent shape whether or not the entry still exists. A null url means deleted
-        // entries render as plain text instead of a broken link.
+        // Matches the shape returned by entryToArray(); null url renders as plain text, not a broken link.
         return [
             'id' => null,
             'title' => '## Entry deleted ##',

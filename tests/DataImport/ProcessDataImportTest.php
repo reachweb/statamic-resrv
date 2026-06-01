@@ -149,7 +149,7 @@ class ProcessDataImportTest extends TestCase
 
         (new ProcessDataImport)->handle();
 
-        // Invalid cell is skipped before any write (and before a default rate is created).
+        // Skipped before any write, so no default rate is created either.
         $this->assertDatabaseCount('resrv_availabilities', 0);
         $this->assertDatabaseCount('resrv_rates', 0);
     }
@@ -192,15 +192,13 @@ class ProcessDataImportTest extends TestCase
 
     public function test_import_skips_row_with_fractional_availability()
     {
-        // available is an integer inventory count, so 1.9 must be skipped rather than silently
-        // truncated to 1 by the (int) cast.
+        // 1.9 must not be silently truncated to 1 by the (int) cast.
         $this->assertFractionalAvailabilityIsSkipped(1.9);
     }
 
     public function test_import_skips_row_with_negative_fractional_availability()
     {
-        // -0.5 passes is_numeric and (int) truncates it to 0 (>= 0), so without an integer check it
-        // would be imported as available = 0 instead of being skipped.
+        // -0.5 would (int)-cast to 0 and pass the >= 0 check without an explicit integer guard.
         $this->assertFractionalAvailabilityIsSkipped(-0.5);
     }
 
@@ -242,21 +240,19 @@ class ProcessDataImportTest extends TestCase
 
     public function test_import_skips_row_with_blank_date_range()
     {
-        // A blank header date silently parses to "now" via Carbon, which would write an unintended
-        // availability row for today instead of being skipped.
+        // Blank string silently parses to "now" via Carbon; strict parsing must skip it instead.
         $this->assertInvalidDateRangeIsSkipped('', '');
     }
 
     public function test_import_skips_row_with_unparseable_date_range()
     {
-        // A garbage date would otherwise make CarbonPeriod::create() throw and abort the whole import;
-        // it must be skipped + logged per row instead.
+        // Garbage date would make CarbonPeriod::create() throw; must be skipped per row, not abort the import.
         $this->assertInvalidDateRangeIsSkipped('not-a-date', 'also-not-a-date');
     }
 
     public function test_import_skips_row_with_reversed_date_range()
     {
-        // date_start after date_end yields an empty CarbonPeriod that writes nothing without a trace.
+        // date_start after date_end yields an empty CarbonPeriod with no trace; skip + log instead.
         $start = today()->addDays(5)->isoFormat('YYYY-MM-DD');
         $end = today()->addDay()->isoFormat('YYYY-MM-DD');
         $this->assertInvalidDateRangeIsSkipped($start, $end);
@@ -264,22 +260,19 @@ class ProcessDataImportTest extends TestCase
 
     public function test_import_skips_row_with_overflow_date()
     {
-        // Carbon::parse() would normalize 2024-02-30 to 2024-03-01 and write availability for the
-        // wrong date. Strict YYYY-MM-DD parsing must reject it instead.
+        // Carbon::parse() normalizes 2024-02-30 to 2024-03-01; strict parsing must reject it.
         $this->assertInvalidDateRangeIsSkipped('2024-02-30', '2024-03-15');
     }
 
     public function test_import_skips_row_with_relative_date_string()
     {
-        // Relative strings like "next monday" are valid to Carbon::parse() but are not real header
-        // dates — strict YYYY-MM-DD parsing must reject them.
+        // "next monday" is valid to Carbon::parse() but not a real header date; strict parsing rejects it.
         $this->assertInvalidDateRangeIsSkipped('next monday', 'next friday');
     }
 
     public function test_import_skips_row_with_non_iso_date_separator()
     {
-        // Headers are expected to use YYYY-MM-DD; a slash-separated date is rejected rather than
-        // silently coerced, so the row is skipped + logged instead of corrupting availability.
+        // Slash-separated dates must be rejected rather than silently coerced to YYYY-MM-DD.
         $this->assertInvalidDateRangeIsSkipped('2024/01/15', '2024/01/20');
     }
 

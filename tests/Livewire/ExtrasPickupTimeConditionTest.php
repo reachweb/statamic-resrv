@@ -59,7 +59,6 @@ class ExtrasPickupTimeConditionTest extends TestCase
 
         $component = Livewire::test(Extras::class, ['reservation' => $this->reservationStartingAt('12:00')]);
 
-        // A 12:00 pickup is outside the 06:00-10:00 window, so the extra must NOT be required.
         $this->assertFalse($component->extraConditions->get('required')->contains($extra->id));
     }
 
@@ -88,7 +87,6 @@ class ExtrasPickupTimeConditionTest extends TestCase
 
         $component = Livewire::test(Extras::class, ['reservation' => $this->reservationStartingAt('07:00')]);
 
-        // A 07:00 pickup falls inside the overnight 21:00-08:00 window, so the extra is required.
         $this->assertTrue($component->extraConditions->get('required')->contains($extra->id));
     }
 

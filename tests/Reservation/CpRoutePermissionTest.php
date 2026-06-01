@@ -16,8 +16,7 @@ class CpRoutePermissionTest extends TestCase
     {
         parent::setUp();
 
-        // The CP route guard throws an AuthorizationException; Laravel only turns that into
-        // an HTTP response when exception handling is enabled (TestCase disables it by default).
+        // The guard throws AuthorizationException; exception handling must be on to get an HTTP 403.
         $this->withExceptionHandling();
     }
 
