@@ -56,8 +56,11 @@ class SendAbandonedReservationEmails extends Command
                 new ReservationAbandoned($reservation),
             )) {
                 $sentCount++;
+                // Mark by recipient email (the dedupe key), not customer_id: a single
+                // person abandoning multiple checkouts gets a fresh customer row each
+                // time, so customer_id alone would leave the duplicates to resend.
                 $reservations
-                    ->where('customer_id', $reservation->customer_id)
+                    ->filter(fn (Reservation $r) => $r->customer->email === $reservation->customer->email)
                     ->each(fn (Reservation $r) => $r->update(['abandoned_email_sent_at' => now()]));
             }
         });

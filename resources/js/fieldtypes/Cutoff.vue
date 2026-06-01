@@ -77,6 +77,7 @@
 import { Fieldtype } from '@statamic/cms';
 import { Alert, Button, Card, DateRangePicker, Field, Input, Label, Panel, Switch } from '@statamic/cms/ui';
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import isEqual from 'lodash/isEqual';
 import { toCalendarDate, toIsoString } from '../composables/useDateRangeModel.js';
 
 const emit = defineEmits(Fieldtype.emits);
@@ -98,9 +99,6 @@ const serverTimezone = computed(() => props.meta.server_timezone);
 
 onMounted(() => {
     loadExistingSettings();
-    if (!newItem.value) {
-        updateFieldValue();
-    }
 });
 
 watch(settings, () => {
@@ -144,7 +142,16 @@ function removeSchedule(index) {
 }
 
 function updateFieldValue() {
-    update(enabled.value ? { ...settings, schedules: [...settings.schedules] } : null);
+    const next = enabled.value ? { ...settings, schedules: [...settings.schedules] } : null;
+
+    // The emit always builds a fresh object, which the publish container's ===
+    // check treats as a change — skip it when nothing actually differs, so just
+    // opening an entry never flags it dirty.
+    if (isEqual(next, props.value)) {
+        return;
+    }
+
+    update(next);
 }
 
 function scheduleDateRange(index) {
