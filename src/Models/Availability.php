@@ -1031,6 +1031,13 @@ class Availability extends Model implements AvailabilityContract
 
             $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date) && $rate->meetsBookingLeadTime($row->date));
 
+            // Mirror rateHasCapacity(): a requested quantity larger than the cap can never fit on any
+            // date, and the exhausted-date set below only flags dates that already carry a booking, so
+            // it would miss this. Drop every row for the rate up front.
+            if ($rate->isShared() && $rate->max_available && $quantity > $rate->max_available) {
+                continue;
+            }
+
             $exhaustedDates = $exhaustedByRate->get($rate->id, collect());
             if ($exhaustedDates->isNotEmpty()) {
                 $rateRows = $rateRows->reject(fn ($row) => $exhaustedDates->contains($row->date));

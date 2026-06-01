@@ -1266,6 +1266,55 @@ class RateSharedAvailabilityTest extends TestCase
         $this->assertTrue(app(Availability::class)->getAvailable($searchData)['message']['status']);
     }
 
+    public function test_show_all_rates_calendar_rejects_shared_rate_when_quantity_exceeds_cap()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Only the shared rate is a calendar candidate (base rate unpublished), capped at 1.
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-capped',
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 1,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(3)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+                ['date' => $startDate->copy()->addDays(2)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // No reservations exist, so the exhausted-date set is empty. Asking for 2 against a cap of 1
+        // must drop the rate from the all-rates calendar — matching the browse/checkout paths.
+        $exceedsCap = app(Availability::class)->getAvailableDatesFromDate(
+            $entry->id(), $startDate->toDateString(), 2, null, true,
+        );
+        $this->assertEmpty($exceedsCap);
+
+        // A quantity that fits the cap still renders the calendar dates.
+        $fitsCap = app(Availability::class)->getAvailableDatesFromDate(
+            $entry->id(), $startDate->toDateString(), 1, null, true,
+        );
+        $this->assertNotEmpty($fitsCap);
+    }
+
     public function test_empty_calendar_result_skips_unbounded_exhausted_date_scan()
     {
         $setup = $this->createSharedSetup(baseAvailable: 5, maxAvailable: 1);
