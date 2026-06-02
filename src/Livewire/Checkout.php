@@ -10,7 +10,6 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\CouponUpdated;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
@@ -29,6 +28,7 @@ class Checkout extends Component
     use Traits\HandlesExtrasQueries,
         Traits\HandlesOptionsQueries,
         Traits\HandlesPricing,
+        Traits\HandlesReservationConfirmation,
         Traits\HandlesReservationQueries,
         Traits\HandlesStatamicQueries;
 
@@ -471,13 +471,12 @@ class Checkout extends Component
             return;
         }
 
-        // Transition to PARTNER (terminal-equivalent for affiliate bookings) and dispatch the
-        // confirmed event for side effects (emails) only if the transition actually happened.
-        if ($reservation->transitionTo(ReservationStatus::PARTNER, tolerant: true)) {
-            ReservationConfirmed::dispatch($reservation);
+        // PARTNER is the terminal-equivalent state for affiliate (skip-payment) bookings.
+        if ($this->confirmOrAlreadyConfirmed($reservation, ReservationStatus::PARTNER)) {
+            return $this->redirectToCheckoutComplete($reservation->id);
         }
 
-        return $this->redirectToCheckoutComplete($reservation->id);
+        $this->reservationError = 'This reservation has expired. Please start over.';
     }
 
     protected function handleReservationWithZeroPayment()
@@ -489,11 +488,11 @@ class Checkout extends Component
             return;
         }
 
-        if ($this->reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
-            ReservationConfirmed::dispatch($this->reservation);
+        if ($this->confirmOrAlreadyConfirmed($this->reservation, ReservationStatus::CONFIRMED)) {
+            return $this->redirectToCheckoutComplete($this->reservation->id);
         }
 
-        return $this->redirectToCheckoutComplete($this->reservation->id);
+        $this->reservationError = 'This reservation has expired. Please start over.';
     }
 
     protected function confirmReservationIsValid(): void

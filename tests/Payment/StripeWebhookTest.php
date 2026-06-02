@@ -4,9 +4,11 @@ namespace Reach\StatamicResrv\Tests\Payment;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Mockery;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -125,6 +127,73 @@ class StripeWebhookTest extends TestCase
             'reservation_id' => $reservationId,
             'status' => 'fail',
         ]);
+    }
+
+    /**
+     * Expire the row the first time it is hydrated as PENDING — simulating ExpireReservations winning
+     * the race between the gateway's pre-check read and the lockForUpdate re-read inside transitionTo().
+     */
+    private function expireRowOnFirstPendingRead(int $reservationId): void
+    {
+        Reservation::retrieved(function (Reservation $model) use ($reservationId) {
+            if ((int) $model->id === $reservationId && $model->status === ReservationStatus::PENDING->value) {
+                DB::table('resrv_reservations')
+                    ->where('id', $reservationId)
+                    ->update(['status' => ReservationStatus::EXPIRED->value]);
+            }
+        });
+    }
+
+    public function test_stripe_succeeded_webhook_that_loses_the_confirm_race_to_expiry_notifies_orphan()
+    {
+        // Race: the webhook clears the PENDING pre-checks, then the row expires before transitionTo()
+        // locks it — the gateway must surface the orphaned charge instead of a silent 200 no-op.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_confirm_race',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $this->expireRowOnFirstPendingRead($reservation->id);
+
+        $request = $this->signedSucceededWebhookRequest('pi_test_confirm_race', 'whsec_test', time());
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('expired', $reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationConfirmed::class);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($m) => $m->hasTo('admin@example.com'));
+    }
+
+    public function test_fake_gateway_succeeded_webhook_that_loses_the_confirm_race_to_expiry_notifies_orphan()
+    {
+        // Parity with the Stripe gateway: a success webhook that wins the pre-checks as PENDING but
+        // loses the transitionTo() race to expiry must surface the orphaned charge, not no-op to 200.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_fake_confirm_race',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $this->expireRowOnFirstPendingRead($reservation->id);
+
+        $response = app(FakePaymentGateway::class)->verifyPayment($this->fakeGatewaySuccessRequest($reservation->id));
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('expired', $reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationConfirmed::class);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($m) => $m->hasTo('admin@example.com'));
     }
 
     public function test_verify_payment_short_circuits_for_already_confirmed_reservation()

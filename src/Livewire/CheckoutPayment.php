@@ -6,12 +6,12 @@ use Carbon\Carbon;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Reservation;
 
 class CheckoutPayment extends Component
 {
+    use Traits\HandlesReservationConfirmation;
     use Traits\HandlesStatamicQueries;
 
     public string $view = 'checkout-payment';
@@ -77,11 +77,11 @@ class CheckoutPayment extends Component
             return;
         }
 
-        if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
-            ReservationConfirmed::dispatch($reservation);
+        if ($this->confirmOrAlreadyConfirmed($reservation, ReservationStatus::CONFIRMED)) {
+            return redirect()->to($this->checkoutCompletedUrl.'?payment_pending='.$reservation->id);
         }
 
-        return redirect()->to($this->checkoutCompletedUrl.'?payment_pending='.$reservation->id);
+        $this->addError('reservation', 'This reservation has expired. Please start over.');
     }
 
     public function render()

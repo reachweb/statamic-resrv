@@ -276,27 +276,12 @@ class StripePaymentGateway implements PaymentInterface
                 return response()->json([], 200);
             }
 
-            // Succeeded webhook for a terminal reservation — charge exists with no live reservation;
-            // notify admins for manual refund.
-            if (in_array($reservation->status, [
-                ReservationStatus::EXPIRED->value,
-                ReservationStatus::REFUNDED->value,
-                ReservationStatus::PARTNER->value,
-            ], true)) {
-                Log::warning('Stripe succeeded webhook for a terminal reservation — manual refund likely required.', [
-                    'reservation_id' => $reservation->id,
-                    'reservation_status' => $reservation->status,
-                    'payment_intent_id' => $data['id'],
-                ]);
-
-                OrphanedPaymentNotification::dispatchFor($reservation, $data['id'], $event->id ?? null);
-
+            // Terminal reservation: the charge can't attach to a live booking, so notify and stop.
+            if (OrphanedPaymentNotification::notifyIfOrphaned($reservation, $data['id'], $event->id ?? null)) {
                 return response()->json([], 200);
             }
 
-            // Defense-in-depth: the intent is created server-side with the correct total, but verify
-            // the charged amount still matches what the reservation owes before confirming. A mismatch
-            // can't be reconciled to this booking, so notify admins instead.
+            // Defense-in-depth: refuse to confirm if the charged amount no longer matches what's owed.
             $expectedAmount = $reservation->payment->add($reservation->payment_surcharge)->raw();
 
             if (isset($data['amount_received']) && (int) $data['amount_received'] !== (int) $expectedAmount) {
@@ -314,7 +299,13 @@ class StripePaymentGateway implements PaymentInterface
 
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
                 ReservationConfirmed::dispatch($reservation);
+
+                return response()->json([], 200);
             }
+
+            // Lost the confirm race (row expired under the lock): surface any orphaned charge.
+            $reservation->refresh();
+            OrphanedPaymentNotification::notifyIfOrphaned($reservation, $data['id'], $event->id ?? null);
 
             return response()->json([], 200);
         }

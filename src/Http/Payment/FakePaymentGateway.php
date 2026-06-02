@@ -156,26 +156,22 @@ class FakePaymentGateway implements PaymentInterface
         }
 
         if ($request->get('status') === 'success') {
-            // Terminal-state reservations (expired/refunded/partner) receiving a success
-            // webhook represent orphan payments — manual reconciliation required.
-            if (in_array($reservation->status, [
-                ReservationStatus::EXPIRED->value,
-                ReservationStatus::REFUNDED->value,
-                ReservationStatus::PARTNER->value,
-            ], true)) {
-                Log::warning('Fake gateway success webhook for a terminal reservation — would require manual refund on a real gateway.', [
-                    'reservation_id' => $reservation->id,
-                    'reservation_status' => $reservation->status,
-                ]);
+            $paymentId = (string) ($reservation->payment_id ?: 'fake_intent');
 
-                OrphanedPaymentNotification::dispatchFor($reservation, (string) ($reservation->payment_id ?: 'fake_intent'));
-
+            // Terminal reservation: the charge can't attach to a live booking, so notify and stop.
+            if (OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId)) {
                 return response()->json([], 200);
             }
 
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
                 ReservationConfirmed::dispatch($reservation);
+
+                return response()->json([], 200);
             }
+
+            // Lost the confirm race (row expired under the lock): surface any orphaned charge.
+            $reservation->refresh();
+            OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId);
 
             return response()->json([], 200);
         }

@@ -7,6 +7,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
 
@@ -31,6 +32,32 @@ class OrphanedPaymentNotification extends Mailable
     public function build()
     {
         return $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.orphaned-payment'));
+    }
+
+    /**
+     * Notify admins when a succeeded payment lands on a reservation that can no longer be
+     * confirmed (EXPIRED/REFUNDED/PARTNER), leaving the charge orphaned. Returns true when an
+     * orphan was detected, so gateways can short-circuit on it.
+     */
+    public static function notifyIfOrphaned(Reservation $reservation, string $paymentIntentId, ?string $stripeEventId = null): bool
+    {
+        if (! in_array($reservation->status, [
+            ReservationStatus::EXPIRED->value,
+            ReservationStatus::REFUNDED->value,
+            ReservationStatus::PARTNER->value,
+        ], true)) {
+            return false;
+        }
+
+        Log::warning('Succeeded payment for a non-confirmable reservation — manual refund likely required.', [
+            'reservation_id' => $reservation->id,
+            'reservation_status' => $reservation->status,
+            'payment_intent_id' => $paymentIntentId,
+        ]);
+
+        self::dispatchFor($reservation, $paymentIntentId, $stripeEventId);
+
+        return true;
     }
 
     /**
