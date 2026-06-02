@@ -3,9 +3,12 @@
 namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
 
 class Report
 {
+    use ResolvesReservationEntries;
+
     protected $date_start;
 
     protected $date_end;
@@ -46,23 +49,30 @@ class Report
 
     public function topSellerItems()
     {
-        $items = $this->getTopItems();
-        $items->transform(function ($item) {
-            return [
-                'title' => $item->entry['title'],
-                'api_url' => $item->entry['url'],
-                'reservations' => (int) $item->occurrences,
-                'total_revenue' => round($this->reservations->where('item_id', $item->item_id)->sum(function ($reservation) {
-                    return $reservation->price->format();
-                }), 2),
-                'avg_revenue' => round($this->reservations->where('item_id', $item->item_id)->avg(function ($reservation) {
-                    return $reservation->price->format();
-                }), 2),
-                'percentage' => round($item->occurrences / $this->countConfirmedReservations(), 2),
-            ];
-        });
+        // Group the already-loaded reservations once instead of re-scanning the full collection
+        // (and re-querying) per item; this also keeps the status set aligned with the rest of the report.
+        $topItems = $this->reservations
+            ->groupBy('item_id')
+            ->sortByDesc(fn ($reservations) => $reservations->count())
+            ->take(10);
 
-        return $items;
+        // Batch-resolve the top items' entries in one query instead of one Entry::find() per item.
+        $entries = $this->resolveReservationEntries(
+            $topItems->map(fn ($reservations) => $reservations->first())->values()
+        );
+
+        return $topItems->map(function ($reservations, $itemId) use ($entries) {
+            $entry = $reservations->first()->entryToArray($entries->get($itemId));
+
+            return [
+                'title' => $entry['title'],
+                'api_url' => $entry['url'],
+                'reservations' => $reservations->count(),
+                'total_revenue' => round($reservations->sum(fn ($reservation) => $reservation->price->format()), 2),
+                'avg_revenue' => round($reservations->avg(fn ($reservation) => $reservation->price->format()), 2),
+                'percentage' => round($reservations->count() / $this->countConfirmedReservations(), 2),
+            ];
+        })->values();
     }
 
     public function topSellerExtras()
@@ -79,19 +89,6 @@ class Report
         });
 
         return $extras;
-    }
-
-    protected function getTopItems()
-    {
-        return Reservation::select('item_id')
-            ->addSelect(DB::raw('COUNT(item_id) AS occurrences'))
-            ->whereDate($this->dateField, '>=', $this->date_start)
-            ->whereDate($this->dateField, '<=', $this->date_end)
-            ->where('status', 'confirmed')
-            ->groupBy('item_id')
-            ->orderBy('occurrences', 'DESC')
-            ->limit(10)
-            ->get('occurrences');
     }
 
     protected function getTopExtras()

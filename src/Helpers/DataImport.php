@@ -51,12 +51,14 @@ class DataImport
                 ->useDelimiter($this->delimiter)->take(3);
         }
 
+        // Aggregate by entry id: multiple CSV rows for the same entry (e.g. one row per rate)
+        // must accumulate. mapWithKeys would keep only the last row, silently dropping the rest.
         $import = $reader
             ->getRows()
-            ->mapWithKeys(function ($row) {
+            ->reduce(function ($import, $row) {
                 $id = $this->getId($row[$this->identifier]);
                 if ($id == false) {
-                    $id = 'not-found';
+                    return $import;
                 }
                 $data = collect();
                 $index = 0;
@@ -76,8 +78,8 @@ class DataImport
                     $index++;
                 }
 
-                return [$id => $data];
-            })->reject(fn ($item, $id) => $id == 'not-found');
+                return $import->put($id, $import->get($id, collect())->concat($data));
+            }, collect());
 
         if ($sample) {
             return $import->take(1);
@@ -139,6 +141,12 @@ class DataImport
         foreach ($headers as $header) {
             if (strpos($header, 'price') !== false) {
                 $priceHeaderFound = true;
+                // A price header drives the date range, so it must carry one (price:date_start|date_end).
+                // Without this, a header literally named "price" would import every row as a skipped no-op.
+                $dates = $this->getDatesFromHeader($header);
+                if ($dates['date_start'] === '' || $dates['date_end'] === '') {
+                    return 'A price header is missing its date range, expected e.g. "price:2024-01-01|2024-01-10".';
+                }
             }
             if (strpos($header, 'availability') !== false) {
                 $availabilityHeaderFound = true;

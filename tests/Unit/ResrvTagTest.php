@@ -38,6 +38,20 @@ class ResrvTagTest extends TestCase
             ->setContext([]);
     }
 
+    public function test_search_json_html_escapes_session_values()
+    {
+        // Antlers does not escape tag output, so the JSON itself must be safe to embed.
+        session(['resrv_search' => ['date_start' => '</script><script>alert(1)</script>']]);
+
+        $output = $this->tag->searchJson();
+
+        // No raw angle brackets reach the output. The round-trip below proves they were
+        // hex-escaped (\uXXXX), not stripped — so a JS consumer still gets the real value.
+        $this->assertStringNotContainsString('<', $output);
+        $this->assertStringNotContainsString('>', $output);
+        $this->assertEquals('</script><script>alert(1)</script>', json_decode($output, true)['date_start']);
+    }
+
     public function test_reservation_from_uri_returns_404_when_customer_is_null()
     {
         Reservation::factory()->create([

@@ -38,6 +38,12 @@ class Affiliate extends Model
         return AffiliateFactory::new();
     }
 
+    // Unpublished affiliates are disabled: they must not be cookied or attributed to reservations.
+    public function scopePublished($query)
+    {
+        return $query->where('published', true);
+    }
+
     public function reservations(): BelongsToMany
     {
         return $this->belongsToMany(Reservation::class, 'resrv_reservation_affiliate')->withPivot('fee');

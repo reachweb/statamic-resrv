@@ -8,7 +8,7 @@ trait HandlesAffiliates
 {
     public function getAffiliateIfCookieExists(): ?Affiliate
     {
-        return request()->cookie('resrv_afid') ? Affiliate::where('code', request()->cookie('resrv_afid'))->first() : null;
+        return request()->cookie('resrv_afid') ? Affiliate::published()->where('code', request()->cookie('resrv_afid'))->first() : null;
     }
 
     public function affiliateCanSkipPayment(): bool
