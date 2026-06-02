@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Mail;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Models\Reservation;
@@ -38,12 +39,26 @@ class OrphanedPaymentNotification extends Mailable
      */
     public static function dispatchFor(Reservation $reservation, string $paymentIntentId, ?string $stripeEventId = null): void
     {
+        // Stripe redelivers webhooks for up to ~3 days, so an orphan charge would otherwise re-email
+        // admins on every retry. Notify only once per (reservation, payment intent).
+        $dedupeKey = 'resrv_orphan_notified:'.$reservation->id.':'.$paymentIntentId;
+
+        if (Cache::has($dedupeKey)) {
+            return;
+        }
+
         try {
-            app(ReservationEmailDispatcher::class)->send(
+            $sent = app(ReservationEmailDispatcher::class)->send(
                 $reservation,
                 ReservationEmailEvent::AdminOrphanedPayment,
                 new self($reservation, $paymentIntentId, $stripeEventId),
             );
+
+            // Only mark as notified once a message actually went out, so a disabled/no-recipient run
+            // doesn't permanently suppress a later genuine notification.
+            if ($sent) {
+                Cache::put($dedupeKey, true, now()->addDays(4));
+            }
         } catch (\Throwable $e) {
             Log::error('Failed to dispatch orphaned payment notification', [
                 'reservation_id' => $reservation->id,

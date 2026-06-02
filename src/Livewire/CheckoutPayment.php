@@ -77,7 +77,7 @@ class CheckoutPayment extends Component
             return;
         }
 
-        if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
+        if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
             ReservationConfirmed::dispatch($reservation);
         }
 

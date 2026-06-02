@@ -14,7 +14,18 @@ class ChildReservation extends Model
 
     protected $table = 'resrv_child_reservations';
 
-    protected $guarded = [];
+    // Explicit allow-list (vs. $guarded = []) so untrusted input can't mass-assign the primary key
+    // or any column not written by app code.
+    protected $fillable = [
+        'reservation_id',
+        'date_start',
+        'date_end',
+        'quantity',
+        'rate_id',
+        'price',
+        'created_at',
+        'updated_at',
+    ];
 
     protected $casts = [
         'date_start' => 'datetime',

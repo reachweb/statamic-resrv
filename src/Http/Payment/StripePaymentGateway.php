@@ -13,9 +13,6 @@ use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\InvalidRequestException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Exception\UnexpectedValueException;
-use Stripe\PaymentIntent;
-use Stripe\Refund;
-use Stripe\Stripe;
 use Stripe\StripeClient;
 use Stripe\Webhook;
 
@@ -38,8 +35,8 @@ class StripePaymentGateway implements PaymentInterface
 
     public function paymentIntent($payment, Reservation $reservation, $data)
     {
-        Stripe::setApiKey($this->getSecretKey($reservation));
-        $paymentIntent = PaymentIntent::create([
+        $stripe = new StripeClient($this->getSecretKey($reservation));
+        $paymentIntent = $stripe->paymentIntents->create([
             'amount' => $payment->raw(),
             'currency' => Str::lower(config('resrv-config.currency_isoCode')),
             'metadata' => array_merge(['reservation_id' => $reservation->id], $this->filterCustomerData($data)),
@@ -53,13 +50,13 @@ class StripePaymentGateway implements PaymentInterface
 
     public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
     {
-        Stripe::setApiKey($this->getSecretKey($reservation));
+        $stripe = new StripeClient($this->getSecretKey($reservation));
 
         try {
-            $intent = PaymentIntent::retrieve($paymentId);
+            $intent = $stripe->paymentIntents->retrieve($paymentId);
 
             if (in_array($intent->status, ['requires_payment_method', 'requires_confirmation', 'requires_action', 'processing', 'requires_capture'], true)) {
-                $intent->cancel();
+                $stripe->paymentIntents->cancel($paymentId);
             }
         } catch (ApiErrorException $e) {
             Log::warning('Failed to cancel Stripe payment intent: '.$e->getMessage(), [
@@ -71,9 +68,9 @@ class StripePaymentGateway implements PaymentInterface
 
     public function refund($reservation)
     {
-        Stripe::setApiKey($this->getSecretKey($reservation));
+        $stripe = new StripeClient($this->getSecretKey($reservation));
         try {
-            $attemptRefund = Refund::create([
+            $attemptRefund = $stripe->refunds->create([
                 'payment_intent' => $reservation->payment_id,
                 'reverse_transfer' => false,
             ]);
@@ -86,12 +83,14 @@ class StripePaymentGateway implements PaymentInterface
 
     protected function filterCustomerData($data)
     {
-        $customerData = collect($data);
-        $filteredData = $customerData->filter(function ($value, $key) {
-            return is_string($value);
-        });
-
-        return $filteredData->toArray();
+        // Stripe caps metadata at 50 keys with keys ≤ 40 and values ≤ 500 characters. The customer
+        // payload is free-text from the checkout form, so clamp it to those limits — the caller merges
+        // reservation_id in separately, so cap at 49 — to avoid an InvalidRequestException on create().
+        return collect($data)
+            ->filter(fn ($value, $key) => is_string($value) && mb_strlen((string) $key) <= 40)
+            ->take(49)
+            ->map(fn ($value) => mb_substr($value, 0, 500))
+            ->toArray();
     }
 
     public function getPublicKey($reservation)
@@ -220,8 +219,6 @@ class StripePaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
 
-        Stripe::setApiKey($this->getSecretKey($reservation));
-
         // Refuse verification when the webhook secret is missing — an empty secret makes the HMAC
         // forgeable by anyone on this CSRF-exempt endpoint.
         $webhookSecret = $this->getWebhookSecret($reservation);
@@ -274,7 +271,7 @@ class StripePaymentGateway implements PaymentInterface
                     'current_payment_gateway' => $reservation->payment_gateway,
                 ]);
 
-                OrphanedPaymentNotification::dispatchFor($reservation, $data['id']);
+                OrphanedPaymentNotification::dispatchFor($reservation, $data['id'], $event->id ?? null);
 
                 return response()->json([], 200);
             }
@@ -292,12 +289,30 @@ class StripePaymentGateway implements PaymentInterface
                     'payment_intent_id' => $data['id'],
                 ]);
 
-                OrphanedPaymentNotification::dispatchFor($reservation, $data['id']);
+                OrphanedPaymentNotification::dispatchFor($reservation, $data['id'], $event->id ?? null);
 
                 return response()->json([], 200);
             }
 
-            if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
+            // Defense-in-depth: the intent is created server-side with the correct total, but verify
+            // the charged amount still matches what the reservation owes before confirming. A mismatch
+            // can't be reconciled to this booking, so notify admins instead.
+            $expectedAmount = $reservation->payment->add($reservation->payment_surcharge)->raw();
+
+            if (isset($data['amount_received']) && (int) $data['amount_received'] !== (int) $expectedAmount) {
+                Log::warning('Stripe succeeded webhook amount does not match the reservation total; not confirming.', [
+                    'reservation_id' => $reservation->id,
+                    'payment_intent_id' => $data['id'],
+                    'amount_received' => $data['amount_received'],
+                    'expected_amount' => $expectedAmount,
+                ]);
+
+                OrphanedPaymentNotification::dispatchFor($reservation, $data['id'], $event->id ?? null);
+
+                return response()->json([], 200);
+            }
+
+            if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
                 ReservationConfirmed::dispatch($reservation);
             }
 

@@ -33,6 +33,60 @@ class StateMachineTest extends TestCase
         ]);
     }
 
+    public function test_duration_does_not_mutate_the_cached_dates()
+    {
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'date_start' => '2026-06-01 14:30:00',
+            'date_end' => '2026-06-04 09:15:00',
+        ]);
+
+        $this->assertEquals(3, $reservation->duration());
+
+        // duration() must not zero the time component of the model's cached Carbon instances (L11).
+        $this->assertEquals('2026-06-01 14:30:00', $reservation->date_start->format('Y-m-d H:i:s'));
+        $this->assertEquals('2026-06-04 09:15:00', $reservation->date_end->format('Y-m-d H:i:s'));
+    }
+
+    public function test_find_by_payment_id_ignores_reservations_with_a_cleared_payment_id()
+    {
+        // expire()/cancelActiveIntent clear payment_id to '', so a lookup with an empty id must match
+        // nothing rather than an arbitrary cleared reservation (L9).
+        $cleared = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'expired',
+            'payment_id' => '',
+        ]);
+
+        $live = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_live_123',
+        ]);
+
+        // An empty/cleared id matches nothing...
+        $this->assertNull(Reservation::findByPaymentId('')->first());
+        // ...while a real intent id still resolves to its reservation.
+        $this->assertEquals($live->id, Reservation::findByPaymentId('pi_live_123')->first()?->id);
+    }
+
+    public function test_reservation_does_not_mass_assign_guarded_columns()
+    {
+        // L12: id/timestamps are not fillable, so a future fill()/update() with untrusted input
+        // can't overwrite the primary key; legitimately-writable columns still fill.
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+        ]);
+
+        $originalId = $reservation->id;
+
+        $reservation->fill(['id' => $originalId + 999, 'status' => 'confirmed']);
+
+        $this->assertEquals($originalId, $reservation->id);
+        $this->assertEquals('confirmed', $reservation->status);
+    }
+
     public function test_transition_to_same_state_is_idempotent_no_op()
     {
         foreach (['pending', 'confirmed', 'expired', 'refunded', 'partner'] as $status) {
@@ -115,6 +169,19 @@ class StateMachineTest extends TestCase
         $this->expectException(InvalidStateTransition::class);
 
         $reservation->transitionTo(ReservationStatus::CONFIRMED);
+    }
+
+    public function test_tolerant_transition_returns_false_instead_of_throwing_on_invalid_transition()
+    {
+        // Reactive callers (webhooks/checkout) pass tolerant: true so a row that changed under the
+        // lock — e.g. a concurrent expire() between their in-memory pre-check and the lock — is a
+        // no-op rather than an uncaught exception that surfaces as an HTTP 500 / webhook retry (L10).
+        $reservation = $this->reservation('expired');
+
+        $changed = $reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true);
+
+        $this->assertFalse($changed);
+        $this->assertEquals('expired', $reservation->fresh()->status);
     }
 
     public function test_refunded_to_confirmed_is_rejected()

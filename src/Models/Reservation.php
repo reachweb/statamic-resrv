@@ -31,7 +31,30 @@ class Reservation extends Model
 
     protected $table = 'resrv_reservations';
 
-    protected $guarded = [];
+    // Explicit allow-list (vs. $guarded = []) so a future fill()/update() with untrusted input
+    // can't mass-assign the primary key or any column not written by app code. Status changes
+    // still go exclusively through transitionTo() (direct assignment, not mass assignment).
+    // Timestamps stay fillable — time-based flows/tests set created_at/updated_at directly.
+    protected $fillable = [
+        'status',
+        'type',
+        'reference',
+        'item_id',
+        'date_start',
+        'date_end',
+        'quantity',
+        'rate_id',
+        'price',
+        'payment',
+        'payment_surcharge',
+        'payment_id',
+        'payment_gateway',
+        'total',
+        'customer_id',
+        'abandoned_email_sent_at',
+        'created_at',
+        'updated_at',
+    ];
 
     protected $casts = [
         'date_start' => 'datetime',
@@ -166,7 +189,11 @@ class Reservation extends Model
 
     public function scopeFindByPaymentId($query, $id)
     {
-        return $query->where('payment_id', $id);
+        // payment_id is cleared to '' on expire/cancel, so a falsy id must match nothing rather than
+        // every cleared reservation.
+        return $query->where('payment_id', $id)
+            ->where('payment_id', '!=', '')
+            ->whereNotNull('payment_id');
     }
 
     /**
@@ -174,10 +201,15 @@ class Reservation extends Model
      * event dispatch on the return value to prevent duplicate side effects (e.g. double
      * IncreaseAvailability). Events are not dispatched here so callers can choose which event
      * to fire (e.g. PARTNER still triggers ReservationConfirmed).
+     *
+     * Pass $tolerant = true for reactive callers (webhooks/checkout) so a concurrent update that
+     * changed the row after their in-memory pre-check is treated as a no-op (returns false) rather
+     * than throwing — avoiding a spurious HTTP 500 / webhook retry. Explicit callers (CP refund)
+     * keep the default and catch InvalidStateTransition to surface the error.
      */
-    public function transitionTo(ReservationStatus $to): bool
+    public function transitionTo(ReservationStatus $to, bool $tolerant = false): bool
     {
-        return (bool) DB::transaction(function () use ($to) {
+        return (bool) DB::transaction(function () use ($to, $tolerant) {
             $fresh = static::query()->lockForUpdate()->findOrFail($this->id);
 
             if ($fresh->status === $to->value) {
@@ -187,6 +219,16 @@ class Reservation extends Model
             $current = ReservationStatus::from($fresh->status);
 
             if (! $current->canTransitionTo($to)) {
+                if ($tolerant) {
+                    Log::info('Skipped reservation transition; state changed under lock.', [
+                        'reservation_id' => $fresh->id,
+                        'from' => $current->value,
+                        'to' => $to->value,
+                    ]);
+
+                    return false;
+                }
+
                 throw new InvalidStateTransition($current, $to, $fresh->id);
             }
 
@@ -221,7 +263,9 @@ class Reservation extends Model
 
     public function duration()
     {
-        return (int) $this->date_start->startOfDay()->diffInDays($this->date_end->startOfDay(), true);
+        // Copy before startOfDay() — date_start/date_end are mutable Carbon instances, so mutating
+        // them in place is a footgun (and inconsistent with HandlesAvailabilityDates::checkMinimumDate).
+        return (int) $this->date_start->copy()->startOfDay()->diffInDays($this->date_end->copy()->startOfDay(), true);
     }
 
     public function extraCharges()

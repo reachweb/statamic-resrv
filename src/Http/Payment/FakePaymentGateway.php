@@ -173,7 +173,7 @@ class FakePaymentGateway implements PaymentInterface
                 return response()->json([], 200);
             }
 
-            if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
+            if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
                 ReservationConfirmed::dispatch($reservation);
             }
 

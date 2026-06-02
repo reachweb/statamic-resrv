@@ -473,7 +473,7 @@ class Checkout extends Component
 
         // Transition to PARTNER (terminal-equivalent for affiliate bookings) and dispatch the
         // confirmed event for side effects (emails) only if the transition actually happened.
-        if ($reservation->transitionTo(ReservationStatus::PARTNER)) {
+        if ($reservation->transitionTo(ReservationStatus::PARTNER, tolerant: true)) {
             ReservationConfirmed::dispatch($reservation);
         }
 
@@ -489,7 +489,7 @@ class Checkout extends Component
             return;
         }
 
-        if ($this->reservation->transitionTo(ReservationStatus::CONFIRMED)) {
+        if ($this->reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
             ReservationConfirmed::dispatch($this->reservation);
         }
 

@@ -17,6 +17,7 @@ use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
+use Stripe\Stripe;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class StripeWebhookTest extends TestCase
@@ -61,6 +62,11 @@ class StripeWebhookTest extends TestCase
         return $this->signedWebhookRequest('payment_intent.succeeded', $paymentIntentId, $secret, $timestamp);
     }
 
+    private function signedSucceededWebhookRequestWithAmount(string $paymentIntentId, string $secret, int $timestamp, int $amountReceived): Request
+    {
+        return $this->signedWebhookRequest('payment_intent.succeeded', $paymentIntentId, $secret, $timestamp, ['amount_received' => $amountReceived]);
+    }
+
     private function signedFailedWebhookRequest(string $paymentIntentId, string $secret, int $timestamp): Request
     {
         return $this->signedWebhookRequest('payment_intent.payment_failed', $paymentIntentId, $secret, $timestamp);
@@ -76,12 +82,18 @@ class StripeWebhookTest extends TestCase
      * Stripe's `t=...,v1=...` header. The signature covers the raw payload, so it stays valid
      * for any event type.
      */
-    private function signedWebhookRequest(string $type, string $paymentIntentId, string $secret, int $timestamp): Request
+    private function signedWebhookRequest(string $type, string $paymentIntentId, string $secret, int $timestamp, array $extraObjectData = [], ?string $eventId = null): Request
     {
-        $payload = json_encode([
+        $event = [
             'type' => $type,
-            'data' => ['object' => ['id' => $paymentIntentId]],
-        ]);
+            'data' => ['object' => array_merge(['id' => $paymentIntentId], $extraObjectData)],
+        ];
+
+        if ($eventId !== null) {
+            $event['id'] = $eventId;
+        }
+
+        $payload = json_encode($event);
 
         $signature = sprintf(
             't=%d,v1=%s',
@@ -229,6 +241,52 @@ class StripeWebhookTest extends TestCase
         Mail::assertSent(OrphanedPaymentNotification::class);
     }
 
+    public function test_stripe_orphan_notification_includes_the_verified_event_id()
+    {
+        // L6: the orphan email's most useful reconciliation handle is the Stripe event id; the real
+        // gateway must pass it through so the template's "Event id" line renders.
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'expired',
+            'payment_id' => 'pi_test_event_id',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $request = $this->signedWebhookRequest('payment_intent.succeeded', 'pi_test_event_id', 'whsec_test', time(), [], 'evt_test_orphan_123');
+
+        $gateway = app(StripePaymentGateway::class);
+        $response = $gateway->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->stripeEventId === 'evt_test_orphan_123');
+    }
+
+    public function test_duplicate_orphan_webhook_only_notifies_admins_once()
+    {
+        // L5: Stripe redelivers webhooks for up to ~3 days; an orphan charge against a terminal
+        // reservation must not re-email admins on every retry.
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'expired',
+            'payment_id' => 'pi_test_orphan_dedup',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $gateway = app(FakePaymentGateway::class);
+        $gateway->verifyPayment($this->fakeGatewaySuccessRequest($reservation->id));
+        $gateway->verifyPayment($this->fakeGatewaySuccessRequest($reservation->id));
+
+        // One notification despite two webhook deliveries for the same orphaned charge.
+        Mail::assertSent(OrphanedPaymentNotification::class, 1);
+        $this->assertEquals('expired', $reservation->fresh()->status);
+    }
+
     public function test_orphan_notification_sends_one_message_per_admin_recipient()
     {
         Mail::fake();
@@ -364,6 +422,90 @@ class StripeWebhookTest extends TestCase
         $this->assertEquals(200, $response->getStatusCode());
         $this->assertEquals('confirmed', $reservation->fresh()->status);
         Event::assertDispatched(ReservationConfirmed::class, fn ($e) => $e->reservation->id === $reservation->id);
+    }
+
+    public function test_verify_payment_does_not_confirm_when_charged_amount_differs_from_reservation_total()
+    {
+        // L4: defense-in-depth — a signed succeeded webhook whose amount_received does not match what
+        // the reservation owes must not confirm; it's an orphaned charge for manual reconciliation.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment' => 50,
+            'payment_id' => 'pi_test_amount_mismatch',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        // Reservation owes 50.00 (5000 minor units); report a different charged amount.
+        $request = $this->signedSucceededWebhookRequestWithAmount('pi_test_amount_mismatch', 'whsec_test', time(), 9900);
+
+        $gateway = app(StripePaymentGateway::class);
+        $response = $gateway->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('pending', $reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationConfirmed::class);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($m) => $m->hasTo('admin@example.com'));
+    }
+
+    public function test_verify_payment_confirms_when_charged_amount_matches_reservation_total()
+    {
+        // L4: the amount guard must not block the happy path — a matching amount_received confirms.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment' => 50,
+            'payment_id' => 'pi_test_amount_match',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        // 50.00 => 5000 minor units, matching the reservation total.
+        $request = $this->signedSucceededWebhookRequestWithAmount('pi_test_amount_match', 'whsec_test', time(), 5000);
+
+        $gateway = app(StripePaymentGateway::class);
+        $response = $gateway->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('confirmed', $reservation->fresh()->status);
+        Event::assertDispatched(ReservationConfirmed::class, fn ($e) => $e->reservation->id === $reservation->id);
+        Mail::assertNotSent(OrphanedPaymentNotification::class);
+    }
+
+    public function test_verify_payment_does_not_mutate_the_global_stripe_api_key()
+    {
+        // L7: the gateway resolves its key via per-call instance clients, so verifyPayment must not
+        // write the process-global Stripe key — under a persistent worker (Octane) with multisite
+        // per-collection keys a leaked global would target the wrong Stripe account.
+        Event::fake([ReservationConfirmed::class]);
+
+        $original = Stripe::getApiKey();
+        Stripe::setApiKey('sk_sentinel');
+
+        try {
+            $reservation = Reservation::factory()->withCustomer()->create([
+                'item_id' => $this->entries->first()->id(),
+                'status' => 'pending',
+                'payment_id' => 'pi_test_no_global_key',
+                'payment_gateway' => 'stripe',
+            ]);
+
+            $request = $this->signedSucceededWebhookRequest('pi_test_no_global_key', 'whsec_test', time());
+
+            app(StripePaymentGateway::class)->verifyPayment($request);
+
+            // Untouched — the gateway never calls Stripe::setApiKey on the global SDK singleton.
+            $this->assertEquals('sk_sentinel', Stripe::getApiKey());
+            $this->assertEquals('confirmed', $reservation->fresh()->status);
+        } finally {
+            Stripe::setApiKey($original);
+        }
     }
 
     public function test_stripe_payment_failed_webhook_leaves_reservation_pending_and_does_not_release_hold()
