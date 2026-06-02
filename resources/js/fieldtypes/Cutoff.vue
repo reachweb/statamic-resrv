@@ -110,6 +110,12 @@ watch(settings, () => {
 function loadExistingSettings() {
     if (props.value && typeof props.value === 'object') {
         Object.assign(settings, props.value);
+        // Clone schedule rows so edits don't mutate props.value in place, which
+        // would make the isEqual guard suppress real updates (and the emit that
+        // records this field as localized on a synced multisite entry).
+        settings.schedules = Array.isArray(settings.schedules)
+            ? settings.schedules.map((schedule) => ({ ...schedule }))
+            : [];
         enabled.value = settings.enable_cutoff || false;
     } else {
         enabled.value = false;
@@ -146,12 +152,22 @@ function updateFieldValue() {
 
     // The emit always builds a fresh object, which the publish container's ===
     // check treats as a change — skip it when nothing actually differs, so just
-    // opening an entry never flags it dirty.
-    if (isEqual(next, props.value)) {
+    // opening an entry never flags it dirty. Compare against the stored value
+    // normalized to the shape we emit (older/default-only configs may omit
+    // `schedules`), otherwise that shape gap alone would read as a change on load.
+    if (isEqual(next, normalizedStoredValue())) {
         return;
     }
 
     update(next);
+}
+
+function normalizedStoredValue() {
+    if (! props.value || typeof props.value !== 'object') {
+        return null;
+    }
+
+    return { ...props.value, schedules: Array.isArray(props.value.schedules) ? props.value.schedules : [] };
 }
 
 function scheduleDateRange(index) {
