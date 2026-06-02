@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\FixedPricing;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
@@ -295,5 +296,32 @@ class FixedPricingCpTest extends TestCase
             str_contains($type, 'decimal') || str_contains($type, 'numeric'),
             "Expected resrv_fixed_pricing.price to be a decimal/numeric column, got '{$type}'."
         );
+    }
+
+    public function test_price_column_preserves_three_decimal_currency_precision()
+    {
+        // BHD has 3 decimal places. MySQL/Postgres enforce the column scale, so a
+        // decimal(10,2) column truncates an admin-entered 1.234 down to 1.23 before
+        // FixedPricing reads it back through the currency-aware Price::create(), charging
+        // the wrong amount. decimal(12,4) preserves it. SQLite uses NUMERIC affinity and
+        // ignores declared scale, so it can neither enforce nor record this — skip there.
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            $this->markTestSkipped('SQLite ignores decimal scale; precision loss only reproduces on MySQL/Postgres.');
+        }
+
+        config(['resrv-config.currency_isoCode' => 'BHD']);
+
+        $item = $this->makeStatamicItem();
+        Rate::factory()->create(['collection' => 'pages']);
+
+        $this->post(cp_route('resrv.fixedpricing.update'), [
+            'statamic_id' => $item->id(),
+            'days' => '4',
+            'price' => '1.234',
+        ])->assertStatus(200);
+
+        $stored = FixedPricing::entry($item->id())->where('days', 4)->first();
+
+        $this->assertSame('1.234', $stored->price->format());
     }
 }
