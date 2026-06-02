@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Rate;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
@@ -1440,5 +1441,20 @@ class RateSharedAvailabilityTest extends TestCase
 
         $this->assertEmpty($result);
         $this->assertCount(0, $reservationQueries, 'No reservation-overlap query should run for an empty result set.');
+    }
+
+    public function test_composite_overlap_indexes_exist_on_reservation_tables()
+    {
+        // The rate_id + date-range overlap checks rely on these composite indexes (M38).
+        $this->assertReservationIndexExists('resrv_reservations', ['rate_id', 'date_start', 'date_end']);
+        $this->assertReservationIndexExists('resrv_child_reservations', ['rate_id', 'date_start', 'date_end']);
+    }
+
+    protected function assertReservationIndexExists(string $table, array $columns): void
+    {
+        $hasIndex = collect(Schema::getIndexes($table))
+            ->contains(fn ($index) => $index['columns'] === $columns);
+
+        $this->assertTrue($hasIndex, "Expected a composite index on {$table} (".implode(', ', $columns).').');
     }
 }

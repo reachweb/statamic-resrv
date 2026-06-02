@@ -9,7 +9,6 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
-use Stripe\Event;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\InvalidRequestException;
 use Stripe\Exception\SignatureVerificationException;
@@ -201,6 +200,8 @@ class StripePaymentGateway implements PaymentInterface
     {
         $payload = json_decode($request->getContent(), true);
 
+        // Untrusted until constructEvent() verifies the signature below. Used only to locate the
+        // reservation, which is needed to resolve a per-collection webhook secret.
         $data = $payload['data']['object'];
 
         $reservation = Reservation::findByPaymentId($data['id'])->first();
@@ -219,10 +220,6 @@ class StripePaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
 
-        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
-            return response()->json([], 200);
-        }
-
         Stripe::setApiKey($this->getSecretKey($reservation));
 
         // Refuse verification when the webhook secret is missing — an empty secret makes the HMAC
@@ -237,14 +234,11 @@ class StripePaymentGateway implements PaymentInterface
             abort(500);
         }
 
-        try {
-            $event = Event::constructFrom(json_decode($request->getContent(), true));
-        } catch (\UnexpectedValueException $e) {
-            // Invalid payload
+        $sig_header = $request->header('Stripe-Signature');
+
+        if (empty($sig_header)) {
             abort(403);
         }
-
-        $sig_header = $_SERVER['HTTP_STRIPE_SIGNATURE'];
 
         try {
             // Omit $tolerance to keep Stripe's default 300s replay-window check.
@@ -259,6 +253,14 @@ class StripePaymentGateway implements PaymentInterface
         } catch (UnexpectedValueException $e) {
             // Invalid payload
             abort(403);
+        }
+
+        // Signature verified: re-read the payload from the trusted event and only now act on
+        // reservation state, so an unsigned request can't probe status before verification.
+        $data = $event->data->object;
+
+        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
+            return response()->json([], 200);
         }
 
         if ($event->type === 'payment_intent.succeeded') {

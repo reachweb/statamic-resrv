@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\FixedPricing;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -282,5 +283,17 @@ class FixedPricingCpTest extends TestCase
         $rate = Rate::find($row->rate_id);
         $this->assertEquals('pages', $rate->collection);
         $this->assertEquals('default', $rate->slug);
+    }
+
+    public function test_price_column_is_stored_as_decimal_not_float()
+    {
+        // Money must not be stored as a float (precision loss, magnitude cap). The column
+        // reports as 'decimal' on MySQL and 'numeric' on SQLite/Postgres.
+        $type = strtolower(Schema::getColumnType('resrv_fixed_pricing', 'price'));
+
+        $this->assertTrue(
+            str_contains($type, 'decimal') || str_contains($type, 'numeric'),
+            "Expected resrv_fixed_pricing.price to be a decimal/numeric column, got '{$type}'."
+        );
     }
 }

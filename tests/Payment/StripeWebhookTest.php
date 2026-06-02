@@ -35,13 +35,6 @@ class StripeWebhookTest extends TestCase
         Config::set('resrv-config.stripe_secret_key', 'sk_test');
     }
 
-    protected function tearDown(): void
-    {
-        unset($_SERVER['HTTP_STRIPE_SIGNATURE']);
-
-        parent::tearDown();
-    }
-
     private function succeededWebhookRequest(string $paymentIntentId): Request
     {
         return Request::create('/resrv/api/webhook', 'POST', [], [], [], [], json_encode([
@@ -90,13 +83,15 @@ class StripeWebhookTest extends TestCase
             'data' => ['object' => ['id' => $paymentIntentId]],
         ]);
 
-        $_SERVER['HTTP_STRIPE_SIGNATURE'] = sprintf(
+        $signature = sprintf(
             't=%d,v1=%s',
             $timestamp,
             hash_hmac('sha256', "{$timestamp}.{$payload}", $secret)
         );
 
-        return Request::create('/resrv/api/webhook', 'POST', [], [], [], [], $payload);
+        // Pass the signature as an HTTP_* server var so it lands in the request header bag,
+        // matching how the gateway now reads it ($request->header('Stripe-Signature')).
+        return Request::create('/resrv/api/webhook', 'POST', [], [], [], ['HTTP_STRIPE_SIGNATURE' => $signature], $payload);
     }
 
     /**
@@ -131,13 +126,41 @@ class StripeWebhookTest extends TestCase
             'payment_gateway' => 'stripe',
         ]);
 
+        // A correctly-signed duplicate succeeded webhook for an already-CONFIRMED reservation is a
+        // no-op (idempotent): 200 with no re-confirmation.
+        $request = $this->signedSucceededWebhookRequest('pi_test_already_confirmed', 'whsec_test', time());
+
         $gateway = app(StripePaymentGateway::class);
-        $response = $gateway->verifyPayment($this->succeededWebhookRequest('pi_test_already_confirmed'));
+        $response = $gateway->verifyPayment($request);
 
         $this->assertNotNull($response, 'verifyPayment should return a response for a CONFIRMED reservation.');
         $this->assertEquals(200, $response->getStatusCode());
 
         Event::assertNotDispatched(ReservationConfirmed::class);
+    }
+
+    public function test_verify_payment_verifies_signature_before_confirmed_short_circuit()
+    {
+        // L1/L3: an unsigned webhook (no Stripe-Signature header) must be rejected (403) before
+        // reaching the already-confirmed short-circuit, which would otherwise leak reservation
+        // status to an unauthenticated caller.
+        Event::fake([ReservationConfirmed::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'pi_test_unsigned_confirmed',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $gateway = app(StripePaymentGateway::class);
+
+        try {
+            $gateway->verifyPayment($this->succeededWebhookRequest('pi_test_unsigned_confirmed'));
+            $this->fail('verifyPayment should reject an unsigned webhook before the confirmed short-circuit.');
+        } catch (HttpException $e) {
+            $this->assertEquals(403, $e->getStatusCode());
+        }
     }
 
     public function test_fake_gateway_rejects_succeeded_webhook_for_expired_reservation_and_sends_orphan_notification()
