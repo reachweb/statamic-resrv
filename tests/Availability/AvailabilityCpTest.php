@@ -6,7 +6,6 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Models\Availability;
-use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -76,6 +75,29 @@ class AvailabilityCpTest extends TestCase
         $this->assertSoftDeleted('resrv_entries', [
             'item_id' => $item->id(),
         ]);
+    }
+
+    public function test_entry_deletion_hard_deletes_availability_which_a_mirror_restore_does_not_bring_back()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+
+        $item->delete();
+
+        // The mirror is recoverable (soft-deleted) but availability is hard-deleted.
+        $this->assertSoftDeleted('resrv_entries', ['item_id' => $item->id()]);
+        $this->assertDatabaseMissing('resrv_availabilities', ['statamic_id' => $item->id()]);
+
+        // Re-saving restores the mirror (single row, not a duplicate) but availability stays gone.
+        $item->save();
+
+        $this->assertDatabaseHas('resrv_entries', ['item_id' => $item->id(), 'deleted_at' => null]);
+        $this->assertDatabaseMissing('resrv_availabilities', ['statamic_id' => $item->id()]);
     }
 
     public function test_availability_can_index_for_a_statamic_item()

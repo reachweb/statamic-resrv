@@ -157,4 +157,15 @@ class PriceTest extends TestCase
         $this->assertSame('22.76', $price->format());
         $this->assertSame('2276', $price->raw());
     }
+
+    public function test_price_create_rounds_sub_cent_input_half_up()
+    {
+        config(['resrv-config.currency_isoCode' => 'EUR']);
+
+        // Sub-cent precision must round half-up to the currency subunit, not truncate.
+        // (The old bcmul(*, 100) logic floored these: 77.359 -> 7735, 77.355 -> 7735.)
+        $this->assertSame('7736', Price::create('77.359')->raw());
+        $this->assertSame('7736', Price::create('77.355')->raw());
+        $this->assertSame('7735', Price::create('77.354')->raw());
+    }
 }

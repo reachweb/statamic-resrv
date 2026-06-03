@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Jobs;
 
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -29,6 +30,11 @@ class ExpireReservationsTest extends TestCase
             'status' => 'pending',
             'created_at' => now()->subMinutes($createdMinutesAgo),
         ]);
+    }
+
+    public function test_it_is_not_a_queued_job_because_it_depends_on_the_request_session()
+    {
+        $this->assertNotInstanceOf(ShouldQueue::class, new ExpireReservations);
     }
 
     public function test_expires_pending_reservations_past_the_hold_window_but_keeps_fresh_ones()
@@ -74,6 +80,23 @@ class ExpireReservationsTest extends TestCase
 
         $this->assertEquals('pending', $stale->fresh()->status);
         Event::assertNotDispatched(ReservationExpired::class);
+    }
+
+    public function test_expires_the_session_held_pending_reservation_on_search_even_within_the_hold_window()
+    {
+        Event::fake([ReservationExpired::class]);
+
+        // Both are fresh holds the prune would keep.
+        $held = $this->pendingReservation(5);
+        $other = $this->pendingReservation(5);
+        session()->put('resrv_reservation', $held->id);
+
+        (new ExpireReservations)->handle();
+
+        // By design, search expires this session's own hold even within the hold window.
+        $this->assertEquals('expired', $held->fresh()->status);
+        $this->assertEquals('pending', $other->fresh()->status);
+        Event::assertDispatchedTimes(ReservationExpired::class, 1);
     }
 
     public function test_prune_filters_stale_rows_in_sql_rather_than_loading_every_pending_row()

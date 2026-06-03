@@ -101,6 +101,16 @@ class ProcessDataImportTest extends TestCase
         $this->assertFalse(Cache::has('resrv-data-import-1'));
     }
 
+    // A failed job must clear its cache key so it doesn't block re-uploading.
+    public function test_failed_clears_the_cache_key()
+    {
+        Cache::put('resrv-data-import-1', 'stale-import');
+
+        (new ProcessDataImport('resrv-data-import-1'))->failed(new \Exception('boom'));
+
+        $this->assertFalse(Cache::has('resrv-data-import-1'));
+    }
+
     public function test_import_uses_existing_rate_when_rate_id_omitted()
     {
         $item = $this->makeStatamicItem();

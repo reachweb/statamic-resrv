@@ -434,7 +434,7 @@ class DynamicPricing extends Model
                 return true;
             }
         }
-        if ($pricing->condition_type == 'reservation_price') {
+        if ($pricing->condition_type == 'reservation_price' && $price !== null) {
             if ($this->compare($price->format(), $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }

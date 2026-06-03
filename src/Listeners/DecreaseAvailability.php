@@ -27,7 +27,7 @@ class DecreaseAvailability
 
     protected function decreaseMultiple(ReservationCreated $event): void
     {
-        $childs = $event->reservation->childs()->get();
+        $childs = $event->reservation->childs;
         $childs->each(function ($child) use ($event) {
             $this->availability->decrementAvailability(
                 date_start: $child->date_start,

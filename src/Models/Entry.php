@@ -65,6 +65,7 @@ class Entry extends Model
             return;
         }
 
+        // A detached localization (origin set to null) gets its own row here; its old availability isn't migrated.
         $resrvEntry = static::withTrashed()->updateOrCreate(
             [
                 'item_id' => $entry->id(),
@@ -77,6 +78,8 @@ class Entry extends Model
             ]
         );
 
+        // Restoring the mirror brings back its extras/options links but not availability or
+        // dynamic pricing (hard-deleted on EntryDeleted, keyed by statamic_id) — re-enter stock.
         if ($resrvEntry->trashed()) {
             $resrvEntry->restore();
         }

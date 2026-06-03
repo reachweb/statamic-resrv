@@ -173,8 +173,16 @@ class ProcessDataImport implements ShouldQueue
         });
 
         Cache::forget($this->cacheKey);
+    }
 
-        return true;
+    /**
+     * Clear the cache key and log the error so a failed import doesn't block re-uploading.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Cache::forget($this->cacheKey);
+
+        Log::error('Data import job failed.', ['error' => $exception->getMessage()]);
     }
 
     /**

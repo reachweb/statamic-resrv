@@ -206,6 +206,53 @@ class AvailabilityEventsTest extends TestCase
         ], 'pending', '["c1"]');
     }
 
+    // Expiring a parent restores each child's stock (incrementMultiple), leaving a normal hold untouched.
+    public function test_expiring_a_parent_reservation_restores_its_children_stock()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->isoFormat('YYYY-MM-DD'),
+            'available' => 5,
+        ]);
+
+        $normal = Reservation::factory()->withRate($rate->id)->create([
+            'item_id' => $item->id(),
+            'quantity' => 1,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(1, 'day')->toIso8601String(),
+        ]);
+
+        $parent = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'type' => 'parent',
+        ]);
+        ChildReservation::factory()->withRate($rate->id)->create([
+            'reservation_id' => $parent->id,
+            'quantity' => 2,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->add(1, 'day')->toIso8601String(),
+        ]);
+
+        Event::dispatch(new ReservationCreated($normal));
+        Event::dispatch(new ReservationCreated($parent));
+
+        // 5 − 1 (normal 'r1') − 2 (child 'c1') = 2.
+        $this->assertDatabaseHasJsonColumn('resrv_availabilities', [
+            'available' => 2,
+        ], 'pending', '["r1","c1"]');
+
+        $this->dispatchEventAndCatchException(new ReservationExpired($parent));
+
+        // Only the child's 2 are restored; the normal hold remains held.
+        $this->assertDatabaseHasJsonColumn('resrv_availabilities', [
+            'available' => 4,
+        ], 'pending', '["r1"]');
+    }
+
     public function dispatchEventAndCatchException($event)
     {
         try {

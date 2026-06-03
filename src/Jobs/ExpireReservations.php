@@ -3,18 +3,14 @@
 namespace Reach\StatamicResrv\Jobs;
 
 use Carbon\Carbon;
-use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Reservation;
 
-class ExpireReservations implements ShouldQueue
+class ExpireReservations
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable;
 
     /**
      * Execute the job.
@@ -23,7 +19,7 @@ class ExpireReservations implements ShouldQueue
      */
     public function handle()
     {
-        // If a user already started a reservation that he didn't finish, expire it right away.
+        // Expire any unfinished hold from this session right away; returning to search abandons it by design.
         if (session()->has('resrv_reservation')) {
             $this->expireSafely((new Reservation)->newQuery()->find(session('resrv_reservation')));
         }

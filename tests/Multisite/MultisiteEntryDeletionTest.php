@@ -139,4 +139,39 @@ class MultisiteEntryDeletionTest extends TestCase
         $this->assertNotFalse($result, 'A localization without active reservations should delete freely');
         $this->assertNull(Entry::find($localizedId), 'The localization should be gone after deletion');
     }
+
+    #[Test]
+    public function deleting_a_localization_keeps_the_origin_availability()
+    {
+        $this->createMultisiteEntry();
+
+        $this->localizedEntry->delete();
+
+        // The origin still exists, so its availability must survive.
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $this->originEntry->id(),
+        ]);
+    }
+
+    // "Detach" makes a localization standalone without migrating Resrv data: the origin survives, the
+    // detached entry starts empty.
+    #[Test]
+    public function detaching_localizations_keeps_origin_data_and_leaves_the_detached_entry_without_availability()
+    {
+        $rate = $this->createMultisiteEntry();
+        $this->createActiveReservation($rate);
+
+        $originId = $this->originEntry->id();
+        $localizedId = $this->localizedEntry->id();
+
+        $this->originEntry->detachLocalizations();
+
+        // The booked origin's availability and reservation are untouched.
+        $this->assertDatabaseHas('resrv_availabilities', ['statamic_id' => $originId]);
+        $this->assertDatabaseHas('resrv_reservations', ['item_id' => $originId, 'status' => 'pending']);
+
+        // The detached entry gets its own row but no availability.
+        $this->assertDatabaseHas('resrv_entries', ['item_id' => $localizedId]);
+        $this->assertDatabaseMissing('resrv_availabilities', ['statamic_id' => $localizedId]);
+    }
 }

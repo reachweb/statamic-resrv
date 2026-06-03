@@ -76,6 +76,25 @@ class DynamicPricingCpTest extends TestCase
         ]);
     }
 
+    public function test_rejects_a_non_numeric_amount_so_a_malformed_value_never_reaches_the_pricing_math()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItem();
+
+        $dynamic = DynamicPricing::factory()->make()->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+        // A comma decimal separator ('20,5') would later fatal bcmul() in Price::percent(); the
+        // required|numeric rule must reject it at the write boundary so it never reaches that path.
+        $dynamic['amount'] = '20,5';
+
+        $response = $this->postJson(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('amount');
+        $this->assertDatabaseMissing('resrv_dynamic_pricing', ['amount' => '20,5']);
+    }
+
     public function test_can_edit_dynamic_pricing_for_statamic_item()
     {
         $item1 = $this->makeStatamicItem();
