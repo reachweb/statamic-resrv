@@ -175,6 +175,43 @@ class RateSharedAvailabilityTest extends TestCase
         );
     }
 
+    public function test_max_available_clamps_long_overlapping_reservation_to_requested_night()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        // A two-month reservation holds the cap and extends well before AND after the single night
+        // being requested, so its expansion must be clamped to the requested window — yet the day
+        // it overlaps must still count.
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->copy()->subDays(30)->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(30)->toDateString(),
+            'quantity' => 1,
+            'status' => 'confirmed',
+        ]);
+
+        $newReservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDay()->toDateString(),
+            'quantity' => 1,
+            'status' => 'pending',
+        ]);
+
+        $this->expectException(AvailabilityException::class);
+
+        AvailabilityRepository::decrement(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDay()->toDateString(),
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $newReservation->id,
+        );
+    }
+
     public function test_shared_rate_cancellation_increments_base_rate()
     {
         $setup = $this->createSharedSetup(baseAvailable: 5);

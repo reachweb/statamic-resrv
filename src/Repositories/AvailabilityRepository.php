@@ -18,6 +18,7 @@ use Reach\StatamicResrv\Models\Reservation;
 
 class AvailabilityRepository
 {
+    /** @var array<int, Rate|null> Rates loaded as the caller referenced them, keyed by requested id. */
     protected array $rateCache = [];
 
     protected static function groupConcat(string $column): string
@@ -30,23 +31,40 @@ class AvailabilityRepository
         };
     }
 
-    public function resolveBaseRateId(int $rateId): int
+    /**
+     * Loads (and memoizes) a rate exactly as the caller referenced it — without global scopes so a
+     * soft-deleted rate still resolves, selecting deleted_at so callers can reject trashed rates.
+     */
+    protected function findRequestedRate(int $rateId): ?Rate
     {
-        if (isset($this->rateCache[$rateId])) {
-            return $this->rateCache[$rateId];
+        if (! array_key_exists($rateId, $this->rateCache)) {
+            $this->rateCache[$rateId] = Rate::withoutGlobalScopes()
+                ->find($rateId, ['id', 'base_rate_id', 'availability_type', 'pricing_type', 'deleted_at']);
         }
 
-        $rate = Rate::withoutGlobalScopes()->find($rateId, ['id', 'base_rate_id', 'availability_type', 'pricing_type']);
+        return $this->rateCache[$rateId];
+    }
 
-        $resolved = ($rate?->base_rate_id && $rate->isShared())
+    public function resolveBaseRateId(int $rateId): int
+    {
+        $rate = $this->findRequestedRate($rateId);
+
+        return ($rate?->base_rate_id && $rate->isShared())
             ? (int) $rate->base_rate_id
             : $rateId;
-
-        return $this->rateCache[$rateId] = $resolved;
     }
 
     protected function applyRateFilter(Builder $query, int $rateId): void
     {
+        // A soft-deleted requested rate must surface nothing. resolveBaseRateId() maps a shared rate
+        // to its (possibly still-live) base id, so a deleted_at guard on the joined base row cannot
+        // reject a deleted *shared* rate — reject the requested rate itself here.
+        if ($this->findRequestedRate($rateId)?->trashed()) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
         $query->where('rate_id', $this->resolveBaseRateId($rateId));
     }
 
@@ -433,13 +451,22 @@ class AvailabilityRepository
         // Build a date => booked-quantity map in a single pass (each reservation expanded once)
         // rather than re-filtering the whole overlapping set per requested day. This keeps the
         // work — and the lockForUpdate window when useLocks is true — minimal for long stays.
+        $windowStart = Carbon::parse($dateStart);
+        $windowEnd = Carbon::parse($dateEnd);
+
         $bookedPerDay = [];
         foreach ($allOverlapping as $reservation) {
-            // date_end is exclusive (checkout day is free for the next guest); normalise to date
-            // strings so day boundaries match the request period regardless of any time component.
+            // Only days inside the requested [dateStart, dateEnd) window are checked below, so clamp
+            // each reservation to that window before expanding: a short request overlapping a
+            // months-long booking would otherwise build hundreds of unused entries and needlessly
+            // widen the lockForUpdate window. date_end stays exclusive (checkout day is free), and
+            // normalising to date strings keeps day boundaries stable against any time component.
+            $occupiedStart = $reservation->date_start->lt($windowStart) ? $windowStart : $reservation->date_start;
+            $occupiedEnd = $reservation->date_end->gt($windowEnd) ? $windowEnd : $reservation->date_end;
+
             $occupied = CarbonPeriod::create(
-                $reservation->date_start->toDateString(),
-                $reservation->date_end->toDateString(),
+                $occupiedStart->toDateString(),
+                $occupiedEnd->toDateString(),
                 CarbonPeriod::EXCLUDE_END_DATE
             );
             foreach ($occupied as $date) {
