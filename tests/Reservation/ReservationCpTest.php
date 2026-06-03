@@ -87,6 +87,26 @@ class ReservationCpTest extends TestCase
         $this->assertArrayNotHasKey('permalink', $entry);
     }
 
+    // The Listing renders date columns with DateIndexFieldtype, which expects the Date
+    // fieldtype's preProcessIndex() payload. A pre-formatted string has no `date` key, so
+    // every row would silently render as the current date.
+    public function test_index_payload_formats_dates_for_the_date_index_fieldtype()
+    {
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
+
+        $response = $this->getJson(cp_route('resrv.reservation.index'));
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.0.date_start.date', $reservation->date_start->copy()->utc()->toIso8601ZuluString('millisecond'))
+            ->assertJsonPath('data.0.date_start.mode', 'single')
+            ->assertJsonPath('data.0.date_start.time_enabled', true)
+            ->assertJsonPath('data.0.date_start.format_has_time', true)
+            ->assertJsonPath('data.0.date_end.date', $reservation->date_end->copy()->utc()->toIso8601ZuluString('millisecond'))
+            ->assertJsonPath('data.0.created_at.date', $reservation->created_at->copy()->utc()->toIso8601ZuluString('millisecond'));
+    }
+
     public function test_can_search_reservations_by_reference()
     {
         $item = $this->makeStatamicItem();
