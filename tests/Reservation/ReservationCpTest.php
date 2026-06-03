@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
@@ -98,13 +99,32 @@ class ReservationCpTest extends TestCase
 
         $response = $this->getJson(cp_route('resrv.reservation.index'));
 
+        // Start/end are wall dates: date-only strings, rendered pinned to UTC so they never
+        // shift into the viewer's timezone. Timestamps keep their time and render locally.
+        $response->assertStatus(200)
+            ->assertJsonPath('data.0.date_start.date', $reservation->date_start->format('Y-m-d'))
+            ->assertJsonPath('data.0.date_start.mode', 'single')
+            ->assertJsonPath('data.0.date_start.format_has_time', false)
+            ->assertJsonPath('data.0.date_end.date', $reservation->date_end->format('Y-m-d'))
+            ->assertJsonPath('data.0.created_at.date', $reservation->created_at->copy()->utc()->toIso8601ZuluString('millisecond'))
+            ->assertJsonPath('data.0.created_at.time_enabled', true)
+            ->assertJsonPath('data.0.created_at.format_has_time', true);
+    }
+
+    public function test_index_payload_includes_start_and_end_times_when_charging_by_time()
+    {
+        Config::set('resrv-config.calculate_days_using_time', true);
+
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
+
+        $response = $this->getJson(cp_route('resrv.reservation.index'));
+
         $response->assertStatus(200)
             ->assertJsonPath('data.0.date_start.date', $reservation->date_start->copy()->utc()->toIso8601ZuluString('millisecond'))
-            ->assertJsonPath('data.0.date_start.mode', 'single')
             ->assertJsonPath('data.0.date_start.time_enabled', true)
-            ->assertJsonPath('data.0.date_start.format_has_time', true)
-            ->assertJsonPath('data.0.date_end.date', $reservation->date_end->copy()->utc()->toIso8601ZuluString('millisecond'))
-            ->assertJsonPath('data.0.created_at.date', $reservation->created_at->copy()->utc()->toIso8601ZuluString('millisecond'));
+            ->assertJsonPath('data.0.date_start.format_has_time', true);
     }
 
     public function test_can_search_reservations_by_reference()
