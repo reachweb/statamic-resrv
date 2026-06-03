@@ -133,6 +133,8 @@ const categoryOptions = computed(() => {
     return out;
 });
 
+// Fires on every edit and once on mount: the onMounted reassignment below is a
+// tracked change, so the parent stays in sync without a separate mount-time emit.
 watch(conditionsForm, (conditions) => {
     emit('updated', handleDates(conditions));
 }, { deep: true });
@@ -142,9 +144,6 @@ onMounted(() => {
         // Clone so add/remove/v-model edits don't mutate the parent extra's
         // conditions array in place before the user saves (or when they cancel).
         conditionsForm.value = Array.isArray(props.data) ? props.data.map((condition) => ({ ...condition, _key: nextKey++ })) : [];
-    }
-    if (conditionsForm.value.length > 0) {
-        emit('updated', handleDates(conditionsForm.value));
     }
 });
 

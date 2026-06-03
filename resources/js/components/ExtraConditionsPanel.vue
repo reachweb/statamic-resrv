@@ -54,9 +54,7 @@ const { disableSave, errors, save } = useFormHandler({
 disableSave.value = true;
 
 watch(submit, (value) => {
-    if (value.conditions && value.conditions.length > 0) {
-        disableSave.value = false;
-    }
+    disableSave.value = !(value.conditions && value.conditions.length > 0);
 }, { deep: true });
 
 onMounted(() => {

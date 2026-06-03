@@ -4,6 +4,7 @@
             <draggable
                 v-model="localValues"
                 item-key="id"
+                :disabled="disableDrag"
                 @start="drag = true"
                 @end="drag = false"
                 @change="order"
@@ -71,6 +72,7 @@ const toast = useToast();
 const showPanel = ref(false);
 const deleteId = ref(null);
 const drag = ref(false);
+const disableDrag = ref(false);
 const value = ref({});
 
 const localValues = ref(initialValues());
@@ -145,15 +147,19 @@ function order(event) {
     if (!event.moved) {
         return;
     }
+    disableDrag.value = true;
     const item = event.moved.element;
     const newOrder = event.moved.newIndex + 1;
     axios.patch('/cp/resrv/option/value/order', { id: item.id, order: newOrder })
         .then(() => {
             toast.success('Options order changed');
-            emit('saved');
         })
         .catch(() => {
             toast.error('Options ordering failed');
+        })
+        .finally(() => {
+            emit('saved');
+            disableDrag.value = false;
         });
 }
 </script>

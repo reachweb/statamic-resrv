@@ -996,70 +996,70 @@ Each item is a checkbox. Work top-down (High → Nit). When an item is fixed, ch
   - **Evidence:** Line 123 `value: parseInt(extra.category.id, 10),` (unguarded) vs line 124 `label: extra.category ? extra.category.name : 'Uncategorized',` (guarded). The asymmetry proves the missing-category case was anticipated for the label but not the value.
   - _bug · confirmed · medium confidence_
 
-- [ ] **L66 — ExtraConditionsForm emits 'updated' twice on mount (watcher + explicit emit)**
+- [x] **L66 — ExtraConditionsForm emits 'updated' twice on mount (watcher + explicit emit)**
   - **Where:** `resources/js/components/ExtraConditionsForm.vue:130-141`
   - **Problem:** The watch on conditionsForm uses default 'pre' flush and { deep: true } but NOT { immediate: true }. When onMounted reassigns conditionsForm.value (line 136), that reassignment does trigger the deep watcher (a top-level .value reassignment is a tracked change), and onMounted then also calls emit('updated', ...) explicitly when length > 0 (line 139). So on initial mount with existing conditions there are two 'updated' emits, each landing in the parent's createSubmit (ExtraConditionsPanel.vue:18,72), which only reassigns submit.value = { conditions }. It is idempotent and harmless today, so this is a minor redundancy/code-smell, not a bug. Note: when props.data is empty, the explicit emit is skipped (length===0 guard) but the parent already calls createSubmit([]) in its own onMounted (ExtraConditionsPanel.vue:63), so submit is initialised regardless.
   - **Fix:** Drop the explicit onMounted emit and add { immediate: true } to the watcher, or gate the watcher to skip the hydration assignment. Optional cleanup, not required for correctness.
   - **Evidence:** Lines 130-132 watcher without immediate; lines 138-140 `if (conditionsForm.value.length > 0) { emit('updated', handleDates(conditionsForm.value)); }`. Parent handler createSubmit just sets submit.value = { conditions } (ExtraConditionsPanel.vue:72-74), confirming idempotency.
   - _Vue · partially-confirmed · medium confidence_
 
-- [ ] **L67 — selectedEntriesLoaded watcher overwrites user edits if entry lists resolve out of order**
+- [x] **L67 — selectedEntriesLoaded watcher overwrites user edits if entry lists resolve out of order**
   - **Where:** `resources/js/components/ExtraMassAssignPanel.vue:71-84`
   - **Problem:** watch(selectedEntriesLoaded, () => { submit.value.entries = selectedEntries.value.map(...) }) seeds the selection when the 'currently selected' request resolves. selectedEntriesLoaded is set to true exactly once in getSelectedEntries success (line 103) and never reset, and getSelectedEntries fires once in onMounted, so today the watcher fires exactly once and cannot clobber user edits. The picker is also gated on entriesLoaded && selectedEntriesLoaded (line 17), so it does not render until both resolve. The described race (out-of-order resolution overwriting edits) cannot actually occur with the current code — it is a hypothetical about a future refresh that re-toggles the flag. So this is a latent robustness/fragility note, not a present bug. Seeding via a watcher on a boolean rather than in the success callback is indeed slightly fragile.
   - **Fix:** Optional hardening: seed submit.value.entries inside the getSelectedEntries success callback instead of via watch(selectedEntriesLoaded), so it is structurally impossible to re-run. No fix needed for current behaviour.
   - **Evidence:** Line 71-73 watcher; line 103 `selectedEntriesLoaded.value = true;` set once, never reset; line 81-84 onMounted fires getSelectedEntries once. Picker v-if at line 17 gates on both flags.
   - _Vue · partially-confirmed · medium confidence_
 
-- [ ] **L68 — MassAssign/Conditions Save button can re-enable but never re-disables on empty selection**
+- [x] **L68 — MassAssign/Conditions Save button can re-enable but never re-disables on empty selection**
   - **Where:** `resources/js/components/ExtraMassAssignPanel.vue:75-79`
   - **Problem:** disableSave is initialised true (line 69) but the deep watcher on submit only ever sets disableSave = false when value.entries.length > 0 (lines 75-79); it never re-disables when the list is emptied via removeAll() (line 95-97). After selecting then clearing entries, Save stays enabled and submits an empty entries array. The same one-directional pattern exists in ExtraConditionsPanel.vue:56-60 (only sets false when conditions.length > 0). Real, minor UX issue; only guard against the empty payload is server-side validation.
   - **Fix:** Make the watcher bidirectional: disableSave.value = !(value.entries && value.entries.length > 0) (and analogously disableSave.value = !(value.conditions && value.conditions.length > 0) in ExtraConditionsPanel). If saving an empty set is intended as a 'clear' operation, decide that explicitly and reflect it in the UI.
   - **Evidence:** ExtraMassAssignPanel.vue:75-79 `watch(submit, (value) => { if (value.entries && value.entries.length > 0) { disableSave.value = false; } }, { deep: true });` — no else branch. ExtraConditionsPanel.vue:56-60 has the identical one-way pattern.
   - _Vue · confirmed · high confidence_
 
-- [ ] **L69 — Extras deep watch on props.extras can feed back through shared object references**
+- [x] **L69 — Extras deep watch on props.extras can feed back through shared object references**
   - **Where:** `resources/js/components/Extras.vue:113-139`
   - **Problem:** localExtras = ref([...props.extras]) (line 113) is a shallow copy: the array is new but its elements are the same objects as props.extras, which are the same objects in ExtrasList's categories ref (passed as category.extras at ExtrasList.vue:59). watch(() => props.extras, v => localExtras.value = [...v], { deep: true }) (lines 137-139) re-clones the array whenever any shared element mutates. Combined with editExtra/editConditions handing those same object references into panels where they get mutated (confirmed in finding #1 for conditions), an in-panel mutation deep-triggers this watcher and replaces localExtras mid-edit. It is masked today by the full server reload on save (reload-categories -> getAllCategories), but the aliasing is a genuine latent reactivity hazard exactly as described. Severity low because of the masking.
   - **Fix:** Deep-clone elements when copying into localExtras: localExtras = ref(props.extras.map(e => ({ ...e }))) and likewise in the watcher, and avoid passing prop-derived object references into editable panels (clone in editExtra/editConditions).
   - **Evidence:** Line 113 `const localExtras = ref([...props.extras]);` (shallow); lines 137-139 `watch(() => props.extras, (value) => { localExtras.value = [...value]; }, { deep: true });`. editExtra:178 `extra.value = item;` and editConditions:183 pass shared references.
   - _Vue · confirmed · medium confidence_
 
-- [ ] **L70 — addExtra mutates the shared emptyExtra template object before spreading**
+- [x] **L70 — addExtra mutates the shared emptyExtra template object before spreading**
   - **Where:** `resources/js/components/Extras.vue:166-172`
   - **Problem:** addExtra() sets emptyExtra.category_id = props.categoryId (line 168) on the module-instance template object defined at line 122, then spreads it into extra.value (line 170). The template is permanently dirtied and category_id is never reset to null. Within one Extras instance categoryId is a constant prop so behaviour is correct today, but the pattern is brittle: if a category-less add path were ever added on the same instance, it would inherit the stale category_id. Real but minor maintainability issue, exactly as described.
   - **Fix:** Build the copy first then set on the copy: const e = { ...emptyExtra }; if (props.categoryId) e.category_id = props.categoryId; extra.value = e;
   - **Evidence:** Lines 166-171: `function addExtra() { if (props.categoryId) { emptyExtra.category_id = props.categoryId; } extra.value = { ...emptyExtra }; togglePanel(); }` mutates emptyExtra (declared at line 122) before the spread.
   - _Vue · confirmed · high confidence_
 
-- [ ] **L71 — Money/number inputs are bound as raw strings with no client-side numeric validation**
+- [x] **L71 — Money/number inputs are bound as raw strings with no client-side numeric validation**
   - **Where:** `resources/js/components/ExtrasPanel.vue:21-23`
   - **Problem:** Several monetary/amount fields are plain text Inputs with no masking or numeric coercion: ExtrasPanel price (21-23) and maximum (36-38), OptionValuesPanel price (25-27), DynamicPricingPanel amount (19-21) and condition_value (51-53). So the user can type non-numeric or comma-decimal values and only learns of the problem on the server round-trip; there is no decimal-separator normalisation. That part is accurate. However the reviewer over-generalised: several cited fields ARE numeric inputs — RatePanel modifier_amount is type text BUT min_days_before/max_days_before/min_stay/max_stay/max_available all use type="number" (RatePanel.vue:86,117,120,123,126), and FixedPricingPanel was cited but those fields (days/price) need separate verification (the panel was not read here). DynamicPricingList move dialog uses type="number". So the issue is real for the money/amount text fields specifically, not a blanket gap. Server-side validation via Price/moneyphp is the backstop, so functional risk is low — this is a UX/best-practice improvement.
   - **Fix:** Use type="number" / input masking for monetary and integer fields that are currently plain text (extra price/maximum, option value price, dynamic pricing amount/condition_value, rate modifier_amount), and normalise the decimal separator on blur so the backend receives clean values and users get immediate feedback. Keep relying on server-side Price validation as the safety net.
   - **Evidence:** ExtrasPanel.vue:21-23 `<Field :label="__('Price')"><Input v-model="submit.price" /></Field>` (no type). OptionValuesPanel.vue:25-27 same for price. DynamicPricingPanel.vue:19-21 amount plain Input. Contrast RatePanel.vue:117 `<Input v-model="form.min_days_before" type="number" />` showing numeric inputs ARE used for the restriction fields, so the 'all number inputs are raw strings' framing is too broad.
   - _best-practice · partially-confirmed · medium confidence_
 
-- [ ] **L72 — Loader text rendered with v-html**
+- [x] **L72 — Loader text rendered with v-html**
   - **Where:** `resources/js/components/Loader.vue:6`
   - **Problem:** Loader.vue line 6 (`<span v-html="text"></span>`) exposes a v-html sink for the `text` prop (default 'Loading...'). The single current caller (fieldtypes/Availability.vue line 13: `<Loader v-if="..." />`) passes no `text` at all, so it always uses the static default — there is no live XSS today. The concern is defensive: the only way to set loader text is via a raw-HTML sink, inviting a future caller to pass interpolated/user content. Severity is correctly low; this is a hardening/anti-pattern note, not an active vulnerability.
   - **Fix:** Use text interpolation `{{ text }}` unless rich content is genuinely required. The current default 'Loading...' has no HTML, so switching to interpolation is risk-free.
   - **Evidence:** Line 6: `<span v-html="text"></span>`. defineProps (lines 15-20) gives `text` a default of 'Loading...'. The only usage found is `resources/js/fieldtypes/Availability.vue:13` `<Loader v-if="!availabilityLoaded && !hasRates && ratesLoaded" />` which passes no `text`, so today it only ever renders the static default. Real but currently unexploitable; low/defensive.
   - _security · partially-confirmed · high confidence_
 
-- [ ] **L73 — MassAvailabilityModal sends an empty rate_ids array when all rates are deselected**
+- [x] **L73 — MassAvailabilityModal sends an empty rate_ids array when all rates are deselected**
   - **Where:** `resources/js/components/MassAvailabilityModal.vue:86-107`
   - **Problem:** selectedRateIds is initialised to [props.rate.code] (line 86) but the Combobox is multiple and clearable, so the user can reduce it to []. The submit computed gates fields.rate_ids on props.rate (line 103-105) which is always truthy when the rate selector is shown, so it sends rate_ids: [] with no client guard and disableSave only reflects useFormHandler/server validation. There is no UI feedback that Save targeted zero rates. Whether this silently no-ops or errors depends on backend validation of rate_ids, which I did not inspect, but the front-end gap (no disable/guard on empty selection) is real and matches the description. Severity low.
   - **Fix:** Disable Save or show a validation message when props.rate && selectedRateIds.value.length === 0, or default to all rateOptions when none are selected.
   - **Evidence:** Line 86 `const selectedRateIds = ref(props.rate ? [props.rate.code] : []);`; lines 103-105 `if (props.rate) { fields.rate_ids = selectedRateIds.value; }` with no length check; Combobox at lines 8-14 is multiple + clearable with a Select-all action (line 89) but no minimum.
   - _correctness · confirmed · medium confidence_
 
-- [ ] **L74 — OptionValuesPanel togglePrice wipes the price when switching away from 'free' during edit**
+- [x] **L74 — OptionValuesPanel togglePrice wipes the price when switching away from 'free' during edit**
   - **Where:** `resources/js/components/OptionValuesPanel.vue:95-103`
   - **Problem:** togglePrice runs on every price_type change (Select @update:modelValue, line 22). When the new type is not 'free' it unconditionally sets submit.price = '' (line 101). So editing a 'perday' value with an existing price and switching to a different priced type (e.g. 'fixed'), or briefly toggling to 'free' and back, clears the previously entered price. The reset to '' is only appropriate when leaving 'free' (where price was forced to '0' at line 98); between two priced types it silently discards the user's existing value. Confirmed; minor data-loss UX bug. Note: on the very first render of an edit, createSubmit hydrates submit.price from props.data without calling togglePrice, so the loaded value is preserved until the user touches the type selector.
   - **Fix:** Track the prior price_type and only clear price when transitioning out of 'free' (i.e. when the previous type was 'free' and price was '0'); otherwise preserve the existing submit.price.
   - **Evidence:** Lines 95-103: `function togglePrice() { if (submit.price_type === 'free') { showPrice.value = false; submit.price = '0'; } else { showPrice.value = true; submit.price = ''; } }` — the else branch unconditionally blanks price regardless of the previous type.
   - _bug · confirmed · high confidence_
 
-- [ ] **L75 — Reorder requests fire-and-refresh without disabling drag in OptionsList / OptionValuesList**
+- [x] **L75 — Reorder requests fire-and-refresh without disabling drag in OptionsList / OptionValuesList**
   - **Where:** `resources/js/components/OptionsList.vue:143-157`
   - **Problem:** order() in OptionsList (lines 143-157) and OptionValuesList (lines 144-158) issue the reorder PATCH and only refetch on success (getOptions / emit('saved')); there is no disableDrag lock during the request and no refetch in the catch path. By contrast RatesList (lines 276-289), Extras.vue (lines 265-298), ExtrasList (lines 188-206) and DynamicPricingList all set a disableDrag/loading flag and refetch in a finally. So a second drag started before the first PATCH returns can race, and on failure the local order stays diverged from the server (catch only toasts). Confirmed inconsistency; low severity. Note these two components track a `drag` ref via @start/@end but never bind it to the draggable :disabled, so it is unused for locking.
   - **Fix:** Mirror the other lists: set a disableDrag/loading flag for the duration of the PATCH (bind to draggable :disabled) and refetch in a finally so the list re-syncs on both success and failure.

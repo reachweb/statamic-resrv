@@ -68,7 +68,7 @@
                                 <Select v-model="form.modifier_operation" :options="modifierOperations" />
                             </Field>
                             <Field :label="__('Modifier amount')" :instructions="__('Amount or percentage without the % character.')" :error="form.errors.modifier_amount">
-                                <Input v-model="form.modifier_amount" />
+                                <Input v-model="form.modifier_amount" :input-attrs="{ inputmode: 'decimal' }" />
                             </Field>
                         </div>
                     </div>

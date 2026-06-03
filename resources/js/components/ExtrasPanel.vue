@@ -19,7 +19,7 @@
                         <Input v-model="submit.slug" @input="onSlugInput" />
                     </Field>
                     <Field :label="__('Price')" :errors="errors.price">
-                        <Input v-model="submit.price" />
+                        <Input v-model="submit.price" :input-attrs="{ inputmode: 'decimal' }" />
                     </Field>
                     <Field :label="__('Price type')" :errors="errors.price_type">
                         <Select v-model="submit.price_type" :options="priceTypeOptions" />
@@ -34,7 +34,7 @@
                         <Switch v-model="submit.allow_multiple" />
                     </Field>
                     <Field v-if="submit.allow_multiple" :label="__('Maximum number for 1 reservation')" :errors="errors.maximum">
-                        <Input v-model="submit.maximum" />
+                        <Input v-model="submit.maximum" type="number" />
                     </Field>
                     <Field :label="__('Description')" :errors="errors.description">
                         <Textarea v-model="submit.description" />

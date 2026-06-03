@@ -17,7 +17,7 @@
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-6">
                         <Field v-bind="fieldProps('amount', __('Amount'), __('Amount or percentage without the % character.'))">
-                            <Input v-model="form.amount" />
+                            <Input v-model="form.amount" :input-attrs="{ inputmode: 'decimal' }" />
                         </Field>
                         <Field v-bind="fieldProps('amount_operation', __('Operation'), __('Select if the base price will be decreased or increased.'))">
                             <Select v-model="form.amount_operation" :options="amountOperationOptions" />
@@ -49,7 +49,7 @@
                             <Select v-model="form.condition_comparison" :options="conditionComparisonOptions" />
                         </Field>
                         <Field v-bind="fieldProps('condition_value', __('Value'), __('The value to compare to (days or price).'))">
-                            <Input v-model="form.condition_value" />
+                            <Input v-model="form.condition_value" :input-attrs="{ inputmode: 'decimal' }" />
                         </Field>
                     </div>
 
