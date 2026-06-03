@@ -53,8 +53,11 @@ const { disableSave, errors, save } = useFormHandler({
 
 disableSave.value = true;
 
+// Enable-only: never re-disable on empty, so clearing all conditions stays saveable.
 watch(submit, (value) => {
-    disableSave.value = !(value.conditions && value.conditions.length > 0);
+    if (value.conditions && value.conditions.length > 0) {
+        disableSave.value = false;
+    }
 }, { deep: true });
 
 onMounted(() => {
