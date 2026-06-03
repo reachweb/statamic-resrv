@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\DataImport;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Jobs\ProcessDataImport;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
@@ -109,6 +110,32 @@ class ProcessDataImportTest extends TestCase
         (new ProcessDataImport('resrv-data-import-1'))->failed(new \Exception('boom'));
 
         $this->assertFalse(Cache::has('resrv-data-import-1'));
+    }
+
+    // The uploaded CSV must be removed once the import succeeds so it doesn't linger on disk.
+    public function test_handle_deletes_the_uploaded_csv_after_processing()
+    {
+        $path = sys_get_temp_dir().'/resrv-data-import-test-'.uniqid().'.csv';
+        file_put_contents($path, "id,price:2026-01-01|2026-01-10,availability:2026-01-01|2026-01-10,rate_id\n");
+
+        Cache::put('resrv-data-import-1', new DataImport($path, ',', 'pages', 'id'));
+
+        (new ProcessDataImport('resrv-data-import-1'))->handle();
+
+        $this->assertFileDoesNotExist($path);
+    }
+
+    // A failed import must also clean up its uploaded CSV.
+    public function test_failed_deletes_the_uploaded_csv()
+    {
+        $path = sys_get_temp_dir().'/resrv-data-import-test-'.uniqid().'.csv';
+        file_put_contents($path, "id,price:2026-01-01|2026-01-10,availability:2026-01-01|2026-01-10,rate_id\n");
+
+        Cache::put('resrv-data-import-1', new DataImport($path, ',', 'pages', 'id'));
+
+        (new ProcessDataImport('resrv-data-import-1'))->failed(new \Exception('boom'));
+
+        $this->assertFileDoesNotExist($path);
     }
 
     public function test_import_uses_existing_rate_when_rate_id_omitted()

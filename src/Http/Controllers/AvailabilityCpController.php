@@ -80,6 +80,11 @@ class AvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
+        // validated() omits nullable keys absent from the request; normalise so the unconditional
+        // is_null() reads below (and in the validation rule) don't hit undefined-array-key warnings.
+        $data['price'] = $data['price'] ?? null;
+        $data['available'] = $data['available'] ?? null;
+
         $rateIds = $data['rate_ids'] ?? $this->defaultRateIds($data['statamic_id']);
 
         foreach ($rateIds as $rateId) {

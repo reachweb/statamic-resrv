@@ -14,7 +14,11 @@ trait HandlesCutoffValidation
             return;
         }
 
-        $resrvEntry = ResrvEntry::whereItemId($this->entryId);
+        $resrvEntry = ResrvEntry::query()->itemId($this->entryId)->first();
+
+        if (! $resrvEntry) {
+            return; // Mirror row missing — degrade gracefully instead of throwing to the visitor
+        }
 
         $dateStart = $date ?? $this->data->dates['date_start'];
         $schedule = $resrvEntry->getCutoffScheduleForDate($dateStart);

@@ -9,6 +9,7 @@ use Livewire\Livewire;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
+use Reach\StatamicResrv\Livewire\Traits\HandlesCutoffValidation;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
@@ -1340,6 +1341,24 @@ class AvailabilityResultsTest extends TestCase
             ])
             ->assertHasNoErrors()
             ->assertDispatched('availability-results-updated');
+    }
+
+    public function test_cutoff_validation_degrades_gracefully_when_entry_mirror_row_is_missing()
+    {
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        $component = new class
+        {
+            use HandlesCutoffValidation;
+
+            public string $entryId = 'missing-mirror-row-id';
+        };
+
+        // A missing resrv_entries mirror row must be treated as "no cutoff applies" rather than
+        // throwing ModelNotFoundException at the visitor (matching the ResrvCutoff fieldtype).
+        $this->expectNotToPerformAssertions();
+
+        $component->validateCutoffRules(now()->toDateString());
     }
 
     public function test_cutoff_enforces_correct_schedule_based_on_date()

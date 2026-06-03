@@ -74,6 +74,25 @@ class OptionCpTest extends TestCase
         ]);
     }
 
+    public function test_cannot_add_value_with_an_unknown_price_type()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItem();
+        $option = Option::factory()->state(['item_id' => $item->id()])->create();
+
+        $payload = [
+            'name' => 'This is an option value',
+            'price' => '22.75',
+            'price_type' => 'bogus',
+            'published' => true,
+        ];
+
+        $this->postJson(cp_route('resrv.option.value.create', $option->id), $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('price_type');
+    }
+
     public function test_can_update_option()
     {
         $item = $this->makeStatamicItem();

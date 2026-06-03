@@ -164,6 +164,25 @@ class CheckoutExtrasTest extends TestCase
         $this->assertEquals('30.00', $component->extras[1]->price);
     }
 
+    // The validation price (calculatePrice) must apply the selected extra quantity for every price
+    // type, including custom, so it matches the frontend total (price × quantity) and does not throw
+    // a spurious ReservationDriftException when a custom extra allows quantity > 1.
+    public function test_custom_extra_calculate_price_applies_selected_quantity()
+    {
+        $extra = ResrvExtra::factory()->custom()->create();
+
+        $data = [
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(4)->toIso8601String(),
+            'quantity' => 1,
+            'item_id' => $this->entries->first()->id(),
+            'customer' => collect(['adults' => 3]),
+        ];
+
+        // Custom extra: price 10 × 3 adults = 30 per unit, × selected quantity 2 = 60.
+        $this->assertEquals('60.00', $extra->calculatePrice($data, 2)->format());
+    }
+
     // Test that relative price extras are correctly calculated based on the Reservation price
     public function test_gets_correct_price_for_relative_price_extra()
     {
@@ -1447,6 +1466,53 @@ class CheckoutExtrasTest extends TestCase
         // NOT: 10 * 1 (session fallback) * 2 = 20
         $charges = $reservation->extraCharges();
         $this->assertEquals('60.00', $charges->format());
+    }
+
+    public function test_category_membership_lookup_is_memoized_across_children()
+    {
+        $item = $this->entries->first();
+
+        $extraCategory = ExtraCategory::factory()->create(['name' => 'Test Category']);
+        ResrvExtra::factory()->create(['id' => 20, 'category_id' => $extraCategory->id]);
+
+        // The entry's extra carries a category-membership condition, evaluated once per child.
+        ExtraCondition::factory()->create([
+            'extra_id' => $this->extras->first()->id,
+            'conditions' => [[
+                'operation' => 'required',
+                'type' => 'no_extra_in_category_selected',
+                'value' => $extraCategory->id,
+            ]],
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(10)->toIso8601String(),
+            'quantity' => 3,
+            'price' => '300.00',
+            'payment' => '300.00',
+        ]);
+
+        foreach ([[0, 2], [4, 6], [8, 10]] as [$start, $end]) {
+            ChildReservation::factory()->create([
+                'reservation_id' => $reservation->id,
+                'date_start' => today()->addDays($start)->toIso8601String(),
+                'date_end' => today()->addDays($end)->toIso8601String(),
+                'quantity' => 1,
+            ]);
+        }
+
+        DB::enableQueryLog();
+
+        Livewire::test(Extras::class, ['reservation' => $reservation]);
+
+        // Three children, but the published-extras-per-category lookup must run once, not per child.
+        $categoryQueries = collect(DB::getQueryLog())
+            ->filter(fn ($query) => str_contains($query['query'], 'category_id'));
+
+        $this->assertCount(1, $categoryQueries);
     }
 
     public function test_parent_perday_option_does_not_compound_across_children()

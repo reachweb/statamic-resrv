@@ -28,6 +28,14 @@ class ExtraCondition extends Model
         'conditions' => AsCollection::class,
     ];
 
+    /**
+     * Request-scoped memo of published extra ids per category, so repeated category-membership
+     * checks across cart selections / parent children don't re-query the same category.
+     *
+     * @var array<int|string, Collection<int, int>>
+     */
+    private array $categoryExtraIdsCache = [];
+
     protected static function newFactory()
     {
         return ExtraConditionFactory::new();
@@ -349,9 +357,7 @@ class ExtraCondition extends Model
             return false;
         }
 
-        $categoryExtras = Extra::where('category_id', $condition->value)
-            ->where('published', true)
-            ->pluck('id');
+        $categoryExtras = $this->extraIdsInCategory($condition->value);
 
         $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
             return $categoryExtras->contains($extraId);
@@ -360,15 +366,20 @@ class ExtraCondition extends Model
         return $selected->count() > 0;
     }
 
+    private function extraIdsInCategory($categoryId): Collection
+    {
+        return $this->categoryExtraIdsCache[$categoryId] ??= Extra::where('category_id', $categoryId)
+            ->where('published', true)
+            ->pluck('id');
+    }
+
     protected function checkNoExtraInCategorySelected($condition, $data)
     {
         if (! Arr::exists($data, 'extras')) {
             return true; // No extras provided → none in category selected
         }
 
-        $categoryExtras = Extra::where('category_id', $condition->value)
-            ->where('published', true)
-            ->pluck('id');
+        $categoryExtras = $this->extraIdsInCategory($condition->value);
 
         $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
             return $categoryExtras->contains($extraId);

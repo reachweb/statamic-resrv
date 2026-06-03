@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Extra;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
@@ -72,6 +73,23 @@ class AffiliateCpTest extends TestCase
         $response->assertStatus(200);
 
         $this->assertSoftDeleted($affiliate);
+    }
+
+    public function test_deleting_an_affiliate_rolls_back_when_pivot_cleanup_fails()
+    {
+        $affiliate = Affiliate::factory()->create();
+
+        // Force the pivot cleanup (the second write) to fail so we can assert the delete is atomic:
+        // the affiliate removal must roll back rather than leave a half-applied state.
+        Schema::drop('resrv_reservation_affiliate');
+
+        try {
+            $this->delete(cp_route('resrv.affiliate.delete', $affiliate->id));
+        } catch (\Throwable $e) {
+            // Expected: the missing pivot table makes the cleanup throw.
+        }
+
+        $this->assertNotSoftDeleted($affiliate);
     }
 
     public function test_can_create_affiliate_with_coupons()

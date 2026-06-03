@@ -782,7 +782,7 @@ Each item is a checkbox. Work top-down (High → Nit). When an item is fixed, ch
   - **Evidence:** Price.php:23,62,70,78 all call bcmul on incoming values. Reproduced on PHP 8.5.6: `bcmul('20,5', 100)` -> ValueError: 'Argument #1 ($num1) is not well-formed'. currency_delimiter ',' at config.php:56; amount fields are free-text in the CP. No code path was found that actually stores a comma into amount, so impact depends on operator/import data.
   - _bug · partially-confirmed · medium confidence_
 
-- [ ] **L37 — processDynamicPricing always sets originalPrice when any policy matches, even with zero net change**
+- [x] **L37 — processDynamicPricing always sets originalPrice when any policy matches, even with zero net change**
   - **Where:** `src/Traits/HandlesPricing.php:74-77`
   - **Problem:** `if ($discountedPrice = $this->processDynamicPricing($reservationPrice, $id))` treats any returned Price as truthy. processDynamicPricing returns false only when searchForAvailability matches nothing; whenever at least one policy matches, apply(clone $price) -> applyClamps(applyRest(...)) always returns a Price object (truthy) even if the net effect is zero (e.g. a matched coupon/policy that leaves the price unchanged, or a clamp that doesn't bind). originalPrice is then set equal to reservationPrice, so the frontend renders a struck-through 'original' price identical to the final price. Cosmetic but user-visible.
   - **Fix:** Only set originalPrice when the value actually differs: `if (($discountedPrice = $this->processDynamicPricing($reservationPrice, $id)) && ! $discountedPrice->equals($reservationPrice)) { $originalPrice = $reservationPrice; $reservationPrice = $discountedPrice; }`.
@@ -791,35 +791,35 @@ Each item is a checkbox. Work top-down (High → Nit). When an item is fixed, ch
 
 ### Extras / Options / Cutoff
 
-- [ ] **L38 — Cutoff validation can throw ModelNotFoundException to the visitor when the resrv_entries mirror is missing**
+- [x] **L38 — Cutoff validation can throw ModelNotFoundException to the visitor when the resrv_entries mirror is missing**
   - **Where:** `src/Livewire/Traits/HandlesCutoffValidation.php:17`
   - **Problem:** validateCutoffRules() calls ResrvEntry::whereItemId($this->entryId), and Entry::whereItemId() uses firstOrFail() (Entry.php:49). Unlike ResrvCutoff::augment/process which wrap the same lookup in try/catch, this call is unguarded. If the resrv_entries mirror row is absent (mirror desync), it throws ModelNotFoundException to the visitor mid availability-check instead of degrading gracefully (the rest of the cutoff code treats 'no schedule' as a no-op). Low likelihood given EntrySaved keeps the mirror in sync, but a hard failure mode.
   - **Fix:** Fetch with Entry::query()->itemId($this->entryId)->first() and return early if null, mirroring the graceful handling in the ResrvCutoff fieldtype.
   - **Evidence:** HandlesCutoffValidation.php:17 $resrvEntry = ResrvEntry::whereItemId($this->entryId); (no try/catch). Entry.php:47-50 whereItemId returns static::query()->itemId($id)->firstOrFail(). ResrvCutoff.php:22-28 and :62-78 wrap the same call in try/catch.
   - _best-practice · confirmed · medium confidence_
 
-- [ ] **L39 — Extra 'custom' price type ignores selected quantity, risking spurious ReservationDriftException**
+- [x] **L39 — Extra 'custom' price type ignores selected quantity, risking spurious ReservationDriftException**
   - **Where:** `src/Models/Extra.php:203-205`
   - **Problem:** In calculatePrice($data,$quantity) the perday/fixed/relative branches multiply by the selected extra $quantity, but the custom branch is $this->price->multiply($this->getCustomPrice($data)) with no $quantity (the trailing applyQuantityIfNeeded only applies the RESERVATION quantity $this->quantity, a different value confirmed by test_loads_extras_for_the_reservation_with_extra_quantity where reservation quantity 2 doubles 9.30->18.60). The frontend total (HandlesPricing.php:50) multiplies the displayed per-unit price by $extra['quantity'] for ALL types including custom. So a custom extra with selected quantity>1 yields frontend total = price x quantity while the server validates price x 1, failing validateTotal() and rejecting a legitimate checkout. Masked today because custom extras typically have allow_multiple=false so quantity stays 1.
   - **Fix:** Make the custom branch consistent: $price = $this->price->multiply($this->getCustomPrice($data))->multiply($quantity); so all price types apply the selected extra quantity, matching the frontend computation.
   - **Evidence:** Extra.php:194-205: perday multiply($quantity), fixed multiply($quantity), relative ...multiply($quantity), custom multiply($this->getCustomPrice($data)) [no $quantity]. Extra.php:210 applyQuantityIfNeeded uses $this->quantity (reservation qty). HandlesPricing.php:50 multiply($extra['quantity']) for all types.
   - _correctness · confirmed · medium confidence_
 
-- [ ] **L40 — Category-membership conditions run an uncached query per extra/condition/selection (N+1)**
+- [x] **L40 — Category-membership conditions run an uncached query per extra/condition/selection (N+1)**
   - **Where:** `src/Models/ExtraCondition.php:343-345, 362-364`
   - **Problem:** checkExtraInCategorySelected() and checkNoExtraInCategorySelected() each run Extra::where('category_id', $condition->value)->where('published', true)->pluck('id') with no per-request caching. These are invoked from shouldApplyCondition() for every condition of every extra, and evaluateConditionsForSelections()/evaluateConditionsForParentReservation() call calculateConditionArrays() once per selection/child, producing O(selections x extras x category-conditions) identical lookups per render. Real but performance-only; only matters when category conditions are configured and carts have multiple selections.
   - **Fix:** Memoize category->extra-id lists for the request (static map keyed by category_id) or pre-resolve all referenced category ids once before the loops, instead of querying inside each per-condition evaluation.
   - **Evidence:** ExtraCondition.php:343-345 and :362-364 identical Extra::where('category_id',...)->where('published',true)->pluck('id'). Invoked via shouldApplyCondition() :183-184, looped per selection in HandlesExtrasQueries.php:202-216 and per child :236-250.
   - _performance · confirmed · medium confidence_
 
-- [ ] **L41 — OptionValue::option() uses hasOne for an inverse relationship (should be belongsTo)**
+- [x] **L41 — OptionValue::option() uses hasOne for an inverse relationship (should be belongsTo)**
   - **Where:** `src/Models/OptionValue.php:42-45`
   - **Problem:** option() is declared return $this->hasOne(Option::class). It is the inverse of Option::values() (hasMany on option_id) and must be belongsTo(Option::class, 'option_id'). As hasOne it would look for option_value_id on the options table, which does not exist, so the relation never resolves. Confirmed unused in the codebase, so this is latent — a footgun for any future $value->option access.
   - **Fix:** Change to return $this->belongsTo(Option::class, 'option_id');
   - **Evidence:** OptionValue.php:42-45 public function option(){ return $this->hasOne(Option::class); }. Option.php:39 values()=hasMany(OptionValue::class) keyed on option_id. OptionValue has option_id column (fillable, OptionValue.php:20).
   - _Laravel · confirmed · high confidence_
 
-- [ ] **L42 — OptionValue::calculatePrice returns null for unknown price_type, then format() fatals**
+- [x] **L42 — OptionValue::calculatePrice returns null for unknown price_type, then format() fatals**
   - **Where:** `src/Models/OptionValue.php:54-68`
   - **Problem:** calculatePrice() handles only free/fixed/perday; any other price_type falls through with an implicit null return, and priceForDates() (line 51) then calls ->format() on null -> TypeError. OptionCpController::createValue/updateValue validate price_type as merely 'required' (no in:...), so a non-UI client can persist an arbitrary price_type and crash every options render/pricing for that entry. Also confirmed the duplicate initiateAvailabilityUnsafe($data): priceForDates calls it at line 49 and calculatePrice calls it again at line 59 — harmless but wasteful.
   - **Fix:** Constrain price_type to in:free,fixed,perday in OptionCpController createValue/updateValue, and make calculatePrice throw an explicit exception (or return the base price) for unknown types. Remove the duplicate initiateAvailabilityUnsafe call in calculatePrice.
@@ -828,7 +828,7 @@ Each item is a checkbox. Work top-down (High → Nit). When an item is fixed, ch
 
 ### Entry mirror / Multisite
 
-- [ ] **L43 — Entry::whereItemId() is typed ?static but firstOrFail() can never return null - callers get an exception instead of a null**
+- [x] **L43 — Entry::whereItemId() is typed ?static but firstOrFail() can never return null - callers get an exception instead of a null**
   - **Where:** `src/Models/Entry.php:47-50`
   - **Problem:** public static function whereItemId(string $id): ?static calls ->firstOrFail(), which returns a model or throws ModelNotFoundException - it never returns null, so the ?static return type is dishonest. The finding's claim that callers 'using ?->' get an unexpected exception is slightly off: no callsite actually uses ?-> here. The real callsites call methods on the result directly (Availability.php:338 ->isDisabled(), :737/:859 ->item_id, Extra.php:221 ->id, :236 ->extras()), so on a missing/soft-deleted mirror they get a ModelNotFoundException rather than a handled null - i.e. the nullable signature implies a null guard is possible when in fact the only guard is try/catch (ResrvCutoff.php:23 does wrap correctly; the Availability/Extra callsites do not). Also correct: firstOrFail() does not include withTrashed(), so once the mirror is soft-deleted (after Statamic deletion) this throws even though the row physically exists. Net: a real but low-impact contract/best-practice inconsistency.
   - **Fix:** Make the contract honest: either return `static` (non-nullable) and document that it throws ModelNotFoundException, or switch to ->first() and keep ?static so the nullable type is truthful and callers can null-guard. If soft-deleted mirrors should still resolve (e.g. during a re-save/restore window), add ->withTrashed() to the query.
@@ -837,21 +837,21 @@ Each item is a checkbox. Work top-down (High → Nit). When an item is fixed, ch
 
 ### CP / HTTP & Routing
 
-- [ ] **L44 — Affiliate delete is not transactional — model delete and pivot cleanup can diverge**
+- [x] **L44 — Affiliate delete is not transactional — model delete and pivot cleanup can diverge**
   - **Where:** `src/Http/Controllers/AffiliateCpController.php:84-93`
   - **Problem:** delete() runs `$affiliate->delete()` then a separate `DB::table('resrv_reservation_affiliate')->where('affiliate_id', $affiliate->id)->delete()` outside any transaction. If the second statement fails, the affiliate row is gone but its pivot rows remain orphaned. Low severity (requires a mid-operation DB failure; pivot rows reference fee data only). Affiliate is route-model-bound so a missing id already 404s — the only gap is atomicity.
   - **Fix:** Wrap both deletes in `DB::transaction(...)`, or add a `deleting` model event / FK `onDelete('cascade')` so the pivot cleanup cannot be skipped.
   - **Evidence:** AffiliateCpController.php:86-90 `$affiliate->delete(); DB::table('resrv_reservation_affiliate')->where('affiliate_id', $affiliate->id)->delete();` — two writes, no DB::transaction wrapper.
   - _correctness · confirmed · high confidence_
 
-- [ ] **L45 — AvailabilityCpController::update reads nullable keys that may be absent from validated()**
+- [x] **L45 — AvailabilityCpController::update reads nullable keys that may be absent from validated()**
   - **Where:** `src/Http/Controllers/AvailabilityCpController.php:266, 306, 319, 323`
   - **Problem:** AvailabilityCpRequest declares `price`/`available` as `nullable` with `required_if:available,null` / `required_if:price,null`. update() uses `$data = $request->validated()`, which omits keys not present in the request. updateAvailability() then reads `$data['price']`/`$data['available']` unconditionally (lines 266, 306, 319, 323), and ResrvAvailabilityExists::validate does `is_null($this->data[$otherAttribute])` (rule line 24) — both raise undefined-array-key warnings if a key is omitted. However, this is partially mitigated: the actual CP UI (AvailabilityModal.vue) initializes both `available` and `price` refs to null (lines 88-89) and always posts both keys (lines 124-125), so via the UI both keys are present (as null) and `validated()` includes them. The warnings only surface for direct/partial API callers. The reviewer's secondary point is correct and more substantive: `required_if:available,null` matches the string "null", not PHP null, so it does NOT enforce the intended 'price required when available is null/empty' guard — the either/or constraint is effectively inert. Recalibrated to low because the UI path works and the consequence is a warning + a non-functioning validation rule rather than data corruption.
   - **Fix:** Default the keys before use (`$price = $data['price'] ?? null; $available = $data['available'] ?? null;`) and in the rule (`$this->data[$otherAttribute] ?? null`). Re-express the either/or as `required_without:available` / `required_without:price`.
   - **Evidence:** AvailabilityCpRequest.php:17-18 `'price' => ['nullable','numeric','required_if:available,null', ...], 'available' => ['nullable','numeric','required_if:price,null', ...]`. AvailabilityCpController.php:81 `$data = $request->validated();`, :266 `if ($skipPrice && ! is_null($data['price']) && is_null($data['available']))`, :319/:323 read both keys. ResrvAvailabilityExists.php:24 `if (! is_null($value) && is_null($this->data[$otherAttribute]))`. AvailabilityModal.vue:88-89 `const available = ref(null); const price = ref(null);` and :124-125 always send both — mitigates the UI path.
   - _bug · partially-confirmed · medium confidence_
 
-- [ ] **L46 — Imported CSV file is never cleaned up and reuses a fixed filename across imports**
+- [x] **L46 — Imported CSV file is never cleaned up and reuses a fixed filename across imports**
   - **Where:** `src/Http/Controllers/DataImportCpController.php:43-51`
   - **Problem:** Every import writes to the same fixed path via `$file->storeAs('resrv-data-import', 'resrv-data-import.csv')` (DataImportCpController.php:43) and the same cache key 'resrv-data-import'. Two admins, or one admin re-running before the job finishes, overwrite each other's file and cache, and the CSV is never deleted after ProcessDataImport completes (the job only forgets the cache key, not the file). The stale CSV lingers on disk. Concurrency is low for a CP tool, but the fixed name makes overlapping imports clobber silently.
   - **Fix:** Use a unique per-import filename/cache key (e.g. include a uuid) and delete the CSV after ProcessDataImport completes (in its finally/failed handler).

@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
@@ -44,7 +45,10 @@ class Entry extends Model
         $query->where('item_id', $id);
     }
 
-    public static function whereItemId(string $id): ?static
+    /**
+     * @throws ModelNotFoundException
+     */
+    public static function whereItemId(string $id): static
     {
         return static::query()->itemId($id)->firstOrFail();
     }

@@ -53,6 +53,34 @@ class CheckoutOptionsTest extends TestCase
         $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
     }
 
+    // The inverse of Option::values() must resolve back to the parent Option.
+    public function test_option_value_belongs_to_its_option()
+    {
+        $value = $this->options->values->first();
+
+        $this->assertInstanceOf(Option::class, $value->option);
+        $this->assertEquals($this->options->id, $value->option->id);
+    }
+
+    // An unknown price_type (legacy/tampered data) must fall back to the base price instead of
+    // returning null and fataling at the ->format() call in priceForDates().
+    public function test_calculate_price_falls_back_to_base_price_for_unknown_price_type()
+    {
+        $value = OptionValue::factory()->create([
+            'option_id' => $this->options->id,
+            'price' => '15',
+            'price_type' => 'bogus',
+        ]);
+
+        $data = [
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ];
+
+        $this->assertEquals('15.00', $value->priceForDates($data));
+    }
+
     // Test that it loads options list in the view
     public function test_loads_options_list_in_the_view()
     {

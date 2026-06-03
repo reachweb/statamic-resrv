@@ -51,7 +51,7 @@ class OptionCpController extends Controller
         $data = $request->validate([
             'name' => 'required',
             'price' => 'required|numeric',
-            'price_type' => 'required',
+            'price_type' => 'required|in:free,fixed,perday',
             'published' => 'required|boolean',
         ]);
 
@@ -89,7 +89,7 @@ class OptionCpController extends Controller
             'id' => 'required|integer',
             'name' => 'required',
             'price' => 'required|numeric',
-            'price_type' => 'required',
+            'price_type' => 'required|in:free,fixed,perday',
             'order' => 'required|integer',
             'published' => 'required|boolean',
         ]);

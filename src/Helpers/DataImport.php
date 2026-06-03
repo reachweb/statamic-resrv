@@ -24,6 +24,11 @@ class DataImport
         $this->identifier = $identifier;
     }
 
+    public function getPath(): string
+    {
+        return $this->path;
+    }
+
     public function checkForErrors()
     {
         $errors = collect();

@@ -21,7 +21,7 @@ class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
     {
         $otherAttribute = $attribute === 'price' ? 'available' : 'price';
 
-        if (! is_null($value) && is_null($this->data[$otherAttribute])) {
+        if (! is_null($value) && is_null($this->data[$otherAttribute] ?? null)) {
             if (array_key_exists('rate_ids', $this->data)) {
                 foreach ($this->data['rate_ids'] as $rateId) {
                     if (! Availability::itemsExistAndHavePrices(

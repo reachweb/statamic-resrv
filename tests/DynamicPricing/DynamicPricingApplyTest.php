@@ -148,11 +148,11 @@ class DynamicPricingApplyTest extends TestCase
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
 
-        // Baseline 100.92 is already above the 50 floor → price unchanged.
+        // Baseline 100.92 is already above the 50 floor → price unchanged, so no original price is surfaced.
         $this->createDynamicPricing('fixedMinimum', ['amount' => '50']);
 
-        $this->assertPrice('100.92', '100.92');
-        $this->assertIndexPrice('100.92', '100.92');
+        $this->assertPrice('100.92');
+        $this->assertIndexPrice('100.92');
     }
 
     public function test_fixed_maximum_caps_price_when_above()
@@ -170,11 +170,11 @@ class DynamicPricingApplyTest extends TestCase
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
 
-        // Baseline 100.92 is below the 200 ceiling → unchanged.
+        // Baseline 100.92 is below the 200 ceiling → unchanged, so no original price is surfaced.
         $this->createDynamicPricing('fixedMaximum', ['amount' => '200']);
 
-        $this->assertPrice('100.92', '100.92');
-        $this->assertIndexPrice('100.92', '100.92');
+        $this->assertPrice('100.92');
+        $this->assertIndexPrice('100.92');
     }
 
     public function test_fixed_decrease_above_base_floors_price_at_zero()

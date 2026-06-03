@@ -201,7 +201,7 @@ class Extra extends Model
             $price = $this->price->multiply($this->getRelativePrice($data))->multiply($quantity);
         }
         if ($this->price_type == 'custom') {
-            $price = $this->price->multiply($this->getCustomPrice($data));
+            $price = $this->price->multiply($this->getCustomPrice($data))->multiply($quantity);
         }
         if ($dynamicPricing) {
             $price = $dynamicPricing->applyClamps($price);

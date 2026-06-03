@@ -70,8 +70,9 @@ trait HandlesPricing
             }
         }
 
-        // Apply dynamic pricing
-        if ($discountedPrice = $this->processDynamicPricing($reservationPrice, $id)) {
+        // Apply dynamic pricing — only treat it as a discount when the value actually changes, so a
+        // matched-but-non-binding policy doesn't surface an "original" price equal to the final one.
+        if (($discountedPrice = $this->processDynamicPricing($reservationPrice, $id)) && ! $discountedPrice->equals($reservationPrice)) {
             $originalPrice = $reservationPrice;
             $reservationPrice = $discountedPrice;
         }

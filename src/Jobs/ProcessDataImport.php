@@ -11,6 +11,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\RatePrice;
@@ -172,17 +173,33 @@ class ProcessDataImport implements ShouldQueue
             });
         });
 
+        $this->deleteImportFile($dataImport);
+
         Cache::forget($this->cacheKey);
     }
 
     /**
-     * Clear the cache key and log the error so a failed import doesn't block re-uploading.
+     * Clear the cache key and the uploaded CSV, and log the error so a failed import doesn't
+     * block re-uploading or leave a stale file on disk.
      */
     public function failed(\Throwable $exception): void
     {
+        $this->deleteImportFile(Cache::get($this->cacheKey));
+
         Cache::forget($this->cacheKey);
 
         Log::error('Data import job failed.', ['error' => $exception->getMessage()]);
+    }
+
+    /**
+     * Remove the uploaded CSV once the import is done. Guarded by the type check because cached
+     * import payloads are arbitrary in tests (and only a real DataImport exposes a file path).
+     */
+    protected function deleteImportFile($dataImport): void
+    {
+        if ($dataImport instanceof DataImport && is_file($path = $dataImport->getPath())) {
+            @unlink($path);
+        }
     }
 
     /**
