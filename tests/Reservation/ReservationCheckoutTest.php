@@ -165,6 +165,16 @@ class ReservationCheckoutTest extends TestCase
         Event::assertNotDispatched(ReservationCancelled::class);
     }
 
+    // The controller must return the gateway's verifyPayment() Response, not discard it. An
+    // unhandled status exercises the gateway's default 200 branch; before the fix the controller
+    // returned an empty body (the gateway response was thrown away).
+    public function test_webhook_store_returns_the_gateway_response()
+    {
+        $this->post(route('resrv.webhook.store', ['reservation_id' => $this->reservation->id, 'status' => 'unknown']))
+            ->assertOk()
+            ->assertExactJson([]);
+    }
+
     // Test if email is sent when reservation is confirmed
     public function test_email_is_sent_when_reservation_is_confirmed()
     {

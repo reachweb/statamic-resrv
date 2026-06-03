@@ -183,6 +183,9 @@ class FakePaymentGateway implements PaymentInterface
 
             return response()->json([], 200);
         }
+
+        // Mirror StripePaymentGateway: always return a Response (never fall through to null).
+        return response()->json([], 200);
     }
 
     public function verifyWebhook()

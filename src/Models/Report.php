@@ -3,6 +3,8 @@
 namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
 
 class Report
@@ -33,18 +35,25 @@ class Report
         return $this->reservations->count();
     }
 
-    public function sumConfirmedReservations()
+    public function sumConfirmedReservations(): PriceClass
     {
-        return $this->reservations->sum(function ($reservation) {
-            return $reservation->price->format();
-        });
+        // Accumulate in integer minor units (Money::add) rather than summing formatted decimal
+        // strings as floats, which CLAUDE.md forbids and which can drift by a cent over many rows.
+        return $this->reservations->reduce(
+            fn (PriceClass $carry, $reservation) => $carry->add($reservation->price),
+            Price::create(0)
+        );
     }
 
-    public function avgConfirmedReservations()
+    public function avgConfirmedReservations(): PriceClass
     {
-        return $this->reservations->avg(function ($reservation) {
-            return $reservation->price->format();
-        });
+        $count = $this->countConfirmedReservations();
+
+        if ($count === 0) {
+            return Price::create(0);
+        }
+
+        return $this->sumConfirmedReservations()->divide((string) $count);
     }
 
     public function topSellerItems()

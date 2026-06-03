@@ -10,7 +10,7 @@ class DataImport
 {
     private $path;
 
-    private $collection;
+    private $collectionHandle;
 
     private $delimiter;
 
@@ -19,7 +19,7 @@ class DataImport
     public function __construct($path, $delimiter, $collection, $identifier)
     {
         $this->path = $path;
-        $this->collection = Collection::findByHandle($collection);
+        $this->collectionHandle = $collection;
         $this->delimiter = $delimiter;
         $this->identifier = $identifier;
     }
@@ -106,12 +106,20 @@ class DataImport
         ];
     }
 
+    // Resolve the collection on demand rather than storing the resolved object. The controller
+    // caches this DataImport (file/redis/database drivers serialize the value), so keeping only
+    // the handle avoids serializing the whole Statamic Collection object graph.
+    private function collection(): ?\Statamic\Contracts\Entries\Collection
+    {
+        return Collection::findByHandle($this->collectionHandle);
+    }
+
     private function collectionHasIdentifier()
     {
         if ($this->identifier == 'id') {
             return false;
         }
-        foreach ($this->collection->entryBlueprints() as $blueprint) {
+        foreach ($this->collection()->entryBlueprints() as $blueprint) {
             if ($blueprint->fields()->all()->has($this->identifier)) {
                 return false;
             }
@@ -126,7 +134,7 @@ class DataImport
             return $value;
         }
 
-        $entry = $this->collection
+        $entry = $this->collection()
             ->queryEntries()
             ->where($this->identifier, $value)
             ->where('site', Site::default())

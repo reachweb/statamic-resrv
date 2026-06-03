@@ -220,6 +220,33 @@ class StripeWebhookTest extends TestCase
         Event::assertNotDispatched(ReservationConfirmed::class);
     }
 
+    public function test_unhandled_stripe_event_type_returns_a_200_response_without_acting_on_the_reservation()
+    {
+        Event::fake([ReservationConfirmed::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_unhandled',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        // An event type the gateway doesn't act on (e.g. payment_intent.created) must be acknowledged
+        // with a 200 Response rather than falling through to null, so WebhookController can return it.
+        $request = $this->signedWebhookRequest('payment_intent.created', 'pi_test_unhandled', 'whsec_test', time());
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($request);
+
+        $this->assertNotNull($response, 'verifyPayment should return a response for unhandled event types.');
+        $this->assertEquals(200, $response->getStatusCode());
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'pending',
+        ]);
+        Event::assertNotDispatched(ReservationConfirmed::class);
+    }
+
     public function test_verify_payment_verifies_signature_before_confirmed_short_circuit()
     {
         // L1/L3: an unsigned webhook (no Stripe-Signature header) must be rejected (403) before

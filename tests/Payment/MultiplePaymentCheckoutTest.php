@@ -192,6 +192,31 @@ class MultiplePaymentCheckoutTest extends TestCase
         $response->assertOk();
     }
 
+    // With multiple gateways configured, each provider posts to its own /webhook/{gateway} URL, so a
+    // bare URL can't be routed to a specific gateway and must be rejected rather than handed to the
+    // default — which would otherwise process (here, confirm) the reservation as the wrong gateway.
+    public function test_bare_webhook_url_is_rejected_in_multi_gateway_mode()
+    {
+        $this->withExceptionHandling();
+
+        Config::set('resrv-config.payment_gateways', [
+            'fake_one' => ['class' => FakePaymentGateway::class, 'label' => 'Fake One'],
+            'fake_two' => ['class' => FakePaymentGateway::class, 'label' => 'Fake Two'],
+        ]);
+
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $this->post('/resrv/api/webhook', [
+            'reservation_id' => $this->reservation->id,
+            'status' => 'success',
+        ])->assertNotFound();
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'status' => 'pending',
+        ]);
+    }
+
     public function test_payment_view_is_set_on_checkout_payment()
     {
         session(['resrv_reservation' => $this->reservation->id]);

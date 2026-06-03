@@ -336,6 +336,10 @@ class StripePaymentGateway implements PaymentInterface
 
             return response()->json([], 200);
         }
+
+        // Acknowledge event types we don't act on with a 200 so Stripe stops retrying; returning a
+        // Response (rather than falling through to null) lets WebhookController surface it.
+        return response()->json([], 200);
     }
 
     public function verifyWebhook()

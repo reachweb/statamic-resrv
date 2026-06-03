@@ -138,6 +138,65 @@ class ReservationCpTest extends TestCase
         $response->assertStatus(200)->assertJsonFragment(['total' => 0]);
     }
 
+    // A bare % is escaped, so it must not behave as a wildcard that returns every reservation.
+    public function test_search_escapes_like_wildcards_instead_of_matching_everything()
+    {
+        $item = $this->makeStatamicItem();
+        Reservation::factory(3, ['item_id' => $item->id()])->withCustomer()->create();
+
+        $this->getJson(cp_route('resrv.reservation.index').'?search=%25')
+            ->assertStatus(200)
+            ->assertJsonFragment(['total' => 0]);
+    }
+
+    // An unlisted ?sort= (here a relation column) must be dropped — it would 500 on MySQL/Postgres
+    // where ORDER BY validates columns — and replaced with the default created_at. A whitelisted
+    // column is passed through unchanged.
+    public function test_index_whitelists_the_sort_column()
+    {
+        $item = $this->makeStatamicItem();
+        Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
+
+        $this->assertListingOrdersBy('created_at', '?sort=customer');
+        $this->assertListingOrdersBy('reference', '?sort=reference');
+    }
+
+    // A ?order= that is not asc/desc must fall back to desc rather than throwing the
+    // InvalidArgumentException that Builder::orderBy() raises for an unknown direction.
+    public function test_index_ignores_an_invalid_sort_direction()
+    {
+        $item = $this->makeStatamicItem();
+        Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
+
+        $this->getJson(cp_route('resrv.reservation.index').'?order=garbage')->assertOk();
+    }
+
+    // A reasonable ?perPage passes through, but an excessive one is capped so the listing can't
+    // load and serialize an unbounded number of rows.
+    public function test_index_clamps_per_page_to_a_safe_maximum()
+    {
+        $item = $this->makeStatamicItem();
+        Reservation::factory(['item_id' => $item->id()])->withCustomer()->create();
+
+        $this->getJson(cp_route('resrv.reservation.index').'?perPage=10')
+            ->assertOk()->assertJsonPath('meta.per_page', 10);
+
+        $this->getJson(cp_route('resrv.reservation.index').'?perPage=1000000')
+            ->assertOk()->assertJsonPath('meta.per_page', 100);
+    }
+
+    private function assertListingOrdersBy(string $column, string $query): void
+    {
+        DB::enableQueryLog();
+        $this->getJson(cp_route('resrv.reservation.index').$query)->assertOk();
+        $mainQuery = collect(DB::getQueryLog())->pluck('query')
+            ->first(fn ($sql) => str_contains($sql, 'resrv_reservations') && str_contains($sql, 'order by'));
+        DB::flushQueryLog();
+
+        $this->assertNotNull($mainQuery, 'Expected a reservations listing query with an order by clause.');
+        $this->assertStringContainsString($column, $mainQuery, "Expected the listing to order by {$column} for query {$query}.");
+    }
+
     public function test_reservation_listing_eager_loads_relations_without_n_plus_one()
     {
         $item = $this->makeStatamicItem();

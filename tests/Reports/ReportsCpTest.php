@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Reports;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Report;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Money\Price;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReportsCpTest extends TestCase
@@ -46,6 +47,23 @@ class ReportsCpTest extends TestCase
                 'avg_revenue' => '200.00',
             ])
             ->assertSee('Test Statamic Item');
+    }
+
+    // Revenue is accumulated in integer minor units and returned as a Price, not summed as floats
+    // (which CLAUDE.md forbids). Reverting to Collection::sum() on formatted strings would return a
+    // float and fail the instanceof assertion.
+    public function test_sum_and_avg_confirmed_reservations_return_exact_money()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed', 'price' => '10.01'])
+            ->count(3)->create();
+
+        $report = new Report(now()->toDateString(), now()->addWeek()->toDateString());
+
+        $this->assertInstanceOf(Price::class, $report->sumConfirmedReservations());
+        $this->assertSame('30.03', $report->sumConfirmedReservations()->format());
+        $this->assertSame('10.01', $report->avgConfirmedReservations()->format());
     }
 
     public function test_can_get_report_data_filtered_by_created_at()

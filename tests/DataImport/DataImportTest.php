@@ -56,6 +56,28 @@ class DataImportTest extends TestCase
         $this->assertEquals('30', $prepared->get($entryB)->first()['rate_id']);
     }
 
+    // The controller caches the DataImport, and non-array cache drivers (file/redis/database)
+    // serialize the value. The heavy Statamic Collection object graph must not be dragged into
+    // that payload — only the scalar inputs — and the restored object must remain fully usable.
+    public function test_it_does_not_serialize_the_resolved_statamic_collection()
+    {
+        $entry = $this->makeStatamicItem()->id();
+
+        $path = $this->csvPath(
+            "id,price:2026-01-01|2026-01-03,availability:2026-01-01|2026-01-03\n".
+            "{$entry},100,5\n"
+        );
+
+        $serialized = serialize(new DataImport($path, ',', 'pages', 'id'));
+
+        $this->assertStringNotContainsString('Statamic\\Entries\\Collection', $serialized);
+
+        $restored = unserialize($serialized);
+
+        $this->assertSame($path, $restored->getPath());
+        $this->assertCount(1, $restored->prepare()->get($entry));
+    }
+
     // A price header drives the date range, so a header literally named "price" (no date range)
     // must be rejected at the confirm step rather than silently importing every row as a no-op.
     public function test_check_for_errors_rejects_a_price_header_without_a_date_range()

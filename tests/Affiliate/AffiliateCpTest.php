@@ -47,6 +47,19 @@ class AffiliateCpTest extends TestCase
         ]);
     }
 
+    // A non-positive cookie_duration becomes a 0-minute (session) or already-expired cookie in
+    // SetResrvAffiliateCookie, silently breaking attribution — so it must be rejected.
+    public function test_cookie_duration_must_be_at_least_one_day()
+    {
+        $this->withExceptionHandling();
+
+        $affiliate = Affiliate::factory()->make(['cookie_duration' => 0])->toArray();
+
+        $this->postJson(cp_route('resrv.affiliate.create'), $affiliate)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cookie_duration');
+    }
+
     public function test_can_update_an_affiliate()
     {
         $affiliate = Affiliate::factory()->create();

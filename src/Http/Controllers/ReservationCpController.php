@@ -78,7 +78,10 @@ class ReservationCpController extends Controller
         $query = $this->getReservations();
 
         $activeFilterBadges = $this->queryFilters($query, $request->filters);
-        $perPage = request('perPage') ?? config('statamic.cp.pagination_size');
+
+        // Clamp so a huge ?perPage can't load/serialize unbounded rows (matches DynamicPricingCpController).
+        $perPage = (int) (request('perPage') ?? config('statamic.cp.pagination_size', 25));
+        $perPage = max(1, min($perPage, 100));
 
         $reservations = $query->paginate($perPage);
 
@@ -235,8 +238,13 @@ class ReservationCpController extends Controller
 
     private function getReservations()
     {
-        $sortOrder = request('order') ?? 'desc';
-        $sortBy = request('sort') ?? 'created_at';
+        // Only allow sorting by real, sortable columns (mirrors ReservationBlueprint's sortable
+        // handles). An unlisted ?sort= would otherwise 500 on a relation/non-existent column, and
+        // a non asc/desc ?order= throws from orderBy()'s direction validation.
+        $sortableColumns = ['id', 'status', 'type', 'reference', 'date_start', 'date_end', 'payment', 'price', 'payment_gateway', 'created_at', 'updated_at'];
+
+        $sortBy = in_array(request('sort'), $sortableColumns, true) ? request('sort') : 'created_at';
+        $sortOrder = strtolower((string) request('order')) === 'asc' ? 'asc' : 'desc';
 
         $this->reservation = $this->reservation
             ->with(['customer', 'rate', 'extras', 'options', 'childs.rate'])
@@ -251,7 +259,10 @@ class ReservationCpController extends Controller
 
     private function searchReservations()
     {
-        $search = request('search');
+        // Cap the term and neutralise LIKE wildcards so a user-supplied % or _ can't widen the
+        // match (or force a full scan via a bare %). '\' is the default LIKE escape on MySQL and
+        // Postgres, so escaped wildcards are matched literally; ordinary searches are unaffected.
+        $search = addcslashes(mb_substr((string) request('search'), 0, 100), '%_\\');
         $searchTerm = "%{$search}%";
 
         return $this->reservation->where(function ($query) use ($searchTerm) {
