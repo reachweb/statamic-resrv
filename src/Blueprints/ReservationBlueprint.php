@@ -74,6 +74,7 @@ class ReservationBlueprint
                             'handle' => 'date_start',
                             'field' => [
                                 'type' => 'date',
+                                'time_enabled' => true,
                                 'listable' => true,
                                 'display' => 'Start date',
                             ],
@@ -82,6 +83,7 @@ class ReservationBlueprint
                             'handle' => 'date_end',
                             'field' => [
                                 'type' => 'date',
+                                'time_enabled' => true,
                                 'listable' => true,
                                 'display' => 'End date',
                             ],
@@ -123,6 +125,7 @@ class ReservationBlueprint
                             'handle' => 'created_at',
                             'field' => [
                                 'type' => 'date',
+                                'time_enabled' => true,
                                 'listable' => true,
                                 'display' => 'Created at',
                             ],
@@ -131,6 +134,7 @@ class ReservationBlueprint
                             'handle' => 'updated_at',
                             'field' => [
                                 'type' => 'date',
+                                'time_enabled' => true,
                                 'display' => 'Updated at',
                             ],
                         ],

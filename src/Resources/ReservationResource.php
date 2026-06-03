@@ -20,6 +20,8 @@ class ReservationResource extends ResourceCollection
 
     protected $columns;
 
+    protected $dateFieldtypes = [];
+
     public function __construct($resource)
     {
         parent::__construct($resource);
@@ -51,8 +53,8 @@ class ReservationResource extends ResourceCollection
                     'quantity' => $reservation->quantity,
                     'payment' => config('resrv-config.currency_symbol').' '.$reservation->payment->format(),
                     'price' => config('resrv-config.currency_symbol').' '.$reservation->price->format(),
-                    'date_start' => $this->formatDate($reservation->date_start),
-                    'date_end' => $this->formatDate($reservation->date_end),
+                    'date_start' => $this->dateIndexValue('date_start', $reservation->date_start),
+                    'date_end' => $this->dateIndexValue('date_end', $reservation->date_end),
                     'customer' => ['email' => $reservation->customer?->email],
                     'extras' => $reservation->extras,
                     'options' => $reservation->options,
@@ -60,8 +62,8 @@ class ReservationResource extends ResourceCollection
                     'payment_gateway' => $reservation->payment_gateway
                         ? app(PaymentGatewayManager::class)->label($reservation->payment_gateway)
                         : null,
-                    'created_at' => $this->formatDate($reservation->created_at),
-                    'updated_at' => $this->formatDate($reservation->updated_at),
+                    'created_at' => $this->dateIndexValue('created_at', $reservation->created_at),
+                    'updated_at' => $this->dateIndexValue('updated_at', $reservation->updated_at),
                 ];
             }),
 
@@ -90,14 +92,12 @@ class ReservationResource extends ResourceCollection
         $this->columns = $columns->rejectUnlisted()->values();
     }
 
-    private function formatDate(?Carbon $date)
+    // The Listing component renders date columns with DateIndexFieldtype, which expects the
+    // Date fieldtype's preProcessIndex() payload — a pre-formatted string would render as "now".
+    private function dateIndexValue(string $handle, ?Carbon $date): ?array
     {
-        $format = config('statamic.cp.date_format').' H:i';
+        $fieldtype = $this->dateFieldtypes[$handle] ??= $this->blueprint->field($handle)->fieldtype();
 
-        if (! $date) {
-            return null;
-        }
-
-        return $date->format($format);
+        return $fieldtype->preProcessIndex($date);
     }
 }
