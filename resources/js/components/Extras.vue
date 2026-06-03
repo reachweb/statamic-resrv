@@ -110,7 +110,7 @@ const props = defineProps({
 const emit = defineEmits(['reload-categories']);
 const toast = useToast();
 
-const localExtras = ref([...props.extras]);
+const localExtras = ref(props.extras.map((item) => ({ ...item })));
 const showPanel = ref(false);
 const showConditionsPanel = ref(false);
 const showMassAssignPanel = ref(false);
@@ -135,7 +135,7 @@ const emptyExtra = {
 const newItem = computed(() => props.parent === 'Collection');
 
 watch(() => props.extras, (value) => {
-    localExtras.value = [...value];
+    localExtras.value = value.map((item) => ({ ...item }));
 }, { deep: true });
 
 function togglePanel() {
@@ -164,10 +164,11 @@ function toggleEntryExtraEditing() {
 }
 
 function addExtra() {
+    const newExtra = { ...emptyExtra };
     if (props.categoryId) {
-        emptyExtra.category_id = props.categoryId;
+        newExtra.category_id = props.categoryId;
     }
-    extra.value = { ...emptyExtra };
+    extra.value = newExtra;
     togglePanel();
 }
 

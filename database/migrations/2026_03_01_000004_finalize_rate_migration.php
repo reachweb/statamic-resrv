@@ -138,7 +138,7 @@ return new class extends Migration
             $table->string('statamic_id')->index();
             $table->date('date')->index();
             $table->integer('available');
-            $table->float('price', 8, 2);
+            $table->decimal('price', 10, 2);
             $table->string('property')->index();
             $table->unique(['statamic_id', 'date', 'property']);
             $table->timestamps();

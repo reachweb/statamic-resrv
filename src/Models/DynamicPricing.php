@@ -76,10 +76,7 @@ class DynamicPricing extends Model
         );
     }
 
-    /**
-     * Get extras count in a PostgreSQL-compatible way.
-     * PostgreSQL requires explicit type casting for bigint = varchar comparison.
-     */
+    /** PostgreSQL requires explicit bigint→text cast for this join; SQLite does not. */
     public function extrasCount(): int
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
@@ -96,10 +93,7 @@ class DynamicPricing extends Model
         return $this->extras()->count();
     }
 
-    /**
-     * Get extras in a PostgreSQL-compatible way.
-     * PostgreSQL requires explicit type casting for bigint = varchar comparison.
-     */
+    /** PostgreSQL requires explicit bigint→text cast for this join; SQLite does not. */
     public function getExtras()
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
@@ -194,7 +188,9 @@ class DynamicPricing extends Model
             $price = $this->$method($price, $policy);
         }
 
-        return $price;
+        // Safety floor: a misconfigured decrease can drive the result below zero (moneyphp allows it).
+        // Runs after the min/max clamps so a configured minimum still wins.
+        return $price->lessThan(Price::create(0)) ? Price::create(0) : $price;
     }
 
     protected function clampPolicies(): Collection
@@ -438,13 +434,13 @@ class DynamicPricing extends Model
                 return true;
             }
         }
-        if ($pricing->condition_type == 'reservation_price') {
+        if ($pricing->condition_type == 'reservation_price' && $price !== null) {
             if ($this->compare($price->format(), $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }
         }
         if ($pricing->condition_type == 'days_to_reservation') {
-            if ($this->compare((int) Carbon::parse($date_start)->diffInDays(now()->setHour(0), true), $pricing->condition_comparison, $pricing->condition_value)) {
+            if ($this->compare((int) Carbon::parse($date_start)->startOfDay()->diffInDays(now()->startOfDay(), true), $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }
         }

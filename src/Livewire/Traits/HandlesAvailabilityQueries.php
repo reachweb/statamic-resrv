@@ -80,12 +80,16 @@ trait HandlesAvailabilityQueries
     {
         ExpireReservations::dispatchSync();
 
-        return $this->generateDatePeriods($this->data)->map(function ($period) {
+        // Reuse one Availability instance: the entry and rate set are identical across all periods,
+        // so the instance memoizes them instead of re-querying for each date shift.
+        $availability = app(Availability::class);
+
+        return $this->generateDatePeriods($this->data)->map(function ($period) use ($availability) {
             $searchData = array_merge($period, Arr::only($this->data->toResrvArray(), ['quantity', 'rate_id']));
             try {
                 $this->validateCutoffRules($searchData['date_start']);
 
-                return app(Availability::class)->getAvailabilityForEntry($searchData, $this->entryId, expireReservations: false, rateSorting: $this->resolveRateSorting());
+                return $availability->getAvailabilityForEntry($searchData, $this->entryId, expireReservations: false, rateSorting: $this->resolveRateSorting());
             } catch (AvailabilityException|CutoffException $exception) {
                 return [
                     'message' => [
@@ -161,6 +165,16 @@ trait HandlesAvailabilityQueries
         $aggregated = $selections->groupBy(
             fn ($s) => $s['rate_id'].'|'.$s['date_start'].'|'.$s['date_end']
         )->map(function ($group) {
+            // Same rate + dates always resolve to the same per-unit price, so a divergent
+            // price within a group means a selection was tampered with (selections is public,
+            // not #[Locked]). Reject here — otherwise collapsing to the first member's price
+            // would hide a low duplicate from the confirmAvailabilityAndPrice check below.
+            if ($group->pluck('price')->unique()->count() > 1) {
+                throw new AvailabilityException(
+                    __('This item is not available anymore or the price has changed. Please refresh and try searching again!')
+                );
+            }
+
             $first = $group->first();
 
             return array_merge($first, ['quantity' => $group->sum('quantity')]);

@@ -11,6 +11,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\RatePrice;
@@ -20,6 +21,8 @@ class ProcessDataImport implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public function __construct(protected string $cacheKey = 'resrv-data-import') {}
+
     /**
      * Execute the job.
      *
@@ -27,7 +30,7 @@ class ProcessDataImport implements ShouldQueue
      */
     public function handle()
     {
-        $dataImport = Cache::get('resrv-data-import');
+        $dataImport = Cache::get($this->cacheKey);
 
         if (! $dataImport) {
             Log::warning('Data import job fired but cache entry was missing.');
@@ -39,7 +42,37 @@ class ProcessDataImport implements ShouldQueue
             $defaultRateId = null;
 
             $item->each(function ($data) use ($id, &$defaultRateId) {
-                $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
+                // upsert() bypasses Eloquent casts, so validate before writing. Fractional
+                // availability (e.g. 1.9) is rejected rather than silently truncated to 1.
+                if (! is_numeric($data['price'] ?? null) || (float) $data['price'] < 0
+                    || ! is_numeric($data['available'] ?? null) || (float) $data['available'] < 0
+                    || floor((float) $data['available']) !== (float) $data['available']) {
+                    Log::warning("Data import: skipping row for entry {$id} — non-numeric, negative, or fractional price/availability.");
+
+                    return;
+                }
+
+                // Use parseImportDate() instead of Carbon::parse(): it enforces strict YYYY-MM-DD
+                // and rejects overflow dates (2024-02-30) and relative strings ("next monday").
+                $periodStart = $this->parseImportDate($data['date_start'] ?? null);
+                $periodEnd = $this->parseImportDate($data['date_end'] ?? null);
+
+                if (! $periodStart || ! $periodEnd) {
+                    Log::warning("Data import: skipping row for entry {$id} — blank or invalid date range (expected YYYY-MM-DD).");
+
+                    return;
+                }
+
+                if ($periodStart->gt($periodEnd)) {
+                    Log::warning("Data import: skipping row for entry {$id} — reversed date range (start after end).");
+
+                    return;
+                }
+
+                $price = (float) $data['price'];
+                $available = (int) $data['available'];
+
+                $period = CarbonPeriod::create($periodStart, $periodEnd);
                 $rateId = $data['rate_id'] ?? null;
                 $isSharedRate = false;
                 $sharedIndependentRateId = null;
@@ -88,7 +121,7 @@ class ProcessDataImport implements ShouldQueue
                 if ($isSharedRate) {
                     $existingDates = Availability::where('statamic_id', $id)
                         ->where('rate_id', $rateId)
-                        ->whereBetween('date', [$data['date_start'], $data['date_end']])
+                        ->whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])
                         ->pluck('date')
                         ->map(fn ($d) => $d instanceof Carbon ? $d->toDateString() : $d)
                         ->all();
@@ -101,8 +134,8 @@ class ProcessDataImport implements ShouldQueue
                             $dataToAdd[] = [
                                 'statamic_id' => $id,
                                 'date' => $dateStr,
-                                'price' => $data['price'],
-                                'available' => $data['available'],
+                                'price' => $price,
+                                'available' => $available,
                                 'rate_id' => $rateId,
                             ];
                             if ($sharedIndependentRateId !== null) {
@@ -110,7 +143,7 @@ class ProcessDataImport implements ShouldQueue
                                     'rate_id' => $sharedIndependentRateId,
                                     'statamic_id' => $id,
                                     'date' => $dateStr,
-                                    'price' => $data['price'],
+                                    'price' => $price,
                                 ];
                             }
                         }
@@ -129,8 +162,8 @@ class ProcessDataImport implements ShouldQueue
                         $dataToAdd[] = [
                             'statamic_id' => $id,
                             'date' => $day->isoFormat('YYYY-MM-DD'),
-                            'price' => $data['price'],
-                            'available' => $data['available'],
+                            'price' => $price,
+                            'available' => $available,
                             'rate_id' => $rateId,
                         ];
                     }
@@ -140,8 +173,51 @@ class ProcessDataImport implements ShouldQueue
             });
         });
 
-        Cache::forget('resrv-data-import');
+        $this->deleteImportFile($dataImport);
 
-        return true;
+        Cache::forget($this->cacheKey);
+    }
+
+    /**
+     * Clear the cache key and the uploaded CSV, and log the error so a failed import doesn't
+     * block re-uploading or leave a stale file on disk.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        $this->deleteImportFile(Cache::get($this->cacheKey));
+
+        Cache::forget($this->cacheKey);
+
+        Log::error('Data import job failed.', ['error' => $exception->getMessage()]);
+    }
+
+    /**
+     * Remove the uploaded CSV once the import is done. Guarded by the type check because cached
+     * import payloads are arbitrary in tests (and only a real DataImport exposes a file path).
+     */
+    protected function deleteImportFile($dataImport): void
+    {
+        if ($dataImport instanceof DataImport && is_file($path = $dataImport->getPath())) {
+            @unlink($path);
+        }
+    }
+
+    /**
+     * Parse a date string as strict YYYY-MM-DD, returning null for anything else.
+     * The round-trip check rejects overflow dates Carbon would silently normalize.
+     */
+    private function parseImportDate($value): ?Carbon
+    {
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        try {
+            $date = Carbon::createFromFormat('!Y-m-d', $value);
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return $date && $date->format('Y-m-d') === $value ? $date : null;
     }
 }

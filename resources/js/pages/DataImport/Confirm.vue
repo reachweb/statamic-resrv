@@ -1,5 +1,5 @@
 <script setup>
-import { Head, Link } from '@statamic/cms/inertia';
+import { Head, useForm } from '@statamic/cms/inertia';
 import { Header, Button, Card } from '@statamic/cms/ui';
 
 const props = defineProps({
@@ -8,6 +8,13 @@ const props = defineProps({
     storeUrl: { type: String, required: true },
     indexUrl: { type: String, required: true },
 });
+
+const form = useForm({});
+
+// POST (not a GET link) so the state-mutating import runs through CSRF protection.
+function proceed() {
+    form.post(props.storeUrl);
+}
 
 function goBack() {
     window.history.back();
@@ -19,7 +26,7 @@ function goBack() {
         <Head :title="__('Resrv Data import')" />
 
         <Header :title="__('Import availability')">
-            <Button v-if="!errors.length" :href="storeUrl" variant="primary">
+            <Button v-if="!errors.length" variant="primary" :loading="form.processing" @click="proceed">
                 {{ __('Continue') }}
             </Button>
         </Header>

@@ -102,4 +102,70 @@ class PriceTest extends TestCase
         $this->assertFalse($price1->lessThan($price2));
         $this->assertTrue($price2->lessThan($price1));
     }
+
+    public function test_price_round_trips_for_zero_decimal_currency()
+    {
+        config(['resrv-config.currency_isoCode' => 'JPY']);
+
+        $price = Price::create(1000);
+
+        // JPY has no minor unit; old *100 logic produced 100000.
+        $this->assertSame('1000', $price->format());
+        $this->assertSame('1000', $price->raw());
+    }
+
+    public function test_price_round_trips_for_three_decimal_currency()
+    {
+        config(['resrv-config.currency_isoCode' => 'BHD']);
+
+        $price = Price::create(100);
+
+        // BHD has 3 decimal places; old *100 logic gave 10.000 instead of 100.000.
+        $this->assertSame('100.000', $price->format());
+        $this->assertSame('100000', $price->raw());
+    }
+
+    public function test_price_arithmetic_for_zero_decimal_currency()
+    {
+        config(['resrv-config.currency_isoCode' => 'JPY']);
+
+        $result = Price::create(1000)->add(Price::create(500));
+        $this->assertSame('1500', $result->format());
+
+        $discounted = Price::create(1000)->percent(30);
+        $this->assertSame('300', $discounted->format());
+    }
+
+    public function test_price_create_handles_null_as_zero()
+    {
+        config(['resrv-config.currency_isoCode' => 'EUR']);
+
+        // Price::create(null) (nullable column before checkout) must return zero without warnings on PHP 8.5+.
+        $price = Price::create(null);
+
+        $this->assertInstanceOf(PriceClass::class, $price);
+        $this->assertSame('0.00', $price->format());
+        $this->assertSame('0', $price->raw());
+    }
+
+    public function test_price_round_trips_for_two_decimal_currency()
+    {
+        config(['resrv-config.currency_isoCode' => 'USD']);
+
+        $price = Price::create(22.76);
+
+        $this->assertSame('22.76', $price->format());
+        $this->assertSame('2276', $price->raw());
+    }
+
+    public function test_price_create_rounds_sub_cent_input_half_up()
+    {
+        config(['resrv-config.currency_isoCode' => 'EUR']);
+
+        // Sub-cent precision must round half-up to the currency subunit, not truncate.
+        // (The old bcmul(*, 100) logic floored these: 77.359 -> 7735, 77.355 -> 7735.)
+        $this->assertSame('7736', Price::create('77.359')->raw());
+        $this->assertSame('7736', Price::create('77.355')->raw());
+        $this->assertSame('7735', Price::create('77.354')->raw());
+    }
 }

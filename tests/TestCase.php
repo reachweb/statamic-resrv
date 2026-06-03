@@ -17,6 +17,7 @@ use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
 use Statamic\Facades\User;
+use Statamic\Licensing\Outpost;
 use Statamic\Stache\Stores\UsersStore;
 use Statamic\Statamic;
 use Statamic\Support\Str;
@@ -37,6 +38,8 @@ class TestCase extends AddonTestCase
 
         $this->resetPostgresSequences();
 
+        $this->preventOutpostRequests();
+
         $this->withoutExceptionHandling();
 
         Rate::resetEntryCollectionCache();
@@ -54,6 +57,13 @@ class TestCase extends AddonTestCase
     protected function setUpFaker()
     {
         $this->faker = $this->makeFaker();
+    }
+
+    // Stop the licensing Outpost (hit by the ContactOutpost CP middleware on
+    // every CP route) from making real requests to outpost.statamic.com.
+    protected function preventOutpostRequests(): void
+    {
+        $this->instance(Outpost::class, \Mockery::mock(Outpost::class)->shouldIgnoreMissing());
     }
 
     public function multisite($site = 'en'): void

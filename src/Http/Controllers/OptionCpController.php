@@ -51,7 +51,7 @@ class OptionCpController extends Controller
         $data = $request->validate([
             'name' => 'required',
             'price' => 'required|numeric',
-            'price_type' => 'required',
+            'price_type' => 'required|in:free,fixed,perday',
             'published' => 'required|boolean',
         ]);
 
@@ -76,7 +76,7 @@ class OptionCpController extends Controller
             'required' => 'required|boolean',
             'published' => 'required|boolean',
         ]);
-        $option = $this->option->find($data['id'])->update($data);
+        $option = $this->option->findOrFail($data['id'])->update($data);
 
         return response()->json(['id' => $data['id']]);
     }
@@ -89,14 +89,14 @@ class OptionCpController extends Controller
             'id' => 'required|integer',
             'name' => 'required',
             'price' => 'required|numeric',
-            'price_type' => 'required',
+            'price_type' => 'required|in:free,fixed,perday',
             'order' => 'required|integer',
             'published' => 'required|boolean',
         ]);
 
         $data['option_id'] = $option->id;
 
-        $value = $this->value->find($data['id'])->update($data);
+        $value = $this->value->findOrFail($data['id'])->update($data);
 
         return response()->json(['id' => $data['id']]);
     }
@@ -130,7 +130,7 @@ class OptionCpController extends Controller
             'order' => 'required|integer',
         ]);
 
-        $this->option->find($data['id'])->changeOrder($data['order']);
+        $this->option->findOrFail($data['id'])->changeOrder($data['order']);
 
         return response(200);
     }
@@ -142,7 +142,7 @@ class OptionCpController extends Controller
             'order' => 'required|integer',
         ]);
 
-        $this->value->find($data['id'])->changeOrder($data['order']);
+        $this->value->findOrFail($data['id'])->changeOrder($data['order']);
 
         return response(200);
     }

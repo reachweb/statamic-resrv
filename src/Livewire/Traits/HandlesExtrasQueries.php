@@ -19,11 +19,7 @@ trait HandlesExtrasQueries
             ? $this->getExtrasWithParentPricing($reservation)
             : Extra::getPriceForDates($reservation);
 
-        $extras->transform(function ($extra) {
-            $extra->conditions = (new Extra)->find($extra->id)->conditions()->get();
-
-            return $extra;
-        });
+        $this->loadConditionsAsCollection($extras);
 
         $this->handleExtrasConditions($extras);
 
@@ -68,11 +64,7 @@ trait HandlesExtrasQueries
     {
         $extras = Extra::getPriceForDates(array_merge($data, ['item_id' => $entryId]));
 
-        $extras->transform(function ($extra) {
-            $extra->conditions = (new Extra)->find($extra->id)->conditions()->get();
-
-            return $extra;
-        });
+        $this->loadConditionsAsCollection($extras);
 
         $this->handleExtrasConditions($extras);
 
@@ -117,14 +109,32 @@ trait HandlesExtrasQueries
             }
 
             $extra->price = $totalPrice->format();
-            $extra->conditions = (new Extra)->find($extra->id)->conditions()->get();
 
             return $extra;
         });
 
+        $this->loadConditionsAsCollection($extras);
+
         $this->handleExtrasConditions($extras);
 
         return $extras;
+    }
+
+    /**
+     * Fetch every extra's conditions in a single query instead of a find() + conditions()->get()
+     * per extra (the N+1 this replaces). conditions() is declared hasOne, but an extra can hold
+     * multiple condition rows (extra_id is a plain index, not unique), so group all rows by extra_id
+     * and expose each set as the Collection downstream code counts/iterates.
+     */
+    protected function loadConditionsAsCollection(Collection $extras): void
+    {
+        $conditionsByExtra = ExtraCondition::whereIn('extra_id', $extras->pluck('id'))
+            ->get()
+            ->groupBy('extra_id');
+
+        $extras->each(function ($extra) use ($conditionsByExtra) {
+            $extra->setRelation('conditions', $conditionsByExtra->get($extra->id, collect()));
+        });
     }
 
     public function updateEnabledExtraPrices(): void

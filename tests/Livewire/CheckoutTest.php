@@ -2,13 +2,18 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\CouponUpdated;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
@@ -82,6 +87,30 @@ class CheckoutTest extends TestCase
             ->assertStatus(200);
     }
 
+    public function test_get_updated_prices_is_memoised_until_the_reservation_reloads()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $checkout = Livewire::test(Checkout::class)->instance();
+
+        // Mirrors the unset($this->reservation) that every price-changing action performs.
+        unset($checkout->reservation);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $first = $checkout->getUpdatedPrices();
+        $firstCount = count(DB::getQueryLog());
+
+        DB::flushQueryLog();
+        $second = $checkout->getUpdatedPrices();
+        $secondCount = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $this->assertGreaterThan(0, $firstCount, 'first call after a reservation reload must compute prices from the DB');
+        $this->assertSame(0, $secondCount, 'subsequent calls within the request must reuse the memoised prices, not re-query');
+        $this->assertEquals($first, $second);
+    }
+
     public function test_loads_reservation_and_entry()
     {
         session(['resrv_reservation' => $this->reservation->id]);
@@ -125,6 +154,30 @@ class CheckoutTest extends TestCase
             'quantity' => 1,
             'price' => '9.30',
         ]);
+    }
+
+    public function test_first_step_does_not_advance_when_assigning_extras_fails()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $extras = ResrvExtra::getPriceForDates($this->reservation);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extras->first()->id => [
+                'id' => $extras->first()->id,
+                'quantity' => 1,
+                'price' => $extras->first()->price->format(),
+                'name' => $extras->first()->name,
+            ]]);
+
+        // Simulate a database failure during the extras sync (e.g. deadlock/constraint).
+        // The flow must surface the error and stay on step 1 rather than advancing to
+        // payment with a total that doesn't match the (unattached) extras.
+        Schema::drop('resrv_reservation_extra');
+
+        $component->call('handleFirstStep')
+            ->assertSet('step', 1)
+            ->assertHasErrors('extras');
     }
 
     public function test_it_handles_second_step()
@@ -179,6 +232,87 @@ class CheckoutTest extends TestCase
         $component = Livewire::test(Checkout::class)
             ->call('handleSecondStep')
             ->assertRedirect(Entry::find(Config::get('resrv-config.checkout_completed_entry'))->absoluteUrl().'?payment_pending='.$reservation->id);
+    }
+
+    public function test_zero_payment_checkout_surfaces_error_when_reservation_expires_during_the_transition_race()
+    {
+        // Race: the row clears the PENDING pre-check, then expires before transitionTo() locks it —
+        // the zero-payment path must surface the expired error, not redirect as if it went through.
+        $reservation = Reservation::factory()->create([
+            'price' => '0',
+            'payment' => '0',
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $confirmedDispatched = false;
+        Event::listen(ReservationConfirmed::class, function () use (&$confirmedDispatched) {
+            $confirmedDispatched = true;
+        });
+
+        // Mount first so the component's initial load isn't what trips the hook below.
+        $component = Livewire::test(Checkout::class);
+
+        // Expire the row when transitionTo() opens its transaction (after the component's pre-checks).
+        $fired = false;
+        Event::listen(TransactionBeginning::class, function () use ($reservation, &$fired) {
+            if ($fired) {
+                return;
+            }
+            $fired = true;
+            DB::table('resrv_reservations')
+                ->where('id', $reservation->id)
+                ->update(['status' => ReservationStatus::EXPIRED->value]);
+        });
+
+        $component->call('handleSecondStep')
+            ->assertNoRedirect()
+            ->assertSet('reservationError', fn ($value) => is_string($value) && $value !== '');
+
+        $this->assertEquals('expired', $reservation->fresh()->status);
+        $this->assertFalse($confirmedDispatched, 'ReservationConfirmed must not fire when the confirm transition lost the race.');
+    }
+
+    public function test_without_payment_affiliate_checkout_surfaces_error_when_reservation_expires_during_the_transition_race()
+    {
+        // Race parity for the affiliate skip-payment (PARTNER) path: must surface the expired error
+        // rather than redirecting as if the affiliate booking was confirmed.
+        $reservation = Reservation::factory()->create([
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        $affiliate = Affiliate::factory()->create(['allow_skipping_payment' => true]);
+        $reservation->affiliate()->attach($affiliate->id, ['fee' => 0]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $confirmedDispatched = false;
+        Event::listen(ReservationConfirmed::class, function () use (&$confirmedDispatched) {
+            $confirmedDispatched = true;
+        });
+
+        // Mount first so the component's initial load isn't what trips the hook below.
+        $component = Livewire::test(Checkout::class);
+
+        // Expire the row when transitionTo() opens its transaction (after the component's pre-checks).
+        $fired = false;
+        Event::listen(TransactionBeginning::class, function () use ($reservation, &$fired) {
+            if ($fired) {
+                return;
+            }
+            $fired = true;
+            DB::table('resrv_reservations')
+                ->where('id', $reservation->id)
+                ->update(['status' => ReservationStatus::EXPIRED->value]);
+        });
+
+        $component->dispatch('checkout-form-submitted-without-payment')
+            ->assertNoRedirect()
+            ->assertSet('reservationError', fn ($value) => is_string($value) && $value !== '');
+
+        $this->assertEquals('expired', $reservation->fresh()->status);
+        $this->assertFalse($confirmedDispatched, 'ReservationConfirmed must not fire when the PARTNER transition lost the race.');
     }
 
     public function test_it_shows_an_arror_if_the_reservation_is_expired()

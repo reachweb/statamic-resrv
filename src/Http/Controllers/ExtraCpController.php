@@ -81,7 +81,7 @@ class ExtraCpController extends Controller
             'published' => 'required|boolean',
         ]);
 
-        $extra = $this->extra->find($data['id'])->update($data);
+        $extra = $this->extra->findOrFail($data['id'])->update($data);
 
         return response()->json(['id' => $data['id']]);
     }
@@ -95,7 +95,7 @@ class ExtraCpController extends Controller
         ]);
 
         foreach ($data as $item) {
-            $extra = $this->extra->find($item['id']);
+            $extra = $this->extra->findOrFail($item['id']);
             $extra->update([
                 'category_id' => $item['category_id'],
                 'order' => $item['order'],
@@ -156,17 +156,16 @@ class ExtraCpController extends Controller
             'conditions.*.comparison' => 'required_if:conditions.*.type,reservation_duration',
         ]);
 
-        if ($data['conditions']) {
-            $this->extra->find($extra_id)
-                ->conditions()
+        $extra = $this->extra->findOrFail($extra_id);
+
+        if (! empty($data['conditions'])) {
+            $extra->conditions()
                 ->updateOrCreate(
                     ['extra_id' => $extra_id],
                     $data
                 );
         } else {
-            $this->extra->find($extra_id)
-                ->conditions()
-                ->delete();
+            $extra->conditions()->delete();
         }
 
         return response(200);

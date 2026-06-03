@@ -38,6 +38,20 @@ class ResrvTagTest extends TestCase
             ->setContext([]);
     }
 
+    public function test_search_json_html_escapes_session_values()
+    {
+        // Antlers does not escape tag output, so the JSON itself must be safe to embed.
+        session(['resrv_search' => ['date_start' => '</script><script>alert(1)</script>']]);
+
+        $output = $this->tag->searchJson();
+
+        // No raw angle brackets reach the output. The round-trip below proves they were
+        // hex-escaped (\uXXXX), not stripped — so a JS consumer still gets the real value.
+        $this->assertStringNotContainsString('<', $output);
+        $this->assertStringNotContainsString('>', $output);
+        $this->assertEquals('</script><script>alert(1)</script>', json_decode($output, true)['date_start']);
+    }
+
     public function test_reservation_from_uri_returns_404_when_customer_is_null()
     {
         Reservation::factory()->create([
@@ -128,6 +142,36 @@ class ResrvTagTest extends TestCase
 
     public function test_cutoff_returns_no_rules_when_cutoff_disabled()
     {
+        $this->tag->setParameters(['entry' => $this->entry->id()]);
+
+        $result = $this->tag->cutoff();
+
+        $expected = [
+            'has_cutoff_rules' => false,
+            'starting_time' => null,
+            'cutoff_time' => null,
+            'cutoff_hours' => null,
+            'schedule_name' => null,
+        ];
+
+        $this->assertEquals($expected, $result);
+    }
+
+    public function test_cutoff_returns_no_rules_when_enabled_but_no_schedule_or_default()
+    {
+        // Cutoff is enabled for the entry but no schedule matches and no default is configured,
+        // so there is no cutoff to report — the tag must not surface a bogus midnight cutoff.
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        $this->resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => null,
+                'default_cutoff_hours' => null,
+            ],
+        ];
+        $this->resrvEntry->save();
+
         $this->tag->setParameters(['entry' => $this->entry->id()]);
 
         $result = $this->tag->cutoff();

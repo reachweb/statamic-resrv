@@ -16,6 +16,11 @@ class EntryDeleted
             return;
         }
 
+        // Availability/pricing is origin-keyed; skip localizations so a localization delete leaves the origin intact.
+        if ($event->entry->hasOrigin()) {
+            return;
+        }
+
         $id = $event->entry->id();
 
         // Delete availability

@@ -80,6 +80,11 @@ class AvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
+        // validated() omits nullable keys absent from the request; normalise so the unconditional
+        // is_null() reads below (and in the validation rule) don't hit undefined-array-key warnings.
+        $data['price'] = $data['price'] ?? null;
+        $data['available'] = $data['available'] ?? null;
+
         $rateIds = $data['rate_ids'] ?? $this->defaultRateIds($data['statamic_id']);
 
         foreach ($rateIds as $rateId) {
@@ -115,11 +120,8 @@ class AvailabilityCpController extends Controller
             ], 422);
         }
 
-        // Override prices for shared+independent rates are tied to the base
-        // row's date. When that base row is removed, every sibling shared+indep
-        // rate hanging off the same base must lose its override too — otherwise
-        // recreating the base row later silently revives the stale child
-        // prices. Always sweep by base_rate_id, not by the requested ids.
+        // Sweep shared+independent rate price overrides by base_rate_id: removing the base row
+        // must also remove sibling overrides, or recreating the base later revives stale prices.
         $sharedIndependentRateIds = Rate::withoutGlobalScopes()
             ->where('availability_type', 'shared')
             ->where('pricing_type', 'independent')
@@ -178,57 +180,73 @@ class AvailabilityCpController extends Controller
             }
 
             $terminal = ReservationStatus::terminal();
-            $terminalIds = [];
+
+            // Keys are namespaced ('r'<id> / 'c'<id>); bare integers are legacy entries resolved against both tables.
+            $parsed = collect($pending)->map(function ($entry) {
+                if (is_string($entry) && preg_match('/^([rc])(\d+)$/', $entry, $matches)) {
+                    return ['key' => $entry, 'type' => $matches[1] === 'c' ? 'child' : 'normal', 'id' => (int) $matches[2]];
+                }
+
+                return ['key' => $entry, 'type' => 'legacy', 'id' => (int) $entry];
+            });
+
+            $normalIds = $parsed->whereIn('type', ['normal', 'legacy'])->pluck('id')->unique();
+            $childIds = $parsed->whereIn('type', ['child', 'legacy'])->pluck('id')->unique();
+
+            $reservations = $normalIds->isEmpty()
+                ? collect()
+                : Reservation::whereIn('id', $normalIds->all())->get(['id', 'status', 'quantity'])->keyBy('id');
+
+            $childReservations = $childIds->isEmpty()
+                ? collect()
+                : ChildReservation::whereIn('resrv_child_reservations.id', $childIds->all())
+                    ->join('resrv_reservations', 'resrv_child_reservations.reservation_id', '=', 'resrv_reservations.id')
+                    ->get([
+                        'resrv_child_reservations.id',
+                        'resrv_child_reservations.quantity',
+                        'resrv_reservations.status as parent_status',
+                    ])
+                    ->keyBy('id');
+
+            $terminalKeys = [];
             $activeIds = [];
-            $quantityById = [];
+            $quantityByKey = [];
 
-            foreach (Reservation::whereIn('id', $pending)->get(['id', 'status', 'quantity']) as $parent) {
-                $quantityById[$parent->id] = (int) $parent->quantity;
-                if (in_array($parent->status, $terminal, true)) {
-                    $terminalIds[] = $parent->id;
+            foreach ($parsed as $entry) {
+                $status = null;
+                $quantity = 0;
+
+                if ($entry['type'] !== 'child' && $reservations->has($entry['id'])) {
+                    $status = $reservations[$entry['id']]->status;
+                    $quantity = (int) $reservations[$entry['id']]->quantity;
+                } elseif ($entry['type'] !== 'normal' && $childReservations->has($entry['id'])) {
+                    $status = $childReservations[$entry['id']]->parent_status;
+                    $quantity = (int) $childReservations[$entry['id']]->quantity;
+                }
+
+                $quantityByKey[$entry['key']] = $quantity;
+
+                // Null status means the holder is gone from both tables — treat as terminal with quantity 0.
+                if ($status === null || in_array($status, $terminal, true)) {
+                    $terminalKeys[] = $entry['key'];
                 } else {
-                    $activeIds[] = $parent->id;
+                    $activeIds[] = $entry['id'];
                 }
             }
 
-            $children = ChildReservation::whereIn('resrv_child_reservations.id', $pending)
-                ->join('resrv_reservations', 'resrv_child_reservations.reservation_id', '=', 'resrv_reservations.id')
-                ->get([
-                    'resrv_child_reservations.id',
-                    'resrv_child_reservations.quantity',
-                    'resrv_reservations.status as parent_status',
-                ]);
-
-            foreach ($children as $child) {
-                $quantityById[$child->id] = (int) $child->quantity;
-                if (in_array($child->parent_status, $terminal, true)) {
-                    $terminalIds[] = $child->id;
-                } else {
-                    $activeIds[] = $child->id;
-                }
-            }
-
-            // IDs not found in either table are vanished — treat as terminal but with quantity 0
-            // (the original quantity is unrecoverable; admin will have to reset `available` manually
-            // if accounting drifts).
-            $vanished = array_values(array_diff($pending, array_keys($quantityById)));
-            foreach ($vanished as $id) {
-                $terminalIds[] = $id;
-                $quantityById[$id] = 0;
-            }
-
-            $toClear = $force ? $pending : $terminalIds;
+            $activeIds = array_values(array_unique($activeIds));
+            $toClear = $force ? array_values($pending) : $terminalKeys;
 
             if (empty($toClear)) {
                 return response()->json([
                     'cleared' => 0,
-                    'still_active' => array_values($activeIds),
+                    'still_active' => $activeIds,
                 ]);
             }
 
             $restoredQuantity = 0;
-            foreach ($toClear as $id) {
-                $restoredQuantity += $quantityById[$id] ?? 0;
+            foreach ($toClear as $key) {
+                $restoredQuantity += $quantityByKey[$key] ?? 0;
             }
 
             $row->update([
@@ -239,13 +257,13 @@ class AvailabilityCpController extends Controller
             if ($force && ! empty($activeIds)) {
                 Log::warning('Resrv: admin force-cleared active holds from availability row', [
                     'availability_id' => $row->id,
-                    'forced_ids' => array_values($activeIds),
+                    'forced_ids' => $activeIds,
                 ]);
             }
 
             return response()->json([
                 'cleared' => count($toClear),
-                'still_active' => $force ? [] : array_values($activeIds),
+                'still_active' => $force ? [] : $activeIds,
             ]);
         });
     }
@@ -257,18 +275,14 @@ class AvailabilityCpController extends Controller
 
         $isSharedIndependent = $rate && $rate->hasIndependentSharedPricing();
 
-        // Shared+relative rates read from the base rate's availability rows.
-        // Writing prices into base rows would overwrite the base rate's data,
-        // and prices on relative rates derive from the modifier — there is no
-        // distinct price to set. Block direct price edits for them.
+        // Shared+relative rates derive their price from the modifier — block direct price edits.
         $skipPrice = ($resolvedRateId !== $rateId) && ! $isSharedIndependent;
 
         if ($skipPrice && ! is_null($data['price']) && is_null($data['available'])) {
             abort(422, __('Price cannot be edited directly for shared rates. Edit the base rate instead.'));
         }
 
-        // Only block when inventory is being changed — price-only edits don't disturb the
-        // available/pending invariant maintained by AvailabilityRepository.
+        // Only block on inventory changes — price-only edits don't disturb the available/pending invariant.
         if (! is_null($data['available']) && ActiveReservationsGuard::hasActiveReservationsForRange(
             $data['statamic_id'], $data['date_start'], $data['date_end'], [$resolvedRateId]
         )) {
@@ -289,10 +303,7 @@ class AvailabilityCpController extends Controller
                 $date = $day->isoFormat('YYYY-MM-DD');
 
                 if ($isSharedIndependent) {
-                    // Without a base row there is no inventory for this date —
-                    // writing a price override would be orphaned and the date
-                    // would still show as unavailable. Skip silently; the admin
-                    // must seed base availability via the base rate first.
+                    // No base row = no inventory; a price override here would be orphaned. Skip silently.
                     $baseRowExists = Availability::where([
                         'statamic_id' => $data['statamic_id'],
                         'date' => $date,

@@ -26,9 +26,10 @@ class ResrvSearch extends Scope
 
         $result = $this->getAvailability($searchData);
 
-        // TODO: throw an exception here
+        // Invalid searches (bad dates, over-limit quantity, lead-time violation, etc.) return no 'data' key —
+        // exclude all entries rather than surfacing the full collection as bookable.
         if (! isset($result['data']) && $result['message']['status'] === false) {
-            return $query;
+            return $query->whereIn('id', []);
         }
 
         $originIds = $result['data']->keys()->toArray();
@@ -59,9 +60,7 @@ class ResrvSearch extends Scope
             return $originIds;
         }
 
-        // Batch fetch localized entries for the current site in a single query.
-        // Statamic stores origin references, so we query entries in the current site
-        // whose origin is one of our origin IDs.
+        // Batch-fetch localized entries for the current site whose origin matches our IDs.
         $localizedEntries = Entry::query()
             ->where('site', $currentSite)
             ->whereIn('origin', $originIds)

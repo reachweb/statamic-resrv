@@ -107,14 +107,14 @@ class AvailabilityResults extends Component
             return;
         }
 
-        $this->getAvailability();
+        $this->loadAvailability();
 
         $this->runHooks('availability-results-updated', $this->availability);
 
         $this->dispatch('availability-results-updated');
     }
 
-    public function getAvailability(): void
+    public function loadAvailability(): void
     {
         if ($this->extraDays > 0) {
             $this->availability = $this->queryExtraAvailabilityForEntry();

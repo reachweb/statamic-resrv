@@ -17,7 +17,9 @@ class Resrv extends Tags
             return json_encode([]);
         }
 
-        return json_encode(session()->get('resrv_search'));
+        // HTML-safe flags so the JSON is safe to embed directly in markup or attributes;
+        // Antlers does not escape tag output, and default /-escaping alone is fragile.
+        return json_encode(session()->get('resrv_search'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     }
 
     public function reservationFromUri()

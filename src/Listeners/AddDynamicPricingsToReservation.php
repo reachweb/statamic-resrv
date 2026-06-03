@@ -10,7 +10,7 @@ class AddDynamicPricingsToReservation
     public function handle(ReservationCreated $event)
     {
         if ($event->data->hasCoupon()) {
-            session('resrv_coupon', $event->data->coupon);
+            session(['resrv_coupon' => $event->data->coupon]);
         }
 
         $dynamicPricingData = (new Availability)->getDynamicPricingsForReservation($event->reservation);

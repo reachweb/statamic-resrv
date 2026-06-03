@@ -184,7 +184,7 @@ const currentPage = ref(props.pricings.current_page ?? 1);
 const perPage = ref(props.pricings.per_page ?? 25);
 const total = computed(() => props.pricings.total ?? 0);
 const lastPage = computed(() => props.pricings.last_page ?? 1);
-const resetting = ref(false);
+const resetting = ref(false); // true while resetFilters() clears fields, so the watchers below skip per-field reloads
 let searchDebounce = null;
 
 const moveDialog = reactive({ open: false, mode: null, item: null, value: 1 });
@@ -283,6 +283,9 @@ function applyFilters() {
 }
 
 function resetFilters() {
+    // Clear search + filters at once without firing a reload per field: the watchers above
+    // early-return while `resetting` is true. Flipping the flag back and reloading inside
+    // nextTick keeps it true across the watcher flush, so the reset triggers exactly one reload.
     resetting.value = true;
     clearTimeout(searchDebounce);
     searchQuery.value = '';

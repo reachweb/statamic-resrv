@@ -83,11 +83,13 @@ class AffiliateCpController extends Controller
 
     public function delete(Request $request, Affiliate $affiliate)
     {
-        $affiliate->delete();
+        DB::transaction(function () use ($affiliate) {
+            $affiliate->delete();
 
-        DB::table('resrv_reservation_affiliate')
-            ->where('affiliate_id', $affiliate->id)
-            ->delete();
+            DB::table('resrv_reservation_affiliate')
+                ->where('affiliate_id', $affiliate->id)
+                ->delete();
+        });
 
         return response(200);
     }

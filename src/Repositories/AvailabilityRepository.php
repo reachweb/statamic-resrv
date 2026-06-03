@@ -18,6 +18,7 @@ use Reach\StatamicResrv\Models\Reservation;
 
 class AvailabilityRepository
 {
+    /** @var array<int, Rate|null> Rates loaded as the caller referenced them, keyed by requested id. */
     protected array $rateCache = [];
 
     protected static function groupConcat(string $column): string
@@ -30,23 +31,40 @@ class AvailabilityRepository
         };
     }
 
-    public function resolveBaseRateId(int $rateId): int
+    /**
+     * Loads (and memoizes) a rate exactly as the caller referenced it — without global scopes so a
+     * soft-deleted rate still resolves, selecting deleted_at so callers can reject trashed rates.
+     */
+    protected function findRequestedRate(int $rateId): ?Rate
     {
-        if (isset($this->rateCache[$rateId])) {
-            return $this->rateCache[$rateId];
+        if (! array_key_exists($rateId, $this->rateCache)) {
+            $this->rateCache[$rateId] = Rate::withoutGlobalScopes()
+                ->find($rateId, ['id', 'base_rate_id', 'availability_type', 'pricing_type', 'deleted_at']);
         }
 
-        $rate = Rate::withoutGlobalScopes()->find($rateId, ['id', 'base_rate_id', 'availability_type', 'pricing_type']);
+        return $this->rateCache[$rateId];
+    }
 
-        $resolved = ($rate?->base_rate_id && $rate->isShared())
+    public function resolveBaseRateId(int $rateId): int
+    {
+        $rate = $this->findRequestedRate($rateId);
+
+        return ($rate?->base_rate_id && $rate->isShared())
             ? (int) $rate->base_rate_id
             : $rateId;
-
-        return $this->rateCache[$rateId] = $resolved;
     }
 
     protected function applyRateFilter(Builder $query, int $rateId): void
     {
+        // A soft-deleted requested rate must surface nothing. resolveBaseRateId() maps a shared rate
+        // to its (possibly still-live) base id, so a deleted_at guard on the joined base row cannot
+        // reject a deleted *shared* rate — reject the requested rate itself here.
+        if ($this->findRequestedRate($rateId)?->trashed()) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
         $query->where('rate_id', $this->resolveBaseRateId($rateId));
     }
 
@@ -93,6 +111,7 @@ class AvailabilityRepository
             ->where('resrv_availabilities.date', '>=', $date_start)
             ->where('resrv_availabilities.date', '<', $date_end)
             ->where('resrv_availabilities.available', '>=', $quantity)
+            ->whereNull('resrv_rates.deleted_at')
             ->when($rateId, fn (Builder $query, int $rateId) => $this->applyRateFilter($query, $rateId))
             ->when(! $rateId, fn (Builder $query) => $this->applyPublishedRateFilter($query))
             ->groupBy('resrv_availabilities.statamic_id', 'resrv_availabilities.rate_id', 'resrv_rates.order')
@@ -112,6 +131,15 @@ class AvailabilityRepository
             ->groupBy('statamic_id');
     }
 
+    /**
+     * Validates that every day in date_start..date_end has an availability row WITH a price.
+     *
+     * NOTE: uses INCLUSIVE end-date semantics (both ends counted) — distinct from the EXCLUSIVE
+     * convention of the booking-engine queries here (availableBetween, itemAvailableBetween and
+     * getLockedAvailabilities treat date_end as the checkout/departure day, `date < date_end`).
+     * This matches its only caller, the ResrvAvailabilityExists CP rule, which validates the full
+     * range a CP user typed. Passing an engine-style exclusive range here would be off by one day.
+     */
     public function itemsExistAndHavePrices(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): bool
     {
         $result = Availability::selectRaw('COUNT(*) as total_days, SUM(CASE WHEN price IS NOT NULL THEN 1 ELSE 0 END) as days_with_prices')
@@ -164,7 +192,7 @@ class AvailabilityRepository
             }
         }
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId) {
+        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $rateId);
 
             foreach ($availabilities as $availability) {
@@ -173,26 +201,26 @@ class AvailabilityRepository
                 }
             }
 
-            $this->addToPending($availabilities, $reservationId, $quantity);
+            $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
     }
 
-    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId): void
+    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false): void
     {
         if ($rateId) {
             $rate = Rate::findOrFail($rateId);
 
             if ($rate->isShared()) {
-                $this->incrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId);
+                $this->incrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation);
 
                 return;
             }
         }
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId) {
+        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $rateId);
 
-            $this->removeFromPending($availabilities, $reservationId, $quantity);
+            $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
     }
 
@@ -220,18 +248,18 @@ class AvailabilityRepository
 
             $this->validateMaxAvailableForDateRange($rate, $date_start, $date_end, $reservationId, $quantity, $isChildReservation);
 
-            $this->addToPending($availabilities, $reservationId, $quantity);
+            $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
     }
 
-    protected function incrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId): void
+    protected function incrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false): void
     {
         $baseRateId = $rate->base_rate_id ?? $rate->id;
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $reservationId) {
+        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $baseRateId);
 
-            $this->removeFromPending($availabilities, $reservationId, $quantity);
+            $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
     }
 
@@ -246,38 +274,61 @@ class AvailabilityRepository
             ->get();
     }
 
-    protected function addToPending($availabilities, int $reservationId, int $quantity): void
+    /**
+     * Prefixes the id with 'r' or 'c' so normal and child reservations (independent sequences)
+     * don't collide in the pending list.
+     */
+    protected function pendingKey(int $reservationId, bool $isChildReservation): string
     {
+        return ($isChildReservation ? 'c' : 'r').$reservationId;
+    }
+
+    protected function addToPending($availabilities, int $reservationId, int $quantity, bool $isChildReservation = false): void
+    {
+        $key = $this->pendingKey($reservationId, $isChildReservation);
+
         foreach ($availabilities as $availability) {
             $pending = $availability->pending ?? [];
 
-            if (in_array($reservationId, $pending)) {
-                Log::error("Reservation ID $reservationId was already found in pending list for availability ID {$availability->id}");
+            if (in_array($key, $pending, true)) {
+                Log::error("Reservation key $key was already found in pending list for availability ID {$availability->id}");
 
                 continue;
             }
 
             $availability->update([
                 'available' => $availability->available - $quantity,
-                'pending' => array_merge($pending, [$reservationId]),
+                'pending' => array_merge($pending, [$key]),
             ]);
         }
     }
 
-    protected function removeFromPending($availabilities, int $reservationId, int $quantity): void
+    protected function removeFromPending($availabilities, int $reservationId, int $quantity, bool $isChildReservation = false): void
     {
+        $key = $this->pendingKey($reservationId, $isChildReservation);
+
         foreach ($availabilities as $availability) {
             $pending = $availability->pending ?? [];
 
-            if (! in_array($reservationId, $pending)) {
-                Log::error("Reservation ID $reservationId not found in pending list for availability ID {$availability->id}");
+            // Fall back to legacy bare-integer key for entries written before namespacing,
+            // so in-flight reservations still restore their stock after an upgrade.
+            $position = array_search($key, $pending, true);
+
+            if ($position === false) {
+                $position = array_search($reservationId, $pending, true);
+            }
+
+            if ($position === false) {
+                Log::error("Reservation key $key not found in pending list for availability ID {$availability->id}");
 
                 continue;
             }
 
+            unset($pending[$position]);
+
             $availability->update([
                 'available' => $availability->available + $quantity,
-                'pending' => array_values(array_diff($pending, [$reservationId])),
+                'pending' => array_values($pending),
             ]);
         }
     }
@@ -304,19 +355,24 @@ class AvailabilityRepository
         }
     }
 
-    public function getExhaustedDatesForRate(Rate $rate, int $quantity = 1): SupportCollection
+    public function getExhaustedDatesForRate(Rate $rate, int $quantity = 1, ?string $rangeStart = null, ?string $rangeEnd = null): SupportCollection
     {
         if (! $rate->isShared() || ! $rate->max_available) {
             return collect();
         }
 
-        $result = $this->getExhaustedDatesForRates(collect([$rate]), $quantity);
+        $result = $this->getExhaustedDatesForRates(collect([$rate]), $quantity, $rangeStart, $rangeEnd);
 
         return $result->get($rate->id, collect());
     }
 
-    /** @return SupportCollection<int, SupportCollection<int, string>> keyed by rate ID */
-    public function getExhaustedDatesForRates(SupportCollection $rates, int $quantity = 1): SupportCollection
+    /**
+     * @return SupportCollection<int, SupportCollection<int, string>> keyed by rate ID
+     *
+     * $rangeStart/$rangeEnd bound the lookup to an exclusive [rangeStart, rangeEnd) window so only
+     * overlapping reservations are loaded; when null the lookup is unbounded.
+     */
+    public function getExhaustedDatesForRates(SupportCollection $rates, int $quantity = 1, ?string $rangeStart = null, ?string $rangeEnd = null): SupportCollection
     {
         $sharedRates = $rates->filter(fn (Rate $rate) => $rate->isShared() && $rate->max_available);
 
@@ -328,15 +384,26 @@ class AvailabilityRepository
 
         $overlapping = Reservation::whereIn('rate_id', $rateIds)
             ->whereNotIn('status', ReservationStatus::terminal())
+            ->when($rangeEnd, fn ($q) => $q->where('date_start', '<', $rangeEnd))
+            ->when($rangeStart, fn ($q) => $q->where('date_end', '>', $rangeStart))
             ->get(['rate_id', 'quantity', 'date_start', 'date_end']);
 
         $overlappingChildren = ChildReservation::whereIn('rate_id', $rateIds)
             ->whereHas('parent', fn ($q) => $q->whereNotIn('status', ReservationStatus::terminal()))
+            ->when($rangeEnd, fn ($q) => $q->where('date_start', '<', $rangeEnd))
+            ->when($rangeStart, fn ($q) => $q->where('date_end', '>', $rangeStart))
             ->get(['rate_id', 'quantity', 'date_start', 'date_end']);
 
         $allByRate = $overlapping->concat($overlappingChildren)->groupBy('rate_id');
 
-        return $sharedRates->mapWithKeys(function (Rate $rate) use ($allByRate, $quantity) {
+        // Callers only ever read dates inside the requested [rangeStart, rangeEnd) window, so clamp
+        // each reservation to it before expanding — a short request overlapping a months-long booking
+        // would otherwise build hundreds of unused per-day entries. A null bound means unbounded on
+        // that side (no clamp). This mirrors the clamp in validateMaxAvailableForDateRange().
+        $windowStart = $rangeStart ? Carbon::parse($rangeStart) : null;
+        $windowEnd = $rangeEnd ? Carbon::parse($rangeEnd) : null;
+
+        return $sharedRates->mapWithKeys(function (Rate $rate) use ($allByRate, $quantity, $windowStart, $windowEnd) {
             $all = $allByRate->get($rate->id, collect());
 
             if ($all->isEmpty()) {
@@ -345,8 +412,12 @@ class AvailabilityRepository
 
             $dateCounts = [];
             foreach ($all as $res) {
-                // date_end is exclusive across the engine — the checkout day is free for the next guest.
-                $period = CarbonPeriod::create($res->date_start, $res->date_end, CarbonPeriod::EXCLUDE_END_DATE);
+                // date_end is exclusive (checkout day is free for the next guest); normalising to
+                // date strings keeps day boundaries stable against any time component.
+                $occupiedStart = ($windowStart && $res->date_start->lt($windowStart)) ? $windowStart : $res->date_start;
+                $occupiedEnd = ($windowEnd && $res->date_end->gt($windowEnd)) ? $windowEnd : $res->date_end;
+
+                $period = CarbonPeriod::create($occupiedStart->toDateString(), $occupiedEnd->toDateString(), CarbonPeriod::EXCLUDE_END_DATE);
                 foreach ($period as $date) {
                     $dateStr = $date->toDateString();
                     $dateCounts[$dateStr] = ($dateCounts[$dateStr] ?? 0) + $res->quantity;
@@ -388,13 +459,37 @@ class AvailabilityRepository
 
         $allOverlapping = $overlapping->concat($overlappingChildren);
 
+        // Build a date => booked-quantity map in a single pass (each reservation expanded once)
+        // rather than re-filtering the whole overlapping set per requested day. This keeps the
+        // work — and the lockForUpdate window when useLocks is true — minimal for long stays.
+        $windowStart = Carbon::parse($dateStart);
+        $windowEnd = Carbon::parse($dateEnd);
+
+        $bookedPerDay = [];
+        foreach ($allOverlapping as $reservation) {
+            // Only days inside the requested [dateStart, dateEnd) window are checked below, so clamp
+            // each reservation to that window before expanding: a short request overlapping a
+            // months-long booking would otherwise build hundreds of unused entries and needlessly
+            // widen the lockForUpdate window. date_end stays exclusive (checkout day is free), and
+            // normalising to date strings keeps day boundaries stable against any time component.
+            $occupiedStart = $reservation->date_start->lt($windowStart) ? $windowStart : $reservation->date_start;
+            $occupiedEnd = $reservation->date_end->gt($windowEnd) ? $windowEnd : $reservation->date_end;
+
+            $occupied = CarbonPeriod::create(
+                $occupiedStart->toDateString(),
+                $occupiedEnd->toDateString(),
+                CarbonPeriod::EXCLUDE_END_DATE
+            );
+            foreach ($occupied as $date) {
+                $dateStr = $date->toDateString();
+                $bookedPerDay[$dateStr] = ($bookedPerDay[$dateStr] ?? 0) + $reservation->quantity;
+            }
+        }
+
         $period = CarbonPeriod::create($dateStart, $dateEnd, CarbonPeriod::EXCLUDE_END_DATE);
 
         foreach ($period as $date) {
-            $dateStr = $date->toDateString();
-            $activeQuantity = $allOverlapping
-                ->filter(fn ($r) => $r->date_start->toDateString() <= $dateStr && $r->date_end->toDateString() > $dateStr)
-                ->sum('quantity');
+            $activeQuantity = $bookedPerDay[$date->toDateString()] ?? 0;
 
             if (($activeQuantity + $quantity) > $rate->max_available) {
                 throw new AvailabilityException(__('The maximum number of bookings for this rate has been reached.'));

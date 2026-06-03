@@ -66,7 +66,7 @@ class ExportCpController extends Controller
             fputcsv($handle, array_map(fn ($field) => $field['label'], $fields));
 
             $this->baseQuery($data)
-                ->with(['customer', 'extras', 'options.values'])
+                ->with(['customer', 'extras', 'options.values', 'rate', 'childs.rate'])
                 ->lazyById(500)
                 ->each(function (Reservation $reservation) use ($handle, $fields) {
                     $row = [];
@@ -474,9 +474,7 @@ class ExportCpController extends Controller
     protected function resolveRateLabel(Reservation $reservation): string
     {
         if ($reservation->type === 'parent') {
-            return $reservation->childs()
-                ->with('rate')
-                ->get()
+            return $reservation->childs
                 ->map(fn ($child) => $child->rate?->title)
                 ->filter()
                 ->unique()
@@ -489,9 +487,7 @@ class ExportCpController extends Controller
     protected function resolveRateSlug(Reservation $reservation): string
     {
         if ($reservation->type === 'parent') {
-            return $reservation->childs()
-                ->with('rate')
-                ->get()
+            return $reservation->childs
                 ->map(fn ($child) => $child->rate?->slug)
                 ->filter()
                 ->unique()

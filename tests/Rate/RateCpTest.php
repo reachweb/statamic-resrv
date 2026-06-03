@@ -512,6 +512,48 @@ class RateCpTest extends TestCase
         $this->assertEquals('120.00', $result->format());
     }
 
+    public function test_calculate_price_percent_decrease_floors_at_zero()
+    {
+        $rate = Rate::factory()->relative()->create([
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 150,
+        ]);
+
+        // A >100% decrease must not produce a negative price.
+        $result = $rate->calculatePrice(Price::create('100.00'));
+
+        $this->assertEquals('0.00', $result->format());
+    }
+
+    public function test_calculate_price_fixed_decrease_floors_at_zero()
+    {
+        $rate = Rate::factory()->relative()->create([
+            'modifier_type' => 'fixed',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 150,
+        ]);
+
+        // A flat decrease larger than the base must clamp to zero, not go negative.
+        $result = $rate->calculatePrice(Price::create('100.00'));
+
+        $this->assertEquals('0.00', $result->format());
+    }
+
+    public function test_calculate_total_price_fixed_decrease_floors_at_zero()
+    {
+        $rate = Rate::factory()->relative()->create([
+            'modifier_type' => 'fixed',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 60,
+        ]);
+
+        // 60/day over 2 days = 120 decrease on a 100 total — clamps to zero.
+        $result = $rate->calculateTotalPrice(Price::create('100.00'), 2);
+
+        $this->assertEquals('0.00', $result->format());
+    }
+
     public function test_is_available_for_dates()
     {
         $rate = Rate::factory()->withRestrictions()->create([

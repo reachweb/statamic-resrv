@@ -47,6 +47,17 @@ class Availability extends Model implements AvailabilityContract
 
     protected RateSorting $rateSorting = RateSorting::Order;
 
+    /**
+     * Per-instance caches for entry/rate lookups. The extra-days search reuses one Availability
+     * instance across every date period, so these avoid repeated queries for the same static data.
+     *
+     * @var array<string, Entry>
+     */
+    private array $resolvedResrvEntries = [];
+
+    /** @var array<string, Collection> */
+    private array $publishedRatesCache = [];
+
     protected static function newFactory()
     {
         return AvailabilityFactory::new();
@@ -190,7 +201,7 @@ class Availability extends Model implements AvailabilityContract
         );
     }
 
-    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null): void
+    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null, bool $isChildReservation = false): void
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
@@ -206,6 +217,7 @@ class Availability extends Model implements AvailabilityContract
             statamic_id: $statamic_id,
             rateId: $rateId,
             reservationId: $reservationId,
+            isChildReservation: $isChildReservation,
         );
     }
 
@@ -287,17 +299,30 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
+        // Pre-compute exhausted dates for all capped shared rates in one query; capacity checks
+        // below become in-memory lookups. getExhaustedDatesForRates ignores uncapped rates.
+        $exhaustedByRate = app(AvailabilityRepositoryClass::class)
+            ->getExhaustedDatesForRates($ratesMap->values(), $this->quantity, $this->date_start, $this->date_end);
+
+        // Pre-load shared-independent pricing (rate overrides + base-rate prices) for every grouped
+        // entry in one query each, so resolveSharedIndependentPrices() does no per-item queries below.
+        $statamicIds = $filteredAvailable->pluck('statamic_id')->unique()->values()->all();
+        $prefetchedPricing = [
+            'overrides' => $this->loadRateOverridesForRates($ratesMap->values(), $statamicIds, $this->date_start, $this->date_end),
+            'basePrices' => $this->loadBasePricesForRates($ratesMap->values(), $statamicIds, $this->date_start, $this->date_end),
+        ];
+
         $availableWithPricing = $filteredAvailable
             ->groupBy('statamic_id')
-            ->map(function ($items) use ($ratesMap, $sharedByBase, $selectedSharedRate) {
+            ->map(function ($items) use ($ratesMap, $sharedByBase, $selectedSharedRate, $exhaustedByRate, $prefetchedPricing) {
                 $processed = collect();
 
                 foreach ($items as $item) {
                     if ($selectedSharedRate) {
-                        if ($this->ratePassesRestrictions($selectedSharedRate)
+                        if ($this->ratePassesRestrictions($selectedSharedRate, $exhaustedByRate->get($selectedSharedRate->id, collect()))
                             && $selectedSharedRate->appliesToEntry($item->statamic_id)
                         ) {
-                            if ($populated = $this->populateAvailability($item, rateId: $selectedSharedRate->id, rate: $selectedSharedRate)) {
+                            if ($populated = $this->populateAvailability($item, rateId: $selectedSharedRate->id, rate: $selectedSharedRate, prefetchedPricing: $prefetchedPricing)) {
                                 $processed->push($populated);
                             }
                         }
@@ -307,35 +332,56 @@ class Availability extends Model implements AvailabilityContract
 
                     $baseRate = $ratesMap->get($item->rate_id);
 
-                    if ($baseRate && $this->ratePassesRestrictions($baseRate) && $baseRate->appliesToEntry($item->statamic_id)) {
+                    if ($baseRate && $this->ratePassesRestrictions($baseRate, $exhaustedByRate->get($baseRate->id, collect())) && $baseRate->appliesToEntry($item->statamic_id)) {
                         if ($populated = $this->populateAvailability($item)) {
                             $processed->push($populated);
                         }
                     }
 
                     foreach ($sharedByBase->get($item->rate_id, collect()) as $sharedRate) {
-                        if (! $this->ratePassesRestrictions($sharedRate)) {
+                        if (! $this->ratePassesRestrictions($sharedRate, $exhaustedByRate->get($sharedRate->id, collect()))) {
                             continue;
                         }
                         if (! $sharedRate->appliesToEntry($item->statamic_id)) {
                             continue;
                         }
-                        if ($populated = $this->populateAvailability($item, rateId: $sharedRate->id, rate: $sharedRate)) {
+                        if ($populated = $this->populateAvailability($item, rateId: $sharedRate->id, rate: $sharedRate, prefetchedPricing: $prefetchedPricing)) {
                             $processed->push($populated);
                         }
                     }
                 }
 
-                return $processed->sortBy('price', SORT_NUMERIC);
+                return $processed->sortBy(fn ($row) => (int) Price::create($row->get('price'))->raw());
             })
             ->filter(fn ($items) => $items->isNotEmpty());
 
         return new AvailabilityResource($availableWithPricing, $request);
     }
 
+    /**
+     * Returns (and memoizes) the resrv entry mirror row for a Statamic id.
+     */
+    protected function resolveResrvEntry($statamic_id): Entry
+    {
+        return $this->resolvedResrvEntries[$statamic_id] ??= Entry::whereItemId($statamic_id);
+    }
+
+    /**
+     * Returns (and memoizes) an entry's published rate set. Date-restriction checks still run
+     * per call; only the DB query is cached.
+     */
+    protected function publishedRatesForEntry($itemId, bool $withEntries = false): Collection
+    {
+        $key = $itemId.'|'.($withEntries ? 'with-entries' : 'bare');
+
+        return $this->publishedRatesCache[$key] ??= ($withEntries
+            ? Rate::forEntry($itemId)->published()->with('entries')->get()
+            : Rate::forEntry($itemId)->published()->get());
+    }
+
     protected function getSpecificItemCollection($statamic_id)
     {
-        $resrvEntry = Entry::whereItemId($statamic_id);
+        $resrvEntry = $this->resolveResrvEntry($statamic_id);
 
         $request = $this->requestCollection();
 
@@ -388,7 +434,7 @@ class Availability extends Model implements AvailabilityContract
 
     protected function resolveRateForResult($result, Entry $entry): ?Rate
     {
-        $rates = Rate::forEntry($entry->item_id)->published()->with('entries')->get();
+        $rates = $this->publishedRatesForEntry($entry->item_id, withEntries: true);
 
         foreach ($rates as $rate) {
             $matchesResult = ($rate->isShared() && $rate->base_rate_id)
@@ -415,7 +461,7 @@ class Availability extends Model implements AvailabilityContract
             statamic_id: $entry->id()
         )->get()->keyBy('rate_id');
 
-        $rates = Rate::forEntry($entry->item_id)->published()->get();
+        $rates = $this->publishedRatesForEntry($entry->item_id);
 
         foreach ($rates as $rate) {
             $result = ($rate->isShared() && $rate->base_rate_id)
@@ -441,19 +487,15 @@ class Availability extends Model implements AvailabilityContract
     protected function getMultipleRatesAvailability(Entry $entry, $request)
     {
         return new AvailabilityItemResource(
-            $this->buildRatesAvailabilityCollection($entry)->sortBy('price', SORT_NUMERIC),
+            $this->buildRatesAvailabilityCollection($entry)->sortBy(fn ($row) => (int) Price::create($row->get('price'))->raw()),
             $request
         );
     }
 
     protected function getCheapestRateAvailability(Entry $entry, $request)
     {
-        // buildRatesAvailabilityCollection() yields rates in OrderScope order (order, then id).
-        // Scan for the lowest price and keep the FIRST rate that reaches it (strict lessThan),
-        // so a price tie resolves to the lowest-order rate — the same rate the default "order"
-        // sorting surfaces. This is deterministic by construction: it depends only on the
-        // iteration order, not on sortBy() being a stable sort. Comparison goes through Price
-        // (integer-cents) rather than float casts to stay decimal-safe.
+        // Scan for the lowest price; keep the FIRST rate that reaches it (strict lessThan) so
+        // ties resolve to lowest-order rate. Comparison goes through Price (integer cents).
         $cheapest = $this->buildRatesAvailabilityCollection($entry)
             ->reduce(function ($cheapest, $rate) {
                 if ($cheapest === null) {
@@ -469,19 +511,30 @@ class Availability extends Model implements AvailabilityContract
         );
     }
 
-    protected function ratePassesRestrictions(Rate $rate): bool
+    protected function ratePassesRestrictions(Rate $rate, ?Collection $exhaustedDates = null): bool
     {
         return $rate->published
             && $rate->isAvailableForDates($this->date_start, $this->date_end)
             && $rate->meetsStayRestrictions($this->duration)
             && $rate->meetsBookingLeadTime($this->date_start)
-            && $this->rateHasCapacity($rate);
+            && $this->rateHasCapacity($rate, $exhaustedDates);
     }
 
-    protected function rateHasCapacity(Rate $rate): bool
+    protected function rateHasCapacity(Rate $rate, ?Collection $exhaustedDates = null): bool
     {
         if (! $rate->isShared() || ! $rate->max_available) {
             return true;
+        }
+
+        // A quantity above the cap can never be satisfied; the exhausted-date set only flags
+        // already-booked dates, so reject it up front.
+        if ($this->quantity > $rate->max_available) {
+            return false;
+        }
+
+        // Use the pre-computed exhausted-date set when available (browse path).
+        if ($exhaustedDates !== null) {
+            return ! $this->periodIntersectsExhaustedDates($exhaustedDates);
         }
 
         return app(AvailabilityRepositoryClass::class)->checkMaxAvailable(
@@ -492,11 +545,32 @@ class Availability extends Model implements AvailabilityContract
         );
     }
 
-    protected function populateAvailability($results, $label = null, ?int $rateId = null, ?Rate $rate = null): ?Collection
+    /**
+     * Returns true when any night in [date_start, date_end) is in the exhausted-date set.
+     * date_end is exclusive — the checkout day is free.
+     */
+    private function periodIntersectsExhaustedDates(Collection $exhaustedDates): bool
+    {
+        if ($exhaustedDates->isEmpty()) {
+            return false;
+        }
+
+        $lookup = $exhaustedDates->flip();
+
+        foreach (CarbonPeriod::create($this->date_start, $this->date_end, CarbonPeriod::EXCLUDE_END_DATE) as $date) {
+            if ($lookup->has($date->toDateString())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    protected function populateAvailability($results, $label = null, ?int $rateId = null, ?Rate $rate = null, ?array $prefetchedPricing = null): ?Collection
     {
         $effectiveRateId = $rateId ?? $this->rateId ?? $results->rate_id;
 
-        $prices = $this->getPrices($results->prices, $results->statamic_id, $effectiveRateId, $rate);
+        $prices = $this->getPrices($results->prices, $results->statamic_id, $effectiveRateId, $rate, $prefetchedPricing);
 
         if ($prices['reservationPrice'] === null) {
             return null;
@@ -714,8 +788,10 @@ class Availability extends Model implements AvailabilityContract
                 fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date)
             );
 
-            if ($rate->isShared() && $rate->max_available) {
-                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate);
+            // Skip for empty set: no dates to reject, and a null range would cause an unbounded scan.
+            if ($results->isNotEmpty() && $rate->isShared() && $rate->max_available) {
+                [$rangeStart, $rangeEnd] = $this->exhaustedDateWindow($results);
+                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, 1, $rangeStart, $rangeEnd);
                 if ($exhaustedDates->isNotEmpty()) {
                     $results = $results->reject(fn ($item) => $exhaustedDates->contains($item->date));
                 }
@@ -729,6 +805,9 @@ class Availability extends Model implements AvailabilityContract
         return $results
             ->groupBy(fn ($item) => Carbon::parse($item->date)->format('Y-m-d'))
             ->map(fn ($item) => $item->sortBy(fn ($row) => (int) $row->price->raw())->firstWhere('available', '>', 0))
+            // Drop dates whose every row is sold out (firstWhere returns null) so the calendar
+            // contract is "date => cheapest available row", never a null mixed in with arrays.
+            ->filter()
             ->toArray();
     }
 
@@ -783,8 +862,16 @@ class Availability extends Model implements AvailabilityContract
                 $results = $results->filter(fn ($item) => $rate->dateIsWithinWindow($item->date) && $rate->meetsBookingLeadTime($item->date));
             }
 
-            if ($rate?->isShared() && $rate->max_available) {
-                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, $quantity);
+            // A quantity above the cap can never be satisfied; the exhausted-date set only flags
+            // already-booked dates so it would miss this. Drop every date up front.
+            if ($rate?->isShared() && $rate->max_available && $quantity > $rate->max_available) {
+                return [];
+            }
+
+            // Skip for empty set: no dates to reject, and a null range would cause an unbounded scan.
+            if ($results->isNotEmpty() && $rate?->isShared() && $rate->max_available) {
+                [$rangeStart, $rangeEnd] = $this->exhaustedDateWindow($results);
+                $exhaustedDates = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRate($rate, $quantity, $rangeStart, $rangeEnd);
                 if ($exhaustedDates->isNotEmpty()) {
                     $results = $results->reject(fn ($item) => $exhaustedDates->contains($item->date));
                 }
@@ -862,18 +949,45 @@ class Availability extends Model implements AvailabilityContract
         return $this->expandRatesFromBaseResults($baseResults, $rates, $quantity, $dateStart);
     }
 
+    /**
+     * Exclusive [start, end) window covering the given availability rows, so the exhausted-date
+     * lookup only loads overlapping reservations. End is pushed one day past the last night
+     * (date_end is exclusive). Returns [null, null] for an empty set.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    private function exhaustedDateWindow(Collection $results): array
+    {
+        $dates = $results->pluck('date')->filter()->map(fn ($d) => Carbon::parse($d)->toDateString());
+
+        if ($dates->isEmpty()) {
+            return [null, null];
+        }
+
+        return [$dates->min(), Carbon::parse($dates->max())->addDay()->toDateString()];
+    }
+
     private function expandRatesFromBaseResults(Collection $baseResults, Collection $rates, int $quantity = 1, ?string $dateStart = null): Collection
     {
+        // With no base rows there is nothing to expand, and an empty set would produce a null
+        // date window causing an unbounded exhausted-date scan.
+        if ($baseResults->isEmpty()) {
+            return collect();
+        }
+
         $baseGrouped = $baseResults->groupBy('rate_id');
         $expanded = collect();
-
-        $exhaustedByRate = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRates($rates, $quantity);
 
         $statamicIds = $baseResults->pluck('statamic_id')->unique()->values()->all();
 
         $dates = $baseResults->pluck('date')->map(fn ($d) => Carbon::parse($d)->toDateString());
         $rangeStart = $dates->min();
         $rangeEnd = $dates->max();
+
+        // date_end is exclusive, so push the bound one day past the last night.
+        $exhaustedRangeEnd = $rangeEnd ? Carbon::parse($rangeEnd)->addDay()->toDateString() : null;
+
+        $exhaustedByRate = app(AvailabilityRepositoryClass::class)->getExhaustedDatesForRates($rates, $quantity, $rangeStart, $exhaustedRangeEnd);
 
         $overridesByRate = $this->loadRateOverridesForRates($rates, $statamicIds, $rangeStart, $rangeEnd);
 
@@ -912,6 +1026,12 @@ class Availability extends Model implements AvailabilityContract
 
             $rateRows = $rateRows->filter(fn ($row) => $rate->dateIsWithinWindow($row->date) && $rate->meetsBookingLeadTime($row->date));
 
+            // A quantity above the cap can never be satisfied; the exhausted-date set only flags
+            // already-booked dates so it would miss this. Drop every row for the rate up front.
+            if ($rate->isShared() && $rate->max_available && $quantity > $rate->max_available) {
+                continue;
+            }
+
             $exhaustedDates = $exhaustedByRate->get($rate->id, collect());
             if ($exhaustedDates->isNotEmpty()) {
                 $rateRows = $rateRows->reject(fn ($row) => $exhaustedDates->contains($row->date));
@@ -949,6 +1069,33 @@ class Availability extends Model implements AvailabilityContract
             ->whereIn('statamic_id', $statamicIds)
             ->when($dateStart, fn ($q) => $q->where('date', '>=', $dateStart))
             ->when($dateEnd, fn ($q) => $q->where('date', '<=', $dateEnd))
+            ->get()
+            ->groupBy('rate_id')
+            ->map(function ($rows) {
+                return $rows->keyBy(fn ($row) => $row->statamic_id.'|'.Carbon::parse($row->getRawOriginal('date'))->toDateString());
+            });
+    }
+
+    /**
+     * Batch-loads base-rate availability prices, keyed by base rate id then "statamic_id|date",
+     * for every shared-independent rate that falls back to its base rate on un-overridden dates.
+     */
+    protected function loadBasePricesForRates(Collection $rates, array $statamicIds, ?string $dateStart = null, ?string $dateEnd = null): Collection
+    {
+        $baseRateIds = $rates
+            ->filter(fn ($rate) => $rate->hasIndependentSharedPricing() && $rate->base_rate_id)
+            ->pluck('base_rate_id')
+            ->unique()
+            ->values();
+
+        if ($baseRateIds->isEmpty() || empty($statamicIds)) {
+            return collect();
+        }
+
+        return Availability::whereIn('rate_id', $baseRateIds->all())
+            ->whereIn('statamic_id', $statamicIds)
+            ->when($dateStart, fn ($q) => $q->where('date', '>=', $dateStart))
+            ->when($dateEnd, fn ($q) => $q->where('date', '<', $dateEnd))
             ->get()
             ->groupBy('rate_id')
             ->map(function ($rows) {

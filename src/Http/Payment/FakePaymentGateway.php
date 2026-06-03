@@ -5,7 +5,6 @@ namespace Reach\StatamicResrv\Http\Payment;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
@@ -157,40 +156,36 @@ class FakePaymentGateway implements PaymentInterface
         }
 
         if ($request->get('status') === 'success') {
-            // Terminal-state reservations (expired/refunded/partner) receiving a success
-            // webhook represent orphan payments — manual reconciliation required.
-            if (in_array($reservation->status, [
-                ReservationStatus::EXPIRED->value,
-                ReservationStatus::REFUNDED->value,
-                ReservationStatus::PARTNER->value,
-            ], true)) {
-                Log::warning('Fake gateway success webhook for a terminal reservation — would require manual refund on a real gateway.', [
-                    'reservation_id' => $reservation->id,
-                    'reservation_status' => $reservation->status,
-                ]);
+            $paymentId = (string) ($reservation->payment_id ?: 'fake_intent');
 
-                OrphanedPaymentNotification::dispatchFor($reservation, (string) ($reservation->payment_id ?: 'fake_intent'));
+            // Terminal reservation: the charge can't attach to a live booking, so notify and stop.
+            if (OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId)) {
+                return response()->json([], 200);
+            }
+
+            if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
+                ReservationConfirmed::dispatch($reservation);
 
                 return response()->json([], 200);
             }
 
-            if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
-                ReservationConfirmed::dispatch($reservation);
-            }
+            // Lost the confirm race (row expired under the lock): surface any orphaned charge.
+            $reservation->refresh();
+            OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId);
 
             return response()->json([], 200);
         }
         if ($request->get('status') === 'fail') {
-            if ($reservation->status !== ReservationStatus::PENDING->value) {
-                return response()->json([], 200);
-            }
-
-            if ($reservation->transitionTo(ReservationStatus::REFUNDED)) {
-                ReservationCancelled::dispatch($reservation);
-            }
+            // Mirror StripePaymentGateway: a failed attempt is retryable, so leave it PENDING.
+            Log::info('Fake gateway payment failure; leaving reservation PENDING for retry.', [
+                'reservation_id' => $reservation->id,
+            ]);
 
             return response()->json([], 200);
         }
+
+        // Mirror StripePaymentGateway: always return a Response (never fall through to null).
+        return response()->json([], 200);
     }
 
     public function verifyWebhook()

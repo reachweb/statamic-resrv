@@ -4,11 +4,14 @@ namespace Reach\StatamicResrv\Tests\Rate;
 
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\RatePrice;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -85,7 +88,7 @@ class RateSharedAvailabilityTest extends TestCase
         // Base rate's availability should be decremented, not shared rate's
         foreach ($this->getBaseRateAvailabilities($setup) as $availability) {
             $this->assertEquals(4, $availability->available);
-            $this->assertContains(1, $availability->pending);
+            $this->assertContains('r1', $availability->pending);
         }
     }
 
@@ -132,6 +135,83 @@ class RateSharedAvailabilityTest extends TestCase
         );
     }
 
+    public function test_max_available_is_enforced_per_day_for_partially_overlapping_reservations()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 2);
+
+        // Two existing reservations occupy ONLY the second night, pushing that single day
+        // to the cap of 2 while the first night stays free.
+        foreach (range(1, 2) as $i) {
+            Reservation::factory()->create([
+                'item_id' => $setup['entry']->id(),
+                'rate_id' => $setup['sharedRate']->id,
+                'date_start' => $setup['startDate']->copy()->addDay()->toDateString(),
+                'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+                'quantity' => 1,
+                'status' => 'confirmed',
+            ]);
+        }
+
+        // New booking spans both nights. The first night is free, but the second night is
+        // already at capacity, so the per-day check must reject it.
+        $newReservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'status' => 'pending',
+        ]);
+
+        $this->expectException(AvailabilityException::class);
+
+        AvailabilityRepository::decrement(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $newReservation->id,
+        );
+    }
+
+    public function test_max_available_clamps_long_overlapping_reservation_to_requested_night()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        // A two-month reservation holds the cap and extends well before AND after the single night
+        // being requested, so its expansion must be clamped to the requested window — yet the day
+        // it overlaps must still count.
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->copy()->subDays(30)->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(30)->toDateString(),
+            'quantity' => 1,
+            'status' => 'confirmed',
+        ]);
+
+        $newReservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDay()->toDateString(),
+            'quantity' => 1,
+            'status' => 'pending',
+        ]);
+
+        $this->expectException(AvailabilityException::class);
+
+        AvailabilityRepository::decrement(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDay()->toDateString(),
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $newReservation->id,
+        );
+    }
+
     public function test_shared_rate_cancellation_increments_base_rate()
     {
         $setup = $this->createSharedSetup(baseAvailable: 5);
@@ -164,7 +244,7 @@ class RateSharedAvailabilityTest extends TestCase
         // Should be back to original
         foreach ($this->getBaseRateAvailabilities($setup) as $availability) {
             $this->assertEquals(5, $availability->available);
-            $this->assertNotContains(1, $availability->pending);
+            $this->assertNotContains('r1', $availability->pending);
         }
     }
 
@@ -365,6 +445,91 @@ class RateSharedAvailabilityTest extends TestCase
             $setup['startDate']->copy()->addDays(2)->toDateString(),
             $exhausted->all(),
             'checkout day (date_end) must remain bookable for back-to-back reservations'
+        );
+    }
+
+    public function test_get_exhausted_dates_is_bounded_to_the_requested_range()
+    {
+        // Only reservations overlapping the requested window should be loaded; out-of-window bookings must not leak in.
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        // In-window booking: exhausts the first searched night (max_available = 1).
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDay()->toDateString(),
+            'quantity' => 1,
+            'status' => 'confirmed',
+        ]);
+
+        // Out-of-window booking a year in the past.
+        $pastStart = $setup['startDate']->copy()->subYear();
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $pastStart->toDateString(),
+            'date_end' => $pastStart->copy()->addDay()->toDateString(),
+            'quantity' => 1,
+            'status' => 'confirmed',
+        ]);
+
+        $exhausted = AvailabilityRepository::getExhaustedDatesForRate(
+            $setup['sharedRate'],
+            1,
+            $setup['startDate']->toDateString(),
+            $setup['startDate']->copy()->addDays(3)->toDateString(),
+        );
+
+        $this->assertContains(
+            $setup['startDate']->toDateString(),
+            $exhausted->all(),
+            'in-range exhausted night should be returned'
+        );
+
+        $this->assertNotContains(
+            $pastStart->toDateString(),
+            $exhausted->all(),
+            'a reservation outside the requested window must not leak into the exhausted dates'
+        );
+    }
+
+    public function test_get_exhausted_dates_treats_the_window_end_as_exclusive()
+    {
+        // date_end is exclusive: a booking on the last night is only counted when the window end is that night + 1 day.
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        $lastNight = $setup['startDate']->copy()->addDays(2);
+
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $lastNight->toDateString(),
+            'date_end' => $lastNight->copy()->addDay()->toDateString(),
+            'quantity' => 1,
+            'status' => 'confirmed',
+        ]);
+
+        $rangeStart = $setup['startDate']->toDateString();
+
+        // Exclusive end one day past the last night (what the callers pass): the night is counted.
+        $withExclusiveEnd = AvailabilityRepository::getExhaustedDatesForRate(
+            $setup['sharedRate'], 1, $rangeStart, $lastNight->copy()->addDay()->toDateString()
+        );
+        $this->assertContains(
+            $lastNight->toDateString(),
+            $withExclusiveEnd->all(),
+            'last night must be counted when the window end is exclusive (last night + 1 day)'
+        );
+
+        // Ending the window on the last night itself drops the booking (date_start < end is false).
+        $withTooNarrowEnd = AvailabilityRepository::getExhaustedDatesForRate(
+            $setup['sharedRate'], 1, $rangeStart, $lastNight->toDateString()
+        );
+        $this->assertNotContains(
+            $lastNight->toDateString(),
+            $withTooNarrowEnd->all(),
+            'a window ending on the last night excludes a booking that starts that night'
         );
     }
 
@@ -986,5 +1151,387 @@ class RateSharedAvailabilityTest extends TestCase
             rateId: $setup['sharedRate']->id,
             reservationId: $newReservation->id,
         );
+    }
+
+    public function test_browse_collection_batches_shared_rate_capacity_checks_across_entries()
+    {
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        // Collection-wide shared rate with a cap; previously triggered a per-entry reservation query.
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-capped',
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 5,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        $addEntryWithAvailability = function () use ($baseRate, $startDate) {
+            $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+            Availability::factory()
+                ->count(3)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                    ['date' => $startDate->copy()->addDays(2)],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $baseRate->id,
+                    'price' => 100,
+                    'available' => 10,
+                ]);
+        };
+
+        $searchData = [
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ];
+
+        $countReservationQueries = function () use ($searchData) {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            $result = app(Availability::class)->getAvailable($searchData);
+            $this->assertTrue($result['message']['status']);
+
+            $count = collect(DB::getQueryLog())
+                ->filter(fn ($query) => str_contains($query['query'], 'resrv_reservations') || str_contains($query['query'], 'resrv_child_reservations'))
+                ->count();
+
+            DB::disableQueryLog();
+
+            return $count;
+        };
+
+        $addEntryWithAvailability();
+        $addEntryWithAvailability();
+        $queriesForTwoEntries = $countReservationQueries();
+
+        $addEntryWithAvailability();
+        $addEntryWithAvailability();
+        $queriesForFourEntries = $countReservationQueries();
+
+        // Exhausted dates are resolved once per search, not once per entry.
+        $this->assertSame(
+            $queriesForTwoEntries,
+            $queriesForFourEntries,
+            'Shared-rate capacity checks must not issue a reservation query per browsed entry.'
+        );
+    }
+
+    public function test_browse_collection_batches_shared_independent_pricing_queries_across_entries()
+    {
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        // Shared rate with its own per-date price overrides (independent pricing).
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-independent',
+            'base_rate_id' => $baseRate->id,
+            'require_price_override' => false,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        // Each entry overrides only the first night, so the resolver must also fall back to the
+        // base-rate price for the second night — exercising both per-item queries pre-batching.
+        $addEntryWithAvailability = function () use ($baseRate, $sharedRate, $startDate) {
+            $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+            Availability::factory()
+                ->count(2)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $baseRate->id,
+                    'price' => 100,
+                    'available' => 10,
+                ]);
+
+            RatePrice::create([
+                'rate_id' => $sharedRate->id,
+                'statamic_id' => $entry->id(),
+                'date' => $startDate->toDateString(),
+                'price' => 50,
+            ]);
+
+            return $entry;
+        };
+
+        $searchData = [
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ];
+
+        $countPricingQueries = function () use ($searchData) {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            $result = app(Availability::class)->getAvailable($searchData);
+            $this->assertTrue($result['message']['status']);
+
+            $log = collect(DB::getQueryLog());
+            $counts = [
+                'rate_prices' => $log->filter(fn ($query) => str_contains($query['query'], 'resrv_rate_prices'))->count(),
+                'availabilities' => $log->filter(fn ($query) => str_contains($query['query'], 'select') && str_contains($query['query'], 'resrv_availabilities'))->count(),
+            ];
+
+            DB::disableQueryLog();
+
+            return [$counts, $result];
+        };
+
+        $addEntryWithAvailability();
+        $addEntryWithAvailability();
+        [$twoEntryCounts, $twoEntryResult] = $countPricingQueries();
+
+        $addEntryWithAvailability();
+        $addEntryWithAvailability();
+        [$fourEntryCounts] = $countPricingQueries();
+
+        // Override and base-price lookups are batched once per search, not once per browsed entry.
+        $this->assertSame(
+            $twoEntryCounts['rate_prices'],
+            $fourEntryCounts['rate_prices'],
+            'Shared-independent override lookups must not issue a rate-price query per browsed entry.'
+        );
+        $this->assertSame(
+            $twoEntryCounts['availabilities'],
+            $fourEntryCounts['availabilities'],
+            'Base-rate price fallback must not issue an availability query per browsed entry.'
+        );
+
+        // Pricing is unchanged: first night uses the 50 override, second night falls back to base 100.
+        $firstEntryId = $twoEntryResult['data']->keys()->first();
+        $sharedOption = $twoEntryResult['data'][$firstEntryId]->firstWhere('rate_id', $sharedRate->id);
+        $this->assertNotNull($sharedOption);
+        $this->assertEquals('150.00', $sharedOption['price']);
+    }
+
+    public function test_browse_collection_excludes_exhausted_shared_rate_capacity()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Base rate unpublished, so only the shared rate (capped at 1) is a browse candidate.
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-capped',
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 1,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(3)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+                ['date' => $startDate->copy()->addDays(2)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        $searchData = [
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+        ];
+
+        // With the single slot free, the browse offers the shared rate.
+        $this->assertTrue(app(Availability::class)->getAvailable($searchData)['message']['status']);
+
+        // An active reservation fills the single slot for the searched dates.
+        Reservation::factory()->create([
+            'item_id' => $entry->id(),
+            'rate_id' => $sharedRate->id,
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'status' => 'confirmed',
+        ]);
+
+        // Cap exhausted — entry drops out of browse results.
+        $this->assertFalse(app(Availability::class)->getAvailable($searchData)['message']['status']);
+    }
+
+    public function test_browse_collection_rejects_shared_rate_when_quantity_exceeds_cap()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Base rate unpublished, so only the shared rate (capped at 1) is a browse candidate.
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-capped',
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 1,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(3)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+                ['date' => $startDate->copy()->addDays(2)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // quantity 2 exceeds cap of 1, so the rate must be rejected even with no reservations.
+        $searchData = [
+            'date_start' => $startDate->toDateString(),
+            'date_end' => $startDate->copy()->addDays(2)->toDateString(),
+            'quantity' => 2,
+        ];
+
+        $this->assertFalse(app(Availability::class)->getAvailable($searchData)['message']['status']);
+
+        // The same dates with a quantity that fits the cap are still bookable.
+        $searchData['quantity'] = 1;
+        $this->assertTrue(app(Availability::class)->getAvailable($searchData)['message']['status']);
+    }
+
+    public function test_show_all_rates_calendar_rejects_shared_rate_when_quantity_exceeds_cap()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Base rate unpublished, so only the shared rate (capped at 1) is a calendar candidate.
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'published' => false,
+        ]);
+
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-capped',
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 1,
+            'published' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(3)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+                ['date' => $startDate->copy()->addDays(2)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // quantity 2 exceeds cap of 1; all-rates calendar must return nothing.
+        $exceedsCap = app(Availability::class)->getAvailableDatesFromDate(
+            $entry->id(), $startDate->toDateString(), 2, null, true,
+        );
+        $this->assertEmpty($exceedsCap);
+
+        // A quantity that fits the cap still renders the calendar dates.
+        $fitsCap = app(Availability::class)->getAvailableDatesFromDate(
+            $entry->id(), $startDate->toDateString(), 1, null, true,
+        );
+        $this->assertNotEmpty($fitsCap);
+    }
+
+    public function test_selected_rate_calendar_rejects_shared_rate_when_quantity_exceeds_cap()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 5, maxAvailable: 1);
+
+        // No reservations; quantity 2 still exceeds cap of 1 — selected-rate calendar must return nothing.
+        $exceedsCap = app(Availability::class)->getAvailableDatesFromDate(
+            $setup['entry']->id(), $setup['startDate']->toDateString(), 2, $setup['sharedRate']->id,
+        );
+        $this->assertEmpty($exceedsCap);
+
+        // A quantity that fits the cap still renders the calendar dates.
+        $fitsCap = app(Availability::class)->getAvailableDatesFromDate(
+            $setup['entry']->id(), $setup['startDate']->toDateString(), 1, $setup['sharedRate']->id,
+        );
+        $this->assertNotEmpty($fitsCap);
+    }
+
+    public function test_empty_calendar_result_skips_unbounded_exhausted_date_scan()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 5, maxAvailable: 1);
+
+        // Window with no availability rows — exhausted-date lookup must be skipped entirely.
+        $emptyWindowStart = $setup['startDate']->copy()->addDays(30)->toDateString();
+
+        DB::enableQueryLog();
+
+        $result = app(Availability::class)->getAvailableDatesFromDate(
+            $setup['entry']->id(),
+            $emptyWindowStart,
+            1,
+            $setup['sharedRate']->id,
+        );
+
+        $reservationQueries = collect(DB::getQueryLog())
+            ->filter(fn ($entry) => str_contains($entry['query'], 'resrv_reservations'));
+
+        DB::disableQueryLog();
+
+        $this->assertEmpty($result);
+        $this->assertCount(0, $reservationQueries, 'No reservation-overlap query should run for an empty result set.');
+    }
+
+    public function test_composite_overlap_indexes_exist_on_reservation_tables()
+    {
+        // The rate_id + date-range overlap checks rely on these composite indexes (M38).
+        $this->assertReservationIndexExists('resrv_reservations', ['rate_id', 'date_start', 'date_end']);
+        $this->assertReservationIndexExists('resrv_child_reservations', ['rate_id', 'date_start', 'date_end']);
+    }
+
+    protected function assertReservationIndexExists(string $table, array $columns): void
+    {
+        $hasIndex = collect(Schema::getIndexes($table))
+            ->contains(fn ($index) => $index['columns'] === $columns);
+
+        $this->assertTrue($hasIndex, "Expected a composite index on {$table} (".implode(', ', $columns).').');
     }
 }

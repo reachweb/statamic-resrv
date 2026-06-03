@@ -23,7 +23,7 @@
                         />
                     </Field>
                     <Field v-if="showPrice" :label="__('Price')" :errors="errors.price">
-                        <Input v-model="submit.price" />
+                        <Input v-model="submit.price" :input-attrs="{ inputmode: 'decimal' }" />
                     </Field>
                     <Field :label="__('Description (optional)')" :errors="errors.description">
                         <Textarea v-model="submit.description" />
@@ -98,7 +98,11 @@ function togglePrice() {
         submit.price = '0';
     } else {
         showPrice.value = true;
-        submit.price = '';
+        // Only clear the '0' sentinel set when leaving 'free'; preserve a real price typed
+        // for another priced type (a hydrated zero is formatted '0.00', not '0').
+        if (submit.price === '0') {
+            submit.price = '';
+        }
     }
 }
 </script>

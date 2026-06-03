@@ -4,8 +4,12 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
+use Reach\StatamicResrv\Livewire\Traits\HandlesCutoffValidation;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
@@ -396,6 +400,46 @@ class AvailabilityResultsTest extends TestCase
             ->assertViewHas('availability.0.data.price', '50.00')
             ->assertViewHas('availability.+1.data.price', '50.00')
             ->assertViewHas('availability.+1.request.date_start', $this->date->copy()->addDays(2)->format('Y-m-d'));
+    }
+
+    public function test_extra_days_search_does_not_re_query_entry_and_rates_per_period()
+    {
+        $entryId = $this->entries->first()->id();
+
+        // Guard that entry/rate metadata queries don't scale with the number of extra-day periods (memoized).
+        $countMetadataQueries = function (int $extraDays) use ($entryId) {
+            // Clear session so mount() doesn't replay a previous search.
+            session()->forget(['resrv-search', 'resrv-extras', 'resrv-options']);
+
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'extraDays' => $extraDays])
+                ->dispatch('availability-search-updated', [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => null,
+                ]);
+
+            // Count only entry/rate metadata lookups; exclude per-period availability queries.
+            $count = collect(DB::getQueryLog())
+                ->filter(fn ($query) => (str_contains($query['query'], 'resrv_entries') || str_contains($query['query'], 'resrv_rates'))
+                    && ! str_contains($query['query'], 'resrv_availabilities'))
+                ->count();
+
+            DB::disableQueryLog();
+
+            return $count;
+        };
+
+        $this->assertSame(
+            $countMetadataQueries(1),
+            $countMetadataQueries(3),
+            'Entry/rate queries must not scale with the number of extra-day periods.'
+        );
     }
 
     public function test_returns_availability_for_specific_rate()
@@ -1052,6 +1096,41 @@ class AvailabilityResultsTest extends TestCase
             ->assertHasErrors('availability');
     }
 
+    public function test_checkout_does_not_leave_an_orphan_reservation_when_a_side_effect_fails()
+    {
+        $this->createCheckoutEntry();
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => null,
+                ]
+            );
+
+        // Simulate a failure during the synchronous ReservationCreated chain (e.g. the
+        // locked decrement throwing when stock ran out in the TOCTOU window).
+        Event::listen(ReservationCreated::class, function () {
+            throw new AvailabilityException(__('Not enough availability for this rate.'));
+        });
+
+        $component->call('checkout')
+            ->assertHasErrors('availability');
+
+        // The reservation must be rolled back rather than left as an orphan PENDING row,
+        // and the availability the chain already decremented must be restored.
+        $this->assertDatabaseCount('resrv_reservations', 0);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $this->entries->first()->id(),
+            'date' => $this->date->startOfDay(),
+            'available' => 1,
+        ]);
+    }
+
     public function test_starts_checkout_correctly_when_extra_quantity_is_ignored_for_pricing()
     {
         $this->createCheckoutEntry();
@@ -1227,6 +1306,59 @@ class AvailabilityResultsTest extends TestCase
             ])
             ->assertHasNoErrors()
             ->assertDispatched('availability-results-updated');
+    }
+
+    public function test_cutoff_does_not_block_when_enabled_but_no_schedule_or_default()
+    {
+        // Enable cutoff rules globally
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        // Entry opts into cutoff but has no matching schedule and no default starting time —
+        // there is no cutoff to enforce, so a same-day search must not be falsely blocked.
+        $entry = $this->makeStatamicItemWithAvailability();
+        $resrvEntry = ResrvEntry::whereItemId($entry->id());
+
+        $resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => null,
+                'default_cutoff_hours' => null,
+            ],
+        ];
+        $resrvEntry->save();
+
+        $this->travelTo(now()->setTime(14, 0, 0));
+        $today = now()->startOfDay();
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $today->toISOString(),
+                    'date_end' => $today->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => null,
+            ])
+            ->assertHasNoErrors()
+            ->assertDispatched('availability-results-updated');
+    }
+
+    public function test_cutoff_validation_degrades_gracefully_when_entry_mirror_row_is_missing()
+    {
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        $component = new class
+        {
+            use HandlesCutoffValidation;
+
+            public string $entryId = 'missing-mirror-row-id';
+        };
+
+        // A missing resrv_entries mirror row must be treated as "no cutoff applies" rather than
+        // throwing ModelNotFoundException at the visitor (matching the ResrvCutoff fieldtype).
+        $this->expectNotToPerformAssertions();
+
+        $component->validateCutoffRules(now()->toDateString());
     }
 
     public function test_cutoff_enforces_correct_schedule_based_on_date()

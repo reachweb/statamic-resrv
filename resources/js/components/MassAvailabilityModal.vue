@@ -42,7 +42,7 @@
         <template #footer>
             <div class="flex items-center justify-end gap-2 p-3 border-t border-gray-200 dark:border-gray-700">
                 <Button :text="__('Cancel')" variant="ghost" @click="emit('cancel')" />
-                <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+                <Button :text="__('Save')" variant="primary" :disabled="saveDisabled" @click="save" />
             </div>
         </template>
     </Modal>
@@ -113,6 +113,9 @@ const { disableSave, errors, save } = useFormHandler({
     successMessage: 'Availability successfully saved',
     emit,
 });
+
+// An empty rate selection would post rate_ids: [], which the backend silently no-ops; block Save instead.
+const saveDisabled = computed(() => disableSave.value || (Boolean(props.rate) && selectedRateIds.value.length === 0));
 
 const dateErrors = computed(() => {
     const out = [];

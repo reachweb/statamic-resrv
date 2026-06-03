@@ -81,6 +81,74 @@ class RateAvailabilityTest extends TestCase
         $this->assertCount(0, $results);
     }
 
+    public function test_availability_query_excludes_soft_deleted_rate()
+    {
+        $data = $this->createEntryWithRateAndAvailability();
+
+        // Soft-delete the rate; its availability rows still reference it via rate_id, so the
+        // resrv_rates join would otherwise surface them despite the rate being gone.
+        $data['rate']->delete();
+
+        $results = AvailabilityRepository::itemAvailableBetween(
+            date_start: now()->startOfDay()->toDateString(),
+            date_end: now()->startOfDay()->addDays(2)->toDateString(),
+            duration: 2,
+            quantity: 1,
+            statamic_id: $data['entry']->id(),
+            rateId: $data['rate']->id,
+        )->get();
+
+        $this->assertCount(0, $results);
+    }
+
+    public function test_availability_query_excludes_soft_deleted_shared_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'apply_to_all' => true,
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'deleted-shared',
+            'base_rate_id' => $baseRate->id,
+            'apply_to_all' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate],
+                ['date' => $startDate->copy()->addDay()],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $baseRate->id,
+                'price' => 100,
+                'available' => 5,
+            ]);
+
+        // Soft-delete the SHARED rate while its base stays live. Resolving the shared rate to the
+        // base id would otherwise surface the base's availability for the deleted shared rate.
+        $sharedRate->delete();
+
+        $results = AvailabilityRepository::itemAvailableBetween(
+            date_start: $startDate->toDateString(),
+            date_end: $startDate->copy()->addDays(2)->toDateString(),
+            duration: 2,
+            quantity: 1,
+            statamic_id: $entry->id(),
+            rateId: $sharedRate->id,
+        )->get();
+
+        $this->assertCount(0, $results);
+    }
+
     public function test_relative_rate_price_calculation_percent_decrease()
     {
         [$entry, , $relativeRate] = $this->createRelativePricingSetup(
@@ -1118,6 +1186,43 @@ class RateAvailabilityTest extends TestCase
         $result = (new Availability)->getAvailabilityCalendar($entryA->id(), (string) $sharedRate->id);
 
         $this->assertEmpty($result);
+    }
+
+    public function test_calendar_omits_fully_booked_dates_instead_of_emitting_null()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'apply_to_all' => true,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        // First date is available; the second is fully booked (available = 0).
+        Availability::factory()
+            ->count(2)
+            ->sequence(
+                ['date' => $startDate, 'available' => 5],
+                ['date' => $startDate->copy()->addDay(), 'available' => 0],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $rate->id,
+                'price' => 100,
+            ]);
+
+        $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $rate->id);
+
+        $availableKey = $startDate->format('Y-m-d');
+        $soldOutKey = $startDate->copy()->addDay()->format('Y-m-d');
+
+        $this->assertArrayHasKey($availableKey, $calendar);
+        $this->assertNotNull($calendar[$availableKey]);
+
+        // A fully-booked date must be absent, not present with a null value.
+        $this->assertArrayNotHasKey($soldOutKey, $calendar);
     }
 
     public function test_available_dates_rejects_rate_not_assigned_to_entry()

@@ -41,13 +41,11 @@ class OptionValue extends Model
 
     public function option()
     {
-        return $this->hasOne(Option::class);
+        return $this->belongsTo(Option::class, 'option_id');
     }
 
     public function priceForDates($data)
     {
-        $this->initiateAvailabilityUnsafe($data);
-
         return $this->calculatePrice($data)->format();
     }
 
@@ -65,6 +63,10 @@ class OptionValue extends Model
         if ($this->price_type == 'perday') {
             return $applyQuantity ? $this->price->multiply($this->duration)->multiply($this->quantity) : $this->price->multiply($this->duration);
         }
+
+        // Unknown price type (e.g. legacy data): fall back to the base price instead of
+        // returning null, which would fatal at the ->format() call in priceForDates().
+        return $this->price;
     }
 
     public function changeOrder($order)

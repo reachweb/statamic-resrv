@@ -68,10 +68,7 @@ const { disableSave, errors, save } = useFormHandler({
 
 disableSave.value = true;
 
-watch(selectedEntriesLoaded, () => {
-    submit.value.entries = selectedEntries.value.map((item) => item.id);
-});
-
+// Enable-only: never re-disable on empty, so "Remove all" stays saveable.
 watch(submit, (value) => {
     if (value.entries && value.entries.length > 0) {
         disableSave.value = false;
@@ -100,6 +97,9 @@ function getSelectedEntries() {
     axios.get('/cp/resrv/extra/entries/' + props.data.id)
         .then((response) => {
             selectedEntries.value = response.data;
+            // Seed the picker selection here (not via a watcher) so it runs exactly
+            // once when the data arrives and can never re-fire over later user edits.
+            submit.value.entries = selectedEntries.value.map((item) => item.id);
             selectedEntriesLoaded.value = true;
         })
         .catch(() => {

@@ -20,6 +20,7 @@ use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Money\Price;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -56,6 +57,18 @@ class ReservationCheckoutTest extends TestCase
         $this->entry->save();
 
         Config::set('resrv-config.checkout_completed_entry', $this->entry->id());
+    }
+
+    public function test_reading_total_before_checkout_returns_zero_price_without_error()
+    {
+        $reservation = $this->reservation->fresh();
+
+        // total is nullable and unpopulated before checkout.
+        $this->assertNull($reservation->getRawOriginal('total'));
+
+        // The Price accessor must return zero (not warn/throw) when the column is null.
+        $this->assertInstanceOf(Price::class, $reservation->total);
+        $this->assertSame('0.00', $reservation->total->format());
     }
 
     // Test if the checkout completed page loads correctly
@@ -135,8 +148,8 @@ class ReservationCheckoutTest extends TestCase
         });
     }
 
-    // Test if the webhook will cancel a reservation for failed status
-    public function test_webhook_can_cancel_reservation()
+    // A failed payment attempt is retryable: leave the reservation PENDING, don't cancel it.
+    public function test_webhook_failed_payment_keeps_reservation_pending()
     {
         Mail::fake();
         Event::fake();
@@ -144,9 +157,22 @@ class ReservationCheckoutTest extends TestCase
         $this->post(route('resrv.webhook.store', ['reservation_id' => $this->reservation->id, 'status' => 'fail']))
             ->assertOk(200);
 
-        Event::assertDispatched(ReservationCancelled::class, function ($event) {
-            return $event->reservation->id === $this->reservation->id;
-        });
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'status' => 'pending',
+        ]);
+
+        Event::assertNotDispatched(ReservationCancelled::class);
+    }
+
+    // The controller must return the gateway's verifyPayment() Response, not discard it. An
+    // unhandled status exercises the gateway's default 200 branch; before the fix the controller
+    // returned an empty body (the gateway response was thrown away).
+    public function test_webhook_store_returns_the_gateway_response()
+    {
+        $this->post(route('resrv.webhook.store', ['reservation_id' => $this->reservation->id, 'status' => 'unknown']))
+            ->assertOk()
+            ->assertExactJson([]);
     }
 
     // Test if email is sent when reservation is confirmed

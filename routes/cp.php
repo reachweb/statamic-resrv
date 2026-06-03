@@ -2,6 +2,7 @@
 
 Route::namespace('\Reach\StatamicResrv\Http\Controllers')
     ->name('resrv.')
+    ->middleware('can:use resrv')
     ->group(function () {
         Route::get('/resrv/availability/{statamic_id}/{identifier?}', 'AvailabilityCpController@index')->name('availability.index');
         Route::post('/resrv/availability', 'AvailabilityCpController@update')->name('availability.update');
@@ -70,15 +71,13 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/reports', 'ReportsCpController@indexCp')->name('reports.index');
         Route::get('/resrv/reports/index', 'ReportsCpController@index')->name('report.index');
 
-        Route::middleware('can:use resrv')->group(function () {
-            Route::get('/resrv/export', 'ExportCpController@indexCp')->name('export.index');
-            Route::get('/resrv/export/count', 'ExportCpController@count')->name('export.count');
-            Route::get('/resrv/export/download', 'ExportCpController@download')->name('export.download');
-        });
+        Route::get('/resrv/export', 'ExportCpController@indexCp')->name('export.index');
+        Route::get('/resrv/export/count', 'ExportCpController@count')->name('export.count');
+        Route::get('/resrv/export/download', 'ExportCpController@download')->name('export.download');
 
         Route::get('/resrv/dataimport', 'DataImportCpController@index')->name('dataimport.index');
         Route::post('/resrv/dataimport', 'DataImportCpController@confirm')->name('dataimport.confirm');
-        Route::get('/resrv/dataimport/store', 'DataImportCpController@store')->name('dataimport.store');
+        Route::post('/resrv/dataimport/store', 'DataImportCpController@store')->name('dataimport.store');
 
         Route::get('/resrv/utility/entries', 'UtilityCpController@entries')->name('utilities.entries');
 

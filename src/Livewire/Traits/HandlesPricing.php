@@ -18,7 +18,8 @@ trait HandlesPricing
 
         $reservationTotal = $this->reservation->price;
 
-        $originalPrice = Price::create($this->getUpdatedPrices()['original_price']) ?? null;
+        $original = $this->getUpdatedPrices()['original_price'];
+        $originalPrice = $original !== null ? Price::create($original) : null;
 
         // Calculate totals
         $extrasTotal = $this->calculateExtraTotals();

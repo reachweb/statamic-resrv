@@ -89,7 +89,10 @@ class CheckoutForm extends Component
             return;
         }
 
-        $data = collect($this->form)->except('email');
+        // Only persist known form handles — $form is client-controlled, so undeclared keys
+        // (which the validator does not strip) would otherwise pollute customer.data.
+        $allowed = collect($this->checkoutForm)->pluck('handle');
+        $data = collect($this->form)->only($allowed->all())->except('email');
         $reservation = $this->reservation->fresh();
 
         // If the reservation already has a customer (e.g. retry after a failed step-2 submit),

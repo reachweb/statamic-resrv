@@ -74,27 +74,32 @@ trait HandlesReservationQueries
             ? (int) $this->data->rate
             : null;
 
-        $reservation = Reservation::create(
-            [
-                'status' => ReservationStatus::PENDING,
-                'type' => ReservationTypes::NORMAL,
-                'reference' => (new Reservation)->createRandomReference(),
-                'item_id' => $this->entryId,
-                'date_start' => $this->data->dates['date_start'],
-                'date_end' => $this->data->dates['date_end'],
-                'quantity' => $this->data->quantity,
-                'rate_id' => $rateId,
-                'price' => data_get($this->availability, 'data.price'),
-                'payment' => data_get($this->availability, 'data.payment'),
-                'payment_id' => '',
-                'customer_id' => $customer->id ?? null,
-            ]
-        );
+        // Dispatch inside the transaction so a failing side effect (e.g. the locked
+        // DecreaseAvailability throwing when stock ran out in the TOCTOU window) rolls
+        // back the reservation row instead of leaving an orphan PENDING reservation.
+        DB::transaction(function () use ($rateId, $customer) {
+            $reservation = Reservation::create(
+                [
+                    'status' => ReservationStatus::PENDING,
+                    'type' => ReservationTypes::NORMAL->value,
+                    'reference' => (new Reservation)->createRandomReference(),
+                    'item_id' => $this->entryId,
+                    'date_start' => $this->data->dates['date_start'],
+                    'date_end' => $this->data->dates['date_end'],
+                    'quantity' => $this->data->quantity,
+                    'rate_id' => $rateId,
+                    'price' => data_get($this->availability, 'data.price'),
+                    'payment' => data_get($this->availability, 'data.payment'),
+                    'payment_id' => '',
+                    'customer_id' => $customer->id ?? null,
+                ]
+            );
 
-        ReservationCreated::dispatch($reservation, new ReservationData(
-            affiliate: $this->getAffiliateIfCookieExists(),
-            coupon: session('resrv_coupon'),
-        ));
+            ReservationCreated::dispatch($reservation, new ReservationData(
+                affiliate: $this->getAffiliateIfCookieExists(),
+                coupon: session('resrv_coupon'),
+            ));
+        });
     }
 
     public function createMultiReservation(Collection $selections): void
@@ -123,10 +128,13 @@ trait HandlesReservationQueries
             default => Price::create($totalPrice->format()),
         };
 
-        $reservation = DB::transaction(function () use ($selections, $totalPrice, $totalPayment, $customer, $childPrices) {
+        // Dispatch inside the transaction so a failing child decrement rolls back the
+        // parent + every child row (and the sibling decrements already applied), instead
+        // of committing the rows and leaving stock partially decremented.
+        DB::transaction(function () use ($selections, $totalPrice, $totalPayment, $customer, $childPrices) {
             $reservation = Reservation::create([
                 'status' => ReservationStatus::PENDING,
-                'type' => ReservationTypes::PARENT,
+                'type' => ReservationTypes::PARENT->value,
                 'reference' => (new Reservation)->createRandomReference(),
                 'item_id' => $this->entryId,
                 'date_start' => $selections->min('date_start'),
@@ -149,13 +157,11 @@ trait HandlesReservationQueries
                 ]);
             }
 
-            return $reservation;
+            ReservationCreated::dispatch($reservation, new ReservationData(
+                affiliate: $this->getAffiliateIfCookieExists(),
+                coupon: session('resrv_coupon'),
+            ));
         });
-
-        ReservationCreated::dispatch($reservation, new ReservationData(
-            affiliate: $this->getAffiliateIfCookieExists(),
-            coupon: session('resrv_coupon'),
-        ));
     }
 
     protected function createCustomerFromData(): ?Customer
@@ -180,13 +186,25 @@ trait HandlesReservationQueries
         ];
     }
 
+    private ?array $updatedPricesCache = null;
+
+    private ?Reservation $updatedPricesCacheReservation = null;
+
     public function getUpdatedPrices(): array
     {
-        if ($this->reservation->type === ReservationTypes::PARENT->value) {
-            return $this->getUpdatedPricesForParent();
+        // Memoise per request: multiple callers hit this in one Livewire render, and a parent cart
+        // issues one getPricing() query per child. Cache invalidates when the reservation is reloaded.
+        if ($this->updatedPricesCache !== null && $this->updatedPricesCacheReservation === $this->reservation) {
+            return $this->updatedPricesCache;
         }
 
-        return (new Availability)->getPricing($this->getAvailabilityDataFromReservation(), $this->reservation->item_id);
+        $this->updatedPricesCacheReservation = $this->reservation;
+
+        if ($this->reservation->type === ReservationTypes::PARENT->value) {
+            return $this->updatedPricesCache = $this->getUpdatedPricesForParent();
+        }
+
+        return $this->updatedPricesCache = (new Availability)->getPricing($this->getAvailabilityDataFromReservation(), $this->reservation->item_id);
     }
 
     protected function getUpdatedPricesForParent(): array

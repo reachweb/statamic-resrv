@@ -94,7 +94,17 @@ class Options extends Component
         $valueId = (int) $valueId;
 
         $option = $this->options->firstWhere('id', $optionId);
+
+        // selectOption is a public, client-callable action — ignore ids not in the available list
+        if (! $option) {
+            return;
+        }
+
         $value = $option->values->firstWhere('id', $valueId);
+
+        if (! $value) {
+            return;
+        }
 
         // Create option data
         $option = [

@@ -522,4 +522,49 @@ class ExtraCpTest extends TestCase
             'extra_id' => $extra->id,
         ]);
     }
+
+    public function test_updating_a_non_existent_extra_returns_404()
+    {
+        $this->withExceptionHandling();
+
+        $payload = [
+            'id' => 99999,
+            'name' => 'This is an extra',
+            'slug' => 'this-is-an-extra',
+            'price' => 150,
+            'price_type' => 'perday',
+            'allow_multiple' => 0,
+            'order' => 1,
+            'published' => 1,
+        ];
+
+        $response = $this->patch(cp_route('resrv.extra.update'), $payload);
+        $response->assertNotFound();
+    }
+
+    public function test_setting_conditions_on_a_non_existent_extra_returns_404()
+    {
+        $this->withExceptionHandling();
+
+        $payload = [
+            'conditions' => [],
+        ];
+
+        $response = $this->post(cp_route('resrv.extra.conditions', 99999), $payload);
+        $response->assertNotFound();
+    }
+
+    public function test_can_remove_conditions_when_key_is_omitted()
+    {
+        $extra = Extra::factory()->create();
+        ExtraCondition::factory()->showExtraSelected()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        $response = $this->post(cp_route('resrv.extra.conditions', $extra->id), []);
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('resrv_extra_conditions', [
+            'extra_id' => $extra->id,
+        ]);
+    }
 }

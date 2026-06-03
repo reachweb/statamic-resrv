@@ -31,11 +31,37 @@ class Reservation extends Model
 
     protected $table = 'resrv_reservations';
 
-    protected $guarded = [];
+    // Explicit allow-list (vs. $guarded = []) so a future fill()/update() with untrusted input
+    // can't mass-assign the primary key or any column not written by app code. Status changes
+    // still go exclusively through transitionTo() (direct assignment, not mass assignment).
+    // Timestamps stay fillable — time-based flows/tests set created_at/updated_at directly.
+    protected $fillable = [
+        'status',
+        'type',
+        'reference',
+        'item_id',
+        'date_start',
+        'date_end',
+        'quantity',
+        'rate_id',
+        'price',
+        'payment',
+        'payment_surcharge',
+        'payment_id',
+        'payment_gateway',
+        'total',
+        'customer_id',
+        'abandoned_email_sent_at',
+        'created_at',
+        'updated_at',
+    ];
 
     protected $casts = [
         'date_start' => 'datetime',
         'date_end' => 'datetime',
+        // The money columns pair this cast with the get*Attribute accessors below on purpose —
+        // see the accessor note. The cast normalises writes and powers string serialization;
+        // do not drop a money cast without also removing its accessor.
         'price' => PriceClass::class,
         'payment' => PriceClass::class,
         'payment_surcharge' => PriceClass::class,
@@ -80,6 +106,12 @@ class Reservation extends Model
         return $this->belongsToMany(DynamicPricing::class, 'resrv_reservation_dynamic_pricing')->withPivot('data');
     }
 
+    // These accessors are NOT redundant with the PriceClass cast above — the two serve different
+    // reads. On direct access ($reservation->price) the accessor wins and returns a Price object
+    // for money math (->format(), ->subtract(), ...). On array/JSON serialization the cast's get()
+    // runs instead and emits a formatted string, which is what the ResrvCheckoutRedirect tag and
+    // the gateway toArray() payloads expose to Antlers templates. Keep both halves in sync;
+    // ReservationPriceCastTest locks this contract.
     public function getPriceAttribute($value)
     {
         return Price::create($value);
@@ -142,8 +174,15 @@ class Reservation extends Model
 
     public function getEntryAttribute()
     {
-        $entry = Entry::find($this->item_id);
+        return $this->entryToArray(Entry::find($this->item_id));
+    }
 
+    /**
+     * Accepts a pre-resolved entry so CP resources can batch all lookups via resolveReservationEntries()
+     * instead of one Entry::find() per row.
+     */
+    public function entryToArray(?EntryContract $entry): array
+    {
         return $entry ? $entry->toAugmentedArray(['id', 'title', 'slug', 'url']) : $this->emptyEntry();
     }
 
@@ -159,19 +198,27 @@ class Reservation extends Model
 
     public function scopeFindByPaymentId($query, $id)
     {
-        return $query->where('payment_id', $id);
+        // payment_id is cleared to '' on expire/cancel, so a falsy id must match nothing rather than
+        // every cleared reservation.
+        return $query->where('payment_id', $id)
+            ->where('payment_id', '!=', '')
+            ->whereNotNull('payment_id');
     }
 
     /**
      * Returns true when the status changed, false on same-state no-op. Callers MUST gate
-     * event dispatch on the return value — otherwise a duplicate webhook re-fires side
-     * effects (e.g. double IncreaseAvailability). Events are intentionally NOT dispatched
-     * here so the affiliate flow can transition to PARTNER and still dispatch
-     * ReservationConfirmed for side-effect listeners.
+     * event dispatch on the return value to prevent duplicate side effects (e.g. double
+     * IncreaseAvailability). Events are not dispatched here so callers can choose which event
+     * to fire (e.g. PARTNER still triggers ReservationConfirmed).
+     *
+     * Pass $tolerant = true for reactive callers (webhooks/checkout) so a concurrent update that
+     * changed the row after their in-memory pre-check is treated as a no-op (returns false) rather
+     * than throwing — avoiding a spurious HTTP 500 / webhook retry. Explicit callers (CP refund)
+     * keep the default and catch InvalidStateTransition to surface the error.
      */
-    public function transitionTo(ReservationStatus $to): bool
+    public function transitionTo(ReservationStatus $to, bool $tolerant = false): bool
     {
-        return (bool) DB::transaction(function () use ($to) {
+        return (bool) DB::transaction(function () use ($to, $tolerant) {
             $fresh = static::query()->lockForUpdate()->findOrFail($this->id);
 
             if ($fresh->status === $to->value) {
@@ -181,6 +228,16 @@ class Reservation extends Model
             $current = ReservationStatus::from($fresh->status);
 
             if (! $current->canTransitionTo($to)) {
+                if ($tolerant) {
+                    Log::info('Skipped reservation transition; state changed under lock.', [
+                        'reservation_id' => $fresh->id,
+                        'from' => $current->value,
+                        'to' => $to->value,
+                    ]);
+
+                    return false;
+                }
+
                 throw new InvalidStateTransition($current, $to, $fresh->id);
             }
 
@@ -215,7 +272,9 @@ class Reservation extends Model
 
     public function duration()
     {
-        return (int) $this->date_start->startOfDay()->diffInDays($this->date_end->startOfDay(), true);
+        // Copy before startOfDay() — date_start/date_end are mutable Carbon instances, so mutating
+        // them in place is a footgun (and inconsistent with HandlesAvailabilityDates::checkMinimumDate).
+        return (int) $this->date_start->copy()->startOfDay()->diffInDays($this->date_end->copy()->startOfDay(), true);
     }
 
     public function extraCharges()
@@ -247,17 +306,15 @@ class Reservation extends Model
         foreach ($this->childs as $child) {
             $data = $this->buildChildDataArray($child);
 
-            // Fresh instances required per child: OptionValue::calculatePrice mutates $this->price
-            // via Price::multiply() for perday/fixed types, so re-using the same Option (and its
-            // eager-loaded values) across child iterations compounds the multiplication.
+            // Fresh instances per child: OptionValue::calculatePrice mutates $this->price via
+            // Price::multiply(), so reusing the same Option across children compounds the result.
             foreach ($this->options()->with('values')->get() as $option) {
                 $totalCharges->add($option->calculatePrice($data, $option->pivot->value));
             }
 
             foreach ($this->extras()->get() as $extra) {
-                // Fresh instance required: Extra::calculatePrice mutates $this->price via dynamic pricing.
-                // withTrashed() preserves the extras() relationship behavior so soft-deleted extras
-                // attached to historical reservations can still be priced.
+                // Fresh instance via withTrashed(): Extra::calculatePrice mutates price,
+                // and soft-deleted extras on historical reservations must still be priced.
                 $totalCharges->add(Extra::withTrashed()->find($extra->id)->calculatePrice($data, $extra->pivot->quantity));
             }
         }
@@ -459,9 +516,7 @@ class Reservation extends Model
 
             $required = $extraCondition->hasRequiredExtrasSelected($statamic_id, $childData);
             if ($required !== true) {
-                // union (not merge) preserves integer keys so $extra_id stays the real DB id;
-                // first-wins on collision is fine — the same extra_id from different children
-                // means the same missing prerequisite extra.
+                // union() preserves integer keys (real DB ids); first-wins on collision is fine.
                 $allRequired = $allRequired->union($required);
             }
         }
@@ -560,10 +615,9 @@ class Reservation extends Model
     }
 
     /**
-     * Clear payment_id/payment_gateway BEFORE commit so a racing succeeded webhook cannot
-     * reconcile via findByPaymentId once EXPIRED is committed; call the remote Stripe cancel
-     * AFTER commit so no DB row lock is held across a network call. If remote cancel fails,
-     * local state is already correct — the stray intent is logged for manual reconciliation.
+     * Clears payment_id/payment_gateway before commit (blocks racing webhooks), then cancels
+     * the remote intent after commit (no lock held across the network call). If remote cancel
+     * fails, local state is already correct; the error is logged for manual reconciliation.
      */
     public function expire(): void
     {
@@ -614,11 +668,12 @@ class Reservation extends Model
 
     public function emptyEntry()
     {
+        // Matches the shape returned by entryToArray(); null url renders as plain text, not a broken link.
         return [
             'id' => null,
             'title' => '## Entry deleted ##',
-            'api_url' => '## Entry deleted ##',
-            'permalink' => '#',
+            'slug' => null,
+            'url' => null,
         ];
     }
 }

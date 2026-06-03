@@ -26,7 +26,7 @@ class IncreaseAvailability
 
     protected function incrementMultiple($event): void
     {
-        $childs = $event->reservation->childs()->get();
+        $childs = $event->reservation->childs;
         $childs->each(function ($child) use ($event) {
             $this->availability->incrementAvailability(
                 date_start: $child->date_start,
@@ -35,6 +35,7 @@ class IncreaseAvailability
                 statamic_id: $event->reservation->item_id,
                 reservationId: $child->id,
                 rateId: $child->rate_id,
+                isChildReservation: true,
             );
         });
     }

@@ -24,7 +24,7 @@ class SetResrvAffiliateCookie
 
         $afid = $request->get('afid');
 
-        if ($affiliate = Affiliate::where('code', $afid)->first()) {
+        if ($affiliate = Affiliate::published()->where('code', $afid)->first()) {
             return $next($request)->cookie('resrv_afid', $afid, $affiliate->cookie_duration * 24 * 60);
         }
 

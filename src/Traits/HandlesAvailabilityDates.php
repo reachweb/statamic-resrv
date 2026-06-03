@@ -56,6 +56,10 @@ trait HandlesAvailabilityDates
     {
         $quantity = Arr::get($data, 'quantity', 1);
 
+        if ($quantity < 1) {
+            throw new AvailabilityException(__('You have to reserve at least one.'));
+        }
+
         if ($quantity > config('resrv-config.maximum_quantity')) {
             throw new AvailabilityException(__('You cannot reserve these many in one reservation.'));
         }

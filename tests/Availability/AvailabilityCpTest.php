@@ -6,7 +6,6 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Models\Availability;
-use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -76,6 +75,29 @@ class AvailabilityCpTest extends TestCase
         $this->assertSoftDeleted('resrv_entries', [
             'item_id' => $item->id(),
         ]);
+    }
+
+    public function test_entry_deletion_hard_deletes_availability_which_a_mirror_restore_does_not_bring_back()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+
+        $item->delete();
+
+        // The mirror is recoverable (soft-deleted) but availability is hard-deleted.
+        $this->assertSoftDeleted('resrv_entries', ['item_id' => $item->id()]);
+        $this->assertDatabaseMissing('resrv_availabilities', ['statamic_id' => $item->id()]);
+
+        // Re-saving restores the mirror (single row, not a duplicate) but availability stays gone.
+        $item->save();
+
+        $this->assertDatabaseHas('resrv_entries', ['item_id' => $item->id(), 'deleted_at' => null]);
+        $this->assertDatabaseMissing('resrv_availabilities', ['statamic_id' => $item->id()]);
     }
 
     public function test_availability_can_index_for_a_statamic_item()
@@ -292,6 +314,58 @@ class AvailabilityCpTest extends TestCase
 
         $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
         $response->assertStatus(302)->assertInvalid(['available']);
+    }
+
+    public function test_availability_can_update_when_price_key_is_omitted_entirely()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        // Seed availability so the "available without price" path has existing prices to satisfy.
+        $this->post(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 6,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(200);
+
+        // A partial request that omits the price key entirely must not raise undefined-array-key
+        // warnings in the controller/rule and must update availability normally.
+        $response = $this->post(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'available' => 2,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 2,
+            'price' => 150,
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_availability_update_requires_price_or_available()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        // Neither price nor available provided — the request must be rejected rather than silently no-op.
+        $response = $this->post(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(302)->assertInvalid(['price', 'available']);
     }
 
     public function test_availability_can_save_price_when_availability_missing()

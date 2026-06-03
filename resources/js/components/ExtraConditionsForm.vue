@@ -3,7 +3,7 @@
         <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {{ __('Select when to show, hide or make this extra required. When adding multiple conditions for an operation, all of them have to apply.') }}
         </p>
-        <div v-for="(condition, index) in conditionsForm" :key="index" class="grid @2xl:grid-cols-[1fr_1fr_2fr_auto] gap-x-3 gap-y-6 items-end py-5 border-b border-gray-200 dark:border-gray-700/80 last:border-b-0">
+        <div v-for="(condition, index) in conditionsForm" :key="condition._key" class="grid @2xl:grid-cols-[1fr_1fr_2fr_auto] gap-x-3 gap-y-6 items-end py-5 border-b border-gray-200 dark:border-gray-700/80 last:border-b-0">
             <Field :label="__('Operation')" :error="errors['conditions.' + index + '.operation']?.[0]">
                 <Select v-model="conditionsForm[index].operation" :options="operationOptions" />
             </Field>
@@ -73,6 +73,10 @@ const emit = defineEmits(['updated']);
 
 const conditionsForm = ref([]);
 
+// Stable client-only key so v-for row identity survives mid-list removals
+// (index keys would shift stateful child fieldtypes onto the wrong row).
+let nextKey = 0;
+
 const operationOptions = computed(() => normalizeInputOptions({
     required: __('Required'),
     show: __('Show when'),
@@ -120,28 +124,32 @@ const categoryOptions = computed(() => {
         }
         seen.add(extra.category_id);
         out.push({
-            value: parseInt(extra.category.id, 10),
+            // Use the foreign key (guaranteed non-null above) rather than extra.category.id, which
+            // throws when the category relation is missing (not loaded / soft-deleted).
+            value: parseInt(extra.category_id, 10),
             label: extra.category ? extra.category.name : 'Uncategorized',
         });
     }
     return out;
 });
 
+// Fires on every edit and once on mount: the onMounted reassignment below is a
+// tracked change, so the parent stays in sync without a separate mount-time emit.
 watch(conditionsForm, (conditions) => {
     emit('updated', handleDates(conditions));
 }, { deep: true });
 
 onMounted(() => {
     if (props.data) {
-        conditionsForm.value = Array.isArray(props.data) ? props.data : [];
-    }
-    if (conditionsForm.value.length > 0) {
-        emit('updated', handleDates(conditionsForm.value));
+        // Clone so add/remove/v-model edits don't mutate the parent extra's
+        // conditions array in place before the user saves (or when they cancel).
+        conditionsForm.value = Array.isArray(props.data) ? props.data.map((condition) => ({ ...condition, _key: nextKey++ })) : [];
     }
 });
 
 function add() {
     conditionsForm.value.push({
+        _key: nextKey++,
         operation: '',
         type: '',
         comparison: '',
@@ -181,7 +189,8 @@ function typeIsCategory(index) {
 }
 
 function handleDates(conditions) {
-    return conditions.map((condition) => {
+    // Drop the client-only _key; the backend rejects unknown condition keys.
+    return conditions.map(({ _key, ...condition }) => {
         if (condition.type === 'reservation_dates') {
             return {
                 ...condition,

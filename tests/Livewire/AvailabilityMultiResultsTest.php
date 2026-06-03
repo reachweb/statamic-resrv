@@ -2,8 +2,13 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
 use Reach\StatamicResrv\Livewire\Extras;
@@ -12,6 +17,7 @@ use Reach\StatamicResrv\Livewire\Traits\HandlesExtrasQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesOptionsQueries;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Option;
@@ -317,6 +323,46 @@ class AvailabilityMultiResultsTest extends TestCase
         ]);
     }
 
+    public function test_multi_checkout_rolls_back_parent_and_children_when_a_side_effect_fails()
+    {
+        $this->createCheckoutEntry();
+
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry();
+
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload());
+
+        $component
+            ->call('updateRateQuantity', $adultsRate->id, 2)
+            ->call('updateRateQuantity', $childrenRate->id, 2)
+            ->call('addSelections');
+
+        // Simulate a child decrement failing partway through the ReservationCreated chain.
+        Event::listen(ReservationCreated::class, function () {
+            throw new AvailabilityException(__('Not enough availability for this rate.'));
+        });
+
+        $component->call('checkout')
+            ->assertHasErrors('availability');
+
+        // Neither the parent nor any child rows may survive, and stock must not be left
+        // partially decremented.
+        $this->assertDatabaseCount('resrv_reservations', 0);
+        $this->assertDatabaseCount('resrv_child_reservations', 0);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $adultsRate->id,
+            'date' => $this->date->startOfDay(),
+            'available' => 5,
+        ]);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $childrenRate->id,
+            'date' => $this->date->startOfDay(),
+            'available' => 5,
+        ]);
+    }
+
     public function test_multi_date_checkout()
     {
         $this->createCheckoutEntry();
@@ -405,6 +451,35 @@ class AvailabilityMultiResultsTest extends TestCase
         foreach ($availabilities as $avail) {
             $this->assertEquals(2, $avail->available);
         }
+    }
+
+    public function test_multi_rate_checkout_decrements_each_rate_by_its_own_quantity()
+    {
+        $this->createCheckoutEntry();
+
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry(available: 5);
+
+        Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 2)
+            ->call('updateRateQuantity', $childrenRate->id, 3)
+            ->call('addSelections')
+            ->call('checkout');
+
+        // The parent must decrement each rate by its own child quantity (decreaseMultiple),
+        // not the whole cart total against every rate (the normal-reservation branch).
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $adultsRate->id,
+            'date' => $this->date->startOfDay(),
+            'available' => 3,
+        ]);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $entryId,
+            'rate_id' => $childrenRate->id,
+            'date' => $this->date->startOfDay(),
+            'available' => 2,
+        ]);
     }
 
     public function test_checkout_errors_without_selections()
@@ -559,6 +634,34 @@ class AvailabilityMultiResultsTest extends TestCase
             'item_id' => $entryId,
             'type' => 'parent',
         ]);
+    }
+
+    public function test_duplicate_same_rate_date_selections_with_divergent_prices_are_rejected()
+    {
+        $this->createCheckoutEntry();
+        [$entryId, $adultsRate] = $this->createMultiRateEntry(available: 4);
+
+        // Two selections of the same rate+dates — legitimate duplicates always share a price.
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('addSelections')
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('addSelections');
+
+        $selections = $component->get('selections');
+        $this->assertCount(2, $selections);
+
+        // Tamper the second duplicate's per-unit price below the first (selections is public,
+        // not #[Locked], so a crafted request can do this). The aggregation collapses to the
+        // first member's price, so the guard must reject the divergent group up front.
+        $selections[1]['price'] = '1.00';
+        $component->set('selections', $selections);
+
+        $component->call('checkout')->assertHasErrors('availability');
+
+        // Rejected at the pre-flight check: no reservation is created at all.
+        $this->assertDatabaseMissing('resrv_reservations', ['item_id' => $entryId]);
     }
 
     public function test_search_quantity_does_not_inflate_per_rate_prices()
@@ -769,6 +872,42 @@ class AvailabilityMultiResultsTest extends TestCase
         $extras = $component->get('enabledExtras.extras');
         // Extra is 4.65/day perday. 2 selections × 2 days each × 4.65 = 18.60
         $this->assertEquals('18.60', $extras->first()['price']);
+    }
+
+    public function test_extras_dynamic_pricing_is_applied_per_selection_not_compounded()
+    {
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry();
+
+        $extra = ResrvExtra::factory()->create(); // 4.65/day perday
+        ResrvEntry::whereItemId($entryId)->extras()->attach($extra->id);
+
+        // Fixed -2 per-unit decrease when reservation_duration >= 2 (the extra() factory state).
+        $dynamic = DynamicPricing::factory()->extra()->create();
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $extra->id,
+            'dynamic_pricing_assignment_type' => ResrvExtra::class,
+        ]);
+        Cache::flush();
+
+        // Two selections over identical 2-day dates. Each: (4.65 - 2)/day × 2 days = 5.30.
+        $price = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('updateRateQuantity', $childrenRate->id, 1)
+            ->call('addSelections')
+            ->dispatch('extras-updated', [[
+                'id' => $extra->id,
+                'price' => '0',
+                'name' => $extra->name,
+                'quantity' => 1,
+            ]])
+            ->get('enabledExtras.extras')->first()['price'];
+
+        // 2 × 5.30 = 10.60. Not 18.60 (proves dynamic pricing fired), and not 6.60 — which
+        // is what selection 2 would cost if priceForDates()'s price mutation leaked from
+        // selection 1 (5.30 + (2.65 - 2)/day × 2 days = 5.30 + 1.30).
+        $this->assertEquals('10.60', $price);
     }
 
     public function test_extras_price_recalculated_on_remove_selection()

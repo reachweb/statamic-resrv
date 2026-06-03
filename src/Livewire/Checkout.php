@@ -10,7 +10,6 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\CouponUpdated;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
@@ -29,6 +28,7 @@ class Checkout extends Component
     use Traits\HandlesExtrasQueries,
         Traits\HandlesOptionsQueries,
         Traits\HandlesPricing,
+        Traits\HandlesReservationConfirmation,
         Traits\HandlesReservationQueries,
         Traits\HandlesStatamicQueries;
 
@@ -204,9 +204,12 @@ class Checkout extends Component
         // Update the reservation with the total
         $this->reservation->update($toUpdate);
 
-        // Sync extras & options to the database
-        $this->assignExtras();
-        $this->assignOptions();
+        // Sync extras & options to the database. Don't advance if either fails —
+        // the total was already written above, so proceeding would let the user pay
+        // an amount that doesn't match the extras/options actually attached.
+        if (! $this->assignExtras() || ! $this->assignOptions()) {
+            return;
+        }
 
         $this->step = 2;
     }
@@ -215,6 +218,13 @@ class Checkout extends Component
     public function handleSecondStep()
     {
         $this->resetErrorBag('reservation');
+
+        // Price/availability drift is intentionally NOT re-validated here. The quote and stock are
+        // held at reservation creation and re-confirmed once in handleFirstStep(); for the rest of
+        // the minutes_to_hold window the price is locked. The charge below uses the server-stored
+        // reservation->payment (never client input), so there is no tampering vector — re-pricing
+        // now would only reject legitimate customers whose held price drifted mid-checkout,
+        // defeating the hold. Only expiry is re-checked.
 
         // Make sure the reservation is not expired — wrap every subsequent $this->reservation
         // access too, because the getReservation() time-check inside the computed can itself
@@ -468,13 +478,12 @@ class Checkout extends Component
             return;
         }
 
-        // Transition to PARTNER (terminal-equivalent for affiliate bookings) and dispatch the
-        // confirmed event for side effects (emails) only if the transition actually happened.
-        if ($reservation->transitionTo(ReservationStatus::PARTNER)) {
-            ReservationConfirmed::dispatch($reservation);
+        // PARTNER is the terminal-equivalent state for affiliate (skip-payment) bookings.
+        if ($this->confirmOrAlreadyConfirmed($reservation, ReservationStatus::PARTNER)) {
+            return $this->redirectToCheckoutComplete($reservation->id);
         }
 
-        return $this->redirectToCheckoutComplete($reservation->id);
+        $this->reservationError = 'This reservation has expired. Please start over.';
     }
 
     protected function handleReservationWithZeroPayment()
@@ -486,11 +495,11 @@ class Checkout extends Component
             return;
         }
 
-        if ($this->reservation->transitionTo(ReservationStatus::CONFIRMED)) {
-            ReservationConfirmed::dispatch($this->reservation);
+        if ($this->confirmOrAlreadyConfirmed($this->reservation, ReservationStatus::CONFIRMED)) {
+            return $this->redirectToCheckoutComplete($this->reservation->id);
         }
 
-        return $this->redirectToCheckoutComplete($this->reservation->id);
+        $this->reservationError = 'This reservation has expired. Please start over.';
     }
 
     protected function confirmReservationIsValid(): void
@@ -555,7 +564,7 @@ class Checkout extends Component
         $this->enabledOptions->options = collect($options);
     }
 
-    protected function assignExtras(): void
+    protected function assignExtras(): bool
     {
         if ($this->enabledExtras->extras->count() > 0) {
             try {
@@ -563,12 +572,14 @@ class Checkout extends Component
             } catch (\Exception $e) {
                 $this->addError('extras', 'There was an error assigning the extras. Please try again.');
 
-                return;
+                return false;
             }
         }
+
+        return true;
     }
 
-    protected function assignOptions(): void
+    protected function assignOptions(): bool
     {
         if ($this->enabledOptions->options->count() > 0) {
             try {
@@ -576,9 +587,11 @@ class Checkout extends Component
             } catch (\Exception $e) {
                 $this->addError('options', 'There was an error assigning the options. Please try again.');
 
-                return;
+                return false;
             }
         }
+
+        return true;
     }
 
     #[On('coupon-applied'), On('coupon-removed')]

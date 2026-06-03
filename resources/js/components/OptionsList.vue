@@ -5,6 +5,7 @@
                 class="space-y-2"
                 v-model="options"
                 item-key="id"
+                :disabled="disableDrag"
                 @start="drag = true"
                 @end="drag = false"
                 @change="order"
@@ -69,6 +70,7 @@ const options = ref([]);
 const dataLoaded = ref(false);
 const deleteId = ref(null);
 const drag = ref(false);
+const disableDrag = ref(false);
 const option = ref({});
 
 const emptyOption = {
@@ -144,15 +146,19 @@ function order(event) {
     if (!event.moved) {
         return;
     }
+    disableDrag.value = true;
     const item = event.moved.element;
     const newOrder = event.moved.newIndex + 1;
     axios.patch('/cp/resrv/option/order', { id: item.id, order: newOrder })
         .then(() => {
             toast.success('Options order changed');
-            getOptions();
         })
         .catch(() => {
             toast.error('Options ordering failed');
+        })
+        .finally(() => {
+            getOptions();
+            disableDrag.value = false;
         });
 }
 </script>

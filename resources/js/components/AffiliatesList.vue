@@ -13,7 +13,7 @@
                 >
                     <div class="flex items-center gap-2">
                         <StatusIndicator :status="item.published ? 'published' : 'draft'" />
-                        <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="item.name" @click="editAffiliate(item)"></span>
+                        <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" @click="editAffiliate(item)">{{ item.name }}</span>
                         <span class="text-sm text-gray-600 dark:text-gray-400 ml-2">
                             {{ item.email }}
                         </span>
@@ -93,7 +93,9 @@ function addAffiliate() {
 }
 
 function editAffiliate(item) {
-    affiliate.value = item;
+    // Clone so the panel can never mutate the Inertia-owned prop array element in place
+    // (mirrors addAffiliate's spread). coupons_ids stays shared but the panel only reads it.
+    affiliate.value = { ...item };
     togglePanel();
 }
 

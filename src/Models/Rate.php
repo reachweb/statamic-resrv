@@ -273,16 +273,17 @@ class Rate extends Model
         $price = Price::create($basePrice->format());
 
         if ($this->modifier_type === 'percent') {
-            return $this->modifier_operation === 'increase'
+            $result = $this->modifier_operation === 'increase'
                 ? $price->increasePercent($this->modifier_amount)
                 : $price->decreasePercent($this->modifier_amount);
+        } else {
+            $modifier = Price::create($this->modifier_amount);
+            $result = $this->modifier_operation === 'increase'
+                ? $price->add($modifier)
+                : $price->subtract($modifier);
         }
 
-        $modifier = Price::create($this->modifier_amount);
-
-        return $this->modifier_operation === 'increase'
-            ? $price->add($modifier)
-            : $price->subtract($modifier);
+        return $this->floorAtZero($result);
     }
 
     /**
@@ -299,16 +300,25 @@ class Rate extends Model
         $price = Price::create($totalPrice->format());
 
         if ($this->modifier_type === 'percent') {
-            return $this->modifier_operation === 'increase'
+            $result = $this->modifier_operation === 'increase'
                 ? $price->increasePercent($this->modifier_amount)
                 : $price->decreasePercent($this->modifier_amount);
+        } else {
+            $modifier = Price::create($this->modifier_amount)->multiply($duration);
+            $result = $this->modifier_operation === 'increase'
+                ? $price->add($modifier)
+                : $price->subtract($modifier);
         }
 
-        $modifier = Price::create($this->modifier_amount)->multiply($duration);
+        return $this->floorAtZero($result);
+    }
 
-        return $this->modifier_operation === 'increase'
-            ? $price->add($modifier)
-            : $price->subtract($modifier);
+    /**
+     * A relative "decrease" modifier larger than the base must never drive a price below zero.
+     */
+    protected function floorAtZero(PriceClass $price): PriceClass
+    {
+        return $price->lessThan(Price::create(0)) ? Price::create(0) : $price;
     }
 
     public function scopePublished(Builder $query): void
