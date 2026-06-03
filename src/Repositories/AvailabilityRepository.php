@@ -396,7 +396,14 @@ class AvailabilityRepository
 
         $allByRate = $overlapping->concat($overlappingChildren)->groupBy('rate_id');
 
-        return $sharedRates->mapWithKeys(function (Rate $rate) use ($allByRate, $quantity) {
+        // Callers only ever read dates inside the requested [rangeStart, rangeEnd) window, so clamp
+        // each reservation to it before expanding — a short request overlapping a months-long booking
+        // would otherwise build hundreds of unused per-day entries. A null bound means unbounded on
+        // that side (no clamp). This mirrors the clamp in validateMaxAvailableForDateRange().
+        $windowStart = $rangeStart ? Carbon::parse($rangeStart) : null;
+        $windowEnd = $rangeEnd ? Carbon::parse($rangeEnd) : null;
+
+        return $sharedRates->mapWithKeys(function (Rate $rate) use ($allByRate, $quantity, $windowStart, $windowEnd) {
             $all = $allByRate->get($rate->id, collect());
 
             if ($all->isEmpty()) {
@@ -405,8 +412,12 @@ class AvailabilityRepository
 
             $dateCounts = [];
             foreach ($all as $res) {
-                // date_end is exclusive — the checkout day is free for the next guest.
-                $period = CarbonPeriod::create($res->date_start, $res->date_end, CarbonPeriod::EXCLUDE_END_DATE);
+                // date_end is exclusive (checkout day is free for the next guest); normalising to
+                // date strings keeps day boundaries stable against any time component.
+                $occupiedStart = ($windowStart && $res->date_start->lt($windowStart)) ? $windowStart : $res->date_start;
+                $occupiedEnd = ($windowEnd && $res->date_end->gt($windowEnd)) ? $windowEnd : $res->date_end;
+
+                $period = CarbonPeriod::create($occupiedStart->toDateString(), $occupiedEnd->toDateString(), CarbonPeriod::EXCLUDE_END_DATE);
                 foreach ($period as $date) {
                     $dateStr = $date->toDateString();
                     $dateCounts[$dateStr] = ($dateCounts[$dateStr] ?? 0) + $res->quantity;
