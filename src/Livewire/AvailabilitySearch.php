@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Carbon\Carbon;
+use Carbon\Exceptions\InvalidFormatException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -144,7 +145,16 @@ class AvailabilitySearch extends Component
     #[On('availability-date-selected')]
     public function availabilityDateSelected(array $data): void
     {
-        $dateStart = Carbon::parse($data['date']);
+        if (! isset($data['date']) || ! is_string($data['date'])) {
+            return;
+        }
+
+        try {
+            $dateStart = Carbon::parse($data['date']);
+        } catch (InvalidFormatException $e) {
+            return;
+        }
+
         $minimumPeriod = max(1, config('resrv-config.minimum_reservation_period_in_days', 1));
 
         $this->data->dates['date_start'] = $dateStart->toDateString();

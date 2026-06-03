@@ -219,6 +219,13 @@ class Checkout extends Component
     {
         $this->resetErrorBag('reservation');
 
+        // Price/availability drift is intentionally NOT re-validated here. The quote and stock are
+        // held at reservation creation and re-confirmed once in handleFirstStep(); for the rest of
+        // the minutes_to_hold window the price is locked. The charge below uses the server-stored
+        // reservation->payment (never client input), so there is no tampering vector — re-pricing
+        // now would only reject legitimate customers whose held price drifted mid-checkout,
+        // defeating the hold. Only expiry is re-checked.
+
         // Make sure the reservation is not expired — wrap every subsequent $this->reservation
         // access too, because the getReservation() time-check inside the computed can itself
         // throw ReservationExpiredException (the reservation may have aged past

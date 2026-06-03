@@ -53,6 +53,24 @@ class CheckoutOptionsTest extends TestCase
         $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
     }
 
+    // selectOption is a public client-callable action; an unknown option or value id must be
+    // ignored rather than dereferencing null and throwing a 500.
+    public function test_select_option_ignores_unknown_option_id_without_erroring()
+    {
+        Livewire::test(Options::class, ['reservation' => $this->reservation])
+            ->call('selectOption', 99999, 88888)
+            ->assertHasNoErrors()
+            ->assertNotDispatched('options-updated');
+    }
+
+    public function test_select_option_ignores_unknown_value_id_without_erroring()
+    {
+        Livewire::test(Options::class, ['reservation' => $this->reservation])
+            ->call('selectOption', $this->options->id, 88888)
+            ->assertHasNoErrors()
+            ->assertNotDispatched('options-updated');
+    }
+
     // The inverse of Option::values() must resolve back to the parent Option.
     public function test_option_value_belongs_to_its_option()
     {

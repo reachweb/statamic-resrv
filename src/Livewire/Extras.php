@@ -134,6 +134,12 @@ class Extras extends Component
             $this->enabledExtras->extras->forget($extraId);
         } else {
             $extra = $this->extras->firstWhere('id', $extraId);
+
+            // toggleExtra is a public, client-callable action — ignore ids not in the available list
+            if (! $extra) {
+                return;
+            }
+
             $this->enabledExtras->extras->put($extraId, [
                 'id' => $extraId,
                 'price' => $extra->price->format(),

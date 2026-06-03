@@ -93,7 +93,9 @@ function addAffiliate() {
 }
 
 function editAffiliate(item) {
-    affiliate.value = item;
+    // Clone so the panel can never mutate the Inertia-owned prop array element in place
+    // (mirrors addAffiliate's spread). coupons_ids stays shared but the panel only reads it.
+    affiliate.value = { ...item };
     togglePanel();
 }
 

@@ -931,42 +931,42 @@ Each item is a checkbox. Work top-down (High → Nit). When an item is fixed, ch
 
 ### Frontend Livewire
 
-- [ ] **L57 — availabilityDateSelected listener parses untrusted client-dispatched date with Carbon::parse**
+- [x] **L57 — availabilityDateSelected listener parses untrusted client-dispatched date with Carbon::parse**
   - **Where:** `src/Livewire/AvailabilitySearch.php:142-156`
   - **Problem:** #[On('availability-date-selected')] availabilityDateSelected(array $data) does `Carbon::parse($data['date'])` (line 145) with no isset guard on $data['date'] and no try/catch. Any #[On] method is invokable directly from the browser, so a client can dispatch this event with a missing 'date' key (undefined-array-key warning) or unparseable 'date' (Carbon throws InvalidFormatException), surfacing an unhandled exception. The rate_id assignment is already guarded with isset() (line 151) and later validated by data->validate() inside search(), so only the date parsing is the concern. Confirmed; severity low (worst case is a thrown exception returned to that client, not a security breach or data corruption).
   - **Fix:** Guard and validate the payload before use: `if (! isset($data['date'])) { return; }` then wrap Carbon::parse in try/catch (or validate with a date rule) and bail with a user-facing error on failure. The rate_id path is already adequately guarded.
   - **Evidence:** Lines 143-156: `public function availabilityDateSelected(array $data): void { $dateStart = Carbon::parse($data['date']); ... if (isset($data['rate_id'])) { $this->data->rate = $data['rate_id']; } $this->search(); }`. No isset check on $data['date'] and no try/catch around Carbon::parse. Tests (test_listens_to_availability_date_selected_event) only exercise well-formed payloads.
   - _best-practice · confirmed · high confidence_
 
-- [ ] **L58 — Payment step does not re-validate price/availability drift before charging**
+- [x] **L58 — Payment step does not re-validate price/availability drift before charging**
   - **Where:** `src/Livewire/Checkout.php:215-266`
   - **Problem:** Drift/required-extras validation (confirmReservationIsValid → validateReservation → validateTotal) runs only in handleFirstStep (Checkout.php:165-167). handleSecondStep (215-266) and the zero-payment/affiliate-skip paths only re-check expiry, then build the payment intent from the persisted reservation->payment. Between step 1 and payment the catalogue price / dynamic-pricing window / coupon can change, so the customer may be charged a stale price. Because stock is held at creation, this is a stale-price risk, not overbooking. This is plausibly an intentional 'lock price for the hold window' design, but there is no re-confirmation and no comment documenting it. Low severity / design observation.
   - **Fix:** Either re-run a lightweight validateTotal()/getPricing() drift check at the start of handleSecondStep before initializePayment, or add an explicit comment documenting that the step-1 price is intentionally locked for the hold window.
   - **Evidence:** Checkout.php:165-167 (validation only in step 1). handleSecondStep 223-248 calls only confirmReservationHasNotExpired then availableForFrontend($reservation->payment); no validateTotal. initializePayment (398-441) charges from $reservation->payment.
   - _correctness · confirmed · low confidence_
 
-- [ ] **L59 — Arbitrary keys in the public $form array are persisted into customer.data**
+- [x] **L59 — Arbitrary keys in the public $form array are persisted into customer.data**
   - **Where:** `src/Livewire/CheckoutForm.php:25,84-114`
   - **Problem:** Real but the stored-XSS framing is speculative. `public array $form` is not shape-locked, and rules() only declares rules for resolved form handles (CheckoutForm.php:56-61); Laravel's validator validates declared keys but does not strip undeclared ones, so extra client-injected keys survive. saveCustomer() then stores `collect($this->form)->except('email')` verbatim into customer.data (lines 92, 106-109). So unwhitelisted keys ARE persisted — confirmed data pollution. However, the stored-XSS angle is not currently realised: the shipped views (CP is Vue 3, which escapes by default; emails use Blade auto-escaping) contain no `{!! !!}` rendering of customer data (grep found only resources/views/email/theme/text/layout.blade.php, which is the text theme). So today this is data pollution / unbounded JSON growth, not XSS. Low severity / defense-in-depth.
   - **Fix:** Whitelist persisted keys to known handles before saving: `$allowed = collect($this->checkoutForm)->pluck('handle'); $data = collect($this->form)->only($allowed->all())->except('email');`. Optionally validate that $form contains no unexpected keys.
   - **Evidence:** CheckoutForm.php:24-25 `#[Validate] public array $form;`. rules() (56-61) maps only checkoutForm handles. saveCustomer() (92) `$data = collect($this->form)->except('email');` then persists at 100/108. No `{!! !!}` rendering of customer data found in shipped views.
   - _security · partially-confirmed · medium confidence_
 
-- [ ] **L60 — CheckoutPayment::confirmPayment does not guard non-PENDING terminal states before transitionTo**
+- [x] **L60 — CheckoutPayment::confirmPayment does not guard non-PENDING terminal states before transitionTo**
   - **Where:** `src/Livewire/CheckoutPayment.php:68-84`
   - **Problem:** confirmPayment() (manual-confirmation/offline gateways) short-circuits only CONFIRMED (line 68) and EXPIRED (line 74) before calling transitionTo(CONFIRMED) (line 80). For REFUNDED/PARTNER/WEBHOOK, canTransitionTo(CONFIRMED) returns false (ReservationStatus.php:31-34: REFUNDED→[], PARTNER→[REFUNDED], WEBHOOK→[]), so transitionTo throws InvalidStateTransition (Reservation.php:183-184) as an uncaught 500 instead of a friendly message. The realistic trigger is REFUNDED (an admin refunds a PENDING reservation while the customer's offline-payment tab is open); PARTNER would not normally reach the payment step (zero payment) and WEBHOOK has no writer, so practical reach is narrow — low severity.
   - **Fix:** After the CONFIRMED short-circuit, gate on PENDING: `if ($reservation->status !== ReservationStatus::PENDING->value) { addError(...); return; }`, or wrap transitionTo in a try/catch for InvalidStateTransition.
   - **Evidence:** CheckoutPayment.php:68 (CONFIRMED), 74 (EXPIRED), 80 (transitionTo). ReservationStatus.php:31-34 shows REFUNDED/PARTNER/WEBHOOK cannot go to CONFIRMED; Reservation.php:183-184 throws InvalidStateTransition.
   - _correctness · confirmed · medium confidence_
 
-- [ ] **L61 — toggleExtra / selectOption fatally error on unknown ids supplied by the client**
+- [x] **L61 — toggleExtra / selectOption fatally error on unknown ids supplied by the client**
   - **Where:** `src/Livewire/Extras.php:136-142`
   - **Problem:** toggleExtra($extraId) (Extras.php:127-148) does `$extra = $this->extras->firstWhere('id', $extraId)` then dereferences `$extra->price->format()` (line 139) with no null guard. These are public, client-callable Livewire actions, so toggleExtra(99999) for an id not in the available list makes firstWhere return null and throws an uncaught Error (HTTP 500). Options::selectOption() (Options.php:91-106) has the same shape: `$option = $this->options->firstWhere('id', $optionId)` then `$option->values->firstWhere('id', $valueId)` then `$value->price->format()` — both lookups can be null on crafted input. Low severity (DoS-ish 500 on malformed input, no data impact).
   - **Fix:** After each firstWhere, return early (or addError) when the extra/option/value is null before dereferencing.
   - **Evidence:** Extras.php:136-139 (no guard before $extra->price). Options.php:96-103 (no guard before $value->price). Both methods are public Livewire actions.
   - _bug · confirmed · high confidence_
 
-- [ ] **L62 — Redundant per-extra queries re-fetch conditions already in memory (N+1)**
+- [x] **L62 — Redundant per-extra queries re-fetch conditions already in memory (N+1)**
   - **Where:** `src/Livewire/Traits/HandlesExtrasQueries.php:22-26, 71-75, 120`
   - **Problem:** getExtrasForReservation(), getExtrasForSearch() and getExtrasForSelections() set $extra->conditions = (new Extra)->find($extra->id)->conditions()->get(), running an extra find() (which itself auto-eager-loads conditions via $with) plus a conditions()->get() per extra on each render — a real N+1/redundant-query cost. HOWEVER the original finding's suggested fix (just rely on the eager-loaded $with relation) is WRONG and would break the code: Extra::conditions() is a hasOne (Extra.php:60), so $with eager-loads a SINGLE ExtraCondition model (or null), whereas downstream code requires a Collection — handleExtrasConditions does count($extra->conditions) (line 142) and calculateConditionArrays does $extra->conditions->each(fn($condition)=>$condition->createConditionsArray(...)) (ExtraCondition.php:124). The ->conditions()->get() call exists specifically to coerce the hasOne into a collection. So this is a genuine but lower-severity performance nit, not the trivially-removable duplication described.
   - **Fix:** Drop the per-row find() but still coerce to a collection without an extra query, e.g. $extra->setRelation('conditions', $extra->conditions ? collect([$extra->conditions]) : collect()). Or model conditions as a hasMany / eager-load via Extra::with('conditions') once and adapt the consumers. Do NOT simply remove the line and rely on $with as-is.
@@ -975,21 +975,21 @@ Each item is a checkbox. Work top-down (High → Nit). When an item is fixed, ch
 
 ### Vue / CP UI
 
-- [ ] **L63 — editAffiliate stores a live reference to the prop array element**
+- [x] **L63 — editAffiliate stores a live reference to the prop array element**
   - **Where:** `resources/js/components/AffiliatesList.vue:95-98`
   - **Problem:** editAffiliate (lines 95-98) does `affiliate.value = item`, storing the exact object from the `affiliates` prop array, then passes it to `<AffiliatesPanel :data="affiliate">` (line 41). addAffiliate clones via `{ ...emptyAffiliate }` (line 91) but editAffiliate does not. AffiliatesPanel currently only reads props.data to hydrate a separate useForm (hydrateForm, lines 99-111), so nothing mutates the parent prop today — no live bug. The note is correct as a one-way-data-flow risk: if the panel or a future edit ever assigned into props.data, it would mutate the parent's Inertia-owned reactive prop in place. Low severity is right.
   - **Fix:** Clone on assign for consistency with addAffiliate: `affiliate.value = { ...item }` (deep clone if nested arrays like coupons_ids must be isolated).
   - **Evidence:** Lines 95-98: `function editAffiliate(item) { affiliate.value = item; togglePanel(); }`. Line 91 (addAffiliate) clones: `affiliate.value = { ...emptyAffiliate }`. AffiliatesPanel hydrateForm (lines 99-111) only reads `props.data` into a separate useForm, so no current mutation. Real coupling/inconsistency, currently benign.
   - _Vue · confirmed · high confidence_
 
-- [ ] **L64 — AvailabilityModal mass clear-stuck-holds aggregates 'cleared' but reports active holds only after all requests settle**
+- [x] **L64 — AvailabilityModal mass clear-stuck-holds aggregates 'cleared' but reports active holds only after all requests settle**
   - **Where:** `resources/js/components/AvailabilityModal.vue:171-214`
   - **Problem:** clearStuckHolds fires one POST per date via Promise.all (lines 178-185). If any single request rejects, Promise.all short-circuits to the catch (line 208) showing the generic 'Failed to clear stuck holds' toast; the resolved responses' cleared counts and still_active ids are discarded, and emit('saved') is not called, so the parent does not refresh. The user gets no indication of partial success in exactly the recovery path this feature exists for. Confirmed as described; best-practice/robustness issue at low severity (the worst case is a re-run, which is presumably idempotent server-side).
   - **Fix:** Use Promise.allSettled and aggregate per-date successes/failures, reporting partial progress (e.g. 'X cleared, Y dates failed') and still emitting saved when any succeeded.
   - **Evidence:** Lines 178-185 `const responses = await Promise.all(datesWithPending.value.map((date) => axios.post(...)));` then catch at 208-210 `catch (e) { console.error(e); toast.error('Failed to clear stuck holds'); }` discards all per-response data on any single rejection.
   - _best-practice · confirmed · high confidence_
 
-- [ ] **L65 — categoryOptions throws if an extra has category_id set but category relation is missing**
+- [x] **L65 — categoryOptions throws if an extra has category_id set but category relation is missing**
   - **Where:** `resources/js/components/ExtraConditionsForm.vue:110-128`
   - **Problem:** Inside the loop, line 123 does parseInt(extra.category.id, 10) with no null guard, while line 124 guards the label as extra.category ? extra.category.name : 'Uncategorized'. The loop only continues when category_id is null/undefined (line 115); when category_id is set but extra.category is null/undefined, line 123 throws a TypeError, which breaks the entire computed and the conditions form render for category-type conditions. The author clearly anticipated a missing category on the label line but not on the value line — a genuine, self-evident inconsistency. Severity stays low because in normal operation the backend eager-loads the category relation whenever category_id is set, so this only triggers in edge cases (relation not loaded, category soft-deleted). The 'Uncategorized' fallback label is also dead code here since the row is only reached when category_id is non-null.
   - **Fix:** Guard the value the same way: value: extra.category ? parseInt(extra.category.id, 10) : extra.category_id, and/or skip rows where extra.category is missing. Keyed by category_id which is already non-null, so parseInt(extra.category_id, 10) is a safe fallback.

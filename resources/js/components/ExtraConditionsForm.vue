@@ -124,7 +124,9 @@ const categoryOptions = computed(() => {
         }
         seen.add(extra.category_id);
         out.push({
-            value: parseInt(extra.category.id, 10),
+            // Use the foreign key (guaranteed non-null above) rather than extra.category.id, which
+            // throws when the category relation is missing (not loaded / soft-deleted).
+            value: parseInt(extra.category_id, 10),
             label: extra.category ? extra.category.name : 'Uncategorized',
         });
     }

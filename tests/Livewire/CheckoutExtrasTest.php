@@ -73,6 +73,45 @@ class CheckoutExtrasTest extends TestCase
         $this->assertEquals('9.30', $component->extras->first()->price);
     }
 
+    // toggleExtra is a public client-callable action; an id not in the available list must be
+    // ignored rather than dereferencing null and throwing a 500.
+    public function test_toggle_extra_ignores_unknown_id_without_erroring()
+    {
+        Livewire::test(Extras::class, ['reservation' => $this->reservation])
+            ->call('toggleExtra', 99999)
+            ->assertHasNoErrors()
+            ->assertNotDispatched('extras-updated');
+    }
+
+    // Conditions for every available extra must load in a single batched query, not one (plus a
+    // redundant find()) per extra. With 5 condition-bearing extras the old code issued 1 + 2*5
+    // queries against the conditions table; the fix issues exactly one.
+    public function test_extras_conditions_load_without_n_plus_1_queries()
+    {
+        $entry = ResrvEntry::whereItemId($this->entries->first()->id);
+
+        foreach (range(1, 5) as $i) {
+            $extra = ResrvExtra::factory()->create([
+                'id' => 100 + $i,
+                'slug' => 'condition-extra-'.$i,
+            ]);
+            $entry->extras()->attach($extra->id);
+            ExtraCondition::factory()->requiredAlways()->create(['extra_id' => $extra->id]);
+        }
+
+        DB::enableQueryLog();
+
+        Livewire::test(Extras::class, ['reservation' => $this->reservation]);
+
+        $conditionQueries = collect(DB::getQueryLog())
+            ->filter(fn ($query) => str_contains($query['query'], 'resrv_extra_conditions'))
+            ->count();
+
+        DB::disableQueryLog();
+
+        $this->assertEquals(1, $conditionQueries);
+    }
+
     // Test that extra categories are correctly loaded for the Reservation
     public function test_it_loads_the_extra_categories_for_the_entry_and_reservation()
     {

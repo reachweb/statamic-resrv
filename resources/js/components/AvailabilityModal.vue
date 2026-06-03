@@ -172,10 +172,13 @@ async function clearStuckHolds(force) {
     if (clearingPending.value) return;
     clearingPending.value = true;
     let totalCleared = 0;
+    let failedCount = 0;
     const stillActive = new Set();
 
     try {
-        const responses = await Promise.all(
+        // allSettled (not all) so one failed date doesn't discard the holds other dates cleared —
+        // this is the recovery path, partial progress must be kept and reported.
+        const results = await Promise.allSettled(
             datesWithPending.value.map((date) => axios.post('/cp/resrv/availability/clear-stuck-pending', {
                 statamic_id: props.parentId,
                 date,
@@ -184,27 +187,42 @@ async function clearStuckHolds(force) {
             }))
         );
 
-        for (const response of responses) {
-            const data = response.data || {};
+        for (const result of results) {
+            if (result.status === 'rejected') {
+                failedCount++;
+                console.error(result.reason);
+                continue;
+            }
+            const data = result.value.data || {};
             totalCleared += data.cleared || 0;
             if (!force && Array.isArray(data.still_active)) {
                 data.still_active.forEach((id) => stillActive.add(id));
             }
         }
 
-        if (!force && stillActive.size > 0) {
+        if (force) {
+            stillActiveIds.value = [];
+        } else if (stillActive.size > 0) {
             stillActiveIds.value = [...stillActive];
+        }
+
+        const waitingForConfirmation = !force && stillActive.size > 0;
+
+        if (failedCount > 0) {
+            toast.error(`${totalCleared} hold(s) cleared, ${failedCount} date(s) failed`);
+        } else if (waitingForConfirmation) {
             if (totalCleared > 0) {
                 toast.success(`${totalCleared} stuck hold(s) cleared. Active holds need confirmation.`);
             }
-            return;
+        } else {
+            toast.success(`${totalCleared} hold(s) cleared`);
         }
 
-        if (force) {
-            stillActiveIds.value = [];
+        // emit('saved') closes + refreshes the parent modal, so hold it back while we still need
+        // the user to confirm active holds; otherwise refresh whenever anything actually cleared.
+        if (!waitingForConfirmation && (failedCount === 0 || totalCleared > 0)) {
+            emit('saved');
         }
-        toast.success(`${totalCleared} hold(s) cleared`);
-        emit('saved');
     } catch (e) {
         console.error(e);
         toast.error('Failed to clear stuck holds');

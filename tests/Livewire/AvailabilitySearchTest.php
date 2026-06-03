@@ -468,6 +468,27 @@ class AvailabilitySearchTest extends TestCase
             ->assertDispatched('availability-search-updated');
     }
 
+    public function test_availability_date_selected_ignores_missing_date_key()
+    {
+        Livewire::test(AvailabilitySearch::class)
+            ->dispatch('availability-date-selected', [
+                'rate_id' => null,
+            ])
+            ->assertSet('data.dates', [])
+            ->assertNotDispatched('availability-search-updated');
+    }
+
+    public function test_availability_date_selected_ignores_unparseable_date()
+    {
+        Livewire::test(AvailabilitySearch::class)
+            ->dispatch('availability-date-selected', [
+                'date' => 'not-a-date',
+                'rate_id' => null,
+            ])
+            ->assertSet('data.dates', [])
+            ->assertNotDispatched('availability-search-updated');
+    }
+
     public function test_availability_calendar_returns_lowest_price_when_multiple_rates()
     {
         $entry = $this->entries->first();
