@@ -142,14 +142,14 @@ class AvailabilityMultiResults extends Component
             return;
         }
 
-        $this->getAvailability();
+        $this->loadAvailability();
 
         $this->runHooks('availability-results-updated', $this->availability);
 
         $this->dispatch('availability-results-updated');
     }
 
-    public function getAvailability(): void
+    public function loadAvailability(): void
     {
         try {
             $this->validateCutoffRules();

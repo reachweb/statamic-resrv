@@ -93,6 +93,7 @@ class AvailabilityRepository
             ->where('resrv_availabilities.date', '>=', $date_start)
             ->where('resrv_availabilities.date', '<', $date_end)
             ->where('resrv_availabilities.available', '>=', $quantity)
+            ->whereNull('resrv_rates.deleted_at')
             ->when($rateId, fn (Builder $query, int $rateId) => $this->applyRateFilter($query, $rateId))
             ->when(! $rateId, fn (Builder $query) => $this->applyPublishedRateFilter($query))
             ->groupBy('resrv_availabilities.statamic_id', 'resrv_availabilities.rate_id', 'resrv_rates.order')
@@ -112,6 +113,15 @@ class AvailabilityRepository
             ->groupBy('statamic_id');
     }
 
+    /**
+     * Validates that every day in date_start..date_end has an availability row WITH a price.
+     *
+     * NOTE: uses INCLUSIVE end-date semantics (both ends counted) — distinct from the EXCLUSIVE
+     * convention of the booking-engine queries here (availableBetween, itemAvailableBetween and
+     * getLockedAvailabilities treat date_end as the checkout/departure day, `date < date_end`).
+     * This matches its only caller, the ResrvAvailabilityExists CP rule, which validates the full
+     * range a CP user typed. Passing an engine-style exclusive range here would be off by one day.
+     */
     public function itemsExistAndHavePrices(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): bool
     {
         $result = Availability::selectRaw('COUNT(*) as total_days, SUM(CASE WHEN price IS NOT NULL THEN 1 ELSE 0 END) as days_with_prices')
@@ -420,13 +430,28 @@ class AvailabilityRepository
 
         $allOverlapping = $overlapping->concat($overlappingChildren);
 
+        // Build a date => booked-quantity map in a single pass (each reservation expanded once)
+        // rather than re-filtering the whole overlapping set per requested day. This keeps the
+        // work — and the lockForUpdate window when useLocks is true — minimal for long stays.
+        $bookedPerDay = [];
+        foreach ($allOverlapping as $reservation) {
+            // date_end is exclusive (checkout day is free for the next guest); normalise to date
+            // strings so day boundaries match the request period regardless of any time component.
+            $occupied = CarbonPeriod::create(
+                $reservation->date_start->toDateString(),
+                $reservation->date_end->toDateString(),
+                CarbonPeriod::EXCLUDE_END_DATE
+            );
+            foreach ($occupied as $date) {
+                $dateStr = $date->toDateString();
+                $bookedPerDay[$dateStr] = ($bookedPerDay[$dateStr] ?? 0) + $reservation->quantity;
+            }
+        }
+
         $period = CarbonPeriod::create($dateStart, $dateEnd, CarbonPeriod::EXCLUDE_END_DATE);
 
         foreach ($period as $date) {
-            $dateStr = $date->toDateString();
-            $activeQuantity = $allOverlapping
-                ->filter(fn ($r) => $r->date_start->toDateString() <= $dateStr && $r->date_end->toDateString() > $dateStr)
-                ->sum('quantity');
+            $activeQuantity = $bookedPerDay[$date->toDateString()] ?? 0;
 
             if (($activeQuantity + $quantity) > $rate->max_available) {
                 throw new AvailabilityException(__('The maximum number of bookings for this rate has been reached.'));

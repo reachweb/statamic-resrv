@@ -118,7 +118,7 @@ class ReservationCpController extends Controller
 
         $entryArray = is_array($entry)
             ? $entry
-            : $entry->toAugmentedArray(['id', 'title', 'slug', 'url']);
+            : $reservation->entryToArray($entry);
 
         return [
             'id' => $reservation->id,

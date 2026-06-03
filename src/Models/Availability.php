@@ -351,7 +351,7 @@ class Availability extends Model implements AvailabilityContract
                     }
                 }
 
-                return $processed->sortBy('price', SORT_NUMERIC);
+                return $processed->sortBy(fn ($row) => (int) Price::create($row->get('price'))->raw());
             })
             ->filter(fn ($items) => $items->isNotEmpty());
 
@@ -487,7 +487,7 @@ class Availability extends Model implements AvailabilityContract
     protected function getMultipleRatesAvailability(Entry $entry, $request)
     {
         return new AvailabilityItemResource(
-            $this->buildRatesAvailabilityCollection($entry)->sortBy('price', SORT_NUMERIC),
+            $this->buildRatesAvailabilityCollection($entry)->sortBy(fn ($row) => (int) Price::create($row->get('price'))->raw()),
             $request
         );
     }
@@ -805,6 +805,9 @@ class Availability extends Model implements AvailabilityContract
         return $results
             ->groupBy(fn ($item) => Carbon::parse($item->date)->format('Y-m-d'))
             ->map(fn ($item) => $item->sortBy(fn ($row) => (int) $row->price->raw())->firstWhere('available', '>', 0))
+            // Drop dates whose every row is sold out (firstWhere returns null) so the calendar
+            // contract is "date => cheapest available row", never a null mixed in with arrays.
+            ->filter()
             ->toArray();
     }
 

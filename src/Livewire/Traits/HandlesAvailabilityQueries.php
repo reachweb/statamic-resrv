@@ -165,6 +165,16 @@ trait HandlesAvailabilityQueries
         $aggregated = $selections->groupBy(
             fn ($s) => $s['rate_id'].'|'.$s['date_start'].'|'.$s['date_end']
         )->map(function ($group) {
+            // Same rate + dates always resolve to the same per-unit price, so a divergent
+            // price within a group means a selection was tampered with (selections is public,
+            // not #[Locked]). Reject here — otherwise collapsing to the first member's price
+            // would hide a low duplicate from the confirmAvailabilityAndPrice check below.
+            if ($group->pluck('price')->unique()->count() > 1) {
+                throw new AvailabilityException(
+                    __('This item is not available anymore or the price has changed. Please refresh and try searching again!')
+                );
+            }
+
             $first = $group->first();
 
             return array_merge($first, ['quantity' => $group->sum('quantity')]);

@@ -636,6 +636,34 @@ class AvailabilityMultiResultsTest extends TestCase
         ]);
     }
 
+    public function test_duplicate_same_rate_date_selections_with_divergent_prices_are_rejected()
+    {
+        $this->createCheckoutEntry();
+        [$entryId, $adultsRate] = $this->createMultiRateEntry(available: 4);
+
+        // Two selections of the same rate+dates — legitimate duplicates always share a price.
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('addSelections')
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('addSelections');
+
+        $selections = $component->get('selections');
+        $this->assertCount(2, $selections);
+
+        // Tamper the second duplicate's per-unit price below the first (selections is public,
+        // not #[Locked], so a crafted request can do this). The aggregation collapses to the
+        // first member's price, so the guard must reject the divergent group up front.
+        $selections[1]['price'] = '1.00';
+        $component->set('selections', $selections);
+
+        $component->call('checkout')->assertHasErrors('availability');
+
+        // Rejected at the pre-flight check: no reservation is created at all.
+        $this->assertDatabaseMissing('resrv_reservations', ['item_id' => $entryId]);
+    }
+
     public function test_search_quantity_does_not_inflate_per_rate_prices()
     {
         [$entryId, $adultsRate] = $this->createMultiRateEntry();

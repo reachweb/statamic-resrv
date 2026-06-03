@@ -59,6 +59,9 @@ class Reservation extends Model
     protected $casts = [
         'date_start' => 'datetime',
         'date_end' => 'datetime',
+        // The money columns pair this cast with the get*Attribute accessors below on purpose —
+        // see the accessor note. The cast normalises writes and powers string serialization;
+        // do not drop a money cast without also removing its accessor.
         'price' => PriceClass::class,
         'payment' => PriceClass::class,
         'payment_surcharge' => PriceClass::class,
@@ -103,6 +106,12 @@ class Reservation extends Model
         return $this->belongsToMany(DynamicPricing::class, 'resrv_reservation_dynamic_pricing')->withPivot('data');
     }
 
+    // These accessors are NOT redundant with the PriceClass cast above — the two serve different
+    // reads. On direct access ($reservation->price) the accessor wins and returns a Price object
+    // for money math (->format(), ->subtract(), ...). On array/JSON serialization the cast's get()
+    // runs instead and emits a formatted string, which is what the ResrvCheckoutRedirect tag and
+    // the gateway toArray() payloads expose to Antlers templates. Keep both halves in sync;
+    // ReservationPriceCastTest locks this contract.
     public function getPriceAttribute($value)
     {
         return Price::create($value);

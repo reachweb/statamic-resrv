@@ -135,6 +135,46 @@ class RateSharedAvailabilityTest extends TestCase
         );
     }
 
+    public function test_max_available_is_enforced_per_day_for_partially_overlapping_reservations()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 2);
+
+        // Two existing reservations occupy ONLY the second night, pushing that single day
+        // to the cap of 2 while the first night stays free.
+        foreach (range(1, 2) as $i) {
+            Reservation::factory()->create([
+                'item_id' => $setup['entry']->id(),
+                'rate_id' => $setup['sharedRate']->id,
+                'date_start' => $setup['startDate']->copy()->addDay()->toDateString(),
+                'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+                'quantity' => 1,
+                'status' => 'confirmed',
+            ]);
+        }
+
+        // New booking spans both nights. The first night is free, but the second night is
+        // already at capacity, so the per-day check must reject it.
+        $newReservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'status' => 'pending',
+        ]);
+
+        $this->expectException(AvailabilityException::class);
+
+        AvailabilityRepository::decrement(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $newReservation->id,
+        );
+    }
+
     public function test_shared_rate_cancellation_increments_base_rate()
     {
         $setup = $this->createSharedSetup(baseAvailable: 5);
