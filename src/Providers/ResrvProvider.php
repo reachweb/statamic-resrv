@@ -17,6 +17,7 @@ use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Fieldtypes\ResrvAvailability;
 use Reach\StatamicResrv\Fieldtypes\ResrvCutoff;
+use Reach\StatamicResrv\Fieldtypes\ResrvEmailTemplate;
 use Reach\StatamicResrv\Fieldtypes\ResrvExtras;
 use Reach\StatamicResrv\Fieldtypes\ResrvFixedPricing;
 use Reach\StatamicResrv\Fieldtypes\ResrvOptions;
@@ -90,6 +91,7 @@ class ResrvProvider extends AddonServiceProvider
         ResrvExtras::class,
         ResrvFixedPricing::class,
         ResrvCutoff::class,
+        ResrvEmailTemplate::class,
     ];
 
     protected $tags = [
