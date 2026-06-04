@@ -8,7 +8,7 @@ interface AvailabilityContract
 {
     public function getPriceAttribute($value);
 
-    public function getAvailable(array $data);
+    public function getAvailable(array $data, ?array $entries = null, RateSorting $rateSorting = RateSorting::Price);
 
     public function getAvailabilityForEntry(array $data, string $statamic_id, bool $expireReservations = true, RateSorting $rateSorting = RateSorting::Order);
 

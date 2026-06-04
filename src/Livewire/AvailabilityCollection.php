@@ -9,6 +9,7 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\CutoffException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
@@ -51,6 +52,11 @@ class AvailabilityCollection extends Component
 
     #[Locked]
     public string $sort = 'order';
+
+    // Orders the rates WITHIN each entry ('order' | 'price'); distinct from $sort, which
+    // orders the entries. Mirrors AvailabilityResults so a listing and a detail page agree.
+    #[Locked]
+    public string $rateSorting = 'order';
 
     #[Locked]
     public array $overrideRates = [];
@@ -177,7 +183,7 @@ class AvailabilityCollection extends Component
             return collect();
         }
 
-        $response = $this->getAvailability($this->searchPayload(), $entries);
+        $response = $this->getAvailability($this->searchPayload(), $entries, $this->resolveRateSorting());
 
         // An availability-level rejection (a range the model rejects but the form rules
         // allow) returns message.error with no data — surface it rather than show "no
@@ -308,6 +314,11 @@ class AvailabilityCollection extends Component
             'quantity' => $this->data->quantity,
             'rate' => $this->data->rate,
         ]]);
+    }
+
+    protected function resolveRateSorting(): RateSorting
+    {
+        return RateSorting::fromValue($this->rateSorting);
     }
 
     protected function isEntryInScope($entry): bool

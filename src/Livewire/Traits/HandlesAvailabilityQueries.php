@@ -25,14 +25,14 @@ trait HandlesAvailabilityQueries
 {
     use HandlesCutoffValidation, HandlesMultisiteIds;
 
-    public function getAvailability(Collection $data, EntryCollection|LengthAwarePaginator|null $entries = null): array
+    public function getAvailability(Collection $data, EntryCollection|LengthAwarePaginator|null $entries = null, RateSorting $rateSorting = RateSorting::Price): array
     {
         $searchData = $this->toResrvArray($data->first());
 
         try {
             $entryIds = $entries ? $this->getEntryIds($entries) : null;
 
-            return app(Availability::class)->getAvailable($searchData, $entryIds);
+            return app(Availability::class)->getAvailable($searchData, $entryIds, $rateSorting);
         } catch (AvailabilityException $exception) {
             return [
                 'message' => [
