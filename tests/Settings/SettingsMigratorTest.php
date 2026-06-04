@@ -140,6 +140,23 @@ class SettingsMigratorTest extends TestCase
         $this->assertSame(['logo' => ['file' => false, 'cp' => 'https://example.com/logo.png']], $result->conflicts);
     }
 
+    public function test_file_logo_url_replaces_a_legacy_no_logo_sentinel_in_cp_settings()
+    {
+        $settings = $this->settings();
+        $settings->set(['logo' => 'false']);
+
+        $result = $this->migrator->migrate(
+            ['logo' => 'https://example.com/logo.png'],
+            $settings,
+            $this->blueprintFields
+        );
+
+        $this->assertSame(['logo' => 'https://example.com/logo.png'], $result->seeded);
+        $this->assertSame([], $result->conflicts);
+        $this->assertSame(['logo'], $result->normalized);
+        $this->assertSame('https://example.com/logo.png', $this->settings()->raw()['logo']);
+    }
+
     public function test_legacy_false_logo_is_removed_from_existing_cp_settings()
     {
         $settings = $this->settings();

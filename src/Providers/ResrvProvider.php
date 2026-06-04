@@ -53,6 +53,7 @@ use Reach\StatamicResrv\Support\SettingsMigrator;
 use Reach\StatamicResrv\Tags\Resrv;
 use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
+use Reach\StatamicResrv\UpdateScripts\MigrateConfigToSettings;
 use Statamic\Events\BlueprintSaved;
 use Statamic\Events\EntryDeleting;
 use Statamic\Events\EntrySaved;
@@ -84,6 +85,11 @@ class ResrvProvider extends AddonServiceProvider
         MigrateSettings::class,
         UpgradeToRates::class,
         SendAbandonedReservationEmails::class,
+    ];
+
+    /** Not auto-discovered — Statamic only scans src/Providers/UpdateScripts. */
+    protected $updateScripts = [
+        MigrateConfigToSettings::class,
     ];
 
     protected $dictionaries = [

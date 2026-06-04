@@ -60,6 +60,9 @@ class SettingsMigrator
      * store. Existing CP values always win; values equal to the blueprint default
      * are skipped so future default changes keep flowing through.
      *
+     * The legacy no-logo sentinel is normalized away first so it neither blocks
+     * seeding a file logo URL nor surfaces as a conflict.
+     *
      * @param  array<string, mixed>  $publishedConfig
      * @param  array<string, array<string, mixed>>  $blueprintFields  top-level fields keyed by handle (see SettingsBlueprint::fields())
      */
@@ -71,6 +74,13 @@ class SettingsMigrator
     ): SettingsMigrationResult {
         $raw = $settings->raw();
         $defaults = SettingsBlueprint::defaultsFromFields($blueprintFields);
+
+        $normalized = [];
+
+        if (array_key_exists('logo', $raw) && $this->meansNoLogo($raw['logo'])) {
+            unset($raw['logo']);
+            $normalized[] = 'logo';
+        }
 
         $cpManaged = array_intersect_key($publishedConfig, $blueprintFields);
 
@@ -84,16 +94,8 @@ class SettingsMigrator
 
         $conflicts = collect($cpManaged)
             ->filter(fn ($value, $key) => array_key_exists($key, $raw) && $raw[$key] !== $value)
-            ->reject(fn ($value, $key) => $key === 'logo' && $this->meansNoLogo($value) && $this->meansNoLogo($raw[$key]))
             ->map(fn ($value, $key) => ['file' => $value, 'cp' => $raw[$key]])
             ->all();
-
-        $normalized = [];
-
-        if (array_key_exists('logo', $raw) && $this->meansNoLogo($raw['logo'])) {
-            unset($raw['logo']);
-            $normalized[] = 'logo';
-        }
 
         $stale = collect($publishedConfig)
             ->keys()
