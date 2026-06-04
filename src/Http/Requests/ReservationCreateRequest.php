@@ -42,14 +42,6 @@ class ReservationCreateRequest extends FormRequest
             ];
         }
 
-        if (config('resrv-config.enable_locations') == true) {
-            $additional_rules = [
-                'location_start' => 'required|integer',
-                'location_end' => 'required|integer',
-            ];
-            $rules = array_merge($rules, $additional_rules);
-        }
-
         return $rules;
     }
 }

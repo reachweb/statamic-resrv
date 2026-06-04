@@ -30,7 +30,9 @@ class InstallResrv extends Command
      */
     public function handle()
     {
-        $this->publishConfigurationFile();
+        if ($this->confirm('Publish the developer configuration file (payment gateways & Stripe keys)? Most sites don\'t need this.', false)) {
+            $this->publishConfigurationFile();
+        }
         if ($this->confirm('Do you want to publish the checkout form? (needed for Resrv to work correctly)', true)) {
             $this->publishCheckoutForm();
         }
@@ -48,7 +50,7 @@ class InstallResrv extends Command
 
     protected function publishConfigurationFile()
     {
-        $this->info('Publishing configuration file');
+        $this->info('Publishing developer configuration file');
 
         $this->callSilent('vendor:publish', [
             '--tag' => 'resrv-config',

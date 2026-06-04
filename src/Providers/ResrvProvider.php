@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Providers;
 use Illuminate\Console\Application as Artisan;
 use Reach\StatamicResrv\Console\Commands\ImportEntries;
 use Reach\StatamicResrv\Console\Commands\InstallResrv;
+use Reach\StatamicResrv\Console\Commands\MigrateSettings;
 use Reach\StatamicResrv\Console\Commands\SendAbandonedReservationEmails;
 use Reach\StatamicResrv\Console\Commands\UpgradeToRates;
 use Reach\StatamicResrv\Dictionaries\CountryPhoneCodes;
@@ -47,10 +48,13 @@ use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
+use Reach\StatamicResrv\Support\SettingsBlueprint;
+use Reach\StatamicResrv\Support\SettingsMigrator;
 use Reach\StatamicResrv\Tags\Resrv;
 use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
 use Statamic\Events\BlueprintSaved;
+use Statamic\Events\EntryDeleting;
 use Statamic\Events\EntrySaved;
 use Statamic\Facades\Addon;
 use Statamic\Facades\CP\Nav;
@@ -77,6 +81,7 @@ class ResrvProvider extends AddonServiceProvider
     protected $commands = [
         InstallResrv::class,
         ImportEntries::class,
+        MigrateSettings::class,
         UpgradeToRates::class,
         SendAbandonedReservationEmails::class,
     ];
@@ -138,7 +143,7 @@ class ResrvProvider extends AddonServiceProvider
         EntrySaved::class => [
             AddResrvEntryToDatabase::class,
         ],
-        \Statamic\Events\EntryDeleting::class => [
+        EntryDeleting::class => [
             PreventEntryDeletionWithActiveReservations::class,
         ],
         \Statamic\Events\EntryDeleted::class => [
@@ -204,11 +209,14 @@ class ResrvProvider extends AddonServiceProvider
 
         $this->mergeConfigFrom(__DIR__.'/../../config/config.php', 'resrv-config');
 
+        $blueprint = YAML::file(__DIR__.'/../../resources/blueprints/settings.yaml')->parse();
+        $blueprintFields = SettingsBlueprint::fields($blueprint);
+
         $this->registerSettingsBlueprint(
-            YAML::file(__DIR__.'/../../resources/blueprints/settings.yaml')->parse()
+            $this->injectPublishedConfigWarning($blueprint, $blueprintFields)
         );
 
-        $this->mergeAddonSettings();
+        $this->mergeAddonSettings($blueprintFields);
 
         $this->app->bind(
             PaymentInterface::class,
@@ -301,10 +309,13 @@ class ResrvProvider extends AddonServiceProvider
     }
 
     /**
-     * Layer user-saved settings over config('resrv-config') so existing call sites keep working.
-     * raw() avoids Settings::resolveAntlersValue() stringifying booleans/integers.
+     * Assemble the effective resrv-config: blueprint defaults, overlaid by anything
+     * already in config (developer config file, test overrides), overlaid by the
+     * CP-saved settings. raw() avoids Settings::resolveAntlersValue() stringifying
+     * booleans/integers. Legacy "no logo" sentinels (false, 'false', '') are
+     * normalized to null here so runtime consumers only ever see null or a URL.
      */
-    protected function mergeAddonSettings(): void
+    protected function mergeAddonSettings(array $blueprintFields): void
     {
         $addon = Addon::get('reachweb/statamic-resrv');
 
@@ -312,10 +323,51 @@ class ResrvProvider extends AddonServiceProvider
             return;
         }
 
-        config(['resrv-config' => array_merge(
+        $merged = array_merge(
+            SettingsBlueprint::defaultsFromFields($blueprintFields),
             config('resrv-config'),
             $addon->settings()->raw()
-        )]);
+        );
+
+        if (isset($merged['logo']) && in_array($merged['logo'], [false, 'false', ''], true)) {
+            $merged['logo'] = null;
+        }
+
+        config(['resrv-config' => $merged]);
+    }
+
+    /**
+     * Prepend a warning section to the settings blueprint when a published
+     * config/resrv-config.php still defines CP-managed keys, since values saved in
+     * the CP silently override that file at runtime.
+     */
+    protected function injectPublishedConfigWarning(array $blueprint, array $blueprintFields): array
+    {
+        if (($published = SettingsMigrator::publishedConfig()) === null) {
+            return $blueprint;
+        }
+
+        $shadowed = array_keys(array_intersect_key($published, $blueprintFields));
+
+        if (empty($shadowed)) {
+            return $blueprint;
+        }
+
+        $firstTab = array_key_first($blueprint['tabs'] ?? []);
+
+        if ($firstTab === null) {
+            return $blueprint;
+        }
+
+        array_unshift($blueprint['tabs'][$firstTab]['sections'], [
+            'display' => '⚠ Published config file detected',
+            'instructions' => 'Your `config/resrv-config.php` defines: **'.implode('**, **', $shadowed).'**. '
+                .'Values saved on this page override that file at runtime. '
+                .'Remove those keys from the file, or run `php please resrv:settings:migrate`.',
+            'fields' => [],
+        ]);
+
+        return $blueprint;
     }
 
     protected function bootPermissions(): void
