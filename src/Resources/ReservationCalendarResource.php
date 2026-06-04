@@ -4,9 +4,15 @@ namespace Reach\StatamicResrv\Resources;
 
 use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\ResourceCollection;
+use Illuminate\Support\Collection;
+use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
 
 class ReservationCalendarResource extends ResourceCollection
 {
+    use ResolvesReservationEntries;
+
+    protected Collection $entries;
+
     public function __construct($resource)
     {
         parent::__construct($resource);
@@ -14,35 +20,27 @@ class ReservationCalendarResource extends ResourceCollection
 
     public function toArray($request)
     {
+        $onlyStart = $request->query('onlyStart') == 1;
         $childs = collect();
-        $reservations = $this->collection->transform(function ($reservation) use ($request, &$childs) {
+        $this->entries = $this->resolveReservationEntries($this->collection);
+        $reservations = $this->collection->transform(function ($reservation) use ($onlyStart, &$childs) {
             if ($reservation->type === 'parent') {
-                $childs->push($this->buildChildReservationArray($reservation, $request)->toArray());
+                $childs->push($this->buildChildReservationArray($reservation, $onlyStart)->toArray());
 
                 return false;
             }
-            $data = [
-                'id' => $reservation->id,
-                'title' => '#'.$reservation->id.
-                            ' - '.$reservation->entry['title'].
-                            (config('resrv-config.enable_advanced_availability') ? ' - '.$reservation->getPropertyAttributeLabel() : '').
-                            (config('resrv-config.maximum_quantity') > 1 ? ' x '.$reservation->quantity : ''),
-                'start' => $this->formatDate($reservation->date_start),
-                'end' => $this->formatDate($reservation->date_end),
-                'url' => cp_route('resrv.reservation.show', $reservation->id),
-            ];
-            // Remove end date if we only want the start date
-            if ($request->has('onlyStart')) {
-                if ($request->query('onlyStart') == 1) {
-                    $data['end'] = null;
-                }
-            }
 
-            return $data;
+            return $this->buildEventArray(
+                reservation: $reservation,
+                rateLabel: $reservation->rate_id ? $reservation->getRateLabel() : null,
+                quantity: $reservation->quantity,
+                dateStart: $reservation->date_start,
+                dateEnd: $reservation->date_end,
+                onlyStart: $onlyStart,
+            );
         })->reject(fn ($item) => $item === false);
-        $childs = $childs->flatten(1);
 
-        return $reservations->concat($childs);
+        return $reservations->concat($childs->flatten(1));
     }
 
     private function formatDate(?Carbon $date)
@@ -58,28 +56,55 @@ class ReservationCalendarResource extends ResourceCollection
         return $date->toIso8601String();
     }
 
-    protected function buildChildReservationArray($reservation, $request)
+    protected function buildChildReservationArray($reservation, bool $onlyStart)
     {
-        return $reservation->childs->map(function ($child) use ($reservation, $request) {
-            $data = [
-                'id' => $reservation->id,
-                'title' => '#'.$reservation->id.
-                            ' - '.$reservation->entry['title'].
-                            (config('resrv-config.enable_advanced_availability') ? ' - '.$child->getPropertyAttributeLabel() : '').
-                            (config('resrv-config.maximum_quantity') > 1 ? ' x '.$child->quantity : ''),
-                'start' => $this->formatDate($child->date_start),
-                'end' => $this->formatDate($child->date_end),
-                'url' => cp_route('resrv.reservation.show', $reservation->id),
-                'color' => 'hsl('.rand(0, 359).','.rand(0, 100).'%,'.rand(0, 55).'%)',
-            ];
-            // Remove end date if we only want the start date
-            if ($request->has('onlyStart')) {
-                if ($request->query('onlyStart') == 1) {
-                    $data['end'] = null;
-                }
-            }
+        return $reservation->childs->map(fn ($child) => $this->buildEventArray(
+            reservation: $reservation,
+            rateLabel: $child->rate_id ? $child->getRateLabel() : null,
+            quantity: $child->quantity,
+            dateStart: $child->date_start,
+            dateEnd: $child->date_end,
+            onlyStart: $onlyStart,
+            isChild: true,
+        ));
+    }
 
-            return $data;
-        });
+    protected function buildEventArray(
+        $reservation,
+        ?string $rateLabel,
+        $quantity,
+        ?Carbon $dateStart,
+        ?Carbon $dateEnd,
+        bool $onlyStart,
+        bool $isChild = false,
+    ): array {
+        $entryTitle = $reservation->entryToArray($this->entries->get($reservation->item_id))['title'];
+        $showQuantity = config('resrv-config.maximum_quantity') > 1;
+        $titleParts = ['#'.$reservation->id, $entryTitle];
+        if ($rateLabel) {
+            $titleParts[] = $rateLabel;
+        }
+        $title = implode(' - ', $titleParts).($showQuantity ? ' x '.$quantity : '');
+
+        $classNames = ['resrv-event', 'resrv-event--'.$reservation->status];
+        if ($isChild) {
+            $classNames[] = 'resrv-event--child';
+        }
+
+        return [
+            'id' => $reservation->id,
+            'title' => $title,
+            'start' => $this->formatDate($dateStart),
+            'end' => $onlyStart ? null : $this->formatDate($dateEnd),
+            'url' => cp_route('resrv.reservation.show', $reservation->id),
+            'status' => $reservation->status,
+            'classNames' => $classNames,
+            'extendedProps' => [
+                'reservationId' => $reservation->id,
+                'entryTitle' => $entryTitle,
+                'rateLabel' => $rateLabel,
+                'quantity' => $showQuantity ? $quantity : null,
+            ],
+        ];
     }
 }

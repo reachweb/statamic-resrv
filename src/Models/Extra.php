@@ -172,8 +172,8 @@ class Extra extends Model
         $data['date_end'] = $reservation->date_end;
         $data['quantity'] = $reservation->quantity;
         $data['item_id'] = $reservation->item_id ?? $reservation->parent->item_id;
-        if (isset($reservation->property)) {
-            $data['advanced'] = $reservation->property;
+        if ($reservation->rate_id) {
+            $data['rate_id'] = $reservation->rate_id;
         }
 
         return $this->priceForDates($data);
@@ -201,7 +201,7 @@ class Extra extends Model
             $price = $this->price->multiply($this->getRelativePrice($data))->multiply($quantity);
         }
         if ($this->price_type == 'custom') {
-            $price = $this->price->multiply($this->getCustomPrice($data));
+            $price = $this->price->multiply($this->getCustomPrice($data))->multiply($quantity);
         }
         if ($dynamicPricing) {
             $price = $dynamicPricing->applyClamps($price);
@@ -220,6 +220,9 @@ class Extra extends Model
         $statamicEntry = $this->getDefaultSiteEntry($entry);
         $entry = Entry::whereItemId($statamicEntry->id());
 
+        // This raw query bypasses the published filter and the SoftDeletes global scope, so apply
+        // both here — the required-extras gate must only enforce extras the customer can actually
+        // see and select, otherwise an unpublished/trashed required extra permanently blocks checkout.
         return DB::table('resrv_extras')
             ->join('resrv_entry_extra', function ($join) use ($entry) {
                 $join->on('resrv_extras.id', '=', 'resrv_entry_extra.extra_id')
@@ -228,6 +231,8 @@ class Extra extends Model
             ->join('resrv_extra_conditions', function ($join) {
                 $join->on('resrv_extras.id', '=', 'resrv_extra_conditions.extra_id');
             })
+            ->where('resrv_extras.published', true)
+            ->whereNull('resrv_extras.deleted_at')
             ->select('resrv_extras.*', 'resrv_extra_conditions.*');
     }
 
@@ -238,6 +243,7 @@ class Extra extends Model
         $extras = $entry->extras()
             ->where('published', true)
             ->with('category')
+            ->without('conditions')
             ->orderBy('order')
             ->get();
 
@@ -305,8 +311,8 @@ class Extra extends Model
         $reservationData['date_end'] = $data->date_end;
         $reservationData['quantity'] = $data->quantity;
         $reservationData['item_id'] = $data->item_id ?? $data->parent->item_id;
-        if (isset($data->property)) {
-            $reservationData['advanced'] = $data->property;
+        if ($data->rate_id) {
+            $reservationData['rate_id'] = $data->rate_id;
         }
 
         return $reservationData;

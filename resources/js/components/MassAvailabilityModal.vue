@@ -1,188 +1,126 @@
 <template>
-    <modal name="availability-modal">
-        <div class="availability-modal flex flex-col h-full">
-            <div class="text-lg font-semibold px-5 py-3 bg-gray-200 dark:bg-dark-500 rounded-t-lg border-b dark:border-dark-900">
-                {{ __('Change availability') }}
-            </div>
-            <div v-if="property" class="px-4 mt-4">
-                <v-select 
+    <Modal :open="true" :title="__('Change availability')" icon="calendar-date" @dismissed="emit('cancel')">
+        <div class="space-y-6 p-2">
+            <Field v-if="rate" :label="__('Rates')">
+                <template #actions>
+                    <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllRates" />
+                </template>
+                <Combobox
                     multiple
                     :close-on-select="false"
-                    :placeholder="__('Select property')" 
-                    v-model="selectedProperty" 
-                    :options="propertiesOptions" 
+                    :placeholder="__('Select rate')"
+                    v-model="selectedRateIds"
+                    :options="rateOptions"
                 />
-                <div class="flex w-full justify-end pt-2">
-                    <button class="text-grey hover:text-grey-90" @click="selectedProperty = propertiesOptions">{{ __('Select all') }}</button>
-                </div>
+            </Field>
+
+            <Field :label="__('Select dates')" :errors="dateErrors">
+                <DateRangePicker v-model="dateRange" granularity="day" />
+            </Field>
+
+            <div class="grid grid-cols-2 gap-x-4 gap-y-6">
+                <Field :label="__('Available')" :errors="errors.available">
+                    <Input v-model="available" />
+                </Field>
+                <Field :label="__('Price')" :errors="errors.price">
+                    <Input v-model="price" />
+                </Field>
             </div>
-            <div class="px-4 mt-2 my-4">
-                <span class="block mb-2 text-sm">{{ __('Select dates') }}</span>
-                <div class="date-container input-group w-full">
-                    <v-date-picker
-                        v-model="dates"
-                        :model-config="modelConfig"
-                        :popover="{ visibility: 'click' }"
-                        :masks="{ input: 'YYYY-MM-DD' }"
-                        :mode="'date'"
-                        :columns="$screens({ default: 1, lg: 2 })"
-                        is-range
-                        >
-                        <template v-slot="{ inputValue, inputEvents }">
-                            <div class="w-full flex items-center">
-                            <div class="input-group">
-                                <div class="input-group-prepend flex items-center">
-                                    <svg-icon name="light/calendar" class="w-4 h-4" />
-                                </div>
-                                <div class="input-text border-l-0" :class="{ 'read-only': isReadOnly }">
-                                    <input
-                                        class="input-text-minimal p-0 bg-transparent leading-none"
-                                        :value="inputValue.start"
-                                        v-on="inputEvents.start"
-                                    />
-                                </div>
-                            </div>
-                            <div class="icon icon-arrow-right my-sm mx-1 text-gray-600" />
-                            <div class="input-group">
-                                <div class="input-group-prepend flex items-center">
-                                    <svg-icon name="light/calendar" class="w-4 h-4" />
-                                </div>
-                                <div class="input-text border-l-0" :class="{ 'read-only': isReadOnly }">
-                                    <input
-                                        class="input-text-minimal p-0 bg-transparent leading-none"
-                                        :value="inputValue.end"
-                                        v-on="inputEvents.end"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                        </template>
-                    </v-date-picker>
-                </div>
-                <div v-if="errors.date_start || errors.date_end" class="w-full mt-1 text-sm text-red-400">
-                    {{ __('Date range is required') }}
-                </div>  
+
+            <Field :label="__('Only apply to specific days of the week (optional)')">
+                <CheckboxGroup v-model="onlyDays" inline>
+                    <Checkbox
+                        v-for="(day, index) in weekdays"
+                        :key="index"
+                        :value="index"
+                        :label="day"
+                    />
+                </CheckboxGroup>
+            </Field>
+        </div>
+
+        <template #footer>
+            <div class="flex items-center justify-end gap-2 p-3 border-t border-gray-200 dark:border-gray-700">
+                <Button :text="__('Cancel')" variant="ghost" @click="emit('cancel')" />
+                <Button :text="__('Save')" variant="primary" :disabled="saveDisabled" @click="save" />
             </div>
-            <div class="flex-1 px-4 mb-4">
-                <div class="flex flex-wrap items-center space-x-4">
-                    <div class="flex-1">
-                        <div class="mb-1 text-sm">
-                            <label for="available">{{ __('Available') }}</label>
-                        </div>
-                        <div class="w-full">
-                            <input class="input-text" name="available" type="text" v-model="available">
-                        </div>
-                        <div v-if="errors.available" class="w-full mt-1 text-sm text-red-400">
-                            {{ errors.available[0] }}
-                        </div>                    
-                    </div>
-                    <div class="flex-1">
-                        <div class="mb-1 text-sm">
-                            <label for="available">{{ __('Price') }}</label>
-                        </div>
-                        <div class="w-full">
-                            <input class="input-text" name="price" type="text" v-model="price">
-                        </div>
-                        <div v-if="errors.price" class="w-full mt-1 text-sm text-red-400">
-                            {{ errors.price[0] }}
-                        </div>                     
-                    </div>
-                </div>
-            </div>
-            <div class="flex-1 px-4 mb-4">
-                <span class="block text-sm mb-2">{{ __('Only apply to specific days of the week (optional)') }}</span>
-                <div class="flex flex-wrap space-x-4">
-                    <div v-for="(day, index) in weekdays" :key="index">
-                        <label class="flex items-center space-x-1">
-                            <input type="checkbox" v-model="onlyDays" :value="index">
-                            <span>{{ day }}</span>
-                        </label>
-                    </div>
-                </div>
-            </div>            
-            <div class="p-4 bg-gray-200 dark:bg-dark-500 border-t rounded-b-lg flex items-center justify-between dark:border-dark-900">
-                <button class="text-gray-700 hover:text-gray-900 dark:text-dark-100 dark:hover:text-dark-175" v-html="__('Cancel')" @click="$emit('cancel')"></button>
-                <button 
-                    class="ml-4 text-white bg-blue-500 rounded font-bold px-6 py-2" 
-                    v-html="__('Save')" 
-                    @click="save"
-                    :disabled="disableSave"
-                >
-                </button>
-            </div>
-        </div>        
-    </modal>
+        </template>
+    </Modal>
 </template>
 
-<script>
-import FormHandler from '../mixins/FormHandler.vue'
-import dayjs from 'dayjs'
+<script setup>
+import { Button, Checkbox, CheckboxGroup, Combobox, DateRangePicker, Field, Input, Modal } from '@statamic/cms/ui';
+import { computed, reactive, ref } from 'vue';
+import { useDateRangeModel } from '../composables/useDateRangeModel.js';
+import { useFormHandler } from '../composables/useFormHandler.js';
 
-export default {
-
-    props: {
-        parentId: {
-            type: String,
-            required: true
-        },
-        property: {
-            type: Object,
-            required: false
-        },
-        propertiesOptions: {
-            type: Object,
-            required: false
-        }
+const props = defineProps({
+    parentId: {
+        type: String,
+        required: true,
     },
-
-    data() {
-        return {
-            dates: {
-                start: '',
-                end: ''
-            },
-            available: null,
-            price: null,
-            onlyDays: [],
-            weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-            successMessage: 'Availability successfully saved',
-            postUrl: '/cp/resrv/availability',
-            method: 'post',
-            selectedProperty: (this.property ? this.property : null)
-        }
+    rate: {
+        type: Object,
+        required: false,
     },
-
-    computed: {
-        submit() {
-            let fields = {}
-            fields.date_start = this.dates ? dayjs(this.dates.start).format('YYYY-MM-DD') : ''
-            fields.date_end = this.dates ? dayjs(this.dates.end).format('YYYY-MM-DD') : ''
-            fields.statamic_id = this.parentId
-            fields.price = this.price
-            fields.available = this.available
-            if (this.onlyDays.length > 0) {
-                fields.onlyDays = this.onlyDays
-            }
-            if (this.property) {
-                fields.advanced = _.isArray(this.selectedProperty) ? this.selectedProperty : [_.findWhere(this.propertiesOptions, {'code': this.selectedProperty.code})]
-            }
-            return fields
-        }
+    rateOptions: {
+        type: Array,
+        required: false,
+        default: () => [],
     },
+});
 
-    mixins: [ FormHandler ],
-  
+const emit = defineEmits(['cancel', 'saved']);
+
+const dates = reactive({ start: '', end: '' });
+const dateRange = useDateRangeModel(
+    () => dates.start,
+    () => dates.end,
+    (v) => (dates.start = v ?? ''),
+    (v) => (dates.end = v ?? ''),
+);
+const available = ref(null);
+const price = ref(null);
+const onlyDays = ref([]);
+const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const selectedRateIds = ref(props.rate ? [props.rate.code] : []);
+
+function selectAllRates() {
+    selectedRateIds.value = props.rateOptions.map((option) => option.value);
 }
+
+const submit = computed(() => {
+    const fields = {
+        date_start: dates.start,
+        date_end: dates.end,
+        statamic_id: props.parentId,
+        price: price.value,
+        available: available.value,
+    };
+    if (onlyDays.value.length > 0) {
+        fields.onlyDays = onlyDays.value;
+    }
+    if (props.rate) {
+        fields.rate_ids = selectedRateIds.value;
+    }
+    return fields;
+});
+
+const { disableSave, errors, save } = useFormHandler({
+    submit,
+    postUrl: '/cp/resrv/availability',
+    method: 'post',
+    successMessage: 'Availability successfully saved',
+    emit,
+});
+
+// An empty rate selection would post rate_ids: [], which the backend silently no-ops; block Save instead.
+const saveDisabled = computed(() => disableSave.value || (Boolean(props.rate) && selectedRateIds.value.length === 0));
+
+const dateErrors = computed(() => {
+    const out = [];
+    if (errors.value?.date_start) out.push(...errors.value.date_start);
+    if (errors.value?.date_end) out.push(...errors.value.date_end);
+    return out.length ? out : null;
+});
 </script>
-
-<style>
-.vm--modal {
-    overflow: visible !important;
-}
-.v-select .vs__selected-options {
-    flex-wrap: wrap;
-}
-.v-select:not(.vs--single) .vs__selected {
-    margin-bottom: 0.25rem;
-}
-</style>

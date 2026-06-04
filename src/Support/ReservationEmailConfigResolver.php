@@ -206,6 +206,13 @@ class ReservationEmailConfigResolver
                 'markdown' => 'statamic-resrv::email.reservations.abandoned',
                 'recipients' => [['type' => 'customer']],
             ],
+            ReservationEmailEvent::AdminOrphanedPayment->value => [
+                'enabled' => true,
+                'from' => ['address' => null, 'name' => null],
+                'subject' => null,
+                'markdown' => 'statamic-resrv::email.reservations.orphaned-payment',
+                'recipients' => [['type' => 'admins']],
+            ],
             default => [
                 'enabled' => true,
                 'from' => ['address' => null, 'name' => null],

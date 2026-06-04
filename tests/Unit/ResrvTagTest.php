@@ -4,11 +4,15 @@ namespace Reach\StatamicResrv\Tests\Unit;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Config;
+use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tags\Resrv;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Antlers;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ResrvTagTest extends TestCase
 {
@@ -34,6 +38,88 @@ class ResrvTagTest extends TestCase
             ->setContext([]);
     }
 
+    public function test_search_json_html_escapes_session_values()
+    {
+        // Antlers does not escape tag output, so the JSON itself must be safe to embed.
+        session(['resrv_search' => ['date_start' => '</script><script>alert(1)</script>']]);
+
+        $output = $this->tag->searchJson();
+
+        // No raw angle brackets reach the output. The round-trip below proves they were
+        // hex-escaped (\uXXXX), not stripped — so a JS consumer still gets the real value.
+        $this->assertStringNotContainsString('<', $output);
+        $this->assertStringNotContainsString('>', $output);
+        $this->assertEquals('</script><script>alert(1)</script>', json_decode($output, true)['date_start']);
+    }
+
+    public function test_reservation_from_uri_returns_404_when_customer_is_null()
+    {
+        Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CONFIRMED,
+            'reference' => 'TEST01',
+            'customer_id' => null,
+        ]);
+
+        request()->merge([
+            'ref' => 'TEST01',
+            'hash' => str_repeat('a', 64),
+        ]);
+
+        $this->expectException(NotFoundHttpException::class);
+        $this->tag->reservationFromUri();
+    }
+
+    public function test_reservation_from_uri_returns_reservation_with_valid_customer()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'test@example.com',
+        ]);
+
+        Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CONFIRMED,
+            'reference' => 'TEST02',
+            'customer_id' => $customer->id,
+        ]);
+
+        $expectedHash = hash_hmac('sha256', 'test@example.com', config('app.key'));
+
+        request()->merge([
+            'ref' => 'TEST02',
+            'hash' => $expectedHash,
+        ]);
+
+        $reservation = $this->tag->reservationFromUri();
+        $this->assertEquals('TEST02', $reservation->reference);
+    }
+
+    public function test_reservation_from_uri_accepts_reference_longer_than_10_chars()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'long@example.com',
+        ]);
+
+        $longRef = 'ABCDEFGHIJKLMNO';
+
+        Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CONFIRMED,
+            'reference' => $longRef,
+            'customer_id' => $customer->id,
+        ]);
+
+        $expectedHash = hash_hmac('sha256', 'long@example.com', config('app.key'));
+
+        request()->merge([
+            'ref' => $longRef,
+            'hash' => $expectedHash,
+        ]);
+
+        $reservation = $this->tag->reservationFromUri();
+        $this->assertEquals($longRef, $reservation->reference);
+    }
+
     public function test_cutoff_throws_exception_when_no_entry_id()
     {
         $this->tag->setParameters([]);
@@ -56,6 +142,36 @@ class ResrvTagTest extends TestCase
 
     public function test_cutoff_returns_no_rules_when_cutoff_disabled()
     {
+        $this->tag->setParameters(['entry' => $this->entry->id()]);
+
+        $result = $this->tag->cutoff();
+
+        $expected = [
+            'has_cutoff_rules' => false,
+            'starting_time' => null,
+            'cutoff_time' => null,
+            'cutoff_hours' => null,
+            'schedule_name' => null,
+        ];
+
+        $this->assertEquals($expected, $result);
+    }
+
+    public function test_cutoff_returns_no_rules_when_enabled_but_no_schedule_or_default()
+    {
+        // Cutoff is enabled for the entry but no schedule matches and no default is configured,
+        // so there is no cutoff to report — the tag must not surface a bogus midnight cutoff.
+        Config::set('resrv-config.enable_cutoff_rules', true);
+
+        $this->resrvEntry->options = [
+            'cutoff_rules' => [
+                'enable_cutoff' => true,
+                'default_starting_time' => null,
+                'default_cutoff_hours' => null,
+            ],
+        ];
+        $this->resrvEntry->save();
+
         $this->tag->setParameters(['entry' => $this->entry->id()]);
 
         $result = $this->tag->cutoff();

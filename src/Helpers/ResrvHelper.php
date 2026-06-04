@@ -19,22 +19,7 @@ class ResrvHelper
             return [
                 'title' => $collection->title(),
                 'handle' => $collection->handle(),
-                'advanced' => self::hasAdvanced($collection),
             ];
         });
-    }
-
-    private static function hasAdvanced($collection)
-    {
-        foreach ($collection->entryBlueprints() as $blueprint) {
-            if (AvailabilityField::blueprintHasAvailabilityField($blueprint)) {
-                $field = AvailabilityField::getField($blueprint);
-                if (array_key_exists('advanced_availability', $field->config())) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
     }
 }

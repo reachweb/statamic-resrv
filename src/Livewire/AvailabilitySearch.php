@@ -2,6 +2,8 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
+use Carbon\Carbon;
+use Carbon\Exceptions\InvalidFormatException;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -25,10 +27,13 @@ class AvailabilitySearch extends Component
     public bool $live = true;
 
     #[Locked]
-    public $advanced = false;
+    public bool $rates = false;
 
     #[Locked]
-    public bool $anyAdvanced = false;
+    public ?string $ratesBlueprint = null;
+
+    #[Locked]
+    public bool $anyRate = false;
 
     #[Locked]
     public bool $resetOnBoot = false;
@@ -49,25 +54,23 @@ class AvailabilitySearch extends Component
     public array $calendarRules = [];
 
     #[Locked]
-    public array $overrideProperties = [];
+    public array $overrideRates = [];
 
-    public function boot(): void
+    public function mount(): void
     {
+        // mount() runs once per component lifecycle; boot() would re-run on every
+        // subsequent request, resetting the user's rate/quantity selection each time.
         if ($this->resetOnBoot) {
             $this->data->quantity = 1;
-            $this->data->advanced = null;
+            $this->data->rate = null;
             $this->search(true);
         }
     }
 
     #[Computed(persist: true)]
-    public function advancedProperties(): array
+    public function entryRates(): array
     {
-        if (! $this->advanced) {
-            return [];
-        }
-
-        return count($this->overrideProperties) > 0 ? $this->overrideProperties : $this->getProperties();
+        return $this->computeEntryRates($this->entry);
     }
 
     #[Computed(persist: true)]
@@ -78,7 +81,7 @@ class AvailabilitySearch extends Component
 
     public function availabilityCalendar(): array
     {
-        if ($this->showAvailabilityOnCalendar === false) {
+        if (! $this->showAvailabilityOnCalendar) {
             return [];
         }
 
@@ -98,8 +101,8 @@ class AvailabilitySearch extends Component
             $this->data->validate();
         }
 
-        if ($this->data->advanced == null && $this->anyAdvanced) {
-            $this->data->advanced = 'any';
+        if (! $this->data->rate && $this->anyRate) {
+            $this->data->rate = 'any';
         }
 
         $this->dispatch('availability-search-updated', $this->data);
@@ -116,13 +119,11 @@ class AvailabilitySearch extends Component
 
     public function validateDatesAreSet(): bool
     {
-        $datesAreSet = isset($this->data->dates['date_start']) && isset($this->data->dates['date_end']);
-
-        if (! $datesAreSet && ! $this->anyAdvanced) {
+        if (! $this->data->hasDates() && ! $this->anyRate) {
             $this->addError('data.dates.date_start', 'Availability search requires date information to be provided.');
         }
 
-        return $datesAreSet;
+        return $this->data->hasDates();
     }
 
     public function clearDates(): void
@@ -144,14 +145,23 @@ class AvailabilitySearch extends Component
     #[On('availability-date-selected')]
     public function availabilityDateSelected(array $data): void
     {
-        $dateStart = \Carbon\Carbon::parse($data['date']);
+        if (! isset($data['date']) || ! is_string($data['date'])) {
+            return;
+        }
+
+        try {
+            $dateStart = Carbon::parse($data['date']);
+        } catch (InvalidFormatException $e) {
+            return;
+        }
+
         $minimumPeriod = max(1, config('resrv-config.minimum_reservation_period_in_days', 1));
 
         $this->data->dates['date_start'] = $dateStart->toDateString();
         $this->data->dates['date_end'] = $dateStart->copy()->addDays($minimumPeriod)->toDateString();
 
-        if (isset($data['property'])) {
-            $this->data->advanced = $data['property'];
+        if (isset($data['rate_id'])) {
+            $this->data->rate = $data['rate_id'];
         }
 
         $this->search();

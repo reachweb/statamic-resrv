@@ -1,130 +1,134 @@
 <template>
     <div>
-        <div class="w-full flex justify-end mb-4">
-            <button class="btn-primary" @click="addPricing">
-                {{ __('Add Dynamic Pricing') }}
-            </button>
-        </div>
+        <Header :title="__('Dynamic Pricing')" icon="money-cashier-price-tag">
+            <Button
+                :text="__('Add Dynamic Pricing')"
+                variant="primary"
+                icon="plus"
+                @click="addPricing"
+            />
+        </Header>
 
-        <div class="card p-0">
-            <div class="flex flex-wrap items-center gap-3 px-4 py-5">
+        <Card inset>
+            <div class="flex flex-wrap items-center gap-3 px-4 py-4 border-b border-gray-200 dark:border-gray-700/80">
                 <div class="flex-1 min-w-[220px]">
-                    <data-list-search
-                        ref="search"
+                    <Input
                         v-model="searchQuery"
+                        type="search"
+                        icon-prepend="magnifying-glass"
                         :placeholder="__('Search by title')"
                     />
                 </div>
                 <div class="min-w-[170px]">
-                    <v-select
+                    <Select
                         v-model="filters.operation"
                         :options="operationOptions"
-                        :reduce="o => o.code"
+                        :clearable="true"
                         :placeholder="__('Any operation')"
                     />
                 </div>
                 <div class="min-w-[200px]">
-                    <v-select
+                    <Select
                         v-model="filters.dates_active"
                         :options="datesActiveOptions"
-                        :reduce="o => o.code"
+                        :clearable="true"
                         :placeholder="__('Any dates')"
                     />
                 </div>
                 <div class="min-w-[210px]">
-                    <v-select
+                    <Select
                         v-model="filters.condition"
                         :options="conditionOptions"
-                        :reduce="o => o.code"
+                        :clearable="true"
                         :placeholder="__('Any condition')"
                     />
                 </div>
-                <button v-if="hasActiveFilters" class="text-sm text-blue-600 hover:underline" @click="resetFilters">
-                    {{ __('Reset all') }}
-                </button>
+                <Button
+                    v-if="hasActiveFilters"
+                    variant="ghost"
+                    size="sm"
+                    :text="__('Reset all')"
+                    @click="resetFilters"
+                />
             </div>
 
-            <p v-if="isFiltered" class="text-xs text-gray-600 dark:text-dark-175 px-4 pb-4">
+            <p v-if="hasActiveFilters" class="text-xs text-gray-600 dark:text-gray-400 px-4 pt-3">
                 {{ __('Drag to reorder is disabled while filters are active. Use "Move to position" or reset filters.') }}
             </p>
 
-            <div class="relative" v-if="dynamicPricingLoaded">
-                <div
-                    v-if="loading"
-                    class="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-dark-600/60 rounded-b-md"
-                >
-                    <loading-graphic />
+            <div class="relative">
+                <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-gray-900/60 rounded-b-xl">
+                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('Loading…') }}</span>
                 </div>
-                <div v-if="dynamicPricings.length === 0" class="p-8 text-center text-gray-500">
+                <div v-if="dynamicPricings.length === 0" class="p-10 text-center text-gray-500 dark:text-gray-400">
                     {{ __('No dynamic pricing found') }}
                 </div>
-                <vue-draggable
+                <draggable
                     v-else
-                    class="p-5 space-y-3"
+                    class="p-4 space-y-2"
                     v-model="dynamicPricings"
-                    :disabled="isFiltered"
-                    @start="drag=true"
-                    @end="drag=false"
+                    item-key="id"
+                    :disabled="hasActiveFilters"
+                    @start="drag = true"
+                    @end="drag = false"
                     @change="onDragChange"
                 >
-                    <div
-                        v-for="dynamic in dynamicPricings"
-                        :key="dynamic.id"
-                        class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors
-                        bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"
-                        :class="{ 'cursor-move': !isFiltered }"
-                    >
-                        <div class="flex items-center space-x-2">
-                            <span class="text-xs font-mono px-2 py-0.5 rounded bg-gray-300 dark:bg-dark-700 dark:text-dark-150" :title="__('Order')">#{{ dynamic.order }}</span>
-                            <span class="font-medium cursor-pointer" v-html="dynamic.title" @click="editPricing(dynamic)"></span>
-                            <span class="text-xs p-1 bg-gray-600 dark:text-dark-150 text-white rounded" v-if="dynamic.overrides_all">{{ __('OVERRIDING') }}</span>
+                    <template #item="{ element: dynamic }">
+                        <div
+                            class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 border-gray-200 dark:border-gray-700/80 transition-colors"
+                            :class="{ 'cursor-move hover:bg-gray-50 dark:hover:bg-gray-800': !hasActiveFilters }"
+                        >
+                            <div class="flex items-center gap-2">
+                                <StatusIndicator :status="dynamic.published ? 'published' : 'draft'" />
+                                <span class="text-xs font-mono px-2 py-0.5 rounded-md bg-gray-150 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :title="__('Order')">#{{ dynamic.order }}</span>
+                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="dynamic.title" @click="editPricing(dynamic)"></span>
+                                <Badge v-if="dynamic.overrides_all" :text="__('OVERRIDING')" variant="warning" size="sm" />
+                            </div>
+                            <div>
+                                <Dropdown>
+                                    <DropdownMenu>
+                                        <DropdownItem :text="__('Edit')" icon="pencil" @click="editPricing(dynamic)" />
+                                        <DropdownItem :text="__('Move to position…')" icon="arrow-up-down" @click="openMoveDialog(dynamic, 'position')" />
+                                        <DropdownItem :text="__('Move to page…')" icon="arrow-right" @click="openMoveDialog(dynamic, 'page')" />
+                                        <DropdownSeparator />
+                                        <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(dynamic)" />
+                                    </DropdownMenu>
+                                </Dropdown>
+                            </div>
                         </div>
-                        <div>
-                            <dropdown-list>
-                                <dropdown-item :text="__('Edit')" @click="editPricing(dynamic)" />
-                                <dropdown-item :text="__('Move to position…')" @click="openMoveDialog(dynamic, 'position')" />
-                                <dropdown-item :text="__('Move to page…')" @click="openMoveDialog(dynamic, 'page')" />
-                                <dropdown-item :text="__('Delete')" @click="confirmDelete(dynamic)" />
-                            </dropdown-list>
-                        </div>
-                    </div>
-                </vue-draggable>
+                    </template>
+                </draggable>
             </div>
-            <div v-else class="p-8 text-center">
-                <loading-graphic />
-            </div>
-        </div>
+            <Pagination
+                v-if="lastPage > 1"
+                class="px-4 py-3 border-t border-gray-200 dark:border-gray-700/80"
+                :per-page="perPage"
+                :resource-meta="props.pricings"
+                @page-selected="onPageSelected"
+                @per-page-changed="onPerPageChanged"
+            />
+        </Card>
 
-        <data-list-pagination
-            v-if="dynamicPricingLoaded && total > 0"
-            class="mt-3"
-            :resource-meta="paginationMeta"
-            :per-page="perPage"
-            @page-selected="selectPage"
-            @per-page-changed="changePerPage"
-        />
-
-        <dynamic-pricing-panel
+        <DynamicPricingPanel
             v-if="showPanel"
             :data="dynamic"
             :timezone="timezone"
             @closed="togglePanel"
-            @saved="dynamicSaved"
-        >
-        </dynamic-pricing-panel>
+            @saved="togglePanel"
+        />
         <confirmation-modal
-            v-if="deleteId"
-            title="Delete dynamic pricing"
+            :open="deleteId !== null"
+            :title="__('Delete dynamic pricing')"
             :danger="true"
             @confirm="deleteDynamic"
-            @cancel="deleteId = false"
+            @cancel="deleteId = null"
         >
-            Are you sure you want to delete this dynamic pricing? <strong>This cannot be undone.</strong>
+            {{ __('Are you sure you want to delete this dynamic pricing?') }} <strong>{{ __('This cannot be undone.') }}</strong>
         </confirmation-modal>
         <confirmation-modal
-            v-if="moveDialog.open"
+            :open="moveDialog.open"
             :title="moveDialog.mode === 'position' ? __('Move to position') : __('Move to page')"
-            :buttonText="__('Move')"
+            :button-text="__('Move')"
             @confirm="submitMove"
             @cancel="closeMoveDialog"
         >
@@ -136,262 +140,241 @@
                     {{ __('Enter the page number. The item will land at the top of that page.') }}
                 </span>
             </div>
-            <input type="number" min="1" v-model.number="moveDialog.value" class="input-text" />
-            <p v-if="moveDialog.mode === 'page'" class="text-xs text-gray-600 dark:text-dark-175 mt-2">
+            <Input type="number" min="1" v-model.number="moveDialog.value" />
+            <p v-if="moveDialog.mode === 'page'" class="text-xs text-gray-600 dark:text-gray-400 mt-2">
                 {{ __('Resolves to position') }}: {{ resolvedMoveOrder }}
             </p>
         </confirmation-modal>
     </div>
 </template>
-<script>
-import axios from 'axios'
-import DynamicPricingPanel from './DynamicPricingPanel.vue'
-import VueDraggable from 'vuedraggable'
 
-export default {
+<script setup>
+import { Badge, Button, Card, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, Header, Input, Pagination, Select, StatusIndicator } from '@statamic/cms/ui';
+import { router } from '@statamic/cms/inertia';
+import draggable from 'vuedraggable';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
+import axios from 'axios';
+import DynamicPricingPanel from './DynamicPricingPanel.vue';
+import { useToast } from '../composables/useToast.js';
 
-    props: {
-        timezone: {
-            type: String,
-            required: true,
-            default: 'UTC'
-        }
+const props = defineProps({
+    timezone: { type: String, required: true, default: 'UTC' },
+    filters: { type: Object, default: () => ({}) },
+    pricings: {
+        type: Object,
+        default: () => ({ data: [], current_page: 1, last_page: 1, per_page: 25, total: 0 }),
     },
+});
 
-    data() {
-        return {
-            showPanel: false,
-            dynamicPricings: [],
-            dynamicPricingLoaded: false,
-            loading: false,
-            deleteId: false,
-            dynamic: '',
-            drag: false,
-            searchQuery: '',
-            filters: {
-                operation: '',
-                dates_active: '',
-                condition: '',
-            },
-            currentPage: 1,
-            perPage: 25,
-            total: 0,
-            lastPage: 1,
-            searchDebounce: null,
-            resetting: false,
-            moveDialog: {
-                open: false,
-                mode: null,
-                item: null,
-                value: 1,
-            },
-            operationOptions: [
-                { code: 'increase', label: 'Increase' },
-                { code: 'decrease', label: 'Decrease' },
-                { code: 'minimum', label: 'Minimum' },
-                { code: 'maximum', label: 'Maximum' },
-            ],
-            datesActiveOptions: [
-                { code: 'active', label: 'Currently active' },
-                { code: 'upcoming', label: 'Upcoming' },
-                { code: 'expired', label: 'Expired' },
-                { code: 'always', label: 'Always-on (no dates)' },
-            ],
-            conditionOptions: [
-                { code: 'reservation_duration', label: 'Reservation duration' },
-                { code: 'reservation_price', label: 'Reservation price' },
-                { code: 'days_to_reservation', label: 'Days to reservation' },
-                { code: 'none', label: 'No condition' },
-            ],
-            emptyDynamic: {
-                title: '',
-                amount: '',
-                amount_type: '',
-                amount_operation: '',
-                date_start: '',
-                date_end: '',
-                date_include: '',
-                condition_type: '',
-                condition_comparison : '',
-                condition_value : '',
-                entries: '',
-                extras: '',
-                coupon: '',
-                expire_at: '',
-                overrides_all: false,
-            }
-        }
-    },
+const toast = useToast();
 
-    components: {
-        DynamicPricingPanel,
-        VueDraggable
-    },
+const showPanel = ref(false);
+const dynamicPricings = ref(props.pricings.data ?? []);
+const loading = ref(false);
+const deleteId = ref(null);
+const dynamic = ref({});
+const drag = ref(false);
+const searchQuery = ref(props.filters.search ?? '');
+const filters = reactive({
+    operation: props.filters.operation ?? '',
+    dates_active: props.filters.dates_active ?? '',
+    condition: props.filters.condition ?? '',
+});
+const currentPage = ref(props.pricings.current_page ?? 1);
+const perPage = ref(props.pricings.per_page ?? 25);
+const total = computed(() => props.pricings.total ?? 0);
+const lastPage = computed(() => props.pricings.last_page ?? 1);
+const resetting = ref(false); // true while resetFilters() clears fields, so the watchers below skip per-field reloads
+let searchDebounce = null;
 
-    computed: {
-        hasActiveFilters() {
-            return !!this.searchQuery || !!this.filters.operation || !!this.filters.dates_active || !!this.filters.condition
-        },
-        isFiltered() {
-            return this.hasActiveFilters
-        },
-        paginationMeta() {
-            return {
-                current_page: this.currentPage,
-                last_page: this.lastPage,
-                per_page: this.perPage,
-                total: this.total,
-                from: this.total === 0 ? 0 : (this.currentPage - 1) * this.perPage + 1,
-                to: Math.min(this.currentPage * this.perPage, this.total),
-            }
-        },
-        resolvedMoveOrder() {
-            if (this.moveDialog.mode !== 'page') return null
-            const page = Math.min(Math.max(1, parseInt(this.moveDialog.value) || 1), this.lastPage)
-            return (page - 1) * this.perPage + 1
-        },
-    },
+const moveDialog = reactive({ open: false, mode: null, item: null, value: 1 });
 
-    watch: {
-        searchQuery() {
-            if (this.resetting) return
-            clearTimeout(this.searchDebounce)
-            this.searchDebounce = setTimeout(() => {
-                this.currentPage = 1
-                this.fetchPricings()
-            }, 300)
-        },
-        'filters.operation'() { if (this.resetting) return; this.currentPage = 1; this.fetchPricings() },
-        'filters.dates_active'() { if (this.resetting) return; this.currentPage = 1; this.fetchPricings() },
-        'filters.condition'() { if (this.resetting) return; this.currentPage = 1; this.fetchPricings() },
-    },
+const operationOptions = [
+    { value: 'increase', label: 'Increase' },
+    { value: 'decrease', label: 'Decrease' },
+    { value: 'minimum', label: 'Minimum' },
+    { value: 'maximum', label: 'Maximum' },
+];
+const datesActiveOptions = [
+    { value: 'active', label: 'Currently active' },
+    { value: 'upcoming', label: 'Upcoming' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'always', label: 'Always-on (no dates)' },
+];
+const conditionOptions = [
+    { value: 'reservation_duration', label: 'Reservation duration' },
+    { value: 'reservation_price', label: 'Reservation price' },
+    { value: 'days_to_reservation', label: 'Days to reservation' },
+    { value: 'none', label: 'No condition' },
+];
 
-    mounted() {
-        this.fetchPricings()
-    },
+const emptyDynamic = {
+    title: '', amount: '', amount_type: '', amount_operation: '',
+    date_start: '', date_end: '', date_include: '',
+    condition_type: '', condition_comparison: '', condition_value: '',
+    entries: [], extras: [], coupon: '', expire_at: '', overrides_all: false,
+    published: true,
+};
 
-    methods: {
-        togglePanel() {
-            this.showPanel = !this.showPanel
-        },
-        addPricing() {
-            this.dynamic = this.emptyDynamic
-            this.togglePanel()
-        },
-        editPricing(dynamic) {
-            this.dynamic = dynamic
-            this.togglePanel()
-        },
-        dynamicSaved() {
-            this.togglePanel()
-            this.fetchPricings()
-        },
-        fetchPricings() {
-            const params = { page: this.currentPage, per_page: this.perPage }
-            if (this.searchQuery) params.search = this.searchQuery
-            if (this.filters.operation) params.operation = this.filters.operation
-            if (this.filters.dates_active) params.dates_active = this.filters.dates_active
-            if (this.filters.condition) params.condition = this.filters.condition
+const hasActiveFilters = computed(() =>
+    !!searchQuery.value || !!filters.operation || !!filters.dates_active || !!filters.condition,
+);
+const resolvedMoveOrder = computed(() => {
+    if (moveDialog.mode !== 'page') return null;
+    const page = Math.min(Math.max(1, parseInt(moveDialog.value) || 1), lastPage.value);
+    return (page - 1) * perPage.value + 1;
+});
 
-            this.loading = true
-            return axios.get('/cp/resrv/dynamicpricing/index', { params })
-                .then(response => {
-                    const lastPage = response.data.last_page || 1
-                    const currentPage = response.data.current_page || 1
-                    if (currentPage > lastPage && (response.data.total || 0) > 0) {
-                        this.currentPage = lastPage
-                        return this.fetchPricings()
-                    }
-                    this.dynamicPricings = response.data.data || []
-                    this.total = response.data.total || 0
-                    this.lastPage = lastPage
-                    this.currentPage = currentPage
-                    this.dynamicPricingLoaded = true
-                })
-                .catch(() => {
-                    this.$toast.error('Cannot retrieve dynamic pricing')
-                })
-                .then(() => {
-                    this.loading = false
-                })
-        },
-        resetFilters() {
-            this.resetting = true
-            clearTimeout(this.searchDebounce)
-            this.searchQuery = ''
-            this.filters.operation = ''
-            this.filters.dates_active = ''
-            this.filters.condition = ''
-            this.$nextTick(() => {
-                this.resetting = false
-                this.currentPage = 1
-                this.fetchPricings()
-            })
-        },
-        selectPage(page) {
-            this.currentPage = page
-            this.fetchPricings()
-        },
-        changePerPage(perPage) {
-            this.perPage = perPage
-            this.currentPage = 1
-            this.fetchPricings()
-        },
-        confirmDelete(dynamic) {
-            this.deleteId = dynamic.id
-        },
-        deleteDynamic() {
-            axios.delete('/cp/resrv/dynamicpricing', {data: {'id': this.deleteId}})
-                .then(() => {
-                    this.$toast.success('Dynamic pricing deleted')
-                    this.deleteId = false
-                    this.fetchPricings()
-                })
-                .catch(() => {
-                    this.$toast.error('Cannot delete dynamic pricing')
-                })
-        },
-        onDragChange(event) {
-            if (!event.moved) return
-            const { newIndex, oldIndex } = event.moved
-            const item = event.moved.element
-            let neighbour
-            if (newIndex < oldIndex) {
-                neighbour = this.dynamicPricings[newIndex + 1]
-            } else if (newIndex > oldIndex) {
-                neighbour = this.dynamicPricings[newIndex - 1]
-            } else {
-                return
-            }
-            if (!neighbour) return
-            this.patchOrder(item.id, neighbour.order)
-        },
-        patchOrder(id, order) {
-            axios.patch('/cp/resrv/dynamicpricing/order', { id, order })
-                .then(() => {
-                    this.$toast.success('Dynamic pricing order changed')
-                    this.fetchPricings()
-                })
-                .catch(() => { this.$toast.error('Dynamic pricing ordering failed') })
-        },
-        openMoveDialog(item, mode) {
-            this.moveDialog = { open: true, mode, item, value: mode === 'page' ? this.currentPage : item.order }
-        },
-        closeMoveDialog() {
-            this.moveDialog = { open: false, mode: null, item: null, value: 1 }
-        },
-        submitMove() {
-            let value = Math.max(1, parseInt(this.moveDialog.value) || 1)
-            if (this.moveDialog.mode === 'page') {
-                value = Math.min(value, this.lastPage)
-            }
-            const order = this.moveDialog.mode === 'page'
-                ? (value - 1) * this.perPage + 1
-                : value
-            const id = this.moveDialog.item.id
-            this.closeMoveDialog()
-            this.patchOrder(id, order)
-        },
+watch(() => props.pricings?.data, (newData) => {
+    dynamicPricings.value = newData ?? [];
+});
+
+watch(() => props.pricings?.current_page, (val) => {
+    if (val !== undefined) currentPage.value = val;
+});
+
+watch(searchQuery, () => {
+    if (resetting.value) return;
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(() => {
+        currentPage.value = 1;
+        applyFilters();
+    }, 300);
+});
+
+watch(filters, () => {
+    if (resetting.value) return;
+    currentPage.value = 1;
+    applyFilters();
+});
+
+function togglePanel() {
+    showPanel.value = !showPanel.value;
+}
+
+function addPricing() {
+    dynamic.value = { ...emptyDynamic };
+    togglePanel();
+}
+
+function editPricing(item) {
+    dynamic.value = item;
+    togglePanel();
+}
+
+function applyFilters() {
+    const data = {
+        page: currentPage.value,
+        per_page: perPage.value,
+    };
+    if (searchQuery.value) data.search = searchQuery.value;
+    if (filters.operation) data.operation = filters.operation;
+    if (filters.dates_active) data.dates_active = filters.dates_active;
+    if (filters.condition) data.condition = filters.condition;
+
+    router.reload({
+        only: ['pricings', 'filters'],
+        data,
+        preserveState: true,
+        preserveScroll: true,
+        onStart: () => { loading.value = true; },
+        onFinish: () => { loading.value = false; },
+    });
+}
+
+function resetFilters() {
+    // Clear search + filters at once without firing a reload per field: the watchers above
+    // early-return while `resetting` is true. Flipping the flag back and reloading inside
+    // nextTick keeps it true across the watcher flush, so the reset triggers exactly one reload.
+    resetting.value = true;
+    clearTimeout(searchDebounce);
+    searchQuery.value = '';
+    filters.operation = '';
+    filters.dates_active = '';
+    filters.condition = '';
+    currentPage.value = 1;
+    nextTick(() => {
+        resetting.value = false;
+        applyFilters();
+    });
+}
+
+function onPageSelected(page) {
+    currentPage.value = page;
+    applyFilters();
+}
+
+function onPerPageChanged(size) {
+    perPage.value = size;
+    currentPage.value = 1;
+    applyFilters();
+}
+
+function confirmDelete(item) {
+    deleteId.value = item.id;
+}
+
+function deleteDynamic() {
+    axios.delete('/cp/resrv/dynamicpricing', { data: { id: deleteId.value } })
+        .then(() => {
+            toast.success('Dynamic pricing deleted');
+            deleteId.value = null;
+            applyFilters();
+        })
+        .catch(() => {
+            toast.error('Cannot delete dynamic pricing');
+        });
+}
+
+function onDragChange(event) {
+    if (!event.moved) return;
+    const { newIndex, oldIndex } = event.moved;
+    const item = event.moved.element;
+    let neighbour;
+    if (newIndex < oldIndex) {
+        neighbour = dynamicPricings.value[newIndex + 1];
+    } else if (newIndex > oldIndex) {
+        neighbour = dynamicPricings.value[newIndex - 1];
+    } else {
+        return;
     }
+    if (!neighbour) return;
+    patchOrder(item.id, neighbour.order);
+}
+
+function patchOrder(id, order) {
+    axios.patch('/cp/resrv/dynamicpricing/order', { id, order })
+        .then(() => {
+            toast.success('Dynamic pricing order changed');
+            applyFilters();
+        })
+        .catch(() => {
+            toast.error('Dynamic pricing ordering failed');
+        });
+}
+
+function openMoveDialog(item, mode) {
+    moveDialog.open = true;
+    moveDialog.mode = mode;
+    moveDialog.item = item;
+    moveDialog.value = mode === 'page' ? currentPage.value : item.order;
+}
+
+function closeMoveDialog() {
+    moveDialog.open = false;
+    moveDialog.mode = null;
+    moveDialog.item = null;
+    moveDialog.value = 1;
+}
+
+function submitMove() {
+    let value = Math.max(1, parseInt(moveDialog.value) || 1);
+    if (moveDialog.mode === 'page') {
+        value = Math.min(value, lastPage.value);
+    }
+    const order = moveDialog.mode === 'page' ? (value - 1) * perPage.value + 1 : value;
+    const id = moveDialog.item.id;
+    closeMoveDialog();
+    patchOrder(id, order);
 }
 </script>

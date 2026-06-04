@@ -28,6 +28,14 @@ class ExtraCondition extends Model
         'conditions' => AsCollection::class,
     ];
 
+    /**
+     * Request-scoped memo of published extra ids per category, so repeated category-membership
+     * checks across cart selections / parent children don't re-query the same category.
+     *
+     * @var array<int|string, Collection<int, int>>
+     */
+    private array $categoryExtraIdsCache = [];
+
     protected static function newFactory()
     {
         return ExtraConditionFactory::new();
@@ -115,7 +123,7 @@ class ExtraCondition extends Model
         return $extrasThatApply;
     }
 
-    public function calculateConditionArrays(Collection $extras, EnabledExtras $enabledExtras, AvailabilityData|Reservation $data): Collection
+    public function calculateConditionArrays(Collection $extras, EnabledExtras $enabledExtras, AvailabilityData|Reservation|array $data): Collection
     {
         $required = collect();
         $hide = collect();
@@ -138,8 +146,12 @@ class ExtraCondition extends Model
         ]);
     }
 
-    private function mergeData(AvailabilityData|Reservation $data, EnabledExtras $enabledExtras): array
+    private function mergeData(AvailabilityData|Reservation|array $data, EnabledExtras $enabledExtras): array
     {
+        if (is_array($data)) {
+            return array_merge($data, ['extras' => $enabledExtras->extras->keys()]);
+        }
+
         return array_merge(
             $data instanceof Reservation ? $data->toArray() : $data->toResrvArray(),
             ['extras' => $enabledExtras->extras->keys()]
@@ -251,10 +263,20 @@ class ExtraCondition extends Model
     protected function checkTime($condition, $date)
     {
         $time_start = Carbon::createFromTimeString($condition->time_start);
-        $time_end = Carbon::createFromTimeString($condition->time_end)->addDay();
+        $time_end = Carbon::createFromTimeString($condition->time_end);
         $payload = new Carbon($date);
 
-        return $payload->setDateFrom(today())->between($time_start, $time_end);
+        $start_minutes = $time_start->hour * 60 + $time_start->minute;
+        $end_minutes = $time_end->hour * 60 + $time_end->minute;
+        $payload_minutes = $payload->hour * 60 + $payload->minute;
+
+        // Overnight window (e.g. 21:00 -> 08:00): in range if after start OR before end.
+        if ($end_minutes < $start_minutes) {
+            return $payload_minutes >= $start_minutes || $payload_minutes <= $end_minutes;
+        }
+
+        // Same-day window: must fall within both bounds.
+        return $payload_minutes >= $start_minutes && $payload_minutes <= $end_minutes;
     }
 
     protected function checkDates($condition, $data)
@@ -335,12 +357,8 @@ class ExtraCondition extends Model
             return false;
         }
 
-        // Get all extras in the specified category
-        $categoryExtras = Extra::where('category_id', $condition->value)
-            ->where('published', true)
-            ->pluck('id');
+        $categoryExtras = $this->extraIdsInCategory($condition->value);
 
-        // Check if any of the extras in the data array are in the category
         $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
             return $categoryExtras->contains($extraId);
         });
@@ -348,18 +366,21 @@ class ExtraCondition extends Model
         return $selected->count() > 0;
     }
 
+    private function extraIdsInCategory($categoryId): Collection
+    {
+        return $this->categoryExtraIdsCache[$categoryId] ??= Extra::where('category_id', $categoryId)
+            ->where('published', true)
+            ->pluck('id');
+    }
+
     protected function checkNoExtraInCategorySelected($condition, $data)
     {
         if (! Arr::exists($data, 'extras')) {
-            return true; // If no extras are provided at all, then no extras in the category are selected
+            return true; // No extras provided → none in category selected
         }
 
-        // Get all extras in the specified category
-        $categoryExtras = Extra::where('category_id', $condition->value)
-            ->where('published', true)
-            ->pluck('id');
+        $categoryExtras = $this->extraIdsInCategory($condition->value);
 
-        // Check if none of the extras in the data array are in the category
         $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
             return $categoryExtras->contains($extraId);
         });

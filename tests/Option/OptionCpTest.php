@@ -74,6 +74,25 @@ class OptionCpTest extends TestCase
         ]);
     }
 
+    public function test_cannot_add_value_with_an_unknown_price_type()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItem();
+        $option = Option::factory()->state(['item_id' => $item->id()])->create();
+
+        $payload = [
+            'name' => 'This is an option value',
+            'price' => '22.75',
+            'price_type' => 'bogus',
+            'published' => true,
+        ];
+
+        $this->postJson(cp_route('resrv.option.value.create', $option->id), $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('price_type');
+    }
+
     public function test_can_update_option()
     {
         $item = $this->makeStatamicItem();
@@ -228,5 +247,36 @@ class OptionCpTest extends TestCase
             'id' => 3,
             'order' => 2,
         ]);
+    }
+
+    public function test_updating_a_non_existent_option_returns_404()
+    {
+        $this->withExceptionHandling();
+
+        $payload = [
+            'id' => 99999,
+            'name' => 'This option does not exist',
+            'slug' => 'this-option-does-not-exist',
+            'item_id' => 'some-item',
+            'required' => false,
+            'order' => 1,
+            'published' => true,
+        ];
+
+        $response = $this->patch(cp_route('resrv.option.update'), $payload);
+        $response->assertNotFound();
+    }
+
+    public function test_reordering_a_non_existent_option_returns_404()
+    {
+        $this->withExceptionHandling();
+
+        $payload = [
+            'id' => 99999,
+            'order' => 3,
+        ];
+
+        $response = $this->patch(cp_route('resrv.option.order'), $payload);
+        $response->assertNotFound();
     }
 }

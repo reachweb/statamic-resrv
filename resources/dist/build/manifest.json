@@ -1,19 +1,20 @@
 {
-  "resources/css/resrv.css": {
-    "file": "assets/resrv-d8fadd67.css",
-    "isEntry": true,
-    "src": "resources/css/resrv.css"
-  },
-  "resources/js/resrv.css": {
-    "file": "assets/resrv-7563e5e4.css",
-    "src": "resources/js/resrv.css"
-  },
-  "resources/js/resrv.js": {
-    "css": [
-      "assets/resrv-7563e5e4.css"
+  "resources/css/cp.css": {
+    "file": "assets/cp-2pwPcNfQ.css",
+    "name": "cp",
+    "names": [
+      "cp.css"
     ],
-    "file": "assets/resrv-0995ede7.js",
+    "src": "resources/css/cp.css",
+    "isEntry": true
+  },
+  "resources/js/cp.js": {
+    "file": "assets/cp-C0N5cMh2.js",
+    "name": "cp",
+    "src": "resources/js/cp.js",
     "isEntry": true,
-    "src": "resources/js/resrv.js"
+    "css": [
+      "assets/cp-CWZOeTTA.css"
+    ]
   }
 }

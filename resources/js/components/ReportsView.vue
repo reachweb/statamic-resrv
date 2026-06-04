@@ -1,163 +1,106 @@
 <template>
-    <div class="card">
-        <div class="flex flex-wrap items-center py-4 gap-3">
-            <label class="text-sm font-semibold">{{ __('Filter by') }}</label>
-            <div class="min-w-[200px]">
-                <v-select
-                    v-model="dateField"
-                    :options="dateFieldOptions"
-                    :reduce="option => option.value"
-                    :clearable="false"
-                />
+    <div>
+        <Header :title="__('Reports')" icon="chart-monitoring-indicator" />
+
+        <Card class="mb-6">
+            <div class="flex flex-wrap items-end gap-4">
+                <div class="min-w-[220px]">
+                    <Field :label="__('Filter by')">
+                        <Select v-model="dateField" :options="dateFieldOptions" :clearable="false" />
+                    </Field>
+                </div>
+                <div class="min-w-[320px]">
+                    <Field :label="__('Date range')">
+                        <DateRangePicker v-model="dateRange" granularity="day" />
+                    </Field>
+                </div>
             </div>
-            <div class="date-container input-group max-w-xl">
-                <v-date-picker
-                    v-model="date"
-                    :model-config="modelConfig"
-                    :popover="{ visibility: 'click' }"
-                    :masks="{ input: 'YYYY-MM-DD' }"
-                    :mode="'date'"
-                    :columns="$screens({ default: 1, lg: 2 })"
-                    is-range
-                    >
-                    <template v-slot="{ inputValue, inputEvents }">
-                        <div class="w-full flex items-center">
-                        <div class="input-group">
-                            <div class="input-group-prepend flex items-center">
-                                <svg-icon name="light/calendar" class="w-4 h-4" />
-                            </div>
-                            <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
-                                <input
-                                    class="input-text-minimal p-0 bg-transparent leading-none w-24 text-sm"
-                                    :value="inputValue.start"
-                                    v-on="inputEvents.start"
-                                />
-                            </div>
-                        </div>
-                        <div class="icon icon-arrow-right my-sm mx-1 text-grey-60" />
-                        <div class="input-group">
-                            <div class="input-group-prepend flex items-center">
-                                <svg-icon name="light/calendar" class="w-4 h-4" />
-                            </div>
-                            <div class="input-text border border-grey-50 border-l-0" :class="{ 'read-only': isReadOnly }">
-                                <input
-                                    class="input-text-minimal p-0 bg-transparent leading-none w-24 text-sm"
-                                    :value="inputValue.end"
-                                    v-on="inputEvents.end"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                    </template>
-                </v-date-picker>
-            </div>
+        </Card>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <Card class="text-center">
+                <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">{{ __('Reservations') }}</div>
+                <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">{{ report.total_confirmed_reservations ?? 0 }}</div>
+            </Card>
+            <Card class="text-center">
+                <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">{{ __('Revenue') }}</div>
+                <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">{{ currency }} {{ report.total_revenue ?? 0 }}</div>
+            </Card>
+            <Card class="text-center">
+                <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">{{ __('Average reservation value') }}</div>
+                <div class="text-3xl font-semibold text-gray-900 dark:text-gray-100">{{ currency }} {{ report.avg_revenue ?? 0 }}</div>
+            </Card>
         </div>
-        <div class="flex flex-wrap items-center text-center border-t mt-4 pt-4">
-            <div class="w-full lg:!w-1/3">
-                <div class="mb-2">{{ __('Reservations') }}</div>
-                <div class="text-2xl">{{ reportData.total_confirmed_reservations }}</div>
-            </div>
-            <div class="w-full lg:!w-1/3">
-                <div class="mb-2">{{ __('Revenue') }}</div>
-                <div class="text-2xl">{{ currency }} {{ reportData.total_revenue }}</div>
-            </div>
-            <div class="w-full lg:!w-1/3">
-                <div class="mb-2">{{ __('Average reservation value') }}</div>
-                <div class="text-2xl">{{ currency }} {{ reportData.avg_revenue }}</div>
-            </div>
-        </div>
-        <div class="border-t mt-4 pt-4">
-            <div class="text-2xl font-bold mb-2 ml-1">{{ __('Best sellers') }}</div>
-            <reports-items-table
-                v-if="reportDataLoaded"
-                :items="reportData.top_seller_items"
+
+        <Panel :heading="__('Best sellers')" class="mb-6">
+            <ReportsItemsTable
+                v-if="report.top_seller_items"
+                :items="report.top_seller_items"
                 :table-columns="'items'"
                 :currency="currency"
-            >
-            </reports-items-table>
-        </div>
-        <div class="border-t mt-4 pt-4" v-if="reportDataLoaded">
-            <template v-if="reportData.top_seller_extras"> 
-                <div class="text-2xl font-bold mb-2 ml-1">{{ __('Top selling extras') }}</div>
-                <reports-items-table
-                    v-if="reportDataLoaded"
-                    :items="reportData.top_seller_extras"
-                    :table-columns="'other'"
-                    :currency="currency"
-                >
-                </reports-items-table>
-            </template>
-        </div>
-        <div class="border-t mt-4 pt-4" v-if="reportDataLoaded">
-            <template v-if="reportData.top_seller_starting_locations"> 
-                <div class="text-2xl font-bold mb-2 ml-1">{{ __('Top starting locations') }}</div>
-                <reports-items-table
-                    v-if="reportDataLoaded"
-                    :items="reportData.top_seller_starting_locations"
-                    :table-columns="'other'"
-                    :currency="currency"
-                >
-                </reports-items-table>
-            </template>
-        </div>        
+            />
+        </Panel>
+
+        <Panel v-if="report.top_seller_extras" :heading="__('Top selling extras')" class="mb-6">
+            <ReportsItemsTable
+                :items="report.top_seller_extras"
+                :table-columns="'other'"
+                :currency="currency"
+            />
+        </Panel>
+
+        <Panel v-if="report.top_seller_starting_locations" :heading="__('Top starting locations')" class="mb-6">
+            <ReportsItemsTable
+                :items="report.top_seller_starting_locations"
+                :table-columns="'other'"
+                :currency="currency"
+            />
+        </Panel>
     </div>
 </template>
-<script>
-import axios from 'axios'
-import ReportsItemsTable from './ReportsItemsTable.vue'
 
-export default ({
-    props: {
-        reportsUrl: '',
-        currency: ''
-    },
+<script setup>
+import { Card, DateRangePicker, Field, Header, Panel, Select } from '@statamic/cms/ui';
+import { router } from '@statamic/cms/inertia';
+import { ref, watch } from 'vue';
+import ReportsItemsTable from './ReportsItemsTable.vue';
+import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 
-    data() {
-        return {
-            reportData: '',
-            reportDataLoaded: false,
-            date: {
-                start: Vue.moment().subtract(7, 'days').toDate(),
-                end: Vue.moment().toDate()
-            },
-            dateField: 'date_start',
-            dateFieldOptions: [
-                { value: 'date_start', label: __('Reservation date') },
-                { value: 'created_at', label: __('Date created') },
-            ],
-        }
-    },
+const props = defineProps({
+    report: { type: Object, default: () => ({}) },
+    filters: { type: Object, default: () => ({}) },
+    currency: { type: String, default: '' },
+});
 
-    mounted() {
-        this.getReports()        
-    },
+const dateStart = ref(props.filters.start ?? '');
+const dateEnd = ref(props.filters.end ?? '');
+const dateField = ref(props.filters.dateField ?? 'date_start');
 
-    watch: {
-        date() {
-            this.getReports()
-        },
-        dateField() {
-            this.getReports()
-        }
-    },
+const dateRange = useDateRangeModel(
+    () => dateStart.value,
+    () => dateEnd.value,
+    (v) => (dateStart.value = v ?? ''),
+    (v) => (dateEnd.value = v ?? ''),
+);
 
-    components: {
-        ReportsItemsTable
-    },
+const dateFieldOptions = [
+    { value: 'date_start', label: __('Reservation date') },
+    { value: 'created_at', label: __('Date created') },
+];
 
-    methods: {
-        getReports() {
-            axios.get(this.reportsUrl+"?start="+Vue.moment(this.date.start).format('YYYY-MM-DD')+"&end="+Vue.moment(this.date.end).format('YYYY-MM-DD')+"&date_field="+this.dateField)
-            .then(response => {
-                this.reportData = response.data
-                this.reportDataLoaded = true
-            })
-            .catch(error => {
-                this.$toast.error('Cannot retrieve report data')
-            })
-        },
+watch([dateStart, dateEnd, dateField], () => {
+    if (!dateStart.value || !dateEnd.value) {
+        return;
     }
-
-
-})
+    router.reload({
+        only: ['report', 'filters'],
+        data: {
+            start: dateStart.value,
+            end: dateEnd.value,
+            date_field: dateField.value,
+        },
+        preserveState: true,
+        preserveScroll: true,
+    });
+});
 </script>

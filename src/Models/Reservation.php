@@ -8,13 +8,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
+use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
+use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\OptionsException;
-use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Exceptions\ReservationDriftException;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Statamic\Contracts\Entries\Entry as EntryContract;
@@ -26,11 +31,37 @@ class Reservation extends Model
 
     protected $table = 'resrv_reservations';
 
-    protected $guarded = [];
+    // Explicit allow-list (vs. $guarded = []) so a future fill()/update() with untrusted input
+    // can't mass-assign the primary key or any column not written by app code. Status changes
+    // still go exclusively through transitionTo() (direct assignment, not mass assignment).
+    // Timestamps stay fillable — time-based flows/tests set created_at/updated_at directly.
+    protected $fillable = [
+        'status',
+        'type',
+        'reference',
+        'item_id',
+        'date_start',
+        'date_end',
+        'quantity',
+        'rate_id',
+        'price',
+        'payment',
+        'payment_surcharge',
+        'payment_id',
+        'payment_gateway',
+        'total',
+        'customer_id',
+        'abandoned_email_sent_at',
+        'created_at',
+        'updated_at',
+    ];
 
     protected $casts = [
         'date_start' => 'datetime',
         'date_end' => 'datetime',
+        // The money columns pair this cast with the get*Attribute accessors below on purpose —
+        // see the accessor note. The cast normalises writes and powers string serialization;
+        // do not drop a money cast without also removing its accessor.
         'price' => PriceClass::class,
         'payment' => PriceClass::class,
         'payment_surcharge' => PriceClass::class,
@@ -60,6 +91,11 @@ class Reservation extends Model
         return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee');
     }
 
+    public function rate(): BelongsTo
+    {
+        return $this->belongsTo(Rate::class, 'rate_id')->withTrashed();
+    }
+
     public function childs()
     {
         return $this->hasMany(ChildReservation::class);
@@ -70,6 +106,12 @@ class Reservation extends Model
         return $this->belongsToMany(DynamicPricing::class, 'resrv_reservation_dynamic_pricing')->withPivot('data');
     }
 
+    // These accessors are NOT redundant with the PriceClass cast above — the two serve different
+    // reads. On direct access ($reservation->price) the accessor wins and returns a Price object
+    // for money math (->format(), ->subtract(), ...). On array/JSON serialization the cast's get()
+    // runs instead and emits a formatted string, which is what the ResrvCheckoutRedirect tag and
+    // the gateway toArray() payloads expose to Antlers templates. Keep both halves in sync;
+    // ReservationPriceCastTest locks this contract.
     public function getPriceAttribute($value)
     {
         return Price::create($value);
@@ -90,13 +132,9 @@ class Reservation extends Model
         return Price::create($value);
     }
 
-    public function getPropertyAttribute($value)
+    public function getRateSlugAttribute(): ?string
     {
-        if ($this->type === 'parent') {
-            return $this->childs()->get()->unique(fn ($item) => $item->property);
-        }
-
-        return $value;
+        return $this->rate?->slug;
     }
 
     public function getCustomerDataAttribute(): Collection
@@ -117,26 +155,34 @@ class Reservation extends Model
         return $data;
     }
 
-    public function getPropertyAttributeLabel()
+    public function getRateLabel(): string
     {
-        if ($this->property == null) {
-            return '';
-        }
-        $availability = new Availability;
-
-        if ($this->property instanceof Collection) {
-            return $this->property->map(function ($item) use ($availability) {
-                return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $item->property);
-            })->implode(',');
+        if ($this->isParent()) {
+            return $this->childs
+                ->map(fn ($child) => $child->getRateLabel())
+                ->unique()
+                ->implode(', ');
         }
 
-        return $availability->getPropertyLabel($this->entry()->blueprint, $this->entry()->collection()->handle(), $this->property);
+        return $this->rate?->title ?? 'Default';
+    }
+
+    public function getPropertyAttributeLabel(): string
+    {
+        return $this->getRateLabel();
     }
 
     public function getEntryAttribute()
     {
-        $entry = Entry::find($this->item_id);
+        return $this->entryToArray(Entry::find($this->item_id));
+    }
 
+    /**
+     * Accepts a pre-resolved entry so CP resources can batch all lookups via resolveReservationEntries()
+     * instead of one Entry::find() per row.
+     */
+    public function entryToArray(?EntryContract $entry): array
+    {
         return $entry ? $entry->toAugmentedArray(['id', 'title', 'slug', 'url']) : $this->emptyEntry();
     }
 
@@ -152,16 +198,61 @@ class Reservation extends Model
 
     public function scopeFindByPaymentId($query, $id)
     {
-        return $query->where('payment_id', $id);
+        // payment_id is cleared to '' on expire/cancel, so a falsy id must match nothing rather than
+        // every cleared reservation.
+        return $query->where('payment_id', $id)
+            ->where('payment_id', '!=', '')
+            ->whereNotNull('payment_id');
     }
 
-    public function isParent()
+    /**
+     * Returns true when the status changed, false on same-state no-op. Callers MUST gate
+     * event dispatch on the return value to prevent duplicate side effects (e.g. double
+     * IncreaseAvailability). Events are not dispatched here so callers can choose which event
+     * to fire (e.g. PARTNER still triggers ReservationConfirmed).
+     *
+     * Pass $tolerant = true for reactive callers (webhooks/checkout) so a concurrent update that
+     * changed the row after their in-memory pre-check is treated as a no-op (returns false) rather
+     * than throwing — avoiding a spurious HTTP 500 / webhook retry. Explicit callers (CP refund)
+     * keep the default and catch InvalidStateTransition to surface the error.
+     */
+    public function transitionTo(ReservationStatus $to, bool $tolerant = false): bool
     {
-        if ($this->type == 'parent') {
-            return true;
-        }
+        return (bool) DB::transaction(function () use ($to, $tolerant) {
+            $fresh = static::query()->lockForUpdate()->findOrFail($this->id);
 
-        return false;
+            if ($fresh->status === $to->value) {
+                return false;
+            }
+
+            $current = ReservationStatus::from($fresh->status);
+
+            if (! $current->canTransitionTo($to)) {
+                if ($tolerant) {
+                    Log::info('Skipped reservation transition; state changed under lock.', [
+                        'reservation_id' => $fresh->id,
+                        'from' => $current->value,
+                        'to' => $to->value,
+                    ]);
+
+                    return false;
+                }
+
+                throw new InvalidStateTransition($current, $to, $fresh->id);
+            }
+
+            $fresh->status = $to->value;
+            $fresh->save();
+
+            $this->setRawAttributes($fresh->getAttributes(), true);
+
+            return true;
+        });
+    }
+
+    public function isParent(): bool
+    {
+        return $this->type === 'parent';
     }
 
     public function amountRemaining()
@@ -181,31 +272,54 @@ class Reservation extends Model
 
     public function duration()
     {
-        return (int) $this->date_start->startOfDay()->diffInDays($this->date_end->startOfDay(), true);
+        // Copy before startOfDay() — date_start/date_end are mutable Carbon instances, so mutating
+        // them in place is a footgun (and inconsistent with HandlesAvailabilityDates::checkMinimumDate).
+        return (int) $this->date_start->copy()->startOfDay()->diffInDays($this->date_end->copy()->startOfDay(), true);
     }
 
     public function extraCharges()
     {
-        $extraCharges = Price::create(0);
+        if ($this->isParent()) {
+            return $this->parentExtraCharges();
+        }
 
         $data = $this->buildDataArray();
         $data['item_id'] = $this->item_id;
 
         $optionsCost = Price::create(0);
-        if ($this->options()->count() > 0) {
-            foreach ($this->options()->get() as $id => $option) {
-                $optionsCost->add($option->calculatePrice($data, $option->pivot->value));
-            }
+        foreach ($this->options()->get() as $option) {
+            $optionsCost->add($option->calculatePrice($data, $option->pivot->value));
         }
 
         $extrasCost = Price::create(0);
-        if ($this->extras()->count() > 0) {
-            foreach ($this->extras()->get() as $id => $extra) {
-                $extrasCost->add($extra->calculatePrice($data, $extra->pivot->quantity));
+        foreach ($this->extras()->get() as $extra) {
+            $extrasCost->add($extra->calculatePrice($data, $extra->pivot->quantity));
+        }
+
+        return Price::create(0)->add($optionsCost, $extrasCost);
+    }
+
+    protected function parentExtraCharges()
+    {
+        $totalCharges = Price::create(0);
+
+        foreach ($this->childs as $child) {
+            $data = $this->buildChildDataArray($child);
+
+            // Fresh instances per child: OptionValue::calculatePrice mutates $this->price via
+            // Price::multiply(), so reusing the same Option across children compounds the result.
+            foreach ($this->options()->with('values')->get() as $option) {
+                $totalCharges->add($option->calculatePrice($data, $option->pivot->value));
+            }
+
+            foreach ($this->extras()->get() as $extra) {
+                // Fresh instance via withTrashed(): Extra::calculatePrice mutates price,
+                // and soft-deleted extras on historical reservations must still be priced.
+                $totalCharges->add(Extra::withTrashed()->find($extra->id)->calculatePrice($data, $extra->pivot->quantity));
             }
         }
 
-        return $extraCharges->add($optionsCost, $extrasCost);
+        return $totalCharges;
     }
 
     public function getPrices()
@@ -217,7 +331,11 @@ class Reservation extends Model
     {
         $this->validateTotal($data, $statamic_id);
 
-        $this->checkMaxQuantity($data['quantity']);
+        if ($this->type === ReservationTypes::PARENT->value) {
+            $this->checkMaxQuantity($this->childs->sum('quantity'));
+        } else {
+            $this->checkMaxQuantity($data['quantity']);
+        }
 
         if ($checkOptions && ! $this->checkForRequiredOptions($statamic_id, $data)) {
             throw new OptionsException(__('There are required options you did not select.'));
@@ -238,15 +356,27 @@ class Reservation extends Model
         return [
             'date_start' => $this->date_start,
             'date_end' => $this->date_end,
-            'advanced' => $this->property,
             'quantity' => $this->quantity,
+            'rate_id' => $this->rate_id,
+        ];
+    }
+
+    protected function buildChildDataArray(ChildReservation $child): array
+    {
+        return [
+            'date_start' => $child->date_start,
+            'date_end' => $child->date_end,
+            'quantity' => $child->quantity,
+            'rate_id' => $child->rate_id,
+            'item_id' => $this->item_id,
+            'customer' => $this->customerData,
         ];
     }
 
     protected function checkMaxQuantity($quantity)
     {
         if ($quantity > config('resrv-config.maximum_quantity')) {
-            throw new ReservationException(__('You cannot reserve these many in one reservation.'));
+            throw new ReservationDriftException(__('You cannot reserve these many in one reservation.'));
         }
     }
 
@@ -258,27 +388,45 @@ class Reservation extends Model
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
             'quantity' => $data['quantity'],
-            'advanced' => $data['advanced'],
+            'rate_id' => $data['rate_id'] ?? null,
             'payment' => $data['payment'],
             'price' => $data['price'],
         ], $statamic_id);
 
         if ($checkAvailability == false) {
-            throw new ReservationException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
+            throw new ReservationDriftException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
         }
     }
 
     public function validateTotal($data, $statamic_id)
     {
-        $prices = (new Availability)->getPricing($data, $statamic_id);
-
-        $reservationCost = Price::create($prices['price']);
+        if ($this->type === ReservationTypes::PARENT->value) {
+            $reservationCost = Price::create(0);
+            foreach ($this->childs as $child) {
+                $childPrices = (new Availability)->getPricing([
+                    'date_start' => $child->date_start,
+                    'date_end' => $child->date_end,
+                    'quantity' => $child->quantity,
+                    'rate_id' => $child->rate_id,
+                ], $statamic_id);
+                if ($childPrices === false) {
+                    throw new ReservationDriftException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
+                }
+                $reservationCost->add(Price::create($childPrices['price']));
+            }
+        } else {
+            $prices = (new Availability)->getPricing($data, $statamic_id);
+            if ($prices === false) {
+                throw new ReservationDriftException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
+            }
+            $reservationCost = Price::create($prices['price']);
+        }
 
         $dbTotal = $reservationCost->add($this->validateExtraCharges($data, $statamic_id));
         $frontendTotal = $data['total'];
 
         if (! $dbTotal->equals($frontendTotal)) {
-            throw new ReservationException(__('The price for that reservation has changed. Please refresh and try again!'));
+            throw new ReservationDriftException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
 
         return true;
@@ -286,6 +434,10 @@ class Reservation extends Model
 
     protected function validateExtraCharges($data, $statamic_id)
     {
+        if ($this->isParent()) {
+            return $this->validateParentExtraCharges($data, $statamic_id);
+        }
+
         $extraCharges = Price::create(0);
 
         $optionsCost = Price::create(0);
@@ -307,8 +459,38 @@ class Reservation extends Model
         return $extraCharges->add($optionsCost, $extrasCost);
     }
 
+    protected function validateParentExtraCharges($data, $statamic_id)
+    {
+        $totalCharges = Price::create(0);
+
+        foreach ($this->childs as $child) {
+            $childData = $this->buildChildDataArray($child);
+            if (array_key_exists('customer', $data)) {
+                $childData['customer'] = $data['customer'];
+            }
+
+            if (array_key_exists('options', $data) && $data['options']->count() > 0) {
+                $data['options']->each(function ($option) use ($childData, $totalCharges) {
+                    $totalCharges->add(Option::find($option['id'])->calculatePrice($childData, $option['value']));
+                });
+            }
+
+            if (array_key_exists('extras', $data) && $data['extras']->count() > 0) {
+                $data['extras']->each(function ($extra) use ($childData, $totalCharges) {
+                    $totalCharges->add(Extra::find($extra['id'])->calculatePrice($childData, $extra['quantity']));
+                });
+            }
+        }
+
+        return $totalCharges;
+    }
+
     protected function checkForRequiredExtras($statamic_id, $data)
     {
+        if ($this->isParent()) {
+            return $this->checkForRequiredExtrasForParent($statamic_id, $data);
+        }
+
         $required = (new ExtraCondition)->hasRequiredExtrasSelected($statamic_id, $data);
         if ($required !== true) {
             return $required->transform(function ($messages, $extra_id) {
@@ -319,40 +501,55 @@ class Reservation extends Model
         return false;
     }
 
-    protected function checkForRequiredOptions($statamic_id, $data)
+    protected function checkForRequiredExtrasForParent($statamic_id, $data)
     {
-        $requiredOptions = Option::entry($statamic_id)
+        $allRequired = collect();
+        $extraCondition = new ExtraCondition;
+
+        foreach ($this->childs as $child) {
+            $childData = array_merge($data, [
+                'date_start' => $child->date_start,
+                'date_end' => $child->date_end,
+                'quantity' => $child->quantity,
+                'rate_id' => $child->rate_id,
+            ]);
+
+            $required = $extraCondition->hasRequiredExtrasSelected($statamic_id, $childData);
+            if ($required !== true) {
+                // union() preserves integer keys (real DB ids); first-wins on collision is fine.
+                $allRequired = $allRequired->union($required);
+            }
+        }
+
+        if ($allRequired->isEmpty()) {
+            return false;
+        }
+
+        return $allRequired->transform(function ($messages, $extra_id) {
+            return 'ID '.$extra_id.' '.$messages->implode(' ');
+        })->implode(', ');
+    }
+
+    protected function checkForRequiredOptions($statamic_id, $data): bool
+    {
+        $requiredOptionIds = Option::entry($statamic_id)
             ->where('published', true)
             ->where('required', true)
-            ->get()
-            ->groupBy('id')
-            ->toArray();
+            ->pluck('id');
 
-        // If the item doesn't have required options return true
-        if (count($requiredOptions) == 0) {
+        if ($requiredOptionIds->isEmpty()) {
             return true;
         }
 
-        // If the item has required options but the key is not present in the data array return false
         if (! array_key_exists('options', $data)) {
             return false;
         }
 
-        $checkoutOptions = $data['options'];
+        $checkoutOptions = $data['options'] instanceof Collection
+            ? $data['options']->toArray()
+            : $data['options'];
 
-        // Convert checkoutOptions to array if it's a Laravel Collection
-        if ($checkoutOptions instanceof Collection) {
-            $checkoutOptions = $checkoutOptions->toArray();
-        }
-
-        // Check if each required option is in the data array otherwise return false
-        foreach ($requiredOptions as $id => $option) {
-            if (! array_key_exists($id, $checkoutOptions)) {
-                return false;
-            }
-        }
-
-        return true;
+        return $requiredOptionIds->every(fn ($id) => array_key_exists($id, $checkoutOptions));
     }
 
     public function createRandomReference()
@@ -417,28 +614,66 @@ class Reservation extends Model
         return $resolver->resolveForReservation($this);
     }
 
-    public function expire($id)
+    /**
+     * Clears payment_id/payment_gateway before commit (blocks racing webhooks), then cancels
+     * the remote intent after commit (no lock held across the network call). If remote cancel
+     * fails, local state is already correct; the error is logged for manual reconciliation.
+     */
+    public function expire(): void
     {
-        try {
-            DB::transaction(function () use ($id) {
-                $reservation = $this->findOrFail($id);
-                if ($reservation->status == 'pending') {
-                    $reservation->status = 'expired';
-                    $reservation->save();
-                    ReservationExpired::dispatch($reservation);
-                }
-            });
-        } catch (\Exception $e) {
+        $oldPaymentId = null;
+        $oldGateway = null;
+        $expired = null;
+
+        DB::transaction(function () use (&$oldPaymentId, &$oldGateway, &$expired) {
+            $reservation = static::query()->lockForUpdate()->findOrFail($this->id);
+
+            if ($reservation->status !== ReservationStatus::PENDING->value) {
+                return;
+            }
+
+            $oldPaymentId = $reservation->payment_id !== '' ? $reservation->payment_id : null;
+            $oldGateway = $reservation->payment_gateway !== '' ? $reservation->payment_gateway : null;
+
+            $reservation->payment_id = '';
+            $reservation->payment_gateway = '';
+            $reservation->status = ReservationStatus::EXPIRED->value;
+            $reservation->save();
+
+            $this->setRawAttributes($reservation->getAttributes(), true);
+            $expired = $reservation;
+        });
+
+        if ($expired === null) {
+            return;
         }
+
+        if ($oldPaymentId !== null && $oldGateway !== null) {
+            try {
+                app(PaymentGatewayManager::class)
+                    ->gateway($oldGateway)
+                    ->cancelPaymentIntent($oldPaymentId, $expired);
+            } catch (\Throwable $e) {
+                Log::error('Failed to cancel payment intent during expiration; manual reconciliation may be required.', [
+                    'reservation_id' => $expired->id,
+                    'payment_id' => $oldPaymentId,
+                    'payment_gateway' => $oldGateway,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        ReservationExpired::dispatch($expired);
     }
 
     public function emptyEntry()
     {
+        // Matches the shape returned by entryToArray(); null url renders as plain text, not a broken link.
         return [
             'id' => null,
             'title' => '## Entry deleted ##',
-            'api_url' => '## Entry deleted ##',
-            'permalink' => '#',
+            'slug' => null,
+            'url' => null,
         ];
     }
 }

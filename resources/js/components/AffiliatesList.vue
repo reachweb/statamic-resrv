@@ -1,161 +1,135 @@
 <template>
     <div>
-    <div class="w-full flex justify-end mb-4">
-        <button class="btn-primary" @click="addAffiliate">
-            {{ __('Add a new affiliate') }}
-        </button>
-    </div>
-    <div class="w-full h-full" v-if="affiliatesLoaded">
-        <div v-if="affiliates.length > 0">
-            <div
-                v-for="affiliate in affiliates"
-                :key="affiliate.id"
-                class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
-                bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"
-                
-            >
-                <div class="flex items-center space-x-2">
-                    <div class="little-dot" :class="greenDot(affiliate) ? 'bg-green-600' : 'bg-gray-400'"></div>
-                    <span class="font-medium cursor-pointer" v-html="affiliate.name" @click="editAffiliate(affiliate)"></span>
-                    <span class="ml-3 font-light">{{ affiliate.email }} <span class="ml-3 text-xs text-gray-700 dark:text-dark-100">{{ __('Fee:') }} {{ affiliate.fee }}%</span></span>
-                </div>
-                <div class="flex space-x-2">
-                    <dropdown-list>
-                        <dropdown-item :text="__('Edit')" @click="editAffiliate(affiliate)" />
-                        <dropdown-item :text="__('Copy affiliate link')" @click="copyLink(affiliate)" />
-                        <dropdown-item :text="__('Delete')" @click="confirmDelete(affiliate)" />         
-                    </dropdown-list>
+        <Header :title="__('Affiliates')" icon="fieldtype-users">
+            <Button :text="__('Add a new affiliate')" variant="primary" icon="plus" @click="addAffiliate" />
+        </Header>
+
+        <Card inset>
+            <div v-if="affiliates.length > 0" class="p-3 space-y-2">
+                <div
+                    v-for="item in affiliates"
+                    :key="item.id"
+                    class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80"
+                >
+                    <div class="flex items-center gap-2">
+                        <StatusIndicator :status="item.published ? 'published' : 'draft'" />
+                        <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" @click="editAffiliate(item)">{{ item.name }}</span>
+                        <span class="text-sm text-gray-600 dark:text-gray-400 ml-2">
+                            {{ item.email }}
+                        </span>
+                        <Badge :text="`${__('Fee')}: ${item.fee}%`" size="sm" />
+                    </div>
+                    <div>
+                        <Dropdown>
+                            <DropdownMenu>
+                                <DropdownItem :text="__('Edit')" icon="pencil" @click="editAffiliate(item)" />
+                                <DropdownItem :text="__('Copy affiliate link')" icon="clipboard" @click="copyLink(item)" />
+                                <DropdownSeparator />
+                                <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(item)" />
+                            </DropdownMenu>
+                        </Dropdown>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div v-else>
-            <div class="my-8 border shadow-sm bg-gray-100 dark:border-dark-300 dark:bg-dark-550 dark:shadow-dark-sm p-4
-             text-center text-gray-700 dark:text-dark-100">
+            <div v-else class="p-10 text-center text-gray-500 dark:text-gray-400">
                 {{ __('No affiliates found.') }}
             </div>
-        </div>
-    </div>
-    <affiliates-panel            
-        v-if="showPanel"
-        :data="affiliate"
-        @closed="togglePanel"
-        @saved="affiliateSaved"
-    >
-    </affiliates-panel>
-    <confirmation-modal
-        v-if="deleteId"
-        title="Delete affiliate"
-        :danger="true"
-        @confirm="deleteAffiliate"
-        @cancel="deleteId = false"
-    >
-        Are you sure you want to delete this affiliate? <strong>This cannot be undone.</strong>
-    </confirmation-modal>
+        </Card>
+
+        <AffiliatesPanel
+            v-if="showPanel"
+            :data="affiliate"
+            @closed="togglePanel"
+            @saved="togglePanel"
+        />
+        <confirmation-modal
+            :open="deleteId !== null"
+            :title="__('Delete affiliate')"
+            :danger="true"
+            @confirm="deleteAffiliate"
+            @cancel="deleteId = null"
+        >
+            {{ __('Are you sure you want to delete this affiliate?') }} <strong>{{ __('This cannot be undone.') }}</strong>
+        </confirmation-modal>
     </div>
 </template>
-<script>
-import axios from 'axios'
-import AffiliatesPanel from './AffiliatesPanel.vue'
 
-export default {
-    data() {
-        return {
-            showPanel: false,
-            affiliates: '',
-            affiliatesLoaded: false,
-            deleteId: false,
-            affiliate: '',
-            emptyAffiliate: {
-                name: '',
-                code: '',
-                email: '',
-                cookie_duration: '',
-                fee : '',
-                allow_skipping_payment: 0,
-                send_reservation_email: 0,
-                published : 1
-            }
-        }
-    },
+<script setup>
+import { Badge, Button, Card, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, Header, StatusIndicator } from '@statamic/cms/ui';
+import { router } from '@statamic/cms/inertia';
+import { ref } from 'vue';
+import axios from 'axios';
+import AffiliatesPanel from './AffiliatesPanel.vue';
+import { useToast } from '../composables/useToast.js';
 
-    components: {
-        AffiliatesPanel,
-    },
+defineProps({
+    affiliates: { type: Array, default: () => [] },
+});
 
-    computed: {
-        newItem() {
-            if (this.parent == 'Collection') {
-                return true
-            }
-            return false
-        }
-    },
+const toast = useToast();
 
-    mounted() {
-        this.getAllAffiliates()        
-    },
+const showPanel = ref(false);
+const deleteId = ref(null);
+const affiliate = ref({});
 
-    updated() {
-        if (! this.newItem) {
-            this.$emit('input', this.parent)
-        }
-    },
+const emptyAffiliate = {
+    name: '',
+    code: '',
+    email: '',
+    cookie_duration: '',
+    fee: '',
+    allow_skipping_payment: false,
+    send_reservation_email: false,
+    published: true,
+};
 
-    methods: {
-        togglePanel() {
-            this.showPanel = !this.showPanel
-        },
-        addAffiliate() {
-            this.affiliate = this.emptyAffiliate
-            this.togglePanel()
-        },
-        editAffiliate(affiliate) {
-            this.affiliate = affiliate
-            this.togglePanel()
-        },
-        copyLink(affiliate) {
-            let link = window.location.origin + '/?afid=' + affiliate.code
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(link)
-                this.$toast.success('Affiliate link copied to clipboard')
-            } else {
-                this.$toast.error('Failed to copy link. Are you using SSL?')
-            }            
-        },
-        affiliateSaved() {
-            this.togglePanel()
-            this.getAllAffiliates()
-        },
-        greenDot(affiliate) {
-            if (affiliate.published == true) {
-                return true;
-            }
-            return false
-        },
-        getAllAffiliates() {
-            axios.get('/cp/resrv/affiliate')
-            .then(response => {
-                this.affiliates = response.data
-                this.affiliatesLoaded = true                
-            })
-            .catch(error => {
-                this.$toast.error('Cannot retrieve affiliates')
-            })
-        },
-        confirmDelete(affiliate) {
-            this.deleteId = affiliate.id
-        },
-        deleteAffiliate() {
-            axios.delete(`/cp/resrv/affiliate/${this.deleteId}`)
-                .then(response => {
-                    this.$toast.success('Affiliate deleted')
-                    this.deleteId = false
-                    this.getAllAffiliates()
-                })
-                .catch(error => {
-                    this.$toast.error('Cannot delete affiliate')
-                })
-        },
+function togglePanel() {
+    showPanel.value = !showPanel.value;
+}
+
+function addAffiliate() {
+    affiliate.value = { ...emptyAffiliate };
+    togglePanel();
+}
+
+function editAffiliate(item) {
+    // Clone so the panel can never mutate the Inertia-owned prop array element in place
+    // (mirrors addAffiliate's spread). coupons_ids stays shared but the panel only reads it.
+    affiliate.value = { ...item };
+    togglePanel();
+}
+
+function copyLink(item) {
+    const link = window.location.origin + '/?afid=' + item.code;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(link);
+        toast.success('Affiliate link copied to clipboard');
+    } else {
+        toast.error('Failed to copy link. Are you using SSL?');
     }
+}
+
+function refreshAffiliates() {
+    router.reload({
+        only: ['affiliates'],
+        preserveState: true,
+        preserveScroll: true,
+    });
+}
+
+function confirmDelete(item) {
+    deleteId.value = item.id;
+}
+
+function deleteAffiliate() {
+    axios.delete(`/cp/resrv/affiliate/${deleteId.value}`)
+        .then(() => {
+            toast.success('Affiliate deleted');
+            deleteId.value = null;
+            refreshAffiliates();
+        })
+        .catch(() => {
+            toast.error('Cannot delete affiliate');
+        });
 }
 </script>

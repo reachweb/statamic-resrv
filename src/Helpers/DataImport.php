@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Helpers;
 
-use Carbon\Carbon;
 use Spatie\SimpleExcel\SimpleExcelReader;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Site;
@@ -11,7 +10,7 @@ class DataImport
 {
     private $path;
 
-    private $collection;
+    private $collectionHandle;
 
     private $delimiter;
 
@@ -20,9 +19,14 @@ class DataImport
     public function __construct($path, $delimiter, $collection, $identifier)
     {
         $this->path = $path;
-        $this->collection = Collection::findByHandle($collection);
+        $this->collectionHandle = $collection;
         $this->delimiter = $delimiter;
         $this->identifier = $identifier;
+    }
+
+    public function getPath(): string
+    {
+        return $this->path;
     }
 
     public function checkForErrors()
@@ -52,12 +56,14 @@ class DataImport
                 ->useDelimiter($this->delimiter)->take(3);
         }
 
+        // Aggregate by entry id: multiple CSV rows for the same entry (e.g. one row per rate)
+        // must accumulate. mapWithKeys would keep only the last row, silently dropping the rest.
         $import = $reader
             ->getRows()
-            ->mapWithKeys(function ($row) {
+            ->reduce(function ($import, $row) {
                 $id = $this->getId($row[$this->identifier]);
                 if ($id == false) {
-                    $id = 'not-found';
+                    return $import;
                 }
                 $data = collect();
                 $index = 0;
@@ -69,16 +75,16 @@ class DataImport
                         $arrayToPush['date_end'] = $dates['date_end'];
                         $arrayToPush['available'] = $row[array_keys($row)[$index + 1]];
                         $arrayToPush['price'] = $value;
-                        if (array_key_exists('advanced', $row)) {
-                            $arrayToPush['advanced'] = $row['advanced'];
+                        if (array_key_exists('rate_id', $row)) {
+                            $arrayToPush['rate_id'] = $row['rate_id'];
                         }
                         $data->push($arrayToPush);
                     }
                     $index++;
                 }
 
-                return [$id => $data];
-            })->reject(fn ($item, $id) => $id == 'not-found');
+                return $import->put($id, $import->get($id, collect())->concat($data));
+            }, collect());
 
         if ($sample) {
             return $import->take(1);
@@ -89,12 +95,23 @@ class DataImport
 
     private function getDatesFromHeader($header)
     {
-        $dates = explode('|', explode(':', $header)[1]);
+        // Parse "price:2024-01-01|2024-01-10" headers without throwing; blanks are passed through
+        // so ProcessDataImport's per-row validation can skip them rather than aborting the import.
+        $afterColon = explode(':', $header, 2)[1] ?? '';
+        $dates = explode('|', $afterColon);
 
         return [
-            'date_start' => Carbon::create($dates[0]),
-            'date_end' => Carbon::create($dates[1]),
+            'date_start' => trim($dates[0] ?? ''),
+            'date_end' => trim($dates[1] ?? ''),
         ];
+    }
+
+    // Resolve the collection on demand rather than storing the resolved object. The controller
+    // caches this DataImport (file/redis/database drivers serialize the value), so keeping only
+    // the handle avoids serializing the whole Statamic Collection object graph.
+    private function collection(): ?\Statamic\Contracts\Entries\Collection
+    {
+        return Collection::findByHandle($this->collectionHandle);
     }
 
     private function collectionHasIdentifier()
@@ -102,7 +119,7 @@ class DataImport
         if ($this->identifier == 'id') {
             return false;
         }
-        foreach ($this->collection->entryBlueprints() as $blueprint) {
+        foreach ($this->collection()->entryBlueprints() as $blueprint) {
             if ($blueprint->fields()->all()->has($this->identifier)) {
                 return false;
             }
@@ -117,7 +134,7 @@ class DataImport
             return $value;
         }
 
-        $entry = $this->collection
+        $entry = $this->collection()
             ->queryEntries()
             ->where($this->identifier, $value)
             ->where('site', Site::default())
@@ -137,6 +154,12 @@ class DataImport
         foreach ($headers as $header) {
             if (strpos($header, 'price') !== false) {
                 $priceHeaderFound = true;
+                // A price header drives the date range, so it must carry one (price:date_start|date_end).
+                // Without this, a header literally named "price" would import every row as a skipped no-op.
+                $dates = $this->getDatesFromHeader($header);
+                if ($dates['date_start'] === '' || $dates['date_end'] === '') {
+                    return 'A price header is missing its date range, expected e.g. "price:2024-01-01|2024-01-10".';
+                }
             }
             if (strpos($header, 'availability') !== false) {
                 $availabilityHeaderFound = true;

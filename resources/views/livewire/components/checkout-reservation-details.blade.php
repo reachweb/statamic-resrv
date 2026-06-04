@@ -42,13 +42,13 @@
                 {{ $reservation->date_end }}
             </p>
         </div>
-        @if ($reservation->property)
+        @if ($reservation->rate_id)
         <div class="py-3 md:py-4 border-b border-gray-200">
             <p class="font-medium text-gray-500 truncate">
                 {{ trans('statamic-resrv::frontend.property') }}
             </p>
             <p class="text-gray-900 truncate">
-                {{ $reservation->getPropertyAttributeLabel() }}
+                {{ $reservation->getRateLabel() }}
             </p>
         </div>
         @endif

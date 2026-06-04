@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\DynamicPricing;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -30,7 +31,8 @@ class DynamicPricingCpTest extends TestCase
         $dynamic = DynamicPricing::factory()->create();
 
         $response = $this->get(cp_route('resrv.dynamicpricings.index'));
-        $response->assertStatus(200)->assertSee('dynamic-pricing');
+        $response->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('resrv::DynamicPricing/Index'));
     }
 
     public function test_can_add_dynamic_pricing_for_statamic_item()
@@ -72,6 +74,25 @@ class DynamicPricingCpTest extends TestCase
             'dynamic_pricing_assignment_id' => $extra['id'],
             'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Extra',
         ]);
+    }
+
+    public function test_rejects_a_non_numeric_amount_so_a_malformed_value_never_reaches_the_pricing_math()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItem();
+
+        $dynamic = DynamicPricing::factory()->make()->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+        // A comma decimal separator ('20,5') would later fatal bcmul() in Price::percent(); the
+        // required|numeric rule must reject it at the write boundary so it never reaches that path.
+        $dynamic['amount'] = '20,5';
+
+        $response = $this->postJson(cp_route('resrv.dynamicpricing.create'), $dynamic);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('amount');
+        $this->assertDatabaseMissing('resrv_dynamic_pricing', ['amount' => '20,5']);
     }
 
     public function test_can_edit_dynamic_pricing_for_statamic_item()
@@ -358,6 +379,56 @@ class DynamicPricingCpTest extends TestCase
         $this->patch(cp_route('resrv.dynamicpricing.order'), ['id' => $c->id, 'order' => 0])
             ->assertStatus(200);
         $this->assertSame(1, DynamicPricing::find($c->id)->order);
+    }
+
+    public function test_can_create_dynamic_pricing_with_published_false()
+    {
+        $item = $this->makeStatamicItem();
+
+        $dynamic = DynamicPricing::factory()->make(['published' => false])->toArray();
+        $dynamic['entries'] = [$item->id()];
+        $dynamic['extras'] = [];
+
+        $response = $this->postJson(cp_route('resrv.dynamicpricing.create'), $dynamic);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_dynamic_pricing', [
+            'title' => $dynamic['title'],
+            'published' => false,
+        ]);
+    }
+
+    public function test_can_toggle_published_via_update()
+    {
+        $dynamic = DynamicPricing::factory()->create();
+
+        $payload = array_merge($dynamic->toArray(), [
+            'entries' => [$this->makeStatamicItem()->id()],
+            'extras' => [],
+            'published' => false,
+        ]);
+
+        $this->patchJson(cp_route('resrv.dynamicpricing.update', $dynamic->id), $payload)
+            ->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_dynamic_pricing', [
+            'id' => $dynamic->id,
+            'published' => false,
+        ]);
+    }
+
+    public function test_index_returns_unpublished_dynamic_pricings()
+    {
+        DynamicPricing::factory()->create(['title' => 'on', 'order' => 1]);
+        DynamicPricing::factory()->unpublished()->create(['title' => 'off', 'order' => 2]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index'));
+
+        $response->assertStatus(200);
+        $this->assertSame(2, $response->json('total'));
+        $titles = collect($response->json('data'))->pluck('title')->all();
+        $this->assertContains('on', $titles);
+        $this->assertContains('off', $titles);
     }
 
     public function test_neighbour_order_round_trip_across_pages()

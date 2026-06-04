@@ -114,4 +114,15 @@ class ExtraCpCategoryTest extends TestCase
             'category_id' => null,
         ]);
     }
+
+    public function test_reordering_a_non_existent_category_returns_404()
+    {
+        $this->withExceptionHandling();
+
+        $response = $this->patch(cp_route('resrv.extraCategory.order'), [
+            'id' => 99999,
+            'order' => 3,
+        ]);
+        $response->assertNotFound();
+    }
 }

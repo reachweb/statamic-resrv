@@ -4,12 +4,16 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Http\Controllers\ExportCpController;
 use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -29,7 +33,8 @@ class ExportCpTest extends TestCase
     {
         $response = $this->get(cp_route('resrv.export.index'));
 
-        $response->assertStatus(200)->assertSee('Export reservations');
+        $response->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('resrv::Export/Index'));
     }
 
     public function test_count_endpoint_returns_matching_reservations()
@@ -331,16 +336,19 @@ class ExportCpTest extends TestCase
         $this->assertSame("'  =1+1", $rows[1][0]);
     }
 
-    public function test_download_includes_property_label_and_handle_for_advanced_availability()
+    public function test_download_includes_rate_title_and_slug_for_rate_assigned_reservation()
     {
-        $entries = $this->createAdvancedEntries();
+        $entries = $this->createRateEntries();
         $entry = $entries->first();
+        $rate = Rate::where('collection', $entry->collection()->handle())
+            ->where('slug', 'test')
+            ->firstOrFail();
 
         Reservation::factory([
             'item_id' => $entry->id(),
             'status' => 'confirmed',
             'reference' => 'PROP001',
-            'property' => 'test',
+            'rate_id' => $rate->id,
             'date_start' => today()->toIso8601String(),
             'date_end' => today()->addDays(2)->toIso8601String(),
         ])->withCustomer()->create();
@@ -350,30 +358,33 @@ class ExportCpTest extends TestCase
 
         $response = $this->get(
             cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_property&fields[]=entry_property_handle"
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug"
         );
 
         $response->assertStatus(200);
         $csv = $response->streamedContent();
         $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
 
-        $this->assertEquals(['Reference', 'Property', 'Property handle'], $rows[0]);
+        $this->assertEquals(['Reference', 'Rate', 'Rate slug'], $rows[0]);
         $this->assertEquals('PROP001', $rows[1][0]);
-        $this->assertEquals('Test Property', $rows[1][1]);
+        $this->assertEquals($rate->title, $rows[1][1]);
         $this->assertEquals('test', $rows[1][2]);
     }
 
-    public function test_download_falls_back_to_property_handle_when_entry_is_deleted()
+    public function test_download_keeps_rate_columns_when_entry_is_deleted()
     {
-        $entries = $this->createAdvancedEntries();
+        $entries = $this->createRateEntries();
         $entry = $entries->first();
         $itemId = $entry->id();
+        $rate = Rate::where('collection', $entry->collection()->handle())
+            ->where('slug', 'test')
+            ->firstOrFail();
 
         Reservation::factory([
             'item_id' => $itemId,
             'status' => 'confirmed',
             'reference' => 'GONE001',
-            'property' => 'test',
+            'rate_id' => $rate->id,
             'date_start' => today()->toIso8601String(),
             'date_end' => today()->addDays(2)->toIso8601String(),
         ])->withCustomer()->create();
@@ -385,7 +396,7 @@ class ExportCpTest extends TestCase
 
         $response = $this->get(
             cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_property&fields[]=entry_property_handle"
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug"
         );
 
         $response->assertStatus(200);
@@ -393,11 +404,11 @@ class ExportCpTest extends TestCase
         $rows = array_map('str_getcsv', array_filter(explode("\n", trim($csv))));
 
         $this->assertEquals('GONE001', $rows[1][0]);
-        $this->assertEquals('test', $rows[1][1]);
+        $this->assertEquals($rate->title, $rows[1][1]);
         $this->assertEquals('test', $rows[1][2]);
     }
 
-    public function test_download_returns_blank_property_for_non_advanced_reservation()
+    public function test_download_returns_blank_rate_columns_for_reservation_without_rate()
     {
         $item = $this->makeStatamicItem();
 
@@ -405,7 +416,7 @@ class ExportCpTest extends TestCase
             'item_id' => $item->id(),
             'status' => 'confirmed',
             'reference' => 'NOPROP',
-            'property' => null,
+            'rate_id' => null,
         ])->withCustomer()->create();
 
         $start = today()->toDateString();
@@ -413,7 +424,7 @@ class ExportCpTest extends TestCase
 
         $response = $this->get(
             cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_property&fields[]=entry_property_handle"
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug"
         );
 
         $response->assertStatus(200);
@@ -423,6 +434,65 @@ class ExportCpTest extends TestCase
         $this->assertEquals('NOPROP', $rows[1][0]);
         $this->assertSame('', $rows[1][1]);
         $this->assertSame('', $rows[1][2]);
+    }
+
+    public function test_download_does_not_query_child_rates_per_parent_reservation()
+    {
+        $entries = $this->createRateEntries();
+        $entry = $entries->first();
+        $rate = Rate::where('collection', $entry->collection()->handle())
+            ->where('slug', 'test')
+            ->firstOrFail();
+
+        $makeParent = function (string $ref) use ($entry, $rate) {
+            $parent = Reservation::factory([
+                'item_id' => $entry->id(),
+                'status' => 'confirmed',
+                'reference' => $ref,
+                'type' => 'parent',
+                'date_start' => today()->toIso8601String(),
+                'date_end' => today()->addDays(2)->toIso8601String(),
+            ])->withCustomer()->create();
+
+            ChildReservation::factory()->withRate($rate->id)->count(2)->create([
+                'reservation_id' => $parent->id,
+            ]);
+        };
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+        $url = cp_route('resrv.export.download').
+            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug";
+
+        $countChildQueries = function () use ($url) {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            $this->get($url)->streamedContent();
+
+            $count = collect(DB::getQueryLog())
+                ->filter(fn ($query) => str_contains($query['query'], 'resrv_child_reservations'))
+                ->count();
+
+            DB::disableQueryLog();
+
+            return $count;
+        };
+
+        $makeParent('PARENT1');
+        $makeParent('PARENT2');
+        $twoParents = $countChildQueries();
+
+        $makeParent('PARENT3');
+        $makeParent('PARENT4');
+        $fourParents = $countChildQueries();
+
+        // Child rates are eager-loaded once per chunk, not re-queried per parent row.
+        $this->assertSame(
+            $twoParents,
+            $fourParents,
+            'Export must not issue a child-reservation query per parent reservation row.'
+        );
     }
 
     public function test_dynamic_discovery_does_not_duplicate_standard_customer_keys()

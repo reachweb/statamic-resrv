@@ -1,155 +1,165 @@
 <template>
     <div>
-    <div class="w-full h-full" v-if="values">
-        <vue-draggable class="mt-2" v-model="values" @start="drag=true" @end="drag=false" @change="order">
-            <div
-                v-for="value in values"
-                :key="value.id"
-                class="w-full flex items-center text-sm justify-between px-3 py-2 border-t border-gray-200 dark:border-gray-500"
+        <div v-if="localValues">
+            <draggable
+                v-model="localValues"
+                item-key="id"
+                :disabled="disableDrag"
+                @start="drag = true"
+                @end="drag = false"
+                @change="order"
             >
-                <div class="flex items-center space-x-2">
-                    <div class="little-dot" :class="value.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
-                    <span class="font-medium cursor-pointer" v-html="value.name" @click="edit(value)"></span>
-                    <span v-if="value.price_type != 'free'">{{ value.price }} <span class="text-xs text-gray-700 dark:text-dark-100" v-html="priceLabel(value.price_type)"></span></span>
-                    <span v-else class="text-xs text-gray-700 dark:text-dark-100" v-html="__('Free')"></span>
-                </div>
-                <div class="flex space-x-2">                    
-                    <dropdown-list>
-                        <dropdown-item :text="__('Edit')" @click="edit(value)" />
-                        <dropdown-item :text="__('Delete')" @click="confirmDelete(value)" />         
-                    </dropdown-list>
-                </div>
-            </div>
-        </vue-draggable>
-    </div>
-    <div class="w-full mt-1">
-        <button class="btn text-sm" @click="add" v-html="__('Add value')"></button>
-    </div>
-    <option-values-panel            
-        v-if="showPanel"
-        :data="value"
-        :parent="parent"
-        @closed="togglePanel"
-        @saved="dataSaved"
-    >
-    </option-values-panel>
-    <confirmation-modal
-        v-if="deleteId"
-        title="Delete value"
-        :danger="true"
-        @confirm="deleteValue"
-        @cancel="deleteId = false"
-    >
-        Are you sure you want to delete this option? <strong>This cannot be undone.</strong>
-    </confirmation-modal>
+                <template #item="{ element: value }">
+                    <div class="w-full flex items-center text-sm justify-between px-3 py-2 border-t border-gray-200 dark:border-gray-700/80">
+                        <div class="flex items-center gap-2">
+                            <StatusIndicator :status="value.published ? 'published' : 'draft'" />
+                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="value.name" @click="edit(value)"></span>
+                            <span v-if="value.price_type !== 'free'" class="text-gray-700 dark:text-gray-400">
+                                {{ value.price }}
+                                <span class="text-xs text-gray-500" v-html="priceLabel(value.price_type)"></span>
+                            </span>
+                            <Badge v-else :text="__('Free')" size="sm" variant="success" />
+                        </div>
+                        <Dropdown>
+                            <DropdownMenu>
+                                <DropdownItem :text="__('Edit')" icon="pencil" @click="edit(value)" />
+                                <DropdownSeparator />
+                                <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(value)" />
+                            </DropdownMenu>
+                        </Dropdown>
+                    </div>
+                </template>
+            </draggable>
+        </div>
+        <div class="mt-2">
+            <Button size="sm" :text="__('Add value')" variant="default" icon="plus" @click="add" />
+        </div>
+        <OptionValuesPanel
+            v-if="showPanel"
+            :data="value"
+            :parent="parent"
+            @closed="togglePanel"
+            @saved="dataSaved"
+        />
+        <confirmation-modal
+            :open="deleteId !== null"
+            :title="__('Delete value')"
+            :danger="true"
+            @confirm="deleteValue"
+            @cancel="deleteId = null"
+        >
+            {{ __('Are you sure you want to delete this option?') }} <strong>{{ __('This cannot be undone.') }}</strong>
+        </confirmation-modal>
     </div>
 </template>
-<script>
-import axios from 'axios'
-import OptionValuesPanel from './OptionValuesPanel.vue'
-import VueDraggable from 'vuedraggable'
 
-export default {
-    props: {
-        values: {
-            type: Object,
-            required: true
-        },
-        parent: {
-            type: String,
-            required: true
-        }
-    },
+<script setup>
+import { Badge, Button, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, StatusIndicator } from '@statamic/cms/ui';
+import draggable from 'vuedraggable';
+import { ref, watch } from 'vue';
+import axios from 'axios';
+import OptionValuesPanel from './OptionValuesPanel.vue';
+import { useToast } from '../composables/useToast.js';
 
-    emits: ['saved'],
+const props = defineProps({
+    values: { type: [Array, Object], required: true },
+    parent: { type: String, required: true },
+});
 
-    data() {
-        return {
-            containerWidth: null,
-            showPanel: false,            
-            dataLoaded: false,
-            deleteId: false,
-            drag: false,
-            value: '',
-            emptyValue: {
-                name: '',
-                slug: '',
-                price: '',
-                price_type: '',
-                option_id: this.parent,
-                description: '',
-                published : 1
-            }
-        }
-    },
+const emit = defineEmits(['saved']);
+const toast = useToast();
 
-    components: {
-        OptionValuesPanel,
-        VueDraggable
-    },
+const showPanel = ref(false);
+const deleteId = ref(null);
+const drag = ref(false);
+const disableDrag = ref(false);
+const value = ref({});
 
-    computed: {
-        newItem() {
-            if (this.parent == 'Collection') {
-                return true
-            }
-            return false
-        }
-    },
+const localValues = ref(initialValues());
 
-    updated() {
-        if (! this.newItem) {
-            this.$emit('input', this.parent)
-        }
-    },
+const emptyValue = {
+    name: '',
+    slug: '',
+    price: '',
+    price_type: '',
+    option_id: props.parent,
+    description: '',
+    published: true,
+};
 
-    methods: {
-        togglePanel() {
-            this.showPanel = !this.showPanel
-        },
-        priceLabel(code) {
-            if (code == 'perday') {
-                return '/ day'
-            } else if (code == 'fixed') {
-                return '/ reservation'
-            }
-        },
-        add() {
-            this.value = this.emptyValue
-            this.togglePanel()
-        },
-        edit(value) {
-            this.value = value
-            this.togglePanel()
-        },
-        dataSaved() {
-            this.togglePanel()
-            this.$emit('saved')
-        },
-        confirmDelete(extra) {
-            this.deleteId = extra.id
-        },
-        deleteValue() {
-            axios.delete('/cp/resrv/option/value', {data: {'id': this.deleteId}})
-                .then(response => {
-                    this.$toast.success('Option deleted')
-                    this.deleteId = false
-                    this.$emit('saved')
-                })
-                .catch(error => {
-                    this.$toast.error('Cannot delete option')
-                })
-        },
-        order(event){
-            let item = event.moved.element
-            let order = event.moved.newIndex + 1
-            axios.patch('/cp/resrv/option/value/order', {id: item.id, order: order})
-                .then(() => {
-                    this.$toast.success('Options order changed')
-                    this.$emit('saved')
-                })
-                .catch(() => {this.$toast.error('Options ordering failed')})
-        }        
+function initialValues() {
+    if (Array.isArray(props.values)) {
+        return [...props.values];
     }
+    return Object.values(props.values || {});
+}
+
+watch(() => props.values, () => {
+    localValues.value = initialValues();
+}, { deep: true });
+
+function togglePanel() {
+    showPanel.value = !showPanel.value;
+}
+
+function priceLabel(code) {
+    if (code === 'perday') {
+        return '/ day';
+    }
+    if (code === 'fixed') {
+        return '/ reservation';
+    }
+    return '';
+}
+
+function add() {
+    value.value = { ...emptyValue };
+    togglePanel();
+}
+
+function edit(item) {
+    value.value = item;
+    togglePanel();
+}
+
+function dataSaved() {
+    togglePanel();
+    emit('saved');
+}
+
+function confirmDelete(item) {
+    deleteId.value = item.id;
+}
+
+function deleteValue() {
+    axios.delete('/cp/resrv/option/value', { data: { id: deleteId.value } })
+        .then(() => {
+            toast.success('Option deleted');
+            deleteId.value = null;
+            emit('saved');
+        })
+        .catch(() => {
+            toast.error('Cannot delete option');
+        });
+}
+
+function order(event) {
+    if (!event.moved) {
+        return;
+    }
+    disableDrag.value = true;
+    const item = event.moved.element;
+    const newOrder = event.moved.newIndex + 1;
+    axios.patch('/cp/resrv/option/value/order', { id: item.id, order: newOrder })
+        .then(() => {
+            toast.success('Options order changed');
+        })
+        .catch(() => {
+            toast.error('Options ordering failed');
+        })
+        .finally(() => {
+            emit('saved');
+            disableDrag.value = false;
+        });
 }
 </script>

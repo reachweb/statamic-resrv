@@ -8,6 +8,13 @@ class ReservationBlueprint
 {
     public function __invoke()
     {
+        // Without time-based charging, start/end are wall dates: a date-only format makes the
+        // Date fieldtype emit them as plain Y-m-d strings the CP renders pinned to UTC, instead
+        // of as midnight instants that shift into the viewer's timezone.
+        $startEndTimeConfig = config('resrv-config.calculate_days_using_time')
+            ? ['time_enabled' => true]
+            : ['format' => 'Y-m-d'];
+
         return Blueprint::make()->setContents([
             'sections' => [
                 'main' => [
@@ -62,18 +69,19 @@ class ReservationBlueprint
                             ],
                         ],
                         [
-                            'handle' => 'property',
+                            'handle' => 'rate',
                             'field' => [
-                                'type' => 'integer',
+                                'type' => 'text',
                                 'listable' => true,
-                                'display' => 'Property',
-                                'sortable' => true,
+                                'display' => 'Rate',
+                                'sortable' => false,
                             ],
                         ],
                         [
                             'handle' => 'date_start',
                             'field' => [
                                 'type' => 'date',
+                                ...$startEndTimeConfig,
                                 'listable' => true,
                                 'display' => 'Start date',
                             ],
@@ -82,6 +90,7 @@ class ReservationBlueprint
                             'handle' => 'date_end',
                             'field' => [
                                 'type' => 'date',
+                                ...$startEndTimeConfig,
                                 'listable' => true,
                                 'display' => 'End date',
                             ],
@@ -123,6 +132,7 @@ class ReservationBlueprint
                             'handle' => 'created_at',
                             'field' => [
                                 'type' => 'date',
+                                'time_enabled' => true,
                                 'listable' => true,
                                 'display' => 'Created at',
                             ],
@@ -131,6 +141,7 @@ class ReservationBlueprint
                             'handle' => 'updated_at',
                             'field' => [
                                 'type' => 'date',
+                                'time_enabled' => true,
                                 'display' => 'Updated at',
                             ],
                         ],

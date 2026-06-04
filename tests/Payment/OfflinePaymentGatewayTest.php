@@ -3,8 +3,10 @@
 namespace Reach\StatamicResrv\Tests\Payment;
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
@@ -321,8 +323,9 @@ class OfflinePaymentGatewayTest extends TestCase
         Event::assertDispatched(ReservationConfirmed::class);
     }
 
-    public function test_confirm_payment_rejects_expired_reservation()
+    public function test_confirm_payment_rejects_reservation_with_expired_status_flag()
     {
+        // Isolate the status-flag guard: reservation is within the hold window but status=expired.
         Config::set('resrv-config.payment_gateways', [
             'offline' => [
                 'class' => OfflinePaymentGateway::class,
@@ -332,7 +335,7 @@ class OfflinePaymentGatewayTest extends TestCase
         app()->forgetInstance(PaymentGatewayManager::class);
 
         $this->reservation->update([
-            'created_at' => now()->subHours(2),
+            'created_at' => now(),
             'status' => 'expired',
             'payment_gateway' => 'offline',
         ]);
@@ -347,6 +350,81 @@ class OfflinePaymentGatewayTest extends TestCase
         ])
             ->call('confirmPayment')
             ->assertHasErrors('reservation');
+    }
+
+    public function test_confirm_payment_rejects_reservation_past_minutes_to_hold()
+    {
+        // Isolate the time-based guard: status=pending but created_at past minutes_to_hold.
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => [
+                'class' => OfflinePaymentGateway::class,
+                'label' => 'Bank Transfer',
+            ],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $this->reservation->update([
+            'created_at' => now()->subHours(2),
+            'status' => 'pending',
+            'payment_gateway' => 'offline',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(CheckoutPayment::class, [
+            'clientSecret' => 'offline_test',
+            'publicKey' => '',
+            'amount' => 100.00,
+            'paymentView' => 'statamic-resrv::livewire.checkout-payment-offline',
+        ])
+            ->call('confirmPayment')
+            ->assertHasErrors('reservation');
+    }
+
+    public function test_confirm_payment_surfaces_error_when_reservation_expires_during_the_transition_race()
+    {
+        // Race: the row clears the PENDING pre-checks, then expires before transitionTo() locks it —
+        // confirmPayment() must surface the expired error, not redirect as if it had been received.
+        Event::fake([ReservationConfirmed::class]);
+
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => [
+                'class' => OfflinePaymentGateway::class,
+                'label' => 'Bank Transfer',
+            ],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $this->reservation->update([
+            'created_at' => now(),
+            'status' => 'pending',
+            'payment_gateway' => 'offline',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // Expire the row the first time it's hydrated as PENDING, before transitionTo() re-reads it.
+        $reservationId = $this->reservation->id;
+        Reservation::retrieved(function (Reservation $model) use ($reservationId) {
+            if ((int) $model->id === $reservationId && $model->status === ReservationStatus::PENDING->value) {
+                DB::table('resrv_reservations')
+                    ->where('id', $reservationId)
+                    ->update(['status' => ReservationStatus::EXPIRED->value]);
+            }
+        });
+
+        Livewire::test(CheckoutPayment::class, [
+            'clientSecret' => 'offline_test',
+            'publicKey' => '',
+            'amount' => 100.00,
+            'paymentView' => 'statamic-resrv::livewire.checkout-payment-offline',
+        ])
+            ->call('confirmPayment')
+            ->assertHasErrors('reservation')
+            ->assertNoRedirect();
+
+        $this->assertEquals('expired', $this->reservation->fresh()->status);
+        Event::assertNotDispatched(ReservationConfirmed::class);
     }
 
     public function test_offline_refund_succeeds_in_cp()

@@ -3,6 +3,8 @@
 namespace Reach\StatamicResrv\Tests\Extra;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -45,6 +47,19 @@ class AffiliateCpTest extends TestCase
         ]);
     }
 
+    // A non-positive cookie_duration becomes a 0-minute (session) or already-expired cookie in
+    // SetResrvAffiliateCookie, silently breaking attribution — so it must be rejected.
+    public function test_cookie_duration_must_be_at_least_one_day()
+    {
+        $this->withExceptionHandling();
+
+        $affiliate = Affiliate::factory()->make(['cookie_duration' => 0])->toArray();
+
+        $this->postJson(cp_route('resrv.affiliate.create'), $affiliate)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cookie_duration');
+    }
+
     public function test_can_update_an_affiliate()
     {
         $affiliate = Affiliate::factory()->create();
@@ -71,6 +86,23 @@ class AffiliateCpTest extends TestCase
         $response->assertStatus(200);
 
         $this->assertSoftDeleted($affiliate);
+    }
+
+    public function test_deleting_an_affiliate_rolls_back_when_pivot_cleanup_fails()
+    {
+        $affiliate = Affiliate::factory()->create();
+
+        // Force the pivot cleanup (the second write) to fail so we can assert the delete is atomic:
+        // the affiliate removal must roll back rather than leave a half-applied state.
+        Schema::drop('resrv_reservation_affiliate');
+
+        try {
+            $this->delete(cp_route('resrv.affiliate.delete', $affiliate->id));
+        } catch (\Throwable $e) {
+            // Expected: the missing pivot table makes the cleanup throw.
+        }
+
+        $this->assertNotSoftDeleted($affiliate);
     }
 
     public function test_can_create_affiliate_with_coupons()
@@ -185,7 +217,7 @@ class AffiliateCpTest extends TestCase
 
         $this->withoutExceptionHandling();
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->expectException(ValidationException::class);
         $this->post(cp_route('resrv.affiliate.create'), $affiliate2Data);
 
         // Verify the coupon is still only associated with affiliate1

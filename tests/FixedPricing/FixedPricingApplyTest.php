@@ -40,7 +40,7 @@ class FixedPricingApplyTest extends TestCase
 
     public function test_fixed_pricing_changes_availability_prices()
     {
-        $this->createAvailabilityForEntry($this->entry, 25.23, 3, 'none', 7);
+        $this->createAvailabilityForEntry($this->entry, 25.23, 3, days: 7);
 
         // Baseline price
         Livewire::test(AvailabilityResults::class, ['entry' => $this->entry->id()])
@@ -50,7 +50,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(4, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '100.92');
 
@@ -71,7 +71,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(4, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '90.00');
 
@@ -83,7 +83,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(6, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '151.38');
 
@@ -104,7 +104,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(6, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '130.00');
 
@@ -116,14 +116,14 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(6, 'day')->toISOString(),
                 ],
                 'quantity' => 3,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertViewHas('availability.data.price', '390.00');
     }
 
     public function test_fixed_pricing_changes_reservation_prices()
     {
-        $this->createAvailabilityForEntry($this->entry, 25.23, 3, 'none', 7);
+        $this->createAvailabilityForEntry($this->entry, 25.23, 3, days: 7);
 
         FixedPricing::create([
             'statamic_id' => $this->entry->id(),
@@ -138,7 +138,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(4, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ]);
 
         $component->assertViewHas('availability.data.price', '90.00');
@@ -172,7 +172,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(6, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ]);
 
         $component->assertViewHas('availability.data.price', '130.00');
@@ -193,7 +193,7 @@ class FixedPricingApplyTest extends TestCase
 
     public function test_fixed_pricing_changes_reservation_prices_for_multiple_items()
     {
-        $this->createAvailabilityForEntry($this->entry, 25.23, 3, 'none', 7);
+        $this->createAvailabilityForEntry($this->entry, 25.23, 3, days: 7);
 
         FixedPricing::create([
             'statamic_id' => $this->entry->id(),
@@ -208,7 +208,7 @@ class FixedPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(4, 'day')->toISOString(),
                 ],
                 'quantity' => 3,
-                'advanced' => null,
+                'rate' => null,
             ]);
 
         $component->assertViewHas('availability.data.price', '270.00');

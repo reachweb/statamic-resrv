@@ -13,14 +13,18 @@ class AvailabilityFieldHelper
 
     private const FIELD_TYPE = 'resrv_availability';
 
+    private const CACHE_PREFIXES = [
+        'resrv_availability_field_handle',
+        'resrv_availability_field',
+        'resrv_has_availability_field',
+    ];
+
     /**
      * Get the availability field handle for a given blueprint
      */
     public function getHandle(Blueprint $blueprint): string
     {
-        $cacheKey = "resrv_availability_field_handle_{$blueprint->namespace()}";
-
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($blueprint) {
+        return Cache::remember($this->cacheKey('resrv_availability_field_handle', $blueprint), self::CACHE_TTL, function () use ($blueprint) {
             $field = $this->findAvailabilityField($blueprint);
 
             if (! $field) {
@@ -36,9 +40,7 @@ class AvailabilityFieldHelper
      */
     public function getField(Blueprint $blueprint): ?Field
     {
-        $cacheKey = "resrv_availability_field_{$blueprint->namespace()}";
-
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($blueprint) {
+        return Cache::remember($this->cacheKey('resrv_availability_field', $blueprint), self::CACHE_TTL, function () use ($blueprint) {
             return $this->findAvailabilityField($blueprint);
         });
     }
@@ -48,9 +50,7 @@ class AvailabilityFieldHelper
      */
     public function blueprintHasAvailabilityField(Blueprint $blueprint): bool
     {
-        $cacheKey = "resrv_has_availability_field_{$blueprint->namespace()}";
-
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($blueprint) {
+        return Cache::remember($this->cacheKey('resrv_has_availability_field', $blueprint), self::CACHE_TTL, function () use ($blueprint) {
             return $this->findAvailabilityField($blueprint) !== null;
         });
     }
@@ -58,17 +58,16 @@ class AvailabilityFieldHelper
     /**
      * Clear cache for a specific blueprint
      */
-    public function clearCacheForBlueprint(string $namespace): void
+    public function clearCacheForBlueprint(Blueprint $blueprint): void
     {
-        $keys = [
-            "resrv_availability_field_handle_{$namespace}",
-            "resrv_availability_field_{$namespace}",
-            "resrv_has_availability_field_{$namespace}",
-        ];
-
-        foreach ($keys as $key) {
-            Cache::forget($key);
+        foreach (self::CACHE_PREFIXES as $prefix) {
+            Cache::forget($this->cacheKey($prefix, $blueprint));
         }
+    }
+
+    private function cacheKey(string $prefix, Blueprint $blueprint): string
+    {
+        return "{$prefix}_{$blueprint->namespace()}_{$blueprint->handle()}";
     }
 
     /**

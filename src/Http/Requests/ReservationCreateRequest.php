@@ -19,7 +19,7 @@ class ReservationCreateRequest extends FormRequest
                 'dates.*.date_start' => 'required|date',
                 'dates.*.date_end' => 'required|date',
                 'dates.*.quantity' => 'sometimes|integer',
-                'dates.*.advanced' => 'nullable|string',
+                'dates.*.rate_id' => 'nullable|integer',
                 'payment' => 'required|numeric',
                 'price' => 'required|numeric',
                 'total' => 'required|numeric',
@@ -32,7 +32,7 @@ class ReservationCreateRequest extends FormRequest
                 'date_start' => 'required|date',
                 'date_end' => 'required|date',
                 'quantity' => 'sometimes|integer',
-                'advanced' => 'nullable|string',
+                'rate_id' => 'nullable|integer',
                 'payment' => 'required|numeric',
                 'price' => 'required|numeric',
                 'total' => 'required|numeric',
@@ -40,14 +40,6 @@ class ReservationCreateRequest extends FormRequest
                 'options' => 'nullable|array',
                 'statamic_id' => 'nullable|string',
             ];
-        }
-
-        if (config('resrv-config.enable_locations') == true) {
-            $additional_rules = [
-                'location_start' => 'required|integer',
-                'location_end' => 'required|integer',
-            ];
-            $rules = array_merge($rules, $additional_rules);
         }
 
         return $rules;

@@ -2,8 +2,12 @@
 
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityCpTest extends TestCase
@@ -26,8 +30,8 @@ class AvailabilityCpTest extends TestCase
             'item_id' => $item->id(),
             'title' => $item->get('title'),
             'enabled' => 1,
-            'collection' => $item->collection(),
-            'handle' => $item->blueprint(),
+            'collection' => $item->collection()->handle(),
+            'handle' => $item->blueprint()->handle(),
         ]);
     }
 
@@ -47,9 +51,7 @@ class AvailabilityCpTest extends TestCase
 
     public function test_entry_disabled_when_resrv_availability_off()
     {
-        $item = $this->makeStatamicItem();
-
-        $item->save();
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
 
         $item->set('resrv_availability', 'disabled');
 
@@ -59,8 +61,8 @@ class AvailabilityCpTest extends TestCase
             'item_id' => $item->id(),
             'title' => $item->get('title'),
             'enabled' => 0,
-            'collection' => $item->collection(),
-            'handle' => $item->blueprint(),
+            'collection' => $item->collection()->handle(),
+            'handle' => $item->blueprint()->handle(),
         ]);
     }
 
@@ -75,9 +77,33 @@ class AvailabilityCpTest extends TestCase
         ]);
     }
 
+    public function test_entry_deletion_hard_deletes_availability_which_a_mirror_restore_does_not_bring_back()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+
+        $item->delete();
+
+        // The mirror is recoverable (soft-deleted) but availability is hard-deleted.
+        $this->assertSoftDeleted('resrv_entries', ['item_id' => $item->id()]);
+        $this->assertDatabaseMissing('resrv_availabilities', ['statamic_id' => $item->id()]);
+
+        // Re-saving restores the mirror (single row, not a duplicate) but availability stays gone.
+        $item->save();
+
+        $this->assertDatabaseHas('resrv_entries', ['item_id' => $item->id(), 'deleted_at' => null]);
+        $this->assertDatabaseMissing('resrv_availabilities', ['statamic_id' => $item->id()]);
+    }
+
     public function test_availability_can_index_for_a_statamic_item()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->count(2)
@@ -85,22 +111,25 @@ class AvailabilityCpTest extends TestCase
                 ['date' => today()],
                 ['date' => today()->add(1, 'day')]
             )
-            ->create(
-                ['statamic_id' => $item->id()]
-            );
+            ->create([
+                'statamic_id' => $item->id(),
+                'rate_id' => $rate->id,
+            ]);
 
-        $response = $this->get(cp_route('resrv.availability.index', $item->id()));
+        $response = $this->get(cp_route('resrv.availability.index', [$item->id(), $rate->id]));
         $response->assertStatus(200)->assertSee($item->id());
     }
 
     public function test_availability_returns_empty_array_not_found()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
-            ->create(
-                ['statamic_id' => $item->id()]
-            );
+            ->create([
+                'statamic_id' => $item->id(),
+                'rate_id' => $rate->id,
+            ]);
 
         $response = $this->get(cp_route('resrv.availability.index', 'test'));
         $response->assertStatus(200)->assertSee('[]');
@@ -109,6 +138,7 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_can_add_for_date_range()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         $payload = [
             'statamic_id' => $item->id(),
@@ -116,66 +146,80 @@ class AvailabilityCpTest extends TestCase
             'date_end' => today()->add(5, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 150,
             'available' => 2,
+            'rate_ids' => [$rate->id],
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
         ]);
     }
 
     public function test_availability_can_add_for_single_day()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 150,
             'available' => 2,
+            'rate_ids' => [$rate->id],
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
         ]);
     }
 
     public function test_availability_can_stop_sales()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 150,
             'available' => 0,
+            'rate_ids' => [$rate->id],
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
         ]);
     }
 
     public function test_availability_can_update_for_date_range()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 150,
             'available' => 6,
+            'rate_ids' => [$rate->id],
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 150,
+            'rate_id' => $rate->id,
         ])->assertDatabaseCount('resrv_availabilities', 3);
 
         $newPayload = [
@@ -184,6 +228,7 @@ class AvailabilityCpTest extends TestCase
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 200,
             'available' => 2,
+            'rate_ids' => [$rate->id],
         ];
 
         $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
@@ -191,24 +236,29 @@ class AvailabilityCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 200,
+            'rate_id' => $rate->id,
         ])->assertDatabaseCount('resrv_availabilities', 3);
     }
 
     public function test_availability_can_update_without_price()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 150,
             'available' => 6,
+            'rate_ids' => [$rate->id],
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 150,
+            'rate_id' => $rate->id,
         ])->assertDatabaseCount('resrv_availabilities', 3);
 
         $newPayload = [
@@ -217,6 +267,7 @@ class AvailabilityCpTest extends TestCase
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'available' => 2,
             'price' => null,
+            'rate_ids' => [$rate->id],
         ];
 
         $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
@@ -225,6 +276,7 @@ class AvailabilityCpTest extends TestCase
         $this->assertDatabaseHas('resrv_availabilities', [
             'available' => 2,
             'price' => 150,
+            'rate_id' => $rate->id,
         ])->assertDatabaseCount('resrv_availabilities', 3);
     }
 
@@ -233,18 +285,22 @@ class AvailabilityCpTest extends TestCase
         $this->withExceptionHandling();
 
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 150,
             'available' => 6,
+            'rate_ids' => [$rate->id],
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'price' => 150,
+            'rate_id' => $rate->id,
         ])->assertDatabaseCount('resrv_availabilities', 3);
 
         $newPayload = [
@@ -253,10 +309,63 @@ class AvailabilityCpTest extends TestCase
             'date_end' => today()->add(4, 'day')->isoFormat('YYYY-MM-DD'),
             'available' => 2,
             'price' => null,
+            'rate_ids' => [$rate->id],
         ];
 
         $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
         $response->assertStatus(302)->assertInvalid(['available']);
+    }
+
+    public function test_availability_can_update_when_price_key_is_omitted_entirely()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        // Seed availability so the "available without price" path has existing prices to satisfy.
+        $this->post(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 6,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(200);
+
+        // A partial request that omits the price key entirely must not raise undefined-array-key
+        // warnings in the controller/rule and must update availability normally.
+        $response = $this->post(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'available' => 2,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'available' => 2,
+            'price' => 150,
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_availability_update_requires_price_or_available()
+    {
+        $this->withExceptionHandling();
+
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        // Neither price nor available provided — the request must be rejected rather than silently no-op.
+        $response = $this->post(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(302)->assertInvalid(['price', 'available']);
     }
 
     public function test_availability_can_save_price_when_availability_missing()
@@ -264,12 +373,15 @@ class AvailabilityCpTest extends TestCase
         $this->withExceptionHandling();
 
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 150,
             'available' => 6,
+            'rate_ids' => [$rate->id],
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
@@ -280,6 +392,7 @@ class AvailabilityCpTest extends TestCase
             'date_end' => today()->add(4, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 120,
             'available' => null,
+            'rate_ids' => [$rate->id],
         ];
 
         $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
@@ -289,12 +402,15 @@ class AvailabilityCpTest extends TestCase
     public function test_availability_cannot_save_price_without_availability()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 150,
             'available' => 6,
+            'rate_ids' => [$rate->id],
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
@@ -305,6 +421,7 @@ class AvailabilityCpTest extends TestCase
             'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
             'price' => 120,
             'available' => null,
+            'rate_ids' => [$rate->id],
         ];
 
         $response = $this->post(cp_route('resrv.availability.update'), $newPayload);
@@ -313,12 +430,14 @@ class AvailabilityCpTest extends TestCase
         $this->assertDatabaseHas('resrv_availabilities', [
             'available' => 6,
             'price' => 120,
+            'rate_id' => $rate->id,
         ])->assertDatabaseCount('resrv_availabilities', 3);
     }
 
     public function test_availability_can_delete_for_date_range()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
         Availability::factory()
             ->count(2)
@@ -326,18 +445,21 @@ class AvailabilityCpTest extends TestCase
                 ['date' => today()->isoFormat('YYYY-MM-DD')],
                 ['date' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD')]
             )
-            ->create(
-                ['statamic_id' => $item->id()]
-            );
+            ->create([
+                'statamic_id' => $item->id(),
+                'rate_id' => $rate->id,
+            ]);
 
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
         ]);
 
         $payload = [
             'statamic_id' => $item->id(),
             'date_start' => today()->isoFormat('YYYY-MM-DD'),
             'date_end' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'rate_ids' => [$rate->id],
         ];
 
         $response = $this->delete(cp_route('resrv.availability.delete'), $payload);
@@ -345,14 +467,112 @@ class AvailabilityCpTest extends TestCase
 
         $this->assertDatabaseMissing('resrv_availabilities', [
             'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_availability_update_without_rate_ids_uses_existing_default_rate()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 2,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'price' => 150,
+            'available' => 2,
+        ]);
+    }
+
+    public function test_availability_update_without_rate_ids_creates_default_rate_when_none_exist()
+    {
+        $item = $this->makeStatamicItem();
+
+        $this->assertDatabaseCount('resrv_rates', 0);
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 2,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseCount('resrv_rates', 1);
+        $this->assertDatabaseHas('resrv_rates', [
+            'collection' => 'pages',
+            'slug' => 'default',
+            'apply_to_all' => true,
+        ]);
+
+        $rate = Rate::first();
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'price' => 150,
+            'available' => 2,
+        ]);
+    }
+
+    public function test_availability_update_without_rate_ids_reuses_existing_default_rate_not_assigned_to_entry()
+    {
+        $item = $this->makeStatamicItem();
+
+        // Create a default rate for same collection but NOT apply_to_all and NOT assigned to this entry
+        $existingDefault = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'default',
+            'title' => 'Default',
+            'apply_to_all' => false,
+        ]);
+
+        $payload = [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->add(1, 'day')->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->add(3, 'day')->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 2,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), $payload);
+        $response->assertStatus(200);
+
+        // Should reuse the existing default rate, not create a new one
+        $this->assertDatabaseCount('resrv_rates', 1);
+
+        // Should have attached pivot so forEntry() finds it
+        $this->assertDatabaseHas('resrv_rate_entries', [
+            'rate_id' => $existingDefault->id,
+            'statamic_id' => $item->id(),
+        ]);
+
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $existingDefault->id,
+            'price' => 150,
         ]);
     }
 
     public function test_availability_can_update_for_date_range_with_specific_days()
     {
         $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        $startDate = today()->next(\Carbon\Carbon::SUNDAY);
+        $startDate = today()->next(Carbon::SUNDAY);
         $endDate = $startDate->copy()->addDays(6);
 
         $payload = [
@@ -362,6 +582,7 @@ class AvailabilityCpTest extends TestCase
             'price' => 150,
             'available' => 6,
             'onlyDays' => [1, 3, 5], // Monday, Wednesday, Friday
+            'rate_ids' => [$rate->id],
         ];
         $response = $this->post(cp_route('resrv.availability.update'), $payload);
         $response->assertStatus(200);
@@ -377,18 +598,21 @@ class AvailabilityCpTest extends TestCase
             'date' => $expectedMonday,
             'price' => 150,
             'available' => 6,
+            'rate_id' => $rate->id,
         ]);
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'date' => $expectedWednesday,
             'price' => 150,
             'available' => 6,
+            'rate_id' => $rate->id,
         ]);
         $this->assertDatabaseHas('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'date' => $expectedFriday,
             'price' => 150,
             'available' => 6,
+            'rate_id' => $rate->id,
         ]);
 
         $this->assertDatabaseMissing('resrv_availabilities', [
@@ -397,5 +621,267 @@ class AvailabilityCpTest extends TestCase
         ]);
 
         $this->assertDatabaseCount('resrv_availabilities', 3);
+    }
+
+    public function test_update_rejects_when_pending_reservation_overlaps()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'available' => 8,
+            'pending' => [42],
+        ]);
+
+        Reservation::factory()->create([
+            'id' => 42,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 10,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('resrv_availabilities', ['available' => 8]);
+    }
+
+    public function test_update_succeeds_for_price_only_change_with_pending_reservation()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'available' => 8,
+            'pending' => [42],
+        ]);
+
+        Reservation::factory()->create([
+            'id' => 42,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'price' => 999,
+            'available' => null,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('resrv_availabilities', ['available' => 8]);
+    }
+
+    public function test_delete_rejects_when_pending_reservation_overlaps()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'available' => 6,
+            'pending' => [42],
+        ]);
+
+        Reservation::factory()->create([
+            'id' => 42,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_delete_succeeds_when_pending_reservation_is_terminal()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+        ]);
+
+        // Reservation exists but is expired (terminal) — should not block.
+        Reservation::factory()->expired()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+        ]);
+
+        $response = $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_clear_stuck_pending_removes_terminal_holds_and_restores_quantity()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $reservation = Reservation::factory()->expired()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+        ]);
+
+        $availability = Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 4,
+            'pending' => [$reservation->id],
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $item->id(),
+            'date' => $date,
+            'rate_id' => $rate->id,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['cleared' => 1, 'still_active' => []]);
+
+        $availability->refresh();
+        $this->assertEquals(6, $availability->available);
+        $this->assertEquals([], $availability->pending);
+    }
+
+    public function test_clear_stuck_pending_leaves_active_holds_by_default()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        $availability = Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 4,
+            'pending' => [$reservation->id],
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $item->id(),
+            'date' => $date,
+            'rate_id' => $rate->id,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'cleared' => 0,
+                'still_active' => [$reservation->id],
+            ]);
+
+        $availability->refresh();
+        $this->assertEquals(4, $availability->available);
+        $this->assertEquals([$reservation->id], $availability->pending);
+    }
+
+    public function test_clear_stuck_pending_force_mode_clears_active_holds_and_logs()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 3,
+            'status' => 'pending',
+        ]);
+
+        $availability = Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 2,
+            'pending' => [$reservation->id],
+        ]);
+
+        Log::spy();
+
+        $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $item->id(),
+            'date' => $date,
+            'rate_id' => $rate->id,
+            'force' => true,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['cleared' => 1, 'still_active' => []]);
+
+        Log::shouldHaveReceived('warning')
+            ->once()
+            ->with('Resrv: admin force-cleared active holds from availability row', \Mockery::on(fn ($ctx) => in_array($reservation->id, $ctx['forced_ids'])));
+
+        $availability->refresh();
+        $this->assertEquals(5, $availability->available);
+        $this->assertEquals([], $availability->pending);
     }
 }

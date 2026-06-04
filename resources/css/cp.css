@@ -1,3 +1,9 @@
+@import "@statamic/cms/tailwind.css";
+
+@source "../views/**/*.{antlers.html,blade.php}";
+@source "../js/**/*.{vue,js}";
+@source "../../src/**/*.php";
+
 .statamic-resrv-availability {
     .fc-daygrid-day-top {
         flex-direction: column !important;
@@ -15,6 +21,228 @@
     :is(.dark .fc-theme-standard) .fc-scrollgrid {
         @apply border border-neutral-700;
     }
+
+    .resrv-day-number {
+        @apply mt-1 mb-1 text-xs font-medium text-gray-700;
+    }
+    :is(.dark .resrv-day-number) {
+        @apply text-gray-300;
+    }
+
+    .resrv-cell {
+        @apply mx-1 mb-0.5 px-1.5 py-0.5 text-xs font-medium rounded text-center leading-tight;
+    }
+
+    .resrv-cell-good {
+        @apply bg-emerald-100 text-emerald-800;
+    }
+    :is(.dark .resrv-cell-good) {
+        @apply bg-emerald-900/40 text-emerald-200;
+    }
+
+    .resrv-cell-low {
+        @apply bg-amber-100 text-amber-900;
+    }
+    :is(.dark .resrv-cell-low) {
+        @apply bg-amber-900/40 text-amber-100;
+    }
+
+    .resrv-cell-sold-out {
+        @apply text-gray-500 italic;
+        background-image: repeating-linear-gradient(
+            -45deg,
+            rgb(243 244 246),
+            rgb(243 244 246) 4px,
+            rgb(229 231 235) 4px,
+            rgb(229 231 235) 8px
+        );
+    }
+    :is(.dark .resrv-cell-sold-out) {
+        @apply text-gray-400;
+        background-image: repeating-linear-gradient(
+            -45deg,
+            rgb(31 41 55),
+            rgb(31 41 55) 4px,
+            rgb(55 65 81) 4px,
+            rgb(55 65 81) 8px
+        );
+    }
+
+    .resrv-cell-price {
+        @apply bg-gray-100 text-gray-700;
+    }
+    :is(.dark .resrv-cell-price) {
+        @apply bg-gray-800 text-gray-200;
+    }
+}
+
+.statamic-resrv-reservations {
+    .fc-theme-standard td, .fc-theme-standard th {
+        @apply border border-gray-200;
+    }
+    :is(.dark .fc-theme-standard) td, :is(.dark .fc-theme-standard) th {
+        @apply border border-neutral-700;
+    }
+    .fc-theme-standard .fc-scrollgrid {
+        @apply border border-gray-200;
+    }
+    :is(.dark .fc-theme-standard) .fc-scrollgrid {
+        @apply border border-neutral-700;
+    }
+
+    .fc-col-header-cell-cushion,
+    .fc-daygrid-day-number {
+        @apply text-xs font-medium text-gray-700 no-underline;
+    }
+    :is(.dark .fc-col-header-cell-cushion),
+    :is(.dark .fc-daygrid-day-number) {
+        @apply text-gray-300;
+    }
+
+    /* Only highlight "today" in month view — in day view the whole grid IS today. */
+    .fc-dayGridMonth-view .fc-day-today {
+        @apply !bg-blue-50;
+    }
+    :is(.dark .fc-dayGridMonth-view .fc-day-today) {
+        @apply !bg-blue-950/30;
+    }
+    .fc-dayGridDay-view .fc-day-today {
+        @apply !bg-transparent;
+    }
+
+    .fc-toolbar-title {
+        @apply text-gray-900;
+    }
+    :is(.dark .fc-toolbar-title) {
+        @apply text-gray-100;
+    }
+
+    /* Toolbar buttons — match Statamic CP button look */
+    .fc-button {
+        @apply !bg-white !border-gray-200 !text-gray-800 !shadow-sm !rounded-md !px-3 !py-1.5 !text-sm !font-medium !capitalize transition-colors;
+    }
+    .fc-button:hover {
+        @apply !bg-gray-50 !border-gray-300;
+    }
+    .fc-button:focus {
+        @apply !outline-none !ring-2 !ring-blue-500/30;
+    }
+    .fc-button:disabled {
+        @apply !opacity-50;
+    }
+    .fc-button-active,
+    .fc-button-primary:not(:disabled).fc-button-active,
+    .fc-button-primary:not(:disabled):active {
+        @apply !bg-gray-100 !border-gray-300 !text-gray-900;
+    }
+    :is(.dark .fc-button) {
+        @apply !bg-gray-850 !border-gray-700 !text-gray-200;
+    }
+    :is(.dark .fc-button:hover) {
+        @apply !bg-gray-800 !border-gray-600;
+    }
+    :is(.dark .fc-button-active),
+    :is(.dark .fc-button-primary:not(:disabled).fc-button-active),
+    :is(.dark .fc-button-primary:not(:disabled):active) {
+        @apply !bg-gray-800 !border-gray-600 !text-gray-100;
+    }
+
+    /* Event card — let our eventContent markup do the painting */
+    .fc-event,
+    .fc-daygrid-event {
+        @apply !border-0 !bg-transparent !shadow-none rounded-md cursor-pointer;
+    }
+    .fc-daygrid-event:hover {
+        @apply opacity-90;
+    }
+    .fc-daygrid-event-dot {
+        @apply hidden;
+    }
+
+    /* Status-driven event card body */
+    .resrv-event-card {
+        @apply flex items-center gap-1.5 w-full min-w-0 px-2 py-1 rounded-md text-xs leading-tight;
+    }
+    .resrv-event-card .resrv-event-id {
+        @apply font-mono opacity-70 shrink-0;
+    }
+    .resrv-event-card .resrv-event-title {
+        @apply truncate font-medium;
+    }
+    .resrv-event-card .resrv-event-time {
+        @apply font-mono opacity-70 shrink-0;
+    }
+    .resrv-event-card .resrv-event-qty {
+        @apply ms-auto shrink-0 px-1.5 py-0.5 rounded-sm bg-black/10 font-medium;
+    }
+    :is(.dark .resrv-event-card .resrv-event-qty) {
+        @apply bg-white/10;
+    }
+    .resrv-event-dot {
+        @apply w-2 h-2 rounded-full shrink-0;
+    }
+
+    /* Status palettes (light + dark) */
+    .resrv-event--confirmed .resrv-event-card {
+        @apply bg-emerald-50 text-emerald-900;
+    }
+    :is(.dark .resrv-event--confirmed .resrv-event-card) {
+        @apply bg-emerald-900/40 text-emerald-100;
+    }
+    .resrv-event--confirmed .resrv-event-dot { @apply bg-emerald-500; }
+
+    .resrv-event--partner .resrv-event-card {
+        @apply bg-indigo-50 text-indigo-900;
+    }
+    :is(.dark .resrv-event--partner .resrv-event-card) {
+        @apply bg-indigo-900/40 text-indigo-100;
+    }
+    .resrv-event--partner .resrv-event-dot { @apply bg-indigo-500; }
+
+    .resrv-event--pending .resrv-event-card {
+        @apply bg-amber-50 text-amber-900;
+    }
+    :is(.dark .resrv-event--pending .resrv-event-card) {
+        @apply bg-amber-900/40 text-amber-100;
+    }
+    .resrv-event--pending .resrv-event-dot { @apply bg-amber-500; }
+
+    .resrv-event--webhook .resrv-event-card {
+        @apply bg-orange-50 text-orange-900;
+    }
+    :is(.dark .resrv-event--webhook .resrv-event-card) {
+        @apply bg-orange-900/40 text-orange-100;
+    }
+    .resrv-event--webhook .resrv-event-dot { @apply bg-orange-500; }
+
+    .resrv-event--completed .resrv-event-card {
+        @apply bg-teal-50 text-teal-900;
+    }
+    :is(.dark .resrv-event--completed .resrv-event-card) {
+        @apply bg-teal-900/40 text-teal-100;
+    }
+    .resrv-event--completed .resrv-event-dot { @apply bg-teal-500; }
+
+    .resrv-event--refunded .resrv-event-card {
+        @apply bg-gray-100 text-gray-700;
+    }
+    :is(.dark .resrv-event--refunded .resrv-event-card) {
+        @apply bg-gray-800 text-gray-300;
+    }
+    .resrv-event--refunded .resrv-event-dot { @apply bg-gray-400; }
+
+    .resrv-event--expired .resrv-event-card {
+        @apply bg-red-50 text-red-800 italic;
+    }
+    :is(.dark .resrv-event--expired .resrv-event-card) {
+        @apply bg-red-900/30 text-red-200 italic;
+    }
+    .resrv-event--expired .resrv-event-dot { @apply bg-red-400; }
+
+    /* Child reservation marker — dashed left border in the row color */
+    .resrv-event--child .resrv-event-card {
+        @apply border-l-2 border-dashed border-current/60 ps-2;
+    }
 }
 
 .fade-enter-active, .fade-leave-active {
@@ -26,7 +254,7 @@
 
 .fc .fc-toolbar-title {
     font-size: 1.2rem !important;
-    @screen xl {
+    @media (min-width: 80rem) {
         font-size: 1.75rem !important;
     }
 }

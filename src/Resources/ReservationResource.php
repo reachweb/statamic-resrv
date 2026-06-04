@@ -4,17 +4,23 @@ namespace Reach\StatamicResrv\Resources;
 
 use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\ResourceCollection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Blueprints\ReservationBlueprint;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
 use Statamic\Http\Resources\CP\Concerns\HasRequestedColumns;
 
 class ReservationResource extends ResourceCollection
 {
-    use HasRequestedColumns;
+    use HasRequestedColumns, ResolvesReservationEntries;
 
     protected $blueprint;
 
     protected $columns;
+
+    protected $dateFieldtypes = [];
 
     public function __construct($resource)
     {
@@ -34,28 +40,30 @@ class ReservationResource extends ResourceCollection
     {
         $this->setColumns();
 
+        $entries = $this->resolveReservationEntries($this->collection);
+
         return [
-            'data' => $this->collection->transform(function ($reservation) {
+            'data' => $this->collection->transform(function ($reservation) use ($entries) {
                 return [
                     'id' => $reservation->id,
                     'reference' => $reservation->reference,
                     'type' => Str::ucfirst($reservation->type),
                     'status' => $reservation->status,
-                    'entry' => $reservation->entry,
+                    'entry' => $reservation->entryToArray($entries->get($reservation->item_id)),
                     'quantity' => $reservation->quantity,
                     'payment' => config('resrv-config.currency_symbol').' '.$reservation->payment->format(),
                     'price' => config('resrv-config.currency_symbol').' '.$reservation->price->format(),
-                    'date_start' => $this->formatDate($reservation->date_start),
-                    'date_end' => $this->formatDate($reservation->date_end),
-                    'customer' => $reservation->customer,
+                    'date_start' => $this->dateIndexValue('date_start', $reservation->date_start),
+                    'date_end' => $this->dateIndexValue('date_end', $reservation->date_end),
+                    'customer' => ['email' => $reservation->customer?->email],
                     'extras' => $reservation->extras,
                     'options' => $reservation->options,
-                    'property' => $reservation->getPropertyAttributeLabel(),
+                    'rate' => $reservation->getRateLabel(),
                     'payment_gateway' => $reservation->payment_gateway
-                        ? app(\Reach\StatamicResrv\Http\Payment\PaymentGatewayManager::class)->label($reservation->payment_gateway)
+                        ? app(PaymentGatewayManager::class)->label($reservation->payment_gateway)
                         : null,
-                    'created_at' => $this->formatDate($reservation->created_at),
-                    'updated_at' => $this->formatDate($reservation->updated_at),
+                    'created_at' => $this->dateIndexValue('created_at', $reservation->created_at),
+                    'updated_at' => $this->dateIndexValue('updated_at', $reservation->updated_at),
                 ];
             }),
 
@@ -73,8 +81,8 @@ class ReservationResource extends ResourceCollection
             unset($columns['quantity']);
         }
 
-        if (config('resrv-config.enable_advanced_availability') == false) {
-            unset($columns['property']);
+        if (! Cache::rememberForever('resrv_rates_exist', fn () => Rate::withoutGlobalScopes()->exists())) {
+            unset($columns['rate']);
         }
 
         if ($key = $this->columnPreferenceKey) {
@@ -84,14 +92,12 @@ class ReservationResource extends ResourceCollection
         $this->columns = $columns->rejectUnlisted()->values();
     }
 
-    private function formatDate(?Carbon $date)
+    // The Listing component renders date columns with DateIndexFieldtype, which expects the
+    // Date fieldtype's preProcessIndex() payload — a pre-formatted string would render as "now".
+    private function dateIndexValue(string $handle, ?Carbon $date): ?array
     {
-        $format = config('statamic.cp.date_format').' H:i';
+        $fieldtype = $this->dateFieldtypes[$handle] ??= $this->blueprint->field($handle)->fieldtype();
 
-        if (! $date) {
-            return null;
-        }
-
-        return $date->format($format);
+        return $fieldtype->preProcessIndex($date);
     }
 }

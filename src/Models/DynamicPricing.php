@@ -39,12 +39,14 @@ class DynamicPricing extends Model
         'coupon',
         'expire_at',
         'overrides_all',
+        'published',
     ];
 
     protected $casts = [
         'date_start' => 'datetime',
         'date_end' => 'datetime',
         'expire_at' => 'datetime',
+        'published' => 'boolean',
     ];
 
     protected static function newFactory()
@@ -74,10 +76,7 @@ class DynamicPricing extends Model
         );
     }
 
-    /**
-     * Get extras count in a PostgreSQL-compatible way.
-     * PostgreSQL requires explicit type casting for bigint = varchar comparison.
-     */
+    /** PostgreSQL requires explicit bigint→text cast for this join; SQLite does not. */
     public function extrasCount(): int
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
@@ -94,10 +93,7 @@ class DynamicPricing extends Model
         return $this->extras()->count();
     }
 
-    /**
-     * Get extras in a PostgreSQL-compatible way.
-     * PostgreSQL requires explicit type casting for bigint = varchar comparison.
-     */
+    /** PostgreSQL requires explicit bigint→text cast for this join; SQLite does not. */
     public function getExtras()
     {
         if (DB::connection()->getDriverName() === 'pgsql') {
@@ -126,6 +122,17 @@ class DynamicPricing extends Model
         );
     }
 
+    public function rates()
+    {
+        return $this->morphedByMany(
+            Rate::class,
+            'dynamic_pricing_assignment',
+            'resrv_dynamic_pricing_assignments',
+            'dynamic_pricing_id',
+            'dynamic_pricing_assignment_id',
+        );
+    }
+
     public function reservations()
     {
         return $this->belongsToMany(Reservation::class, 'resrv_reservation_dynamic_pricing');
@@ -138,23 +145,15 @@ class DynamicPricing extends Model
 
     public function getEntriesAttribute($value)
     {
-        $entries = DB::table('resrv_dynamic_pricing_assignments')
+        return DB::table('resrv_dynamic_pricing_assignments')
             ->where('dynamic_pricing_assignment_type', 'Reach\StatamicResrv\Models\Availability')
             ->where('dynamic_pricing_id', $this->id)
-            ->get();
-
-        return $entries->map(function ($item) {
-            return $item->dynamic_pricing_assignment_id;
-        });
+            ->pluck('dynamic_pricing_assignment_id');
     }
 
     public function getExtrasAttribute($value)
     {
-        $extras = $this->getExtras();
-
-        return $extras->map(function ($item) {
-            return $item->id;
-        });
+        return $this->getExtras()->pluck('id');
     }
 
     protected static function booted()
@@ -189,7 +188,9 @@ class DynamicPricing extends Model
             $price = $this->$method($price, $policy);
         }
 
-        return $price;
+        // Safety floor: a misconfigured decrease can drive the result below zero (moneyphp allows it).
+        // Runs after the min/max clamps so a configured minimum still wins.
+        return $price->lessThan(Price::create(0)) ? Price::create(0) : $price;
     }
 
     protected function clampPolicies(): Collection
@@ -245,13 +246,10 @@ class DynamicPricing extends Model
 
     public function scopeSearchForAvailability($query, $statamic_id, $price, $date_start, $date_end, $duration)
     {
-        $data = Cache::remember('dynamic_pricing_assignments_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing_assignments')
-                ->get()
-                ->groupBy(fn ($item) => $item->dynamic_pricing_assignment_type.':'.$item->dynamic_pricing_assignment_id);
-        });
+        $grouped = self::getCachedAssignments();
 
-        $itemsForId = $data->get('Reach\StatamicResrv\Models\Availability:'.$statamic_id, collect());
+        $key = 'Reach\StatamicResrv\Models\Availability|'.$statamic_id;
+        $itemsForId = $grouped->get($key, collect());
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -270,13 +268,10 @@ class DynamicPricing extends Model
 
     public function scopeSearchForExtra($query, $extra_id, $price, $date_start, $date_end, $duration)
     {
-        $data = Cache::remember('dynamic_pricing_assignments_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing_assignments')
-                ->get()
-                ->groupBy(fn ($item) => $item->dynamic_pricing_assignment_type.':'.$item->dynamic_pricing_assignment_id);
-        });
+        $grouped = self::getCachedAssignments();
 
-        $itemsForId = $data->get('Reach\StatamicResrv\Models\Extra:'.$extra_id, collect());
+        $key = 'Reach\StatamicResrv\Models\Extra|'.$extra_id;
+        $itemsForId = $grouped->get($key, collect());
 
         if ($itemsForId->count() == 0) {
             return false;
@@ -292,8 +287,15 @@ class DynamicPricing extends Model
         return $this;
     }
 
+    public function scopePublished($query)
+    {
+        $query->where('published', true);
+    }
+
     public function scopeSearchForCoupon($query, $coupon, $reservation_id)
     {
+        $query->published();
+
         $reservation = Reservation::find($reservation_id);
 
         // First try exact match
@@ -305,7 +307,7 @@ class DynamicPricing extends Model
             $query = $query->where('id', $exactMatch->id);
         } else {
             // Try wildcard matching
-            $wildcardCoupons = $this->where('coupon', 'LIKE', '%*')->get();
+            $wildcardCoupons = (clone $query)->where('coupon', 'LIKE', '%*')->get();
 
             if ($wildcardCoupons->count() == 0) {
                 throw new CouponNotFoundException(__('This coupon does not exist'));
@@ -338,7 +340,14 @@ class DynamicPricing extends Model
         }
 
         if ($coupon && $this->hasDates($coupon) && $reservation) {
-            if (! $this->datesInRange($coupon, $reservation->date_start, $reservation->date_start)) {
+            if ($reservation->isParent()) {
+                $anyChildInRange = $reservation->childs->contains(
+                    fn ($child) => $this->datesInRange($coupon, $child->date_start, $child->date_end)
+                );
+                if (! $anyChildInRange) {
+                    throw new CouponNotFoundException(__('This coupon does not apply to the dates of your reservation.'));
+                }
+            } elseif (! $this->datesInRange($coupon, $reservation->date_start, $reservation->date_end)) {
                 throw new CouponNotFoundException(__('This coupon does not apply to the dates of your reservation.'));
             }
         }
@@ -351,7 +360,7 @@ class DynamicPricing extends Model
         $dynamicPricingThatApplies = collect();
 
         $data = Cache::remember('dynamic_pricing_table', 60, function () {
-            return DB::table('resrv_dynamic_pricing')->get()->keyBy('id');
+            return DB::table('resrv_dynamic_pricing')->where('published', true)->get()->keyBy('id');
         });
 
         foreach ($items as $item) {
@@ -359,20 +368,14 @@ class DynamicPricing extends Model
             if (! $pricing || $this->expired($pricing)) {
                 continue;
             }
-            if ($this->hasCoupon($pricing)) {
-                if ($this->couponNotApplied($pricing)) {
-                    continue;
-                }
+            if ($this->hasCoupon($pricing) && $this->couponNotApplied($pricing)) {
+                continue;
             }
-            if ($this->hasCondition($pricing)) {
-                if (! $this->checkCondition($pricing, $price, $duration, $date_start)) {
-                    continue;
-                }
+            if ($this->hasCondition($pricing) && ! $this->checkCondition($pricing, $price, $duration, $date_start)) {
+                continue;
             }
-            if ($this->hasDates($pricing)) {
-                if (! $this->datesInRange($pricing, $date_start, $date_end)) {
-                    continue;
-                }
+            if ($this->hasDates($pricing) && ! $this->datesInRange($pricing, $date_start, $date_end)) {
+                continue;
             }
             $dynamicPricingThatApplies->push($pricing);
         }
@@ -389,13 +392,9 @@ class DynamicPricing extends Model
         return $pricing->condition_type;
     }
 
-    protected function hasCoupon($pricing)
+    protected function hasCoupon($pricing): bool
     {
-        if ($pricing->coupon) {
-            return true;
-        }
-
-        return false;
+        return (bool) $pricing->coupon;
     }
 
     protected function couponNotApplied($pricing)
@@ -419,14 +418,13 @@ class DynamicPricing extends Model
         return true;
     }
 
-    protected function expired($pricing)
+    protected function expired($pricing): bool
     {
         if (! $pricing->expire_at) {
             return false;
         }
-        if (Carbon::parse($pricing->expire_at)->lessThan(now())) {
-            return true;
-        }
+
+        return Carbon::parse($pricing->expire_at)->lessThan(now());
     }
 
     protected function checkCondition($pricing, ?PriceClass $price = null, $duration = null, $date_start = null)
@@ -436,13 +434,13 @@ class DynamicPricing extends Model
                 return true;
             }
         }
-        if ($pricing->condition_type == 'reservation_price') {
+        if ($pricing->condition_type == 'reservation_price' && $price !== null) {
             if ($this->compare($price->format(), $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }
         }
         if ($pricing->condition_type == 'days_to_reservation') {
-            if ($this->compare((int) Carbon::parse($date_start)->diffInDays(now()->setHour(0), true), $pricing->condition_comparison, $pricing->condition_value)) {
+            if ($this->compare((int) Carbon::parse($date_start)->startOfDay()->diffInDays(now()->startOfDay(), true), $pricing->condition_comparison, $pricing->condition_value)) {
                 return true;
             }
         }
@@ -450,13 +448,9 @@ class DynamicPricing extends Model
         return false;
     }
 
-    protected function hasDates($pricing)
+    protected function hasDates($pricing): bool
     {
-        if ($pricing->date_start && $pricing->date_end) {
-            return true;
-        }
-
-        return false;
+        return $pricing->date_start && $pricing->date_end;
     }
 
     protected function datesInRange($pricing, $date_start, $date_end)
@@ -510,6 +504,15 @@ class DynamicPricing extends Model
     public function appliesToExtras(): bool
     {
         return $this->extrasCount() > 0;
+    }
+
+    protected static function getCachedAssignments(): Collection
+    {
+        return Cache::remember('dynamic_pricing_assignments_table', 60, function () {
+            return DB::table('resrv_dynamic_pricing_assignments')
+                ->get()
+                ->groupBy(fn ($row) => $row->dynamic_pricing_assignment_type.'|'.$row->dynamic_pricing_assignment_id);
+        });
     }
 
     protected function matchesWildcardCoupon(string $wildcardCoupon, string $userCoupon): bool

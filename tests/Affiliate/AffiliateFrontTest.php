@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
 use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
+use Reach\StatamicResrv\Livewire\Traits\HandlesAffiliates;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -49,6 +50,41 @@ class AffiliateFrontTest extends TestCase
 
         $response = $this->get('/'.$this->item->slug.'?afid='.$newAffiliate->code);
         $response->assertStatus(200)->assertCookie('resrv_afid', $newAffiliate->code);
+    }
+
+    // An unpublished affiliate is disabled, so the cookie must not be set for it.
+    public function test_that_it_does_not_set_cookie_for_an_unpublished_affiliate()
+    {
+        $affiliate = Affiliate::factory()->create(['published' => false]);
+
+        $response = $this->get('/'.$this->item->slug.'?afid='.$affiliate->code);
+        $response->assertStatus(200)->assertCookieMissing('resrv_afid');
+    }
+
+    public function test_get_affiliate_if_cookie_exists_ignores_unpublished_affiliates()
+    {
+        Affiliate::factory()->create(['code' => 'DISABLED', 'published' => false]);
+        request()->cookies->set('resrv_afid', 'DISABLED');
+
+        $component = new class
+        {
+            use HandlesAffiliates;
+        };
+
+        $this->assertNull($component->getAffiliateIfCookieExists());
+    }
+
+    public function test_get_affiliate_if_cookie_exists_returns_a_published_affiliate()
+    {
+        $affiliate = Affiliate::factory()->create(['code' => 'ENABLED', 'published' => true]);
+        request()->cookies->set('resrv_afid', 'ENABLED');
+
+        $component = new class
+        {
+            use HandlesAffiliates;
+        };
+
+        $this->assertEquals($affiliate->id, $component->getAffiliateIfCookieExists()?->id);
     }
 
     public function test_listener_listens_to_reservation_created_event()

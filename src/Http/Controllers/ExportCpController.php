@@ -7,6 +7,7 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Entry;
@@ -22,7 +23,7 @@ class ExportCpController extends Controller
 
     protected const STANDARD_CUSTOMER_KEYS = ['email', 'first_name', 'last_name', 'phone', 'address', 'city', 'postal_code', 'country'];
 
-    protected const DEFAULT_FIELDS = ['reference', 'status', 'entry_title', 'entry_property', 'quantity', 'date_start', 'date_end', 'created_at', 'customer_email', 'total'];
+    protected const DEFAULT_FIELDS = ['reference', 'status', 'entry_title', 'entry_rate', 'quantity', 'date_start', 'date_end', 'created_at', 'customer_email', 'total'];
 
     /** @var array<string, \Statamic\Contracts\Entries\Entry|null> */
     protected array $entryCache = [];
@@ -31,11 +32,13 @@ class ExportCpController extends Controller
 
     public function indexCp()
     {
-        return view('statamic-resrv::cp.export.index', [
+        return Inertia::render('resrv::Export/Index', [
             'fields' => $this->fieldMetadata(),
             'statuses' => self::STATUSES,
             'entries' => Entry::query()->orderBy('title')->get(['item_id', 'title'])->values(),
             'affiliates' => Affiliate::query()->orderBy('name')->get(['id', 'name', 'code'])->values(),
+            'countUrl' => cp_route('resrv.export.count'),
+            'downloadUrl' => cp_route('resrv.export.download'),
         ]);
     }
 
@@ -63,7 +66,7 @@ class ExportCpController extends Controller
             fputcsv($handle, array_map(fn ($field) => $field['label'], $fields));
 
             $this->baseQuery($data)
-                ->with(['customer', 'extras', 'options.values'])
+                ->with(['customer', 'extras', 'options.values', 'rate', 'childs.rate'])
                 ->lazyById(500)
                 ->each(function (Reservation $reservation) use ($handle, $fields) {
                     $row = [];
@@ -259,15 +262,15 @@ class ExportCpController extends Controller
                 'group' => __('Entry'),
                 'value' => fn (Reservation $r) => $this->resolveEntryField($r, 'url'),
             ],
-            'entry_property' => [
-                'label' => __('Property'),
+            'entry_rate' => [
+                'label' => __('Rate'),
                 'group' => __('Entry'),
-                'value' => fn (Reservation $r) => $this->resolvePropertyLabel($r),
+                'value' => fn (Reservation $r) => $this->resolveRateLabel($r),
             ],
-            'entry_property_handle' => [
-                'label' => __('Property handle'),
+            'entry_rate_slug' => [
+                'label' => __('Rate slug'),
                 'group' => __('Entry'),
-                'value' => fn (Reservation $r) => $this->resolvePropertyHandle($r),
+                'value' => fn (Reservation $r) => $this->resolveRateSlug($r),
             ],
             'extras' => [
                 'label' => __('Extras'),
@@ -377,7 +380,6 @@ class ExportCpController extends Controller
         $handles->push(
             config('resrv-config.checkout_forms.default')
             ?? config('resrv-config.checkout_forms_default')
-            ?? config('resrv-config.form_name', 'checkout')
         );
 
         foreach ($this->configMappings('checkout_forms.entries', 'checkout_forms_entries') as $mapping) {
@@ -469,37 +471,30 @@ class ExportCpController extends Controller
         return $value;
     }
 
-    protected function resolvePropertyLabel(Reservation $reservation): string
-    {
-        $itemId = $reservation->item_id;
-
-        if (! array_key_exists($itemId, $this->entryCache)) {
-            $this->entryCache[$itemId] = StatamicEntry::find($itemId);
-        }
-
-        // getPropertyAttributeLabel() reads $this->entry()->blueprint and
-        // collection() — those don't exist on the array returned by
-        // emptyEntry(), so a deleted entry would fatal the streamed CSV.
-        // Fall back to the raw handle, matching how entry_title degrades.
-        if (! $this->entryCache[$itemId]) {
-            return $this->resolvePropertyHandle($reservation);
-        }
-
-        return (string) $reservation->getPropertyAttributeLabel();
-    }
-
-    protected function resolvePropertyHandle(Reservation $reservation): string
+    protected function resolveRateLabel(Reservation $reservation): string
     {
         if ($reservation->type === 'parent') {
-            return $reservation->childs()
-                ->get()
-                ->pluck('property')
+            return $reservation->childs
+                ->map(fn ($child) => $child->rate?->title)
+                ->filter()
+                ->unique()
+                ->implode(', ');
+        }
+
+        return (string) ($reservation->rate?->title ?? '');
+    }
+
+    protected function resolveRateSlug(Reservation $reservation): string
+    {
+        if ($reservation->type === 'parent') {
+            return $reservation->childs
+                ->map(fn ($child) => $child->rate?->slug)
                 ->filter()
                 ->unique()
                 ->implode(',');
         }
 
-        return (string) ($reservation->getAttributes()['property'] ?? '');
+        return (string) ($reservation->rate?->slug ?? '');
     }
 
     protected function resolveEntryField(Reservation $reservation, string $key): string

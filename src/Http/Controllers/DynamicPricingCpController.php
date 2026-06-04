@@ -2,9 +2,14 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 use Reach\StatamicResrv\Models\DynamicPricing;
 
 class DynamicPricingCpController extends Controller
@@ -16,26 +21,43 @@ class DynamicPricingCpController extends Controller
         $this->dynamicPricing = $dynamicPricing;
     }
 
-    public function indexCp()
+    public function indexCp(Request $request): InertiaResponse
     {
-        return view('statamic-resrv::cp.dynamicpricings.index');
+        $filters = [
+            'search' => $request->query('search', ''),
+            'operation' => $request->query('operation', ''),
+            'dates_active' => $request->query('dates_active', ''),
+            'condition' => $request->query('condition', ''),
+            'page' => (int) $request->query('page', 1),
+            'per_page' => (int) $request->query('per_page', config('statamic.cp.pagination_size', 25)),
+        ];
+
+        return Inertia::render('resrv::DynamicPricing/Index', [
+            'timezone' => config('app.timezone', 'UTC'),
+            'filters' => $filters,
+            'pricings' => $this->paginatedPricings($request),
+        ]);
     }
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $query = $this->dynamicPricing->query();
-
         // Backward-compatible flat-array response used by AffiliatesPanel.
         if ($request->has('coupons_only') && $request->coupons_only == 'true') {
-            $query->whereNotNull('coupon')->where('coupon', '!=', '');
-            $dynamic = $query->get();
-            foreach ($dynamic as $pricing) {
-                $pricing['entries'] = $pricing->entries;
-                $pricing['extras'] = $pricing->extras;
-            }
+            $dynamic = $this->dynamicPricing->query()
+                ->whereNotNull('coupon')
+                ->where('coupon', '!=', '')
+                ->with(['entries', 'extras'])
+                ->get();
 
             return response()->json($dynamic);
         }
+
+        return response()->json($this->paginatedPricings($request));
+    }
+
+    protected function paginatedPricings(Request $request): LengthAwarePaginator
+    {
+        $query = $this->dynamicPricing->query();
 
         if ($search = $request->input('search')) {
             $query->whereRaw('LOWER(title) LIKE ?', ['%'.mb_strtolower($search).'%']);
@@ -86,17 +108,11 @@ class DynamicPricingCpController extends Controller
 
         $perPage = (int) ($request->input('per_page') ?? config('statamic.cp.pagination_size', 25));
         $perPage = max(1, min($perPage, 100));
-        $paginator = $query->paginate($perPage);
 
-        foreach ($paginator->items() as $pricing) {
-            $pricing['entries'] = $pricing->entries;
-            $pricing['extras'] = $pricing->extras;
-        }
-
-        return response()->json($paginator);
+        return $query->with(['entries', 'extras'])->paginate($perPage);
     }
 
-    public function create(Request $request)
+    public function create(Request $request): JsonResponse|RedirectResponse
     {
         $data = $request->validate([
             'entries' => 'nullable|required_without:extras|array',
@@ -112,6 +128,7 @@ class DynamicPricingCpController extends Controller
             'coupon' => 'nullable|regex:/^[\w*-]+$/',
             'expire_at' => 'nullable|date',
             'overrides_all' => 'nullable|boolean',
+            'published' => 'nullable|boolean',
         ] + $this->amountOperationRules($request));
 
         $order = $this->dynamicPricing->max('order') + 1;
@@ -121,10 +138,14 @@ class DynamicPricingCpController extends Controller
         $dynamicPricing->entries()->sync($data['entries']);
         $dynamicPricing->extras()->sync($data['extras']);
 
+        if ($request->inertia()) {
+            return back();
+        }
+
         return response()->json(['id' => $dynamicPricing['id']]);
     }
 
-    public function update($id, Request $request)
+    public function update($id, Request $request): JsonResponse|RedirectResponse
     {
         $data = $request->validate([
             'entries' => 'nullable|required_without:extras|array',
@@ -141,12 +162,17 @@ class DynamicPricingCpController extends Controller
             'coupon' => 'nullable|regex:/^[\w*-]+$/',
             'expire_at' => 'nullable|date',
             'overrides_all' => 'nullable|boolean',
+            'published' => 'nullable|boolean',
         ] + $this->amountOperationRules($request));
 
         $dynamicPricing = $this->dynamicPricing->findOrFail($id);
         $dynamicPricing->update($data);
         $dynamicPricing->entries()->sync($data['entries']);
         $dynamicPricing->extras()->sync($data['extras']);
+
+        if ($request->inertia()) {
+            return back();
+        }
 
         return response()->json(['id' => $dynamicPricing['id']]);
     }

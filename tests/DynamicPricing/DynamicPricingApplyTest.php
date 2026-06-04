@@ -60,7 +60,7 @@ class DynamicPricingApplyTest extends TestCase
         return $dynamic;
     }
 
-    private function assertPrice($expectedPrice, $expectedOriginalPrice = null, $dates = null, $quantity = 1, $advanced = null)
+    private function assertPrice($expectedPrice, $expectedOriginalPrice = null, $dates = null, $quantity = 1, $rateId = null)
     {
         $dates = $dates ?? [
             'date_start' => $this->date->toISOString(),
@@ -71,13 +71,13 @@ class DynamicPricingApplyTest extends TestCase
             ->dispatch('availability-search-updated', [
                 'dates' => $dates,
                 'quantity' => $quantity,
-                'advanced' => $advanced,
+                'rate' => $rateId,
             ])
             ->assertViewHas('availability.data.price', $expectedPrice)
             ->assertViewHas('availability.data.original_price', $expectedOriginalPrice);
     }
 
-    private function assertIndexPrice($expectedPrice, $expectedOriginalPrice = null, $dates = null, $quantity = 1, $advanced = null)
+    private function assertIndexPrice($expectedPrice, $expectedOriginalPrice = null, $dates = null, $quantity = 1, $rateId = null)
     {
         $dates = $dates ?? [
             'date_start' => $this->date,
@@ -90,7 +90,7 @@ class DynamicPricingApplyTest extends TestCase
             'resrv_search:resrv_availability' => [
                 'dates' => $dates,
                 'quantity' => $quantity,
-                'advanced' => $advanced,
+                'rate_id' => $rateId,
             ],
         ]);
 
@@ -148,11 +148,11 @@ class DynamicPricingApplyTest extends TestCase
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
 
-        // Baseline 100.92 is already above the 50 floor → price unchanged.
+        // Baseline 100.92 is already above the 50 floor → price unchanged, so no original price is surfaced.
         $this->createDynamicPricing('fixedMinimum', ['amount' => '50']);
 
-        $this->assertPrice('100.92', '100.92');
-        $this->assertIndexPrice('100.92', '100.92');
+        $this->assertPrice('100.92');
+        $this->assertIndexPrice('100.92');
     }
 
     public function test_fixed_maximum_caps_price_when_above()
@@ -170,11 +170,31 @@ class DynamicPricingApplyTest extends TestCase
     {
         $this->createAvailabilityForEntry($this->entry, 25.23, 2);
 
-        // Baseline 100.92 is below the 200 ceiling → unchanged.
+        // Baseline 100.92 is below the 200 ceiling → unchanged, so no original price is surfaced.
         $this->createDynamicPricing('fixedMaximum', ['amount' => '200']);
 
-        $this->assertPrice('100.92', '100.92');
-        $this->assertIndexPrice('100.92', '100.92');
+        $this->assertPrice('100.92');
+        $this->assertIndexPrice('100.92');
+    }
+
+    public function test_fixed_decrease_above_base_floors_price_at_zero()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        $this->createDynamicPricing('fixedDecrease', ['amount' => '500']);
+
+        $this->assertPrice('0.00', '100.92');
+        $this->assertIndexPrice('0.00', '100.92');
+    }
+
+    public function test_percent_decrease_over_100_floors_price_at_zero()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        $this->createDynamicPricing('percentDecrease', ['amount' => '150']);
+
+        $this->assertPrice('0.00', '100.92');
+        $this->assertIndexPrice('0.00', '100.92');
     }
 
     public function test_minimum_applied_after_decrease_in_ordering()
@@ -379,6 +399,39 @@ class DynamicPricingApplyTest extends TestCase
         $this->assertIndexPrice('80.74', '100.92');
     }
 
+    public function test_dynamic_pricing_days_to_reservation_condition()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        // Travel to a time with non-zero minutes/seconds to avoid fractional-day rounding errors.
+        $this->travelTo(today()->setTime(15, 30, 45));
+
+        // "20% off when days_to_reservation <= 2", isolated from any date-range constraint.
+        $this->createDynamicPricing('daysToReservation', [
+            'date_start' => null,
+            'date_end' => null,
+            'date_include' => null,
+        ]);
+
+        // 3 days out: must NOT qualify.
+        $threeDaysOut = [
+            'date_start' => today()->addDays(3)->setTime(12, 0, 0)->toISOString(),
+            'date_end' => today()->addDays(7)->setTime(12, 0, 0)->toISOString(),
+        ];
+
+        $this->assertPrice('100.92', null, $threeDaysOut);
+        $this->assertIndexPrice('100.92', null, $threeDaysOut);
+
+        // 2 days out: must qualify.
+        $twoDaysOut = [
+            'date_start' => today()->addDays(2)->setTime(12, 0, 0)->toISOString(),
+            'date_end' => today()->addDays(6)->setTime(12, 0, 0)->toISOString(),
+        ];
+
+        $this->assertPrice('80.74', '100.92', $twoDaysOut);
+        $this->assertIndexPrice('80.74', '100.92', $twoDaysOut);
+    }
+
     public function test_dynamic_pricing_applies_by_ordering()
     {
         $this->createAvailabilityForEntry($this->entry, 50, 2);
@@ -439,6 +492,34 @@ class DynamicPricingApplyTest extends TestCase
         session(['resrv_coupon' => '20OFF']);
 
         $this->assertPrice('80.74', '100.92');
+    }
+
+    public function test_unpublished_dynamic_pricing_is_not_applied()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+        $this->createDynamicPricing('create', ['published' => false]);
+
+        $this->assertPrice('100.92');
+    }
+
+    public function test_unpublished_coupon_does_not_apply()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+        $this->createDynamicPricing('withCoupon', ['published' => false]);
+
+        session(['resrv_coupon' => '20OFF']);
+
+        $this->assertPrice('100.92');
+    }
+
+    public function test_unpublished_wildcard_coupon_does_not_apply()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+        $this->createDynamicPricing('withWildcardCoupon', ['published' => false]);
+
+        session(['resrv_coupon' => 'YHCOSAECZC']);
+
+        $this->assertPrice('100.92');
     }
 
     public function test_dynamic_pricing_with_wildcard_coupon()
@@ -560,7 +641,7 @@ class DynamicPricingApplyTest extends TestCase
                     'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
                 ],
                 'quantity' => 1,
-                'advanced' => null,
+                'rate' => null,
             ])
             ->assertSee('23.00');
     }
@@ -611,6 +692,28 @@ class DynamicPricingApplyTest extends TestCase
 
         // Decrease still pre-multiply: (50 - 10) × 3 = 120.
         $this->assertExtrasPriceSeen('120.00', days: 3);
+    }
+
+    public function test_decrease_above_base_floors_extra_price_at_zero()
+    {
+        $this->createAvailabilityForEntry($this->entry, 25.23, 2);
+
+        $extra = Extra::factory()->create(['price' => '20']);
+
+        // Decrease exceeds the base; applyClamps() must floor to 0 for extras too.
+        $this->assignDynamicPricingToExtra($extra, [
+            'amount_type' => 'fixed',
+            'amount_operation' => 'decrease',
+            'amount' => '500',
+        ]);
+
+        $price = $extra->priceForDates([
+            'date_start' => $this->date->toISOString(),
+            'date_end' => $this->date->copy()->add(3, 'day')->toISOString(),
+            'quantity' => 1,
+        ]);
+
+        $this->assertEquals('0.00', $price);
     }
 
     public function test_decrease_then_minimum_on_perday()

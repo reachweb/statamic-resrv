@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
@@ -14,6 +15,7 @@ use Reach\StatamicResrv\Traits\HandlesCutoffRules;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry as StatamicEntry;
 use Statamic\Facades\Blueprint;
+use Statamic\Fields\Field;
 
 class Entry extends Model
 {
@@ -43,7 +45,10 @@ class Entry extends Model
         $query->where('item_id', $id);
     }
 
-    public static function whereItemId(string $id): ?static
+    /**
+     * @throws ModelNotFoundException
+     */
+    public static function whereItemId(string $id): static
     {
         return static::query()->itemId($id)->firstOrFail();
     }
@@ -64,18 +69,21 @@ class Entry extends Model
             return;
         }
 
+        // A detached localization (origin set to null) gets its own row here; its old availability isn't migrated.
         $resrvEntry = static::withTrashed()->updateOrCreate(
             [
                 'item_id' => $entry->id(),
             ],
             [
                 'title' => $entry->get('title'),
-                'enabled' => $entry->get($field->handle()) === 'disabled' ? false : true,
+                'enabled' => $entry->get($field->handle()) !== 'disabled',
                 'collection' => $entry->collection()->handle(),
                 'handle' => $entry->blueprint()->handle(),
             ]
         );
 
+        // Restoring the mirror brings back its extras/options links but not availability or
+        // dynamic pricing (hard-deleted on EntryDeleted, keyed by statamic_id) — re-enter stock.
         if ($resrvEntry->trashed()) {
             $resrvEntry->restore();
         }
@@ -88,12 +96,17 @@ class Entry extends Model
         return $this->hasMany(Availability::class, 'statamic_id', 'item_id');
     }
 
+    public function rates(): Builder
+    {
+        return Rate::forEntry($this->item_id);
+    }
+
     public function getStatamicEntry(): StatamicEntry
     {
         return StatamicEntry::find($this->item_id);
     }
 
-    public function getAvailabilityField(): ?\Statamic\Fields\Field
+    public function getAvailabilityField(): ?Field
     {
         return AvailabilityField::getField($this->getBlueprint());
     }

@@ -1,105 +1,64 @@
 <template>
-    <stack narrow name="statamic-resrv-fixed-pricing" @closed="close">
-        <div slot-scope="{ close }" class="bg-gray-100 dark:bg-dark-700 h-full overflow-scroll overflow-x-auto flex flex-col">
-            <header class="bg-white dark:bg-dark-550 pl-6 pr-3 py-2 mb-4 border-b dark:border-dark-950 shadow-md text-lg font-medium flex items-center justify-between">
-                {{ __('Fixed pricing') }}
-                <button type="button" class="btn-close" @click="close">×</button>
-            </header>            
-            <div class="flex-1 overflow-auto px-1">
-                <div class="px-2">
-                    <div class="publish-sections">
-                        <div class="publish-sections-section">
-                            <div class="card">
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="name">Days</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="name" type="text" v-model="submit.days">
-                                    </div>
-                                    <div v-if="errors.days" class="w-full mt-2 text-sm text-red-400">
-                                        {{ errors.days[0] }}
-                                    </div>  
-                                </div>                                
-                                <div class="pb-3">
-                                    <div class="mb-1 text-sm">
-                                        <label class="font-semibold" for="price">Price</label>
-                                    </div>
-                                    <div class="w-full">
-                                        <input class="input-text" name="price" type="text" v-model="submit.price">
-                                    </div>
-                                    <div v-if="errors.price" class="w-full mt-1 text-sm text-red-400">
-                                        {{ errors.price[0] }}
-                                    </div>  
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    <Stack
+        :open="true"
+        :title="__('Fixed pricing')"
+        icon="money-cashier-price-tag"
+        size="narrow"
+        @closed="onClosed"
+    >
+        <template #header-actions>
+            <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+        </template>
+        <template #default>
+            <Card>
+                <div class="space-y-6">
+                    <Field :label="__('Days')" :errors="errors.days">
+                        <Input v-model="submit.days" />
+                    </Field>
+                    <Field :label="__('Price')" :errors="errors.price">
+                        <Input v-model="submit.price" />
+                    </Field>
                 </div>
-            </div>
-            <div class="bg-gray-200 dark:bg-dark-500 p-4 border-t dark:border-dark-900 flex items-center justify-between">
-                <div class="w-full">
-                    <button 
-                        class="btn-primary w-full"
-                        :disabled="disableSave"
-                        @click="save"
-                    >
-                    Save
-                    </button>
-                </div>
-            </div>              
-        </div>
-    </stack>
+            </Card>
+        </template>
+    </Stack>
 </template>
 
-<script>
-import FormHandler from '../mixins/FormHandler.vue'
+<script setup>
+import { Button, Card, Field, Input, Stack } from '@statamic/cms/ui';
+import { onMounted, reactive, watch } from 'vue';
+import { useFormHandler } from '../composables/useFormHandler.js';
 
-export default {
+const props = defineProps({
+    data: { type: Object, required: true },
+    openPanel: { type: Boolean, default: false },
+});
 
-    props: {
-        data: {
-            type: Object,
-            required: true
-        },
-        openPanel: {
-            type: Boolean,
-            default: false
-        }
-    },
+const emit = defineEmits(['closed', 'saved']);
 
-    watch: {
-        data() {
-            this.createSubmit()
-        }
-    },
+const submit = reactive({});
 
-    mounted() {
-        this.createSubmit()
-    },
+const { disableSave, errors, save } = useFormHandler({
+    submit,
+    postUrl: '/cp/resrv/fixedpricing',
+    method: 'post',
+    successMessage: 'Fixed pricing successfully saved',
+    emit,
+});
 
-    data() {
-        return {
-            submit: {},
-            successMessage: 'Fixed pricing successfully saved',
-            postUrl: '/cp/resrv/fixedpricing',
-            method: 'post'           
-        }
-    },
+watch(() => props.data, () => createSubmit(), { deep: true });
 
-    mixins: [FormHandler],
+onMounted(() => createSubmit());
 
-    methods: {
-        close() {
-            this.submit = {}
-            this.$emit('closed')
-        },
-        createSubmit() {
-            this.submit = {}
-            _.forEach(this.data, (value, name) => {
-                this.$set(this.submit, name, value)
-            })
-        },
-    }
+function onClosed() {
+    Object.keys(submit).forEach((key) => delete submit[key]);
+    emit('closed');
+}
+
+function createSubmit() {
+    Object.keys(submit).forEach((key) => delete submit[key]);
+    Object.entries(props.data).forEach(([name, value]) => {
+        submit[name] = value;
+    });
 }
 </script>

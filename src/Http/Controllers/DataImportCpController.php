@@ -6,18 +6,22 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
 use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Helpers\ResrvHelper;
 use Reach\StatamicResrv\Jobs\ProcessDataImport;
+use Statamic\Facades\User;
 
 class DataImportCpController extends Controller
 {
     public function index()
     {
-        Cache::forget('resrv-data-import');
-        $collections = ResrvHelper::collectionsWithResrv();
+        Cache::forget($this->importCacheKey());
 
-        return view('statamic-resrv::cp.dataimport.index')->with('collections', $collections);
+        return Inertia::render('resrv::DataImport/Index', [
+            'collections' => ResrvHelper::collectionsWithResrv()->values()->all(),
+            'confirmUrl' => cp_route('resrv.dataimport.confirm'),
+        ]);
     }
 
     public function confirm(Request $request)
@@ -36,8 +40,11 @@ class DataImportCpController extends Controller
             'delimiter' => 'required',
         ]);
 
+        $cacheKey = $this->importCacheKey();
+
         $file = $validated['file'];
-        $path = $file->storeAs('resrv-data-import', 'resrv-data-import.csv');
+        // Scope the stored file per user so concurrent imports can't overwrite each other's upload.
+        $path = $file->storeAs('resrv-data-import', $cacheKey.'.csv');
         $path = storage_path('app/'.$path);
         $delimiter = $validated['delimiter'];
         $identifier = $validated['identifier'];
@@ -45,30 +52,46 @@ class DataImportCpController extends Controller
 
         $dataImport = new DataImport($path, $delimiter, $collection, $identifier);
 
-        Cache::put('resrv-data-import', $dataImport);
+        Cache::put($cacheKey, $dataImport);
 
         $errors = $dataImport->checkForErrors();
 
         if ($errors->count() > 0) {
-            return view('statamic-resrv::cp.dataimport.confirm')
-                ->with('errors', $errors);
+            return $this->renderConfirm($errors->values()->all());
         }
 
-        $sample = $dataImport->prepare(true)->all();
-
-        return view('statamic-resrv::cp.dataimport.confirm')
-            ->with('sample', $sample);
+        return $this->renderConfirm([], $dataImport->prepare(true)->all());
     }
 
     public function store()
     {
-        if (! Cache::has('resrv-data-import')) {
-            return view('statamic-resrv::cp.dataimport.confirm')
-                ->with('errors', collect(['No data import object found in cache, please try again']));
+        $cacheKey = $this->importCacheKey();
+
+        if (! Cache::has($cacheKey)) {
+            return $this->renderConfirm(['No data import object found in cache, please try again']);
         }
 
-        ProcessDataImport::dispatch();
+        ProcessDataImport::dispatch($cacheKey);
 
-        return view('statamic-resrv::cp.dataimport.store');
+        return Inertia::render('resrv::DataImport/Store', [
+            'indexUrl' => cp_route('resrv.dataimport.index'),
+        ]);
+    }
+
+    // Scope the cache key (and the stored CSV filename) to the authenticated user so concurrent
+    // imports by different admins don't clobber each other's file/cache entry.
+    protected function importCacheKey(): string
+    {
+        return 'resrv-data-import-'.(User::current()?->id() ?? 'shared');
+    }
+
+    protected function renderConfirm(array $errors = [], ?array $sample = null)
+    {
+        return Inertia::render('resrv::DataImport/Confirm', [
+            'errors' => $errors,
+            'sample' => $sample,
+            'storeUrl' => cp_route('resrv.dataimport.store'),
+            'indexUrl' => cp_route('resrv.dataimport.index'),
+        ]);
     }
 }

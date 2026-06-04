@@ -6,7 +6,7 @@ use Illuminate\Contracts\Database\Eloquent\CastsAttributes;
 use Money\Currencies\ISOCurrencies;
 use Money\Currency;
 use Money\Formatter\DecimalMoneyFormatter;
-use Money\Money;
+use Money\Parser\DecimalMoneyParser;
 
 class Price implements CastsAttributes
 {
@@ -20,7 +20,19 @@ class Price implements CastsAttributes
     public function create($price): Price
     {
         $class = new self;
-        $class->money = new Money(bcmul($price, 100), new Currency(config('resrv-config.currency_isoCode')));
+
+        $value = (string) $price;
+
+        // The decimal parser trims whitespace silently; reject it explicitly to match the
+        // previous BCMath behaviour that callers (e.g. PaymentGatewayManager) rely on.
+        if (trim($value) !== $value) {
+            throw new \InvalidArgumentException(sprintf('Cannot parse "%s" to a Price.', $value));
+        }
+
+        // Uses the currency's real subunit count (inverse of DecimalMoneyFormatter) so
+        // create()/format() round-trip correctly for all currencies (e.g. JPY, BHD).
+        $parser = new DecimalMoneyParser(new ISOCurrencies);
+        $class->money = $parser->parse($value, new Currency(config('resrv-config.currency_isoCode')));
 
         return $class;
     }

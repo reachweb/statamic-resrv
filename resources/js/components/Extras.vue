@@ -1,333 +1,301 @@
 <template>
-<div>
-    <vue-draggable 
-        v-model="localExtras"
-        group="extras"
-        @change="handleChange"
-        class="space-y-2"
-        :ghost-class="'ghost'"
-        filter=".ignore-element"
-        :animation="200"
-        :disabled="disableDrag"
-    >
-        <div
-            v-text="__('Add or drag extras here')"
-            v-if="localExtras.length == 0"
-            class="ignore-element text-2xs text-gray-600 dark:text-dark-150 text-center border dark:border-dark-200 border-dashed rounded mb-2 p-2"
+    <div>
+        <draggable
+            v-model="localExtras"
+            item-key="id"
+            group="extras"
+            @change="handleChange"
+            class="space-y-2"
+            :ghost-class="'ghost'"
+            filter=".ignore-element"
+            :animation="200"
+            :disabled="disableDrag"
         >
-        </div>
-        <template v-else class="w-full">
-            <div 
-                class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
-                bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm" 
-                v-for="extra in localExtras" 
-                :key="extra.id"
-            >
-                <div class="flex items-center space-x-2">
-                    <div class="little-dot" :class="extraEnabled(extra) ? 'bg-green-600' : 'bg-gray-400'"></div>
-                    <span class="font-medium" :class="{'cursor-pointer' : ! insideEntry}" v-html="extra.name" @click="editExtra(extra)"></span>
-                    <span>{{ extra.price }} <span class="text-xs text-gray-700 dark:text-dark-100" v-html="priceLabel(extra.price_type)"></span></span>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <div class="flex items-center" v-if="extraHasConditions(extra)" v-tooltip="__('This extra has conditions.')">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1"><path d="M7 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M7 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M17 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M7 8l0 8"></path> <path d="M9 18h6a2 2 0 0 0 2 -2v-5"></path> <path d="M14 14l3 -3l3 3"></path></svg> 
+            <template #header>
+                <div
+                    v-if="localExtras.length === 0"
+                    v-text="__('Add or drag extras here')"
+                    class="ignore-element text-xs text-gray-500 dark:text-gray-400 text-center border border-dashed border-gray-300 dark:border-gray-700 rounded-md mb-2 p-3"
+                ></div>
+            </template>
+            <template #item="{ element: extra }">
+                <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80">
+                    <div class="flex items-center gap-2">
+                        <StatusIndicator :status="extraEnabled(extra) ? 'published' : 'draft'" />
+                        <span class="font-medium text-gray-900 dark:text-gray-200" :class="{ 'cursor-pointer hover:underline': !insideEntry }" v-html="extra.name" @click="editExtra(extra)"></span>
+                        <span class="text-sm text-gray-700 dark:text-gray-400">{{ extra.price }} <span class="text-xs text-gray-500" v-html="priceLabel(extra.price_type)"></span></span>
                     </div>
-                    <span 
-                        class="rounded px-2 py-[4px] text-xs uppercase cursor-pointer"
-                        :class="extraEnabled(extra) ? 'bg-green-600 text-white' : 'bg-gray-300 text-gray-800'" 
-                        v-html="extraEnabled(extra) ? 'Enabled' : 'Disabled'"
-                        @click="associateEntryExtra(extra)"
-                        v-if="insideEntry"
-                    ></span>
-                    <dropdown-list v-if="! insideEntry">
-                        <dropdown-item :text="__('Edit')" @click="editExtra(extra)" />
-                        <dropdown-item :text="__('Mass assign')" @click="massAssign(extra)" />
-                        <dropdown-item :text="__('Conditions')" @click="editConditions(extra)" />
-                        <dropdown-item :text="__('Delete')" @click="confirmDelete(extra)" />         
-                    </dropdown-list>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center text-gray-500 dark:text-gray-400" v-if="extraHasConditions(extra)" v-tooltip="__('This extra has conditions.')">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5">
+                                <path d="M7 18m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
+                                <path d="M7 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
+                                <path d="M17 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path>
+                                <path d="M7 8l0 8"></path>
+                                <path d="M9 18h6a2 2 0 0 0 2 -2v-5"></path>
+                                <path d="M14 14l3 -3l3 3"></path>
+                            </svg>
+                        </div>
+                        <Badge
+                            v-if="insideEntry"
+                            :text="extraEnabled(extra) ? __('Enabled') : __('Disabled')"
+                            :variant="extraEnabled(extra) ? 'success' : 'default'"
+                            size="sm"
+                            class="cursor-pointer"
+                            @click="associateEntryExtra(extra)"
+                        />
+                        <Dropdown v-if="!insideEntry">
+                            <DropdownMenu>
+                                <DropdownItem :text="__('Edit')" icon="pencil" @click="editExtra(extra)" />
+                                <DropdownItem :text="__('Mass assign')" icon="duplicate" @click="massAssign(extra)" />
+                                <DropdownItem :text="__('Conditions')" icon="workflow" @click="editConditions(extra)" />
+                                <DropdownSeparator />
+                                <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(extra)" />
+                            </DropdownMenu>
+                        </Dropdown>
+                    </div>
                 </div>
-            </div>
-        </template>
-    </vue-draggable>
-    <div class="category-section-field-actions flex mt-2 -mx-1" v-if="! insideEntry">
-        <div class="px-1">
-            <button class="btn w-full flex justify-center items-center" @click="addExtra">
-                <svg-icon name="light/toggle" class="mr-2 w-4 h-4" />
-                {{ __('Add extra') }}
-            </button>
+            </template>
+        </draggable>
+        <div class="mt-3" v-if="!insideEntry">
+            <Button variant="default" :text="__('Add extra')" icon="plus" @click="addExtra" />
         </div>
-    </div>  
-    <extras-panel            
-        v-if="showPanel"
-        :data="extra"
-        @closed="togglePanel"
-        @saved="extraSaved"
-    >
-    </extras-panel>
-    <extra-conditions-panel            
-        v-if="showConditionsPanel"
-        :data="extra"
-        @closed="toggleConditionsPanel"
-        @saved="extraConditionsSaved"
-    >
-    </extra-conditions-panel>
-    <extra-mass-assign-panel            
-        v-if="showMassAssignPanel"
-        :data="extra"
-        @closed="toggleMassAssignPanel"
-        @saved="toggleMassAssignPanel"
-    >
-    </extra-mass-assign-panel>
-    <confirmation-modal
-        v-if="deleteId"
-        title="Delete extra"
-        :danger="true"
-        @confirm="deleteExtra"
-        @cancel="deleteId = false"
-    >
-        Are you sure you want to delete this extra? <strong>This cannot be undone.</strong>
-    </confirmation-modal>
-</div>
+        <ExtrasPanel
+            v-if="showPanel"
+            :data="extra"
+            @closed="togglePanel"
+            @saved="extraSaved"
+        />
+        <ExtraConditionsPanel
+            v-if="showConditionsPanel"
+            :data="extra"
+            @closed="toggleConditionsPanel"
+            @saved="extraConditionsSaved"
+        />
+        <ExtraMassAssignPanel
+            v-if="showMassAssignPanel"
+            :data="extra"
+            @closed="toggleMassAssignPanel"
+            @saved="toggleMassAssignPanel"
+        />
+        <confirmation-modal
+            :open="deleteId !== null"
+            :title="__('Delete extra')"
+            :danger="true"
+            @confirm="deleteExtra"
+            @cancel="deleteId = null"
+        >
+            {{ __('Are you sure you want to delete this extra?') }} <strong>{{ __('This cannot be undone.') }}</strong>
+        </confirmation-modal>
+    </div>
 </template>
 
-<script>
-import axios from 'axios'
-import ExtrasPanel from './ExtrasPanel.vue'
-import ExtraConditionsPanel from './ExtraConditionsPanel.vue'
-import ExtraMassAssignPanel from './ExtraMassAssignPanel.vue'
-import VueDraggable from 'vuedraggable'
+<script setup>
+import { Badge, Button, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, StatusIndicator } from '@statamic/cms/ui';
+import draggable from 'vuedraggable';
+import { computed, ref, watch } from 'vue';
+import axios from 'axios';
+import ExtrasPanel from './ExtrasPanel.vue';
+import ExtraConditionsPanel from './ExtraConditionsPanel.vue';
+import ExtraMassAssignPanel from './ExtraMassAssignPanel.vue';
+import { useToast } from '../composables/useToast.js';
 
-export default {
-    props: {
-        extras: {
-            type: Array,
-            required: true
-        },
-        insideEntry: {
-            type: Boolean,
-            default: false
-        },
-        parent: {
-            type: String,
-            required: true
-        },
-        categoryId: {
-            type: Number,
-            required: false,
-            default: null
-        }
-    },
+const props = defineProps({
+    extras: { type: Array, required: true },
+    insideEntry: { type: Boolean, default: false },
+    parent: { type: String, required: true },
+    categoryId: { type: Number, required: false, default: null },
+});
 
-    data() {
-        return {
-            localExtras: this.extras,
-            containerWidth: null,
-            showPanel: false,
-            showConditionsPanel: false,
-            showMassAssignPanel: false,
-            extras: '',
-            allowEntryExtraEdit: true,
-            deleteId: false,
-            disableDrag: this.insideEntry,
-            extra: '',
-            category: '',
-            emptyExtra: {
-                name: '',
-                slug: '',
-                category_id: null,
-                price: '',
-                price_type: '',
-                allow_multiple : 0,                
-                custom: '',
-                override_label: '',
-                maximum: 0,
-                published : 1
-            },
-        }
-    },
+const emit = defineEmits(['reload-categories']);
+const toast = useToast();
 
-    components: {
-        ExtrasPanel,
-        ExtraConditionsPanel,
-        ExtraMassAssignPanel,
-        VueDraggable
-    },
+const localExtras = ref(props.extras.map((item) => ({ ...item })));
+const showPanel = ref(false);
+const showConditionsPanel = ref(false);
+const showMassAssignPanel = ref(false);
+const allowEntryExtraEdit = ref(true);
+const deleteId = ref(null);
+const disableDrag = ref(props.insideEntry);
+const extra = ref({});
 
-    computed: {
-        newItem() {
-            if (this.parent == 'Collection') {
-                return true
-            }
-            return false
-        }
-    },
+const emptyExtra = {
+    name: '',
+    slug: '',
+    category_id: null,
+    price: '',
+    price_type: '',
+    allow_multiple: false,
+    custom: '',
+    override_label: '',
+    maximum: 0,
+    published: true,
+};
 
-    watch: {
-        extras: {
-            handler(value) {
-                this.localExtras = value;
-            },
-            deep: true
-        }
-    },
+const newItem = computed(() => props.parent === 'Collection');
 
-    emits: ['reload-categories'],
+watch(() => props.extras, (value) => {
+    localExtras.value = value.map((item) => ({ ...item }));
+}, { deep: true });
 
-    methods: {
-        togglePanel() {
-            this.showPanel = !this.showPanel
-        },
-        toggleConditionsPanel() {
-            this.showConditionsPanel = !this.showConditionsPanel
-        },
-        toggleMassAssignPanel() {
-            this.showMassAssignPanel = !this.showMassAssignPanel
-        },
-        associateEntryExtra(extra) {
-            this.toggleEntryExtraEditing()
-            if (this.extraEnabled(extra)) {
-                this.disableExtra(extra.id)
-            } else {
-                this.enableExtra(extra.id)
-            }
-        },
-        toggleEntryExtraEditing() {
-            this.allowEntryExtraEdit = ! this.allowEntryExtraEdit
-        },
-        addExtra() {
-            if (this.categoryId) {
-                this.emptyExtra.category_id = this.categoryId
-            }
-            this.extra = this.emptyExtra
-            this.togglePanel()
-        },
-        editExtra(extra) {
-            if (this.insideEntry) {
-                return
-            }
-            this.extra = extra
-            this.togglePanel()
-        },
-        editConditions(extra) {
-            this.extra = extra
-            this.toggleConditionsPanel()
-        },
-        massAssign(extra) {
-            this.extra = extra
-            this.toggleMassAssignPanel()
-        },
-        extraSaved() {
-            this.togglePanel()
-            this.getAllExtras()
-        },
-        extraConditionsSaved() {
-            this.toggleConditionsPanel()
-            this.getAllExtras()
-        },
-        extraEnabled(extra) {
-            if (this.insideEntry) {
-                return extra.enabled
-            } else {
-                if (extra.published == true) {
-                    return true;
-                }
-            }
-            return false
-        },
-        extraHasConditions(extra) {
-            return extra.conditions?.conditions.length > 0
-        },
-        priceLabel(code) {
-            if (code == 'perday') {
-                return '/ day'
-            } else if (code == 'fixed') {
-                return '/ reservation'
-            } else if (code == 'relative') {
-                return 'relative'
-            } else if (code == 'custom') {
-                return 'custom'
-            }
-        },
-        getAllExtras() {
-            this.$emit('reload-categories')
-        },
-        enableExtra(extraId) {
-            axios.post('/cp/resrv/extra/add/'+this.parent, {'id': extraId})
-            .then(response => {
-                this.$toast.success('Extra added to this entry')
-                this.toggleEntryExtraEditing()
-                this.getAllExtras()
+function togglePanel() {
+    showPanel.value = !showPanel.value;
+}
+
+function toggleConditionsPanel() {
+    showConditionsPanel.value = !showConditionsPanel.value;
+}
+
+function toggleMassAssignPanel() {
+    showMassAssignPanel.value = !showMassAssignPanel.value;
+}
+
+function associateEntryExtra(item) {
+    toggleEntryExtraEditing();
+    if (extraEnabled(item)) {
+        disableExtra(item.id);
+    } else {
+        enableExtra(item.id);
+    }
+}
+
+function toggleEntryExtraEditing() {
+    allowEntryExtraEdit.value = !allowEntryExtraEdit.value;
+}
+
+function addExtra() {
+    const newExtra = { ...emptyExtra };
+    if (props.categoryId) {
+        newExtra.category_id = props.categoryId;
+    }
+    extra.value = newExtra;
+    togglePanel();
+}
+
+function editExtra(item) {
+    if (props.insideEntry) {
+        return;
+    }
+    extra.value = item;
+    togglePanel();
+}
+
+function editConditions(item) {
+    extra.value = item;
+    toggleConditionsPanel();
+}
+
+function massAssign(item) {
+    extra.value = item;
+    toggleMassAssignPanel();
+}
+
+function extraSaved() {
+    togglePanel();
+    getAllExtras();
+}
+
+function extraConditionsSaved() {
+    toggleConditionsPanel();
+    getAllExtras();
+}
+
+function extraEnabled(item) {
+    if (props.insideEntry) {
+        return item.enabled;
+    }
+    return !!item.published;
+}
+
+function extraHasConditions(item) {
+    return item.conditions?.conditions.length > 0;
+}
+
+function priceLabel(code) {
+    if (code === 'perday') return '/ day';
+    if (code === 'fixed') return '/ reservation';
+    if (code === 'relative') return 'relative';
+    if (code === 'custom') return 'custom';
+    return '';
+}
+
+function getAllExtras() {
+    emit('reload-categories');
+}
+
+function enableExtra(extraId) {
+    axios.post('/cp/resrv/extra/add/' + props.parent, { id: extraId })
+        .then(() => {
+            toast.success('Extra added to this entry');
+            toggleEntryExtraEditing();
+            getAllExtras();
+        })
+        .catch(() => {
+            toast.error('Cannot add extra to entry');
+        });
+}
+
+function disableExtra(extraId) {
+    axios.post('/cp/resrv/extra/remove/' + props.parent, { id: extraId })
+        .then(() => {
+            toast.success('Extra removed from this entry');
+            toggleEntryExtraEditing();
+            getAllExtras();
+        })
+        .catch(() => {
+            toast.error('Cannot remove extra to entry');
+        });
+}
+
+function confirmDelete(item) {
+    deleteId.value = item.id;
+}
+
+function deleteExtra() {
+    axios.delete('/cp/resrv/extra', { data: { id: deleteId.value } })
+        .then(() => {
+            toast.success('Extra deleted');
+            deleteId.value = null;
+            getAllExtras();
+        })
+        .catch(() => {
+            toast.error('Cannot delete extra');
+        });
+}
+
+function handleChange(event) {
+    if (event.added) {
+        disableDrag.value = true;
+        const item = event.added.element;
+        axios.patch(`/cp/resrv/extra/move/${item.id}`, {
+            category_id: props.categoryId,
+            order: event.added.newIndex + 1,
+        })
+            .then(() => {
+                toast.success('Extra moved successfully');
             })
-            .catch(error => {
-                this.$toast.error('Cannot add extra to entry')
+            .catch(() => {
+                toast.error('Failed to move extra');
             })
-        },
-        disableExtra(extraId) {
-            axios.post('/cp/resrv/extra/remove/'+this.parent, {'id': extraId})
-            .then(response => {
-                this.$toast.success('Extra removed from this entry')
-                this.toggleEntryExtraEditing()
-                this.getAllExtras()
+            .finally(() => {
+                getAllExtras();
+                disableDrag.value = false;
+            });
+    } else if (event.moved) {
+        disableDrag.value = true;
+        const item = event.moved.element;
+        const newOrder = event.moved.newIndex + 1;
+        axios.patch(`/cp/resrv/extra/order/${item.id}`, { order: newOrder })
+            .then(() => {
+                toast.success('Extras order changed');
             })
-            .catch(error => {
-                this.$toast.error('Cannot remove extra to entry')
+            .catch(() => {
+                toast.error('Extras ordering failed');
             })
-        },
-        confirmDelete(extra) {
-            this.deleteId = extra.id
-        },
-        deleteExtra() {
-            axios.delete('/cp/resrv/extra', {data: {'id': this.deleteId}})
-                .then(response => {
-                    this.$toast.success('Extra deleted')
-                    this.deleteId = false
-                    this.getAllExtras()
-                })
-                .catch(error => {
-                    this.$toast.error('Cannot delete extra')
-                })
-        },
-        handleChange(event) {
-            if (event.added) {
-                // Handle moving between categories
-                this.disableDrag = true
-                let item = event.added.element
-                
-                axios.patch(`/cp/resrv/extra/move/${item.id}`, {
-                    category_id: this.categoryId,
-                    order: event.added.newIndex + 1
-                })
-                .then(() => {
-                    this.$toast.success('Extra moved successfully')
-                })
-                .catch(() => {
-                    this.$toast.error('Failed to move extra')
-                })
-                .finally(() => {
-                    this.getAllExtras()
-                    this.disableDrag = false
-                })
-            } else if (event.moved) {
-                // Handle reordering within same category
-                this.disableDrag = true
-                let item = event.moved.element;
-                let order = event.moved.newIndex + 1;
-                
-                axios.patch(`/cp/resrv/extra/order/${item.id}`, {
-                    order: order
-                })
-                .then(() => {
-                    this.$toast.success('Extras order changed')
-                })
-                .catch(() => {
-                    this.$toast.error('Extras ordering failed')
-                })
-                .finally(() => {
-                    this.getAllExtras()
-                    this.disableDrag = false
-                })
-            }
-        }        
+            .finally(() => {
+                getAllExtras();
+                disableDrag.value = false;
+            });
     }
 }
 </script>

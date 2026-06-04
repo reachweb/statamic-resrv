@@ -17,7 +17,9 @@ class UpdateCouponAppliedToReservation
 
         if ($event->remove === true) {
             $dynamicPricing = $event->reservation->dynamicPricings()->where('resrv_reservation_dynamic_pricing.data->coupon', $coupon->coupon)->first();
-            $event->reservation->dynamicPricings()->detach($dynamicPricing->id);
+            if ($dynamicPricing) {
+                $event->reservation->dynamicPricings()->detach($dynamicPricing->id);
+            }
 
             return;
         }

@@ -114,7 +114,7 @@ class ExtraCpCategoryController extends Controller
             'order' => 'required|integer',
         ]);
 
-        $category = $this->category->find($data['id'])->changeOrder($data['order']);
+        $category = $this->category->findOrFail($data['id'])->changeOrder($data['order']);
 
         return response(200);
     }

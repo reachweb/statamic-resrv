@@ -1,375 +1,236 @@
 <template>
-    <div>
-        <div class="mb-4">
+    <div class="@container">
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {{ __('Select when to show, hide or make this extra required. When adding multiple conditions for an operation, all of them have to apply.') }}
+        </p>
+        <div v-for="(condition, index) in conditionsForm" :key="condition._key" class="grid @2xl:grid-cols-[1fr_1fr_2fr_auto] gap-x-3 gap-y-6 items-end py-5 border-b border-gray-200 dark:border-gray-700/80 last:border-b-0">
+            <Field :label="__('Operation')" :error="errors['conditions.' + index + '.operation']?.[0]">
+                <Select v-model="conditionsForm[index].operation" :options="operationOptions" />
+            </Field>
+            <Field :label="__('Type')" :error="errors['conditions.' + index + '.type']?.[0]">
+                <Select
+                    v-model="conditionsForm[index].type"
+                    :options="typeOptions"
+                    @update:modelValue="clearValues(index)"
+                />
+            </Field>
+            <div>
+                <Field
+                    v-if="typeIsDate(index)"
+                    :label="__('Date range')"
+                    :error="rowDateError(index)"
+                >
+                    <DateRangePicker
+                        :model-value="rowDateRange(index)"
+                        granularity="day"
+                        @update:model-value="updateRowDateRange(index, $event)"
+                    />
+                </Field>
+                <div v-if="typeIsTime(index)" class="grid grid-cols-2 gap-x-4 gap-y-6">
+                    <Field :label="__('Time start')" :error="errors['conditions.' + index + '.time_start']?.[0]">
+                        <time-fieldtype v-model:value="conditionsForm[index].time_start" />
+                    </Field>
+                    <Field :label="__('Time end')" :error="errors['conditions.' + index + '.time_end']?.[0]">
+                        <time-fieldtype v-model:value="conditionsForm[index].time_end" />
+                    </Field>
+                </div>
+                <div v-if="typeIsValue(index)" class="grid grid-cols-2 gap-x-4 gap-y-6">
+                    <Field :label="__('Comparison')" :error="errors['conditions.' + index + '.comparison']?.[0]">
+                        <Select v-model="conditionsForm[index].comparison" :options="comparisonOptions" />
+                    </Field>
+                    <Field :label="__('Value')" :error="errors['conditions.' + index + '.value']?.[0]">
+                        <Input v-model="conditionsForm[index].value" />
+                    </Field>
+                </div>
+                <Field v-if="typeIsExtra(index)" :label="__('Extra')" :error="errors['conditions.' + index + '.value']?.[0]">
+                    <Select v-model="conditionsForm[index].value" :options="extrasWithoutCurrent" />
+                </Field>
+                <Field v-if="typeIsCategory(index)" :label="__('Category')" :error="errors['conditions.' + index + '.value']?.[0]">
+                    <Select v-model="conditionsForm[index].value" :options="categoryOptions" />
+                </Field>
+            </div>
+            <Button icon="trash" variant="ghost" :aria-label="__('Remove')" @click="remove(index)" />
         </div>
-        <div v-for="(condition, index) in conditionsForm" :key="index">
-            <div class="flex items-center py-4 my-2 border-b">
-                <div class="min-w-[240px]">
-                    <div class="mb-1 text-sm font-semibold">
-                        {{ __('Operation') }}
-                    </div>
-                    <div class="w-full">
-                        <v-select v-model="conditionsForm[index].operation" :options="operation" :reduce="operation => operation.value" />
-                    </div>
-                    <div v-if="errors['conditions.'+index+'.operation']" class="w-full mt-1 text-sm text-red-400">
-                        {{ errors['conditions.'+index+'.operation'][0] }}
-                    </div>  
-                </div>
-                <div class="min-w-[240px] ml-4">
-                    <div class="mb-1 text-sm font-semibold">
-                        {{ __('Type') }}
-                    </div>
-                    <div class="w-full">
-                        <v-select v-model="conditionsForm[index].type" :options="type" :reduce="type => type.value" @input="typeSelected(index)" />
-                    </div>
-                    <div v-if="errors['conditions.'+index+'.type']" class="w-full mt-1 text-sm text-red-400">
-                        {{ errors['conditions.'+index+'.type'][0] }}
-                    </div>  
-                </div>
-                <div class="ml-4" v-if="typeIsDate(index)">
-                    <div class="flex items-center">
-                        <div class="ml-2">
-                            <div class="mb-1 text-sm font-semibold">
-                                {{ __('Date start') }}
-                            </div>
-                            <div class="date-container input-group w-full">
-                                <v-date-picker
-                                    v-model="conditionsForm[index].date_start"
-                                    :popover="{ visibility: 'click' }"
-                                    :masks="{ input: 'YYYY-MM-DD' }"
-                                    :mode="'date'"
-                                    :columns="$screens({ default: 1, lg: 2 })"
-                                > 
-                                    <template v-slot="{ inputValue, inputEvents }">
-                                        <div class="input-group">
-                                            <div class="input-group-prepend flex items-center">
-                                                <svg-icon name="light/calendar" class="w-4 h-4" />
-                                            </div>
-                                            <div class="input-text border border-grey-50 border-l-0">
-                                                <input
-                                                    class="input-text-minimal p-0 bg-transparent leading-none"
-                                                    :value="inputValue"
-                                                    v-on="inputEvents"
-                                                />
-                                            </div>
-                                        </div>
-                                    </template>                 
-                                </v-date-picker>
-                            </div>
-                            <div v-if="errors['conditions.'+index+'.date_start']" class="w-full mt-1 text-sm text-red-400">
-                                {{ errors['conditions.'+index+'.date_start'][0] }}
-                            </div>  
-                        </div>
-                        <div class="ml-2">
-                            <div class="mb-1 text-sm font-semibold">
-                                {{ __('Date end') }}       
-                            </div>
-                            <div class="date-container input-group w-full">
-                                <v-date-picker
-                                    v-model="conditionsForm[index].date_end"
-                                    :popover="{ visibility: 'click' }"
-                                    :masks="{ input: 'YYYY-MM-DD' }"
-                                    :mode="'date'"
-                                    :columns="$screens({ default: 1, lg: 2 })"
-                                >
-                                    <template v-slot="{ inputValue, inputEvents }">
-                                        <div class="input-group">
-                                            <div class="input-group-prepend flex items-center">
-                                                <svg-icon name="light/calendar" class="w-4 h-4" />
-                                            </div>
-                                            <div class="input-text border border-grey-50 border-l-0">
-                                                <input
-                                                    class="input-text-minimal p-0 bg-transparent leading-none"
-                                                    :value="inputValue"
-                                                    v-on="inputEvents"
-                                                />
-                                            </div>
-                                        </div>
-                                    </template>
-                                </v-date-picker>
-                            </div>
-                            <div v-if="errors['conditions.'+index+'.date_end']" class="w-full mt-1 text-sm text-red-400">
-                                {{ errors['conditions.'+index+'.date_end'][0] }}
-                            </div>  
-                        </div>                    
-                    </div>
-                </div>
-                <div class="ml-4 mr-6" v-if="typeIsTime(index)">
-                    <div class="flex items-center">
-                        <div class="ml-2">
-                            <div class="mb-1 text-sm font-semibold">
-                                {{ __('Time start') }}
-                            </div>
-                            <div class="time-fieldtype">
-                                <time-fieldtype v-model="conditionsForm[index].time_start"></time-fieldtype>
-                            </div>
-                            <div v-if="errors['conditions.'+index+'.time_start']" class="w-full mt-1 text-sm text-red-400">
-                                {{ errors['conditions.'+index+'.time_start'][0] }}
-                            </div>  
-                        </div>
-                        <div class="ml-4">
-                            <div class="mb-1 text-sm font-semibold">
-                                {{ __('Time end') }}
-                            </div>
-                            <div class="time-fieldtype">
-                                <time-fieldtype v-model="conditionsForm[index].time_end"></time-fieldtype>
-                            </div>
-                            <div v-if="errors['conditions.'+index+'.time_end']" class="w-full mt-1 text-sm text-red-400">
-                                {{ errors['conditions.'+index+'.time_end'][0] }}
-                            </div>  
-                        </div>
-                    </div>                    
-                </div>
-                <div class="ml-4" v-if="typeIsValue(index)">
-                    <div class="flex items-center">
-                        <div class="ml-2 min-w-lg">
-                            <div class="mb-1 text-sm font-semibold">
-                                {{ __('Comparison') }}
-                            </div>
-                            <div class="w-full">
-                                <v-select class="min-w-40" v-model="conditionsForm[index].comparison" :options="comparison" :reduce="type => type.value" />
-                            </div>
-                            <div v-if="errors['conditions.'+index+'.comparison']" class="w-full mt-1 text-sm text-red-400">
-                                {{ errors['conditions.'+index+'.comparison'][0] }}
-                            </div>  
-                        </div>
-                        <div class="ml-4">
-                            <div class="mb-1 text-sm font-semibold">
-                                {{ __('Value') }}
-                            </div>
-                            <div class="w-full">
-                                <input class="input-text" type="text" v-model="conditionsForm[index].value">
-                            </div>
-                            <div v-if="errors['conditions.'+index+'.value']" class="w-full mt-1 text-sm text-red-400">
-                                {{ errors['conditions.'+index+'.value'][0] }}
-                            </div>  
-                        </div>
-                    </div>
-                </div>
-                <div class="ml-4" v-if="typeIsExtra(index)">
-                    <div class="flex items-center">
-                        <div class="ml-2 min-w-lg">
-                            <div class="mb-1 text-sm font-semibold">
-                                {{ __('Extra') }}
-                            </div>
-                            <div class="w-full">
-                                <v-select class="min-w-40" v-model="conditionsForm[index].value" :options="extrasWithoutCurrent" :reduce="type => type.value" />
-                            </div>
-                            <div v-if="errors['conditions.'+index+'.value']" class="w-full mt-1 text-sm text-red-400">
-                                {{ errors['conditions.'+index+'.value'][0] }}
-                            </div>  
-                        </div>                        
-                    </div>
-                </div>
-                <div class="ml-4" v-if="typeIsCategory(index)">
-                    <div class="flex items-center">
-                        <div class="ml-2 min-w-lg">
-                            <div class="mb-1 text-sm font-semibold">
-                                {{ __('Category') }}
-                            </div>
-                            <div class="w-full">
-                                <v-select class="min-w-40" v-model="conditionsForm[index].value" :options="categoryOptions" :reduce="type => type.value" />
-                            </div>
-                            <div v-if="errors['conditions.'+index+'.value']" class="w-full mt-1 text-sm text-red-400">
-                                {{ errors['conditions.'+index+'.value'][0] }}
-                            </div>  
-                        </div>                        
-                    </div>
-                </div>
-                <div class="ml-2 mt-4">
-                    <button class="btn-close group" @click="remove(index)">
-                        <svg viewBox="0 0 16 16" class="w-4 h-4 group-hover:text-red"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1 3h14M9.5 1h-3a1 1 0 0 0-1 1v1h5V2a1 1 0 0 0-1-1zm-3 10.5v-5m3 5v-5m3.077 7.583a1 1 0 0 1-.997.917H4.42a1 1 0 0 1-.996-.917L2.5 3h11l-.923 11.083z"></path></svg>
-                    </button>
-                </div>
-            </div>                
+        <div class="pt-4">
+            <Button :text="__('Add condition')" variant="default" icon="plus" @click="add" />
         </div>
-        <button 
-            class="btn-primary mt-4"
-            @click="add"
-        >
-            {{ __('Add condition') }}
-        </button>
     </div>
 </template>
 
-<script>
+<script setup>
+import { Button, DateRangePicker, Field, Input, Select } from '@statamic/cms/ui';
+import { computed, onMounted, ref, watch } from 'vue';
+import { normalizeInputOptions } from '../composables/useInputOptions.js';
+import { toCalendarDate, toIsoString } from '../composables/useDateRangeModel.js';
 
-import HasInputOptions from '../mixins/HasInputOptions.vue'
+const props = defineProps({
+    data: { type: [Array, Object], required: true },
+    extras: { type: [Array, Object], required: true },
+    errors: { type: Object, required: false, default: () => ({}) },
+});
 
-export default {
-    props: {
-        data: {
-            type: Array,
-            required: true,
-        },
-        extras: {
-            type: Object,
-            required: true,
-        },
-        errors: {
-            type: Object,
-            required: false
+const emit = defineEmits(['updated']);
+
+const conditionsForm = ref([]);
+
+// Stable client-only key so v-for row identity survives mid-list removals
+// (index keys would shift stateful child fieldtypes onto the wrong row).
+let nextKey = 0;
+
+const operationOptions = computed(() => normalizeInputOptions({
+    required: __('Required'),
+    show: __('Show when'),
+    hidden: __('Hide when'),
+}));
+
+const typeOptions = computed(() => normalizeInputOptions({
+    always: __('Always'),
+    pickup_time: __('Pickup time between'),
+    dropoff_time: __('Drop off time between'),
+    reservation_duration: __('Reservation duration'),
+    reservation_dates: __('Reservation dates included'),
+    extra_selected: __('Extra is selected'),
+    extra_not_selected: __('Extra is not selected'),
+    extra_in_category_selected: __('Extra in category is selected'),
+    no_extra_in_category_selected: __('No extra in category is selected'),
+}));
+
+const comparisonOptions = computed(() => normalizeInputOptions({
+    '==': __('Equal to'),
+    '!=': __('Not equal to'),
+    '>': __('Greater than'),
+    '<': __('Less than'),
+    '>=': __('Greater or equal to'),
+    '<=': __('Less or equal to'),
+}));
+
+const extrasWithoutCurrent = computed(() => {
+    const list = Array.isArray(props.extras) ? props.extras : Object.values(props.extras);
+    return list
+        .filter((extra) => extra.id !== props.data.id)
+        .map((extra) => ({ value: extra.id, label: extra.name }));
+});
+
+const categoryOptions = computed(() => {
+    const list = Array.isArray(props.extras) ? props.extras : Object.values(props.extras);
+    const seen = new Set();
+    const out = [];
+    for (const extra of list) {
+        if (extra.category_id === null || extra.category_id === undefined) {
+            continue;
         }
-    },
-
-    computed: {
-        operation() {
-            return this.normalizeInputOptions({
-                required: __('Required'),
-                show: __('Show when'),
-                hidden: __('Hide when'),
-            });
-        },
-        type() {
-            return this.normalizeInputOptions({
-                always: __('Always'),
-                pickup_time: __('Pickup time between'),
-                dropoff_time: __('Drop off time between'),
-                reservation_duration: __('Reservation duration'),
-                reservation_dates: __('Reservation dates included'),
-                extra_selected: __('Extra is selected'),
-                extra_not_selected: __('Extra is not selected'),
-                extra_in_category_selected: __('Extra in category is selected'),
-                no_extra_in_category_selected: __('No extra in category is selected'),
-            });
-        },
-        comparison() {
-            return this.normalizeInputOptions({
-                '==': __('Equal to'),
-                '!=': __('Not equal to'),
-                '>': __('Greater than'),
-                '<': __('Less than'),
-                '>=': __('Greater or equal to'),
-                '<=': __('Less or equal to'),
-            });
-        },
-        extrasWithoutCurrent() {
-            let extras = _.reject(this.extras, (extra) => extra.id == this.data.id)
-            return _.map(extras, (extra) => {
-                return {
-                    'value': extra.id, 
-                    'label': extra.name
-                }
-            })
-        },
-        categoryOptions() {
-            let categories = _.filter(this.extras, (extra) => extra.category_id !== null);
-            let groupedCategories = _.groupBy(categories, 'category_id');
-
-            return _.map(groupedCategories, (items) => {
-                let category = items[0].category;
-                return {
-                    'value': parseInt(category.id),
-                    'label': category ? category.name : 'Uncategorized'
-                }
-            });
+        if (seen.has(extra.category_id)) {
+            continue;
         }
-    },
-
-    data() {
-        return {
-            conditionsForm: [],
-            dates: []
-        }
-    },
-
-
-    mixins: [HasInputOptions],
-
-    watch: {
-        conditionsForm: {
-            deep: true,
-            handler(conditions) {
-                let readyConditions = this.handleDates(conditions)
-                this.$emit('updated', readyConditions)
-            }
-        }
-    },
-
-    mounted() {
-        if (this.data) {
-            this.conditionsForm = this.data
-        }
-    },
-
-    created() {
-        if (this.conditionsForm.length > 0) {
-            let readyConditions = this.handleDates(this.conditionsForm)
-            this.$emit('updated', readyConditions);
-        }
-    },
-
-    methods: {
-        add() {
-            this.conditionsForm.push({
-                operation: '',
-                type: '',
-                comparison: '',
-                value: '',
-                date_start: '',
-                date_end: '',
-                time_start: '',
-                time_end: ''
-            })
-        },
-        remove(index) {
-            this.conditionsForm.splice(index, 1);
-        },
-        typeSelected(index) {
-            this.clearValues(index)
-        },
-        typeIsDate(index) {
-            if (this.conditionsForm[index].type == 'reservation_dates') {
-                return true
-            }
-            return false
-        },
-        typeIsTime(index) {
-            if (this.conditionsForm[index].type == 'pickup_time' || this.conditionsForm[index].type == 'dropoff_time') {
-                return true
-            }
-            return false
-        },
-        typeIsValue(index) {
-            if (this.conditionsForm[index].type == 'reservation_duration') {
-                return true
-            }
-            return false
-        },
-        typeIsExtra(index) {
-            if (this.conditionsForm[index].type == 'extra_selected' || this.conditionsForm[index].type == 'extra_not_selected') {
-                return true
-            }
-            return false
-        },
-        typeIsCategory(index) {
-            if (this.conditionsForm[index].type == 'extra_in_category_selected' || this.conditionsForm[index].type == 'no_extra_in_category_selected') {
-                return true
-            }
-            return false
-        },
-        handleDates(conditions) {
-            _.forEach(conditions, function(condition) {
-                if (condition.type == 'reservation_dates') {
-                    if (condition.date_start) {
-                        condition.date_start = Vue.moment(condition.date_start).format('YYYY-MM-DD')
-                    }
-                    if (condition.date_end) {
-                        condition.date_end = Vue.moment(condition.date_end).format('YYYY-MM-DD')
-                    }
-                }
-            })
-            return conditions
-        },
-        clearValues(index) {
-            this.conditionsForm[index].value = ''
-            this.conditionsForm[index].comparison = ''
-            this.conditionsForm[index].date_start = ''
-            this.conditionsForm[index].date_end = ''
-            this.conditionsForm[index].time_start = ''
-            this.conditionsForm[index].time_end = ''
-        }
+        seen.add(extra.category_id);
+        out.push({
+            // Use the foreign key (guaranteed non-null above) rather than extra.category.id, which
+            // throws when the category relation is missing (not loaded / soft-deleted).
+            value: parseInt(extra.category_id, 10),
+            label: extra.category ? extra.category.name : 'Uncategorized',
+        });
     }
+    return out;
+});
+
+// Fires on every edit and once on mount: the onMounted reassignment below is a
+// tracked change, so the parent stays in sync without a separate mount-time emit.
+watch(conditionsForm, (conditions) => {
+    emit('updated', handleDates(conditions));
+}, { deep: true });
+
+onMounted(() => {
+    if (props.data) {
+        // Clone so add/remove/v-model edits don't mutate the parent extra's
+        // conditions array in place before the user saves (or when they cancel).
+        conditionsForm.value = Array.isArray(props.data) ? props.data.map((condition) => ({ ...condition, _key: nextKey++ })) : [];
+    }
+});
+
+function add() {
+    conditionsForm.value.push({
+        _key: nextKey++,
+        operation: '',
+        type: '',
+        comparison: '',
+        value: '',
+        date_start: '',
+        date_end: '',
+        time_start: '',
+        time_end: '',
+    });
+}
+
+function remove(index) {
+    conditionsForm.value.splice(index, 1);
+}
+
+function typeIsDate(index) {
+    return conditionsForm.value[index].type === 'reservation_dates';
+}
+
+function typeIsTime(index) {
+    const t = conditionsForm.value[index].type;
+    return t === 'pickup_time' || t === 'dropoff_time';
+}
+
+function typeIsValue(index) {
+    return conditionsForm.value[index].type === 'reservation_duration';
+}
+
+function typeIsExtra(index) {
+    const t = conditionsForm.value[index].type;
+    return t === 'extra_selected' || t === 'extra_not_selected';
+}
+
+function typeIsCategory(index) {
+    const t = conditionsForm.value[index].type;
+    return t === 'extra_in_category_selected' || t === 'no_extra_in_category_selected';
+}
+
+function handleDates(conditions) {
+    // Drop the client-only _key; the backend rejects unknown condition keys.
+    return conditions.map(({ _key, ...condition }) => {
+        if (condition.type === 'reservation_dates') {
+            return {
+                ...condition,
+                date_start: condition.date_start || '',
+                date_end: condition.date_end || '',
+            };
+        }
+        return condition;
+    });
+}
+
+function rowDateRange(index) {
+    const row = conditionsForm.value[index];
+    return {
+        start: toCalendarDate(row.date_start),
+        end: toCalendarDate(row.date_end),
+    };
+}
+
+function updateRowDateRange(index, value) {
+    const row = conditionsForm.value[index];
+    row.date_start = toIsoString(value?.start) ?? '';
+    row.date_end = toIsoString(value?.end) ?? '';
+}
+
+function rowDateError(index) {
+    return (
+        props.errors['conditions.' + index + '.date_start']?.[0] ||
+        props.errors['conditions.' + index + '.date_end']?.[0] ||
+        null
+    );
+}
+
+function clearValues(index) {
+    const row = conditionsForm.value[index];
+    row.value = '';
+    row.comparison = '';
+    row.date_start = '';
+    row.date_end = '';
+    row.time_start = '';
+    row.time_end = '';
 }
 </script>

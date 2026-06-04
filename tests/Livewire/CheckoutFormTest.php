@@ -103,6 +103,29 @@ class CheckoutFormTest extends TestCase
         ]);
     }
 
+    public function test_checkout_form_does_not_persist_unknown_injected_keys()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])
+            ->set('form', [
+                'first_name' => 'Jerry',
+                'last_name' => 'Seinfeld',
+                'email' => 'about@nothing.com',
+                'repeat_email' => 'about@nothing.com',
+                'phone' => '1234567890',
+                'injected_key' => '<script>alert(1)</script>',
+            ])
+            ->call('submit')
+            ->assertDispatchedTo(Checkout::class, 'checkout-form-submitted');
+
+        $customer = Customer::where('email', 'about@nothing.com')->firstOrFail();
+
+        $this->assertEquals('Jerry', $customer->data->get('first_name'));
+        $this->assertFalse($customer->data->has('injected_key'));
+    }
+
     public function test_submit_does_not_create_duplicate_customer_on_retry()
     {
         $reservation = Reservation::factory()->create([

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.1/phpunit.xsd" backupGlobals="false" bootstrap="vendor/autoload.php" colors="true" processIsolation="false" stopOnFailure="false" cacheDirectory=".phpunit.cache" backupStaticProperties="false">
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/13.1/phpunit.xsd" backupGlobals="false" bootstrap="vendor/autoload.php" colors="true" stopOnFailure="false" cacheDirectory=".phpunit.cache" backupStaticProperties="false">
   <testsuites>
     <testsuite name="Resrv">
       <directory suffix="Test.php">tests/Affiliate/</directory>
@@ -16,10 +16,20 @@
       <directory suffix="Test.php">tests/Utilities/</directory>
       <directory suffix="Test.php">tests/Unit/</directory>
       <directory suffix="Test.php">tests/Multisite/</directory>
+      <directory suffix="Test.php">tests/Rate/</directory>
       <directory suffix="Test.php">tests/Mail/</directory>
       <directory suffix="Test.php">tests/Payment/</directory>
+      <directory suffix="Test.php">tests/Listeners/</directory>
+      <directory suffix="Test.php">tests/Console/</directory>
+      <directory suffix="Test.php">tests/Jobs/</directory>
+      <directory suffix="Test.php">tests/Settings/</directory>
     </testsuite>
   </testsuites>
+  <source>
+    <include>
+      <directory>src</directory>
+    </include>
+  </source>
   <php>
     <env name="APP_ENV" value="testing"/>
     <env name="APP_KEY" value="base64:tIt56v64/nM+5fAClHWccPRxbhvdgeRsiYDHyqXh37Y="/>
@@ -30,6 +40,6 @@
     <env name="SESSION_DRIVER" value="array"/>
     <env name="QUEUE_DRIVER" value="sync"/>
     <env name="MAIL_MAILER" value="array"/>
-    <ini name="memory_limit" value="1024M"/>
+    <ini name="memory_limit" value="4096M"/>
   </php>
 </phpunit>

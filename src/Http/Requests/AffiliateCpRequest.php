@@ -32,7 +32,7 @@ class AffiliateCpRequest extends FormRequest
             'name' => ['required', 'string'],
             'code' => ['required', 'string', Rule::unique('resrv_affiliates')->ignore($affiliateId)],
             'email' => ['required', 'email', Rule::unique('resrv_affiliates')->ignore($affiliateId)],
-            'cookie_duration' => ['required', 'integer'],
+            'cookie_duration' => ['required', 'integer', 'min:1', 'max:3650'],
             'fee' => ['required', 'numeric', 'min:0', 'max:100'],
             'published' => ['boolean'],
             'allow_skipping_payment' => ['boolean'],

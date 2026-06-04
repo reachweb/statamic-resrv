@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Options;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
@@ -50,6 +51,52 @@ class CheckoutOptionsTest extends TestCase
 
         $this->assertEquals('Reservation option', $component->options->first()->name);
         $this->assertEquals('45.50', $component->options->first()->values->first()->price->format());
+    }
+
+    // selectOption is a public client-callable action; an unknown option or value id must be
+    // ignored rather than dereferencing null and throwing a 500.
+    public function test_select_option_ignores_unknown_option_id_without_erroring()
+    {
+        Livewire::test(Options::class, ['reservation' => $this->reservation])
+            ->call('selectOption', 99999, 88888)
+            ->assertHasNoErrors()
+            ->assertNotDispatched('options-updated');
+    }
+
+    public function test_select_option_ignores_unknown_value_id_without_erroring()
+    {
+        Livewire::test(Options::class, ['reservation' => $this->reservation])
+            ->call('selectOption', $this->options->id, 88888)
+            ->assertHasNoErrors()
+            ->assertNotDispatched('options-updated');
+    }
+
+    // The inverse of Option::values() must resolve back to the parent Option.
+    public function test_option_value_belongs_to_its_option()
+    {
+        $value = $this->options->values->first();
+
+        $this->assertInstanceOf(Option::class, $value->option);
+        $this->assertEquals($this->options->id, $value->option->id);
+    }
+
+    // An unknown price_type (legacy/tampered data) must fall back to the base price instead of
+    // returning null and fataling at the ->format() call in priceForDates().
+    public function test_calculate_price_falls_back_to_base_price_for_unknown_price_type()
+    {
+        $value = OptionValue::factory()->create([
+            'option_id' => $this->options->id,
+            'price' => '15',
+            'price_type' => 'bogus',
+        ]);
+
+        $data = [
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ];
+
+        $this->assertEquals('15.00', $value->priceForDates($data));
     }
 
     // Test that it loads options list in the view
@@ -142,5 +189,75 @@ class CheckoutOptionsTest extends TestCase
             'option_id' => $option->id,
             'value' => $option->values[0]->id,
         ]);
+    }
+
+    // A tampered payload that submits a required, paid option with a non-existent value id at a
+    // zero price must be rejected at step 1 — the invalid value cannot be priced as free and synced.
+    public function test_it_rejects_a_required_option_submitted_with_an_invalid_value()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // setUp's option is the only required option. Submitting its id satisfies the
+        // required-option check, but at a zero price with a value that does not belong to it —
+        // the bypass we are guarding against. Base price (100) == reservation price, so under the
+        // buggy zero-pricing the total would match and the option would sync free.
+        $option = $this->options->first();
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [$option->id => [
+                'id' => $option->id,
+                'value' => 99999, // value id that does not belong to this option
+                'price' => '0.00',
+                'optionName' => $option->name,
+                'valueName' => 'Tampered',
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasErrors('options')
+            ->assertSet('step', 1);
+
+        // The option must not have been synced at no charge.
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $option->id,
+        ]);
+    }
+
+    public function test_parent_option_prices_sum_per_child_dates()
+    {
+        // Default OptionValue factory: perday at 22.75/day
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $this->entries->first()->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+        ]);
+
+        // Child 1: 2 days, qty 1
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: 1 day, qty 1
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(4)->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $component = Livewire::test(Options::class, ['reservation' => $reservation]);
+
+        // Per-day option at 22.75/day:
+        // Child 1: 22.75 * 2 days * 1 qty = 45.50
+        // Child 2: 22.75 * 1 day  * 1 qty = 22.75
+        // Total: 68.25
+        // NOT: 22.75 * 5 days * 2 qty = 227.50 (parent collapsed dates + total qty)
+        $this->assertEquals('68.25', $component->options->first()->values->first()->price);
     }
 }

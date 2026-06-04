@@ -1,171 +1,164 @@
 <template>
     <div>
-    <div class="w-full h-full" v-if="dataLoaded">
-        <vue-draggable class="mt-4 space-y-2" v-model="options" @start="drag=true" @end="drag=false" @change="order">
-            <div
-                v-for="option in options"
-                :key="option.id"
-                class="w-full flex flex-wrap items-center justify-between p-3 shadow-sm rounded-md border transition-colors 
-                bg-gray-100 dark:border-dark-900 dark:bg-dark-550 dark:shadow-dark-sm"
+        <div v-if="dataLoaded">
+            <draggable
+                class="space-y-2"
+                v-model="options"
+                item-key="id"
+                :disabled="disableDrag"
+                @start="drag = true"
+                @end="drag = false"
+                @change="order"
             >
-                <div class="flex items-center space-x-2">
-                    <div class="little-dot" :class="option.published == true ? 'bg-green-600' : 'bg-gray-400'"></div>
-                    <span class="font-medium cursor-pointer" v-html="option.name" @click="edit(option)"></span>
-                </div>
-                <div class="flex space-x-2">
-                    <span 
-                        class="text-gray-700 dark:text-dark-100 text-sm uppercase" 
-                        v-html="option.required ? 'Required' : 'Optional'"
-                    ></span>
-                    <dropdown-list>
-                        <dropdown-item :text="__('Edit')" @click="edit(option)" />
-                        <dropdown-item :text="__('Delete')" @click="confirmDelete(option)" />         
-                    </dropdown-list>
-                </div>
-                <div class="w-full">
-                    <option-values-list
-                        :values="option.values"
-                        :parent="option.id"
-                        @saved="valueSaved"
-                    >
-                    </option-values-list>
-                </div>
-            </div>
-        </vue-draggable>
-    </div>
-    <div class="w-full mt-4">
-        <button class="btn-primary" @click="add" v-html="__('Add option')"></button>
-    </div>
-    <options-panel            
-        v-if="showPanel"
-        :data="option"
-        @closed="togglePanel"
-        @saved="dataSaved"
-    >
-    </options-panel>
-    <confirmation-modal
-        v-if="deleteId"
-        title="Delete option"
-        :danger="true"
-        @confirm="deleteOption"
-        @cancel="deleteId = false"
-    >
-        Are you sure you want to delete this option? <strong>This cannot be undone.</strong>
-    </confirmation-modal>
+                <template #item="{ element: option }">
+                    <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80">
+                        <div class="flex items-center gap-2">
+                            <StatusIndicator :status="option.published ? 'published' : 'draft'" />
+                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="option.name" @click="edit(option)"></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <Badge :text="option.required ? __('Required') : __('Optional')" size="sm" :variant="option.required ? 'warning' : 'default'" />
+                            <Dropdown>
+                                <DropdownMenu>
+                                    <DropdownItem :text="__('Edit')" icon="pencil" @click="edit(option)" />
+                                    <DropdownSeparator />
+                                    <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(option)" />
+                                </DropdownMenu>
+                            </Dropdown>
+                        </div>
+                        <div class="w-full mt-3">
+                            <OptionValuesList :values="option.values" :parent="option.id" @saved="valueSaved" />
+                        </div>
+                    </div>
+                </template>
+            </draggable>
+        </div>
+        <div class="mt-3">
+            <Button :text="__('Add option')" variant="primary" icon="plus" @click="add" />
+        </div>
+        <OptionsPanel v-if="showPanel" :data="option" @closed="togglePanel" @saved="dataSaved" />
+        <confirmation-modal
+            :open="deleteId !== null"
+            :title="__('Delete option')"
+            :danger="true"
+            @confirm="deleteOption"
+            @cancel="deleteId = null"
+        >
+            {{ __('Are you sure you want to delete this option?') }} <strong>{{ __('This cannot be undone.') }}</strong>
+        </confirmation-modal>
     </div>
 </template>
-<script>
-import axios from 'axios'
-import OptionsPanel from './OptionsPanel.vue'
-import OptionValuesList from './OptionValuesList.vue'
-import VueDraggable from 'vuedraggable'
 
-export default {
-    props: {
-        parent: {
-            type: String,
-            required: false
-        }
-    },
+<script setup>
+import { Badge, Button, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, StatusIndicator } from '@statamic/cms/ui';
+import draggable from 'vuedraggable';
+import { computed, onMounted, onUpdated, ref } from 'vue';
+import axios from 'axios';
+import OptionsPanel from './OptionsPanel.vue';
+import OptionValuesList from './OptionValuesList.vue';
+import { useToast } from '../composables/useToast.js';
 
-    data() {
-        return {
-            containerWidth: null,
-            showPanel: false,
-            options: '',
-            dataLoaded: false,
-            deleteId: false,
-            drag: false,
-            option: '',
-            emptyOption: {
-                name: '',
-                slug: '',
-                item_id: this.parent,
-                description: '',
-                required : 0,
-                published : 1
-            }
-        }
-    },
+const props = defineProps({
+    parent: { type: String, required: false },
+});
 
-    components: {
-        OptionsPanel,
-        OptionValuesList,
-        VueDraggable
-    },
+const emit = defineEmits(['input']);
+const toast = useToast();
 
-    computed: {
-        newItem() {
-            if (this.parent == 'Collection') {
-                return true
-            }
-            return false
-        }
-    },
+const showPanel = ref(false);
+const options = ref([]);
+const dataLoaded = ref(false);
+const deleteId = ref(null);
+const drag = ref(false);
+const disableDrag = ref(false);
+const option = ref({});
 
-    mounted() {
-        this.getOptions()        
-    },
+const emptyOption = {
+    name: '',
+    slug: '',
+    item_id: props.parent,
+    description: '',
+    required: false,
+    published: true,
+};
 
-    updated() {
-        if (! this.newItem) {
-            this.$emit('input', this.parent)
-        }
-    },
+const newItem = computed(() => props.parent === 'Collection');
 
-    methods: {
-        togglePanel() {
-            this.showPanel = !this.showPanel
-        },
-        add() {
-            this.option = this.emptyOption
-            this.togglePanel()
-        },
-        edit(option) {
-            this.option = option
-            this.togglePanel()
-        },
-        dataSaved() {
-            this.togglePanel()
-            this.getOptions()
-        },
-        valueSaved() {
-            this.getOptions()
-        },
-        getOptions() {
-            axios.get('/cp/resrv/option/'+this.parent)
-            .then(response => {
-                this.options = response.data
-                this.dataLoaded = true
-            })
-            .catch(error => {
-                this.$toast.error('Cannot retrieve options')
-            })
-        },
-        confirmDelete(extra) {
-            this.deleteId = extra.id
-        },
-        deleteOption() {
-            axios.delete('/cp/resrv/option', {data: {'id': this.deleteId}})
-                .then(response => {
-                    this.$toast.success('Option deleted')
-                    this.deleteId = false
-                    this.getOptions()
-                })
-                .catch(error => {
-                    this.$toast.error('Cannot delete option')
-                })
-        },
-        order(event){
-            let item = event.moved.element
-            let order = event.moved.newIndex + 1
-            axios.patch('/cp/resrv/option/order', {id: item.id, order: order})
-                .then(() => {
-                    this.$toast.success('Options order changed')
-                    this.getOptions()
-                })
-                .catch(() => {this.$toast.error('Options ordering failed')})
-        }        
+onMounted(() => getOptions());
+
+onUpdated(() => {
+    if (!newItem.value) {
+        emit('input', props.parent);
     }
+});
+
+function togglePanel() {
+    showPanel.value = !showPanel.value;
+}
+
+function add() {
+    option.value = { ...emptyOption };
+    togglePanel();
+}
+
+function edit(item) {
+    option.value = item;
+    togglePanel();
+}
+
+function dataSaved() {
+    togglePanel();
+    getOptions();
+}
+
+function valueSaved() {
+    getOptions();
+}
+
+function getOptions() {
+    axios.get('/cp/resrv/option/' + props.parent)
+        .then((response) => {
+            options.value = response.data;
+            dataLoaded.value = true;
+        })
+        .catch(() => {
+            toast.error('Cannot retrieve options');
+        });
+}
+
+function confirmDelete(item) {
+    deleteId.value = item.id;
+}
+
+function deleteOption() {
+    axios.delete('/cp/resrv/option', { data: { id: deleteId.value } })
+        .then(() => {
+            toast.success('Option deleted');
+            deleteId.value = null;
+            getOptions();
+        })
+        .catch(() => {
+            toast.error('Cannot delete option');
+        });
+}
+
+function order(event) {
+    if (!event.moved) {
+        return;
+    }
+    disableDrag.value = true;
+    const item = event.moved.element;
+    const newOrder = event.moved.newIndex + 1;
+    axios.patch('/cp/resrv/option/order', { id: item.id, order: newOrder })
+        .then(() => {
+            toast.success('Options order changed');
+        })
+        .catch(() => {
+            toast.error('Options ordering failed');
+        })
+        .finally(() => {
+            getOptions();
+            disableDrag.value = false;
+        });
 }
 </script>

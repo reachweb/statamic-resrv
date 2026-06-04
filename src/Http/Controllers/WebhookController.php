@@ -20,17 +20,26 @@ class WebhookController extends Controller
     {
         $payment = $this->resolveGateway($gateway);
 
-        $payment->verifyPayment($request);
+        return $payment->verifyPayment($request);
     }
 
     protected function resolveGateway(?string $gateway): PaymentInterface
     {
+        $manager = app(PaymentGatewayManager::class);
+
         if ($gateway) {
             try {
-                return app(PaymentGatewayManager::class)->gateway($gateway);
+                return $manager->gateway($gateway);
             } catch (\InvalidArgumentException $e) {
                 abort(404);
             }
+        }
+
+        // Multi-gateway deployments configure a per-gateway webhook URL (/resrv/api/webhook/{gateway});
+        // the bare URL can't be routed to a specific provider, so reject it rather than silently hand
+        // it to the default gateway (which would only fail signature verification anyway).
+        if ($manager->hasMultiple()) {
+            abort(404);
         }
 
         return app(PaymentInterface::class);

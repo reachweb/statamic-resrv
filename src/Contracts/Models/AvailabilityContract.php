@@ -2,19 +2,21 @@
 
 namespace Reach\StatamicResrv\Contracts\Models;
 
+use Reach\StatamicResrv\Enums\RateSorting;
+
 interface AvailabilityContract
 {
     public function getPriceAttribute($value);
 
-    public function getAvailable(array $data);
+    public function getAvailable(array $data, ?array $entries = null, RateSorting $rateSorting = RateSorting::Price);
 
-    public function getAvailabilityForEntry(array $data, string $statamic_id);
+    public function getAvailabilityForEntry(array $data, string $statamic_id, bool $expireReservations = true, RateSorting $rateSorting = RateSorting::Order);
 
     public function confirmAvailabilityAndPrice(array $data, string $statamic_id);
 
-    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced);
+    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null): void;
 
-    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?string $advanced);
+    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null): void;
 
-    public function deleteForDates(string $date_start, string $date_end, string $statamic_id, ?array $advanced);
+    public function deleteForDates(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): int;
 }

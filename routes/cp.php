@@ -2,10 +2,22 @@
 
 Route::namespace('\Reach\StatamicResrv\Http\Controllers')
     ->name('resrv.')
+    ->middleware('can:use resrv')
     ->group(function () {
-        Route::get('/resrv/availability/{statamic_id}/{property?}', 'AvailabilityCpController@index')->name('availability.index');
+        Route::get('/resrv/availability/{statamic_id}/{identifier?}', 'AvailabilityCpController@index')->name('availability.index');
         Route::post('/resrv/availability', 'AvailabilityCpController@update')->name('availability.update');
         Route::delete('/resrv/availability', 'AvailabilityCpController@delete')->name('availability.delete');
+        Route::post('/resrv/availability/clear-stuck-pending', 'AvailabilityCpController@clearStuckPending')->name('availability.clearStuckPending');
+
+        Route::get('/resrv/rates', 'RateCpController@indexCp')->name('rates.index');
+        Route::get('/resrv/rates/index', 'RateCpController@index')->name('rate.index');
+        Route::get('/resrv/rates/collections', 'RateCpController@collections')->name('rate.collections');
+        Route::get('/resrv/rates/entries/{collection}', 'RateCpController@entries')->name('rate.entries');
+        Route::get('/resrv/rates/for-entry/{statamic_id}', 'RateCpController@forEntry')->name('rate.forEntry');
+        Route::post('/resrv/rate', 'RateCpController@store')->name('rate.store');
+        Route::patch('/resrv/rate/order/{rate}', 'RateCpController@order')->name('rate.order');
+        Route::patch('/resrv/rate/{rate}', 'RateCpController@update')->name('rate.update');
+        Route::delete('/resrv/rate/{rate}', 'RateCpController@destroy')->name('rate.destroy');
 
         Route::get('/resrv/extras', 'ExtraCpController@indexCp')->name('extras.index');
         Route::get('/resrv/extra', 'ExtraCpController@index')->name('extra.index');
@@ -59,15 +71,13 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/reports', 'ReportsCpController@indexCp')->name('reports.index');
         Route::get('/resrv/reports/index', 'ReportsCpController@index')->name('report.index');
 
-        Route::middleware('can:use resrv')->group(function () {
-            Route::get('/resrv/export', 'ExportCpController@indexCp')->name('export.index');
-            Route::get('/resrv/export/count', 'ExportCpController@count')->name('export.count');
-            Route::get('/resrv/export/download', 'ExportCpController@download')->name('export.download');
-        });
+        Route::get('/resrv/export', 'ExportCpController@indexCp')->name('export.index');
+        Route::get('/resrv/export/count', 'ExportCpController@count')->name('export.count');
+        Route::get('/resrv/export/download', 'ExportCpController@download')->name('export.download');
 
         Route::get('/resrv/dataimport', 'DataImportCpController@index')->name('dataimport.index');
         Route::post('/resrv/dataimport', 'DataImportCpController@confirm')->name('dataimport.confirm');
-        Route::get('/resrv/dataimport/store', 'DataImportCpController@store')->name('dataimport.store');
+        Route::post('/resrv/dataimport/store', 'DataImportCpController@store')->name('dataimport.store');
 
         Route::get('/resrv/utility/entries', 'UtilityCpController@entries')->name('utilities.entries');
 

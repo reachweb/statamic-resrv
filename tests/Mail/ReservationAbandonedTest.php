@@ -237,6 +237,42 @@ class ReservationAbandonedTest extends TestCase
         Mail::assertSent(ReservationAbandoned::class, 1);
     }
 
+    public function test_command_does_not_resend_to_the_same_email_across_different_customers()
+    {
+        Config::set('resrv-config.enable_abandoned_emails', true);
+
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+
+        // Same person abandoning two checkouts gets a fresh customer row each time.
+        $email = 'repeat@test.com';
+        $customerA = Customer::factory()->create(['email' => $email]);
+        $customerB = Customer::factory()->create(['email' => $email]);
+
+        $reservations = collect([$customerA->id, $customerB->id])->map(fn ($customerId) => Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'expired',
+            'customer_id' => $customerId,
+            'updated_at' => Carbon::yesterday(),
+        ])->create());
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('1 abandoned reservation email(s)')
+            ->assertSuccessful();
+
+        // Both rows must be stamped so neither is re-picked on a later run.
+        $reservations->each(function ($reservation) {
+            $this->assertNotNull($reservation->fresh()->abandoned_email_sent_at);
+        });
+
+        $this->artisan('resrv:send-abandoned-emails')
+            ->expectsOutputToContain('No abandoned reservations found')
+            ->assertSuccessful();
+
+        Mail::assertSent(ReservationAbandoned::class, 1);
+    }
+
     public function test_command_picks_up_older_missed_reservations()
     {
         Config::set('resrv-config.enable_abandoned_emails', true);
