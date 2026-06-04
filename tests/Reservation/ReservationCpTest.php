@@ -7,7 +7,12 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
+use Mockery;
+use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
@@ -375,6 +380,129 @@ class ReservationCpTest extends TestCase
 
         $response->assertStatus(200)->assertSee($reservation->id);
         Mail::assertSent(ReservationRefunded::class);
+    }
+
+    public function test_can_refund_partner_reservation_that_skipped_payment()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'partner',
+            'payment_id' => '',
+        ])->withCustomer()->create();
+
+        $affiliate = Affiliate::factory()->create();
+        $reservation->affiliate()->attach($affiliate->id, ['fee' => $affiliate->fee]);
+
+        // No payment intent was ever created, so the gateway must not be touched at all.
+        $manager = Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldNotReceive('forReservation');
+        $manager->shouldNotReceive('gateway');
+        app()->instance(PaymentGatewayManager::class, $manager);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(200)->assertSee($reservation->id);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
+        Mail::assertSent(ReservationRefunded::class);
+    }
+
+    public function test_refunding_partner_reservation_with_payment_still_calls_gateway()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'partner',
+            'payment_id' => 'pi_test123',
+        ])->withCustomer()->create();
+
+        $affiliate = Affiliate::factory()->create();
+        $reservation->affiliate()->attach($affiliate->id, ['fee' => $affiliate->fee]);
+
+        // A payment intent exists, so the charge must still be refunded through the gateway.
+        $manager = Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldReceive('forReservation')
+            ->once()
+            ->with(Mockery::on(fn ($r) => $r->id === $reservation->id))
+            ->andReturn(new FakePaymentGateway);
+        app()->instance(PaymentGatewayManager::class, $manager);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(200)->assertSee($reservation->id);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
+        Mail::assertSent(ReservationRefunded::class);
+    }
+
+    public function test_can_refund_zero_payment_reservation_without_touching_gateway()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment' => 0,
+            'payment_id' => '',
+        ])->withCustomer()->create();
+
+        // Zero-payment checkouts never create a payment intent, so the gateway must not be touched.
+        $manager = Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldNotReceive('forReservation');
+        $manager->shouldNotReceive('gateway');
+        app()->instance(PaymentGatewayManager::class, $manager);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(200)->assertSee($reservation->id);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
+        Mail::assertSent(ReservationRefunded::class);
+    }
+
+    public function test_refunding_pending_reservation_with_cleared_payment_id_still_calls_gateway()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        // A PENDING reservation whose intent was cancelled (payment_id cleared) may still carry
+        // an orphaned charge on the gateway, so the refund must go through the gateway and
+        // surface its failure instead of silently flipping the status to refunded.
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'pending',
+            'payment_id' => '',
+        ])->withCustomer()->create();
+
+        $gateway = Mockery::mock(FakePaymentGateway::class)->makePartial();
+        $gateway->shouldReceive('refund')
+            ->once()
+            ->andThrow(new RefundFailedException('No such payment intent.'));
+
+        $manager = Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldReceive('forReservation')->once()->andReturn($gateway);
+        app()->instance(PaymentGatewayManager::class, $manager);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(400);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'pending',
+        ]);
+        Mail::assertNothingSent();
     }
 
     public function test_refund_on_already_refunded_reservation_short_circuits_before_gateway()
