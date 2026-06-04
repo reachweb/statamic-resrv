@@ -107,9 +107,6 @@ class TestCase extends AddonTestCase
         // Assume the pro edition within tests
         $app['config']->set('statamic.editions.pro', true);
 
-        // Enable legacy endpoints for testing
-        $app['config']->set('resrv-config.enable_legacy_endpoints', true);
-
         // Register Livewire update route before Statamic's catch-all route
         // This is needed for Livewire 4 which uses dynamic endpoint paths
         $this->registerLivewireUpdateRoute($app);

@@ -72,10 +72,7 @@ tabs:
               display: Logo
               type: text
               localizable: false
-              default: 'false'
-              validate:
-                - required
-              instructions: 'Type "false" to use business name or an absolute URL (including https://)'
+              instructions: 'Leave empty to use your business name, or enter an absolute URL (including https://).'
   engine_settings:
     display: Engine
     sections:

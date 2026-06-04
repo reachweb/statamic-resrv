@@ -2,85 +2,19 @@
 
 use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
 
+/**
+ * Developer configuration for Statamic Resrv.
+ *
+ * Only the keys below belong in this file. All user-facing settings (business
+ * information, reservation rules, currency, checkout, emails) are managed in the
+ * Control Panel under Resrv → Settings and stored in resources/addons/statamic-resrv.yaml.
+ * Defining a CP-managed key in this file has no effect once it has been saved in the CP —
+ * run `php please resrv:settings:migrate` to move legacy values into the CP settings.
+ */
 return [
 
     /**
-     * General information.
-     *
-     * Put your business information here. Those information will be used for the emails.
-     */
-    'name' => 'Resrv',
-    'address1' => 'Somestreet 8',
-    'zip_city' => '00000 City',
-    'country' => 'Greece',
-    'phone' => '+30 0000 000000',
-    'mail' => 'resrv@resrv.app',
-    'logo' => false,
-
-    /**
-     * Reservation settings.
-     * enable_time: the reservation will have an explicit pickup and drop-off time
-     * minimum_days_before: set this to the number of days allowed between booking date and pickup time (calendar days count not 24 hour difference)
-     * minimum_reservation_period_in_days: the minimum days for a reservation
-     * maximum_reservation_period_in_day: the maximum days for a reservation
-     * maximum_quantity: the maximum items a user can book in one reservation
-     * ignore_quantity_for_prices: use quantity for availability calculations but ignore it for pricing
-     * free_cancellation_period: the number of days a user can cancel a reservation without being charged
-     * full_payment_after_free_cancellation: If the reservation creation after is after free cancellation has passed, require the full amount
-     * calculate_days_using_time: if true every reservation will charge a day for drop off time after pick up
-     * decrease_availabilty_for_extra_time: if true, the extra day charged for usage over 24hr will behave as a normal reservation
-     * admin_email: list of emails to be notified after a reservation has been made.
-     */
-    'enable_time' => false,
-    'minimum_days_before' => 0,
-    'minimum_reservation_period_in_days' => 1,
-    'maximum_reservation_period_in_days' => 30,
-    'maximum_quantity' => 8,
-    'ignore_quantity_for_prices' => false,
-    'free_cancellation_period' => 0,
-    'full_payment_after_free_cancellation' => false,
-    'calculate_days_using_time' => false,
-    'decrease_availability_for_extra_time' => false,
-    'admin_email' => false,
-    'checkout_entry' => null,
-    'checkout_completed_entry' => null,
-
-    /**
-     * Currency.
-     *
-     * Define your currency
-     */
-    'currency_name' => 'Euro',
-    'currency_isoCode' => 'EUR', // Make sure to use ISO_4217 https://en.wikipedia.org/wiki/ISO_4217
-    'currency_symbol' => '€',
-    'currency_delimiter' => ',',
-
-    /**
-     * Checkout settings.
-     * checkout_forms_default: default checkout form handle used when no entry/collection mapping matches
-     * checkout_forms_collections: list of collection-specific checkout forms (rows: collection, form)
-     * checkout_forms_entries: list of entry-specific checkout forms (rows: entry, form)
-     * payment: full charges the whole amount, everything the amount plus extras and options and fixed charges a fixed deposit and percent charges a percentage
-     * fixed_amount: the amount to charge for a reservation
-     * percent_amount: the percentage of the reservation to charge as an amount
-     * minutes_to_hold: how much time the user has the complete the checkout until availability is reset.
-     */
-    'checkout_forms_default' => null,
-    'checkout_forms_collections' => [],
-    'checkout_forms_entries' => [],
-    // Optional nested alternative to the flat checkout_forms_* keys above.
-    'checkout_forms' => [
-        'default' => null,
-        'collections' => [],
-        'entries' => [],
-    ],
-    'payment' => 'full',
-    'fixed_amount' => 50,
-    'percent_amount' => 20,
-    'minutes_to_hold' => 10,
-
-    /**
-     * Payment methods.
+     * Payment gateway.
      *
      * If you want, you can swap our payment gateway with your own integration.
      */
@@ -122,28 +56,23 @@ return [
     'stripe_webhook_secret' => env('RESRV_STRIPE_WEBHOOK_SECRET', ''),
 
     /**
-     * Advanced features
-     * enable_affiliates: enable the ability to have affiliates that can book on behalf of a customer and / or get commision based on the reservations they make.
-     * enable_cutoff_rules: enable the ability to set cutoff times for bookings based on starting times and schedules.
-     */
-    'enable_affiliates' => true,
-    'enable_cutoff_rules' => false,
-
-    /**
-     * Abandoned reservation emails.
-     * enable_abandoned_emails: send recovery emails for expired reservations with customer data.
-     * abandoned_email_delay_days: days after expiration before sending (1 = next day).
-     */
-    'enable_abandoned_emails' => false,
-    'abandoned_email_delay_days' => 1,
-
-    /**
-     * Reservation email overrides.
+     * Checkout form overrides (optional developer alternative).
      *
-     * reservation_emails_global: optional event-level defaults across all forms.
-     * reservation_emails_forms: optional per-form event overrides.
-     * In the CP blueprint, recipient_sources + recipient_emails are stored and normalized
-     * to the same recipients structure used by legacy string tokens.
+     * The CP manages the flat checkout_forms_default / checkout_forms_collections /
+     * checkout_forms_entries settings. This nested structure takes precedence over
+     * them when set, for setups that need the mapping under version control.
+     */
+    'checkout_forms' => [
+        'default' => null,
+        'collections' => [],
+        'entries' => [],
+    ],
+
+    /**
+     * Reservation email overrides (optional developer alternative).
+     *
+     * The CP manages the flat reservation_emails_global / reservation_emails_forms
+     * settings. This nested structure takes precedence over them when set.
      *
      * Event keys:
      * - customer_confirmed
@@ -151,9 +80,6 @@ return [
      * - customer_refunded
      * - customer_abandoned
      */
-    'reservation_emails_global' => [],
-    'reservation_emails_forms' => [],
-    // Optional nested alternative to the flat reservation_emails_* keys above.
     'reservation_emails' => [
         'global' => [],
         'forms' => [],
