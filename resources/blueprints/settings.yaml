@@ -432,8 +432,10 @@ tabs:
                 -
                   handle: markdown
                   field:
-                    type: text
-                    display: 'Markdown view'
+                    type: resrv_email_template
+                    display: 'Email template'
+                    instructions: 'Leave empty to use the default template for this event.'
+                    clearable: true
           -
             handle: reservation_emails_forms
             field:
@@ -513,8 +515,10 @@ tabs:
                 -
                   handle: markdown
                   field:
-                    type: text
-                    display: 'Markdown view'
+                    type: resrv_email_template
+                    display: 'Email template'
+                    instructions: 'Leave empty to use the default template for this event.'
+                    clearable: true
       -
         display: 'Abandoned reservation emails'
         instructions: 'Send recovery emails to customers who started but did not complete a reservation.'
