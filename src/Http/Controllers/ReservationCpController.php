@@ -211,16 +211,27 @@ class ReservationCpController extends Controller
             return response()->json(['error' => 'Cannot refund a reservation in the '.$reservation->status.' state.'], 422);
         }
 
-        $manager = app(PaymentGatewayManager::class);
-        try {
-            $payment = $manager->forReservation($reservation);
-        } catch (\InvalidArgumentException $e) {
-            $payment = $manager->gateway();
-        }
-        try {
-            $payment->refund($reservation);
-        } catch (RefundFailedException $exception) {
-            return response()->json(['error' => $exception->getMessage()], 400);
+        // Partner (affiliate skip-payment) and zero-payment reservations never create a payment
+        // intent, so payment_id stays '' — there is no charge on the gateway to refund. Skip the
+        // gateway call entirely or Stripe rejects the empty payment_intent and blocks the refund.
+        // Anything else with an empty payment_id (e.g. a PENDING row whose cancelled intent may
+        // still carry an orphaned charge) keeps going through the gateway so the failure surfaces
+        // to the admin instead of silently marking captured money as refunded.
+        $gatewayHoldsNoCharge = ($reservation->payment_id === '' || $reservation->payment_id === null)
+            && ($currentStatus === ReservationStatus::PARTNER || $reservation->payment->isZero());
+
+        if (! $gatewayHoldsNoCharge) {
+            $manager = app(PaymentGatewayManager::class);
+            try {
+                $payment = $manager->forReservation($reservation);
+            } catch (\InvalidArgumentException $e) {
+                $payment = $manager->gateway();
+            }
+            try {
+                $payment->refund($reservation);
+            } catch (RefundFailedException $exception) {
+                return response()->json(['error' => $exception->getMessage()], 400);
+            }
         }
 
         try {
