@@ -78,10 +78,17 @@ class Availability extends Model implements AvailabilityContract
         return Price::create($value);
     }
 
-    public function getAvailable($data, $entries = null)
+    /**
+     * Defaults to RateSorting::Price to preserve the historical batched/browse behaviour
+     * (and direct callers that depend on the cheapest rate surfacing first). The Livewire
+     * AvailabilityCollection component opts into RateSorting::Order via resolveRateSorting()
+     * to match the single-entry getAvailabilityForEntry() default.
+     */
+    public function getAvailable($data, $entries = null, RateSorting $rateSorting = RateSorting::Price)
     {
         ExpireReservations::dispatchSync();
 
+        $this->rateSorting = $rateSorting;
         $this->initiateAvailability($data);
 
         return $this->getAvailabilityCollection($entries)->resolve();
@@ -351,7 +358,20 @@ class Availability extends Model implements AvailabilityContract
                     }
                 }
 
-                return $processed->sortBy(fn ($row) => (int) Price::create($row->get('price'))->raw());
+                $sorted = match ($this->rateSorting) {
+                    RateSorting::Price => $processed->sortBy(
+                        fn ($row) => (int) Price::create($row->get('price'))->raw()
+                    ),
+                    // Mirror OrderScope (orderBy('order')->orderBy(id)). $ratesMap holds both
+                    // base and shared rates keyed by id; a row whose rate is somehow absent
+                    // sinks to the end.
+                    RateSorting::Order => $processed->sortBy(fn ($row) => [
+                        (int) ($ratesMap->get($row->get('rate_id'))?->order ?? PHP_INT_MAX),
+                        (int) $row->get('rate_id'),
+                    ]),
+                };
+
+                return $sorted->values();
             })
             ->filter(fn ($items) => $items->isNotEmpty());
 

@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Livewire\AvailabilityCollection;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
@@ -57,6 +58,42 @@ class AvailabilityCollectionTest extends TestCase
         Config::set('resrv-config.checkout_entry', $entry->id());
 
         return $entry;
+    }
+
+    /**
+     * One entry with two surfacing rates whose Rate.order disagrees with price: a base rate
+     * (order 0, 200.00 over the 2-day search) and a cheaper relative shared rate (order 1,
+     * 180.00 = 2 * 90). The cheapest rate therefore has the HIGHER order, so order-based and
+     * price-based sorting produce different orderings.
+     *
+     * @return array{0: \Statamic\Entries\Entry, 1: Rate, 2: Rate}
+     */
+    protected function entryWithCheaperHigherOrderRate(): array
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+            'title' => 'Base',
+            'order' => 0,
+        ]);
+
+        $sharedRate = Rate::factory()->shared()->relative()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-rate',
+            'title' => 'Shared',
+            'base_rate_id' => $baseRate->id,
+            'order' => 1,
+            'published' => true,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+        ]);
+
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 4);
+
+        return [$entry, $baseRate, $sharedRate];
     }
 
     public function test_renders_successfully()
@@ -146,15 +183,34 @@ class AvailabilityCollectionTest extends TestCase
 
     public function test_shows_a_single_from_price_by_default()
     {
+        // rate-a (order 0, 100.00) is pricier than rate-b (order 1, 60.00). The default 'order'
+        // rate sorting surfaces the lowest-order rate as the "from" price — not the cheapest —
+        // so the collection agrees with the single-entry availability-results component.
         $entry = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');
-        $rateB = $this->createRateForEntry($entry, ['slug' => 'rate-b', 'title' => 'Rate B']);
+        $rateB = $this->createRateForEntry($entry, ['slug' => 'rate-b', 'title' => 'Rate B', 'order' => 1]);
         $this->createAvailabilityForEntry($entry, 30, 2, $rateB->id, 10);
 
         $component = $this->search(
             Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rates' => true])
         );
 
-        // Only the cheapest ("from") price is shown.
+        // Only one ("from") price shows, and it is the lowest-order rate's price.
+        $component->assertSee('100.00')->assertDontSee('60.00');
+        $this->assertEquals(1, substr_count($component->html(), 'Book now'));
+    }
+
+    public function test_from_price_reflects_price_sorting_when_requested()
+    {
+        // Same setup as the default test, but rate-sorting="price" makes the cheapest rate
+        // (rate-b, 60.00) the "from" price instead of the lowest-order one (rate-a, 100.00).
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');
+        $rateB = $this->createRateForEntry($entry, ['slug' => 'rate-b', 'title' => 'Rate B', 'order' => 1]);
+        $this->createAvailabilityForEntry($entry, 30, 2, $rateB->id, 10);
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rates' => true, 'rateSorting' => 'price'])
+        );
+
         $component->assertSee('60.00')->assertDontSee('100.00');
         $this->assertEquals(1, substr_count($component->html(), 'Book now'));
     }
@@ -228,6 +284,74 @@ class AvailabilityCollectionTest extends TestCase
         );
 
         $component->assertSeeInOrder(['60.00', '90.00', '100.00']);
+    }
+
+    public function test_can_set_the_rate_sorting_parameter()
+    {
+        Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rateSorting' => 'price'])
+            ->assertSet('rateSorting', 'price');
+    }
+
+    public function test_orders_each_entrys_rates_by_rate_order_by_default()
+    {
+        $this->entryWithCheaperHigherOrderRate();
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rates' => true, 'showRates' => true])
+        );
+
+        // order 0 (Base, 200.00) before order 1 (Shared, 180.00) — ordered by Rate.order, not price.
+        $component->assertSeeInOrder(['200.00', '180.00']);
+    }
+
+    public function test_orders_each_entrys_rates_by_price_when_requested()
+    {
+        $this->entryWithCheaperHigherOrderRate();
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rates' => true, 'showRates' => true, 'rateSorting' => 'price'])
+        );
+
+        // Cheapest first: Shared (180.00) before Base (200.00).
+        $component->assertSeeInOrder(['180.00', '200.00']);
+    }
+
+    public function test_unknown_rate_sorting_value_falls_back_to_order()
+    {
+        $this->entryWithCheaperHigherOrderRate();
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rates' => true, 'showRates' => true, 'rateSorting' => 'garbage'])
+        );
+
+        $component->assertSeeInOrder(['200.00', '180.00']);
+    }
+
+    public function test_get_available_orders_rates_by_order_or_price_per_entry()
+    {
+        [$entry, $baseRate, $sharedRate] = $this->entryWithCheaperHigherOrderRate();
+
+        $data = [
+            'date_start' => $this->date->toDateString(),
+            'date_end' => $this->date->copy()->add(2, 'day')->toDateString(),
+            'quantity' => 1,
+        ];
+
+        $ordered = app(Availability::class)->getAvailable($data, null, RateSorting::Order);
+        $orderedRates = $ordered['data'][$entry->id()];
+
+        // Both rates surface; the order-0 base rate leads under Order sorting.
+        $this->assertEqualsCanonicalizing(
+            [(string) $baseRate->id, (string) $sharedRate->id],
+            $orderedRates->pluck('rate_id')->map(fn ($id) => (string) $id)->unique()->values()->all()
+        );
+        $this->assertEquals($baseRate->id, $orderedRates->first()['rate_id']);
+
+        $priced = app(Availability::class)->getAvailable($data, null, RateSorting::Price);
+        $pricedRates = $priced['data'][$entry->id()];
+
+        // The cheaper (higher-order) shared rate leads under Price sorting.
+        $this->assertEquals($sharedRate->id, $pricedRates->first()['rate_id']);
     }
 
     public function test_paginates_the_results()

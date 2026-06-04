@@ -55,9 +55,13 @@ Passing both narrows to the given IDs **within** that collection:
     :rates="true"
     :show-rates="true"
     sort="price"
+    rate-sorting="price"
     :paginate="12"
 />
 ```
+
+`sort` orders the **entries**; `rate-sorting` orders the **rates within** each entry. They
+are independent — see the properties table below.
 
 ## Component properties
 
@@ -69,7 +73,8 @@ Passing both narrows to the given IDs **within** that collection:
 | `showRates` | bool | `false` | `true` lists every available rate (with its price) per entry; `false` shows a single cheapest "from" price. |
 | `showUnavailable` | bool | `false` | `false` hides sold-out entries; `true` renders them with a "No availability" note. |
 | `paginate` | int | `null` | Page size. Uses Livewire pagination; availability is still fetched in one query per page. |
-| `sort` | string | `'order'` | `'order'` (collection order), `'title'`, or `'price'` (cheapest first). |
+| `sort` | string | `'order'` | Orders the **entries**: `'order'` (collection order), `'title'`, or `'price'` (cheapest first). |
+| `rateSorting` | string | `'order'` | Orders the **rates within** each entry: `'order'` (each rate's configured `Rate.order`, matching `availability-results`) or `'price'` (cheapest first). Distinct from `sort`. |
 | `overrideRates` | array | `[]` | Override the `rate_id => label` map instead of resolving from the rates. |
 | `view` | string | `availability-collection` | Use a fully custom Blade view. |
 
@@ -119,6 +124,13 @@ Livewire-Filters integration, so templates can be shared.
   query only runs for the current page.
 - **`sort="price"`** sorts within the resolved set. With `paginate`, that means within the
   current page (entries are paged by collection order/title before availability is known).
+- **`rateSorting` defaults to `order`** so a collection listing shows each entry's rates in
+  the same sequence as that entry's `availability-results` detail page. Pass
+  `rate-sorting="price"` for the previous cheapest-first rate ordering. (This is a behaviour
+  change: the listing previously always sorted rates by price.)
+- **`sort="price"` with `rate-sorting="order"`** orders entries by each entry's *order-first*
+  ("from") price rather than its cheapest price, because the "from" price is the first rate
+  under the chosen rate ordering — the same coupling `availability-results` already has.
 - **Multisite**: availability is stored against origin entry IDs. The component resolves
   localized entries to their origin automatically; pass either localized or origin IDs in
   `entries`.
