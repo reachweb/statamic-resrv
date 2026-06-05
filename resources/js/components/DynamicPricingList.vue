@@ -81,7 +81,7 @@
                             <div class="flex items-center gap-2">
                                 <StatusIndicator :status="dynamic.published ? 'published' : 'draft'" />
                                 <span class="text-xs font-mono px-2 py-0.5 rounded-md bg-gray-150 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :title="__('Order')">#{{ dynamic.order }}</span>
-                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="dynamic.title" @click="editPricing(dynamic)"></span>
+                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="dynamic.title" @click="editPricing(dynamic)"></span>
                                 <Badge v-if="dynamic.overrides_all" :text="__('OVERRIDING')" variant="warning" size="sm" />
                             </div>
                             <div>
@@ -317,12 +317,12 @@ function confirmDelete(item) {
 function deleteDynamic() {
     axios.delete('/cp/resrv/dynamicpricing', { data: { id: deleteId.value } })
         .then(() => {
-            toast.success('Dynamic pricing deleted');
+            toast.success(__('Dynamic pricing deleted'));
             deleteId.value = null;
             applyFilters();
         })
         .catch(() => {
-            toast.error('Cannot delete dynamic pricing');
+            toast.error(__('Cannot delete dynamic pricing'));
         });
 }
 
@@ -345,11 +345,11 @@ function onDragChange(event) {
 function patchOrder(id, order) {
     axios.patch('/cp/resrv/dynamicpricing/order', { id, order })
         .then(() => {
-            toast.success('Dynamic pricing order changed');
+            toast.success(__('Dynamic pricing order changed'));
             applyFilters();
         })
         .catch(() => {
-            toast.error('Dynamic pricing ordering failed');
+            toast.error(__('Dynamic pricing ordering failed'));
         });
 }
 

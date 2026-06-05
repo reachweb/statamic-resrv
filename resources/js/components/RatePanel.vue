@@ -258,6 +258,7 @@ watch(() => props.data, hydrateForm, { deep: true });
 
 watch(() => form.collection, (newVal) => {
     if (newVal) {
+        entriesLoaded.value = false;
         getCollectionEntries(newVal);
     }
 });
@@ -329,7 +330,7 @@ function getCollectionEntries(collection) {
             entriesLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve entries');
+            toast.error(__('Cannot retrieve entries'));
         });
 }
 

@@ -25,6 +25,9 @@ class SetResrvAffiliateCookie
         $afid = $request->get('afid');
 
         if ($affiliate = Affiliate::published()->where('code', $afid)->first()) {
+            // Flags are deliberately omitted: CookieJar applies httpOnly=true and the host app's
+            // session config (secure/same_site/path/domain) — hardcoding them here would override
+            // site-level policy (e.g. same_site=none for iframe-embedded booking flows).
             return $next($request)->cookie('resrv_afid', $afid, $affiliate->cookie_duration * 24 * 60);
         }
 

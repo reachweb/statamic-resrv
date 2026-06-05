@@ -133,6 +133,7 @@ const selectedFields = ref(loadSelectedFields());
 const count = ref(0);
 const countLoading = ref(false);
 const countError = ref(false);
+const downloading = ref(false);
 let countDebounce = null;
 
 const fieldsByGroup = computed(() =>
@@ -144,7 +145,10 @@ const fieldsByGroup = computed(() =>
 
 const canDownload = computed(() =>
     !countLoading.value
+    && !downloading.value
     && count.value > 0
+    && dateStart.value !== ''
+    && dateEnd.value !== ''
     && selectedFields.value.length > 0
     && selectedStatuses.value.length > 0,
 );
@@ -184,7 +188,7 @@ function scheduleCount() {
 }
 
 function fetchCount() {
-    if (selectedStatuses.value.length === 0) {
+    if (selectedStatuses.value.length === 0 || !dateStart.value || !dateEnd.value) {
         count.value = 0;
         countLoading.value = false;
         countError.value = false;
@@ -192,7 +196,7 @@ function fetchCount() {
     }
     countLoading.value = true;
     countError.value = false;
-    axios.get(props.countUrl + '?' + buildParams().toString())
+    axios.get(props.countUrl, { params: buildBody() })
         .then((response) => {
             count.value = response.data.count;
             countLoading.value = false;
@@ -200,26 +204,37 @@ function fetchCount() {
         .catch(() => {
             countLoading.value = false;
             countError.value = true;
-            toast.error('Cannot retrieve reservation count');
+            toast.error(__('Cannot retrieve reservation count'));
         });
 }
 
 function download() {
     if (!canDownload.value) return;
-    const params = buildParams();
-    selectedFields.value.forEach((f) => params.append('fields[]', f));
-    window.location = props.downloadUrl + '?' + params.toString();
+    downloading.value = true;
+    axios.post(props.downloadUrl, { ...buildBody(), fields: selectedFields.value }, { responseType: 'blob' })
+        .then((response) => {
+            const filename = response.headers['content-disposition']?.match(/filename="?([^";]+)"?/)?.[1];
+            const url = URL.createObjectURL(response.data);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename ?? 'reservations.csv';
+            link.click();
+            URL.revokeObjectURL(url);
+        })
+        .catch(() => toast.error(__('Could not download the export')))
+        .finally(() => (downloading.value = false));
 }
 
-function buildParams() {
-    const params = new URLSearchParams();
-    params.append('start', dateStart.value);
-    params.append('end', dateEnd.value);
-    selectedStatuses.value.forEach((s) => params.append('statuses[]', s));
-    if (selectedEntry.value) params.append('item_id', selectedEntry.value);
-    if (selectedAffiliate.value) params.append('affiliate_id', selectedAffiliate.value);
-    if (withCustomerData.value) params.append('with_customer_data', '1');
-    return params;
+function buildBody() {
+    const body = {
+        start: dateStart.value,
+        end: dateEnd.value,
+        statuses: selectedStatuses.value,
+    };
+    if (selectedEntry.value) body.item_id = selectedEntry.value;
+    if (selectedAffiliate.value) body.affiliate_id = selectedAffiliate.value;
+    if (withCustomerData.value) body.with_customer_data = 1;
+    return body;
 }
 
 function allGroupSelected(groupName) {

@@ -103,4 +103,34 @@ class DataImportTest extends TestCase
 
         $this->assertTrue($errors->isEmpty());
     }
+
+    // Availability is paired to its price column by the date range in the headers, not by
+    // position. The old next-column read let any column between the pair (here rate_id, a
+    // numeric value that passes the job's validation) silently corrupt availability.
+    public function test_prepare_pairs_availability_to_price_by_date_range_not_position()
+    {
+        $path = $this->csvPath(
+            "id,price:2026-01-01|2026-01-10,rate_id,availability:2026-01-01|2026-01-10\n".
+            "entry-1,100,10,5\n"
+        );
+
+        $prepared = (new DataImport($path, ',', 'pages', 'id'))->prepare();
+
+        $row = $prepared->get('entry-1')->first();
+        $this->assertEquals('5', $row['available']);
+        $this->assertEquals('100', $row['price']);
+        $this->assertEquals('10', $row['rate_id']);
+    }
+
+    public function test_check_for_errors_rejects_a_price_header_without_a_matching_availability_header()
+    {
+        $path = $this->csvPath(
+            "id,price:2026-01-01|2026-01-10,availability:2026-02-01|2026-02-10\n".
+            "entry-1,100,5\n"
+        );
+
+        $errors = (new DataImport($path, ',', 'pages', 'id'))->checkForErrors();
+
+        $this->assertTrue($errors->isNotEmpty());
+    }
 }

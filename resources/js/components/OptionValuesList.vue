@@ -13,10 +13,10 @@
                     <div class="w-full flex items-center text-sm justify-between px-3 py-2 border-t border-gray-200 dark:border-gray-700/80">
                         <div class="flex items-center gap-2">
                             <StatusIndicator :status="value.published ? 'published' : 'draft'" />
-                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="value.name" @click="edit(value)"></span>
+                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="value.name" @click="edit(value)"></span>
                             <span v-if="value.price_type !== 'free'" class="text-gray-700 dark:text-gray-400">
                                 {{ value.price }}
-                                <span class="text-xs text-gray-500" v-html="priceLabel(value.price_type)"></span>
+                                <span class="text-xs text-gray-500" v-text="priceLabel(value.price_type)"></span>
                             </span>
                             <Badge v-else :text="__('Free')" size="sm" variant="success" />
                         </div>
@@ -134,12 +134,12 @@ function confirmDelete(item) {
 function deleteValue() {
     axios.delete('/cp/resrv/option/value', { data: { id: deleteId.value } })
         .then(() => {
-            toast.success('Option deleted');
+            toast.success(__('Option deleted'));
             deleteId.value = null;
             emit('saved');
         })
         .catch(() => {
-            toast.error('Cannot delete option');
+            toast.error(__('Cannot delete option'));
         });
 }
 
@@ -152,10 +152,10 @@ function order(event) {
     const newOrder = event.moved.newIndex + 1;
     axios.patch('/cp/resrv/option/value/order', { id: item.id, order: newOrder })
         .then(() => {
-            toast.success('Options order changed');
+            toast.success(__('Options order changed'));
         })
         .catch(() => {
-            toast.error('Options ordering failed');
+            toast.error(__('Options ordering failed'));
         })
         .finally(() => {
             emit('saved');

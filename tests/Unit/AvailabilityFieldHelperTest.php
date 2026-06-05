@@ -46,6 +46,16 @@ class AvailabilityFieldHelperTest extends TestCase
         $this->assertContains('pages', $handles);
     }
 
+    public function test_handles_fields_without_a_type_key_in_their_config()
+    {
+        $blueprint = $this->makeBlueprint('pages_with_untyped_field', [
+            ['handle' => 'untyped', 'field' => ['display' => 'Untyped']],
+            ['handle' => 'resrv_availability', 'field' => ['type' => 'resrv_availability']],
+        ]);
+
+        $this->assertTrue(AvailabilityField::blueprintHasAvailabilityField($blueprint));
+    }
+
     private function makeBlueprint(string $handle, array $fields): BlueprintInstance
     {
         return tap(

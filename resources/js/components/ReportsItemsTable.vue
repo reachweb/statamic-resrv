@@ -25,8 +25,8 @@
                     </td>
                 </tr>
                 <tr
-                    v-for="(item, index) in sortedItems"
-                    :key="index"
+                    v-for="item in sortedItems"
+                    :key="item.id"
                     class="border-b last:border-b-0 border-gray-200 dark:border-gray-700/80"
                 >
                     <td

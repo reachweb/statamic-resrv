@@ -13,7 +13,7 @@ export function useFormHandler({ submit, postUrl, method = 'post', successMessag
 
     function handleSuccess() {
         disableSave.value = false;
-        toast.success(unref(successMessage));
+        toast.success(__(unref(successMessage)));
         emit?.('saved');
     }
 
@@ -26,9 +26,11 @@ export function useFormHandler({ submit, postUrl, method = 'post', successMessag
         }
 
         errors.value = {};
-        toast.error(response?.data?.message || 'Something went wrong. Please try again.');
+        toast.error(response?.data?.message || __('Something went wrong. Please try again.'));
     }
 
+    // Success side effects flow through the 'saved' emit; the returned
+    // promise never rejects but resolves true/false so callers can branch.
     function save() {
         disableSave.value = true;
         clearErrors();
@@ -38,8 +40,14 @@ export function useFormHandler({ submit, postUrl, method = 'post', successMessag
             url: unref(postUrl),
             data: unref(submit),
         })
-            .then((response) => handleSuccess(response.data))
-            .catch((error) => handleErrors(error.response));
+            .then(() => {
+                handleSuccess();
+                return true;
+            })
+            .catch((error) => {
+                handleErrors(error.response);
+                return false;
+            });
     }
 
     return { disableSave, errors, save, handleSuccess, handleErrors, clearErrors };

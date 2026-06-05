@@ -52,7 +52,7 @@
                                     </svg>
                                 </button>
                                 <StatusIndicator :status="parent.published ? 'published' : 'draft'" />
-                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="parent.title" @click="edit(parent)"></span>
+                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="parent.title" @click="edit(parent)"></span>
                                 <Badge v-if="parent.apply_to_all" :text="__('All entries')" size="sm" />
                             </div>
                             <div class="flex items-center gap-2">
@@ -104,7 +104,7 @@
                                                 </svg>
                                             </button>
                                             <StatusIndicator :status="child.published ? 'published' : 'draft'" />
-                                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="child.title" @click="edit(child)"></span>
+                                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="child.title" @click="edit(child)"></span>
                                             <Badge v-if="child.apply_to_all" :text="__('All entries')" size="sm" />
                                         </div>
                                         <div class="flex items-center gap-2">
@@ -255,7 +255,7 @@ function confirmDelete(item) {
 function deleteRate() {
     axios.delete('/cp/resrv/rate/' + deleteId.value)
         .then(() => {
-            toast.success('Rate deleted');
+            toast.success(__('Rate deleted'));
             deleteId.value = null;
             refreshRates();
         })
@@ -263,7 +263,7 @@ function deleteRate() {
             if (error.response && error.response.status === 422) {
                 toast.error(error.response.data.message);
             } else {
-                toast.error('Cannot delete rate');
+                toast.error(__('Cannot delete rate'));
             }
             deleteId.value = null;
         });
@@ -278,10 +278,10 @@ function reorderRate(event) {
     const newOrder = event.moved.newIndex + 1;
     axios.patch(`/cp/resrv/rate/order/${item.id}`, { order: newOrder })
         .then(() => {
-            toast.success('Rates order changed');
+            toast.success(__('Rates order changed'));
         })
         .catch(() => {
-            toast.error('Rates ordering failed');
+            toast.error(__('Rates ordering failed'));
         })
         .finally(() => {
             refreshRates();

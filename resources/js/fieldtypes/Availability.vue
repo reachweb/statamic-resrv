@@ -4,12 +4,12 @@
         <div class="statamic-resrv-availability relative" v-else>
             <div class="flex items-center justify-between pb-4">
                 <Label :text="__('Enable reservations')" />
-                <Switch v-model="reservationsEnabled" @update:modelValue="changeAvailability" />
+                <Switch v-model="reservationsEnabled" :disabled="isReadOnly" @update:modelValue="changeAvailability" />
             </div>
             <Field v-if="hasRates" :label="__('Rate')" class="mb-3">
                 <Select :placeholder="__('Select rate')" v-model="rateId" :options="rateOptions" />
             </Field>
-            <div class="w-full h-full relative">
+            <div class="w-full h-full relative" :inert="isReadOnly">
                 <Loader v-if="!availabilityLoaded && !hasRates && ratesLoaded" />
                 <div class="flex justify-end my-3" v-if="!hasRates || rateId">
                     <Button size="sm" variant="default" :text="__('Bulk edit')" icon="pencil" @click="showModal = 'massavailability'" />
@@ -43,7 +43,7 @@ import { Alert, Button, Field, Label, Select, Switch } from '@statamic/cms/ui';
 import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { computed, onMounted, onUpdated, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import AvailabilityModal from '../components/AvailabilityModal.vue';
@@ -53,7 +53,7 @@ import { useToast } from '../composables/useToast.js';
 
 const emit = defineEmits(Fieldtype.emits);
 const props = defineProps(Fieldtype.props);
-const { update, expose } = Fieldtype.use(emit, props);
+const { update, expose, isReadOnly } = Fieldtype.use(emit, props);
 const toast = useToast();
 
 const enabled = ref(props.value || 'disabled');
@@ -163,12 +163,6 @@ onMounted(() => {
     }
 });
 
-onUpdated(() => {
-    if (!newItem.value) {
-        update(enabled.value);
-    }
-});
-
 watch(rateId, () => {
     if (rateId.value !== null) {
         getAvailability();
@@ -184,16 +178,11 @@ function toggleModal(modal) {
     }
 }
 
-function toggleAvailability() {
-    availabilityLoaded.value = !availabilityLoaded.value;
-}
-
 function renderAgain() {
     window.dispatchEvent(new Event('resize'));
 }
 
 function availabilitySaved() {
-    toggleAvailability();
     toggleModal();
     getAvailability();
     renderAgain();
@@ -223,23 +212,18 @@ function getAvailability() {
     if (rateId.value) {
         url += '/' + rateId.value;
     }
+    availabilityLoaded.value = false;
     axios.get(url)
         .then((response) => {
             availability.value = response.data.data ?? {};
             maxAvailable.value = response.data.max_available ?? 0;
             calendar.render();
-            toggleAvailability();
+            availabilityLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve availability');
+            availabilityLoaded.value = true;
+            toast.error(__('Cannot retrieve availability'));
         });
-}
-
-function clearAvailability() {
-    availability.value = '';
-    maxAvailable.value = 0;
-    calendar.render();
-    toggleAvailability();
 }
 
 function changeAvailability(newValue) {

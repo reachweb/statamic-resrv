@@ -122,7 +122,7 @@ function getCoupons() {
             couponsLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve the coupons');
+            toast.error(__('Cannot retrieve the coupons'));
         });
 }
 

@@ -165,11 +165,11 @@ class ExportCpTest extends TestCase
         $start = today()->toDateString();
         $end = today()->addWeek()->toDateString();
 
-        $response = $this->get(
-            cp_route('resrv.export.download').
-            "?start={$start}&end={$end}".
-            '&fields[]=reference&fields[]=status&fields[]=entry_title&fields[]=customer_email'
-        );
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'fields' => ['reference', 'status', 'entry_title', 'customer_email'],
+        ]);
 
         $response->assertStatus(200);
         $response->assertHeader('Content-Type', 'text/csv; charset=UTF-8');
@@ -204,10 +204,11 @@ class ExportCpTest extends TestCase
         $start = today()->toDateString();
         $end = today()->addWeek()->toDateString();
 
-        $response = $this->get(
-            cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=extras&fields[]=options"
-        );
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'fields' => ['extras', 'options'],
+        ]);
 
         $response->assertStatus(200);
         $csv = $response->streamedContent();
@@ -223,10 +224,11 @@ class ExportCpTest extends TestCase
         $start = today()->toDateString();
         $end = today()->addWeek()->toDateString();
 
-        $this->getJson(
-            cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=password"
-        )
+        $this->postJson(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'fields' => ['password'],
+        ])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['fields.0']);
     }
@@ -238,9 +240,22 @@ class ExportCpTest extends TestCase
         $start = today()->toDateString();
         $end = today()->addWeek()->toDateString();
 
-        $this->getJson(cp_route('resrv.export.download')."?start={$start}&end={$end}")
+        $this->postJson(cp_route('resrv.export.download'), ['start' => $start, 'end' => $end])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['fields']);
+    }
+
+    /**
+     * The download route is POST-only so field selections travel in the body
+     * instead of a length-limited GET URL. Statamic's CP catch-all turns the
+     * unmatched GET into a 404 rather than a 405.
+     */
+    public function test_download_rejects_get_requests()
+    {
+        $this->withExceptionHandling();
+
+        $this->get(cp_route('resrv.export.download').'?start=2026-01-01&end=2026-01-31&fields[]=reference')
+            ->assertStatus(404);
     }
 
     public function test_count_validates_date_range()
@@ -290,10 +305,11 @@ class ExportCpTest extends TestCase
         $start = today()->toDateString();
         $end = today()->addWeek()->toDateString();
 
-        $response = $this->get(
-            cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=reference&fields[]=customer_tax_id"
-        );
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'fields' => ['reference', 'customer_tax_id'],
+        ]);
 
         $response->assertStatus(200);
         $csv = $response->streamedContent();
@@ -324,10 +340,11 @@ class ExportCpTest extends TestCase
         $start = today()->toDateString();
         $end = today()->addWeek()->toDateString();
 
-        $response = $this->get(
-            cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=customer_first_name"
-        );
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'fields' => ['customer_first_name'],
+        ]);
 
         $response->assertStatus(200);
         $csv = $response->streamedContent();
@@ -356,10 +373,11 @@ class ExportCpTest extends TestCase
         $start = today()->toDateString();
         $end = today()->addWeek()->toDateString();
 
-        $response = $this->get(
-            cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug"
-        );
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'fields' => ['reference', 'entry_rate', 'entry_rate_slug'],
+        ]);
 
         $response->assertStatus(200);
         $csv = $response->streamedContent();
@@ -394,10 +412,11 @@ class ExportCpTest extends TestCase
         $start = today()->toDateString();
         $end = today()->addWeek()->toDateString();
 
-        $response = $this->get(
-            cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug"
-        );
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'fields' => ['reference', 'entry_rate', 'entry_rate_slug'],
+        ]);
 
         $response->assertStatus(200);
         $csv = $response->streamedContent();
@@ -422,10 +441,11 @@ class ExportCpTest extends TestCase
         $start = today()->toDateString();
         $end = today()->addWeek()->toDateString();
 
-        $response = $this->get(
-            cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug"
-        );
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'fields' => ['reference', 'entry_rate', 'entry_rate_slug'],
+        ]);
 
         $response->assertStatus(200);
         $csv = $response->streamedContent();
@@ -459,16 +479,17 @@ class ExportCpTest extends TestCase
             ]);
         };
 
-        $start = today()->toDateString();
-        $end = today()->addWeek()->toDateString();
-        $url = cp_route('resrv.export.download').
-            "?start={$start}&end={$end}&fields[]=reference&fields[]=entry_rate&fields[]=entry_rate_slug";
+        $payload = [
+            'start' => today()->toDateString(),
+            'end' => today()->addWeek()->toDateString(),
+            'fields' => ['reference', 'entry_rate', 'entry_rate_slug'],
+        ];
 
-        $countChildQueries = function () use ($url) {
+        $countChildQueries = function () use ($payload) {
             DB::flushQueryLog();
             DB::enableQueryLog();
 
-            $this->get($url)->streamedContent();
+            $this->post(cp_route('resrv.export.download'), $payload)->streamedContent();
 
             $count = collect(DB::getQueryLog())
                 ->filter(fn ($query) => str_contains($query['query'], 'resrv_child_reservations'))

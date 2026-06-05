@@ -65,22 +65,30 @@ class DataImport
                 if ($id == false) {
                     return $import;
                 }
+                // Pair availability to its price column by the date range in the headers
+                // (price:A|B <-> availability:A|B), not by column position — a column sitting
+                // between the pair (e.g. rate_id) must not be read as the availability value.
+                $availabilityByRange = [];
+                foreach ($row as $header => $value) {
+                    if (strpos($header, 'availability') !== false) {
+                        $dates = $this->getDatesFromHeader($header);
+                        $availabilityByRange[$dates['date_start'].'|'.$dates['date_end']] = $value;
+                    }
+                }
                 $data = collect();
-                $index = 0;
                 foreach ($row as $header => $value) {
                     if (strpos($header, 'price') !== false) {
                         $arrayToPush = [];
                         $dates = $this->getDatesFromHeader($header);
                         $arrayToPush['date_start'] = $dates['date_start'];
                         $arrayToPush['date_end'] = $dates['date_end'];
-                        $arrayToPush['available'] = $row[array_keys($row)[$index + 1]];
+                        $arrayToPush['available'] = $availabilityByRange[$dates['date_start'].'|'.$dates['date_end']] ?? null;
                         $arrayToPush['price'] = $value;
                         if (array_key_exists('rate_id', $row)) {
                             $arrayToPush['rate_id'] = $row['rate_id'];
                         }
                         $data->push($arrayToPush);
                     }
-                    $index++;
                 }
 
                 return $import->put($id, $import->get($id, collect())->concat($data));
@@ -149,26 +157,34 @@ class DataImport
     private function headersHaveCorrectFormat()
     {
         $headers = SimpleExcelReader::create($this->path)->useDelimiter($this->delimiter)->getHeaders();
-        $priceHeaderFound = false;
-        $availabilityHeaderFound = false;
+        $priceRanges = [];
+        $availabilityRanges = [];
         foreach ($headers as $header) {
             if (strpos($header, 'price') !== false) {
-                $priceHeaderFound = true;
                 // A price header drives the date range, so it must carry one (price:date_start|date_end).
                 // Without this, a header literally named "price" would import every row as a skipped no-op.
                 $dates = $this->getDatesFromHeader($header);
                 if ($dates['date_start'] === '' || $dates['date_end'] === '') {
                     return 'A price header is missing its date range, expected e.g. "price:2024-01-01|2024-01-10".';
                 }
+                $priceRanges[$header] = $dates['date_start'].'|'.$dates['date_end'];
             }
             if (strpos($header, 'availability') !== false) {
-                $availabilityHeaderFound = true;
+                $dates = $this->getDatesFromHeader($header);
+                $availabilityRanges[] = $dates['date_start'].'|'.$dates['date_end'];
             }
         }
-        if ($availabilityHeaderFound && $priceHeaderFound) {
-            return false;
+        if (empty($priceRanges) || empty($availabilityRanges)) {
+            return 'The headers are not properly formatted';
+        }
+        // Availability is paired to its price column by date range, so an unmatched price
+        // header must fail here instead of silently skipping every row in the queued job.
+        foreach ($priceRanges as $header => $range) {
+            if (! in_array($range, $availabilityRanges)) {
+                return 'The "'.$header.'" header has no matching "availability:'.$range.'" header.';
+            }
         }
 
-        return 'The headers are not properly formatted';
+        return false;
     }
 }

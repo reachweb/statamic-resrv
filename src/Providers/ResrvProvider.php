@@ -9,7 +9,6 @@ use Reach\StatamicResrv\Console\Commands\MigrateSettings;
 use Reach\StatamicResrv\Console\Commands\SendAbandonedReservationEmails;
 use Reach\StatamicResrv\Console\Commands\UpgradeToRates;
 use Reach\StatamicResrv\Dictionaries\CountryPhoneCodes;
-use Reach\StatamicResrv\Events\AvailabilitySearch;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
@@ -41,7 +40,6 @@ use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
-use Reach\StatamicResrv\Listeners\SaveSearchToSession;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
@@ -142,9 +140,6 @@ class ResrvProvider extends AddonServiceProvider
         CouponUpdated::class => [
             UpdateCouponAppliedToReservation::class,
             AssociateAffiliateFromCoupon::class,
-        ],
-        AvailabilitySearch::class => [
-            SaveSearchToSession::class,
         ],
         EntrySaved::class => [
             AddResrvEntryToDatabase::class,

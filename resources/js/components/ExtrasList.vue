@@ -91,7 +91,7 @@
 <script setup>
 import { Button, Card, Header, StatusIndicator } from '@statamic/cms/ui';
 import draggable from 'vuedraggable';
-import { computed, onMounted, onUpdated, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import axios from 'axios';
 import Extras from './Extras.vue';
 import ExtrasCategoryPanel from './ExtrasCategoryPanel.vue';
@@ -102,7 +102,6 @@ const props = defineProps({
     parent: { type: String, required: false, default: null },
 });
 
-const emit = defineEmits(['input']);
 const toast = useToast();
 
 const showPanel = ref(false);
@@ -119,15 +118,7 @@ const emptyCategory = {
     published: true,
 };
 
-const newItem = computed(() => props.parent === 'Collection');
-
 onMounted(() => getAllCategories());
-
-onUpdated(() => {
-    if (!newItem.value) {
-        emit('input', props.parent);
-    }
-});
 
 function togglePanel() {
     showPanel.value = !showPanel.value;
@@ -163,7 +154,7 @@ function getAllCategories() {
             categoriesLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve categories');
+            toast.error(__('Cannot retrieve categories'));
         });
 }
 
@@ -174,11 +165,11 @@ function confirmDelete(item) {
 function deleteCategory() {
     axios.delete(`/cp/resrv/extra-category/${deleteId.value}`)
         .then(() => {
-            toast.success('Category deleted');
+            toast.success(__('Category deleted'));
             deleteId.value = null;
         })
         .catch(() => {
-            toast.error('Cannot delete category');
+            toast.error(__('Cannot delete category'));
         })
         .finally(() => {
             getAllCategories();
@@ -194,10 +185,10 @@ function orderCategories(event) {
     const newOrder = event.moved.newIndex + 1;
     axios.patch('/cp/resrv/extra-category/order', { id: item.id, order: newOrder })
         .then(() => {
-            toast.success('Categories order changed');
+            toast.success(__('Categories order changed'));
         })
         .catch(() => {
-            toast.error('Categories ordering failed');
+            toast.error(__('Categories ordering failed'));
         })
         .finally(() => {
             getAllCategories();

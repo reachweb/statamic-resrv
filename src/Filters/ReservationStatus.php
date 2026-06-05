@@ -38,7 +38,7 @@ class ReservationStatus extends Filter
 
     public function apply($query, $values)
     {
-        if (count($values['status']) === 0) {
+        if (empty($values['status'])) {
             return;
         }
         $query->whereIn('status', $values['status']);
@@ -46,7 +46,7 @@ class ReservationStatus extends Filter
 
     public function badge($values)
     {
-        return implode(', ', array_map('ucwords', $values['status']));
+        return implode(', ', array_map('ucwords', $values['status'] ?? []));
     }
 
     public function visibleTo($key)
