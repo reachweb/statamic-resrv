@@ -53,4 +53,17 @@ class ReservationEntryFilterTest extends TestCase
         $this->assertSame(2, $nullQuery->count());
         $this->assertSame(2, $missingQuery->count());
     }
+
+    // A saved filter can reference a since-deleted entry; the badge must fall back to the
+    // raw id instead of throwing on the missing option key.
+    public function test_badge_falls_back_to_the_raw_id_for_deleted_entries()
+    {
+        $item = $this->makeStatamicItem();
+        Reservation::factory()->create(['item_id' => $item->id()]);
+        Reservation::factory()->create(['item_id' => 'deleted-entry-id']);
+
+        $badge = (new ReservationEntry)->badge(['entry' => [$item->id(), 'deleted-entry-id']]);
+
+        $this->assertSame($item->title.', deleted-entry-id', $badge);
+    }
 }

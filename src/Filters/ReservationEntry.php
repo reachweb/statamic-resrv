@@ -37,8 +37,10 @@ class ReservationEntry extends Filter
 
     public function badge($values)
     {
+        // Fall back to the raw id: a saved filter can reference a since-deleted entry,
+        // and Collection array access on a missing key throws.
         return collect($values['entry'])->map(function ($entry) {
-            return $this->entries()[$entry];
+            return $this->entries()->get($entry, $entry);
         })->implode(', ');
     }
 
