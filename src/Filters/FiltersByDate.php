@@ -62,7 +62,9 @@ trait FiltersByDate
 
         $value = Carbon::parse($values['value']['date']);
 
-        $query->where(self::$handle, $operator, $value);
+        // whereDate like the 'between' branch above: the picker provides a day, and both handles
+        // are datetime columns — a raw `where > midnight` would match rows from the picked day.
+        $query->whereDate(self::$handle, $operator, $value);
     }
 
     public function badge($values)

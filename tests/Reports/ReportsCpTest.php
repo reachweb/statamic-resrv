@@ -64,6 +64,13 @@ class ReportsCpTest extends TestCase
         $this->assertInstanceOf(Price::class, $report->sumConfirmedReservations());
         $this->assertSame('30.03', $report->sumConfirmedReservations()->format());
         $this->assertSame('10.01', $report->avgConfirmedReservations()->format());
+
+        // Per-item revenue aggregates through the same Price path; the payload stays numeric
+        // (floats) on purpose — ReportsItemsTable.vue only number-sorts `typeof === 'number'`
+        // values, so switching to formatted strings would silently break the revenue sort.
+        $top = $report->topSellerItems();
+        $this->assertSame(30.03, $top[0]['total_revenue']);
+        $this->assertSame(10.01, $top[0]['avg_revenue']);
     }
 
     public function test_can_get_report_data_filtered_by_created_at()
@@ -109,12 +116,13 @@ class ReportsCpTest extends TestCase
         $this->assertEquals($itemA->id(), $top[0]['id']);
         $this->assertEquals($itemB->id(), $top[1]['id']);
         $this->assertEquals(4, $top[0]['reservations']);
-        $this->assertEquals(800.0, $top[0]['total_revenue']);
-        $this->assertEquals(200.0, $top[0]['avg_revenue']);
+        $this->assertSame(800.0, $top[0]['total_revenue']);
+        $this->assertSame(200.0, $top[0]['avg_revenue']);
         $this->assertEquals(0.67, $top[0]['percentage']);
 
         $this->assertEquals(2, $top[1]['reservations']);
-        $this->assertEquals(400.0, $top[1]['total_revenue']);
+        $this->assertSame(400.0, $top[1]['total_revenue']);
+        $this->assertSame(200.0, $top[1]['avg_revenue']);
         $this->assertEquals(0.33, $top[1]['percentage']);
     }
 

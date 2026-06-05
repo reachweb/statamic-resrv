@@ -73,13 +73,21 @@ class Report
         return $topItems->map(function ($reservations, $itemId) use ($entries) {
             $entry = $reservations->first()->entryToArray($entries->get($itemId));
 
+            // Accumulate in integer minor units like sumConfirmedReservations() above — not
+            // Collection::sum() over format() strings, which adds money as floats. The single
+            // terminal (float) cast keeps the JSON numeric for the table sort and cannot drift.
+            $totalRevenue = $reservations->reduce(
+                fn (PriceClass $carry, $reservation) => $carry->add($reservation->price),
+                Price::create(0)
+            );
+
             return [
                 'id' => $itemId,
                 'title' => $entry['title'],
                 'api_url' => $entry['url'],
                 'reservations' => $reservations->count(),
-                'total_revenue' => round($reservations->sum(fn ($reservation) => $reservation->price->format()), 2),
-                'avg_revenue' => round($reservations->avg(fn ($reservation) => $reservation->price->format()), 2),
+                'total_revenue' => (float) $totalRevenue->format(),
+                'avg_revenue' => (float) (clone $totalRevenue)->divide((string) $reservations->count())->format(),
                 'percentage' => round($reservations->count() / $this->countConfirmedReservations(), 2),
             ];
         })->values();

@@ -2,7 +2,7 @@
 
 namespace Reach\StatamicResrv\Filters;
 
-use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Query\Scopes\Filter;
 
@@ -17,9 +17,20 @@ class ReservationStartingDateYear extends Filter
 
     public function fieldItems()
     {
-        $years = Reservation::pluck('date_start')->map(function ($date) {
-            return Carbon::parse($date)->format('Y');
-        })->unique()->toArray();
+        // Distinct years in SQL instead of materializing every date_start row into PHP — this
+        // runs on every listing page render. Year extraction has no driver-portable syntax.
+        $year = match (DB::connection()->getDriverName()) {
+            'sqlite' => "strftime('%Y', date_start)",
+            'pgsql' => 'EXTRACT(YEAR FROM date_start)::int',
+            default => 'YEAR(date_start)',
+        };
+
+        $years = Reservation::query()
+            ->selectRaw("DISTINCT {$year} AS year")
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->map(fn ($year) => (string) $year)
+            ->all();
 
         return [
             'date' => [

@@ -12,17 +12,6 @@ class ReservationEntry extends Filter
 
     protected $entries;
 
-    public function __construct()
-    {
-        $ids = Reservation::pluck('item_id')->unique()->toArray();
-
-        $this->entries = Entry::query()->whereIn('id', $ids)->get()->flatMap(function ($entry) {
-            return [
-                $entry->id() => $entry->title,
-            ];
-        });
-    }
-
     public static function title()
     {
         return __('Entry');
@@ -33,14 +22,14 @@ class ReservationEntry extends Filter
         return [
             'entry' => [
                 'type' => 'checkboxes',
-                'options' => $this->entries,
+                'options' => $this->entries(),
             ],
         ];
     }
 
     public function apply($query, $values)
     {
-        if (count($values['entry']) === 0) {
+        if (empty($values['entry'])) {
             return;
         }
         $query->whereIn('item_id', $values['entry']);
@@ -49,12 +38,23 @@ class ReservationEntry extends Filter
     public function badge($values)
     {
         return collect($values['entry'])->map(function ($entry) {
-            return $this->entries[$entry];
+            return $this->entries()[$entry];
         })->implode(', ');
     }
 
     public function visibleTo($key)
     {
         return $key === 'resrv';
+    }
+
+    // Built lazily and deduped in SQL: Statamic constructs this filter afresh on every filtered
+    // data fetch just to call apply(), which doesn't need the option list — only the index page
+    // (fieldItems) and badges do.
+    protected function entries()
+    {
+        return $this->entries ??= Entry::query()
+            ->whereIn('id', Reservation::query()->distinct()->pluck('item_id')->all())
+            ->get()
+            ->flatMap(fn ($entry) => [$entry->id() => $entry->title]);
     }
 }
