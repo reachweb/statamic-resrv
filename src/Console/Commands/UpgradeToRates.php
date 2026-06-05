@@ -4,8 +4,8 @@ namespace Reach\StatamicResrv\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection as BaseCollection;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Models\Rate;
@@ -23,6 +23,15 @@ class UpgradeToRates extends Command
     protected bool $dryRun = false;
 
     protected int $updatedCount = 0;
+
+    /**
+     * Collections whose default rate has been handled already — updateStandardRate()
+     * is invoked once per property-less blueprint, so a collection with several such
+     * blueprints would otherwise reprocess (and re-count) the same default rate.
+     *
+     * @var array<int, string>
+     */
+    protected array $processedStandardRateCollections = [];
 
     public function handle(): int
     {
@@ -138,9 +147,18 @@ class UpgradeToRates extends Command
 
     protected function updateStandardRate($collection): void
     {
+        if (in_array($collection->handle(), $this->processedStandardRateCollections, true)) {
+            return;
+        }
+
+        $this->processedStandardRateCollections[] = $collection->handle();
+
+        // Only touch un-customized titles ('Default' from the data migration and
+        // findOrCreateDefaultForEntry), mirroring the title guard on property rates.
         $rates = Rate::withoutGlobalScopes()
             ->where('collection', $collection->handle())
             ->where('slug', 'default')
+            ->whereIn('title', ['default', 'Default'])
             ->get();
 
         if ($rates->isEmpty()) {

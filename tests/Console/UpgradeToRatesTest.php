@@ -48,6 +48,35 @@ class UpgradeToRatesTest extends TestCase
         $this->assertEquals('Standard Rate', $default->fresh()->title);
     }
 
+    public function test_does_not_overwrite_a_customized_default_rate_title()
+    {
+        $this->collectionWithAvailabilityField('villas');
+
+        $custom = Rate::factory()->create([
+            'collection' => 'villas',
+            'slug' => 'default',
+            'title' => 'My Custom Rate',
+        ]);
+
+        $this->artisan('resrv:upgrade-to-rates')->assertSuccessful();
+
+        $this->assertEquals('My Custom Rate', $custom->fresh()->title);
+    }
+
+    public function test_multiple_propertyless_blueprints_process_the_default_rate_once()
+    {
+        $this->collectionWithAvailabilityField('villas');
+        $this->availabilityBlueprint('villas', 'second');
+
+        $this->makeRate('villas', 'default');
+
+        // Dry-run isolates the dedupe: without it, each blueprint re-counts the
+        // same (unchanged) default rate and the projected total is wrong.
+        $this->artisan('resrv:upgrade-to-rates', ['--dry-run' => true])
+            ->expectsOutputToContain('1 rate title(s) would be updated')
+            ->assertSuccessful();
+    }
+
     public function test_dry_run_makes_no_changes()
     {
         $this->collectionWithAvailabilityField('rooms', [
@@ -107,6 +136,11 @@ class UpgradeToRatesTest extends TestCase
     {
         Collection::make($handle)->routes('/{slug}')->save();
 
+        $this->availabilityBlueprint($handle, $handle, $fieldConfig);
+    }
+
+    private function availabilityBlueprint(string $collection, string $handle, array $fieldConfig = []): void
+    {
         Blueprint::make()->setContents([
             'sections' => [
                 'main' => [
@@ -119,6 +153,6 @@ class UpgradeToRatesTest extends TestCase
                     ],
                 ],
             ],
-        ])->setHandle($handle)->setNamespace('collections.'.$handle)->save();
+        ])->setHandle($handle)->setNamespace('collections.'.$collection)->save();
     }
 }

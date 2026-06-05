@@ -1,7 +1,7 @@
 <template>
     <element-container>
         <Alert v-if="newItem" :title="__('You need to save this entry before you can add fixed pricing.')" variant="info" />
-        <div class="statamic-resrv-extras relative" v-else>
+        <div class="statamic-resrv-extras relative" v-else :inert="isReadOnly">
             <FixedPricingList :parent="props.meta.parent" />
         </div>
     </element-container>
@@ -15,7 +15,7 @@ import FixedPricingList from '../components/FixedPricingList.vue';
 
 const emit = defineEmits(Fieldtype.emits);
 const props = defineProps(Fieldtype.props);
-const { update, expose } = Fieldtype.use(emit, props);
+const { update, expose, isReadOnly } = Fieldtype.use(emit, props);
 
 const newItem = computed(() => props.meta.parent === 'Collection');
 

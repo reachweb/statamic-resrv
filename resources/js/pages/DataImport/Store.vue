@@ -19,7 +19,7 @@ defineProps({
 
         <Card class="p-4 lg:px-8 lg:py-6">
             <div class="font-bold text-center text-base">
-                {{ __('Import finished!') }}
+                {{ __('Import started! Availability will update in a few moments.') }}
             </div>
         </Card>
     </div>

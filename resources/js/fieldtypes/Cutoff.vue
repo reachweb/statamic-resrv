@@ -4,7 +4,7 @@
         <Alert v-else-if="cutoffFeatureDisabled" :title="__('Cutoff Rules Disabled')" variant="warning">
             {{ __('Cutoff rules are currently disabled in the global configuration. Enable them in the Resrv settings to use this feature.') }}
         </Alert>
-        <div class="statamic-resrv-cutoff relative" v-else>
+        <div class="statamic-resrv-cutoff relative" v-else :inert="isReadOnly">
             <div class="flex items-center justify-between pb-6">
                 <Label :text="__('Enable Cutoff Rules')" />
                 <Switch v-model="enabled" @update:modelValue="toggleCutoff" />
@@ -82,7 +82,7 @@ import { toCalendarDate, toIsoString } from '../composables/useDateRangeModel.js
 
 const emit = defineEmits(Fieldtype.emits);
 const props = defineProps(Fieldtype.props);
-const { update, expose } = Fieldtype.use(emit, props);
+const { update, expose, isReadOnly } = Fieldtype.use(emit, props);
 
 const enabled = ref(false);
 const settings = reactive({
