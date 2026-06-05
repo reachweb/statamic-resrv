@@ -37,6 +37,11 @@ class UpgradeToRates extends Command
     {
         $this->dryRun = $this->option('dry-run');
 
+        // Artisan reuses command instances within a process (Octane, deploy scripts
+        // calling dry-run then a real run, tests), so per-run state must reset here.
+        $this->updatedCount = 0;
+        $this->processedStandardRateCollections = [];
+
         if ($this->dryRun) {
             $this->components->info('Running in dry-run mode. No changes will be made.');
             $this->newLine();

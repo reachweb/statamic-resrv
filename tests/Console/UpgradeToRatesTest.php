@@ -77,6 +77,20 @@ class UpgradeToRatesTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_dry_run_followed_by_real_run_still_updates_the_default_rate()
+    {
+        $this->collectionWithAvailabilityField('villas');
+
+        $default = $this->makeRate('villas', 'default');
+
+        // Artisan reuses the same command instance within one process, so the
+        // dedupe state recorded by the dry run must not leak into the real run.
+        $this->artisan('resrv:upgrade-to-rates', ['--dry-run' => true])->assertSuccessful();
+        $this->artisan('resrv:upgrade-to-rates')->assertSuccessful();
+
+        $this->assertEquals('Standard Rate', $default->fresh()->title);
+    }
+
     public function test_dry_run_makes_no_changes()
     {
         $this->collectionWithAvailabilityField('rooms', [
