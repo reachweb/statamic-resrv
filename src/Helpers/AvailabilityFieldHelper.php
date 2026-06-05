@@ -76,7 +76,7 @@ class AvailabilityFieldHelper
     private function findAvailabilityField(Blueprint $blueprint): ?Field
     {
         foreach ($blueprint->fields()->all() as $field) {
-            if ($field->config()['type'] === self::FIELD_TYPE) {
+            if ($field->type() === self::FIELD_TYPE) {
                 return $field;
             }
         }
