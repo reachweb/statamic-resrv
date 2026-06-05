@@ -255,7 +255,7 @@ function confirmDelete(item) {
 function deleteRate() {
     axios.delete('/cp/resrv/rate/' + deleteId.value)
         .then(() => {
-            toast.success('Rate deleted');
+            toast.success(__('Rate deleted'));
             deleteId.value = null;
             refreshRates();
         })
@@ -263,7 +263,7 @@ function deleteRate() {
             if (error.response && error.response.status === 422) {
                 toast.error(error.response.data.message);
             } else {
-                toast.error('Cannot delete rate');
+                toast.error(__('Cannot delete rate'));
             }
             deleteId.value = null;
         });
@@ -278,10 +278,10 @@ function reorderRate(event) {
     const newOrder = event.moved.newIndex + 1;
     axios.patch(`/cp/resrv/rate/order/${item.id}`, { order: newOrder })
         .then(() => {
-            toast.success('Rates order changed');
+            toast.success(__('Rates order changed'));
         })
         .catch(() => {
-            toast.error('Rates ordering failed');
+            toast.error(__('Rates ordering failed'));
         })
         .finally(() => {
             refreshRates();

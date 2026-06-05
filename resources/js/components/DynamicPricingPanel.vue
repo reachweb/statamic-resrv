@@ -265,7 +265,7 @@ function getEntries() {
             entriesLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve the entries');
+            toast.error(__('Cannot retrieve the entries'));
         });
 }
 
@@ -276,7 +276,7 @@ function getExtras() {
             extrasLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve the extras');
+            toast.error(__('Cannot retrieve the extras'));
         });
 }
 

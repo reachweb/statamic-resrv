@@ -134,12 +134,12 @@ function confirmDelete(item) {
 function deleteValue() {
     axios.delete('/cp/resrv/option/value', { data: { id: deleteId.value } })
         .then(() => {
-            toast.success('Option deleted');
+            toast.success(__('Option deleted'));
             deleteId.value = null;
             emit('saved');
         })
         .catch(() => {
-            toast.error('Cannot delete option');
+            toast.error(__('Cannot delete option'));
         });
 }
 
@@ -152,10 +152,10 @@ function order(event) {
     const newOrder = event.moved.newIndex + 1;
     axios.patch('/cp/resrv/option/value/order', { id: item.id, order: newOrder })
         .then(() => {
-            toast.success('Options order changed');
+            toast.success(__('Options order changed'));
         })
         .catch(() => {
-            toast.error('Options ordering failed');
+            toast.error(__('Options ordering failed'));
         })
         .finally(() => {
             emit('saved');

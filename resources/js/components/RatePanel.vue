@@ -330,7 +330,7 @@ function getCollectionEntries(collection) {
             entriesLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve entries');
+            toast.error(__('Cannot retrieve entries'));
         });
 }
 

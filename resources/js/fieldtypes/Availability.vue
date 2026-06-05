@@ -43,7 +43,7 @@ import { Alert, Button, Field, Label, Select, Switch } from '@statamic/cms/ui';
 import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { computed, onMounted, onUpdated, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import AvailabilityModal from '../components/AvailabilityModal.vue';
@@ -163,12 +163,6 @@ onMounted(() => {
     }
 });
 
-onUpdated(() => {
-    if (!newItem.value) {
-        update(enabled.value);
-    }
-});
-
 watch(rateId, () => {
     if (rateId.value !== null) {
         getAvailability();
@@ -231,7 +225,7 @@ function getAvailability() {
             toggleAvailability();
         })
         .catch(() => {
-            toast.error('Cannot retrieve availability');
+            toast.error(__('Cannot retrieve availability'));
         });
 }
 

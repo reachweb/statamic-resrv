@@ -10,7 +10,7 @@
 <script setup>
 import { Fieldtype } from '@statamic/cms';
 import { Alert } from '@statamic/cms/ui';
-import { computed, onUpdated } from 'vue';
+import { computed, onMounted } from 'vue';
 import FixedPricingList from '../components/FixedPricingList.vue';
 
 const emit = defineEmits(Fieldtype.emits);
@@ -19,7 +19,7 @@ const { update, expose } = Fieldtype.use(emit, props);
 
 const newItem = computed(() => props.meta.parent === 'Collection');
 
-onUpdated(() => {
+onMounted(() => {
     if (!newItem.value) {
         update(props.meta.parent);
     }

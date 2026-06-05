@@ -103,9 +103,9 @@ function copyLink(item) {
     const link = window.location.origin + '/?afid=' + item.code;
     if (navigator.clipboard) {
         navigator.clipboard.writeText(link);
-        toast.success('Affiliate link copied to clipboard');
+        toast.success(__('Affiliate link copied to clipboard'));
     } else {
-        toast.error('Failed to copy link. Are you using SSL?');
+        toast.error(__('Failed to copy link. Are you using SSL?'));
     }
 }
 
@@ -124,12 +124,12 @@ function confirmDelete(item) {
 function deleteAffiliate() {
     axios.delete(`/cp/resrv/affiliate/${deleteId.value}`)
         .then(() => {
-            toast.success('Affiliate deleted');
+            toast.success(__('Affiliate deleted'));
             deleteId.value = null;
             refreshAffiliates();
         })
         .catch(() => {
-            toast.error('Cannot delete affiliate');
+            toast.error(__('Cannot delete affiliate'));
         });
 }
 </script>

@@ -113,7 +113,7 @@ function getOptions() {
             dataLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve options');
+            toast.error(__('Cannot retrieve options'));
         });
 }
 
@@ -124,12 +124,12 @@ function confirmDelete(item) {
 function deleteOption() {
     axios.delete('/cp/resrv/option', { data: { id: deleteId.value } })
         .then(() => {
-            toast.success('Option deleted');
+            toast.success(__('Option deleted'));
             deleteId.value = null;
             getOptions();
         })
         .catch(() => {
-            toast.error('Cannot delete option');
+            toast.error(__('Cannot delete option'));
         });
 }
 
@@ -142,10 +142,10 @@ function order(event) {
     const newOrder = event.moved.newIndex + 1;
     axios.patch('/cp/resrv/option/order', { id: item.id, order: newOrder })
         .then(() => {
-            toast.success('Options order changed');
+            toast.success(__('Options order changed'));
         })
         .catch(() => {
-            toast.error('Options ordering failed');
+            toast.error(__('Options ordering failed'));
         })
         .finally(() => {
             getOptions();

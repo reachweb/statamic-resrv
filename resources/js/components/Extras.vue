@@ -226,24 +226,24 @@ function getAllExtras() {
 function enableExtra(extraId) {
     axios.post('/cp/resrv/extra/add/' + props.parent, { id: extraId })
         .then(() => {
-            toast.success('Extra added to this entry');
+            toast.success(__('Extra added to this entry'));
             toggleEntryExtraEditing();
             getAllExtras();
         })
         .catch(() => {
-            toast.error('Cannot add extra to entry');
+            toast.error(__('Cannot add extra to entry'));
         });
 }
 
 function disableExtra(extraId) {
     axios.post('/cp/resrv/extra/remove/' + props.parent, { id: extraId })
         .then(() => {
-            toast.success('Extra removed from this entry');
+            toast.success(__('Extra removed from this entry'));
             toggleEntryExtraEditing();
             getAllExtras();
         })
         .catch(() => {
-            toast.error('Cannot remove extra to entry');
+            toast.error(__('Cannot remove extra to entry'));
         });
 }
 
@@ -254,12 +254,12 @@ function confirmDelete(item) {
 function deleteExtra() {
     axios.delete('/cp/resrv/extra', { data: { id: deleteId.value } })
         .then(() => {
-            toast.success('Extra deleted');
+            toast.success(__('Extra deleted'));
             deleteId.value = null;
             getAllExtras();
         })
         .catch(() => {
-            toast.error('Cannot delete extra');
+            toast.error(__('Cannot delete extra'));
         });
 }
 
@@ -272,10 +272,10 @@ function handleChange(event) {
             order: event.added.newIndex + 1,
         })
             .then(() => {
-                toast.success('Extra moved successfully');
+                toast.success(__('Extra moved successfully'));
             })
             .catch(() => {
-                toast.error('Failed to move extra');
+                toast.error(__('Failed to move extra'));
             })
             .finally(() => {
                 getAllExtras();
@@ -287,10 +287,10 @@ function handleChange(event) {
         const newOrder = event.moved.newIndex + 1;
         axios.patch(`/cp/resrv/extra/order/${item.id}`, { order: newOrder })
             .then(() => {
-                toast.success('Extras order changed');
+                toast.success(__('Extras order changed'));
             })
             .catch(() => {
-                toast.error('Extras ordering failed');
+                toast.error(__('Extras ordering failed'));
             })
             .finally(() => {
                 getAllExtras();

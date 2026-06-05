@@ -87,7 +87,7 @@ function getAllExtras() {
             extras.value = response.data;
         })
         .catch(() => {
-            toast.error('Cannot retrieve extras');
+            toast.error(__('Cannot retrieve extras'));
         });
 }
 </script>

@@ -153,12 +153,12 @@ function deleteAvailability() {
     }
     axios.delete('/cp/resrv/availability', { data: deleteData })
         .then(() => {
-            toast.success('Availability deleted');
+            toast.success(__('Availability deleted'));
             deleteId.value = null;
             emit('saved');
         })
         .catch(() => {
-            toast.error('Cannot delete availability');
+            toast.error(__('Cannot delete availability'));
         });
 }
 
@@ -225,7 +225,7 @@ async function clearStuckHolds(force) {
         }
     } catch (e) {
         console.error(e);
-        toast.error('Failed to clear stuck holds');
+        toast.error(__('Failed to clear stuck holds'));
     } finally {
         clearingPending.value = false;
     }

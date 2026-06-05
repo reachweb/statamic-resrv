@@ -113,7 +113,7 @@ function getFixedPricing() {
             fixedPricingLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve fixed pricing data');
+            toast.error(__('Cannot retrieve fixed pricing data'));
         });
 }
 
@@ -124,12 +124,12 @@ function confirmDelete(item) {
 function deleteFixedPricing() {
     axios.delete('/cp/resrv/fixedpricing', { data: { id: deleteId.value } })
         .then(() => {
-            toast.success('Fixed pricing deleted');
+            toast.success(__('Fixed pricing deleted'));
             deleteId.value = null;
             getFixedPricing();
         })
         .catch(() => {
-            toast.error('Cannot delete fixed pricing');
+            toast.error(__('Cannot delete fixed pricing'));
         });
 }
 </script>

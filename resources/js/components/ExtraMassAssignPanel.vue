@@ -103,7 +103,7 @@ function getSelectedEntries() {
             selectedEntriesLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve entries for this extra');
+            toast.error(__('Cannot retrieve entries for this extra'));
         });
 }
 
@@ -114,7 +114,7 @@ function getEntries() {
             entriesLoaded.value = true;
         })
         .catch(() => {
-            toast.error('Cannot retrieve the entries');
+            toast.error(__('Cannot retrieve the entries'));
         });
 }
 </script>
