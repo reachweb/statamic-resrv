@@ -74,6 +74,7 @@ class Report
             $entry = $reservations->first()->entryToArray($entries->get($itemId));
 
             return [
+                'id' => $itemId,
                 'title' => $entry['title'],
                 'api_url' => $entry['url'],
                 'reservations' => $reservations->count(),
@@ -91,6 +92,7 @@ class Report
             $extra = Extra::withTrashed()->find($item->extra_id);
 
             return [
+                'id' => $item->extra_id,
                 'title' => $extra->name,
                 'reservations' => (int) $item->occurrences,
                 'percentage' => round($item->occurrences / $this->countConfirmedReservations(), 2),

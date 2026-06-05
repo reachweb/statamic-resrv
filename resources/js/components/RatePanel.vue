@@ -258,6 +258,7 @@ watch(() => props.data, hydrateForm, { deep: true });
 
 watch(() => form.collection, (newVal) => {
     if (newVal) {
+        entriesLoaded.value = false;
         getCollectionEntries(newVal);
     }
 });

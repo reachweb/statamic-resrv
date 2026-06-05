@@ -22,8 +22,8 @@
                 <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80">
                     <div class="flex items-center gap-2">
                         <StatusIndicator :status="extraEnabled(extra) ? 'published' : 'draft'" />
-                        <span class="font-medium text-gray-900 dark:text-gray-200" :class="{ 'cursor-pointer hover:underline': !insideEntry }" v-html="extra.name" @click="editExtra(extra)"></span>
-                        <span class="text-sm text-gray-700 dark:text-gray-400">{{ extra.price }} <span class="text-xs text-gray-500" v-html="priceLabel(extra.price_type)"></span></span>
+                        <span class="font-medium text-gray-900 dark:text-gray-200" :class="{ 'cursor-pointer hover:underline': !insideEntry }" v-text="extra.name" @click="editExtra(extra)"></span>
+                        <span class="text-sm text-gray-700 dark:text-gray-400">{{ extra.price }} <span class="text-xs text-gray-500" v-text="priceLabel(extra.price_type)"></span></span>
                     </div>
                     <div class="flex items-center gap-2">
                         <div class="flex items-center text-gray-500 dark:text-gray-400" v-if="extraHasConditions(extra)" v-tooltip="__('This extra has conditions.')">

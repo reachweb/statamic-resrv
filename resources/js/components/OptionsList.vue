@@ -14,7 +14,7 @@
                     <div class="w-full flex flex-wrap items-center justify-between p-3 rounded-lg border bg-white shadow-ui-sm dark:bg-gray-850 dark:border-gray-700/80">
                         <div class="flex items-center gap-2">
                             <StatusIndicator :status="option.published ? 'published' : 'draft'" />
-                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="option.name" @click="edit(option)"></span>
+                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="option.name" @click="edit(option)"></span>
                         </div>
                         <div class="flex items-center gap-2">
                             <Badge :text="option.required ? __('Required') : __('Optional')" size="sm" :variant="option.required ? 'warning' : 'default'" />
@@ -52,7 +52,7 @@
 <script setup>
 import { Badge, Button, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator, StatusIndicator } from '@statamic/cms/ui';
 import draggable from 'vuedraggable';
-import { computed, onMounted, onUpdated, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import axios from 'axios';
 import OptionsPanel from './OptionsPanel.vue';
 import OptionValuesList from './OptionValuesList.vue';
@@ -62,7 +62,6 @@ const props = defineProps({
     parent: { type: String, required: false },
 });
 
-const emit = defineEmits(['input']);
 const toast = useToast();
 
 const showPanel = ref(false);
@@ -82,15 +81,7 @@ const emptyOption = {
     published: true,
 };
 
-const newItem = computed(() => props.parent === 'Collection');
-
 onMounted(() => getOptions());
-
-onUpdated(() => {
-    if (!newItem.value) {
-        emit('input', props.parent);
-    }
-});
 
 function togglePanel() {
     showPanel.value = !showPanel.value;

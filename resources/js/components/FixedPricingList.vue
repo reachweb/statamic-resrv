@@ -8,7 +8,7 @@
             >
                 <div class="flex items-center gap-2 cursor-pointer" v-if="pricing.days != 0" @click="editFixedPricing(pricing)">
                     <span class="text-sm text-gray-700 dark:text-gray-300">{{ __('Days:') }}</span>
-                    <span class="font-medium text-gray-900 dark:text-gray-200" v-html="pricing.days"></span>
+                    <span class="font-medium text-gray-900 dark:text-gray-200" v-text="pricing.days"></span>
                     <span class="text-sm text-gray-700 dark:text-gray-300">{{ pricing.price }}</span>
                 </div>
                 <div class="flex items-center gap-2" v-else>
@@ -48,7 +48,7 @@
 
 <script setup>
 import { Button, Dropdown, DropdownItem, DropdownMenu, DropdownSeparator } from '@statamic/cms/ui';
-import { computed, onMounted, onUpdated, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import axios from 'axios';
 import FixedPricingPanel from './FixedPricingPanel.vue';
 import { useToast } from '../composables/useToast.js';
@@ -57,7 +57,6 @@ const props = defineProps({
     parent: { type: String, required: true },
 });
 
-const emit = defineEmits(['input']);
 const toast = useToast();
 
 const showPanel = ref(false);
@@ -77,18 +76,11 @@ const extraFixedPricing = {
     statamic_id: props.parent,
 };
 
-const newItem = computed(() => props.parent === 'Collection');
 const hasExtraDayPricing = computed(() =>
     fixedPricings.value.some((pricing) => pricing.days == '0'),
 );
 
 onMounted(() => getFixedPricing());
-
-onUpdated(() => {
-    if (!newItem.value) {
-        emit('input', props.parent);
-    }
-});
 
 function togglePanel() {
     showPanel.value = !showPanel.value;

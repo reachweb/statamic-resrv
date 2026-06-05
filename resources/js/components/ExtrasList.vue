@@ -91,7 +91,7 @@
 <script setup>
 import { Button, Card, Header, StatusIndicator } from '@statamic/cms/ui';
 import draggable from 'vuedraggable';
-import { computed, onMounted, onUpdated, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import axios from 'axios';
 import Extras from './Extras.vue';
 import ExtrasCategoryPanel from './ExtrasCategoryPanel.vue';
@@ -102,7 +102,6 @@ const props = defineProps({
     parent: { type: String, required: false, default: null },
 });
 
-const emit = defineEmits(['input']);
 const toast = useToast();
 
 const showPanel = ref(false);
@@ -119,15 +118,7 @@ const emptyCategory = {
     published: true,
 };
 
-const newItem = computed(() => props.parent === 'Collection');
-
 onMounted(() => getAllCategories());
-
-onUpdated(() => {
-    if (!newItem.value) {
-        emit('input', props.parent);
-    }
-});
 
 function togglePanel() {
     showPanel.value = !showPanel.value;

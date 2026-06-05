@@ -81,7 +81,7 @@
                             <div class="flex items-center gap-2">
                                 <StatusIndicator :status="dynamic.published ? 'published' : 'draft'" />
                                 <span class="text-xs font-mono px-2 py-0.5 rounded-md bg-gray-150 text-gray-700 dark:bg-gray-800 dark:text-gray-300" :title="__('Order')">#{{ dynamic.order }}</span>
-                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="dynamic.title" @click="editPricing(dynamic)"></span>
+                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="dynamic.title" @click="editPricing(dynamic)"></span>
                                 <Badge v-if="dynamic.overrides_all" :text="__('OVERRIDING')" variant="warning" size="sm" />
                             </div>
                             <div>

@@ -105,6 +105,9 @@ class ReportsCpTest extends TestCase
         $top = (new Report(now()->toDateString(), now()->addWeek()->toDateString()))->topSellerItems();
 
         // Ordered by count desc: A (3 confirmed + 1 partner = 4), then B (2). 6 total.
+        // Each row carries the unique item_id it was grouped by (used as the Vue row key).
+        $this->assertEquals($itemA->id(), $top[0]['id']);
+        $this->assertEquals($itemB->id(), $top[1]['id']);
         $this->assertEquals(4, $top[0]['reservations']);
         $this->assertEquals(800.0, $top[0]['total_revenue']);
         $this->assertEquals(200.0, $top[0]['avg_revenue']);

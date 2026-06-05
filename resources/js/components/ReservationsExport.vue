@@ -145,6 +145,8 @@ const fieldsByGroup = computed(() =>
 const canDownload = computed(() =>
     !countLoading.value
     && count.value > 0
+    && dateStart.value !== ''
+    && dateEnd.value !== ''
     && selectedFields.value.length > 0
     && selectedStatuses.value.length > 0,
 );
@@ -184,7 +186,7 @@ function scheduleCount() {
 }
 
 function fetchCount() {
-    if (selectedStatuses.value.length === 0) {
+    if (selectedStatuses.value.length === 0 || !dateStart.value || !dateEnd.value) {
         count.value = 0;
         countLoading.value = false;
         countError.value = false;

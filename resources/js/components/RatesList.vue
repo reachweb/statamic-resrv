@@ -52,7 +52,7 @@
                                     </svg>
                                 </button>
                                 <StatusIndicator :status="parent.published ? 'published' : 'draft'" />
-                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="parent.title" @click="edit(parent)"></span>
+                                <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="parent.title" @click="edit(parent)"></span>
                                 <Badge v-if="parent.apply_to_all" :text="__('All entries')" size="sm" />
                             </div>
                             <div class="flex items-center gap-2">
@@ -104,7 +104,7 @@
                                                 </svg>
                                             </button>
                                             <StatusIndicator :status="child.published ? 'published' : 'draft'" />
-                                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-html="child.title" @click="edit(child)"></span>
+                                            <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="child.title" @click="edit(child)"></span>
                                             <Badge v-if="child.apply_to_all" :text="__('All entries')" size="sm" />
                                         </div>
                                         <div class="flex items-center gap-2">
