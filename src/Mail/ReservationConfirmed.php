@@ -24,6 +24,10 @@ class ReservationConfirmed extends Mailable
      */
     public function build()
     {
-        return $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.confirmed'));
+        $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.confirmed'));
+
+        $this->dispatchBuildingEvent($this->reservation);
+
+        return $this;
     }
 }

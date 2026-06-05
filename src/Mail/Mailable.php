@@ -3,10 +3,17 @@
 namespace Reach\StatamicResrv\Mail;
 
 use Illuminate\Mail\Mailable as LaravelMailable;
+use Reach\StatamicResrv\Events\BuildingReservationEmail;
+use Reach\StatamicResrv\Models\Reservation;
 
 class Mailable extends LaravelMailable
 {
     protected ?string $markdownTemplateOverride = null;
+
+    protected function dispatchBuildingEvent(?Reservation $reservation = null): void
+    {
+        BuildingReservationEmail::dispatch($this, $reservation);
+    }
 
     public function applyResrvEmailConfig(array $config): static
     {
