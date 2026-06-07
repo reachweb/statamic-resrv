@@ -58,7 +58,21 @@ class RateCancellationPolicyTest extends TestCase
         $cancellation = $rate->effectiveCancellationPolicy();
 
         $this->assertEquals(CancellationPolicy::FreeCancellation, $cancellation['policy']);
-        $this->assertEquals(0, $cancellation['period']);
+        // An unset global setting resolves to NULL ("nothing configured") — distinct from a
+        // rate's explicit zero-day policy, which advertises free cancellation until check-in.
+        $this->assertNull($cancellation['period']);
+    }
+
+    public function test_rate_with_explicit_zero_day_policy_keeps_the_zero()
+    {
+        Config::set('resrv-config.free_cancellation_period', 5);
+
+        $rate = Rate::factory()->freeCancellation(0)->create();
+
+        $cancellation = $rate->effectiveCancellationPolicy();
+
+        $this->assertEquals(CancellationPolicy::FreeCancellation, $cancellation['policy']);
+        $this->assertSame(0, $cancellation['period']);
     }
 
     public function test_rate_policy_overrides_global_config()
@@ -86,24 +100,52 @@ class RateCancellationPolicyTest extends TestCase
     public function test_strictest_cancellation_policy_prefers_non_refundable()
     {
         $strictest = Reservation::strictestCancellationPolicy(collect([
-            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 10],
-            ['policy' => CancellationPolicy::NonRefundable, 'period' => null],
-            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 2],
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 10, 'date_start' => today()->addDays(20)],
+            ['policy' => CancellationPolicy::NonRefundable, 'period' => null, 'date_start' => today()->addDays(20)],
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 2, 'date_start' => today()->addDays(20)],
         ]));
 
         $this->assertEquals(CancellationPolicy::NonRefundable, $strictest['policy']);
+        $this->assertNull($strictest['period']);
     }
 
-    public function test_strictest_cancellation_policy_picks_largest_period()
+    public function test_strictest_cancellation_policy_picks_largest_period_for_a_shared_start_date()
     {
         $strictest = Reservation::strictestCancellationPolicy(collect([
-            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 3],
-            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 10],
-            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 2],
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 3, 'date_start' => today()->addDays(20)],
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 10, 'date_start' => today()->addDays(20)],
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 2, 'date_start' => today()->addDays(20)],
         ]));
 
         $this->assertEquals(CancellationPolicy::FreeCancellation, $strictest['policy']);
         $this->assertEquals(10, $strictest['period']);
+    }
+
+    public function test_strictest_cancellation_policy_compares_deadlines_across_start_dates()
+    {
+        // +2/1-day deadline (+1) is earlier than +100/50-day deadline (+50): the small
+        // period wins. Picking the largest period would force full payment on a cart
+        // whose every selection is still inside its own free-cancellation window.
+        $strictest = Reservation::strictestCancellationPolicy(collect([
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 1, 'date_start' => today()->addDays(2)],
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 50, 'date_start' => today()->addDays(100)],
+        ]));
+
+        $this->assertEquals(CancellationPolicy::FreeCancellation, $strictest['policy']);
+        // Relative to the earliest check-in (+2), the earliest deadline (+1) is 1 day before.
+        $this->assertSame(1, $strictest['period']);
+    }
+
+    public function test_strictest_cancellation_policy_converts_a_late_deadline_onto_the_earliest_check_in()
+    {
+        // The earliest deadline (today, from the +3/3-day selection) belongs to a later
+        // check-in; expressed against the earliest check-in (+2) it becomes a 2-day period.
+        $strictest = Reservation::strictestCancellationPolicy(collect([
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 0, 'date_start' => today()->addDays(2)],
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 3, 'date_start' => today()->addDays(3)],
+        ]));
+
+        $this->assertSame(2, $strictest['period']);
     }
 
     public function test_strictest_cancellation_policy_falls_back_to_global_for_missing_policies()
@@ -111,11 +153,24 @@ class RateCancellationPolicyTest extends TestCase
         Config::set('resrv-config.free_cancellation_period', 4);
 
         $strictest = Reservation::strictestCancellationPolicy(collect([
-            null,
-            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 2],
+            [...CancellationPolicy::globalDefault(), 'date_start' => today()->addDays(10)],
+            ['policy' => CancellationPolicy::FreeCancellation, 'period' => 2, 'date_start' => today()->addDays(10)],
         ]));
 
         $this->assertEquals(4, $strictest['period']);
+    }
+
+    public function test_strictest_cancellation_policy_keeps_null_when_nothing_is_configured()
+    {
+        Config::set('resrv-config.free_cancellation_period', 0);
+
+        $strictest = Reservation::strictestCancellationPolicy(collect([
+            [...CancellationPolicy::globalDefault(), 'date_start' => today()->addDays(2)],
+            [...CancellationPolicy::globalDefault(), 'date_start' => today()->addDays(10)],
+        ]));
+
+        $this->assertEquals(CancellationPolicy::FreeCancellation, $strictest['policy']);
+        $this->assertNull($strictest['period']);
     }
 
     public function test_reservation_prefers_the_snapshot_over_the_live_rate()
@@ -198,6 +253,39 @@ class RateCancellationPolicyTest extends TestCase
         $this->assertEquals(CancellationPolicy::NonRefundable, $reservation->effectiveCancellationPolicy()['policy']);
     }
 
+    public function test_legacy_parent_reservation_fallback_compares_child_deadlines()
+    {
+        $shortNotice = Rate::factory()->freeCancellation(1)->create();
+        $longNotice = Rate::factory()->freeCancellation(50)->create(['slug' => 'long-notice-rate']);
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'date_start' => today()->addDays(2)->toIso8601String(),
+            'date_end' => today()->addDays(102)->toIso8601String(),
+            'cancellation_policy' => null,
+            'free_cancellation_period' => null,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'rate_id' => $shortNotice->id,
+            'date_start' => today()->addDays(2)->toIso8601String(),
+            'date_end' => today()->addDays(4)->toIso8601String(),
+        ]);
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'rate_id' => $longNotice->id,
+            'date_start' => today()->addDays(100)->toIso8601String(),
+            'date_end' => today()->addDays(102)->toIso8601String(),
+        ]);
+
+        $cancellation = $reservation->effectiveCancellationPolicy();
+
+        $this->assertEquals(CancellationPolicy::FreeCancellation, $cancellation['policy']);
+        // Earliest deadline is +1 (from the +2/1-day child), 1 day before the parent's check-in.
+        $this->assertSame(1, $cancellation['period']);
+    }
+
     public function test_cancellation_policy_label()
     {
         $nonRefundable = Reservation::factory()->create([
@@ -224,12 +312,29 @@ class RateCancellationPolicyTest extends TestCase
     {
         Config::set('resrv-config.free_cancellation_period', 0);
 
+        // A booking made under the unconfigured global default snapshots a NULL period.
         $reservation = Reservation::factory()->create([
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => null,
+        ]);
+
+        $this->assertNull($reservation->cancellationPolicyLabel());
+    }
+
+    public function test_cancellation_policy_label_shows_for_an_explicit_zero_day_policy()
+    {
+        $reservation = Reservation::factory()->create([
+            'date_start' => today()->addDays(10)->toIso8601String(),
+            'date_end' => today()->addDays(12)->toIso8601String(),
             'cancellation_policy' => 'free_cancellation',
             'free_cancellation_period' => 0,
         ]);
 
-        $this->assertNull($reservation->cancellationPolicyLabel());
+        // Zero days before check-in = free cancellation until the check-in date itself.
+        $this->assertEquals(
+            trans('statamic-resrv::frontend.freeCancellationUntilDate', ['date' => today()->addDays(10)->format('D d M Y')]),
+            $reservation->cancellationPolicyLabel()
+        );
     }
 
     public function test_migration_maps_legacy_refundable_flag_and_normalizes_zero_windows()

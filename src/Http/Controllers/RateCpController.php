@@ -107,7 +107,7 @@ class RateCpController extends Controller
 
     public function update(Request $request, Rate $rate): JsonResponse|RedirectResponse
     {
-        $data = $this->applyCancellationPolicy($request->validate($this->validationRules($request, $rate)));
+        $data = $this->applyCancellationPolicy($request->validate($this->validationRules($request, $rate)), $rate);
 
         $hasEntries = array_key_exists('entries', $data);
         $entries = Arr::pull($data, 'entries', []);
@@ -279,12 +279,24 @@ class RateCpController extends Controller
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    protected function applyCancellationPolicy(array $data): array
+    protected function applyCancellationPolicy(array $data, ?Rate $rate = null): array
     {
         if (! array_key_exists('cancellation_policy', $data)) {
             // Legacy API payloads may still only send the old boolean — honor the intent.
-            if (($data['refundable'] ?? true) === false) {
+            // The `boolean` rule also lets 0/'0'/1/'1' through, so normalize before comparing.
+            $refundable = array_key_exists('refundable', $data)
+                ? filter_var($data['refundable'], FILTER_VALIDATE_BOOL)
+                : null;
+
+            if ($refundable === false) {
                 $data['cancellation_policy'] = 'non_refundable';
+                $data['free_cancellation_period'] = null;
+            } elseif ($refundable === true && $rate?->cancellation_policy === 'non_refundable') {
+                // Marking a non-refundable rate refundable again must clear the stored policy,
+                // or the saved flag and the policy that is actually enforced contradict each
+                // other. A stored free-cancellation policy is left alone — it is already
+                // refundable and its period is deliberate configuration.
+                $data['cancellation_policy'] = null;
                 $data['free_cancellation_period'] = null;
             }
 

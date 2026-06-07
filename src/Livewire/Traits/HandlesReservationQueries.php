@@ -138,12 +138,17 @@ trait HandlesReservationQueries
 
         // Snapshot cancellation terms: each child freezes its own rate's policy, the parent
         // freezes the strictest one — the parent's snapshot is what gates the (single) payment.
+        // Each selection carries its own check-in date because deadlines, not raw periods,
+        // decide strictness when the cart mixes start dates.
         $rates = Rate::withTrashed()
             ->findMany($selections->pluck('rate_id')->filter()->unique())
             ->keyBy('id');
         $childCancellations = $selections->map(
-            fn ($selection) => $rates->get($selection['rate_id'])?->effectiveCancellationPolicy()
-                ?? CancellationPolicy::globalDefault()
+            fn ($selection) => [
+                ...($rates->get($selection['rate_id'])?->effectiveCancellationPolicy()
+                    ?? CancellationPolicy::globalDefault()),
+                'date_start' => $selection['date_start'],
+            ]
         );
         $parentCancellation = Reservation::strictestCancellationPolicy($childCancellations);
 

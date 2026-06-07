@@ -286,17 +286,12 @@ class Rate extends Model
             return [
                 'policy' => $policy,
                 // A missing period (impossible via the CP, but defensively) inherits the global one —
-                // a blind (int) cast would silently turn "inherit" into "0 days".
-                'period' => is_null($this->free_cancellation_period)
-                    ? (int) config('resrv-config.free_cancellation_period')
-                    : (int) $this->free_cancellation_period,
+                // an explicit 0 is meaningful (free cancellation until check-in) and is kept as-is.
+                'period' => $this->free_cancellation_period ?? CancellationPolicy::globalDefault()['period'],
             ];
         }
 
-        return [
-            'policy' => CancellationPolicy::FreeCancellation,
-            'period' => (int) config('resrv-config.free_cancellation_period'),
-        ];
+        return CancellationPolicy::globalDefault();
     }
 
     public function isNonRefundable(): bool

@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -184,11 +185,12 @@ class Reservation extends Model
         if ($this->cancellation_policy) {
             $policy = CancellationPolicy::tryFrom($this->cancellation_policy) ?? CancellationPolicy::FreeCancellation;
 
-            // Snapshots always hold resolved values: a free-cancellation policy carries an
-            // integer period, non-refundable carries none.
+            // Snapshots hold resolved values: non-refundable carries no period, an explicit
+            // zero-day policy carries 0, and a booking made under the unconfigured global
+            // default carries NULL (nothing to advertise) — don't cast NULL into "0 days".
             return [
                 'policy' => $policy,
-                'period' => $policy === CancellationPolicy::FreeCancellation ? (int) $this->free_cancellation_period : null,
+                'period' => $policy === CancellationPolicy::FreeCancellation ? $this->free_cancellation_period : null,
             ];
         }
 
@@ -198,7 +200,10 @@ class Reservation extends Model
 
         if ($this->isParent() && $this->childs->isNotEmpty()) {
             return static::strictestCancellationPolicy(
-                $this->childs->loadMissing('rate')->map(fn ($child) => $child->rate?->effectiveCancellationPolicy())
+                $this->childs->loadMissing('rate')->map(fn ($child) => [
+                    ...($child->rate?->effectiveCancellationPolicy() ?? CancellationPolicy::globalDefault()),
+                    'date_start' => $child->date_start,
+                ])
             );
         }
 
@@ -217,19 +222,40 @@ class Reservation extends Model
     }
 
     /**
-     * Pick the strictest policy from a set: any non-refundable wins outright; otherwise the
-     * largest free-cancellation period (whose deadline falls earliest before check-in).
+     * Pick the strictest policy from a set of selections: any non-refundable wins outright;
+     * otherwise the one whose free-cancellation deadline (its own check-in date minus its
+     * period) falls earliest. Periods belonging to different check-in dates are not directly
+     * comparable, so the winning deadline is converted back into a period relative to the
+     * earliest check-in in the set — the date a parent reservation stores as date_start.
      *
-     * @param  Collection<int, array{policy: CancellationPolicy, period: ?int}|null>  $policies
+     * @param  Collection<int, array{policy: CancellationPolicy, period: ?int, date_start: mixed}>  $policies
      * @return array{policy: CancellationPolicy, period: ?int}
      */
     public static function strictestCancellationPolicy(Collection $policies): array
     {
-        $policies = $policies->map(fn ($policy) => $policy ?? CancellationPolicy::globalDefault());
+        if ($policies->isEmpty()) {
+            return CancellationPolicy::globalDefault();
+        }
 
-        return $policies->first(fn ($policy) => $policy['policy'] === CancellationPolicy::NonRefundable)
-            ?? $policies->sortByDesc('period')->first()
-            ?? CancellationPolicy::globalDefault();
+        if ($policies->contains(fn ($policy) => $policy['policy'] === CancellationPolicy::NonRefundable)) {
+            return ['policy' => CancellationPolicy::NonRefundable, 'period' => null];
+        }
+
+        // All-NULL periods means nothing was configured anywhere — keep the NULL so the
+        // parent stays as unadvertised as a single unconfigured booking would be.
+        if ($policies->every(fn ($policy) => $policy['period'] === null)) {
+            return ['policy' => CancellationPolicy::FreeCancellation, 'period' => null];
+        }
+
+        $checkIns = $policies->map(fn ($policy) => Carbon::parse($policy['date_start'])->startOfDay());
+        $deadlines = $policies->map(
+            fn ($policy) => Carbon::parse($policy['date_start'])->startOfDay()->subDays((int) $policy['period'])
+        );
+
+        return [
+            'policy' => CancellationPolicy::FreeCancellation,
+            'period' => (int) round($deadlines->min()->diffInDays($checkIns->min(), true)),
+        ];
     }
 
     public function getPropertyAttributeLabel(): string

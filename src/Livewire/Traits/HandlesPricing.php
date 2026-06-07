@@ -84,7 +84,8 @@ trait HandlesPricing
         if (config('resrv-config.full_payment_after_free_cancellation') === false) {
             return true;
         }
-        $freeCancellation = $cancellation['period'];
+        // An unconfigured (NULL) period behaves like 0: the window only closes on check-in day.
+        $freeCancellation = $cancellation['period'] ?? 0;
         $freeCancellationDays = false;
 
         if ($this instanceof AvailabilityResults) {

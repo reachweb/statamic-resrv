@@ -751,6 +751,93 @@ class RateCpTest extends TestCase
         ]);
     }
 
+    public function test_legacy_payload_with_refundable_true_clears_a_stored_non_refundable_policy()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->nonRefundable()->create(['collection' => 'pages']);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => $rate->title,
+            'slug' => $rate->slug,
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'refundable' => true,
+            'published' => true,
+        ];
+
+        $response = $this->patch(cp_route('resrv.rate.update', $rate->id), $payload);
+        $response->assertStatus(200);
+
+        // The stored policy must be cleared, or it would keep enforcing non-refundable
+        // while the row claims refundable=true.
+        $this->assertDatabaseHas('resrv_rates', [
+            'id' => $rate->id,
+            'cancellation_policy' => null,
+            'free_cancellation_period' => null,
+            'refundable' => true,
+        ]);
+    }
+
+    public function test_update_without_cancellation_keys_keeps_the_stored_policy()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->nonRefundable()->create(['collection' => 'pages']);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Renamed Rate',
+            'slug' => $rate->slug,
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'published' => true,
+        ];
+
+        $response = $this->patch(cp_route('resrv.rate.update', $rate->id), $payload);
+        $response->assertStatus(200);
+
+        // A payload that says nothing about cancellation must not wipe the stored policy.
+        $this->assertDatabaseHas('resrv_rates', [
+            'id' => $rate->id,
+            'title' => 'Renamed Rate',
+            'cancellation_policy' => 'non_refundable',
+            'refundable' => false,
+        ]);
+    }
+
+    public function test_legacy_refundable_true_keeps_an_explicit_free_cancellation_policy()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->freeCancellation(7)->create(['collection' => 'pages']);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => $rate->title,
+            'slug' => $rate->slug,
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'refundable' => true,
+            'published' => true,
+        ];
+
+        $response = $this->patch(cp_route('resrv.rate.update', $rate->id), $payload);
+        $response->assertStatus(200);
+
+        // free_cancellation is already refundable — the configured period must survive.
+        $this->assertDatabaseHas('resrv_rates', [
+            'id' => $rate->id,
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 7,
+            'refundable' => true,
+        ]);
+    }
+
     public function test_cancellation_policy_validation()
     {
         $this->withExceptionHandling();

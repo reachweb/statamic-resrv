@@ -11,6 +11,7 @@ use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
+use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Extras;
 use Reach\StatamicResrv\Livewire\Options;
 use Reach\StatamicResrv\Livewire\Traits\HandlesExtrasQueries;
@@ -360,6 +361,72 @@ class AvailabilityMultiResultsTest extends TestCase
             'item_id' => $entryId,
             'type' => 'parent',
             'cancellation_policy' => 'non_refundable',
+        ]);
+    }
+
+    public function test_multi_date_cart_snapshots_the_earliest_deadline_and_keeps_the_deposit()
+    {
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', '20');
+        Config::set('resrv-config.full_payment_after_free_cancellation', true);
+
+        $this->createCheckoutEntry();
+
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry();
+
+        // Check-in +1 with a 0-day period (deadline +1) and check-in +2 with a 1-day period
+        // (deadline +1): both windows are still open, so the deposit must survive checkout.
+        $adultsRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 0]);
+        $childrenRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 1]);
+
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload());
+
+        $component->call('updateRateQuantity', $adultsRate->id, 1)->call('addSelections');
+
+        // Second search with a later check-in — the cart now mixes start dates.
+        $component->dispatch('availability-search-updated', $this->searchPayload(
+            $this->date->copy()->add(1, 'day')->toISOString(),
+            $this->date->copy()->add(3, 'day')->toISOString(),
+        ));
+
+        $component->call('updateRateQuantity', $childrenRate->id, 1)->call('addSelections');
+
+        $component->call('checkout');
+
+        $this->assertDatabaseHas('resrv_child_reservations', [
+            'rate_id' => $adultsRate->id,
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 0,
+        ]);
+
+        $this->assertDatabaseHas('resrv_child_reservations', [
+            'rate_id' => $childrenRate->id,
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 1,
+        ]);
+
+        // The parent stores the earliest deadline (+1) relative to its own check-in (+1) —
+        // 0 days, NOT the largest child period (1), which would close a window that is open.
+        $parent = Reservation::where('type', 'parent')->where('item_id', $entryId)->first();
+        $this->assertEquals('free_cancellation', $parent->cancellation_policy);
+        $this->assertSame(0, $parent->free_cancellation_period);
+        $this->assertEquals(
+            trans('statamic-resrv::frontend.freeCancellationUntilDate', ['date' => today()->addDay()->format('D d M Y')]),
+            $parent->cancellationPolicyLabel()
+        );
+
+        // Adults 50 x 2 days + children 30 x 2 days = 160; the 20% deposit must survive
+        // the first checkout step because every deadline is still in the future.
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $parent->id,
+            'price' => '160',
+            'payment' => '32',
+            'total' => '160',
         ]);
     }
 
