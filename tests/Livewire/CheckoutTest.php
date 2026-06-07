@@ -821,6 +821,54 @@ class CheckoutTest extends TestCase
         $this->assertEquals('119.30', $fresh->total->format());
     }
 
+    public function test_coupon_recalculation_persists_payment_in_a_single_write_without_a_deposit_window()
+    {
+        // Non-refundable owes the full amount: the 20% deposit must never be persisted, even
+        // transiently. The observer records every committed payment so we can prove that.
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', '20');
+        Config::set('resrv-config.full_payment_after_free_cancellation', false);
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '100.00',
+            'item_id' => $this->entries->first()->id(),
+            'cancellation_policy' => 'non_refundable',
+            'free_cancellation_period' => null,
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $observedPayments = [];
+        Reservation::updated(function (Reservation $model) use ($reservation, &$observedPayments) {
+            if ($model->id === $reservation->id) {
+                $observedPayments[] = $model->payment->format();
+            }
+        });
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        // The 20% deposit (16.00) must never be written.
+        $this->assertNotContains('16.00', $observedPayments, 'the configured deposit must never be persisted, even transiently');
+        $this->assertContains('80.00', $observedPayments);
+
+        $fresh = Reservation::find($reservation->id);
+        $this->assertEquals('80.00', $fresh->payment->format());
+    }
+
     public function test_it_successfully_applies_a_wildcard_coupon()
     {
         $dynamic = DynamicPricing::factory()->withWildcardCoupon()->create();
@@ -1162,7 +1210,7 @@ class CheckoutTest extends TestCase
         $this->assertEquals('104.00', $reservation->totalToCharge());
     }
 
-    public function test_coupon_applied_after_gateway_selection_recalculates_surcharge()
+    public function test_coupon_applied_after_gateway_selection_cancels_intent_and_returns_to_step_two()
     {
         Config::set('resrv-config.payment_gateways', [
             'stripe' => [
@@ -1195,15 +1243,21 @@ class CheckoutTest extends TestCase
         $this->assertEquals('4.00', $reservation->payment_surcharge->format());
         $this->assertEquals('100.00', $reservation->payment->format());
         $this->assertEquals('104.00', $reservation->totalToCharge());
+        $this->assertNotEquals('', $reservation->payment_id);
 
+        // Changing the coupon while an intent exists must abandon it and bounce back to step 2.
         session(['resrv_coupon' => '20OFF']);
-        $component->dispatch('coupon-applied', '20OFF');
+        $component->dispatch('coupon-applied', '20OFF')
+            ->assertSet('step', 2)
+            ->assertSet('selectedGateway', '');
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('80.00', $reservation->price->format());
-        $this->assertEquals('3.20', $reservation->payment_surcharge->format());
         $this->assertEquals('80.00', $reservation->payment->format());
-        $this->assertEquals('83.20', $reservation->totalToCharge());
+        $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+        $this->assertEquals('80.00', $reservation->totalToCharge());
+        $this->assertEquals('', $reservation->payment_id);
+        $this->assertEquals('', $reservation->payment_gateway);
     }
 
     public function test_coupon_applied_without_gateway_leaves_surcharge_zero()
