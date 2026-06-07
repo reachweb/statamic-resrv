@@ -622,6 +622,177 @@ class RateCpTest extends TestCase
         $this->assertFalse($rate->meetsBookingLeadTime(now()->addDays(10)->toDateString()));
     }
 
+    public function test_meets_booking_lead_time_with_zero_max_days_before_means_same_day_only()
+    {
+        $rate = Rate::factory()->create([
+            'max_days_before' => 0,
+        ]);
+
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->toDateString()));
+        $this->assertFalse($rate->meetsBookingLeadTime(now()->addDay()->toDateString()));
+    }
+
+    public function test_meets_booking_lead_time_with_zero_min_days_before_is_no_restriction()
+    {
+        $rate = Rate::factory()->create([
+            'min_days_before' => 0,
+        ]);
+
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->toDateString()));
+        $this->assertTrue($rate->meetsBookingLeadTime(now()->addDays(30)->toDateString()));
+    }
+
+    public function test_can_create_rate_with_free_cancellation_policy()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Flexible Rate',
+            'slug' => 'flexible-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 7,
+            'published' => true,
+        ];
+
+        $response = $this->post(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_rates', [
+            'slug' => 'flexible-rate',
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 7,
+            'refundable' => true,
+        ]);
+    }
+
+    public function test_can_create_non_refundable_rate_and_refundable_flag_is_derived()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Non-Refundable Rate',
+            'slug' => 'non-refundable-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'cancellation_policy' => 'non_refundable',
+            // A stale period must be dropped server-side for policies that don't use one.
+            'free_cancellation_period' => 7,
+            'published' => true,
+        ];
+
+        $response = $this->post(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_rates', [
+            'slug' => 'non-refundable-rate',
+            'cancellation_policy' => 'non_refundable',
+            'free_cancellation_period' => null,
+            'refundable' => false,
+        ]);
+    }
+
+    public function test_can_update_rate_back_to_inherited_cancellation_policy()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate = Rate::factory()->nonRefundable()->create(['collection' => 'pages']);
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => $rate->title,
+            'slug' => $rate->slug,
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'cancellation_policy' => null,
+            'free_cancellation_period' => null,
+            'published' => true,
+        ];
+
+        $response = $this->patch(cp_route('resrv.rate.update', $rate->id), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_rates', [
+            'id' => $rate->id,
+            'cancellation_policy' => null,
+            'free_cancellation_period' => null,
+            'refundable' => true,
+        ]);
+    }
+
+    public function test_legacy_payload_with_only_the_refundable_flag_maps_to_non_refundable()
+    {
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Legacy Rate',
+            'slug' => 'legacy-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'refundable' => false,
+            'published' => true,
+        ];
+
+        $response = $this->post(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_rates', [
+            'slug' => 'legacy-rate',
+            'cancellation_policy' => 'non_refundable',
+            'refundable' => false,
+        ]);
+    }
+
+    public function test_cancellation_policy_validation()
+    {
+        $this->withExceptionHandling();
+
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Test Rate',
+            'slug' => 'test-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'cancellation_policy' => 'partial_refund',
+            'published' => true,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(422)->assertJsonValidationErrors('cancellation_policy');
+    }
+
+    public function test_free_cancellation_period_is_required_for_free_cancellation_policy()
+    {
+        $this->withExceptionHandling();
+
+        $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $payload = [
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Test Rate',
+            'slug' => 'test-rate',
+            'pricing_type' => 'independent',
+            'availability_type' => 'independent',
+            'cancellation_policy' => 'free_cancellation',
+            'published' => true,
+        ];
+
+        $response = $this->postJson(cp_route('resrv.rate.store'), $payload);
+        $response->assertStatus(422)->assertJsonValidationErrors('free_cancellation_period');
+    }
+
     public function test_index_returns_assigned_entries_for_specific_rates()
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();

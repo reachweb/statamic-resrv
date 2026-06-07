@@ -54,6 +54,7 @@
                                 <StatusIndicator :status="parent.published ? 'published' : 'draft'" />
                                 <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="parent.title" @click="edit(parent)"></span>
                                 <Badge v-if="parent.apply_to_all" :text="__('All entries')" size="sm" />
+                                <Badge v-if="parent.cancellation_policy === 'non_refundable'" :text="__('Non-refundable')" size="sm" variant="warning" />
                             </div>
                             <div class="flex items-center gap-2">
                                 <Badge
@@ -106,6 +107,7 @@
                                             <StatusIndicator :status="child.published ? 'published' : 'draft'" />
                                             <span class="font-medium cursor-pointer text-gray-900 dark:text-gray-200 hover:underline" v-text="child.title" @click="edit(child)"></span>
                                             <Badge v-if="child.apply_to_all" :text="__('All entries')" size="sm" />
+                                            <Badge v-if="child.cancellation_policy === 'non_refundable'" :text="__('Non-refundable')" size="sm" variant="warning" />
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <Badge v-if="child.pricing_type === 'relative'" :text="__('Relative')" size="sm" variant="info" />
@@ -210,7 +212,8 @@ function add() {
         max_days_before: null,
         min_stay: null,
         max_stay: null,
-        refundable: true,
+        cancellation_policy: null,
+        free_cancellation_period: null,
         published: true,
     };
     togglePanel();

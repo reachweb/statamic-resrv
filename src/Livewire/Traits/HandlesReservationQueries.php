@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Data\ReservationData;
+use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationCreated;
@@ -17,6 +18,7 @@ use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesReservationQueries
@@ -74,10 +76,14 @@ trait HandlesReservationQueries
             ? (int) $this->data->rate
             : null;
 
+        // Snapshot the resolved cancellation terms onto the reservation — later edits to the
+        // rate or the global config must not change what this customer agreed to at booking.
+        $cancellation = Rate::effectiveCancellationPolicyFor($rateId);
+
         // Dispatch inside the transaction so a failing side effect (e.g. the locked
         // DecreaseAvailability throwing when stock ran out in the TOCTOU window) rolls
         // back the reservation row instead of leaving an orphan PENDING reservation.
-        DB::transaction(function () use ($rateId, $customer) {
+        DB::transaction(function () use ($rateId, $cancellation, $customer) {
             $reservation = Reservation::create(
                 [
                     'status' => ReservationStatus::PENDING,
@@ -88,6 +94,8 @@ trait HandlesReservationQueries
                     'date_end' => $this->data->dates['date_end'],
                     'quantity' => $this->data->quantity,
                     'rate_id' => $rateId,
+                    'cancellation_policy' => $cancellation['policy']->value,
+                    'free_cancellation_period' => $cancellation['period'],
                     'price' => data_get($this->availability, 'data.price'),
                     'payment' => data_get($this->availability, 'data.payment'),
                     'payment_id' => '',
@@ -128,10 +136,21 @@ trait HandlesReservationQueries
             default => Price::create($totalPrice->format()),
         };
 
+        // Snapshot cancellation terms: each child freezes its own rate's policy, the parent
+        // freezes the strictest one — the parent's snapshot is what gates the (single) payment.
+        $rates = Rate::withTrashed()
+            ->findMany($selections->pluck('rate_id')->filter()->unique())
+            ->keyBy('id');
+        $childCancellations = $selections->map(
+            fn ($selection) => $rates->get($selection['rate_id'])?->effectiveCancellationPolicy()
+                ?? CancellationPolicy::globalDefault()
+        );
+        $parentCancellation = Reservation::strictestCancellationPolicy($childCancellations);
+
         // Dispatch inside the transaction so a failing child decrement rolls back the
         // parent + every child row (and the sibling decrements already applied), instead
         // of committing the rows and leaving stock partially decremented.
-        DB::transaction(function () use ($selections, $totalPrice, $totalPayment, $customer, $childPrices) {
+        DB::transaction(function () use ($selections, $totalPrice, $totalPayment, $customer, $childPrices, $childCancellations, $parentCancellation) {
             $reservation = Reservation::create([
                 'status' => ReservationStatus::PENDING,
                 'type' => ReservationTypes::PARENT->value,
@@ -140,6 +159,8 @@ trait HandlesReservationQueries
                 'date_start' => $selections->min('date_start'),
                 'date_end' => $selections->max('date_end'),
                 'quantity' => $selections->sum('quantity'),
+                'cancellation_policy' => $parentCancellation['policy']->value,
+                'free_cancellation_period' => $parentCancellation['period'],
                 'price' => $totalPrice->format(),
                 'payment' => $totalPayment->format(),
                 'payment_id' => '',
@@ -153,6 +174,8 @@ trait HandlesReservationQueries
                     'date_end' => $selection['date_end'],
                     'quantity' => $selection['quantity'],
                     'rate_id' => $selection['rate_id'],
+                    'cancellation_policy' => $childCancellations[$index]['policy']->value,
+                    'free_cancellation_period' => $childCancellations[$index]['period'],
                     'price' => $childPrices[$index],
                 ]);
             }

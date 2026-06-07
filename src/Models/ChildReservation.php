@@ -22,6 +22,8 @@ class ChildReservation extends Model
         'date_end',
         'quantity',
         'rate_id',
+        'cancellation_policy',
+        'free_cancellation_period',
         'price',
         'created_at',
         'updated_at',
@@ -31,6 +33,7 @@ class ChildReservation extends Model
         'date_start' => 'datetime',
         'date_end' => 'datetime',
         'price' => PriceClass::class,
+        'free_cancellation_period' => 'integer',
     ];
 
     protected static function newFactory()

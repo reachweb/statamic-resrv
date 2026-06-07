@@ -323,6 +323,46 @@ class AvailabilityMultiResultsTest extends TestCase
         ]);
     }
 
+    public function test_multi_checkout_snapshots_each_child_policy_and_the_strictest_on_the_parent()
+    {
+        $this->createCheckoutEntry();
+
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry();
+
+        $adultsRate->update(['cancellation_policy' => 'non_refundable']);
+        $childrenRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 3]);
+
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload());
+
+        $component
+            ->call('updateRateQuantity', $adultsRate->id, 2)
+            ->call('updateRateQuantity', $childrenRate->id, 2)
+            ->call('addSelections');
+
+        $component->call('checkout');
+
+        // Each child freezes its own rate's terms.
+        $this->assertDatabaseHas('resrv_child_reservations', [
+            'rate_id' => $adultsRate->id,
+            'cancellation_policy' => 'non_refundable',
+            'free_cancellation_period' => null,
+        ]);
+
+        $this->assertDatabaseHas('resrv_child_reservations', [
+            'rate_id' => $childrenRate->id,
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 3,
+        ]);
+
+        // The parent (which gates the single payment) gets the strictest policy.
+        $this->assertDatabaseHas('resrv_reservations', [
+            'item_id' => $entryId,
+            'type' => 'parent',
+            'cancellation_policy' => 'non_refundable',
+        ]);
+    }
+
     public function test_multi_checkout_rolls_back_parent_and_children_when_a_side_effect_fails()
     {
         $this->createCheckoutEntry();

@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
+use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -44,6 +45,8 @@ class Reservation extends Model
         'date_end',
         'quantity',
         'rate_id',
+        'cancellation_policy',
+        'free_cancellation_period',
         'price',
         'payment',
         'payment_surcharge',
@@ -67,6 +70,7 @@ class Reservation extends Model
         'payment_surcharge' => PriceClass::class,
         'total' => PriceClass::class,
         'abandoned_email_sent_at' => 'datetime',
+        'free_cancellation_period' => 'integer',
     ];
 
     protected $appends = ['entry'];
@@ -165,6 +169,67 @@ class Reservation extends Model
         }
 
         return $this->rate?->title ?? 'Default';
+    }
+
+    /**
+     * The cancellation terms this reservation was booked under. Prefers the snapshot taken at
+     * creation time (immune to later rate or config edits); reservations created before the
+     * snapshot existed fall back to the live rate, then to the strictest policy across a
+     * parent's children, then to the global config default.
+     *
+     * @return array{policy: CancellationPolicy, period: ?int}
+     */
+    public function effectiveCancellationPolicy(): array
+    {
+        if ($this->cancellation_policy) {
+            $policy = CancellationPolicy::tryFrom($this->cancellation_policy) ?? CancellationPolicy::FreeCancellation;
+
+            // Snapshots always hold resolved values: a free-cancellation policy carries an
+            // integer period, non-refundable carries none.
+            return [
+                'policy' => $policy,
+                'period' => $policy === CancellationPolicy::FreeCancellation ? (int) $this->free_cancellation_period : null,
+            ];
+        }
+
+        if ($this->rate) {
+            return $this->rate->effectiveCancellationPolicy();
+        }
+
+        if ($this->isParent() && $this->childs->isNotEmpty()) {
+            return static::strictestCancellationPolicy(
+                $this->childs->loadMissing('rate')->map(fn ($child) => $child->rate?->effectiveCancellationPolicy())
+            );
+        }
+
+        return CancellationPolicy::globalDefault();
+    }
+
+    /**
+     * Customer-facing label for the booked cancellation terms — used in the checkout
+     * sidebar and the reservation emails.
+     */
+    public function cancellationPolicyLabel(): ?string
+    {
+        $cancellation = $this->effectiveCancellationPolicy();
+
+        return CancellationPolicy::labelFor($cancellation['policy'], $cancellation['period'], $this->date_start);
+    }
+
+    /**
+     * Pick the strictest policy from a set: any non-refundable wins outright; otherwise the
+     * largest free-cancellation period (whose deadline falls earliest before check-in).
+     *
+     * @param  Collection<int, array{policy: CancellationPolicy, period: ?int}|null>  $policies
+     * @return array{policy: CancellationPolicy, period: ?int}
+     */
+    public static function strictestCancellationPolicy(Collection $policies): array
+    {
+        $policies = $policies->map(fn ($policy) => $policy ?? CancellationPolicy::globalDefault());
+
+        return $policies->first(fn ($policy) => $policy['policy'] === CancellationPolicy::NonRefundable)
+            ?? $policies->sortByDesc('period')->first()
+            ?? CancellationPolicy::globalDefault();
     }
 
     public function getPropertyAttributeLabel(): string

@@ -587,6 +587,97 @@ class CheckoutTest extends TestCase
         ]);
     }
 
+    public function test_non_refundable_reservation_charges_full_even_without_the_full_payment_toggle()
+    {
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', '20');
+        Config::set('resrv-config.free_cancellation_period', 0);
+        Config::set('resrv-config.full_payment_after_free_cancellation', false);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '20.00',
+            'item_id' => $this->entries->first()->id(),
+            'cancellation_policy' => 'non_refundable',
+            'free_cancellation_period' => null,
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'price' => '100',
+            'payment' => '100',
+            'total' => '100',
+        ]);
+    }
+
+    public function test_snapshot_free_cancellation_period_charges_full_within_the_window()
+    {
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', '20');
+        // The global period would allow a deposit — the snapshot (7 days) must win.
+        Config::set('resrv-config.free_cancellation_period', 0);
+        Config::set('resrv-config.full_payment_after_free_cancellation', true);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '20.00',
+            'item_id' => $this->entries->first()->id(),
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 7,
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'price' => '100',
+            'payment' => '100',
+            'total' => '100',
+        ]);
+    }
+
+    public function test_snapshot_free_cancellation_period_keeps_the_deposit_outside_the_window()
+    {
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', '20');
+        // The global period (10 days) would force full payment — the snapshot (1 day) must win.
+        Config::set('resrv-config.free_cancellation_period', 10);
+        Config::set('resrv-config.full_payment_after_free_cancellation', true);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '20.00',
+            'item_id' => $this->entries->first()->id(),
+            'date_start' => today()->addDays(2)->toIso8601String(),
+            'date_end' => today()->addDays(4)->toIso8601String(),
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 1,
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'price' => '100',
+            'payment' => '20',
+            'total' => '100',
+        ]);
+    }
+
     public function test_it_successfully_applies_a_wildcard_coupon()
     {
         $dynamic = DynamicPricing::factory()->withWildcardCoupon()->create();

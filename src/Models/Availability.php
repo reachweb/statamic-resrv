@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
@@ -340,7 +341,7 @@ class Availability extends Model implements AvailabilityContract
                     $baseRate = $ratesMap->get($item->rate_id);
 
                     if ($baseRate && $this->ratePassesRestrictions($baseRate, $exhaustedByRate->get($baseRate->id, collect())) && $baseRate->appliesToEntry($item->statamic_id)) {
-                        if ($populated = $this->populateAvailability($item)) {
+                        if ($populated = $this->populateAvailability($item, rate: $baseRate)) {
                             $processed->push($populated);
                         }
                     }
@@ -602,7 +603,27 @@ class Availability extends Model implements AvailabilityContract
             'payment' => $this->calculatePayment($prices['reservationPrice'])->format(),
             'rate_id' => $effectiveRateId,
             'rateLabel' => $label,
+            'cancellation_policy' => $this->resolveCancellationPolicyData($rate, $effectiveRateId),
         ]);
+    }
+
+    /**
+     * The per-rate cancellation terms exposed in the availability payload so every surface
+     * (Livewire results, resrv_search scope, live_availability hook) can render policy labels.
+     * Reuses the getRate() memo that getPrices() already warmed for the same row.
+     *
+     * @return array{policy: string, period: ?int}
+     */
+    protected function resolveCancellationPolicyData(?Rate $rate, $effectiveRateId): array
+    {
+        $rate ??= $effectiveRateId ? $this->getRate((int) $effectiveRateId) : null;
+
+        $cancellation = $rate?->effectiveCancellationPolicy() ?? CancellationPolicy::globalDefault();
+
+        return [
+            'policy' => $cancellation['policy']->value,
+            'period' => $cancellation['period'],
+        ];
     }
 
     protected function availableForDates()
