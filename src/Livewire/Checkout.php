@@ -50,6 +50,7 @@ class Checkout extends Component
     #[Locked]
     public string $paymentView = '';
 
+    #[Locked]
     public string $selectedGateway = '';
 
     public array $availableGateways = [];
@@ -598,10 +599,12 @@ class Checkout extends Component
             $this->dispatch('extras-coupon-changed');
         }
 
-        // A coupon change invalidates any intent created for the old amount, so cancel it and
-        // return to step 2 to re-pick a gateway rather than leave it charging the stale total.
-        if ($this->selectedGateway !== '') {
-            $this->resetPaymentState();
+        // A coupon change invalidates any intent created for the old amount. Cancel it off the
+        // persisted reservation — resetPaymentState() reads payment_id — not the component-local
+        // selectedGateway, which a stale tab can hold as '' while the row still has a live intent.
+        $wasOnPaymentStep = $this->selectedGateway !== '' || $this->step >= 3;
+        $this->resetPaymentState();
+        if ($wasOnPaymentStep) {
             $this->step = 2;
         }
 

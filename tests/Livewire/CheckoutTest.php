@@ -12,6 +12,7 @@ use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
@@ -1258,6 +1259,45 @@ class CheckoutTest extends TestCase
         $this->assertEquals('80.00', $reservation->totalToCharge());
         $this->assertEquals('', $reservation->payment_id);
         $this->assertEquals('', $reservation->payment_gateway);
+    }
+
+    public function test_coupon_cancels_a_persisted_intent_even_when_selected_gateway_is_empty()
+    {
+        // Simulates a stale/second tab: the reservation row holds a live intent from another
+        // tab, but this component never selected a gateway (selectedGateway === ''). The cancel
+        // must key off the persisted payment_id, not the component-local property.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '100.00',
+            'item_id' => $this->entries->first()->id(),
+            'payment_id' => 'pi_from_other_tab',
+            'payment_gateway' => 'fake',
+        ]);
+
+        session(['resrv_reservation' => $reservation->id, 'resrv_coupon' => '20OFF']);
+
+        Livewire::test(Checkout::class)
+            ->assertSet('selectedGateway', '')
+            ->dispatch('coupon-applied', '20OFF');
+
+        $fresh = Reservation::find($reservation->id);
+        $this->assertEquals('80.00', $fresh->payment->format());
+        $this->assertEquals('', $fresh->payment_id, 'the stale intent must be cleared off persisted state');
+        $this->assertEquals('', $fresh->payment_gateway);
+
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertEquals('pi_from_other_tab', $gateway->cancelledIntents[0]['payment_id']);
     }
 
     public function test_coupon_applied_without_gateway_leaves_surcharge_zero()
