@@ -678,6 +678,149 @@ class CheckoutTest extends TestCase
         ]);
     }
 
+    public function test_non_refundable_full_payment_survives_coupon_application_and_removal()
+    {
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', '20');
+        Config::set('resrv-config.free_cancellation_period', 0);
+        Config::set('resrv-config.full_payment_after_free_cancellation', false);
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '20.00',
+            'item_id' => $this->entries->first()->id(),
+            'cancellation_policy' => 'non_refundable',
+            'free_cancellation_period' => null,
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'payment' => '100',
+        ]);
+
+        // Applying a coupon on step 2 recalculates prices — the full-payment decision must survive
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $fresh = Reservation::find($reservation->id);
+        $this->assertEquals('80.00', $fresh->price->format());
+        $this->assertEquals('80.00', $fresh->payment->format());
+        $this->assertEquals('80.00', $fresh->total->format());
+
+        // Removing it must restore the full un-discounted payment, not the deposit
+        session()->forget('resrv_coupon');
+        $component->dispatch('coupon-removed', '20OFF', true);
+
+        $fresh = Reservation::find($reservation->id);
+        $this->assertEquals('100.00', $fresh->price->format());
+        $this->assertEquals('100.00', $fresh->payment->format());
+        $this->assertEquals('100.00', $fresh->total->format());
+    }
+
+    public function test_full_payment_window_survives_coupon_recalculation()
+    {
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', '20');
+        Config::set('resrv-config.free_cancellation_period', 0);
+        Config::set('resrv-config.full_payment_after_free_cancellation', true);
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '20.00',
+            'item_id' => $this->entries->first()->id(),
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 7,
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'payment' => '100',
+        ]);
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $fresh = Reservation::find($reservation->id);
+        $this->assertEquals('80.00', $fresh->price->format());
+        $this->assertEquals('80.00', $fresh->payment->format());
+    }
+
+    public function test_everything_mode_payment_keeps_extras_when_coupon_is_applied()
+    {
+        Config::set('resrv-config.payment', 'everything');
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $extras = ResrvExtra::getPriceForDates($this->reservation);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extras->first()->id => [
+                'id' => $extras->first()->id,
+                'quantity' => 1,
+                'price' => $extras->first()->price->format(),
+                'name' => $extras->first()->name,
+            ]])
+            ->dispatch('options-updated', [$this->options->first()->id => [
+                'id' => $this->options->first()->id,
+                'value' => $this->options->first()->values->first()->id,
+                'price' => $this->options->first()->values->first()->price->format(),
+                'optionName' => $this->options->first()->name,
+                'valueName' => $this->options->first()->values->first()->name,
+            ]])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'payment' => '139.30',
+        ]);
+
+        // In everything mode the payment must keep covering extras and options after the coupon
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $fresh = Reservation::find($this->reservation->id);
+        $this->assertEquals('80.00', $fresh->price->format());
+        $this->assertEquals('119.30', $fresh->payment->format());
+        $this->assertEquals('119.30', $fresh->total->format());
+    }
+
     public function test_it_successfully_applies_a_wildcard_coupon()
     {
         $dynamic = DynamicPricing::factory()->withWildcardCoupon()->create();

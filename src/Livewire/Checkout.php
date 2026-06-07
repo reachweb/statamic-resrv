@@ -620,14 +620,24 @@ class Checkout extends Component
         // Remove the caches
         unset($this->reservation);
 
-        // If a gateway is still selected, recompute the surcharge against the new base payment
+        // Calculate the new total
+        $totals = $this->calculateReservationTotals();
+        $toUpdate = ['total' => $totals->get('total')->format()];
+
+        // Reapply the full-payment decision from handleFirstStep(): the configured deposit
+        // written above must not undo it for non-refundable bookings, inside the full-payment
+        // window, or in everything mode (where extras and options are part of the charge).
+        if (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible()) {
+            $toUpdate['payment'] = $totals->get('total')->format();
+        }
+
+        $this->reservation->update($toUpdate);
+        unset($this->reservation);
+
+        // If a gateway is still selected, recompute the surcharge against the final base payment
         if ($this->selectedGateway !== '') {
             $this->applySurcharge(app(PaymentGatewayManager::class), $this->selectedGateway);
         }
-
-        // Calculate and update the total
-        $totals = $this->calculateReservationTotals();
-        $this->reservation->update(['total' => $totals->get('total')->format()]);
 
         CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
     }
