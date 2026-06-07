@@ -1,4 +1,5 @@
 @use(Carbon\Carbon)
+@use(Reach\StatamicResrv\Enums\CancellationPolicy)
 
 <div class="relative">
     @if ($availability->isNotEmpty() && $data->hasDates())
@@ -23,12 +24,19 @@
                     </div>
                 </div>
                 @else
+                @php($cancellation = data_get($rateData, 'data.cancellation_policy'))
+                @php($cancellationLabel = $cancellation ? CancellationPolicy::labelFor($cancellation['policy'], $cancellation['period'], Carbon::parse($data->dates['date_start'])) : null)
                 <div class="flex items-center justify-between rounded-lg bg-gray-50 border border-blue-600 text-gray-900 p-3">
                     <div>
-                        <span class="font-bold text-sm">{{ data_get($this->entryRates, $rateId) }}</span>
-                        <span class="ml-2 text-sm text-gray-600">
-                            {{ config('resrv-config.currency_symbol') }} {{ data_get($rateData, 'data.price') }}
-                        </span>
+                        <div>
+                            <span class="font-bold text-sm">{{ data_get($this->entryRates, $rateId) }}</span>
+                            <span class="ml-2 text-sm text-gray-600">
+                                {{ config('resrv-config.currency_symbol') }} {{ data_get($rateData, 'data.price') }}
+                            </span>
+                        </div>
+                        @if ($cancellationLabel)
+                        <div class="mt-1 text-xs text-gray-500">{{ $cancellationLabel }}</div>
+                        @endif
                     </div>
                     <div class="flex items-center gap-2">
                         <button

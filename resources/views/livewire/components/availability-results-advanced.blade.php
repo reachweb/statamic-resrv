@@ -1,4 +1,6 @@
-@props(['availability', 'entryRates'])
+@use(Carbon\Carbon)
+@use(Reach\StatamicResrv\Enums\CancellationPolicy)
+@props(['availability', 'entryRates', 'dateStart' => null])
 
 <div {{ $attributes->merge(['class' => 'my-3 lg:my-4']) }}>
     <div class="text=-sm font-medium text-gray-600 mb-3">
@@ -16,10 +18,17 @@
                 </div>
             </div>
             @else
+            @php($cancellation = data_get($data, 'data.cancellation_policy'))
+            @php($cancellationLabel = ($cancellation && $dateStart) ? CancellationPolicy::labelFor($cancellation['policy'], $cancellation['period'], Carbon::parse($dateStart)) : null)
             <div class="flex flex-col rounded-lg bg-gray-50 border border-blue-600 text-gray-900 h-full" role="listitem">
                 <div class="mt-2 px-2 text-center font-bold text-sm">
                     {{ data_get($entryRates, $rateId) }}
                 </div>
+                @if ($cancellationLabel)
+                <div class="mt-1 px-2 text-center text-xs text-gray-500">
+                    {{ $cancellationLabel }}
+                </div>
+                @endif
                 <div class="mt-2 mb-3 px-2 text-center font-medium">
                     {{ config('resrv-config.currency_symbol') }} {{ data_get($data, 'data.price') }}
                 </div>

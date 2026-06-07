@@ -234,6 +234,47 @@ class AvailabilityCollectionTest extends TestCase
         $this->assertEquals(2, substr_count($component->html(), 'Book now'));
     }
 
+    public function test_shows_each_rates_cancellation_policy_when_show_rates_is_enabled()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');
+        Rate::where('collection', 'pages')->where('slug', 'rate-a')->first()
+            ->update(['cancellation_policy' => 'non_refundable']);
+        $rateB = $this->createRateForEntry($entry, [
+            'slug' => 'rate-b',
+            'title' => 'Rate B',
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 7,
+        ]);
+        $this->createAvailabilityForEntry($entry, 30, 2, $rateB->id, 10);
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, [
+                'collection' => 'pages',
+                'rates' => true,
+                'showRates' => true,
+            ])
+        );
+
+        // Each booking button is a direct commitment to a rate — its policy must show beside it.
+        $component->assertSee(trans('statamic-resrv::frontend.nonRefundable'));
+        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationUntilDate', [
+            'date' => $this->date->copy()->subDays(7)->format('D d M Y'),
+        ]));
+    }
+
+    public function test_shows_the_cancellation_policy_for_the_from_rate()
+    {
+        $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');
+        Rate::where('collection', 'pages')->where('slug', 'rate-a')->first()
+            ->update(['cancellation_policy' => 'non_refundable']);
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rates' => true])
+        );
+
+        $component->assertSee(trans('statamic-resrv::frontend.nonRefundable'));
+    }
+
     public function test_orders_entries_by_collection_order_by_default()
     {
         // 'pages' has no custom sort, so the default 'order' sort falls back to title asc —

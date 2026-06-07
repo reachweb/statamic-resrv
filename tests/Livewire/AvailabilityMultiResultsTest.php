@@ -336,6 +336,12 @@ class AvailabilityMultiResultsTest extends TestCase
         $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
             ->dispatch('availability-search-updated', $this->searchPayload());
 
+        // Each rate row advertises its policy before the customer adds it to the cart.
+        $component->assertSee(trans('statamic-resrv::frontend.nonRefundable'));
+        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationUntilDate', [
+            'date' => $this->date->copy()->subDays(3)->format('D d M Y'),
+        ]));
+
         $component
             ->call('updateRateQuantity', $adultsRate->id, 2)
             ->call('updateRateQuantity', $childrenRate->id, 2)

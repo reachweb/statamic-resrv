@@ -722,6 +722,32 @@ class AvailabilityResultsTest extends TestCase
             'availability.'.$testRate->id.'.data.cancellation_policy',
             ['policy' => 'non_refundable', 'period' => null]
         );
+
+        // The rate-selection card must advertise the policy before the customer picks the rate.
+        $component->assertSee(trans('statamic-resrv::frontend.nonRefundable'));
+    }
+
+    public function test_advanced_rate_selection_shows_the_free_cancellation_deadline()
+    {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+        $testRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 7]);
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => 'any',
+                ]
+            );
+
+        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationUntilDate', [
+            'date' => $this->date->copy()->subDays(7)->format('D d M Y'),
+        ]));
     }
 
     /**

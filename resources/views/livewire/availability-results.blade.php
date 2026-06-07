@@ -2,7 +2,7 @@
 
 <div class="relative">
     @if ($rates == true && (! $data->rate || $data->rate === 'any'))
-    <x-resrv::availability-results-advanced :$availability :entryRates="$this->entryRates" />
+    <x-resrv::availability-results-advanced :$availability :entryRates="$this->entryRates" :dateStart="$data->dates['date_start'] ?? null" />
     @else
         @if (data_get($availability, 'message.status') === true)
             @if ($this->showOptions)

@@ -1,3 +1,6 @@
+@use(Carbon\Carbon)
+@use(Reach\StatamicResrv\Enums\CancellationPolicy)
+
 <div class="relative">
     @if (! $data->hasDates())
     <div class="flex flex-col py-4">
@@ -32,13 +35,20 @@
                     @if ($showRates)
                     <div class="flex flex-col gap-2 sm:items-end">
                         @foreach ($row['rates'] as $rate)
+                        @php($cancellation = data_get($rate, 'cancellation_policy'))
+                        @php($cancellationLabel = $cancellation ? CancellationPolicy::labelFor($cancellation['policy'], $cancellation['period'], Carbon::parse($data->dates['date_start'])) : null)
                         <div class="flex items-center gap-3">
-                            <span class="text-sm font-medium text-gray-600">
-                                {{ data_get($this->rateLabels, data_get($rate, 'rate_id'), data_get($rate, 'rateLabel')) }}
-                            </span>
-                            <span class="font-medium">
-                                {{ config('resrv-config.currency_symbol') }} {{ data_get($rate, 'price') }}
-                            </span>
+                            <div class="text-right">
+                                <span class="text-sm font-medium text-gray-600">
+                                    {{ data_get($this->rateLabels, data_get($rate, 'rate_id'), data_get($rate, 'rateLabel')) }}
+                                </span>
+                                <span class="font-medium">
+                                    {{ config('resrv-config.currency_symbol') }} {{ data_get($rate, 'price') }}
+                                </span>
+                                @if ($cancellationLabel)
+                                <div class="text-xs text-gray-500">{{ $cancellationLabel }}</div>
+                                @endif
+                            </div>
                             <button
                                 type="button"
                                 class="rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300"
@@ -51,6 +61,8 @@
                         @endforeach
                     </div>
                     @else
+                    @php($cancellation = data_get($row['from'], 'cancellation_policy'))
+                    @php($cancellationLabel = $cancellation ? CancellationPolicy::labelFor($cancellation['policy'], $cancellation['period'], Carbon::parse($data->dates['date_start'])) : null)
                     <div class="flex items-center gap-3 sm:justify-end">
                         <div class="text-right">
                             @if (data_get($row['from'], 'original_price'))
@@ -61,6 +73,9 @@
                             <span class="font-medium">
                                 {{ config('resrv-config.currency_symbol') }} {{ data_get($row['from'], 'price') }}
                             </span>
+                            @if ($cancellationLabel)
+                            <div class="text-xs text-gray-500">{{ $cancellationLabel }}</div>
+                            @endif
                         </div>
                         <button
                             type="button"
