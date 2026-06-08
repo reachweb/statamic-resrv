@@ -84,23 +84,24 @@ trait HandlesPricing
         if (config('resrv-config.full_payment_after_free_cancellation') === false) {
             return true;
         }
+        // The check-in date the free-cancellation window is measured against. AvailabilityMultiResults
+        // resolves to null — it has no single date here and decides full payment at checkout from the
+        // parent snapshot — so the window check is skipped (and any future caller fails safe, not silent).
+        $dateStart = match (true) {
+            $this instanceof AvailabilityResults => Carbon::parse($this->data->dates['date_start']),
+            $this instanceof Checkout => Carbon::parse($this->reservation->date_start),
+            default => null,
+        };
+
+        if ($dateStart === null) {
+            return true;
+        }
+
         // An unconfigured (NULL) period behaves like 0: the window only closes on check-in day.
         $freeCancellation = $cancellation['period'] ?? 0;
-        $freeCancellationDays = false;
+        $freeCancellationDays = (int) Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay(), true);
 
-        if ($this instanceof AvailabilityResults) {
-            $dateStart = Carbon::parse($this->data->dates['date_start']);
-            $freeCancellationDays = (int) Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay(), true);
-        }
-        if ($this instanceof Checkout) {
-            $dateStart = Carbon::parse($this->reservation->date_start);
-            $freeCancellationDays = (int) Carbon::create($dateStart->year, $dateStart->month, $dateStart->day, 0, 0, 0)->diffInDays(now()->startOfDay(), true);
-        }
-        if ($freeCancellationDays !== false && $freeCancellationDays <= $freeCancellation) {
-            return false;
-        }
-
-        return true;
+        return $freeCancellationDays > $freeCancellation;
     }
 
     private array $resolvedCancellationPolicies = [];
