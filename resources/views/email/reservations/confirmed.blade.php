@@ -32,6 +32,10 @@
 | {{ __("Rate") }} | {{ $reservation->getRateLabel() }} |
 @endif
 @endif
+@php($cancellationLabel = $reservation->cancellationPolicyLabel())
+@if ($cancellationLabel)
+| {{ __("Cancellation policy") }} | {{ $cancellationLabel }} |
+@endif
 @endcomponent
 
 @if ($reservation->type === 'parent')

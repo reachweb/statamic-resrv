@@ -80,7 +80,7 @@ class RateCpController extends Controller
 
     public function store(Request $request): JsonResponse|RedirectResponse
     {
-        $data = $request->validate($this->validationRules($request));
+        $data = $this->applyCancellationPolicy($request->validate($this->validationRules($request)));
 
         $entries = Arr::pull($data, 'entries', []);
 
@@ -107,7 +107,7 @@ class RateCpController extends Controller
 
     public function update(Request $request, Rate $rate): JsonResponse|RedirectResponse
     {
-        $data = $request->validate($this->validationRules($request, $rate));
+        $data = $this->applyCancellationPolicy($request->validate($this->validationRules($request, $rate)), $rate);
 
         $hasEntries = array_key_exists('entries', $data);
         $entries = Arr::pull($data, 'entries', []);
@@ -266,7 +266,49 @@ class RateCpController extends Controller
             'min_stay' => ['nullable', 'integer', 'min:0'],
             'max_stay' => ['nullable', 'integer', 'min:0'],
             'refundable' => ['boolean'],
+            'cancellation_policy' => ['nullable', Rule::in(['free_cancellation', 'non_refundable'])],
+            'free_cancellation_period' => ['nullable', 'integer', 'min:0', 'required_if:cancellation_policy,free_cancellation'],
             'published' => ['boolean'],
         ];
+    }
+
+    /**
+     * Keep the legacy `refundable` flag in sync with the policy that is actually enforced,
+     * and drop a stale period when the policy doesn't use one.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function applyCancellationPolicy(array $data, ?Rate $rate = null): array
+    {
+        if (! array_key_exists('cancellation_policy', $data)) {
+            // Legacy API payloads may still only send the old boolean — honor the intent.
+            // The `boolean` rule also lets 0/'0'/1/'1' through, so normalize before comparing.
+            $refundable = array_key_exists('refundable', $data)
+                ? filter_var($data['refundable'], FILTER_VALIDATE_BOOL)
+                : null;
+
+            if ($refundable === false) {
+                $data['cancellation_policy'] = 'non_refundable';
+                $data['free_cancellation_period'] = null;
+            } elseif ($refundable === true && $rate?->cancellation_policy === 'non_refundable') {
+                // Marking a non-refundable rate refundable again must clear the stored policy,
+                // or the saved flag and the policy that is actually enforced contradict each
+                // other. A stored free-cancellation policy is left alone — it is already
+                // refundable and its period is deliberate configuration.
+                $data['cancellation_policy'] = null;
+                $data['free_cancellation_period'] = null;
+            }
+
+            return $data;
+        }
+
+        $data['refundable'] = $data['cancellation_policy'] !== 'non_refundable';
+
+        if ($data['cancellation_policy'] !== 'free_cancellation') {
+            $data['free_cancellation_period'] = null;
+        }
+
+        return $data;
     }
 }

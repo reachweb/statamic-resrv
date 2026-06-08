@@ -17,6 +17,7 @@ use Reach\StatamicResrv\Exceptions\ReservationDriftException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Exceptions\ReservationExpiredException;
 use Reach\StatamicResrv\Exceptions\ReservationTerminatedException;
+use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
@@ -49,6 +50,7 @@ class Checkout extends Component
     #[Locked]
     public string $paymentView = '';
 
+    #[Locked]
     public string $selectedGateway = '';
 
     public array $availableGateways = [];
@@ -393,18 +395,6 @@ class Checkout extends Component
         }
     }
 
-    protected function applySurcharge(PaymentGatewayManager $manager, string $gateway): void
-    {
-        $reservation = $this->reservation->fresh();
-        $surcharge = $manager->calculateSurcharge($gateway, $reservation->payment);
-
-        $reservation->update([
-            'payment_surcharge' => $surcharge->format(),
-        ]);
-
-        unset($this->reservation);
-    }
-
     protected function initializePayment()
     {
         // Get a fresh record from the database
@@ -609,25 +599,37 @@ class Checkout extends Component
             $this->dispatch('extras-coupon-changed');
         }
 
-        // Get the prices after applying the coupon
-        $prices = $this->getUpdatedPrices();
-        // Update the reservation with the new prices; clear stale surcharge so it can't desync from payment
-        $this->reservation->update([
-            'price' => $prices['price'],
-            'payment' => $prices['payment'],
-            'payment_surcharge' => 0,
-        ]);
-        // Remove the caches
-        unset($this->reservation);
-
-        // If a gateway is still selected, recompute the surcharge against the new base payment
-        if ($this->selectedGateway !== '') {
-            $this->applySurcharge(app(PaymentGatewayManager::class), $this->selectedGateway);
+        // A coupon change invalidates any intent created for the old amount. Cancel it off the
+        // persisted reservation — resetPaymentState() reads payment_id — not the component-local
+        // selectedGateway, which a stale tab can hold as '' while the row still has a live intent.
+        $wasOnPaymentStep = $this->selectedGateway !== '' || $this->step >= 3;
+        $this->resetPaymentState();
+        if ($wasOnPaymentStep) {
+            $this->step = 2;
         }
 
-        // Calculate and update the total
-        $totals = $this->calculateReservationTotals();
-        $this->reservation->update(['total' => $totals->get('total')->format()]);
+        // Recompute price, total and payment, then persist in one update so a concurrent
+        // handleSecondStep() never reads the deposit before the full-payment override lands.
+        $prices = $this->getUpdatedPrices();
+
+        $total = Price::create($prices['price'])->add(
+            $this->calculateExtraTotals(),
+            $this->calculateOptionTotals(),
+        );
+
+        // Reapply handleFirstStep()'s full-payment decision: non-refundable, the full-payment
+        // window, or everything mode must pay the whole total, not the deposit.
+        $payment = (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible())
+            ? $total->format()
+            : $prices['payment'];
+
+        $this->reservation->update([
+            'price' => $prices['price'],
+            'payment' => $payment,
+            'payment_surcharge' => 0,
+            'total' => $total->format(),
+        ]);
+        unset($this->reservation);
 
         CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
     }

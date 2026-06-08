@@ -113,10 +113,10 @@
                             <DateRangePicker v-model="dateRange" granularity="day" />
                         </Field>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                            <Field :label="__('Min days before')" :instructions="__('Minimum advance booking days.')" :error="form.errors.min_days_before">
+                            <Field :label="__('Min days before')" :instructions="__('Early-bird: bookable only at least this many days before the reservation starts (inclusive). The global minimum still applies. Leave empty for no restriction.')" :error="form.errors.min_days_before">
                                 <Input v-model="form.min_days_before" type="number" />
                             </Field>
-                            <Field :label="__('Max days before')" :instructions="__('Maximum advance booking days.')" :error="form.errors.max_days_before">
+                            <Field :label="__('Max days before')" :instructions="__('Last-minute: bookable only at most this many days before the reservation starts (inclusive). Use 0 for same-day bookings only. Leave empty for no restriction.')" :error="form.errors.max_days_before">
                                 <Input v-model="form.max_days_before" type="number" />
                             </Field>
                             <Field :label="__('Min stay')" :instructions="__('Minimum number of nights.')" :error="form.errors.min_stay">
@@ -130,12 +130,26 @@
                 </Card>
             </Panel>
 
+            <Panel :heading="__('Cancellation policy')">
+                <Card>
+                    <div class="space-y-6">
+                        <Field :label="__('Cancellation policy')" :instructions="__('Leave empty to use the global free cancellation setting. Non-refundable rates always require full payment at checkout.')" :error="form.errors.cancellation_policy">
+                            <Select
+                                v-model="form.cancellation_policy"
+                                :options="cancellationPolicies"
+                                :placeholder="__('Use global default')"
+                            />
+                        </Field>
+                        <Field v-if="form.cancellation_policy === 'free_cancellation'" :label="__('Free cancellation period')" :instructions="__('The number of days before the reservation start date that the customer can cancel for free.')" :error="form.errors.free_cancellation_period">
+                            <Input v-model="form.free_cancellation_period" type="number" />
+                        </Field>
+                    </div>
+                </Card>
+            </Panel>
+
             <Panel :heading="__('Settings')">
                 <Card>
                     <div class="space-y-6">
-                        <Field :label="__('Refundable')">
-                            <Switch v-model="form.refundable" />
-                        </Field>
                         <Field :label="__('Published')">
                             <Switch v-model="form.published" />
                         </Field>
@@ -191,7 +205,8 @@ const form = useForm({
     max_days_before: null,
     min_stay: null,
     max_stay: null,
-    refundable: true,
+    cancellation_policy: null,
+    free_cancellation_period: null,
     published: true,
 });
 
@@ -217,6 +232,10 @@ const modifierOperations = [
 const availabilityTypes = [
     { value: 'independent', label: 'Independent' },
     { value: 'shared', label: 'Shared' },
+];
+const cancellationPolicies = [
+    { value: 'free_cancellation', label: 'Free cancellation until X days before' },
+    { value: 'non_refundable', label: 'Non-refundable' },
 ];
 
 const collectionOptions = computed(() =>
@@ -275,6 +294,12 @@ watch(() => form.apply_to_all, (newVal) => {
     }
 });
 
+watch(() => form.cancellation_policy, (newVal) => {
+    if (newVal !== 'free_cancellation') {
+        form.free_cancellation_period = null;
+    }
+});
+
 onMounted(hydrateForm);
 
 function hydrateForm() {
@@ -298,7 +323,8 @@ function hydrateForm() {
     form.max_days_before = d.max_days_before ?? null;
     form.min_stay = d.min_stay ?? null;
     form.max_stay = d.max_stay ?? null;
-    form.refundable = d.refundable ?? true;
+    form.cancellation_policy = d.cancellation_policy ?? null;
+    form.free_cancellation_period = d.free_cancellation_period ?? null;
     form.published = d.published ?? true;
 
     if (Array.isArray(d.entries) && d.entries.length > 0) {

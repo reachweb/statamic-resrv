@@ -31,6 +31,8 @@ class RateFactory extends Factory
             'min_stay' => null,
             'max_stay' => null,
             'refundable' => true,
+            'cancellation_policy' => null,
+            'free_cancellation_period' => null,
             'order' => 0,
             'published' => true,
         ];
@@ -54,6 +56,26 @@ class RateFactory extends Factory
             'title' => 'Shared Rate',
             'slug' => 'shared-rate',
             'availability_type' => 'shared',
+        ]);
+    }
+
+    public function nonRefundable(): static
+    {
+        return $this->state(fn () => [
+            'title' => 'Non-Refundable Rate',
+            'slug' => 'non-refundable-rate',
+            'refundable' => false,
+            'cancellation_policy' => 'non_refundable',
+        ]);
+    }
+
+    public function freeCancellation(int $days): static
+    {
+        return $this->state(fn () => [
+            'title' => 'Flexible Rate',
+            'slug' => 'flexible-rate',
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => $days,
         ]);
     }
 

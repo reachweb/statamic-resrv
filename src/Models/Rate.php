@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
 use Reach\StatamicResrv\Database\Factories\RateFactory;
+use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
@@ -53,6 +54,8 @@ class Rate extends Model
         'min_stay',
         'max_stay',
         'refundable',
+        'cancellation_policy',
+        'free_cancellation_period',
         'order',
         'published',
     ];
@@ -66,6 +69,7 @@ class Rate extends Model
         'date_end' => 'date',
         'modifier_amount' => 'decimal:2',
         'base_rate_id' => 'string',
+        'free_cancellation_period' => 'integer',
     ];
 
     protected static function newFactory(): RateFactory
@@ -246,22 +250,70 @@ class Rate extends Model
 
     public function meetsBookingLeadTime(string $dateStart): bool
     {
-        if (! $this->min_days_before && ! $this->max_days_before) {
+        if (is_null($this->min_days_before) && is_null($this->max_days_before)) {
             return true;
         }
 
         $start = Carbon::parse($dateStart);
         $daysUntilStart = Carbon::today()->diffInDays($start, false);
 
-        if ($this->min_days_before && $daysUntilStart < $this->min_days_before) {
+        if (! is_null($this->min_days_before) && $daysUntilStart < $this->min_days_before) {
             return false;
         }
 
-        if ($this->max_days_before && $daysUntilStart > $this->max_days_before) {
+        if (! is_null($this->max_days_before) && $daysUntilStart > $this->max_days_before) {
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * Resolve the cancellation policy that applies to this rate. A NULL column means the
+     * rate inherits the global resrv-config.free_cancellation_period setting.
+     *
+     * @return array{policy: CancellationPolicy, period: ?int}
+     */
+    public function effectiveCancellationPolicy(): array
+    {
+        $policy = CancellationPolicy::tryFrom($this->cancellation_policy ?? '');
+
+        if ($policy === CancellationPolicy::NonRefundable) {
+            return ['policy' => $policy, 'period' => null];
+        }
+
+        if ($policy === CancellationPolicy::FreeCancellation) {
+            return [
+                'policy' => $policy,
+                // A missing period (impossible via the CP, but defensively) inherits the global one —
+                // an explicit 0 is meaningful (free cancellation until check-in) and is kept as-is.
+                'period' => $this->free_cancellation_period ?? CancellationPolicy::globalDefault()['period'],
+            ];
+        }
+
+        return CancellationPolicy::globalDefault();
+    }
+
+    public function isNonRefundable(): bool
+    {
+        return $this->effectiveCancellationPolicy()['policy'] === CancellationPolicy::NonRefundable;
+    }
+
+    /**
+     * Resolve the effective cancellation policy for a rate id, falling back to the global
+     * default when the id is empty or unknown. withTrashed so a rate soft-deleted mid-session
+     * still resolves to the terms it carried.
+     *
+     * @return array{policy: CancellationPolicy, period: ?int}
+     */
+    public static function effectiveCancellationPolicyFor(?int $rateId): array
+    {
+        if (! $rateId) {
+            return CancellationPolicy::globalDefault();
+        }
+
+        return static::withTrashed()->find($rateId)?->effectiveCancellationPolicy()
+            ?? CancellationPolicy::globalDefault();
     }
 
     public function calculatePrice(PriceClass $basePrice): PriceClass

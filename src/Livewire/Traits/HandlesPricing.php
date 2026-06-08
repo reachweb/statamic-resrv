@@ -4,9 +4,11 @@ namespace Reach\StatamicResrv\Livewire\Traits;
 
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 
 trait HandlesPricing
@@ -68,12 +70,22 @@ trait HandlesPricing
         return $optionsTotal;
     }
 
-    public function freeCancellationPossible(): bool
+    public function freeCancellationPossible(?int $rateId = null): bool
     {
+        $cancellation = $this->resolveCancellationPolicy($rateId);
+
+        // A non-refundable booking has no free-cancellation window at all, so it is prepaid
+        // in full — regardless of the full_payment_after_free_cancellation toggle, which only
+        // governs what happens once a free-cancellation period has passed.
+        if ($cancellation['policy'] === CancellationPolicy::NonRefundable) {
+            return false;
+        }
+
         if (config('resrv-config.full_payment_after_free_cancellation') === false) {
             return true;
         }
-        $freeCancellation = config('resrv-config.free_cancellation_period');
+        // An unconfigured (NULL) period behaves like 0: the window only closes on check-in day.
+        $freeCancellation = $cancellation['period'] ?? 0;
         $freeCancellationDays = false;
 
         if ($this instanceof AvailabilityResults) {
@@ -89,5 +101,30 @@ trait HandlesPricing
         }
 
         return true;
+    }
+
+    private array $resolvedCancellationPolicies = [];
+
+    /**
+     * Resolve the cancellation terms in play: the reservation snapshot during checkout, the
+     * rate's (or selected rate's) policy on availability results, the global default otherwise.
+     *
+     * @return array{policy: CancellationPolicy, period: ?int}
+     */
+    protected function resolveCancellationPolicy(?int $rateId = null): array
+    {
+        if ($this instanceof Checkout) {
+            return $this->reservation->effectiveCancellationPolicy();
+        }
+
+        if (! $rateId && $this instanceof AvailabilityResults && is_numeric($this->data->rate ?? null)) {
+            $rateId = (int) $this->data->rate;
+        }
+
+        if (! $rateId) {
+            return CancellationPolicy::globalDefault();
+        }
+
+        return $this->resolvedCancellationPolicies[$rateId] ??= Rate::effectiveCancellationPolicyFor($rateId);
     }
 }

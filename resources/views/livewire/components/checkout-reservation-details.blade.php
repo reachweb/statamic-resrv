@@ -52,6 +52,17 @@
             </p>
         </div>
         @endif
+        @php($cancellationLabel = $reservation->cancellationPolicyLabel())
+        @if ($cancellationLabel)
+        <div class="py-3 md:py-4 border-b border-gray-200">
+            <p class="font-medium text-gray-500 truncate">
+                {{ trans('statamic-resrv::frontend.cancellationPolicy') }}
+            </p>
+            <p class="text-gray-900 truncate">
+                {{ $cancellationLabel }}
+            </p>
+        </div>
+        @endif
     </div>
     <button class="mt-2 w-full inline-flex justify-center items-center lg:hidden" x-on:click="toggle">
         <span class="text-gray-900">

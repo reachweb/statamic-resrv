@@ -330,6 +330,60 @@ class RateAvailabilityTest extends TestCase
         $this->assertFalse($rate->meetsBookingLeadTime(now()->addDays(15)->toDateString()));
     }
 
+    public function test_same_day_only_rate_is_filtered_for_future_searches()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            rateAttributes: [
+                'slug' => 'same-day-rate',
+                'max_days_before' => 0,
+            ],
+        );
+
+        // Starting today the rate is within its window.
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $data['rate']->id,
+        ], $data['entry']->id());
+
+        $this->assertTrue($result['message']['status']);
+
+        // Starting tomorrow it must be filtered out — 0 means same-day only, not "no limit".
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => now()->startOfDay()->addDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(3)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $data['rate']->id,
+        ], $data['entry']->id());
+
+        $this->assertFalse($result['message']['status']);
+    }
+
+    public function test_availability_payload_includes_cancellation_policy()
+    {
+        $data = $this->createEntryWithRateAndAvailability(
+            rateAttributes: [
+                'slug' => 'flexible-rate',
+                'cancellation_policy' => 'free_cancellation',
+                'free_cancellation_period' => 7,
+            ],
+        );
+
+        $result = (new Availability)->getAvailabilityForEntry([
+            'date_start' => now()->startOfDay()->toDateString(),
+            'date_end' => now()->startOfDay()->addDays(2)->toDateString(),
+            'quantity' => 1,
+            'rate_id' => $data['rate']->id,
+        ], $data['entry']->id());
+
+        $this->assertTrue($result['message']['status']);
+        $this->assertEquals(
+            ['policy' => 'free_cancellation', 'period' => 7],
+            $result['data']['cancellation_policy']
+        );
+    }
+
     public function test_fixed_pricing_filtered_by_rate_id()
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();

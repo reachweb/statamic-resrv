@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
@@ -19,6 +20,7 @@ use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\RatePrice;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -659,6 +661,93 @@ class AvailabilityResultsTest extends TestCase
 
         // Ensure data.rate was updated to the specific rate
         $this->assertEquals((string) $rateToCheckout, $component->get('data.rate'));
+    }
+
+    public function test_checkout_rate_snapshots_the_cancellation_policy()
+    {
+        $checkoutPage = $this->createCheckoutEntry();
+
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+        $testRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 7]);
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => 'any',
+                ]
+            );
+
+        $component->call('checkoutRate', (string) $testRate->id)->assertRedirect($checkoutPage->url());
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'item_id' => $entryId,
+            'rate_id' => $testRate->id,
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 7,
+        ]);
+
+        // Later edits to the rate must not change the terms the reservation was booked under.
+        $testRate->update(['cancellation_policy' => 'non_refundable', 'free_cancellation_period' => null]);
+
+        $cancellation = Reservation::where('rate_id', $testRate->id)->first()->effectiveCancellationPolicy();
+        $this->assertEquals(CancellationPolicy::FreeCancellation, $cancellation['policy']);
+        $this->assertEquals(7, $cancellation['period']);
+    }
+
+    public function test_availability_payload_includes_the_cancellation_policy()
+    {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+        $testRate->update(['cancellation_policy' => 'non_refundable']);
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => 'any',
+                ]
+            );
+
+        $component->assertViewHas(
+            'availability.'.$testRate->id.'.data.cancellation_policy',
+            ['policy' => 'non_refundable', 'period' => null]
+        );
+
+        // The rate-selection card must advertise the policy before the customer picks the rate.
+        $component->assertSee(trans('statamic-resrv::frontend.nonRefundable'));
+    }
+
+    public function test_advanced_rate_selection_shows_the_free_cancellation_deadline()
+    {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+        $testRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 7]);
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => 'any',
+                ]
+            );
+
+        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationUntilDate', [
+            'date' => $this->date->copy()->subDays(7)->format('D d M Y'),
+        ]));
     }
 
     /**
