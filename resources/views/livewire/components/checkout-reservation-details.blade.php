@@ -52,13 +52,14 @@
             </p>
         </div>
         @endif
-        @if ($reservation->cancellationPolicyLabel())
+        @php($cancellationLabel = $reservation->cancellationPolicyLabel())
+        @if ($cancellationLabel)
         <div class="py-3 md:py-4 border-b border-gray-200">
             <p class="font-medium text-gray-500 truncate">
                 {{ trans('statamic-resrv::frontend.cancellationPolicy') }}
             </p>
             <p class="text-gray-900 truncate">
-                {{ $reservation->cancellationPolicyLabel() }}
+                {{ $cancellationLabel }}
             </p>
         </div>
         @endif
