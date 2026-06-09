@@ -174,6 +174,8 @@ class ResrvProvider extends AddonServiceProvider
         parent::register();
 
         $this->app->singleton(PaymentGatewayManager::class, fn () => new PaymentGatewayManager);
+
+        $this->registerSerializableCacheClasses();
     }
 
     public function bootAddon(): void
@@ -389,5 +391,22 @@ class ResrvProvider extends AddonServiceProvider
         $this->bootEntriesHooks('fetched-entries', function ($hookName, $callback) {
             Collection::hook($hookName, $callback);
         });
+    }
+
+    /**
+     * Allow-list the pure-data classes Resrv caches (Collection<stdClass> pricing rows, the
+     * DataImport object) so Laravel 13's `cache.serializable_classes` hardening doesn't
+     * return them as __PHP_Incomplete_Class on warm reads.
+     *
+     * Runs in register(), before the cache store is built. registerSerializableClasses()
+     * is additive and a no-op when the host hasn't enabled hardening.
+     */
+    protected function registerSerializableCacheClasses(): void
+    {
+        $this->registerSerializableClasses([
+            \Illuminate\Support\Collection::class,
+            \stdClass::class,
+            \Reach\StatamicResrv\Helpers\DataImport::class,
+        ]);
     }
 }

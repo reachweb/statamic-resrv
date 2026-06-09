@@ -3,6 +3,7 @@
   <testsuites>
     <testsuite name="Resrv">
       <directory suffix="Test.php">tests/Affiliate/</directory>
+      <directory suffix="Test.php">tests/Caching/</directory>
       <directory suffix="Test.php">tests/Availability/</directory>
       <directory suffix="Test.php">tests/AdvancedAvailability/</directory>
       <directory suffix="Test.php">tests/Extra/</directory>

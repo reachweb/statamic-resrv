@@ -36,13 +36,18 @@ class AvailabilityFieldHelper
     }
 
     /**
-     * Get the availability field for a given blueprint
+     * Get the availability field for a given blueprint.
+     *
+     * Rehydrated from the cached handle (a string) so we never cache the Field object,
+     * which Laravel 13's `cache.serializable_classes` hardening breaks on warm reads.
      */
     public function getField(Blueprint $blueprint): ?Field
     {
-        return Cache::remember($this->cacheKey('resrv_availability_field', $blueprint), self::CACHE_TTL, function () use ($blueprint) {
-            return $this->findAvailabilityField($blueprint);
-        });
+        if (! $this->blueprintHasAvailabilityField($blueprint)) {
+            return null;
+        }
+
+        return $blueprint->field($this->getHandle($blueprint));
     }
 
     /**
