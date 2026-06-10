@@ -69,10 +69,19 @@ class StripePaymentGateway implements PaymentInterface
     {
         $stripe = new StripeClient($this->getSecretKey($reservation));
         try {
-            $attemptRefund = $stripe->refunds->create([
-                'payment_intent' => $reservation->payment_id,
-                'reverse_transfer' => false,
-            ]);
+            $attemptRefund = $stripe->refunds->create(
+                [
+                    'payment_intent' => $reservation->payment_id,
+                    'reverse_transfer' => false,
+                ],
+                [
+                    // Stable per-(reservation, intent) idempotency key: when a connection
+                    // drops AFTER Stripe processed the refund, the status transition rolls
+                    // back to confirmed — the retry then replays the original response
+                    // instead of failing with "already refunded" forever.
+                    'idempotency_key' => 'resrv-refund-'.$reservation->id.'-'.$reservation->payment_id,
+                ]
+            );
         } catch (ApiErrorException $exception) {
             // Every Stripe failure mode (invalid request, connection, auth, rate limit)
             // must surface as RefundFailedException so callers roll back the status

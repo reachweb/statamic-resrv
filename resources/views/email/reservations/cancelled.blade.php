@@ -44,11 +44,13 @@
 @endforeach
 @endif
 
+@if ($reservation->hasGatewayPayment())
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|
 | {{ __("Refunded to the customer") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
 @endcomponent
+@endif
 
 {{ __("Thank you") }},<br>
 {{ config('app.name') }}

@@ -170,9 +170,15 @@ class ReservationStatus extends Component
             return trans('statamic-resrv::frontend.statusConfirmed');
         }
 
-        return $reservation->status === ReservationStatusEnum::REFUNDED->value
+        if ($reservation->status !== ReservationStatusEnum::REFUNDED->value) {
+            return '';
+        }
+
+        // No-charge cancellations (partner / zero-payment) end in REFUNDED too, but
+        // claiming "& refunded" would tell the customer money moved when none did.
+        return $reservation->hasGatewayPayment()
             ? trans('statamic-resrv::frontend.statusCancelled')
-            : '';
+            : trans('statamic-resrv::frontend.statusCancelledNoRefund');
     }
 
     /**

@@ -447,6 +447,89 @@ class ReservationStatusTest extends TestCase
         ]);
     }
 
+    public function test_cancel_reports_success_even_when_a_post_refund_listener_fails()
+    {
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = $this->makeReservation();
+
+        $this->mockRefundGateway();
+
+        // A synchronous listener exploding AFTER the refund committed (availability
+        // restore, emails) must not read as a failed cancellation — the money already
+        // moved and retrying could not rerun the listener anyway.
+        Event::listen(ReservationRefunded::class, function (): void {
+            throw new \RuntimeException('Availability restore exploded.');
+        });
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->call('cancel')
+            ->assertHasNoErrors()
+            ->assertSet('cancelled', true)
+            ->assertSee(trans('statamic-resrv::frontend.reservationCancelledSuccess'));
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
+    }
+
+    public function test_partner_reservations_cancel_without_claiming_a_refund()
+    {
+        Event::fake([ReservationRefunded::class, ReservationCancelledByCustomer::class]);
+
+        $reservation = $this->makeReservation([
+            'status' => 'partner',
+            'payment_id' => '',
+            'payment' => 100,
+        ]);
+
+        // No charge ever reached a gateway, so cancellation must neither call one...
+        $this->forbidGatewayRefunds();
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertSee(trans('statamic-resrv::frontend.cancelReservationNoPaymentDescription'))
+            ->call('cancel')
+            ->assertHasNoErrors()
+            ->assertSet('cancelled', true)
+            // ...nor tell the customer their money was returned.
+            ->assertSee(trans('statamic-resrv::frontend.reservationCancelledNoPaymentSuccess'))
+            ->assertDontSee(trans('statamic-resrv::frontend.reservationCancelledSuccess'))
+            ->assertDontSee(trans('statamic-resrv::frontend.statusCancelled'));
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
+
+        Event::assertDispatched(ReservationRefunded::class);
+        Event::assertDispatched(ReservationCancelledByCustomer::class);
+    }
+
+    public function test_cancelled_email_omits_the_refund_line_when_no_payment_was_collected()
+    {
+        $noCharge = $this->makeReservation([
+            'status' => 'refunded',
+            'payment_id' => '',
+            'payment' => 100,
+        ]);
+
+        $html = (new ReservationCancelledMail($noCharge))->render();
+        $this->assertStringNotContainsString('Refunded to the customer', $html);
+
+        $paid = $this->makeReservation(['status' => 'refunded']);
+
+        $html = (new ReservationCancelledMail($paid))->render();
+        $this->assertStringContainsString('Refunded to the customer', $html);
+    }
+
     public function test_customer_cancellation_event_is_wired_to_the_email_listener()
     {
         Event::fake();

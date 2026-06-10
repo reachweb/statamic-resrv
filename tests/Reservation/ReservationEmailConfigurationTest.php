@@ -165,8 +165,11 @@ class ReservationEmailConfigurationTest extends TestCase
     {
         Mail::fake();
         $item = $this->makeStatamicItem();
+        // payment_id set: the refunded template only shows its "has been refunded" line
+        // when a gateway payment exists (no-charge bookings get a "cancelled" headline).
         $reservation = Reservation::factory()->withCustomer()->create([
             'item_id' => $item->id(),
+            'payment_id' => 'pi_123',
         ]);
 
         Config::set('resrv-config.reservation_emails_global', [

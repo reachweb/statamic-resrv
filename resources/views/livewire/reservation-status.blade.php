@@ -78,7 +78,7 @@
 
             @if ($cancelled)
             <div class="flex flex-col my-4 p-4 bg-green-50 border border-green-300 rounded">
-                <dd class="text-gray-700">{{ trans('statamic-resrv::frontend.reservationCancelledSuccess') }}</dd>
+                <dd class="text-gray-700">{{ trans($reservation->hasGatewayPayment() ? 'statamic-resrv::frontend.reservationCancelledSuccess' : 'statamic-resrv::frontend.reservationCancelledNoPaymentSuccess') }}</dd>
             </div>
             @endif
 
@@ -210,7 +210,7 @@
                 @if ($reservation->canBeCancelledByCustomer())
                 <div class="mt-6">
                     <p class="text-gray-700 mb-4">
-                        {{ trans('statamic-resrv::frontend.cancelReservationDescription') }}
+                        {{ trans($reservation->hasGatewayPayment() ? 'statamic-resrv::frontend.cancelReservationDescription' : 'statamic-resrv::frontend.cancelReservationNoPaymentDescription') }}
                     </p>
                     <button
                         type="button"

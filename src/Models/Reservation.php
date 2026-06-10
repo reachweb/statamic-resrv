@@ -326,17 +326,33 @@ class Reservation extends Model
     }
 
     /**
-     * The amount a refund returns to the customer — everything they actually paid: the
-     * captured payment under deposit-style payment modes, the recorded price when the site
-     * charges the full amount upfront, plus any gateway surcharge (checkout charges
-     * payment + payment_surcharge in one intent, and the gateway refunds that intent in
-     * full). Shared by the refund-related email templates.
+     * Whether a payment intent ever reached a gateway for this reservation. Partner
+     * (affiliate skip-payment) and zero-payment bookings never create one, so payment_id
+     * stays ''. Unlike gatewayHoldsNoCharge() this does not read the status, so it stays
+     * correct after the transition to REFUNDED — the customer-facing cancellation messages
+     * and the refund emails rely on it to decide whether money actually moved.
+     */
+    public function hasGatewayPayment(): bool
+    {
+        return $this->payment_id !== '' && $this->payment_id !== null;
+    }
+
+    /**
+     * The amount a refund returns to the customer. Checkout charges payment +
+     * payment_surcharge in a single intent — the Stripe webhook verifies exactly that
+     * sum — and refunds return the intent in full, so the recorded charge is reported
+     * as-is. Deliberately independent of the payment-mode config: the mode at booking
+     * time already shaped `payment`, and reading today's config would misreport bookings
+     * made before a mode change. Zero when no charge ever reached a gateway (partner /
+     * zero-payment bookings). Shared by the refund-related email templates.
      */
     public function refundedAmount(): PriceClass
     {
-        $paid = config('resrv-config.payment') !== 'full' ? $this->payment : $this->price;
+        if (! $this->hasGatewayPayment()) {
+            return Price::create(0);
+        }
 
-        return $paid->add($this->payment_surcharge);
+        return $this->payment->add($this->payment_surcharge);
     }
 
     /**
@@ -401,7 +417,9 @@ class Reservation extends Model
     /**
      * Every visible reservation matching a customer-held reference code. Returns all rows
      * because the reference column is not unique — callers disambiguate with the customer
-     * credential (email or lookup hash).
+     * credential (email or lookup hash). Ordered by id so that when legacy rows share both
+     * the reference and the credential, lookups deterministically resolve to the oldest
+     * booking instead of whatever the database returns first.
      */
     protected static function customerLookupCandidates(string $reference, array $statuses): Collection
     {
@@ -415,6 +433,7 @@ class Reservation extends Model
             ->with('customer')
             ->where('reference', $reference)
             ->whereIn('status', $statuses)
+            ->orderBy('id')
             ->get();
     }
 

@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Support;
 
+use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelledByCustomer;
 use Reach\StatamicResrv\Events\ReservationRefunded;
@@ -39,7 +40,7 @@ class ReservationRefundProcessor
         );
 
         if ($changed) {
-            ReservationRefunded::dispatch($reservation);
+            $this->dispatchCommitted(ReservationRefunded::class, $reservation);
         }
 
         return $changed;
@@ -66,10 +67,30 @@ class ReservationRefundProcessor
         $changed = $this->refund($reservation);
 
         if ($changed) {
-            ReservationCancelledByCustomer::dispatch($reservation);
+            $this->dispatchCommitted(ReservationCancelledByCustomer::class, $reservation);
         }
 
         return $changed;
+    }
+
+    /**
+     * Dispatch a post-commit event without letting a throwing synchronous listener
+     * (availability restore, emails) masquerade as a failed refund: by the time these
+     * events fire, the status change — and any gateway refund — has already committed,
+     * so callers must be told the refund succeeded. The failed side effect is logged
+     * for manual reconciliation; retrying the refund could not rerun it anyway.
+     */
+    protected function dispatchCommitted(string $event, Reservation $reservation): void
+    {
+        try {
+            $event::dispatch($reservation);
+        } catch (\Throwable $e) {
+            Log::error('Post-refund side effects failed; manual reconciliation may be required.', [
+                'reservation_id' => $reservation->id,
+                'event' => $event,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

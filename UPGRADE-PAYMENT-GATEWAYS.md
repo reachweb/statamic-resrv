@@ -4,7 +4,7 @@ This document provides step-by-step instructions for updating a custom payment g
 
 ## Background
 
-Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has five new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, and `cancelPaymentIntent()` — the first four are covered in Step 1, and `cancelPaymentIntent()` is covered in Step 9). Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
+Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has six new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, and `supportsAutomaticRefunds()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, and `supportsAutomaticRefunds()` in Step 11). Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
 
 There are two gateway types:
 - **Inline gateways** (e.g. Stripe) — render a payment form directly on the checkout page via a Blade view. `redirectsForPayment()` returns `false`.
@@ -18,7 +18,7 @@ Both types follow the same interface. The sections below are marked with which t
 
 **Applies to: all gateways**
 
-> ℹ️ This step covers four of the five new interface methods. The fifth — `cancelPaymentIntent()` — is covered in **Step 9**. Don't ship without implementing it; the interface requires it and your gateway will fatal at boot otherwise.
+> ℹ️ This step covers four of the six new interface methods. The fifth — `cancelPaymentIntent()` — is covered in **Step 9**, and the sixth — `supportsAutomaticRefunds()` — in **Step 11**. Don't ship without implementing them all; the interface requires them and your gateway will fatal at boot otherwise.
 
 Open your gateway class that implements `Reach\StatamicResrv\Http\Payment\PaymentInterface` and add these four methods:
 
@@ -276,7 +276,7 @@ The legacy route (`POST /resrv/api/webhook` without a gateway segment) still wor
 
 **Applies to: all gateways**
 
-The `refund()` method is called from the CP when an admin refunds a reservation. Resrv uses `PaymentGatewayManager::forReservation($reservation)` to resolve the correct gateway from the reservation's `payment_gateway` column. This means a PayPal reservation is refunded through PayPal, a Stripe reservation through Stripe, etc.
+The `refund()` method is called from the CP when an admin refunds a reservation, and from the customer self-cancellation flow (see **Step 11** for that flow's additional requirements). Resrv uses `PaymentGatewayManager::forReservation($reservation)` to resolve the correct gateway from the reservation's `payment_gateway` column. This means a PayPal reservation is refunded through PayPal, a Stripe reservation through Stripe, etc.
 
 ```php
 public function refund($reservation)
@@ -456,6 +456,11 @@ class PayPalPaymentGateway implements PaymentInterface
         return false; // Provider-verified gateway
     }
 
+    public function supportsAutomaticRefunds(): bool
+    {
+        return true; // refund() moves money through the provider's API (see Step 11)
+    }
+
     // --- Payment flow ---
 
     public function paymentIntent($amount, Reservation $reservation, $data)
@@ -620,6 +625,11 @@ class SquarePaymentGateway implements PaymentInterface
         return false; // Provider-verified gateway
     }
 
+    public function supportsAutomaticRefunds(): bool
+    {
+        return true; // refund() moves money through the provider's API (see Step 11)
+    }
+
     // --- Payment flow ---
 
     public function paymentIntent($amount, Reservation $reservation, $data)
@@ -782,10 +792,12 @@ Before deploying your custom gateway:
 - [ ] `handleRedirectBack()` checks `handlePaymentPending()` first, then returns the correct status array
 - [ ] `verifyPayment()` verifies the webhook signature and dispatches `ReservationConfirmed` on success (a failed attempt stays PENDING for retry)
 - [ ] `verifyPayment()` routes the success state change through `transitionTo(CONFIRMED, tolerant: true)`, gates `ReservationConfirmed` on its return value, and re-reads on `false` to surface orphaned charges (see Step 10)
-- [ ] `refund()` throws `RefundFailedException` on failure
+- [ ] `refund()` throws `RefundFailedException` for **every** provider failure mode — catch the SDK's base exception class, not just invalid-request errors (see Step 11)
+- [ ] `refund()` sends a stable idempotency key when the provider supports one (see Step 11)
+- [ ] `supportsAutomaticRefunds()` returns `true` only when `refund()` actually moves money through the provider's API, `false` for out-of-band collection (see Step 11)
 - [ ] Gateway is registered in `config/resrv-config.php` under `payment_gateways`
 - [ ] Webhook URL configured in provider's dashboard with the correct config key segment
-- [ ] `cancelPaymentIntent()` cancels or voids an intent at the provider (see section below)
+- [ ] `cancelPaymentIntent()` cancels or voids an intent at the provider (see Step 9)
 - [ ] For inline gateways: custom Blade view works and is publishable
 - [ ] For redirect gateways: return URL points to the Statamic page with `{{ resrv_checkout_redirect }}`
 
@@ -1012,3 +1024,85 @@ return response()->json([], 200);
 This is the same trade-off as Step 9's stale-success policy: return `200` so the provider stops retrying, and rely on a logged/notified orphan for manual reconciliation rather than confirming a reservation whose hold is gone. The bundled `StripePaymentGateway` and `FakePaymentGateway` both do exactly this, and Resrv's webhook regression tests cover the race.
 
 > **Manual-confirmation gateways** (`supportsManualConfirmation() === true`, e.g. offline/bank-transfer) confirm through Resrv's built-in `CheckoutPayment::confirmPayment()`, which already performs this re-read and shows the customer an "expired" error instead of a false success page. You do **not** need to add anything for that path — it lives in Resrv core, not your gateway.
+
+---
+
+## Step 11: Implement supportsAutomaticRefunds() and Harden refund() for Customer Self-Cancellation
+
+**Applies to: all gateways**
+
+> 📅 Added 2026-06-10 alongside customer self-cancellation. `supportsAutomaticRefunds()` is a required interface method — a gateway written before this date will fatal at boot until it is implemented. If you wrote a custom gateway earlier, also audit its `refund()` against the exception-coverage and idempotency notes below.
+
+### Background
+
+Resrv now lets customers cancel their own reservations from the reservation-status page, within the booking's free-cancellation window. A successful cancellation transitions the reservation to `REFUNDED` and tells the customer their money has been returned to their original payment method. That promise is only true if `refund()` actually moves money through the provider's API — so the interface now asks your gateway to declare it.
+
+### Implement supportsAutomaticRefunds()
+
+```php
+/**
+ * Whether refund() actually returns money through the provider's API.
+ * Gateways that collect payment out of band (bank transfer, pay at
+ * premises) must return false so automated flows never mark a
+ * reservation refunded without money moving.
+ */
+public function supportsAutomaticRefunds(): bool
+{
+    return true; // provider-backed gateways (Stripe, PayPal, Mollie, Square, ...)
+}
+```
+
+Return `false` only when your `refund()` is a bookkeeping no-op. The bundled `OfflinePaymentGateway` returns `false`; `StripePaymentGateway` and `FakePaymentGateway` return `true`.
+
+What the flag gates:
+
+- **`false`** — reservations paid through your gateway cannot be self-cancelled by the customer: the cancel button is hidden on the reservation-status page, and the server-side guard rejects the attempt with the "cannot be cancelled online, please contact us" message. The **CP refund flow is unchanged** — an admin can still mark such a reservation refunded after returning the money manually.
+- **`true`** — eligible reservations show the cancel button, and a customer cancellation calls your `refund()`.
+
+Reservations where no charge ever reached a gateway (partner / zero-payment bookings, `payment_id === ''`) skip the gateway entirely and can always be self-cancelled — your flag is never consulted for them.
+
+### Wrap every provider failure in RefundFailedException
+
+`refund()` now runs in a customer-facing request, and it executes **inside the `REFUNDED` status transition's database transaction** (a row lock is held): a throw rolls the status back, so money is never marked returned when it wasn't.
+
+`RefundFailedException` is the contract for "the provider refused or could not process the refund". Catch your provider SDK's **whole exception hierarchy** — connection failures, authentication errors, and rate limits included, not just invalid-request errors:
+
+```php
+public function refund($reservation)
+{
+    try {
+        return YourProvider::refund($reservation->payment_id);
+    } catch (YourProviderApiException $e) { // the SDK's BASE exception class
+        throw new RefundFailedException($e->getMessage());
+    }
+}
+```
+
+Anything else that escapes is treated as an unexpected error: the customer still gets a generic failure message instead of a 500 (Resrv catches and reports it), but it lands in the exception handler as a bug rather than being logged as a known refund failure. The bundled Stripe gateway catches `ApiErrorException` — the base class of every Stripe API exception — for exactly this reason.
+
+Keep `refund()` down to the single provider call: the row lock is held while it runs, so don't add unrelated I/O.
+
+### Recommended: send a stable idempotency key
+
+If the connection drops *after* the provider processed the refund, Resrv rolls the status back to `confirmed` — but the money has moved. On retry, a naive refund call then fails forever ("already refunded"), leaving the reservation impossible to reconcile from Resrv. If your provider supports idempotency keys, derive a stable one from the reservation and intent so a retry replays the original success and the transition completes:
+
+```php
+$client->refunds->create(
+    [
+        'payment_intent' => $reservation->payment_id,
+    ],
+    [
+        'idempotency_key' => 'resrv-refund-'.$reservation->id.'-'.$reservation->payment_id,
+    ]
+);
+```
+
+The bundled Stripe gateway uses exactly this key shape. Include the intent id, not just the reservation id, so a reservation that legitimately creates a second intent (abandoned checkout, gateway switch) never replays a stale request.
+
+### Customer cancellation flow (architecture reference)
+
+1. The customer looks up their reservation on the reservation-status page (email + booking reference, or an emailed deep link).
+2. A cancel button shows only when the booking is live, inside its free-cancellation window, **and** either its gateway `supportsAutomaticRefunds()` or no charge ever reached a gateway.
+3. Cancelling calls `ReservationRefundProcessor::cancelByCustomer()`, which runs your `refund()` inside the `REFUNDED` transition's transaction.
+4. A `RefundFailedException` (or any other throw) rolls the transition back; the customer sees a generic "contact us" message and the failure is logged.
+5. On success the customer is told the refunded amount — `payment + payment_surcharge`, i.e. exactly what was charged on the intent. Refunding the **full** intent (as the examples above do) is therefore the correct behavior; partial refunds would contradict the email.
