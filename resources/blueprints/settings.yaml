@@ -152,7 +152,7 @@ tabs:
               default: 0
               validate:
                 - required
-              instructions: 'The number of days before the reservation start date that the user can cancel the reservation. Please note that cancellations are manual; this is mainly used to display that info in the frontend.'
+              instructions: 'The number of days before the reservation start date that the user can cancel the reservation. Displayed in the frontend and used by the reservation status component to allow self-service cancellation with an automatic refund.'
           -
             handle: full_payment_after_free_cancellation
             field:
@@ -383,6 +383,9 @@ tabs:
                       -
                         key: customer_abandoned
                         value: 'Customer abandoned'
+                      -
+                        key: admin_cancelled
+                        value: 'Admin cancelled (by customer)'
                 -
                   handle: enabled
                   field:
@@ -466,6 +469,9 @@ tabs:
                       -
                         key: customer_abandoned
                         value: 'Customer abandoned'
+                      -
+                        key: admin_cancelled
+                        value: 'Admin cancelled (by customer)'
                 -
                   handle: enabled
                   field:

@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Livewire\LivewireServiceProvider;
 use MarcoRieser\Livewire\ServiceProvider;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\StatamicResrvServiceProvider;
 use Spatie\LaravelRay\RayServiceProvider;
@@ -252,6 +254,33 @@ class TestCase extends AddonTestCase
         }
 
         $this->assertTrue($query->exists(), "Failed asserting that table [{$table}] has matching record with {$jsonColumn} = {$jsonString}");
+    }
+
+    /**
+     * Bind a payment gateway mock whose refund() runs exactly once, returning $outcome or
+     * throwing it when it is an exception.
+     */
+    protected function mockRefundGateway(bool|\Throwable $outcome = true): void
+    {
+        $gateway = \Mockery::mock(FakePaymentGateway::class)->makePartial();
+        $expectation = $gateway->shouldReceive('refund')->once();
+        $outcome instanceof \Throwable ? $expectation->andThrow($outcome) : $expectation->andReturn($outcome);
+
+        $manager = \Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldReceive('forReservation')->once()->andReturn($gateway);
+        app()->instance(PaymentGatewayManager::class, $manager);
+    }
+
+    /**
+     * Bind a payment gateway manager that fails the test if any gateway is ever resolved —
+     * for flows that must never reach the gateway.
+     */
+    protected function forbidGatewayRefunds(): void
+    {
+        $manager = \Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldNotReceive('forReservation');
+        $manager->shouldNotReceive('gateway');
+        app()->instance(PaymentGatewayManager::class, $manager);
     }
 
     /**

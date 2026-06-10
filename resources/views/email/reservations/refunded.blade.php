@@ -18,12 +18,8 @@
 
 @component('mail::table')
 |{{ __("Refund information") }}||
-| :----------------------------- |:----------------| 
-@if (config('resrv-config.payment') != 'full')
-| {{ __("Refunded to your card") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
-@else
-| {{ __("Refunded to your card") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->price->format() }} |
-@endif
+| :----------------------------- |:----------------|
+| {{ __("Refunded to your card") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
 @endcomponent
 
 {{ __("Thank you") }},<br>

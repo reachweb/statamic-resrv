@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Models;
 
 use Carbon\Carbon;
+use Closure;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -222,6 +223,124 @@ class Reservation extends Model
     }
 
     /**
+     * The last calendar day on which the customer may cancel free of charge, per the booked
+     * terms. NULL when the booking is non-refundable or when no period was ever configured
+     * (an unadvertised policy gives the customer nothing to act on). The deadline is the
+     * exact date advertised by cancellationPolicyLabel() and is inclusive — cancellation is
+     * allowed through the end of that day.
+     */
+    public function freeCancellationDeadline(): ?Carbon
+    {
+        $cancellation = $this->effectiveCancellationPolicy();
+
+        if ($cancellation['policy'] !== CancellationPolicy::FreeCancellation || $cancellation['period'] === null) {
+            return null;
+        }
+
+        return CancellationPolicy::deadlineFor($this->date_start, $cancellation['period']);
+    }
+
+    /**
+     * A live booking — confirmed (directly or via a partner flow) and not yet in a terminal
+     * state. PENDING rows are mid-checkout and expire on their own.
+     */
+    public function isLive(): bool
+    {
+        return in_array($this->status, ReservationStatus::live(), true);
+    }
+
+    /**
+     * Whether the customer may self-cancel (with an automatic full refund of the amount paid)
+     * from the reservation-status component. Only live bookings with an unexpired free
+     * cancellation window qualify.
+     */
+    public function canBeCancelledByCustomer(): bool
+    {
+        if (! $this->isLive()) {
+            return false;
+        }
+
+        $deadline = $this->freeCancellationDeadline();
+
+        return $deadline !== null && now()->lte($deadline->endOfDay());
+    }
+
+    /**
+     * Whether a live booking had a free cancellation window that has since closed — the
+     * complement of canBeCancelledByCustomer() for bookings that were once cancellable,
+     * used to explain the missing cancel button.
+     */
+    public function freeCancellationExpired(): bool
+    {
+        $deadline = $this->freeCancellationDeadline();
+
+        return $this->isLive() && $deadline !== null && now()->gt($deadline->endOfDay());
+    }
+
+    /**
+     * The amount a refund returns to the customer — everything they actually paid: the
+     * captured payment under deposit-style payment modes, the recorded price when the site
+     * charges the full amount upfront. Shared by the refund-related email templates.
+     */
+    public function refundedAmount(): PriceClass
+    {
+        return config('resrv-config.payment') !== 'full' ? $this->payment : $this->price;
+    }
+
+    /**
+     * HMAC of the customer email, keyed by the app key — proves a lookup link came from an
+     * email we sent without exposing the address in the URL. Used by the reservation_from_uri
+     * tag and the reservation-status component's deep links.
+     */
+    public function customerLookupHash(): ?string
+    {
+        $email = $this->customer?->email;
+
+        return $email ? hash_hmac('sha256', $email, config('app.key')) : null;
+    }
+
+    /**
+     * Find a reservation by the reference code a customer holds, tolerant of casing and
+     * stray whitespace (references are generated uppercase).
+     */
+    public static function findByReferenceForCustomer(string $reference, array $statuses): ?self
+    {
+        $reference = strtoupper(trim($reference));
+
+        if ($reference === '') {
+            return null;
+        }
+
+        return static::query()
+            ->with('customer')
+            ->where('reference', $reference)
+            ->whereIn('status', $statuses)
+            ->first();
+    }
+
+    /**
+     * Resolve a customer deep link (reference + customerLookupHash()) to its reservation, or
+     * null on any failure. Shared by the reservation_from_uri tag and the reservation-status
+     * component so the verification logic exists once.
+     */
+    public static function findForCustomerLookup(string $reference, string $hash, array $statuses): ?self
+    {
+        $reservation = static::findByReferenceForCustomer($reference, $statuses);
+
+        // Always compare against an HMAC — a dummy one when nothing was found — so a miss
+        // costs the same work as a hit and response timing doesn't reveal whether a
+        // reference exists.
+        $expectedHash = $reservation?->customerLookupHash()
+            ?? hash_hmac('sha256', 'resrv-missing-reservation', config('app.key'));
+
+        if (! hash_equals($expectedHash, $hash) || $reservation === null) {
+            return null;
+        }
+
+        return $reservation;
+    }
+
+    /**
      * Pick the strictest policy from a set of selections: any non-refundable wins outright;
      * otherwise the one whose free-cancellation deadline (its own check-in date minus its
      * period) falls earliest. Periods belonging to different check-in dates are not directly
@@ -249,7 +368,7 @@ class Reservation extends Model
 
         $checkIns = $policies->map(fn ($policy) => Carbon::parse($policy['date_start'])->startOfDay());
         $deadlines = $policies->map(
-            fn ($policy) => Carbon::parse($policy['date_start'])->startOfDay()->subDays((int) $policy['period'])
+            fn ($policy) => CancellationPolicy::deadlineFor(Carbon::parse($policy['date_start']), (int) $policy['period'])
         );
 
         return [
@@ -306,10 +425,14 @@ class Reservation extends Model
      * changed the row after their in-memory pre-check is treated as a no-op (returns false) rather
      * than throwing — avoiding a spurious HTTP 500 / webhook retry. Explicit callers (CP refund)
      * keep the default and catch InvalidStateTransition to surface the error.
+     *
+     * $inTransaction receives the locked, still-unchanged row after the guard passes and before
+     * the status is saved — work that must commit or roll back atomically with the transition
+     * (e.g. the refund gateway call) goes there. A throw aborts the whole transition.
      */
-    public function transitionTo(ReservationStatus $to, bool $tolerant = false): bool
+    public function transitionTo(ReservationStatus $to, bool $tolerant = false, ?Closure $inTransaction = null): bool
     {
-        return (bool) DB::transaction(function () use ($to, $tolerant) {
+        return (bool) DB::transaction(function () use ($to, $tolerant, $inTransaction) {
             $fresh = static::query()->lockForUpdate()->findOrFail($this->id);
 
             if ($fresh->status === $to->value) {
@@ -330,6 +453,10 @@ class Reservation extends Model
                 }
 
                 throw new InvalidStateTransition($current, $to, $fresh->id);
+            }
+
+            if ($inTransaction) {
+                $inTransaction($fresh);
             }
 
             $fresh->status = $to->value;

@@ -11,6 +11,7 @@ use Reach\StatamicResrv\Console\Commands\UpgradeToRates;
 use Reach\StatamicResrv\Dictionaries\CountryPhoneCodes;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Events\ReservationCancelledByCustomer;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -26,6 +27,7 @@ use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
+use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -40,6 +42,7 @@ use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
+use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
@@ -132,6 +135,12 @@ class ResrvProvider extends AddonServiceProvider
         ],
         ReservationCancelled::class => [
             IncreaseAvailability::class,
+        ],
+        // Availability restore and the customer refund email are handled by ReservationRefunded,
+        // which the refund processor dispatches in the same flow — this event only adds the
+        // admin "cancelled by the customer" notification.
+        ReservationCancelledByCustomer::class => [
+            SendCancelledReservationEmails::class,
         ],
         ReservationRefunded::class => [
             SendRefundReservationEmails::class,
@@ -406,7 +415,7 @@ class ResrvProvider extends AddonServiceProvider
         $this->registerSerializableClasses([
             \Illuminate\Support\Collection::class,
             \stdClass::class,
-            \Reach\StatamicResrv\Helpers\DataImport::class,
+            DataImport::class,
         ]);
     }
 }

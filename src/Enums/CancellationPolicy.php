@@ -29,6 +29,16 @@ enum CancellationPolicy: string
     }
 
     /**
+     * The last calendar day on which a free cancellation may happen for a given check-in date
+     * and period. Single source of the deadline formula so the advertised date (labelFor) and
+     * the enforced one (Reservation::freeCancellationDeadline) can never drift apart.
+     */
+    public static function deadlineFor(Carbon $dateStart, int $period): Carbon
+    {
+        return $dateStart->copy()->startOfDay()->subDays($period);
+    }
+
+    /**
      * Customer-facing label for a resolved policy. Returns null when there is nothing
      * meaningful to advertise (a NULL period from the untouched global default), so sites
      * that never configured cancellation don't suddenly grow a policy line. An explicit
@@ -49,7 +59,7 @@ enum CancellationPolicy: string
         }
 
         return trans('statamic-resrv::frontend.freeCancellationUntilDate', [
-            'date' => $dateStart->copy()->subDays($period)->format('D d M Y'),
+            'date' => self::deadlineFor($dateStart, $period)->format('D d M Y'),
         ]);
     }
 }

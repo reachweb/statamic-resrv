@@ -47,6 +47,20 @@ enum ReservationStatus: string
     }
 
     /**
+     * Status values for live bookings — confirmed stays a customer can act on, whether paid
+     * normally or via a partner (affiliate skip-payment) flow.
+     *
+     * @return string[]
+     */
+    public static function live(): array
+    {
+        return [
+            self::CONFIRMED->value,
+            self::PARTNER->value,
+        ];
+    }
+
+    /**
      * Status values that should exclude reservations from active availability calculations.
      *
      * @return string[]
