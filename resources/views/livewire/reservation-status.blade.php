@@ -194,7 +194,7 @@
                         {{ trans('statamic-resrv::frontend.amountPaid') }}
                     </p>
                     <p class="text-gray-900 truncate">
-                        {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }}
+                        {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountPaid()->format() }}
                     </p>
                 </div>
             </div>

@@ -15,6 +15,7 @@ use Reach\StatamicResrv\Jobs\SendCancelledReservationEmails as SendCancelledRese
 use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails as SendCancelledReservationEmailsListener;
 use Reach\StatamicResrv\Livewire\ReservationStatus;
 use Reach\StatamicResrv\Mail\ReservationCancelled as ReservationCancelledMail;
+use Reach\StatamicResrv\Mail\ReservationRefunded as ReservationRefundedMail;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -511,6 +512,54 @@ class ReservationStatusTest extends TestCase
 
         Event::assertDispatched(ReservationRefunded::class);
         Event::assertDispatched(ReservationCancelledByCustomer::class);
+    }
+
+    public function test_amount_paid_reflects_the_actual_gateway_charge()
+    {
+        // Checkout charges payment + surcharge in one intent, so that's the amount paid.
+        $charged = $this->makeReservation([
+            'payment' => 50,
+            'payment_surcharge' => 4.30,
+        ]);
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $charged->customer->email)
+            ->set('reference', $charged->reference)
+            ->call('lookup')
+            ->assertSee('54.30')
+            ->assertDontSee('50.00');
+
+        // Partner bookings hold the would-be deposit in `payment` but collected nothing.
+        $partner = $this->makeReservation([
+            'status' => 'partner',
+            'payment_id' => '',
+            'payment' => 123.45,
+        ]);
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $partner->customer->email)
+            ->set('reference', $partner->reference)
+            ->call('lookup')
+            ->assertDontSee('123.45');
+    }
+
+    public function test_refunded_email_subject_matches_whether_money_moved()
+    {
+        $refunded = $this->makeReservation(['status' => 'refunded']);
+        (new ReservationRefundedMail($refunded))->assertHasSubject('Reservation Refunded');
+
+        // The no-payment branch of the template says "cancelled" — the implicit
+        // class-name subject ("Reservation Refunded") would contradict it.
+        $noCharge = $this->makeReservation([
+            'status' => 'refunded',
+            'payment_id' => '',
+            'payment' => 100,
+        ]);
+        (new ReservationRefundedMail($noCharge))->assertHasSubject('Reservation Cancelled');
+
+        $configured = (new ReservationRefundedMail($noCharge))
+            ->applyResrvEmailConfig(['subject' => 'Sorry to see you go']);
+        $configured->assertHasSubject('Sorry to see you go');
     }
 
     public function test_cancelled_email_omits_the_refund_line_when_no_payment_was_collected()

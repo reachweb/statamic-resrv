@@ -59,9 +59,11 @@ class ReservationPriceCastTest extends TestCase
         // intent in full — independent of the payment mode configured at read time, which
         // may have changed since the booking was made.
         Config::set('resrv-config.payment', 'percent');
+        $this->assertSame('54.00', $reservation->amountPaid()->format());
         $this->assertSame('54.00', $reservation->refundedAmount()->format());
 
         Config::set('resrv-config.payment', 'full');
+        $this->assertSame('54.00', $reservation->amountPaid()->format());
         $this->assertSame('54.00', $reservation->refundedAmount()->format());
     }
 
@@ -74,6 +76,7 @@ class ReservationPriceCastTest extends TestCase
             'total' => 200,
         ]);
 
+        $this->assertSame('0.00', $reservation->amountPaid()->format());
         $this->assertSame('0.00', $reservation->refundedAmount()->format());
     }
 }

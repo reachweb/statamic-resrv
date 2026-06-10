@@ -338,21 +338,31 @@ class Reservation extends Model
     }
 
     /**
-     * The amount a refund returns to the customer. Checkout charges payment +
+     * The amount actually collected through a payment gateway. Checkout charges payment +
      * payment_surcharge in a single intent — the Stripe webhook verifies exactly that
-     * sum — and refunds return the intent in full, so the recorded charge is reported
-     * as-is. Deliberately independent of the payment-mode config: the mode at booking
-     * time already shaped `payment`, and reading today's config would misreport bookings
-     * made before a mode change. Zero when no charge ever reached a gateway (partner /
-     * zero-payment bookings). Shared by the refund-related email templates.
+     * sum — so `payment` alone understates the charge. Deliberately independent of the
+     * payment-mode config: the mode at booking time already shaped `payment`, and reading
+     * today's config would misreport bookings made before a mode change. Zero when no
+     * charge ever reached a gateway — partner and zero-payment bookings, where `payment`
+     * may still hold the would-be deposit.
      */
-    public function refundedAmount(): PriceClass
+    public function amountPaid(): PriceClass
     {
         if (! $this->hasGatewayPayment()) {
             return Price::create(0);
         }
 
         return $this->payment->add($this->payment_surcharge);
+    }
+
+    /**
+     * The amount a refund returns to the customer — refunds return the payment intent
+     * in full, so this is exactly what was collected. Shared by the refund-related
+     * email templates.
+     */
+    public function refundedAmount(): PriceClass
+    {
+        return $this->amountPaid();
     }
 
     /**
