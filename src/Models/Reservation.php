@@ -23,6 +23,7 @@ use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationDriftException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Statamic\Contracts\Entries\Entry as EntryContract;
@@ -252,7 +253,8 @@ class Reservation extends Model
     /**
      * Whether the customer may self-cancel (with an automatic full refund of the amount paid)
      * from the reservation-status component. Only live bookings with an unexpired free
-     * cancellation window qualify.
+     * cancellation window qualify — and only when the money can actually flow back without
+     * manual work, since the flow immediately tells the customer their payment was returned.
      */
     public function canBeCancelledByCustomer(): bool
     {
@@ -262,7 +264,53 @@ class Reservation extends Model
 
         $deadline = $this->freeCancellationDeadline();
 
-        return $deadline !== null && now()->lte($deadline->endOfDay());
+        if ($deadline === null || now()->gt($deadline->endOfDay())) {
+            return false;
+        }
+
+        return $this->supportsAutomaticRefund();
+    }
+
+    /**
+     * Whether cancelling now can return the customer's money without manual intervention:
+     * either no charge ever reached a gateway, or the gateway can issue refunds through its
+     * API. Offline-style gateways (bank transfer) confirm bookings but cannot move money
+     * back, so marking them refunded would falsely tell the customer their payment returned.
+     */
+    public function supportsAutomaticRefund(): bool
+    {
+        if ($this->gatewayHoldsNoCharge()) {
+            return true;
+        }
+
+        return $this->resolvePaymentGateway()->supportsAutomaticRefunds();
+    }
+
+    /**
+     * Partner (affiliate skip-payment) and zero-payment reservations never create a payment
+     * intent, so payment_id stays '' — there is no charge on the gateway to refund. Anything
+     * else with an empty payment_id (e.g. a PENDING row whose cancelled intent may still
+     * carry an orphaned charge) is assumed to hold one.
+     */
+    public function gatewayHoldsNoCharge(): bool
+    {
+        return ($this->payment_id === '' || $this->payment_id === null)
+            && ($this->status === ReservationStatus::PARTNER->value || $this->payment->isZero());
+    }
+
+    /**
+     * The gateway this reservation was paid through, falling back to the configured default
+     * for legacy rows whose recorded gateway is empty or no longer configured.
+     */
+    public function resolvePaymentGateway(): PaymentInterface
+    {
+        $manager = app(PaymentGatewayManager::class);
+
+        try {
+            return $manager->forReservation($this);
+        } catch (\InvalidArgumentException) {
+            return $manager->gateway();
+        }
     }
 
     /**
@@ -280,11 +328,15 @@ class Reservation extends Model
     /**
      * The amount a refund returns to the customer — everything they actually paid: the
      * captured payment under deposit-style payment modes, the recorded price when the site
-     * charges the full amount upfront. Shared by the refund-related email templates.
+     * charges the full amount upfront, plus any gateway surcharge (checkout charges
+     * payment + payment_surcharge in one intent, and the gateway refunds that intent in
+     * full). Shared by the refund-related email templates.
      */
     public function refundedAmount(): PriceClass
     {
-        return config('resrv-config.payment') !== 'full' ? $this->payment : $this->price;
+        $paid = config('resrv-config.payment') !== 'full' ? $this->payment : $this->price;
+
+        return $paid->add($this->payment_surcharge);
     }
 
     /**
@@ -300,44 +352,70 @@ class Reservation extends Model
     }
 
     /**
-     * Find a reservation by the reference code a customer holds, tolerant of casing and
-     * stray whitespace (references are generated uppercase).
+     * Find a reservation by the reference code a customer holds plus the email they booked
+     * with, tolerant of casing and stray whitespace (references are generated uppercase).
+     * The email is part of the selection — not a post-check — because the reference column
+     * is not unique: when two visible reservations share a reference, each customer must
+     * still reach their own booking.
      */
-    public static function findByReferenceForCustomer(string $reference, array $statuses): ?self
+    public static function findByReferenceForCustomer(string $reference, string $email, array $statuses): ?self
+    {
+        $email = strtolower(trim($email));
+
+        if ($email === '') {
+            return null;
+        }
+
+        return static::customerLookupCandidates($reference, $statuses)
+            ->first(fn (self $reservation) => $reservation->customer?->email
+                && hash_equals(strtolower($reservation->customer->email), $email));
+    }
+
+    /**
+     * Resolve a customer deep link (reference + customerLookupHash()) to its reservation, or
+     * null on any failure. Shared by the reservation_from_uri tag and the reservation-status
+     * component so the verification logic exists once. The hash selects among reservations
+     * sharing a reference, same as the email does in findByReferenceForCustomer().
+     */
+    public static function findForCustomerLookup(string $reference, string $hash, array $statuses): ?self
+    {
+        $match = static::customerLookupCandidates($reference, $statuses)
+            ->first(function (self $reservation) use ($hash) {
+                $expectedHash = $reservation->customerLookupHash();
+
+                return $expectedHash !== null && hash_equals($expectedHash, $hash);
+            });
+
+        // Always compare at least one HMAC — a dummy one when no candidate exists — so a
+        // miss costs the same work as a hit and response timing doesn't reveal whether a
+        // reference exists.
+        if ($match === null) {
+            hash_equals(hash_hmac('sha256', 'resrv-missing-reservation', config('app.key')), $hash);
+
+            return null;
+        }
+
+        return $match;
+    }
+
+    /**
+     * Every visible reservation matching a customer-held reference code. Returns all rows
+     * because the reference column is not unique — callers disambiguate with the customer
+     * credential (email or lookup hash).
+     */
+    protected static function customerLookupCandidates(string $reference, array $statuses): Collection
     {
         $reference = strtoupper(trim($reference));
 
         if ($reference === '') {
-            return null;
+            return collect();
         }
 
         return static::query()
             ->with('customer')
             ->where('reference', $reference)
             ->whereIn('status', $statuses)
-            ->first();
-    }
-
-    /**
-     * Resolve a customer deep link (reference + customerLookupHash()) to its reservation, or
-     * null on any failure. Shared by the reservation_from_uri tag and the reservation-status
-     * component so the verification logic exists once.
-     */
-    public static function findForCustomerLookup(string $reference, string $hash, array $statuses): ?self
-    {
-        $reservation = static::findByReferenceForCustomer($reference, $statuses);
-
-        // Always compare against an HMAC — a dummy one when nothing was found — so a miss
-        // costs the same work as a hit and response timing doesn't reveal whether a
-        // reference exists.
-        $expectedHash = $reservation?->customerLookupHash()
-            ?? hash_hmac('sha256', 'resrv-missing-reservation', config('app.key'));
-
-        if (! hash_equals($expectedHash, $hash) || $reservation === null) {
-            return null;
-        }
-
-        return $reservation;
+            ->get();
     }
 
     /**
@@ -770,9 +848,20 @@ class Reservation extends Model
         return $requiredOptionIds->every(fn ($id) => array_key_exists($id, $checkoutOptions));
     }
 
-    public function createRandomReference()
+    /**
+     * Six characters of [A-Z0-9] give ~2.2 billion combinations — collisions become likely
+     * (birthday bound) well within a busy site's lifetime, and the column carries no unique
+     * index because legacy installs may already hold duplicates. Retry until unused; the
+     * customer-lookup paths additionally disambiguate by credential in case a race or
+     * legacy data still produces a duplicate.
+     */
+    public function createRandomReference(): string
     {
-        return Str::upper(Str::random(6));
+        do {
+            $reference = Str::upper(Str::random(6));
+        } while (static::query()->where('reference', $reference)->exists());
+
+        return $reference;
     }
 
     // TODO: cleanup these methods

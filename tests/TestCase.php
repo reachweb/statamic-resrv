@@ -266,8 +266,10 @@ class TestCase extends AddonTestCase
         $expectation = $gateway->shouldReceive('refund')->once();
         $outcome instanceof \Throwable ? $expectation->andThrow($outcome) : $expectation->andReturn($outcome);
 
+        // No call-count constraint: Reservation::canBeCancelledByCustomer() also resolves
+        // the gateway (capability check) on every render, not just during the refund.
         $manager = \Mockery::mock(PaymentGatewayManager::class);
-        $manager->shouldReceive('forReservation')->once()->andReturn($gateway);
+        $manager->shouldReceive('forReservation')->andReturn($gateway);
         app()->instance(PaymentGatewayManager::class, $manager);
     }
 

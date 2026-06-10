@@ -66,6 +66,13 @@ class OfflinePaymentGateway implements PaymentInterface
         return true;
     }
 
+    public function supportsAutomaticRefunds(): bool
+    {
+        // Money arrives by bank transfer; refund() is a bookkeeping no-op for the CP flow
+        // where an admin returns the funds manually before marking the booking refunded.
+        return false;
+    }
+
     public function redirectsForPayment(): bool
     {
         return false;

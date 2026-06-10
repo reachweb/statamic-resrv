@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
@@ -73,20 +74,19 @@ class ReservationStatus extends Component
             return;
         }
 
-        $reservation = Reservation::findByReferenceForCustomer($this->reference, $this->visibleStatuses());
+        $reservation = Reservation::findByReferenceForCustomer($this->reference, $this->email, $this->visibleStatuses());
 
         // One generic error for every failure mode so responses don't reveal whether a
         // reference exists — only a matching reference + email pair learns anything.
-        if (! $reservation
-            || ! $reservation->customer?->email
-            || ! hash_equals(strtolower($reservation->customer->email), strtolower(trim($this->email)))) {
+        // Successful lookups never clear the bucket: an attacker holding one valid booking
+        // could otherwise reset the IP-wide budget after every nine guesses at other
+        // references. Failed attempts simply decay after ten minutes.
+        if (! $reservation) {
             RateLimiter::hit($this->rateLimiterKey(), 600);
             $this->addError('lookup', trans('statamic-resrv::frontend.reservationNotFound'));
 
             return;
         }
-
-        RateLimiter::clear($this->rateLimiterKey());
 
         $this->reservationId = $reservation->id;
     }
@@ -110,8 +110,21 @@ class ReservationStatus extends Component
             $this->addError('cancellation', trans('statamic-resrv::frontend.cancellationNotAllowed'));
 
             return;
-        } catch (RefundFailedException|InvalidStateTransition) {
-            // Gateway errors stay internal — the customer gets a generic "contact us" message.
+        } catch (RefundFailedException|InvalidStateTransition $e) {
+            // Gateway errors stay internal — the customer gets a generic "contact us" message,
+            // and the failed refund is logged so the site owner can follow up.
+            Log::warning('Customer cancellation failed.', [
+                'reservation_id' => $reservation->id,
+                'error' => $e->getMessage(),
+            ]);
+            $this->addError('cancellation', trans('statamic-resrv::frontend.cancellationFailed'));
+
+            return;
+        } catch (\Throwable $e) {
+            // Anything unexpected (gateway SDK connection/auth/rate-limit errors not mapped
+            // to RefundFailedException, listener bugs) must not bubble up as a 500 — the
+            // transition already rolled back, so report and show the same generic message.
+            report($e);
             $this->addError('cancellation', trans('statamic-resrv::frontend.cancellationFailed'));
 
             return;

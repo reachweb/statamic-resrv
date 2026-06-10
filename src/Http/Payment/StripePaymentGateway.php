@@ -10,7 +10,6 @@ use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 use Stripe\Exception\ApiErrorException;
-use Stripe\Exception\InvalidRequestException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Exception\UnexpectedValueException;
 use Stripe\StripeClient;
@@ -74,7 +73,10 @@ class StripePaymentGateway implements PaymentInterface
                 'payment_intent' => $reservation->payment_id,
                 'reverse_transfer' => false,
             ]);
-        } catch (InvalidRequestException $exception) {
+        } catch (ApiErrorException $exception) {
+            // Every Stripe failure mode (invalid request, connection, auth, rate limit)
+            // must surface as RefundFailedException so callers roll back the status
+            // transition and show their refund-failed message instead of a 500.
             throw new RefundFailedException($exception->getMessage());
         }
 
@@ -138,6 +140,11 @@ class StripePaymentGateway implements PaymentInterface
     public function supportsManualConfirmation(): bool
     {
         return false;
+    }
+
+    public function supportsAutomaticRefunds(): bool
+    {
+        return true;
     }
 
     public function redirectsForPayment(): bool

@@ -9,6 +9,8 @@ use Livewire\Livewire;
 use Reach\StatamicResrv\Events\ReservationCancelledByCustomer;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Jobs\SendCancelledReservationEmails as SendCancelledReservationEmailsJob;
 use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails as SendCancelledReservationEmailsListener;
 use Reach\StatamicResrv\Livewire\ReservationStatus;
@@ -121,6 +123,83 @@ class ReservationStatusTest extends TestCase
             ->assertHasErrors(['lookup'])
             ->assertSet('reservationId', null)
             ->assertSee(trans('statamic-resrv::frontend.tooManyLookupAttempts'));
+    }
+
+    public function test_successful_lookup_does_not_reset_the_rate_limiter()
+    {
+        $reservation = $this->makeReservation();
+
+        // Nine failures, then a success — if the success cleared the bucket, an attacker
+        // holding one valid booking could reset the IP-wide budget indefinitely.
+        foreach (range(1, 9) as $attempt) {
+            Livewire::test(ReservationStatus::class)
+                ->set('email', 'wrong@example.com')
+                ->set('reference', $reservation->reference)
+                ->call('lookup')
+                ->assertHasErrors(['lookup']);
+        }
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertSet('reservationId', $reservation->id);
+
+        // One more failure exhausts the original budget...
+        Livewire::test(ReservationStatus::class)
+            ->set('email', 'wrong@example.com')
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertHasErrors(['lookup']);
+
+        // ...so even valid credentials are rejected now.
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertHasErrors(['lookup'])
+            ->assertSet('reservationId', null)
+            ->assertSee(trans('statamic-resrv::frontend.tooManyLookupAttempts'));
+    }
+
+    public function test_lookup_disambiguates_reservations_sharing_a_reference()
+    {
+        $first = $this->makeReservation();
+        $second = $this->makeReservation();
+        $first->customer->update(['email' => 'first@example.com']);
+        $second->customer->update(['email' => 'second@example.com']);
+
+        // The factory gives both rows the same reference — the collision scenario the
+        // non-unique column allows.
+        $this->assertSame($first->reference, $second->reference);
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', 'second@example.com')
+            ->set('reference', $second->reference)
+            ->call('lookup')
+            ->assertHasNoErrors()
+            ->assertSet('reservationId', $second->id);
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', 'first@example.com')
+            ->set('reference', $first->reference)
+            ->call('lookup')
+            ->assertHasNoErrors()
+            ->assertSet('reservationId', $first->id);
+    }
+
+    public function test_deep_link_disambiguates_reservations_sharing_a_reference()
+    {
+        $first = $this->makeReservation();
+        $second = $this->makeReservation();
+        $first->customer->update(['email' => 'first@example.com']);
+        $second->customer->update(['email' => 'second@example.com']);
+
+        $hash = hash_hmac('sha256', 'second@example.com', config('app.key'));
+
+        Livewire::withQueryParams(['ref' => $second->reference, 'hash' => $hash])
+            ->test(ReservationStatus::class)
+            ->assertSet('reservationId', $second->id);
     }
 
     public function test_deep_link_loads_reservation_with_valid_hash()
@@ -306,6 +385,66 @@ class ReservationStatusTest extends TestCase
 
         Event::assertNotDispatched(ReservationRefunded::class);
         Event::assertNotDispatched(ReservationCancelledByCustomer::class);
+    }
+
+    public function test_cancel_shows_generic_error_when_the_gateway_throws_unexpectedly()
+    {
+        Event::fake([ReservationRefunded::class, ReservationCancelledByCustomer::class]);
+
+        $reservation = $this->makeReservation();
+
+        // Not a RefundFailedException — e.g. a Stripe SDK connection/auth error that
+        // escaped the gateway's own mapping. Must not surface as a 500.
+        $this->mockRefundGateway(new \RuntimeException('Could not connect to Stripe.'));
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false)
+            ->assertSee(trans('statamic-resrv::frontend.cancellationFailed'))
+            ->assertDontSee('Could not connect to Stripe.');
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+
+        Event::assertNotDispatched(ReservationRefunded::class);
+        Event::assertNotDispatched(ReservationCancelledByCustomer::class);
+    }
+
+    public function test_offline_payment_reservations_cannot_be_cancelled_online()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $reservation = $this->makeReservation([
+            'payment_gateway' => 'offline',
+            'payment_id' => 'offline_test_intent',
+        ]);
+
+        // The offline gateway's refund() is a no-op — auto-cancelling would mark the
+        // booking refunded and email the customer that money moved when it never did.
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
+            ->assertDontSee(trans('statamic-resrv::frontend.freeCancellationExpired'))
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false)
+            ->assertSee(trans('statamic-resrv::frontend.cancellationNotAllowed'));
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
     }
 
     public function test_customer_cancellation_event_is_wired_to_the_email_listener()

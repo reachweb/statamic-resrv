@@ -8,7 +8,6 @@ use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\CancellationNotAllowed;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
-use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationRefundProcessor
@@ -53,6 +52,8 @@ class ReservationRefundProcessor
      * refund email still come from ReservationRefunded via refund().
      *
      * @throws CancellationNotAllowed when the booking is outside its free cancellation window
+     *                                or its gateway cannot refund automatically (e.g. offline
+     *                                bank transfer — money would be marked returned without moving)
      * @throws InvalidStateTransition when the current status cannot transition to REFUNDED
      * @throws RefundFailedException when the payment gateway rejects the refund
      */
@@ -72,28 +73,18 @@ class ReservationRefundProcessor
     }
 
     /**
-     * Partner (affiliate skip-payment) and zero-payment reservations never create a payment
-     * intent, so payment_id stays '' — there is no charge on the gateway to refund. Skip the
-     * gateway call entirely or Stripe rejects the empty payment_intent and blocks the refund.
+     * Reservations whose gateway holds no charge (partner / zero-payment) skip the gateway
+     * call entirely or Stripe rejects the empty payment_intent and blocks the refund.
      * Anything else with an empty payment_id (e.g. a PENDING row whose cancelled intent may
      * still carry an orphaned charge) keeps going through the gateway so the failure surfaces
      * to the caller instead of silently marking captured money as refunded.
      */
     protected function refundThroughGateway(Reservation $fresh): void
     {
-        $gatewayHoldsNoCharge = ($fresh->payment_id === '' || $fresh->payment_id === null)
-            && ($fresh->status === ReservationStatus::PARTNER->value || $fresh->payment->isZero());
-
-        if ($gatewayHoldsNoCharge) {
+        if ($fresh->gatewayHoldsNoCharge()) {
             return;
         }
 
-        $manager = app(PaymentGatewayManager::class);
-        try {
-            $payment = $manager->forReservation($fresh);
-        } catch (\InvalidArgumentException $e) {
-            $payment = $manager->gateway();
-        }
-        $payment->refund($fresh);
+        $fresh->resolvePaymentGateway()->refund($fresh);
     }
 }

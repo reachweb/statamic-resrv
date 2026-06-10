@@ -108,6 +108,11 @@ class FakePaymentGateway implements PaymentInterface
         return false;
     }
 
+    public function supportsAutomaticRefunds(): bool
+    {
+        return true;
+    }
+
     public function redirectsForPayment(): bool
     {
         return false;

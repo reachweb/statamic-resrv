@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
+use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -42,5 +43,23 @@ class ReservationPriceCastTest extends TestCase
 
         $this->assertSame('200.00', $array['price']);
         $this->assertSame('50.00', $array['payment']);
+    }
+
+    public function test_refunded_amount_includes_the_payment_surcharge()
+    {
+        $reservation = Reservation::factory()->create([
+            'price' => 200,
+            'payment' => 50,
+            'payment_surcharge' => 4,
+            'total' => 200,
+        ]);
+
+        // Checkout charges payment + surcharge in one intent and the gateway refunds the
+        // intent in full, so the reported refund must carry the surcharge in both modes.
+        Config::set('resrv-config.payment', 'percent');
+        $this->assertSame('54.00', $reservation->refundedAmount()->format());
+
+        Config::set('resrv-config.payment', 'full');
+        $this->assertSame('204.00', $reservation->refundedAmount()->format());
     }
 }
