@@ -2,11 +2,13 @@
 
 namespace Reach\StatamicResrv\Tests\Listeners;
 
+use Illuminate\Support\Facades\Event;
 use PHPUnit\Framework\Attributes\Test;
 use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Actions\DuplicateEntry;
+use Statamic\Events\EntrySaving;
 use Statamic\Facades\Entry;
 
 class NormalizeAvailabilityFieldValueTest extends TestCase
@@ -44,6 +46,23 @@ class NormalizeAvailabilityFieldValueTest extends TestCase
         $entry->set($handle, 'some-other-entry-id')->save();
 
         $this->assertEquals($entry->id(), Entry::find($entry->id())->get($handle));
+    }
+
+    // Saved-event subscribers (e.g. automatic Git) must never see the stale value.
+    #[Test]
+    public function normalizes_before_the_entry_is_written()
+    {
+        $entry = $this->makeStatamicItemWithAvailability();
+        $handle = AvailabilityField::getHandle($entry->blueprint());
+
+        $seenAtSaving = null;
+        Event::listen(EntrySaving::class, function (EntrySaving $event) use (&$seenAtSaving, $handle) {
+            $seenAtSaving = $event->entry->get($handle);
+        });
+
+        $entry->set($handle, 'some-other-entry-id')->save();
+
+        $this->assertEquals($entry->id(), $seenAtSaving);
     }
 
     #[Test]

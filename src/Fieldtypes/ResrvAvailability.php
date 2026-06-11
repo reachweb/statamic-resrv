@@ -31,8 +31,7 @@ class ResrvAvailability extends Fieldtype
     }
 
     /**
-     * Prefer the augmented entry's ID (origin's for localizations) over the stored value,
-     * which can go stale (e.g. entry duplication copies the original's value).
+     * Prefer the entry's root ID over the stored value, which can go stale (e.g. on duplication).
      */
     private function augmentedEntryId(): ?string
     {
@@ -42,7 +41,7 @@ class ResrvAvailability extends Fieldtype
             return null;
         }
 
-        return $parent->hasOrigin() ? $parent->origin()->id() : $parent->id();
+        return $parent->root()->id();
     }
 
     public function preload(): array
@@ -51,10 +50,7 @@ class ResrvAvailability extends Fieldtype
             return ['parent' => 'Collection'];
         }
 
-        $parent = $this->field->parent()->id();
-        if ($this->field->parent()->hasOrigin()) {
-            $parent = $this->field->parent()->origin()->id();
-        }
+        $parent = $this->field->parent()->root()->id();
 
         return [
             'parent' => $parent,

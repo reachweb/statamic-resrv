@@ -26,6 +26,7 @@ use Reach\StatamicResrv\Filters\ReservationMadeDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
+use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -56,6 +57,7 @@ use Reach\StatamicResrv\UpdateScripts\MigrateConfigToSettings;
 use Statamic\Events\BlueprintSaved;
 use Statamic\Events\EntryDeleting;
 use Statamic\Events\EntrySaved;
+use Statamic\Events\EntrySaving;
 use Statamic\Facades\Addon;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
@@ -142,8 +144,10 @@ class ResrvProvider extends AddonServiceProvider
             UpdateCouponAppliedToReservation::class,
             AssociateAffiliateFromCoupon::class,
         ],
-        EntrySaved::class => [
+        EntrySaving::class => [
             NormalizeAvailabilityFieldValue::class,
+        ],
+        EntrySaved::class => [
             AddResrvEntryToDatabase::class,
         ],
         EntryDeleting::class => [
@@ -408,7 +412,7 @@ class ResrvProvider extends AddonServiceProvider
         $this->registerSerializableClasses([
             \Illuminate\Support\Collection::class,
             \stdClass::class,
-            \Reach\StatamicResrv\Helpers\DataImport::class,
+            DataImport::class,
         ]);
     }
 }

@@ -8,6 +8,7 @@ use Reach\StatamicResrv\Fieldtypes\ResrvAvailability;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
+use Statamic\Facades\Site;
 
 class ResrvAvailabilityFieldtypeTest extends TestCase
 {
@@ -51,6 +52,33 @@ class ResrvAvailabilityFieldtypeTest extends TestCase
         $entry->set($handle, 'disabled')->saveQuietly();
 
         $this->assertFalse($entry->augmentedValue($handle)->value());
+    }
+
+    // Augmentation must resolve the full origin chain — availability is keyed to the root entry.
+    #[Test]
+    public function augments_through_chained_localizations_to_the_root_entry()
+    {
+        Site::setSites([
+            'en' => ['name' => 'English', 'url' => 'http://localhost/', 'locale' => 'en_US', 'lang' => 'en'],
+            'el' => ['name' => 'Greek', 'url' => 'http://localhost/el/', 'locale' => 'el_GR', 'lang' => 'el'],
+            'de' => ['name' => 'German', 'url' => 'http://localhost/de/', 'locale' => 'de_DE', 'lang' => 'de'],
+        ]);
+
+        $root = $this->makeStatamicItemWithAvailability();
+        $handle = AvailabilityField::getHandle($root->blueprint());
+        $root->set($handle, $root->id())->saveQuietly();
+        $root->collection()->sites(['en', 'el', 'de'])->save();
+
+        $intermediate = $root->makeLocalization('el');
+        $intermediate->save();
+
+        $chained = $intermediate->makeLocalization('de');
+        $chained->save();
+
+        $augmented = $chained->augmentedValue($handle)->value();
+
+        $this->assertIsArray($augmented);
+        $this->assertCount(4, $augmented['data']);
     }
 
     #[Test]
