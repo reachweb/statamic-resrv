@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Fieldtypes;
 
 use Reach\StatamicResrv\Models\Availability;
+use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Fields\Fieldtype;
 
 class ResrvAvailability extends Fieldtype
@@ -11,20 +12,37 @@ class ResrvAvailability extends Fieldtype
 
     public function augment($value)
     {
-        if ($value != 'disabled') {
-            $availability_data = Availability::where('statamic_id', $value)->where('available', '>', '0')->get();
-
-            if ($availability_data->count() == 0) {
-                return false;
-            }
-
-            $data = $availability_data->sortBy('date')->keyBy('date')->toArray();
-            $cheapest = $availability_data->sortBy('price')->firstWhere('available', '>', '0')->price->format();
-
-            return compact('data', 'cheapest');
+        if (! $value || $value === 'disabled') {
+            return false;
         }
 
-        return false;
+        $availability_data = Availability::where('statamic_id', $this->augmentedEntryId() ?? $value)
+            ->where('available', '>', '0')
+            ->get();
+
+        if ($availability_data->count() == 0) {
+            return false;
+        }
+
+        $data = $availability_data->sortBy('date')->keyBy('date')->toArray();
+        $cheapest = $availability_data->sortBy('price')->firstWhere('available', '>', '0')->price->format();
+
+        return compact('data', 'cheapest');
+    }
+
+    /**
+     * Prefer the augmented entry's ID (origin's for localizations) over the stored value,
+     * which can go stale (e.g. entry duplication copies the original's value).
+     */
+    private function augmentedEntryId(): ?string
+    {
+        $parent = $this->field?->parent();
+
+        if (! $parent instanceof EntryContract) {
+            return null;
+        }
+
+        return $parent->hasOrigin() ? $parent->origin()->id() : $parent->id();
     }
 
     public function preload(): array

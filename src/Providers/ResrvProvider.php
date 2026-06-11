@@ -39,6 +39,7 @@ use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
+use Reach\StatamicResrv\Listeners\NormalizeAvailabilityFieldValue;
 use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
@@ -142,6 +143,7 @@ class ResrvProvider extends AddonServiceProvider
             AssociateAffiliateFromCoupon::class,
         ],
         EntrySaved::class => [
+            NormalizeAvailabilityFieldValue::class,
             AddResrvEntryToDatabase::class,
         ],
         EntryDeleting::class => [
