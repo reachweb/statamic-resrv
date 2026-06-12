@@ -37,6 +37,42 @@ class NormalizeAvailabilityFieldValueTest extends TestCase
         $this->assertFalse($duplicate->augmentedValue($handle)->value());
     }
 
+    // The repository owns ID generation (a Stache UUID, or the Eloquent driver's database
+    // auto-increment) — assigning one here would insert a UUID into an integer primary key.
+    #[Test]
+    public function does_not_assign_an_id_to_a_new_entry_when_saving()
+    {
+        $existing = $this->makeStatamicItemWithAvailability();
+        $handle = AvailabilityField::getHandle($existing->blueprint());
+
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('a-new-entry')
+            ->data(['title' => 'A new entry', $handle => $existing->id()]);
+
+        EntrySaving::dispatch($entry);
+
+        $this->assertNull($entry->id());
+    }
+
+    #[Test]
+    public function normalizes_a_new_entry_created_with_another_entrys_id()
+    {
+        $existing = $this->makeStatamicItemWithAvailability();
+        $handle = AvailabilityField::getHandle($existing->blueprint());
+
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('a-programmatic-duplicate')
+            ->data(['title' => 'A programmatic duplicate', $handle => $existing->id()]);
+
+        $entry->save();
+
+        $this->assertNotNull($entry->id());
+        $this->assertEquals($entry->id(), $entry->get($handle));
+        $this->assertEquals($entry->id(), Entry::find($entry->id())->get($handle));
+    }
+
     #[Test]
     public function regenerates_a_stale_value_when_an_entry_is_saved()
     {

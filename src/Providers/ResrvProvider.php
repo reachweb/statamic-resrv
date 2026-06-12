@@ -55,6 +55,7 @@ use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
 use Reach\StatamicResrv\UpdateScripts\MigrateConfigToSettings;
 use Statamic\Events\BlueprintSaved;
+use Statamic\Events\EntryCreated;
 use Statamic\Events\EntryDeleting;
 use Statamic\Events\EntrySaved;
 use Statamic\Events\EntrySaving;
@@ -146,6 +147,9 @@ class ResrvProvider extends AddonServiceProvider
         ],
         EntrySaving::class => [
             NormalizeAvailabilityFieldValue::class,
+        ],
+        EntryCreated::class => [
+            NormalizeAvailabilityFieldValue::class.'@handleCreated',
         ],
         EntrySaved::class => [
             AddResrvEntryToDatabase::class,
