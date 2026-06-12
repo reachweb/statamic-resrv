@@ -5,6 +5,8 @@ coverage
 /node_modules/
 .phpunit.result.cache
 .phpunit.cache/test-results
+/tests/__fixtures__/dev-null/*
+!/tests/__fixtures__/dev-null/.gitkeep
 /resources/dist/hot
 /resources/frontend/hot
 .mcp.json
