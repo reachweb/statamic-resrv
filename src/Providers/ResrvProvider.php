@@ -385,7 +385,7 @@ class ResrvProvider extends AddonServiceProvider
 
     protected function bootPermissions(): void
     {
-        $this->app->booted(function () {
+        Permission::extend(function () {
             Permission::group('statamic-resrv', 'Reserv Permissions', function () {
                 Permission::register('use resrv', function ($permission) {
                     $permission
