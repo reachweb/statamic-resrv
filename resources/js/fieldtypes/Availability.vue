@@ -1,6 +1,6 @@
 <template>
     <element-container @resized="renderAgain">
-        <Alert v-if="newItem" :title="__('You need to save this entry before you can add availability information.')" variant="info" />
+        <Alert v-if="newItem" :text="__('You need to save this entry before you can add availability information.')" variant="default" />
         <div class="statamic-resrv-availability relative" v-else>
             <div class="flex items-center justify-between pb-4">
                 <Label :text="__('Enable reservations')" />

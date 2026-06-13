@@ -1,8 +1,9 @@
 <template>
     <element-container>
-        <Alert v-if="newItem" :title="__('You need to save this entry before you can add cutoff rules.')" variant="info" />
-        <Alert v-else-if="cutoffFeatureDisabled" :title="__('Cutoff Rules Disabled')" variant="warning">
-            {{ __('Cutoff rules are currently disabled in the global configuration. Enable them in the Resrv settings to use this feature.') }}
+        <Alert v-if="newItem" :text="__('You need to save this entry before you can add cutoff rules.')" variant="default" />
+        <Alert v-else-if="cutoffFeatureDisabled" variant="warning">
+            <h5>{{ __('Cutoff Rules Disabled') }}</h5>
+            <p>{{ __('Cutoff rules are currently disabled in the global configuration. Enable them in the Resrv settings to use this feature.') }}</p>
         </Alert>
         <div class="statamic-resrv-cutoff relative" v-else :inert="isReadOnly">
             <div class="flex items-center justify-between pb-6">
@@ -11,7 +12,7 @@
             </div>
 
             <div v-if="enabled" class="space-y-6">
-                <Alert variant="info">
+                <Alert variant="default">
                     {{ __('Cutoff times are checked against server time') }}: <strong>{{ serverTime }}</strong>
                     <span class="text-xs block mt-1">{{ __('Server timezone') }}: {{ serverTimezone }}</span>
                 </Alert>

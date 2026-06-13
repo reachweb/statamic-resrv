@@ -7,7 +7,8 @@
                 </div>
                 <div class="text-sm text-gray-700 dark:text-gray-300">{{ __('From') }} {{ date_start }} {{ __('to') }} {{ date_end }}</div>
 
-                <Alert v-if="canClearStuckPending" :title="__('Stuck holds detected')" variant="warning">
+                <Alert v-if="canClearStuckPending" variant="warning">
+                    <h5>{{ __('Stuck holds detected') }}</h5>
                     <div>{{ stuckHoldsMessage }}</div>
                     <Button class="mt-2" size="sm" variant="default" :text="__('Clear stuck holds')" :disabled="clearingPending" @click="clearStuckHolds(false)" />
                 </Alert>
