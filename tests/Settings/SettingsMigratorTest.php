@@ -205,4 +205,97 @@ class SettingsMigratorTest extends TestCase
 
         $this->assertFileDoesNotExist(resource_path('addons/statamic-resrv.yaml'));
     }
+
+    public function test_nested_checkout_forms_config_is_migrated_into_flat_cp_keys()
+    {
+        $result = $this->migrator->migrate(
+            [
+                'checkout_forms' => [
+                    'default' => 'checkout',
+                    'collections' => [['collection' => 'pages', 'form' => 'pages-form']],
+                    'entries' => ['some-entry-id' => 'entry-form'],
+                ],
+            ],
+            $this->settings(),
+            $this->blueprintFields,
+            dryRun: true
+        );
+
+        $this->assertSame('checkout', $result->seeded['checkout_forms_default']);
+        $this->assertSame(
+            [['collection' => 'pages', 'form' => 'pages-form']],
+            $result->seeded['checkout_forms_collections']
+        );
+        $this->assertSame(
+            [['entry' => 'some-entry-id', 'form' => 'entry-form']],
+            $result->seeded['checkout_forms_entries']
+        );
+        $this->assertContains('checkout_forms', $result->deletable);
+        $this->assertSame([], $result->stale);
+    }
+
+    public function test_nested_reservation_emails_config_is_migrated_into_flat_cp_keys()
+    {
+        $result = $this->migrator->migrate(
+            [
+                'reservation_emails' => [
+                    'global' => [
+                        'customer_confirmed' => ['subject' => 'Hi', 'recipients' => 'customer,admins'],
+                    ],
+                    'forms' => [
+                        'checkout' => [
+                            'customer_confirmed' => ['subject' => 'Form subject'],
+                        ],
+                    ],
+                ],
+            ],
+            $this->settings(),
+            $this->blueprintFields,
+            dryRun: true
+        );
+
+        $this->assertSame(
+            [['event' => 'customer_confirmed', 'subject' => 'Hi', 'recipients' => 'customer,admins']],
+            $result->seeded['reservation_emails_global']
+        );
+        $this->assertSame(
+            [['form' => 'checkout', 'event' => 'customer_confirmed', 'subject' => 'Form subject']],
+            $result->seeded['reservation_emails_forms']
+        );
+        $this->assertContains('reservation_emails', $result->deletable);
+        $this->assertSame([], $result->stale);
+    }
+
+    public function test_empty_nested_stub_is_not_seeded_but_remains_deletable()
+    {
+        $result = $this->migrator->migrate(
+            [
+                'checkout_forms' => ['default' => null, 'collections' => [], 'entries' => []],
+                'reservation_emails' => ['global' => [], 'forms' => []],
+            ],
+            $this->settings(),
+            $this->blueprintFields,
+            dryRun: true
+        );
+
+        $this->assertSame([], $result->seeded);
+        $this->assertFalse($result->hasChanges());
+        $this->assertEqualsCanonicalizing(['checkout_forms', 'reservation_emails'], $result->deletable);
+        $this->assertSame([], $result->stale);
+    }
+
+    public function test_nested_config_migration_persists_and_is_idempotent()
+    {
+        $config = ['checkout_forms' => ['default' => 'checkout']];
+
+        $result = $this->migrator->migrate($config, $this->settings(), $this->blueprintFields);
+
+        $this->assertTrue($result->hasChanges());
+        $this->assertSame('checkout', $this->settings()->raw()['checkout_forms_default']);
+
+        $second = $this->migrator->migrate($config, $this->settings(), $this->blueprintFields);
+
+        $this->assertFalse($second->hasChanges());
+        $this->assertSame([], $second->seeded);
+    }
 }

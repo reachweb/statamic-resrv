@@ -54,34 +54,4 @@ return [
     'stripe_secret_key' => env('RESRV_STRIPE_SECRET', ''),
     'stripe_publishable_key' => env('RESRV_STRIPE_PUBLISHABLE', ''),
     'stripe_webhook_secret' => env('RESRV_STRIPE_WEBHOOK_SECRET', ''),
-
-    /**
-     * Checkout form overrides (optional developer alternative).
-     *
-     * The CP manages the flat checkout_forms_default / checkout_forms_collections /
-     * checkout_forms_entries settings. This nested structure takes precedence over
-     * them when set, for setups that need the mapping under version control.
-     */
-    'checkout_forms' => [
-        'default' => null,
-        'collections' => [],
-        'entries' => [],
-    ],
-
-    /**
-     * Reservation email overrides (optional developer alternative).
-     *
-     * The CP manages the flat reservation_emails_global / reservation_emails_forms
-     * settings. This nested structure takes precedence over them when set.
-     *
-     * Event keys:
-     * - customer_confirmed
-     * - admin_made
-     * - customer_refunded
-     * - customer_abandoned
-     */
-    'reservation_emails' => [
-        'global' => [],
-        'forms' => [],
-    ],
 ];

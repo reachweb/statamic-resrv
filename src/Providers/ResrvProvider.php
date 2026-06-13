@@ -360,7 +360,10 @@ class ResrvProvider extends AddonServiceProvider
             return $blueprint;
         }
 
-        $shadowed = array_keys(array_intersect_key($published, $blueprintFields));
+        $shadowed = array_keys(array_intersect_key(
+            $published,
+            $blueprintFields + array_flip(SettingsMigrator::MIGRATABLE_NESTED_KEYS)
+        ));
 
         if (empty($shadowed)) {
             return $blueprint;

@@ -58,4 +58,28 @@ class MigrateSettingsCommandTest extends TestCase
         $this->assertSame('USD', $saved['currency_isoCode']);
         $this->assertArrayNotHasKey('maximum_quantity', $saved);
     }
+
+    public function test_migrates_nested_overrides_into_flat_cp_keys()
+    {
+        file_put_contents(
+            config_path('resrv-config.php'),
+            "<?php\n\nreturn [\n"
+            ."    'checkout_forms' => ['default' => 'checkout'],\n"
+            ."    'reservation_emails' => ['global' => ['customer_confirmed' => ['subject' => 'Hi']]],\n"
+            .'];'
+        );
+
+        $this->artisan('resrv:settings:migrate')
+            ->expectsOutputToContain('Seeded into CP settings')
+            ->expectsOutputToContain('Safe to delete from config/resrv-config.php')
+            ->assertExitCode(0);
+
+        $saved = YAML::file(resource_path('addons/statamic-resrv.yaml'))->parse();
+
+        $this->assertSame('checkout', $saved['checkout_forms_default']);
+        $this->assertSame(
+            [['event' => 'customer_confirmed', 'subject' => 'Hi']],
+            $saved['reservation_emails_global']
+        );
+    }
 }

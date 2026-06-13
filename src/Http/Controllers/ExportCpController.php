@@ -377,16 +377,13 @@ class ExportCpController extends Controller
     {
         $handles = collect();
 
-        $handles->push(
-            config('resrv-config.checkout_forms.default')
-            ?? config('resrv-config.checkout_forms_default')
-        );
+        $handles->push(config('resrv-config.checkout_forms_default'));
 
-        foreach ($this->configMappings('checkout_forms.entries', 'checkout_forms_entries') as $mapping) {
+        foreach ($this->configMappings('checkout_forms_entries') as $mapping) {
             $handles->push(data_get($mapping, 'form'));
         }
 
-        foreach ($this->configMappings('checkout_forms.collections', 'checkout_forms_collections') as $mapping) {
+        foreach ($this->configMappings('checkout_forms_collections') as $mapping) {
             $handles->push(data_get($mapping, 'form'));
         }
 
@@ -416,12 +413,9 @@ class ExportCpController extends Controller
     /**
      * @return array<int, mixed>
      */
-    protected function configMappings(string $primary, string $legacy): array
+    protected function configMappings(string $key): array
     {
-        $mappings = config('resrv-config.'.$primary);
-        if (! is_array($mappings) || $mappings === []) {
-            $mappings = config('resrv-config.'.$legacy, []);
-        }
+        $mappings = config('resrv-config.'.$key, []);
 
         if (is_array($mappings) && Arr::isAssoc($mappings)) {
             return collect($mappings)
