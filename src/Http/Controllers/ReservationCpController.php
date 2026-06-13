@@ -207,6 +207,12 @@ class ReservationCpController extends Controller
             return response()->json(['error' => $exception->getMessage()], 400);
         } catch (InvalidStateTransition $e) {
             return response()->json(['error' => 'Cannot refund a reservation in the '.$e->from->value.' state.'], 422);
+        } catch (\Throwable $e) {
+            // Unmapped failure (e.g. lock-wait QueryException under contention); transaction
+            // rolled back so the charge was never touched. Return a retryable 503, not a raw 500.
+            report($e);
+
+            return response()->json(['error' => 'The refund could not be completed. Please try again.'], 503);
         }
 
         if (! $changed) {

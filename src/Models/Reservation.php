@@ -224,11 +224,8 @@ class Reservation extends Model
     }
 
     /**
-     * The last calendar day on which the customer may cancel free of charge, per the booked
-     * terms. NULL when the booking is non-refundable or when no period was ever configured
-     * (an unadvertised policy gives the customer nothing to act on). The deadline is the
-     * exact date advertised by cancellationPolicyLabel() and is inclusive — cancellation is
-     * allowed through the end of that day.
+     * Last day the customer may cancel free of charge (inclusive through end of day). NULL
+     * when non-refundable or no period was configured.
      */
     public function freeCancellationDeadline(): ?Carbon
     {
@@ -242,8 +239,8 @@ class Reservation extends Model
     }
 
     /**
-     * A live booking — confirmed (directly or via a partner flow) and not yet in a terminal
-     * state. PENDING rows are mid-checkout and expire on their own.
+     * Confirmed (directly or via partner flow) and not yet terminal. PENDING rows are
+     * mid-checkout and excluded.
      */
     public function isLive(): bool
     {
@@ -251,10 +248,8 @@ class Reservation extends Model
     }
 
     /**
-     * Whether the customer may self-cancel (with an automatic full refund of the amount paid)
-     * from the reservation-status component. Only live bookings with an unexpired free
-     * cancellation window qualify — and only when the money can actually flow back without
-     * manual work, since the flow immediately tells the customer their payment was returned.
+     * Whether the customer may self-cancel with automatic full refund: live, within an
+     * unexpired free-cancellation window, and the money can flow back without manual work.
      */
     public function canBeCancelledByCustomer(): bool
     {
@@ -272,10 +267,8 @@ class Reservation extends Model
     }
 
     /**
-     * Whether cancelling now can return the customer's money without manual intervention:
-     * either no charge ever reached a gateway, or the gateway can issue refunds through its
-     * API. Offline-style gateways (bank transfer) confirm bookings but cannot move money
-     * back, so marking them refunded would falsely tell the customer their payment returned.
+     * Whether cancelling can return the money without manual work: no charge reached a
+     * gateway, or the gateway supports API refunds. Offline gateways (bank transfer) cannot.
      */
     public function supportsAutomaticRefund(): bool
     {
@@ -287,10 +280,8 @@ class Reservation extends Model
     }
 
     /**
-     * Partner (affiliate skip-payment) and zero-payment reservations never create a payment
-     * intent, so payment_id stays '' — there is no charge on the gateway to refund. Anything
-     * else with an empty payment_id (e.g. a PENDING row whose cancelled intent may still
-     * carry an orphaned charge) is assumed to hold one.
+     * True when no charge exists to refund: empty payment_id AND (partner or zero payment).
+     * Other empty-payment_id rows (e.g. PENDING with an orphaned charge) are assumed to hold one.
      */
     public function gatewayHoldsNoCharge(): bool
     {
@@ -299,8 +290,8 @@ class Reservation extends Model
     }
 
     /**
-     * The gateway this reservation was paid through, falling back to the configured default
-     * for legacy rows whose recorded gateway is empty or no longer configured.
+     * The gateway this reservation was paid through, falling back to the default for legacy
+     * rows whose recorded gateway is empty or no longer configured.
      */
     public function resolvePaymentGateway(): PaymentInterface
     {
@@ -314,9 +305,8 @@ class Reservation extends Model
     }
 
     /**
-     * Whether a live booking had a free cancellation window that has since closed — the
-     * complement of canBeCancelledByCustomer() for bookings that were once cancellable,
-     * used to explain the missing cancel button.
+     * Whether a live booking's free-cancellation window has closed — used to explain the
+     * missing cancel button.
      */
     public function freeCancellationExpired(): bool
     {
@@ -326,11 +316,8 @@ class Reservation extends Model
     }
 
     /**
-     * Whether a payment intent ever reached a gateway for this reservation. Partner
-     * (affiliate skip-payment) and zero-payment bookings never create one, so payment_id
-     * stays ''. Unlike gatewayHoldsNoCharge() this does not read the status, so it stays
-     * correct after the transition to REFUNDED — the customer-facing cancellation messages
-     * and the refund emails rely on it to decide whether money actually moved.
+     * Whether a payment intent ever reached a gateway (payment_id non-empty). Unlike
+     * gatewayHoldsNoCharge() it ignores status, so it stays correct after REFUNDED.
      */
     public function hasGatewayPayment(): bool
     {
@@ -338,13 +325,9 @@ class Reservation extends Model
     }
 
     /**
-     * The amount actually collected through a payment gateway. Checkout charges payment +
-     * payment_surcharge in a single intent — the Stripe webhook verifies exactly that
-     * sum — so `payment` alone understates the charge. Deliberately independent of the
-     * payment-mode config: the mode at booking time already shaped `payment`, and reading
-     * today's config would misreport bookings made before a mode change. Zero when no
-     * charge ever reached a gateway — partner and zero-payment bookings, where `payment`
-     * may still hold the would-be deposit.
+     * Amount actually collected: payment + payment_surcharge (the sum the intent charged and
+     * the webhook verifies). Independent of current payment-mode config, which would misreport
+     * bookings made before a mode change. Zero when no charge reached a gateway.
      */
     public function amountPaid(): PriceClass
     {
@@ -356,9 +339,7 @@ class Reservation extends Model
     }
 
     /**
-     * The amount a refund returns to the customer — refunds return the payment intent
-     * in full, so this is exactly what was collected. Shared by the refund-related
-     * email templates.
+     * Amount a refund returns — the full intent, i.e. exactly what was collected.
      */
     public function refundedAmount(): PriceClass
     {
@@ -366,9 +347,8 @@ class Reservation extends Model
     }
 
     /**
-     * HMAC of the customer email, keyed by the app key — proves a lookup link came from an
-     * email we sent without exposing the address in the URL. Used by the reservation_from_uri
-     * tag and the reservation-status component's deep links.
+     * App-key HMAC of the customer email — proves a lookup link came from an email we sent
+     * without exposing the address in the URL.
      */
     public function customerLookupHash(): ?string
     {
@@ -378,11 +358,8 @@ class Reservation extends Model
     }
 
     /**
-     * Find a reservation by the reference code a customer holds plus the email they booked
-     * with, tolerant of casing and stray whitespace (references are generated uppercase).
-     * The email is part of the selection — not a post-check — because the reference column
-     * is not unique: when two visible reservations share a reference, each customer must
-     * still reach their own booking.
+     * Find a reservation by reference code + booking email (case/whitespace tolerant). Email is
+     * part of selection, not a post-check, because the reference column is not unique.
      */
     public static function findByReferenceForCustomer(string $reference, string $email, array $statuses): ?self
     {
@@ -399,9 +376,7 @@ class Reservation extends Model
 
     /**
      * Resolve a customer deep link (reference + customerLookupHash()) to its reservation, or
-     * null on any failure. Shared by the reservation_from_uri tag and the reservation-status
-     * component so the verification logic exists once. The hash selects among reservations
-     * sharing a reference, same as the email does in findByReferenceForCustomer().
+     * null. The hash disambiguates reservations sharing a reference, like email above.
      */
     public static function findForCustomerLookup(string $reference, string $hash, array $statuses): ?self
     {
@@ -412,9 +387,9 @@ class Reservation extends Model
                 return $expectedHash !== null && hash_equals($expectedHash, $hash);
             });
 
-        // Always compare at least one HMAC — a dummy one when no candidate exists — so a
-        // miss costs the same work as a hit and response timing doesn't reveal whether a
-        // reference exists.
+        // Dummy HMAC on the no-candidate branch so it isn't trivially faster than one with rows
+        // to compare. Not constant-time, and need not be: the reference isn't the secret — the
+        // app-key HMAC is, compared with hash_equals above.
         if ($match === null) {
             hash_equals(hash_hmac('sha256', 'resrv-missing-reservation', config('app.key')), $hash);
 
@@ -425,11 +400,8 @@ class Reservation extends Model
     }
 
     /**
-     * Every visible reservation matching a customer-held reference code. Returns all rows
-     * because the reference column is not unique — callers disambiguate with the customer
-     * credential (email or lookup hash). Ordered by id so that when legacy rows share both
-     * the reference and the credential, lookups deterministically resolve to the oldest
-     * booking instead of whatever the database returns first.
+     * All visible reservations matching a reference code (column isn't unique; callers
+     * disambiguate by credential). Ordered by id so duplicates resolve deterministically.
      */
     protected static function customerLookupCandidates(string $reference, array $statuses): Collection
     {
@@ -533,9 +505,8 @@ class Reservation extends Model
      * than throwing — avoiding a spurious HTTP 500 / webhook retry. Explicit callers (CP refund)
      * keep the default and catch InvalidStateTransition to surface the error.
      *
-     * $inTransaction receives the locked, still-unchanged row after the guard passes and before
-     * the status is saved — work that must commit or roll back atomically with the transition
-     * (e.g. the refund gateway call) goes there. A throw aborts the whole transition.
+     * $inTransaction runs on the locked row after the guard, before the save — for work that
+     * must commit/roll back atomically (e.g. the refund gateway call). A throw aborts the transition.
      */
     public function transitionTo(ReservationStatus $to, bool $tolerant = false, ?Closure $inTransaction = null): bool
     {
@@ -878,19 +849,21 @@ class Reservation extends Model
     }
 
     /**
-     * Six characters of [A-Z0-9] give ~2.2 billion combinations — collisions become likely
-     * (birthday bound) well within a busy site's lifetime, and the column carries no unique
-     * index because legacy installs may already hold duplicates. Retry until unused; the
-     * customer-lookup paths additionally disambiguate by credential in case a race or
-     * legacy data still produces a duplicate.
+     * Retry a random 6-char [A-Z0-9] reference until unused (column has no unique index;
+     * legacy installs may hold duplicates). Capped at 100 so a saturated table fails loudly
+     * rather than spinning inside the caller's transaction; lookups also disambiguate by credential.
      */
     public function createRandomReference(): string
     {
-        do {
+        for ($attempt = 0; $attempt < 100; $attempt++) {
             $reference = Str::upper(Str::random(6));
-        } while (static::query()->where('reference', $reference)->exists());
 
-        return $reference;
+            if (! static::query()->where('reference', $reference)->exists()) {
+                return $reference;
+            }
+        }
+
+        throw new \RuntimeException('Unable to generate a unique reservation reference after 100 attempts.');
     }
 
     // TODO: cleanup these methods

@@ -117,7 +117,7 @@ class ReservationStatusTest extends TestCase
             $component->call('lookup')->assertSee(trans('statamic-resrv::frontend.reservationNotFound'));
         }
 
-        // Even the correct credentials are rejected while the limiter is exhausted.
+        // Correct credentials are still rejected while the limiter is exhausted.
         $component
             ->set('email', $reservation->customer->email)
             ->call('lookup')
@@ -130,8 +130,7 @@ class ReservationStatusTest extends TestCase
     {
         $reservation = $this->makeReservation();
 
-        // Nine failures, then a success — if the success cleared the bucket, an attacker
-        // holding one valid booking could reset the IP-wide budget indefinitely.
+        // A success must not clear the bucket, or one valid booking could reset the budget indefinitely.
         foreach (range(1, 9) as $attempt) {
             Livewire::test(ReservationStatus::class)
                 ->set('email', 'wrong@example.com')
@@ -146,14 +145,14 @@ class ReservationStatusTest extends TestCase
             ->call('lookup')
             ->assertSet('reservationId', $reservation->id);
 
-        // One more failure exhausts the original budget...
+        // One more failure exhausts the original budget.
         Livewire::test(ReservationStatus::class)
             ->set('email', 'wrong@example.com')
             ->set('reference', $reservation->reference)
             ->call('lookup')
             ->assertHasErrors(['lookup']);
 
-        // ...so even valid credentials are rejected now.
+        // Valid credentials are now rejected.
         Livewire::test(ReservationStatus::class)
             ->set('email', $reservation->customer->email)
             ->set('reference', $reservation->reference)
@@ -163,6 +162,39 @@ class ReservationStatusTest extends TestCase
             ->assertSee(trans('statamic-resrv::frontend.tooManyLookupAttempts'));
     }
 
+    public function test_rate_limiter_is_scoped_per_reference_so_one_booking_does_not_lock_out_another()
+    {
+        $first = $this->makeReservation(['reference' => 'AAAAAA']);
+        $second = $this->makeReservation(['reference' => 'BBBBBB']);
+        $first->customer->update(['email' => 'first@example.com']);
+        $second->customer->update(['email' => 'second@example.com']);
+
+        // Exhaust the budget for the first reference.
+        foreach (range(1, 10) as $attempt) {
+            Livewire::test(ReservationStatus::class)
+                ->set('email', 'wrong@example.com')
+                ->set('reference', 'AAAAAA')
+                ->call('lookup')
+                ->assertHasErrors(['lookup']);
+        }
+
+        // First reference is locked out even with correct credentials.
+        Livewire::test(ReservationStatus::class)
+            ->set('email', 'first@example.com')
+            ->set('reference', 'AAAAAA')
+            ->call('lookup')
+            ->assertSet('reservationId', null)
+            ->assertSee(trans('statamic-resrv::frontend.tooManyLookupAttempts'));
+
+        // A different reference keeps its own budget, so an unrelated visitor on the same IP isn't blocked.
+        Livewire::test(ReservationStatus::class)
+            ->set('email', 'second@example.com')
+            ->set('reference', 'BBBBBB')
+            ->call('lookup')
+            ->assertHasNoErrors()
+            ->assertSet('reservationId', $second->id);
+    }
+
     public function test_lookup_disambiguates_reservations_sharing_a_reference()
     {
         $first = $this->makeReservation();
@@ -170,8 +202,7 @@ class ReservationStatusTest extends TestCase
         $first->customer->update(['email' => 'first@example.com']);
         $second->customer->update(['email' => 'second@example.com']);
 
-        // The factory gives both rows the same reference — the collision scenario the
-        // non-unique column allows.
+        // The reference column is non-unique, so both rows can share one.
         $this->assertSame($first->reference, $second->reference);
 
         Livewire::test(ReservationStatus::class)
@@ -234,14 +265,14 @@ class ReservationStatusTest extends TestCase
                 ->assertSet('reservationId', null);
         }
 
-        // Once the shared limiter is exhausted, even a valid deep link is ignored...
+        // Failed deep links and the lookup form share one budget: a valid deep link is now ignored.
         $hash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));
 
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $hash])
             ->test(ReservationStatus::class)
             ->assertSet('reservationId', null);
 
-        // ...and so is the lookup form, since failed deep links drew from the same budget.
+        // The lookup form is blocked too.
         Livewire::test(ReservationStatus::class)
             ->set('email', $reservation->customer->email)
             ->set('reference', $reservation->reference)
@@ -394,8 +425,7 @@ class ReservationStatusTest extends TestCase
 
         $reservation = $this->makeReservation();
 
-        // Not a RefundFailedException — e.g. a Stripe SDK connection/auth error that
-        // escaped the gateway's own mapping. Must not surface as a 500.
+        // An unexpected (non-RefundFailedException) gateway error must not surface as a 500.
         $this->mockRefundGateway(new \RuntimeException('Could not connect to Stripe.'));
 
         Livewire::test(ReservationStatus::class)
@@ -429,8 +459,7 @@ class ReservationStatusTest extends TestCase
             'payment_id' => 'offline_test_intent',
         ]);
 
-        // The offline gateway's refund() is a no-op — auto-cancelling would mark the
-        // booking refunded and email the customer that money moved when it never did.
+        // Offline gateway refund() is a no-op, so cancelling would falsely tell the customer money moved.
         Livewire::test(ReservationStatus::class)
             ->set('email', $reservation->customer->email)
             ->set('reference', $reservation->reference)
@@ -457,9 +486,7 @@ class ReservationStatusTest extends TestCase
 
         $this->mockRefundGateway();
 
-        // A synchronous listener exploding AFTER the refund committed (availability
-        // restore, emails) must not read as a failed cancellation — the money already
-        // moved and retrying could not rerun the listener anyway.
+        // A listener failing after the refund committed must not read as a failed cancellation.
         Event::listen(ReservationRefunded::class, function (): void {
             throw new \RuntimeException('Availability restore exploded.');
         });
@@ -489,7 +516,7 @@ class ReservationStatusTest extends TestCase
             'payment' => 100,
         ]);
 
-        // No charge ever reached a gateway, so cancellation must neither call one...
+        // No charge reached a gateway, so cancellation must not call one or claim a refund.
         $this->forbidGatewayRefunds();
 
         Livewire::test(ReservationStatus::class)
@@ -500,7 +527,6 @@ class ReservationStatusTest extends TestCase
             ->call('cancel')
             ->assertHasNoErrors()
             ->assertSet('cancelled', true)
-            // ...nor tell the customer their money was returned.
             ->assertSee(trans('statamic-resrv::frontend.reservationCancelledNoPaymentSuccess'))
             ->assertDontSee(trans('statamic-resrv::frontend.reservationCancelledSuccess'))
             ->assertDontSee(trans('statamic-resrv::frontend.statusCancelled'));
@@ -516,7 +542,7 @@ class ReservationStatusTest extends TestCase
 
     public function test_amount_paid_reflects_the_actual_gateway_charge()
     {
-        // Checkout charges payment + surcharge in one intent, so that's the amount paid.
+        // Amount paid is payment + surcharge, charged in one intent.
         $charged = $this->makeReservation([
             'payment' => 50,
             'payment_surcharge' => 4.30,
@@ -529,7 +555,7 @@ class ReservationStatusTest extends TestCase
             ->assertSee('54.30')
             ->assertDontSee('50.00');
 
-        // Partner bookings hold the would-be deposit in `payment` but collected nothing.
+        // Partner bookings hold a would-be deposit in `payment` but collected nothing.
         $partner = $this->makeReservation([
             'status' => 'partner',
             'payment_id' => '',
@@ -548,8 +574,7 @@ class ReservationStatusTest extends TestCase
         $refunded = $this->makeReservation(['status' => 'refunded']);
         (new ReservationRefundedMail($refunded))->assertHasSubject('Reservation Refunded');
 
-        // The no-payment branch of the template says "cancelled" — the implicit
-        // class-name subject ("Reservation Refunded") would contradict it.
+        // No-payment branch says "cancelled", so the subject must not default to "Refunded".
         $noCharge = $this->makeReservation([
             'status' => 'refunded',
             'payment_id' => '',

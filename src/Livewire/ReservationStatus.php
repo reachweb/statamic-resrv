@@ -34,9 +34,7 @@ class ReservationStatus extends Component
     }
 
     /**
-     * Deep-link entry point: emails can link straight to the status page with
-     * ?ref=ABC123&hash=<customerLookupHash()>. The HMAC proves the link came from an email
-     * we sent, so no manual email entry is needed — same scheme as the reservation_from_uri tag.
+     * Deep-link entry: ?ref=&hash=<customerLookupHash()>; the HMAC authenticates the link so no email entry is needed.
      */
     protected function loadReservationFromUri(): void
     {
@@ -47,16 +45,15 @@ class ReservationStatus extends Component
             return;
         }
 
-        // Failed deep links draw from the same attempt budget as the lookup form, so the
-        // mount path can't be used to enumerate references past the limiter.
-        if (RateLimiter::tooManyAttempts($this->rateLimiterKey(), 10)) {
+        // Shares the lookup form's per-(IP, reference) budget so mount can't brute-force the hash.
+        if (RateLimiter::tooManyAttempts($this->rateLimiterKey($reference), 10)) {
             return;
         }
 
         $reservation = Reservation::findForCustomerLookup($reference, $hash, $this->visibleStatuses());
 
         if ($reservation === null) {
-            RateLimiter::hit($this->rateLimiterKey(), 600);
+            RateLimiter::hit($this->rateLimiterKey($reference), 600);
 
             return;
         }
@@ -68,7 +65,7 @@ class ReservationStatus extends Component
     {
         $this->validate();
 
-        if (RateLimiter::tooManyAttempts($this->rateLimiterKey(), 10)) {
+        if (RateLimiter::tooManyAttempts($this->rateLimiterKey($this->reference), 10)) {
             $this->addError('lookup', trans('statamic-resrv::frontend.tooManyLookupAttempts'));
 
             return;
@@ -76,13 +73,10 @@ class ReservationStatus extends Component
 
         $reservation = Reservation::findByReferenceForCustomer($this->reference, $this->email, $this->visibleStatuses());
 
-        // One generic error for every failure mode so responses don't reveal whether a
-        // reference exists — only a matching reference + email pair learns anything.
-        // Successful lookups never clear the bucket: an attacker holding one valid booking
-        // could otherwise reset the IP-wide budget after every nine guesses at other
-        // references. Failed attempts simply decay after ten minutes.
+        // Generic error so responses don't reveal whether a reference exists. Success never clears
+        // the bucket, so a valid email can't reset a reference's budget; failures decay after 10 min.
         if (! $reservation) {
-            RateLimiter::hit($this->rateLimiterKey(), 600);
+            RateLimiter::hit($this->rateLimiterKey($this->reference), 600);
             $this->addError('lookup', trans('statamic-resrv::frontend.reservationNotFound'));
 
             return;
@@ -91,9 +85,13 @@ class ReservationStatus extends Component
         $this->reservationId = $reservation->id;
     }
 
-    protected function rateLimiterKey(): string
+    /**
+     * Throttle per (IP, reference), not per IP, so shared egress IPs aren't exhausted by one user
+     * while still capping guesses per reference. Reference is normalized to match the lookup path.
+     */
+    protected function rateLimiterKey(string $reference): string
     {
-        return 'resrv-status-lookup:'.sha1((string) request()->ip());
+        return 'resrv-status-lookup:'.sha1((string) request()->ip().'|'.strtoupper(trim($reference)));
     }
 
     public function cancel(): void
@@ -111,8 +109,7 @@ class ReservationStatus extends Component
 
             return;
         } catch (RefundFailedException|InvalidStateTransition $e) {
-            // Gateway errors stay internal — the customer gets a generic "contact us" message,
-            // and the failed refund is logged so the site owner can follow up.
+            // Gateway errors stay internal; log for owner follow-up, show a generic message.
             Log::warning('Customer cancellation failed.', [
                 'reservation_id' => $reservation->id,
                 'error' => $e->getMessage(),
@@ -121,9 +118,7 @@ class ReservationStatus extends Component
 
             return;
         } catch (\Throwable $e) {
-            // Anything unexpected (gateway SDK connection/auth/rate-limit errors not mapped
-            // to RefundFailedException, listener bugs) must not bubble up as a 500 — the
-            // transition already rolled back, so report and show the same generic message.
+            // Unmapped errors must not 500; the transition already rolled back, so report and show generic message.
             report($e);
             $this->addError('cancellation', trans('statamic-resrv::frontend.cancellationFailed'));
 
@@ -174,17 +169,14 @@ class ReservationStatus extends Component
             return '';
         }
 
-        // No-charge cancellations (partner / zero-payment) end in REFUNDED too, but
-        // claiming "& refunded" would tell the customer money moved when none did.
+        // No-charge cancellations also end in REFUNDED; don't claim a refund when no money moved.
         return $reservation->hasGatewayPayment()
             ? trans('statamic-resrv::frontend.statusCancelled')
             : trans('statamic-resrv::frontend.statusCancelledNoRefund');
     }
 
     /**
-     * Statuses a customer can legitimately look up: live bookings and cancelled ones.
-     * PENDING rows are mid-checkout and EXPIRED ones were never confirmed — the customer
-     * never received a reference for those.
+     * Lookable statuses: live and cancelled. PENDING/EXPIRED were never confirmed, so no reference was issued.
      */
     protected function visibleStatuses(): array
     {

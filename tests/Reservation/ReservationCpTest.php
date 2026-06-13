@@ -16,6 +16,7 @@ use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationCpTest extends TestCase
@@ -536,6 +537,34 @@ class ReservationCpTest extends TestCase
         $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
 
         $response->assertStatus(422)->assertSee('Cannot refund');
+        Mail::assertNothingSent();
+    }
+
+    public function test_refund_returns_a_retryable_503_when_the_refund_throws_an_unexpected_error()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'pi_123',
+        ])->withCustomer()->create();
+
+        // An unmapped Throwable (e.g. lock-wait timeout) must yield a retryable 503, not a raw 500.
+        $processor = Mockery::mock(ReservationRefundProcessor::class);
+        $processor->shouldReceive('refund')
+            ->once()
+            ->andThrow(new \RuntimeException('SQLSTATE[HY000]: Lock wait timeout exceeded.'));
+        app()->instance(ReservationRefundProcessor::class, $processor);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(503)->assertSee('could not be completed');
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
         Mail::assertNothingSent();
     }
 
