@@ -269,6 +269,11 @@
     }
 }
 
+/* In dark mode Statamic's multi-select chips (Combobox selected options) use a gray-800 fill with no border, which matches the Modal/Panel surface they sit on and makes them read as flat text. Give them a lighter fill and a border so they keep their pill shape. */
+.dark [data-ui-combobox-selected-options] [data-ui-badge] {
+    @apply bg-gray-700 border border-gray-600;
+}
+
 .\@container {
     container-type: inline-size !important;
 }
