@@ -19,6 +19,14 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::patch('/resrv/rate/{rate}', 'RateCpController@update')->name('rate.update');
         Route::delete('/resrv/rate/{rate}', 'RateCpController@destroy')->name('rate.destroy');
 
+        Route::get('/resrv/surcharges', 'SurchargeCpController@indexCp')->name('surcharges.index');
+        Route::get('/resrv/surcharges/index', 'SurchargeCpController@index')->name('surcharge.index');
+        Route::get('/resrv/surcharges/options', 'SurchargeCpController@options')->name('surcharge.options');
+        Route::post('/resrv/surcharge', 'SurchargeCpController@store')->name('surcharge.store');
+        Route::patch('/resrv/surcharge/order/{surcharge}', 'SurchargeCpController@order')->name('surcharge.order');
+        Route::patch('/resrv/surcharge/{surcharge}', 'SurchargeCpController@update')->name('surcharge.update');
+        Route::delete('/resrv/surcharge/{surcharge}', 'SurchargeCpController@destroy')->name('surcharge.destroy');
+
         Route::get('/resrv/extras', 'ExtraCpController@indexCp')->name('extras.index');
         Route::get('/resrv/extra', 'ExtraCpController@index')->name('extra.index');
         Route::get('/resrv/extra/{statamic_id}', 'ExtraCpController@entryIndex')->name('extra.entryindex');

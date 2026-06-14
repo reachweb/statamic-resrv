@@ -11,10 +11,11 @@ use Reach\StatamicResrv\Database\Factories\SurchargeFactory;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
+use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Surcharge extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HandlesOrdering, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_surcharges';
 

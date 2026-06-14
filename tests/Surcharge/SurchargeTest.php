@@ -141,6 +141,23 @@ class SurchargeTest extends TestCase
         $this->assertEquals('100.00', $reservation->fresh()->payableNow()->format());
     }
 
+    public function test_total_to_charge_and_remaining_split_the_surcharge_to_now_in_deposit_mode()
+    {
+        $surcharge = Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $reservation = Reservation::factory()->create(['item_id' => $this->entry->id()]);
+        // total 150 = base 100 + surcharge 50; deposit 50; no gateway surcharge.
+        $reservation->forceFill(['payment' => '50.00', 'total' => '150.00', 'payment_surcharge' => '0.00'])->saveQuietly();
+        $reservation->surcharges()->attach($surcharge->id, ['name' => 'One-way fee', 'price' => '50.00']);
+
+        $reservation = $reservation->fresh();
+
+        // Charged now: deposit 50 + surcharge 50 (+ 0 gateway) = 100.
+        $this->assertEquals('100.00', $reservation->totalToCharge());
+        // Remaining balance excludes the now-paid surcharge: 150 - 100 = 50 (the rest of the base).
+        $this->assertEquals('50.00', $reservation->amountRemaining());
+    }
+
     public function test_payable_now_does_not_double_count_the_surcharge_in_full_payment()
     {
         $surcharge = Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);

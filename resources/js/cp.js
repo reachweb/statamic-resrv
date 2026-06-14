@@ -16,6 +16,7 @@ import ExportIndex from './pages/Export/Index.vue';
 import ReportsIndex from './pages/Reports/Index.vue';
 import ExtrasIndex from './pages/Extras/Index.vue';
 import RatesIndex from './pages/Rates/Index.vue';
+import SurchargesIndex from './pages/Surcharges/Index.vue';
 
 Statamic.booting(() => {
     Statamic.$components.register('resrv_availability-fieldtype', AvailabilityFieldtype);
@@ -36,4 +37,5 @@ Statamic.booting(() => {
     Statamic.$inertia.register('resrv::Reports/Index', ReportsIndex);
     Statamic.$inertia.register('resrv::Extras/Index', ExtrasIndex);
     Statamic.$inertia.register('resrv::Rates/Index', RatesIndex);
+    Statamic.$inertia.register('resrv::Surcharges/Index', SurchargesIndex);
 });

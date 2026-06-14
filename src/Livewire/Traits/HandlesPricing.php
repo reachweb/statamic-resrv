@@ -34,7 +34,15 @@ trait HandlesPricing
         $payment = $this->reservation->payment;
         $paymentSurcharge = $this->reservation->payment_surcharge;
 
-        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'surchargeTotal', 'payment', 'paymentSurcharge'));
+        // Amount due now (display): deposit + the always-now surcharge, or the full total when paying
+        // in full. Mirrors Reservation::payableNow() but uses the live surcharge so the figure tracks
+        // the customer's selections before the surcharge is snapshotted at checkout.
+        $payableNow = Price::create($payment->format());
+        if (! $payment->equals($total)) {
+            $payableNow = $payableNow->add($surchargeTotal);
+        }
+
+        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'surchargeTotal', 'payment', 'paymentSurcharge', 'payableNow'));
     }
 
     public function calculateAvailabilityTotals($availabilityTotal): PriceClass

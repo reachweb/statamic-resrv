@@ -353,12 +353,15 @@ class Reservation extends Model
 
     public function amountRemaining()
     {
-        return $this->total->subtract($this->payment)->format();
+        // Remaining balance excludes whatever is due now (deposit + the always-now booking surcharge).
+        // $this->total is a fresh Price from the accessor, so subtracting in place is safe.
+        return $this->total->subtract($this->payableNow())->format();
     }
 
     public function totalToCharge()
     {
-        return $this->payment->add($this->payment_surcharge)->format();
+        // What the gateway charges: the amount due now plus any payment-gateway surcharge.
+        return $this->payableNow()->add($this->payment_surcharge)->format();
     }
 
     public function amountRemainingWithoutExtras()

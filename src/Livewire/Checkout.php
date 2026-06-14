@@ -258,7 +258,7 @@ class Checkout extends Component
         // Populate available gateways, filtered by the current payment amount
         $manager = app(PaymentGatewayManager::class);
         $reservation = $this->reservation->fresh();
-        $this->availableGateways = $manager->availableForFrontend($reservation->payment);
+        $this->availableGateways = $manager->availableForFrontend($reservation->payableNow());
 
         // No gateway accepts this amount — surface an error and stay on step 2
         if (empty($this->availableGateways)) {
@@ -292,13 +292,14 @@ class Checkout extends Component
         }
 
         $reservation = $this->reservation->fresh();
-        if (! $manager->isAvailableFor($gateway, $reservation->payment)) {
+        $payableNow = $reservation->payableNow();
+        if (! $manager->isAvailableFor($gateway, $payableNow)) {
             // The clicked gateway is being rejected — fully reset payment state (intent + surcharge)
             // carried over from a prior tab or browser-back copy of step 3, so a later webhook can't
             // act on the stale intent and the sidebar doesn't show an inflated payable-now from the
             // previous gateway's surcharge.
             $this->resetPaymentState();
-            $this->availableGateways = $manager->availableForFrontend($reservation->payment);
+            $this->availableGateways = $manager->availableForFrontend($payableNow);
 
             // No gateway accepts the current amount — bounce back to step 2 with the no-gateway error
             if (empty($this->availableGateways)) {
@@ -405,8 +406,9 @@ class Checkout extends Component
         $manager = app(PaymentGatewayManager::class);
         $payment = $manager->gateway($this->selectedGateway);
 
-        $surcharge = $manager->calculateSurcharge($this->selectedGateway, $reservation->payment);
-        $totalToCharge = $reservation->payment->add($surcharge);
+        $payableNow = $reservation->payableNow();
+        $surcharge = $manager->calculateSurcharge($this->selectedGateway, $payableNow);
+        $totalToCharge = $payableNow->add($surcharge);
 
         // Set the public key
         $this->publicKey = $payment->getPublicKey($reservation);

@@ -46,6 +46,7 @@ use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
+use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Reach\StatamicResrv\Support\SettingsBlueprint;
@@ -245,7 +246,7 @@ class ResrvProvider extends AddonServiceProvider
         $this->bootHooks();
 
         $this->app->terminating(fn () => Rate::resetEntryCollectionCache());
-        $this->app->terminating(fn () => \Reach\StatamicResrv\Models\Option::resetEntryCollectionCache());
+        $this->app->terminating(fn () => Option::resetEntryCollectionCache());
 
         // Register commands if running in console
         Artisan::starting(function ($artisan) {
@@ -287,6 +288,12 @@ class ResrvProvider extends AddonServiceProvider
                 ->can('use resrv')
                 ->route('resrv.rates.index')
                 ->icon('<svg viewBox="0 0 24 24" height="24" width="24" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M8 16L16 8"/><circle cx="9" cy="9" r="1.5"/><circle cx="15" cy="15" r="1.5"/><rect x="2" y="2" width="20" height="20" rx="3"/></g></svg>');
+
+            $nav->create(ucfirst(__('Surcharges')))
+                ->section('Resrv')
+                ->can('use resrv')
+                ->route('resrv.surcharges.index')
+                ->icon('<svg viewBox="0 0 24 24" height="24" width="24" xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><path d="M12 3v18"/><circle cx="12" cy="12" r="9"/></g></svg>');
 
             $nav->create(ucfirst(__('Extras')))
                 ->section('Resrv')

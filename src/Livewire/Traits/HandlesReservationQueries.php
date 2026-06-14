@@ -273,6 +273,7 @@ trait HandlesReservationQueries
 
     public function reservationPaymentIsZero(): bool
     {
-        return $this->reservation->payment->isZero();
+        // Use the amount actually due now: a zero deposit with an always-now surcharge is not zero.
+        return $this->reservation->payableNow()->isZero();
     }
 }
