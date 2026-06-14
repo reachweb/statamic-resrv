@@ -282,7 +282,10 @@ class StripePaymentGateway implements PaymentInterface
             }
 
             // Defense-in-depth: refuse to confirm if the charged amount no longer matches what's owed.
-            $expectedAmount = $reservation->payment->add($reservation->payment_surcharge)->raw();
+            // Mirror how the intent was built (Checkout::initializePayment uses payableNow()): the booking
+            // surcharge is due now even in deposit mode, so a deposit booking with a surcharge is charged
+            // payableNow()+gateway fee — using raw payment here would falsely flag it as a mismatch.
+            $expectedAmount = $reservation->payableNow()->add($reservation->payment_surcharge)->raw();
 
             if (isset($data['amount_received']) && (int) $data['amount_received'] !== (int) $expectedAmount) {
                 Log::warning('Stripe succeeded webhook amount does not match the reservation total; not confirming.', [

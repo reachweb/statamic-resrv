@@ -643,6 +643,13 @@ class Checkout extends Component
         $total = Price::create($prices['price'])->add(
             $this->calculateExtraTotals(),
             $this->calculateOptionTotals(),
+            // Use the SNAPSHOT surcharge (the attached pivot via bookingSurchargeTotal), not the live
+            // selections: a coupon event can fire after enabledOptions was reset (e.g. a page reload
+            // re-mounts the component with empty selections), and the persisted total must always match
+            // what payableNow()/the gateway will charge — which reads the snapshot. Using the live total
+            // here would drop the surcharge while the pivot (and payableNow) keep it. Coupons never
+            // discount the flat surcharge; it is frozen at its checkout price.
+            $this->reservation->bookingSurchargeTotal(),
         );
 
         // Reapply handleFirstStep()'s full-payment decision: non-refundable, the full-payment

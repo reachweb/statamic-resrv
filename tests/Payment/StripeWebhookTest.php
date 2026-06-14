@@ -17,6 +17,7 @@ use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Models\Surcharge;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Stripe\Stripe;
@@ -564,6 +565,38 @@ class StripeWebhookTest extends TestCase
 
         // 50.00 => 5000 minor units, matching the reservation total.
         $request = $this->signedSucceededWebhookRequestWithAmount('pi_test_amount_match', 'whsec_test', time(), 5000);
+
+        $gateway = app(StripePaymentGateway::class);
+        $response = $gateway->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('confirmed', $reservation->fresh()->status);
+        Event::assertDispatched(ReservationConfirmed::class, fn ($e) => $e->reservation->id === $reservation->id);
+        Mail::assertNotSent(OrphanedPaymentNotification::class);
+    }
+
+    public function test_deposit_reservation_with_a_booking_surcharge_confirms_when_charged_payable_now()
+    {
+        // L4 + surcharge: in deposit mode the booking surcharge is due now, so the intent charges
+        // payableNow() (deposit + surcharge) + gateway fee. The amount guard must expect the same,
+        // not the raw deposit, or the correct charge is falsely flagged as a mismatch and never confirmed.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_test_deposit_surcharge',
+            'payment_gateway' => 'stripe',
+        ]);
+        // Deposit: payment 50 != total 150 (base 100 + surcharge 50); no gateway fee.
+        $reservation->forceFill(['payment' => '50.00', 'total' => '150.00', 'payment_surcharge' => '0.00'])->saveQuietly();
+
+        $surcharge = Surcharge::factory()->create(['price' => '50.00']);
+        $reservation->surcharges()->attach($surcharge->id, ['name' => 'One-way fee', 'price' => '50.00']);
+
+        // payableNow() = deposit 50 + surcharge 50 = 100.00 => 10000 minor units, what the intent charges.
+        $request = $this->signedSucceededWebhookRequestWithAmount('pi_test_deposit_surcharge', 'whsec_test', time(), 10000);
 
         $gateway = app(StripePaymentGateway::class);
         $response = $gateway->verifyPayment($request);

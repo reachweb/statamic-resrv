@@ -70,6 +70,14 @@ class Surcharge extends Model
      */
     public static function matchingForSelections(array $optionSelections): Collection
     {
+        $selectedValueIds = array_values(array_filter($optionSelections, fn ($v) => $v !== null));
+
+        // No selections can never match a surcharge — skip the published-surcharge and value-name
+        // queries entirely (this runs on every pricing recompute).
+        if (empty($selectedValueIds)) {
+            return new Collection;
+        }
+
         $surcharges = static::where('published', true)->get();
 
         if ($surcharges->isEmpty()) {
@@ -80,7 +88,7 @@ class Surcharge extends Model
         // "Pickup location" and "Return location" are distinct Options with distinct value rows,
         // so the same place (e.g. "Airport") only matches when the admin names both values alike.
         $valueNames = OptionValue::withTrashed()
-            ->whereIn('id', array_values(array_filter($optionSelections, fn ($v) => $v !== null)))
+            ->whereIn('id', $selectedValueIds)
             ->pluck('name', 'id')
             ->all();
 

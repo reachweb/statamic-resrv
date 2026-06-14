@@ -474,7 +474,9 @@ class Reservation extends Model
     {
         $total = Price::create(0);
 
-        foreach ($this->surcharges()->get() as $surcharge) {
+        // Use the cached relation (not ->get()): payableNow/amountRemaining/totalToCharge/extraCharges
+        // each call this within a single render, and CP show eager-loads surcharges.
+        foreach ($this->surcharges as $surcharge) {
             $total->add(Price::create($surcharge->pivot->price));
         }
 

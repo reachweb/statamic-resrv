@@ -3,8 +3,12 @@
 namespace Reach\StatamicResrv\Tests\Surcharge;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
@@ -265,5 +269,206 @@ class SurchargeTest extends TestCase
         $this->assertDatabaseMissing('resrv_reservation_surcharge', [
             'reservation_id' => $reservation->id,
         ]);
+    }
+
+    // Regression: applying or removing a coupon must keep the booking surcharge in the stored total.
+    // The surcharge is a flat fee that coupons never discount; dropping it here under-charges the card.
+    public function test_applying_and_removing_a_coupon_keeps_the_surcharge_in_the_total()
+    {
+        Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        // A 20%-off coupon ("20OFF") assigned to the entry's availability.
+        $coupon = DynamicPricing::factory()->withCoupon()->create();
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $coupon->id,
+            'dynamic_pricing_assignment_id' => $this->entry->id(),
+            'dynamic_pricing_assignment_type' => Availability::class,
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '100.00',
+            'item_id' => $this->entry->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [
+                $this->pickup->id => [
+                    'id' => $this->pickup->id,
+                    'value' => $this->pickupAirport->id,
+                    'price' => '0.00',
+                    'optionName' => 'Pickup location',
+                    'valueName' => 'Airport',
+                    'priceType' => 'free',
+                ],
+                $this->return->id => [
+                    'id' => $this->return->id,
+                    'value' => $this->returnDowntown->id,
+                    'price' => '0.00',
+                    'optionName' => 'Return location',
+                    'valueName' => 'Downtown',
+                    'priceType' => 'free',
+                ],
+            ])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        // Base 100 + one-way fee 50.
+        $this->assertEquals('150.00', $reservation->fresh()->total->format());
+
+        // Apply the coupon: base 100 -> 80, surcharge stays 50 (never discounted) => total 130.
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $reservation->refresh();
+        $this->assertEquals('80.00', $reservation->price->format());
+        $this->assertEquals('130.00', $reservation->total->format());
+        $this->assertDatabaseHas('resrv_reservation_surcharge', [
+            'reservation_id' => $reservation->id,
+            'price' => '50.00',
+        ]);
+
+        // Remove the coupon: base back to 100, surcharge stays 50 => total 150.
+        session()->forget('resrv_coupon');
+        $component->dispatch('coupon-removed', '20OFF', true);
+
+        $this->assertEquals('150.00', $reservation->fresh()->total->format());
+    }
+
+    // Regression: the flat surcharge is added ONCE per reservation, even for a parent (multi) booking
+    // with several children — never once per child.
+    public function test_parent_reservation_counts_the_flat_surcharge_once_not_per_child()
+    {
+        $surcharge = Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $this->entry->id(),
+        ]);
+
+        ChildReservation::factory()->count(2)->create(['reservation_id' => $reservation->id]);
+
+        $reservation->surcharges()->attach($surcharge->id, ['name' => 'One-way fee', 'price' => '50.00']);
+
+        // No options/extras attached: extraCharges() routes to parentExtraCharges() and must add the
+        // flat surcharge exactly once (50.00), not once per child (which would give 100.00).
+        $this->assertEquals('50.00', $reservation->fresh()->extraCharges()->format());
+    }
+
+    // Regression: a coupon change after the component re-mounts with empty selections (e.g. a page
+    // reload) must keep the snapshotted surcharge in the total, so total stays consistent with
+    // payableNow()/the gateway charge — which read the snapshot, not the live selections.
+    public function test_coupon_change_after_a_reload_keeps_the_snapshotted_surcharge_in_the_total()
+    {
+        Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $coupon = DynamicPricing::factory()->withCoupon()->create();
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $coupon->id,
+            'dynamic_pricing_assignment_id' => $this->entry->id(),
+            'dynamic_pricing_assignment_type' => Availability::class,
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '100.00',
+            'item_id' => $this->entry->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        // Step 1 in one component instance: snapshot the 50.00 surcharge onto the reservation.
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [
+                $this->pickup->id => [
+                    'id' => $this->pickup->id, 'value' => $this->pickupAirport->id, 'price' => '0.00',
+                    'optionName' => 'Pickup location', 'valueName' => 'Airport', 'priceType' => 'free',
+                ],
+                $this->return->id => [
+                    'id' => $this->return->id, 'value' => $this->returnDowntown->id, 'price' => '0.00',
+                    'optionName' => 'Return location', 'valueName' => 'Downtown', 'priceType' => 'free',
+                ],
+            ])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservation_surcharge', ['reservation_id' => $reservation->id, 'price' => '50.00']);
+
+        // Simulate a page reload: a FRESH component re-mounts at step 1 with empty enabledOptions.
+        $reloaded = Livewire::test(Checkout::class)->assertSet('step', 1);
+
+        // Apply the coupon on the reloaded component.
+        session(['resrv_coupon' => '20OFF']);
+        $reloaded->dispatch('coupon-applied', '20OFF');
+
+        // Base 100 -> 80 with the coupon; the snapshotted 50 surcharge is retained => total 130.
+        $reservation->refresh();
+        $this->assertEquals('80.00', $reservation->price->format());
+        $this->assertEquals('130.00', $reservation->total->format());
+        $this->assertDatabaseHas('resrv_reservation_surcharge', ['reservation_id' => $reservation->id, 'price' => '50.00']);
+    }
+
+    // Regression: changing selections so the surcharge would no longer apply, WITHOUT re-committing via
+    // handleFirstStep, then applying a coupon must keep total consistent with the committed snapshot.
+    // The snapshot pivot is only re-synced on the next handleFirstStep, so until then total tracks it.
+    public function test_coupon_after_an_uncommitted_selection_change_stays_consistent_with_the_snapshot()
+    {
+        Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $coupon = DynamicPricing::factory()->withCoupon()->create();
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $coupon->id,
+            'dynamic_pricing_assignment_id' => $this->entry->id(),
+            'dynamic_pricing_assignment_type' => Availability::class,
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '100.00',
+            'item_id' => $this->entry->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [
+                $this->pickup->id => [
+                    'id' => $this->pickup->id, 'value' => $this->pickupAirport->id, 'price' => '0.00',
+                    'optionName' => 'Pickup location', 'valueName' => 'Airport', 'priceType' => 'free',
+                ],
+                $this->return->id => [
+                    'id' => $this->return->id, 'value' => $this->returnDowntown->id, 'price' => '0.00',
+                    'optionName' => 'Return location', 'valueName' => 'Downtown', 'priceType' => 'free',
+                ],
+            ])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertEquals('150.00', $reservation->fresh()->total->format());
+
+        // Uncommitted change: make both locations the same (live surcharge would be 0) but do NOT re-run
+        // handleFirstStep, so the committed snapshot pivot stays at 50.
+        $component->dispatch('options-updated', [
+            $this->pickup->id => [
+                'id' => $this->pickup->id, 'value' => $this->pickupAirport->id, 'price' => '0.00',
+                'optionName' => 'Pickup location', 'valueName' => 'Airport', 'priceType' => 'free',
+            ],
+            $this->return->id => [
+                'id' => $this->return->id, 'value' => $this->returnAirport->id, 'price' => '0.00',
+                'optionName' => 'Return location', 'valueName' => 'Airport', 'priceType' => 'free',
+            ],
+        ]);
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        // total uses the committed snapshot (still 50): 80 + 50 = 130, matching payableNow — no divergence.
+        $reservation->refresh();
+        $this->assertEquals('130.00', $reservation->total->format());
+        $this->assertDatabaseHas('resrv_reservation_surcharge', ['reservation_id' => $reservation->id, 'price' => '50.00']);
     }
 }
