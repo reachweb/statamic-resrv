@@ -939,7 +939,8 @@ class AvailabilityMultiResultsTest extends TestCase
         $option = Option::factory()
             ->notRequired()
             ->has(OptionValue::factory(), 'values')
-            ->create(['item_id' => $entryId]);
+            ->forEntry($entryId)
+            ->create();
 
         Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
             ->dispatch('availability-search-updated', $this->searchPayload())
@@ -1058,7 +1059,8 @@ class AvailabilityMultiResultsTest extends TestCase
         $option = Option::factory()
             ->notRequired()
             ->has(OptionValue::factory(), 'values')
-            ->create(['item_id' => $entryId]);
+            ->forEntry($entryId)
+            ->create();
 
         $value = $option->values->first();
 
@@ -1118,7 +1120,8 @@ class AvailabilityMultiResultsTest extends TestCase
         $option = Option::factory()
             ->notRequired()
             ->has(OptionValue::factory(), 'values')
-            ->create(['item_id' => $entryId]);
+            ->forEntry($entryId)
+            ->create();
 
         $value = $option->values->first();
 
@@ -1154,7 +1157,8 @@ class AvailabilityMultiResultsTest extends TestCase
         $option = Option::factory()
             ->notRequired()
             ->has(OptionValue::factory(), 'values')
-            ->create(['item_id' => $entryId]);
+            ->forEntry($entryId)
+            ->create();
 
         $value = $option->values->first();
 
@@ -1521,7 +1525,8 @@ class AvailabilityMultiResultsTest extends TestCase
         $option = Option::factory()
             ->notRequired()
             ->has(OptionValue::factory(), 'values')
-            ->create(['item_id' => $entryId]);
+            ->forEntry($entryId)
+            ->create();
         $value = $option->values->first();
 
         $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])

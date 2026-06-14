@@ -245,6 +245,7 @@ class ResrvProvider extends AddonServiceProvider
         $this->bootHooks();
 
         $this->app->terminating(fn () => Rate::resetEntryCollectionCache());
+        $this->app->terminating(fn () => \Reach\StatamicResrv\Models\Option::resetEntryCollectionCache());
 
         // Register commands if running in console
         Artisan::starting(function ($artisan) {

@@ -21,9 +21,7 @@ class OptionCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $option = Option::factory()
-            ->state([
-                'item_id' => $item->id(),
-            ])
+            ->forEntry($item->id())
             ->has(OptionValue::factory()->count(3), 'values')
             ->create();
 
@@ -54,9 +52,7 @@ class OptionCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $option = Option::factory()
-            ->state([
-                'item_id' => $item->id(),
-            ])
+            ->forEntry($item->id())
             ->create();
 
         $payload = [
@@ -79,7 +75,7 @@ class OptionCpTest extends TestCase
         $this->withExceptionHandling();
 
         $item = $this->makeStatamicItem();
-        $option = Option::factory()->state(['item_id' => $item->id()])->create();
+        $option = Option::factory()->forEntry($item->id())->create();
 
         $payload = [
             'name' => 'This is an option value',
@@ -97,9 +93,7 @@ class OptionCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $option = Option::factory()
-            ->state([
-                'item_id' => $item->id(),
-            ])
+            ->forEntry($item->id())
             ->has(OptionValue::factory()->count(3), 'values')
             ->create();
 
@@ -128,9 +122,7 @@ class OptionCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $option = Option::factory()
-            ->state([
-                'item_id' => $item->id(),
-            ])
+            ->forEntry($item->id())
             ->has(OptionValue::factory()->count(3), 'values')
             ->create();
 
@@ -155,9 +147,7 @@ class OptionCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $option = Option::factory()
-            ->state([
-                'item_id' => $item->id(),
-            ])
+            ->forEntry($item->id())
             ->has(OptionValue::factory()->count(3), 'values')
             ->create();
 
@@ -174,9 +164,7 @@ class OptionCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $option = Option::factory()
-            ->state([
-                'item_id' => $item->id(),
-            ])
+            ->forEntry($item->id())
             ->has(OptionValue::factory()->count(3), 'values')
             ->create();
 
@@ -222,9 +210,7 @@ class OptionCpTest extends TestCase
     {
         $item = $this->makeStatamicItem();
         $option = Option::factory()
-            ->state([
-                'item_id' => $item->id(),
-            ])
+            ->forEntry($item->id())
             ->has(OptionValue::factory()->count(3), 'values')
             ->create();
 

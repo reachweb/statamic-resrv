@@ -53,6 +53,14 @@ class Entry extends Model
         return static::query()->itemId($id)->firstOrFail();
     }
 
+    /**
+     * The collection handle of the Statamic entry with this item id, or null if it is unknown.
+     */
+    public static function collectionForItem(string $itemId): ?string
+    {
+        return static::query()->itemId($itemId)->value('collection');
+    }
+
     // Returns the ID of the Statamic entry
     public function id(): string
     {

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
 use Reach\StatamicResrv\Models\Option;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesOptionsQueries
@@ -18,15 +19,19 @@ trait HandlesOptionsQueries
             return $this->getOptionsWithParentPricing($reservation);
         }
 
-        return $this->getOptionsForId($reservation->item_id)->map(function ($option) use ($reservation) {
-            return Option::find($option->id)->valuesPriceForDates($reservation);
+        $disabled = OptionValue::disabledIdsForEntry($reservation->item_id);
+
+        return $this->getOptionsForId($reservation->item_id, $disabled)->map(function ($option) use ($reservation, $disabled) {
+            return $this->withoutDisabledValues(Option::find($option->id), $disabled)->valuesPriceForDates($reservation);
         });
     }
 
     protected function getOptionsWithParentPricing(Reservation $reservation): Collection
     {
-        return $this->getOptionsForId($reservation->item_id)->map(function ($option) use ($reservation) {
-            $option = Option::find($option->id);
+        $disabled = OptionValue::disabledIdsForEntry($reservation->item_id);
+
+        return $this->getOptionsForId($reservation->item_id, $disabled)->map(function ($option) use ($reservation, $disabled) {
+            $option = $this->withoutDisabledValues(Option::find($option->id), $disabled);
 
             foreach ($option->values as $value) {
                 $value->original_price = $value->price->format();
@@ -53,8 +58,10 @@ trait HandlesOptionsQueries
 
     public function getOptionsForSearch($data, $entryId): Collection
     {
-        $options = $this->getOptionsForId($entryId)->map(function ($option) use ($data) {
-            return Option::find($option->id)->valuesPriceForDates($data);
+        $disabled = OptionValue::disabledIdsForEntry($entryId);
+
+        $options = $this->getOptionsForId($entryId, $disabled)->map(function ($option) use ($data, $disabled) {
+            return $this->withoutDisabledValues(Option::find($option->id), $disabled)->valuesPriceForDates($data);
         });
 
         return $options;
@@ -68,8 +75,10 @@ trait HandlesOptionsQueries
      */
     public function getOptionsForSelections(array $selections, string $entryId): Collection
     {
-        return $this->getOptionsForId($entryId)->map(function ($option) use ($selections, $entryId) {
-            $option = Option::find($option->id);
+        $disabled = OptionValue::disabledIdsForEntry($entryId);
+
+        return $this->getOptionsForId($entryId, $disabled)->map(function ($option) use ($selections, $entryId, $disabled) {
+            $option = $this->withoutDisabledValues(Option::find($option->id), $disabled);
 
             foreach ($option->values as $value) {
                 $value->original_price = $value->price->format();
@@ -126,11 +135,37 @@ trait HandlesOptionsQueries
         return ! empty($selections) ? $selections : null;
     }
 
-    protected function getOptionsForId($id): Collection
+    protected function getOptionsForId($id, ?array $disabled = null): Collection
     {
+        $disabled ??= OptionValue::disabledIdsForEntry($id);
+
         return Option::entry($id)
             ->where('published', true)
             ->with('values')
-            ->get();
+            ->get()
+            ->filter(function ($option) use ($disabled) {
+                // Drop options that have no selectable value left for this entry — there is nothing
+                // to show or pick, and (for a required option) it would otherwise deadlock checkout.
+                return $option->values->reject(fn ($value) => in_array($value->id, $disabled))->isNotEmpty();
+            })
+            ->values();
+    }
+
+    /**
+     * Strip an entry's disabled values from a freshly loaded option so they are neither displayed,
+     * priced, nor selectable.
+     *
+     * @param  array<int, int>  $disabledValueIds
+     */
+    protected function withoutDisabledValues(Option $option, array $disabledValueIds): Option
+    {
+        if (! empty($disabledValueIds)) {
+            $option->setRelation(
+                'values',
+                $option->values->reject(fn ($value) => in_array($value->id, $disabledValueIds))->values()
+            );
+        }
+
+        return $option;
     }
 }

@@ -113,6 +113,7 @@ class Options extends Component
             'price' => $value->price->format(),
             'optionName' => $option->name,
             'valueName' => $value->name,
+            'priceType' => $value->price_type,
         ];
 
         // Save the option with its ID as the key

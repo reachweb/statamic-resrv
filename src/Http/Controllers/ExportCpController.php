@@ -286,7 +286,7 @@ class ExportCpController extends Controller
                     ->map(function ($option) {
                         $value = $option->values->firstWhere('id', $option->pivot->value);
 
-                        return $option->name.': '.($value?->name ?? '');
+                        return $option->name.': '.($option->pivot->value_name ?? $value?->name ?? '');
                     })
                     ->implode(', '),
             ],

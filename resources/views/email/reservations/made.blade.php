@@ -72,7 +72,16 @@
 |{{ __("Options") }}||
 | :------------------------------------------------ |:--------------------------------------------------------------------------| 
 @foreach ($reservation->options()->get() as $option)
-| {{ $option->name }} | {{ $option->values->find($option->pivot->value)->name }} |
+| {{ $option->name }} | {{ $option->pivot->value_name ?? optional($option->values->find($option->pivot->value))->name }} |
+@endforeach
+@endcomponent
+@endif
+@if ($reservation->surcharges()->get()->count() > 0)
+@component('mail::table')
+|{{ __("Surcharges") }}||
+| :------------------------------------------------ |:--------------------------------------------------------------------------|
+@foreach ($reservation->surcharges()->get() as $surcharge)
+| {{ $surcharge->pivot->name }} | {{ config('resrv-config.currency_symbol') }} {{ $surcharge->pivot->price }} |
 @endforeach
 @endcomponent
 @endif

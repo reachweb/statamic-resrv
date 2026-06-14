@@ -95,7 +95,7 @@ class ReservationCpController extends Controller
     public function show($id)
     {
         $reservation = $this->reservation
-            ->with(['extras', 'options.values', 'affiliate', 'dynamicPricings', 'childs.rate'])
+            ->with(['extras', 'options.values', 'surcharges', 'affiliate', 'dynamicPricings', 'childs.rate'])
             ->findOrFail($id);
 
         $entry = $reservation->entry();
@@ -149,12 +149,17 @@ class ReservationCpController extends Controller
             'options' => $reservation->options->map(function ($option) {
                 $value = $option->values->firstWhere('id', $option->pivot->value);
 
+                // Prefer the checkout snapshot (history-safe) and fall back to the live value for
+                // pre-snapshot reservations. price_formatted reflects the price actually charged.
+                $valueName = $option->pivot->value_name ?? $value?->name;
+                $priceType = $option->pivot->price_type ?? $value?->price_type;
+
                 return [
                     'id' => $option->id,
                     'name' => $option->name,
-                    'value_name' => $value?->name,
-                    'price_type' => $value?->price_type,
-                    'price_formatted' => $value?->price_type !== 'free' ? $value?->price?->format() : null,
+                    'value_name' => $valueName,
+                    'price_type' => $priceType,
+                    'price_formatted' => $priceType !== 'free' ? ($option->pivot->price ?? $value?->price?->format()) : null,
                 ];
             })->values()->all(),
             'extras' => $reservation->extras->map(fn ($extra) => [
@@ -162,6 +167,11 @@ class ReservationCpController extends Controller
                 'name' => $extra->name,
                 'quantity' => $extra->pivot->quantity,
                 'price_formatted' => $extra->priceFromPivot(),
+            ])->values()->all(),
+            'surcharges' => $reservation->surcharges->map(fn ($surcharge) => [
+                'id' => $surcharge->id,
+                'name' => $surcharge->pivot->name,
+                'price_formatted' => $surcharge->pivot->price,
             ])->values()->all(),
             'affiliate' => $reservation->affiliate->isNotEmpty() ? (function () use ($reservation) {
                 $affiliate = $reservation->affiliate->first();

@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\Surcharge;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 
 trait HandlesPricing
@@ -26,13 +27,14 @@ trait HandlesPricing
         // Calculate totals
         $extrasTotal = $this->calculateExtraTotals();
         $optionsTotal = $this->calculateOptionTotals();
+        $surchargeTotal = $this->calculateSurchargeTotals();
 
-        $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal);
+        $total = $total->add($reservationTotal, $extrasTotal, $optionsTotal, $surchargeTotal);
 
         $payment = $this->reservation->payment;
         $paymentSurcharge = $this->reservation->payment_surcharge;
 
-        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'payment', 'paymentSurcharge'));
+        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'surchargeTotal', 'payment', 'paymentSurcharge'));
     }
 
     public function calculateAvailabilityTotals($availabilityTotal): PriceClass
@@ -42,7 +44,7 @@ trait HandlesPricing
         $extrasTotal = $this->calculateExtraTotals();
         $optionsTotal = $this->calculateOptionTotals();
 
-        return $total->add($extrasTotal, $optionsTotal);
+        return $total->add($extrasTotal, $optionsTotal, $this->calculateSurchargeTotals());
     }
 
     public function calculateExtraTotals()
@@ -68,6 +70,11 @@ trait HandlesPricing
         }
 
         return $optionsTotal;
+    }
+
+    public function calculateSurchargeTotals()
+    {
+        return Surcharge::totalForSelections($this->enabledOptions->selections());
     }
 
     public function freeCancellationPossible(?int $rateId = null): bool

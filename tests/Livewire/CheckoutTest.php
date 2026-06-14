@@ -74,9 +74,8 @@ class CheckoutTest extends TestCase
         $this->options = Option::factory()
             ->notRequired()
             ->has(OptionValue::factory()->fixed(), 'values')
-            ->create([
-                'item_id' => $this->entries->first()->id(),
-            ]);
+            ->forEntry($this->entries->first()->id())
+            ->create();
     }
 
     public function test_renders_successfully()

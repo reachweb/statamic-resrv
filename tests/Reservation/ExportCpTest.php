@@ -197,7 +197,7 @@ class ExportCpTest extends TestCase
         $extra = Extra::factory()->create(['name' => 'Breakfast']);
         $reservation->extras()->attach($extra->id, ['quantity' => 2, 'price' => 10]);
 
-        $option = Option::factory()->create(['name' => 'Bed type', 'item_id' => $item->id()]);
+        $option = Option::factory()->forEntry($item->id())->create(['name' => 'Bed type']);
         $value = OptionValue::factory()->create(['option_id' => $option->id, 'name' => 'King']);
         $reservation->options()->attach($option->id, ['value' => $value->id]);
 

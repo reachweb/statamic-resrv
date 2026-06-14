@@ -1560,7 +1560,7 @@ class CheckoutExtrasTest extends TestCase
 
         // Default OptionValueFactory: perday at 22.75/day. Quantity stays at 1 so
         // OptionValue::calculatePrice() exercises the bare ->price->multiply($duration) path.
-        $option = Option::factory()->create(['item_id' => $item->id()]);
+        $option = Option::factory()->forEntry($item->id())->create();
         $value = OptionValue::factory()->create(['option_id' => $option->id]);
 
         $reservation = Reservation::factory()->create([
@@ -1601,7 +1601,7 @@ class CheckoutExtrasTest extends TestCase
         $item = $this->entries->first();
 
         // Default OptionValueFactory: perday at 22.75/day.
-        $option = Option::factory()->create(['item_id' => $item->id()]);
+        $option = Option::factory()->forEntry($item->id())->create();
         $value = OptionValue::factory()->create(['option_id' => $option->id]);
 
         $reservation = Reservation::factory()->create([
@@ -1630,7 +1630,7 @@ class CheckoutExtrasTest extends TestCase
     {
         $item = $this->entries->first();
 
-        $option = Option::factory()->create(['item_id' => $item->id()]);
+        $option = Option::factory()->forEntry($item->id())->create();
 
         $reservation = Reservation::factory()->create([
             'item_id' => $item->id(),

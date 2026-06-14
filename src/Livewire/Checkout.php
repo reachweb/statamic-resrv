@@ -23,6 +23,7 @@ use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Models\Surcharge;
 
 class Checkout extends Component
 {
@@ -209,7 +210,7 @@ class Checkout extends Component
         // Sync extras & options to the database. Don't advance if either fails —
         // the total was already written above, so proceeding would let the user pay
         // an amount that doesn't match the extras/options actually attached.
-        if (! $this->assignExtras() || ! $this->assignOptions()) {
+        if (! $this->assignExtras() || ! $this->assignOptions() || ! $this->assignSurcharges()) {
             return;
         }
 
@@ -579,6 +580,31 @@ class Checkout extends Component
 
                 return false;
             }
+        }
+
+        return true;
+    }
+
+    /**
+     * Snapshot the surcharges that apply to the current option selections onto the reservation
+     * (name + frozen price), so the charged amount can never drift if a rule is later edited.
+     */
+    protected function assignSurcharges(): bool
+    {
+        try {
+            $sync = [];
+            foreach (Surcharge::matchingForSelections($this->enabledOptions->selections()) as $surcharge) {
+                $sync[$surcharge->id] = [
+                    'name' => $surcharge->name,
+                    'price' => $surcharge->price->format(),
+                ];
+            }
+
+            $this->reservation->surcharges()->sync($sync);
+        } catch (\Exception $e) {
+            $this->addError('options', 'There was an error applying the surcharge. Please try again.');
+
+            return false;
         }
 
         return true;

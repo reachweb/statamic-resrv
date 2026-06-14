@@ -4,7 +4,9 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\OptionValueFactory;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -42,6 +44,31 @@ class OptionValue extends Model
     public function option()
     {
         return $this->belongsTo(Option::class, 'option_id');
+    }
+
+    /**
+     * Entries for which this value is explicitly DISABLED (sparse exception rows). Used by the CP
+     * to toggle a value off per entry; absence of a row means the value is enabled for the entry.
+     */
+    public function disabledEntries(): BelongsToMany
+    {
+        return $this->belongsToMany(Entry::class, 'resrv_option_value_entries', 'option_value_id', 'statamic_id', 'id', 'item_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Ids of the option values explicitly disabled for an entry (the sparse resrv_option_value_entries
+     * exception rows). An empty list means every published value is selectable for that entry.
+     *
+     * @return array<int, int>
+     */
+    public static function disabledIdsForEntry(string $entryId): array
+    {
+        return DB::table('resrv_option_value_entries')
+            ->where('statamic_id', $entryId)
+            ->pluck('option_value_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     public function priceForDates($data)

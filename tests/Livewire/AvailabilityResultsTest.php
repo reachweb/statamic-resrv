@@ -47,9 +47,8 @@ class AvailabilityResultsTest extends TestCase
 
         $this->option = Option::factory()
             ->has(OptionValue::factory(), 'values')
-            ->create([
-                'item_id' => $this->entries->first()->id(),
-            ]);
+            ->forEntry($this->entries->first()->id())
+            ->create();
 
         $extra = Extra::factory()->create();
 

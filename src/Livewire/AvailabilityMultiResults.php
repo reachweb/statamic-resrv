@@ -391,10 +391,18 @@ class AvailabilityMultiResults extends Component
         $values = OptionValue::findMany($this->enabledOptions->options->pluck('value'))->keyBy('id');
 
         $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($selectionDataArrays, $values) {
+            $value = $values->get($option['value']);
+
+            // A selected value that no longer exists (hard-deleted) leaves its stored price untouched
+            // rather than dereferencing null.
+            if (! $value) {
+                return $option;
+            }
+
             $totalPrice = Price::create(0);
 
             foreach ($selectionDataArrays as $selectionData) {
-                $totalPrice->add(Price::create($values->get($option['value'])->priceForDates($selectionData)));
+                $totalPrice->add(Price::create($value->priceForDates($selectionData)));
             }
 
             $option['price'] = $totalPrice->format();

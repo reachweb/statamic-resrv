@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Fieldtypes;
 
 use Reach\StatamicResrv\Models\Option;
+use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Fields\Fieldtype;
 
 class ResrvOptions extends Fieldtype
@@ -11,7 +12,17 @@ class ResrvOptions extends Fieldtype
 
     public function augment($value)
     {
-        return Option::entry($this->field->parent()->id())
+        $parent = $this->field?->parent();
+
+        // Options key off resrv_entries, which stores ROOT ids only (Entry::syncToDatabase skips
+        // localizations). Resolve the root id so options resolve on every site's localization.
+        $entryId = $parent instanceof EntryContract ? $parent->root()->id() : $parent?->id();
+
+        if (! $entryId) {
+            return [];
+        }
+
+        return Option::entry($entryId)
             ->where('published', true)
             ->with('values')
             ->get()

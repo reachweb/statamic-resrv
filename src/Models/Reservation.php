@@ -279,12 +279,17 @@ class Reservation extends Model
 
     public function options()
     {
-        return $this->belongsToMany(Option::class, 'resrv_reservation_option')->withPivot('value')->withTrashed();
+        return $this->belongsToMany(Option::class, 'resrv_reservation_option')->withPivot(['value', 'value_name', 'price', 'price_type'])->withTrashed();
     }
 
     public function extras()
     {
         return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot(['quantity', 'price'])->withTrashed();
+    }
+
+    public function surcharges()
+    {
+        return $this->belongsToMany(Surcharge::class, 'resrv_reservation_surcharge')->withPivot(['name', 'price'])->withTrashed();
     }
 
     public function scopeFindByPaymentId($query, $id)
@@ -379,7 +384,7 @@ class Reservation extends Model
 
         $optionsCost = Price::create(0);
         foreach ($this->options()->get() as $option) {
-            $optionsCost->add($option->calculatePrice($data, $option->pivot->value));
+            $optionsCost->add($this->resolveOptionPrice($option, $data));
         }
 
         $extrasCost = Price::create(0);
@@ -387,20 +392,33 @@ class Reservation extends Model
             $extrasCost->add($extra->calculatePrice($data, $extra->pivot->quantity));
         }
 
-        return Price::create(0)->add($optionsCost, $extrasCost);
+        $surchargeCost = $this->bookingSurchargeTotal();
+
+        return Price::create(0)->add($optionsCost, $extrasCost, $surchargeCost);
     }
 
     protected function parentExtraCharges()
     {
         $totalCharges = Price::create(0);
 
+        // Options snapshot the full per-reservation price at checkout (already aggregated across all
+        // children by getOptionsWithParentPricing), so add each once — NOT once per child. Pre-snapshot
+        // reservations (null price) fall back to the legacy per-child sum in the loop below.
+        foreach ($this->options()->get() as $option) {
+            if ($option->pivot->price !== null) {
+                $totalCharges->add(Price::create($option->pivot->price));
+            }
+        }
+
         foreach ($this->childs as $child) {
             $data = $this->buildChildDataArray($child);
 
-            // Fresh instances per child: OptionValue::calculatePrice mutates $this->price via
-            // Price::multiply(), so reusing the same Option across children compounds the result.
+            // Legacy fallback only: options without a snapshot are summed per child. Fresh instances
+            // per child — OptionValue::calculatePrice mutates $this->price via Price::multiply().
             foreach ($this->options()->with('values')->get() as $option) {
-                $totalCharges->add($option->calculatePrice($data, $option->pivot->value));
+                if ($option->pivot->price === null) {
+                    $totalCharges->add($option->calculatePrice($data, $option->pivot->value));
+                }
             }
 
             foreach ($this->extras()->get() as $extra) {
@@ -410,7 +428,68 @@ class Reservation extends Model
             }
         }
 
+        // Flat surcharge once per reservation, from the checkout snapshot — NOT per child.
+        $totalCharges->add($this->bookingSurchargeTotal());
+
         return $totalCharges;
+    }
+
+    /**
+     * The option's charged price: the value snapshotted onto the pivot at checkout, or a live
+     * re-price for pre-snapshot (historical) reservations whose pivot predates the snapshot columns.
+     */
+    protected function resolveOptionPrice(Option $option, array $data): PriceClass
+    {
+        if ($option->pivot->price !== null) {
+            return Price::create($option->pivot->price);
+        }
+
+        return $option->calculatePrice($data, $option->pivot->value);
+    }
+
+    /**
+     * Map of [optionId => selectedValueId] from a checkout data payload, for evaluating surcharges
+     * during the drift check before anything is persisted.
+     *
+     * @return array<int, int>
+     */
+    protected function optionSelectionsFromData($data): array
+    {
+        if (! array_key_exists('options', $data)) {
+            return [];
+        }
+
+        return collect($data['options'])
+            ->mapWithKeys(fn ($option) => [$option['id'] => $option['value']])
+            ->all();
+    }
+
+    /**
+     * Total of the surcharges snapshotted onto this reservation (frozen at checkout).
+     */
+    public function bookingSurchargeTotal(): PriceClass
+    {
+        $total = Price::create(0);
+
+        foreach ($this->surcharges()->get() as $surcharge) {
+            $total->add(Price::create($surcharge->pivot->price));
+        }
+
+        return $total;
+    }
+
+    /**
+     * The amount due now, excluding any payment-gateway surcharge. Full-payment reservations already
+     * fold the booking surcharge into `payment` (== `total`); deposit reservations keep `payment` as
+     * the base deposit, so the surcharge — always due now — is added on top.
+     */
+    public function payableNow(): PriceClass
+    {
+        if ($this->payment->equals($this->total)) {
+            return Price::create($this->payment->format());
+        }
+
+        return Price::create($this->payment->format())->add($this->bookingSurchargeTotal());
     }
 
     public function getPrices()
@@ -547,7 +626,9 @@ class Reservation extends Model
             });
         }
 
-        return $extraCharges->add($optionsCost, $extrasCost);
+        $surchargeCost = Surcharge::totalForSelections($this->optionSelectionsFromData($data));
+
+        return $extraCharges->add($optionsCost, $extrasCost, $surchargeCost);
     }
 
     protected function validateParentExtraCharges($data, $statamic_id)
@@ -572,6 +653,9 @@ class Reservation extends Model
                 });
             }
         }
+
+        // Flat surcharge once per reservation — NOT per child.
+        $totalCharges->add(Surcharge::totalForSelections($this->optionSelectionsFromData($data)));
 
         return $totalCharges;
     }
@@ -623,9 +707,18 @@ class Reservation extends Model
 
     protected function checkForRequiredOptions($statamic_id, $data): bool
     {
+        $disabledValueIds = OptionValue::disabledIdsForEntry($statamic_id);
+
         $requiredOptionIds = Option::entry($statamic_id)
             ->where('published', true)
             ->where('required', true)
+            ->with('values')
+            ->get()
+            ->filter(function ($option) use ($disabledValueIds) {
+                // A required option whose values are all disabled for this entry cannot be required —
+                // otherwise checkout would demand a selection the UI never renders (deadlock).
+                return $option->values->reject(fn ($value) => in_array($value->id, $disabledValueIds))->isNotEmpty();
+            })
             ->pluck('id');
 
         if ($requiredOptionIds->isEmpty()) {

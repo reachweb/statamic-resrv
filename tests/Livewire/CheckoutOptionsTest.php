@@ -39,9 +39,8 @@ class CheckoutOptionsTest extends TestCase
 
         $this->options = Option::factory()
             ->has(OptionValue::factory(), 'values')
-            ->create([
-                'item_id' => $this->entries->first()->id(),
-            ]);
+            ->forEntry($this->entries->first()->id())
+            ->create();
     }
 
     // Test that it loads and displays options for the entry

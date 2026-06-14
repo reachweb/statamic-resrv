@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Option;
 
 class OptionFactory extends Factory
@@ -27,7 +28,8 @@ class OptionFactory extends Factory
             'description' => 'Select this option to improve your experience!',
             'required' => true,
             'order' => 1,
-            'item_id' => '',
+            'collection' => null,
+            'apply_to_all' => false,
             'published' => true,
         ];
     }
@@ -38,6 +40,20 @@ class OptionFactory extends Factory
             return [
                 'required' => false,
             ];
+        });
+    }
+
+    /**
+     * Attach the option to a single entry: derive the entry's collection and create the pivot row,
+     * the global-options equivalent of the old item_id binding.
+     */
+    public function forEntry(string $entryId): static
+    {
+        return $this->afterCreating(function (Option $option) use ($entryId) {
+            $collection = Entry::collectionForItem($entryId);
+
+            $option->forceFill(['collection' => $collection])->saveQuietly();
+            $option->entries()->syncWithoutDetaching([$entryId]);
         });
     }
 }
