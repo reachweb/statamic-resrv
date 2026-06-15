@@ -593,4 +593,39 @@ class SurchargeTest extends TestCase
         $totals->get('payableNowWithGatewayFee')->add(Price::create('25.00'));
         $this->assertEquals('100.00', $totals->get('payableNow')->format());
     }
+
+    // Regression: the pivot's composite unique constraint stops two concurrent first-step requests
+    // from inserting duplicate (reservation, surcharge) rows that bookingSurchargeTotal() would
+    // otherwise sum twice — charging the booking surcharge twice.
+    public function test_a_surcharge_cannot_be_snapshotted_twice_for_the_same_reservation()
+    {
+        $surcharge = Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $reservation = Reservation::factory()->create(['item_id' => $this->entry->id()]);
+        $reservation->surcharges()->attach($surcharge->id, ['name' => 'One-way fee', 'price' => '50.00']);
+
+        $this->expectException(\Illuminate\Database\QueryException::class);
+
+        DB::table('resrv_reservation_surcharge')->insert([
+            'reservation_id' => $reservation->id,
+            'surcharge_id' => $surcharge->id,
+            'name' => 'One-way fee',
+            'price' => '50.00',
+        ]);
+    }
+
+    // The constraint must NOT break a legitimate re-submit: sync() updates the existing row in place
+    // rather than inserting a second, so a single snapshot row remains and the total never doubles.
+    public function test_re_syncing_a_surcharge_keeps_a_single_row_and_does_not_double_count()
+    {
+        $surcharge = Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $reservation = Reservation::factory()->create(['item_id' => $this->entry->id()]);
+
+        $reservation->surcharges()->sync([$surcharge->id => ['name' => 'One-way fee', 'price' => '50.00']]);
+        $reservation->surcharges()->sync([$surcharge->id => ['name' => 'One-way fee', 'price' => '50.00']]);
+
+        $this->assertEquals(1, DB::table('resrv_reservation_surcharge')->where('reservation_id', $reservation->id)->count());
+        $this->assertEquals('50.00', $reservation->fresh()->bookingSurchargeTotal()->format());
+    }
 }

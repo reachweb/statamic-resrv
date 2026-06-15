@@ -27,7 +27,7 @@
                             </Dropdown>
                         </div>
                         <div class="w-full mt-3">
-                            <OptionValuesList :values="option.values" :parent="option.id" @saved="valueSaved" />
+                            <OptionValuesList :values="option.values" :parent="option.id" :entry-id="props.parent" @saved="valueSaved" />
                         </div>
                     </div>
                 </template>

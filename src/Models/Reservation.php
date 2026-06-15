@@ -607,8 +607,36 @@ class Reservation extends Model
         return true;
     }
 
+    /**
+     * Reject any submitted option value that is disabled for this entry. The frontend hides disabled
+     * values (HandlesOptionsQueries::withoutDisabledValues), but a stale session or a forged
+     * options payload could still submit one. Without this guard the value is priced and snapshotted
+     * like any other, bypassing the per-entry disable and potentially avoiding a surcharge tied to
+     * the enabled selection. Runs on the validation path only — extraCharges() read-back is untouched.
+     */
+    protected function rejectDisabledOptionValues($data, $statamic_id): void
+    {
+        if (! array_key_exists('options', $data)) {
+            return;
+        }
+
+        $disabledValueIds = OptionValue::disabledIdsForEntry($statamic_id);
+
+        if ($disabledValueIds === []) {
+            return;
+        }
+
+        collect($data['options'])->each(function ($option) use ($disabledValueIds) {
+            if (in_array((int) $option['value'], $disabledValueIds, true)) {
+                throw new OptionsException(__('The selected option value is not valid.'));
+            }
+        });
+    }
+
     protected function validateExtraCharges($data, $statamic_id)
     {
+        $this->rejectDisabledOptionValues($data, $statamic_id);
+
         if ($this->isParent()) {
             return $this->validateParentExtraCharges($data, $statamic_id);
         }

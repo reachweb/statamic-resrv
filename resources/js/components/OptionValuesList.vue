@@ -66,6 +66,7 @@ import { useToast } from '../composables/useToast.js';
 const props = defineProps({
     values: { type: [Array, Object], required: true },
     parent: { type: String, required: true },
+    entryId: { type: String, required: true },
 });
 
 const emit = defineEmits(['saved']);
@@ -149,7 +150,7 @@ function toggleDisable(item) {
     const disabled = !item.disabled_for_entry;
     axios.patch('/cp/resrv/option/value/disable', {
         option_value_id: item.id,
-        statamic_id: props.parent,
+        statamic_id: props.entryId,
         disabled,
     })
         .then(() => {

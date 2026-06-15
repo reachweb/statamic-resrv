@@ -177,6 +177,24 @@ const statusLabel = computed(() => props.reservation.status?.toUpperCase() ?? ''
             </Card>
         </section>
 
+        <section v-if="reservation.surcharges.length">
+            <div class="mb-2 content">
+                <h2 class="text-base">{{ __('Surcharges') }}</h2>
+            </div>
+            <Card class="px-6 py-4 mb-6">
+                <div
+                    v-for="surcharge in reservation.surcharges"
+                    :key="surcharge.id"
+                    class="mb-2 border-b border-gray flex justify-between w-full p-2"
+                >
+                    <div>{{ surcharge.name }}</div>
+                    <div class="font-bold">
+                        {{ currencySymbol }} {{ surcharge.price_formatted }}
+                    </div>
+                </div>
+            </Card>
+        </section>
+
         <section v-if="reservation.affiliate">
             <div class="mb-2 content">
                 <h2 class="text-base">{{ __('Affiliate') }}</h2>

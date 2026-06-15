@@ -12,10 +12,16 @@ return new class extends Migration
         // mirroring resrv_reservation_extra/option so a later edit to the rule never changes a
         // past booking. Plain integer keys (no FK) to match the other reservation pivots.
         Schema::create('resrv_reservation_surcharge', function (Blueprint $table) {
-            $table->integer('reservation_id')->index();
-            $table->integer('surcharge_id')->index();
+            $table->integer('reservation_id');
+            $table->integer('surcharge_id');
             $table->string('name');
             $table->string('price');
+
+            // One snapshot row per (reservation, surcharge). Without this, two concurrent first-step
+            // checkout requests can both clear sync()'s SELECT-then-INSERT window and duplicate the
+            // row, which bookingSurchargeTotal() then sums twice — charging the surcharge twice. The
+            // composite index also serves reservation-scoped lookups (reservation_id is its prefix).
+            $table->unique(['reservation_id', 'surcharge_id']);
         });
     }
 
