@@ -72,6 +72,18 @@
                         </span>
                     </div>
                 </div>
+                @if ($totals->has('surchargeTotal') && ! $totals->get('surchargeTotal')->isZero())
+                <div class="flex justify-between items-center py-3">
+                    <div class="md:text-lg text-gray-900">
+                        {{ trans('statamic-resrv::frontend.surcharges') }}
+                    </div>
+                    <div class="flex justify-end">
+                        <span class="md:text-lg text-gray-900">
+                            +{{ config('resrv-config.currency_symbol') }} {{ $totals->get('surchargeTotal')->format() }}
+                        </span>
+                    </div>
+                </div>
+                @endif
                 <div class="flex justify-between items-center py-3">
                     <div class="md:text-lg text-gray-900">
                         {{ trans('statamic-resrv::frontend.total') }}
@@ -101,7 +113,7 @@
                     </div>
                     <div class="flex justify-end">
                         <span class="md:text-lg text-gray-900">
-                            {{ config('resrv-config.currency_symbol') }} {{ $totals->get('payableNow')->add($totals->get('paymentSurcharge'))->format() }}
+                            {{ config('resrv-config.currency_symbol') }} {{ $totals->get('payableNowWithGatewayFee')->format() }}
                         </span>
                     </div>
                 </div>

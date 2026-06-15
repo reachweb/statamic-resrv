@@ -90,7 +90,7 @@
 |{{ __("Payment information") }}||
 | :----------------------------- |:----------------|
 @if (config('resrv-config.payment') !== 'everything' && $reservation->status !== 'partner')
-| {{ __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
+| {{ __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payableNow()->format() }} |
 | {{ __("Remaining amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
 @if (! $reservation->payment_surcharge->isZero())

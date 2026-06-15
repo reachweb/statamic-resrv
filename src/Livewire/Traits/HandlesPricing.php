@@ -42,7 +42,11 @@ trait HandlesPricing
             $payableNow = $payableNow->add($surchargeTotal);
         }
 
-        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'surchargeTotal', 'payment', 'paymentSurcharge', 'payableNow'));
+        // What the gateway actually charges now: payable-now plus the payment-gateway fee. Built from a
+        // fresh Price so reading it in the view never mutates the payableNow value held in this collection.
+        $payableNowWithGatewayFee = Price::create($payableNow->format())->add($paymentSurcharge);
+
+        return collect(compact('total', 'reservationTotal', 'originalPrice', 'extrasTotal', 'optionsTotal', 'surchargeTotal', 'payment', 'paymentSurcharge', 'payableNow', 'payableNowWithGatewayFee'));
     }
 
     public function calculateAvailabilityTotals($availabilityTotal): PriceClass

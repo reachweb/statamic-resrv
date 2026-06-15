@@ -43,6 +43,12 @@ return new class extends Migration
 
         Schema::dropIfExists('resrv_option_entries');
 
+        // Drop the index before the column in a separate closure: SQLite rebuilds the table on a column
+        // drop and chokes on a still-referenced index (same pattern as the finalize/Rate migrations).
+        Schema::table('resrv_options', function (Blueprint $table) {
+            $table->dropIndex(['collection']);
+        });
+
         Schema::table('resrv_options', function (Blueprint $table) {
             $table->dropColumn(['collection', 'apply_to_all']);
         });

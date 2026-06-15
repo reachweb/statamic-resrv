@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Reach\StatamicResrv\Models\Entry;
@@ -22,7 +23,17 @@ class OptionCpController extends Controller
 
     public function entryIndex($statamic_id)
     {
+        $disabled = OptionValue::disabledIdsForEntry($statamic_id);
+
         $options = $this->option->entry($statamic_id)->with('values')->get();
+
+        // Flag each value with whether it is currently disabled for this entry so the per-entry editor
+        // can reflect and toggle the sparse resrv_option_value_entries exception rows.
+        $options->each(function ($option) use ($disabled) {
+            $option->values->each(function ($value) use ($disabled) {
+                $value->disabled_for_entry = in_array($value->id, $disabled, true);
+            });
+        });
 
         return response()->json($options);
     }
@@ -149,6 +160,31 @@ class OptionCpController extends Controller
         $value = $this->value->findOrFail($data['id'])->update($data);
 
         return response()->json(['id' => $data['id']]);
+    }
+
+    /**
+     * Toggle whether a single option value is disabled for a specific entry. Backed by the sparse
+     * resrv_option_value_entries exception pivot: a row means disabled, no row means enabled.
+     */
+    public function toggleDisableForEntry(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'option_value_id' => 'required|integer',
+            'statamic_id' => 'required|string',
+            'disabled' => 'required|boolean',
+        ]);
+
+        $value = $this->value->findOrFail($data['option_value_id']);
+
+        if ($data['disabled']) {
+            // syncWithoutDetaching is idempotent against the (option_value_id, statamic_id) unique
+            // constraint, so toggling on twice does not throw.
+            $value->disabledEntries()->syncWithoutDetaching([$data['statamic_id']]);
+        } else {
+            $value->disabledEntries()->detach($data['statamic_id']);
+        }
+
+        return response()->json(['disabled' => $data['disabled']]);
     }
 
     public function delete(Request $request)

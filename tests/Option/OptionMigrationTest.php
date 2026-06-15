@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Option;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class OptionMigrationTest extends TestCase
@@ -172,5 +173,21 @@ class OptionMigrationTest extends TestCase
 
         // The pivot insert is guarded by an existence check, so a re-run creates no duplicate rows.
         $this->assertEquals(1, DB::table('resrv_option_entries')->where('option_id', $optionId)->count());
+    }
+
+    // Regression (MIG-001): rolling back the initial schema migration must drop the indexed `collection`
+    // column without choking — SQLite rebuilds the table on a column drop and fails on a still-referenced
+    // index, so down() must drop the index first.
+    public function test_initial_migration_down_drops_the_indexed_collection_column(): void
+    {
+        // After setUp() the 000001 schema (collection, apply_to_all, resrv_option_entries) is in place.
+        $this->assertTrue(Schema::hasColumn('resrv_options', 'collection'));
+
+        $initial = include __DIR__.'/../../database/migrations/2026_06_13_000001_add_collection_to_resrv_options.php';
+        $initial->down();
+
+        $this->assertFalse(Schema::hasColumn('resrv_options', 'collection'));
+        $this->assertFalse(Schema::hasColumn('resrv_options', 'apply_to_all'));
+        $this->assertFalse(Schema::hasTable('resrv_option_entries'));
     }
 }

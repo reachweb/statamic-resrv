@@ -25,6 +25,7 @@ use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Models\Surcharge;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -1143,6 +1144,48 @@ class AvailabilityMultiResultsTest extends TestCase
         // Option: 22.75/day * 2 days = 45.50 for 1 selection
         // Total: 100.00 + 45.50 = 145.50
         $this->assertEquals('145.50', $component->totalPrice);
+    }
+
+    // Regression (PRICE-1): the multi-results cart total must include a booking surcharge that the
+    // selected options trigger, so the cart matches what checkout actually charges.
+    public function test_total_price_includes_surcharge()
+    {
+        [$entryId, $adultsRate] = $this->createMultiRateEntry();
+
+        $pickup = Option::factory()->notRequired()->forEntry($entryId)->create(['name' => 'Pickup location', 'slug' => 'pickup-location']);
+        $pickupAirport = OptionValue::factory()->create(['option_id' => $pickup->id, 'name' => 'Airport', 'price' => '0', 'price_type' => 'free']);
+
+        $return = Option::factory()->notRequired()->forEntry($entryId)->create(['name' => 'Return location', 'slug' => 'return-location']);
+        $returnDowntown = OptionValue::factory()->create(['option_id' => $return->id, 'name' => 'Downtown', 'price' => '0', 'price_type' => 'free']);
+
+        Surcharge::factory()->between($pickup->id, $return->id)->create(['price' => '50.00']);
+
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('addSelections');
+
+        $this->assertEquals('100.00', $component->totalPrice);
+
+        $component->dispatch('options-updated', [
+            [
+                'id' => $pickup->id,
+                'value' => $pickupAirport->id,
+                'price' => '0.00',
+                'optionName' => 'Pickup location',
+                'valueName' => 'Airport',
+            ],
+            [
+                'id' => $return->id,
+                'value' => $returnDowntown->id,
+                'price' => '0.00',
+                'optionName' => 'Return location',
+                'valueName' => 'Downtown',
+            ],
+        ]);
+
+        // Base 100 + free options (0) + 50 one-way fee.
+        $this->assertEquals('150.00', $component->totalPrice);
     }
 
     // --- Fix 1: Clear addon state when selections are empty ---

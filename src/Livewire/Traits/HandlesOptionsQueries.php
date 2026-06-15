@@ -22,7 +22,7 @@ trait HandlesOptionsQueries
         $disabled = OptionValue::disabledIdsForEntry($reservation->item_id);
 
         return $this->getOptionsForId($reservation->item_id, $disabled)->map(function ($option) use ($reservation, $disabled) {
-            return $this->withoutDisabledValues(Option::find($option->id), $disabled)->valuesPriceForDates($reservation);
+            return $this->withoutDisabledValues($option, $disabled)->valuesPriceForDates($reservation);
         });
     }
 
@@ -31,7 +31,7 @@ trait HandlesOptionsQueries
         $disabled = OptionValue::disabledIdsForEntry($reservation->item_id);
 
         return $this->getOptionsForId($reservation->item_id, $disabled)->map(function ($option) use ($reservation, $disabled) {
-            $option = $this->withoutDisabledValues(Option::find($option->id), $disabled);
+            $option = $this->withoutDisabledValues($option, $disabled);
 
             foreach ($option->values as $value) {
                 $value->original_price = $value->price->format();
@@ -61,7 +61,7 @@ trait HandlesOptionsQueries
         $disabled = OptionValue::disabledIdsForEntry($entryId);
 
         $options = $this->getOptionsForId($entryId, $disabled)->map(function ($option) use ($data, $disabled) {
-            return $this->withoutDisabledValues(Option::find($option->id), $disabled)->valuesPriceForDates($data);
+            return $this->withoutDisabledValues($option, $disabled)->valuesPriceForDates($data);
         });
 
         return $options;
@@ -78,7 +78,7 @@ trait HandlesOptionsQueries
         $disabled = OptionValue::disabledIdsForEntry($entryId);
 
         return $this->getOptionsForId($entryId, $disabled)->map(function ($option) use ($selections, $entryId, $disabled) {
-            $option = $this->withoutDisabledValues(Option::find($option->id), $disabled);
+            $option = $this->withoutDisabledValues($option, $disabled);
 
             foreach ($option->values as $value) {
                 $value->original_price = $value->price->format();

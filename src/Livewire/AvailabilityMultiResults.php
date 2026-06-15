@@ -262,6 +262,7 @@ class AvailabilityMultiResults extends Component
 
         $total->add($this->calculateExtraTotals());
         $total->add($this->calculateOptionTotals());
+        $total->add($this->calculateSurchargeTotals());
 
         return $total->format();
     }

@@ -56,6 +56,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/option/{id}', 'OptionCpController@createValue')->name('option.value.create');
         Route::patch('/resrv/option/{id}', 'OptionCpController@updateValue')->name('option.value.update');
         Route::patch('/resrv/option/value/order', 'OptionCpController@orderValue')->name('option.value.order');
+        Route::patch('/resrv/option/value/disable', 'OptionCpController@toggleDisableForEntry')->name('option.value.disable');
         Route::delete('/resrv/option/value', 'OptionCpController@deleteValue')->name('option.value.delete');
 
         Route::get('/resrv/reservation', 'ReservationCpController@index')->name('reservation.index');

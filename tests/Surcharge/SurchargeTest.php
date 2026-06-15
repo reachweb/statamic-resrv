@@ -3,9 +3,13 @@
 namespace Reach\StatamicResrv\Tests\Surcharge;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\DynamicPricing;
@@ -470,5 +474,123 @@ class SurchargeTest extends TestCase
         $reservation->refresh();
         $this->assertEquals('130.00', $reservation->total->format());
         $this->assertDatabaseHas('resrv_reservation_surcharge', ['reservation_id' => $reservation->id, 'price' => '50.00']);
+    }
+
+    // Regression (TC-2): the deposit confirmation/made emails must report the amount actually charged
+    // now (deposit + the always-now booking surcharge = payableNow()), not the bare deposit — otherwise
+    // "Already paid" + "Remaining" would not reconcile to the Total.
+    public function test_deposit_email_reports_payable_now_including_the_surcharge()
+    {
+        Config::set('resrv-config.payment', 'deposit');
+
+        $surcharge = Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $reservation = Reservation::factory()->withCustomer()->create(['item_id' => $this->entry->id()]);
+        // Distinct figures so the paid line (payableNow 110) cannot be confused with the deposit (60)
+        // or the remaining balance (90): total 200 = base 150 + surcharge 50; deposit 60; no gateway fee.
+        $reservation->forceFill(['price' => '150.00', 'payment' => '60.00', 'total' => '200.00', 'payment_surcharge' => '0.00'])->saveQuietly();
+        $reservation->surcharges()->attach($surcharge->id, ['name' => 'One-way fee', 'price' => '50.00']);
+
+        $reservation = $reservation->fresh();
+
+        // Sanity: charged now = deposit 60 + surcharge 50 = 110; remaining = 200 - 110 = 90.
+        $this->assertEquals('110.00', $reservation->payableNow()->format());
+        $this->assertEquals('90.00', $reservation->amountRemaining());
+
+        foreach ([new ReservationMade($reservation), new ReservationConfirmed($reservation)] as $mailable) {
+            $rendered = $mailable->render();
+
+            $this->assertStringContainsString('110.00', $rendered); // amount actually charged now
+            $this->assertStringContainsString('90.00', $rendered);  // remaining balance
+            $this->assertStringContainsString('200.00', $rendered); // total
+            // The bare deposit must NOT be presented as the paid amount anymore.
+            $this->assertStringNotContainsString('60.00', $rendered);
+        }
+    }
+
+    // Regression (PRICE-2): the checkout payment table shows an itemized surcharge line when a surcharge
+    // applies, so the visible lines reconcile to the total.
+    public function test_checkout_payment_table_shows_the_surcharge_line_when_a_surcharge_applies()
+    {
+        Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $reservation = Reservation::factory()->create(['price' => '100.00', 'payment' => '100.00', 'item_id' => $this->entry->id()]);
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [
+                $this->pickup->id => [
+                    'id' => $this->pickup->id, 'value' => $this->pickupAirport->id, 'price' => '0.00',
+                    'optionName' => 'Pickup location', 'valueName' => 'Airport', 'priceType' => 'free',
+                ],
+                $this->return->id => [
+                    'id' => $this->return->id, 'value' => $this->returnDowntown->id, 'price' => '0.00',
+                    'optionName' => 'Return location', 'valueName' => 'Downtown', 'priceType' => 'free',
+                ],
+            ])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2)
+            ->assertSee('Surcharges');
+    }
+
+    public function test_checkout_payment_table_hides_the_surcharge_line_for_the_same_location()
+    {
+        Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $reservation = Reservation::factory()->create(['price' => '100.00', 'payment' => '100.00', 'item_id' => $this->entry->id()]);
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [
+                $this->pickup->id => [
+                    'id' => $this->pickup->id, 'value' => $this->pickupAirport->id, 'price' => '0.00',
+                    'optionName' => 'Pickup location', 'valueName' => 'Airport', 'priceType' => 'free',
+                ],
+                $this->return->id => [
+                    'id' => $this->return->id, 'value' => $this->returnAirport->id, 'price' => '0.00',
+                    'optionName' => 'Return location', 'valueName' => 'Airport', 'priceType' => 'free',
+                ],
+            ])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2)
+            ->assertDontSee('Surcharges');
+    }
+
+    // Regression (PRICE-3): payableNowWithGatewayFee must be a SEPARATE Price from payableNow, so the
+    // view's gateway-fee addition can never mutate payableNow in place (PriceClass::add mutates).
+    // (At step 1 the gateway fee is always 0 — mount resets it — so the guarantee is tested via object
+    // independence rather than a non-zero fee.)
+    public function test_totals_expose_a_non_mutating_payable_now_with_gateway_fee()
+    {
+        Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['price' => '50.00']);
+
+        $reservation = Reservation::factory()->create(['item_id' => $this->entry->id()]);
+        $reservation->forceFill(['price' => '100.00', 'payment' => '50.00'])->saveQuietly();
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [
+                $this->pickup->id => [
+                    'id' => $this->pickup->id, 'value' => $this->pickupAirport->id, 'price' => '0.00',
+                    'optionName' => 'Pickup location', 'valueName' => 'Airport', 'priceType' => 'free',
+                ],
+                $this->return->id => [
+                    'id' => $this->return->id, 'value' => $this->returnDowntown->id, 'price' => '0.00',
+                    'optionName' => 'Return location', 'valueName' => 'Downtown', 'priceType' => 'free',
+                ],
+            ]);
+
+        $totals = $component->instance()->calculateReservationTotals();
+
+        // Deposit 50 + live surcharge 50 = 100 payable now.
+        $this->assertEquals('100.00', $totals->get('payableNow')->format());
+        // The view reads this dedicated key (instead of mutating payableNow with the gateway fee).
+        $this->assertEquals('100.00', $totals->get('payableNowWithGatewayFee')->format());
+        $this->assertNotSame($totals->get('payableNow'), $totals->get('payableNowWithGatewayFee'));
+
+        // Mutating the gateway-inclusive Price must not leak back into payableNow (the PRICE-3 footgun).
+        $totals->get('payableNowWithGatewayFee')->add(Price::create('25.00'));
+        $this->assertEquals('100.00', $totals->get('payableNow')->format());
     }
 }

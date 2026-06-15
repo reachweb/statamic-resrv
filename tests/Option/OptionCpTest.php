@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Option;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -264,5 +265,72 @@ class OptionCpTest extends TestCase
 
         $response = $this->patch(cp_route('resrv.option.order'), $payload);
         $response->assertNotFound();
+    }
+
+    public function test_can_toggle_a_value_disabled_for_an_entry()
+    {
+        $item = $this->makeStatamicItem();
+        $option = Option::factory()->forEntry($item->id())->has(OptionValue::factory(), 'values')->create();
+        $value = $option->values->first();
+
+        $this->patchJson(cp_route('resrv.option.value.disable'), [
+            'option_value_id' => $value->id,
+            'statamic_id' => $item->id(),
+            'disabled' => true,
+        ])->assertStatus(200);
+
+        $this->assertDatabaseHas('resrv_option_value_entries', [
+            'option_value_id' => $value->id,
+            'statamic_id' => $item->id(),
+        ]);
+
+        $this->patchJson(cp_route('resrv.option.value.disable'), [
+            'option_value_id' => $value->id,
+            'statamic_id' => $item->id(),
+            'disabled' => false,
+        ])->assertStatus(200);
+
+        $this->assertDatabaseMissing('resrv_option_value_entries', [
+            'option_value_id' => $value->id,
+            'statamic_id' => $item->id(),
+        ]);
+    }
+
+    public function test_toggling_a_value_disabled_twice_does_not_duplicate_the_pivot_row()
+    {
+        $item = $this->makeStatamicItem();
+        $option = Option::factory()->forEntry($item->id())->has(OptionValue::factory(), 'values')->create();
+        $value = $option->values->first();
+
+        foreach (range(1, 2) as $ignored) {
+            $this->patchJson(cp_route('resrv.option.value.disable'), [
+                'option_value_id' => $value->id,
+                'statamic_id' => $item->id(),
+                'disabled' => true,
+            ])->assertStatus(200);
+        }
+
+        $this->assertEquals(1, DB::table('resrv_option_value_entries')
+            ->where('option_value_id', $value->id)
+            ->where('statamic_id', $item->id())
+            ->count());
+    }
+
+    public function test_entry_index_flags_values_disabled_for_the_entry()
+    {
+        $item = $this->makeStatamicItem();
+        $option = Option::factory()->forEntry($item->id())->has(OptionValue::factory()->count(2), 'values')->create();
+        $disabledValue = $option->values->first();
+        $enabledValue = $option->values->last();
+
+        $disabledValue->disabledEntries()->attach($item->id());
+
+        $response = $this->getJson(cp_route('resrv.option.entryindex', $item->id()))->assertStatus(200);
+
+        $values = collect($response->json())->firstWhere('id', $option->id)['values'];
+        $flags = collect($values)->mapWithKeys(fn ($value) => [$value['id'] => $value['disabled_for_entry']]);
+
+        $this->assertTrue($flags[$disabledValue->id]);
+        $this->assertFalse($flags[$enabledValue->id]);
     }
 }

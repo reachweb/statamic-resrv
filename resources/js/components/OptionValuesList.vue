@@ -19,10 +19,12 @@
                                 <span class="text-xs text-gray-500" v-text="priceLabel(value.price_type)"></span>
                             </span>
                             <Badge v-else :text="__('Free')" size="sm" variant="success" />
+                            <Badge v-if="value.disabled_for_entry" :text="__('Disabled here')" size="sm" variant="warning" />
                         </div>
                         <Dropdown>
                             <DropdownMenu>
                                 <DropdownItem :text="__('Edit')" icon="pencil" @click="edit(value)" />
+                                <DropdownItem :text="value.disabled_for_entry ? __('Enable for this entry') : __('Disable for this entry')" :icon="value.disabled_for_entry ? 'eye' : 'eye-off'" @click="toggleDisable(value)" />
                                 <DropdownSeparator />
                                 <DropdownItem :text="__('Delete')" icon="trash" variant="destructive" @click="confirmDelete(value)" />
                             </DropdownMenu>
@@ -140,6 +142,23 @@ function deleteValue() {
         })
         .catch(() => {
             toast.error(__('Cannot delete option'));
+        });
+}
+
+function toggleDisable(item) {
+    const disabled = !item.disabled_for_entry;
+    axios.patch('/cp/resrv/option/value/disable', {
+        option_value_id: item.id,
+        statamic_id: props.parent,
+        disabled,
+    })
+        .then(() => {
+            item.disabled_for_entry = disabled;
+            toast.success(disabled ? __('Value disabled for this entry') : __('Value enabled for this entry'));
+            emit('saved');
+        })
+        .catch(() => {
+            toast.error(__('Could not update value'));
         });
 }
 
