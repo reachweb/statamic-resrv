@@ -559,14 +559,17 @@ class Checkout extends Component
 
     protected function assignExtras(): bool
     {
-        if ($this->enabledExtras->extras->count() > 0) {
-            try {
-                $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
-            } catch (\Exception $e) {
-                $this->addError('extras', 'There was an error assigning the extras. Please try again.');
+        // Always sync (even when empty) so deselecting the last extra detaches the stale pivot —
+        // otherwise the lower recalculated total is charged while CP/history still show the extra.
+        try {
+            $serverExtras = $this->enabledExtras->extras->isEmpty()
+                ? collect()
+                : $this->getExtrasPricedForReservation();
+            $this->reservation->extras()->sync($this->enabledExtras->extrasToSync($serverExtras));
+        } catch (\Exception $e) {
+            $this->addError('extras', 'There was an error assigning the extras. Please try again.');
 
-                return false;
-            }
+            return false;
         }
 
         return true;
@@ -574,14 +577,16 @@ class Checkout extends Component
 
     protected function assignOptions(): bool
     {
-        if ($this->enabledOptions->options->count() > 0) {
-            try {
-                $this->reservation->options()->sync($this->enabledOptions->optionsToSync($this->getOptionsForReservation()));
-            } catch (\Exception $e) {
-                $this->addError('options', 'There was an error assigning the options. Please try again.');
+        // Always sync (even when empty) so deselecting the last option detaches the stale pivot.
+        try {
+            $serverOptions = $this->enabledOptions->options->isEmpty()
+                ? collect()
+                : $this->getOptionsForReservation();
+            $this->reservation->options()->sync($this->enabledOptions->optionsToSync($serverOptions));
+        } catch (\Exception $e) {
+            $this->addError('options', 'There was an error assigning the options. Please try again.');
 
-                return false;
-            }
+            return false;
         }
 
         return true;

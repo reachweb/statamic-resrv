@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Livewire\Attributes\Validate;
 use Livewire\Form;
 use Reach\StatamicResrv\Exceptions\OptionsException;
+use Reach\StatamicResrv\Models\Option;
 
 class EnabledOptions extends Form
 {
@@ -22,7 +23,7 @@ class EnabledOptions extends Form
      * per-child parent aggregation and disabled-value stripping — so the snapshot can never drift
      * from what was actually charged.
      *
-     * @param  Collection<int, \Reach\StatamicResrv\Models\Option>  $serverOptions
+     * @param  Collection<int, Option>  $serverOptions
      */
     public function optionsToSync(Collection $serverOptions): Collection
     {

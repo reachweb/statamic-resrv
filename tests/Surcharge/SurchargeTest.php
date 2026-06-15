@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Surcharge;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -604,7 +605,7 @@ class SurchargeTest extends TestCase
         $reservation = Reservation::factory()->create(['item_id' => $this->entry->id()]);
         $reservation->surcharges()->attach($surcharge->id, ['name' => 'One-way fee', 'price' => '50.00']);
 
-        $this->expectException(\Illuminate\Database\QueryException::class);
+        $this->expectException(QueryException::class);
 
         DB::table('resrv_reservation_surcharge')->insert([
             'reservation_id' => $reservation->id,

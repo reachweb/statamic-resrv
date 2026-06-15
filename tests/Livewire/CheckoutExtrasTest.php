@@ -1734,4 +1734,89 @@ class CheckoutExtrasTest extends TestCase
             );
         }
     }
+
+    // Integrity guard: the extras-updated event is client-dispatchable. With two extras a client can
+    // redistribute per-unit prices so the aggregate still clears the drift check, while each pivot
+    // snapshot (read back by priceFromPivot in CP/history/emails) is wrong. The snapshot must take the
+    // server-computed per-unit price for each extra.
+    public function test_extra_snapshot_prices_are_rebuilt_from_server_not_the_redistributed_payload()
+    {
+        $item = $this->entries->first();
+
+        $extraA = $this->extras->first(); // per-unit 9.30 (4.65/day x 2 days)
+        $extraB = ResrvExtra::factory()->create(['id' => 50, 'slug' => 'second-extra']);
+        ResrvEntry::whereItemId($item->id())->extras()->attach($extraB->id);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // Forge the distribution (18.60 + 0.00) — the 18.60 aggregate still clears the drift check.
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [
+                $extraA->id => [
+                    'id' => $extraA->id,
+                    'quantity' => 1,
+                    'price' => '18.60',
+                    'name' => $extraA->name,
+                ],
+                $extraB->id => [
+                    'id' => $extraB->id,
+                    'quantity' => 1,
+                    'price' => '0.00',
+                    'name' => $extraB->name,
+                ],
+            ])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        // Each snapshot carries the real per-unit server price (9.30), not the forged distribution.
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extraA->id,
+            'price' => '9.30',
+        ]);
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extraB->id,
+            'price' => '9.30',
+        ]);
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'price' => '18.60',
+        ]);
+    }
+
+    // Deselecting the last extra after returning to step one must detach the stale pivot — otherwise
+    // the lower recalculated total is charged while CP/history still show the extra.
+    public function test_emptying_extras_detaches_the_previously_attached_pivot()
+    {
+        $extra = $this->extras->first();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 1,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+
+        // Back to step one, remove the extra (empty selection), re-run: the pivot must be detached.
+        $component->dispatch('extras-updated', [])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+    }
 }

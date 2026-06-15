@@ -26,6 +26,20 @@ trait HandlesExtrasQueries
         return $extras;
     }
 
+    /**
+     * Server-priced extras for the reservation WITHOUT the conditions machinery. Used at checkout to
+     * rebuild the pivot snapshot from authoritative prices (see EnabledExtras::extrasToSync). Mirrors
+     * getExtrasForReservation()'s pricing branch but skips loadConditionsAsCollection/
+     * handleExtrasConditions, which reference host-component state (extraConditions/extras/data) that
+     * Checkout does not declare.
+     */
+    protected function getExtrasPricedForReservation(): Collection
+    {
+        return $this->reservation->isParent()
+            ? $this->getExtrasWithParentPricing($this->reservation)
+            : Extra::getPriceForDates($this->reservation);
+    }
+
     protected function getExtrasWithParentPricing(Reservation $reservation): Collection
     {
         $firstChild = $reservation->childs->first();

@@ -92,6 +92,28 @@ class SurchargeCpTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors('comparison');
     }
 
+    // The two compared options must share a collection — a cross-collection pair can never both be
+    // selected on one reservation, so the rule would be permanently inert.
+    public function test_options_must_belong_to_the_same_collection()
+    {
+        $this->withExceptionHandling();
+
+        $otherCollection = Option::factory()->create([
+            'name' => 'Pickup in another collection',
+            'slug' => 'pickup-other',
+            'collection' => 'events',
+            'apply_to_all' => true,
+        ]);
+
+        $this->postJson(cp_route('resrv.surcharge.store'), [
+            'name' => 'Cross-collection fee',
+            'first_option_id' => $this->pickup->id,
+            'second_option_id' => $otherCollection->id,
+            'comparison' => 'differs',
+            'price' => '50.00',
+        ])->assertStatus(422)->assertJsonValidationErrors('second_option_id');
+    }
+
     public function test_can_update_a_surcharge()
     {
         $surcharge = Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['name' => 'One-way fee', 'price' => '50.00']);

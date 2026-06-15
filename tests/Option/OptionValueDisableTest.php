@@ -223,4 +223,51 @@ class OptionValueDisableTest extends TestCase
             'value' => $enabled->id,
         ]);
     }
+
+    // Deselecting the last (optional) option after returning to step one must detach the stale pivot,
+    // so the recalculated total and the persisted options stay in sync.
+    public function test_emptying_options_detaches_the_previously_attached_pivot()
+    {
+        $entry = $this->entries->get('normal');
+
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '100.00',
+            'item_id' => $entry->id(),
+        ]);
+
+        $option = Option::factory()
+            ->has(OptionValue::factory()->state(['price' => '0', 'price_type' => 'free']), 'values')
+            ->forEntry($entry->id())
+            ->create(['required' => false]);
+        $value = $option->values->first();
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [$option->id => [
+                'id' => $option->id,
+                'value' => $value->id,
+                'price' => '0.00',
+                'optionName' => $option->name,
+                'valueName' => $value->name,
+                'priceType' => 'free',
+            ]])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservation_option', [
+            'reservation_id' => $reservation->id,
+            'option_id' => $option->id,
+        ]);
+
+        $component->dispatch('options-updated', [])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $reservation->id,
+            'option_id' => $option->id,
+        ]);
+    }
 }

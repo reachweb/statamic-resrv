@@ -50,7 +50,7 @@ class SurchargeCpController extends Controller
 
     public function store(Request $request): JsonResponse|RedirectResponse
     {
-        $data = $this->withSlug($request->validate($this->validationRules()));
+        $data = $this->withSlug($request->validate($this->validationRules($request)));
 
         $data['order'] = Surcharge::max('order') + 1;
 
@@ -65,7 +65,7 @@ class SurchargeCpController extends Controller
 
     public function update(Request $request, Surcharge $surcharge): JsonResponse|RedirectResponse
     {
-        $data = $this->withSlug($request->validate($this->validationRules()));
+        $data = $this->withSlug($request->validate($this->validationRules($request)));
 
         $surcharge->update($data);
 
@@ -108,16 +108,40 @@ class SurchargeCpController extends Controller
     }
 
     /** @return array<string, mixed> */
-    protected function validationRules(): array
+    protected function validationRules(Request $request): array
     {
         return [
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['nullable', 'string', 'max:255'],
             'first_option_id' => ['required', 'integer', 'different:second_option_id', 'exists:resrv_options,id'],
-            'second_option_id' => ['required', 'integer', 'exists:resrv_options,id'],
+            'second_option_id' => ['required', 'integer', 'exists:resrv_options,id', $this->sameCollectionAsFirstOption($request)],
             'comparison' => ['required', Rule::in(['differs', 'matches'])],
             'price' => ['required', 'numeric', 'min:0'],
             'published' => ['boolean'],
         ];
+    }
+
+    /**
+     * Both compared options must live in the same collection. Options are scoped per collection and a
+     * reservation only ever holds options from its entry's collection, so a cross-collection pair can
+     * never both be selected — the surcharge would be a permanently inert rule.
+     */
+    protected function sameCollectionAsFirstOption(Request $request): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) use ($request): void {
+            $firstId = $request->input('first_option_id');
+
+            if ($firstId === null) {
+                return;
+            }
+
+            $collections = Option::whereIn('id', [$firstId, $value])
+                ->pluck('collection')
+                ->unique();
+
+            if ($collections->count() > 1) {
+                $fail(__('Both options must belong to the same collection.'));
+            }
+        };
     }
 }
