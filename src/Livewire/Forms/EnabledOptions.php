@@ -5,25 +5,43 @@ namespace Reach\StatamicResrv\Livewire\Forms;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Validate;
 use Livewire\Form;
+use Reach\StatamicResrv\Exceptions\OptionsException;
 
 class EnabledOptions extends Form
 {
     #[Validate]
     public Collection $options;
 
-    public function optionsToSync(): Collection
+    /**
+     * Build the pivot snapshot (value name, computed price, price type) for each selected option from
+     * the authoritative server-resolved options — NEVER the client-submitted valueName/price/priceType.
+     * The options-updated event is client-dispatchable, so trusting its fields would let a forged
+     * payload persist fake names/types or a redistributed price (one that still clears the aggregate
+     * drift check) into reservation history, the CP, exports and emails. Resolving by the selected
+     * value id against $serverOptions reuses the exact pricing the live cart shows — including
+     * per-child parent aggregation and disabled-value stripping — so the snapshot can never drift
+     * from what was actually charged.
+     *
+     * @param  Collection<int, \Reach\StatamicResrv\Models\Option>  $serverOptions
+     */
+    public function optionsToSync(Collection $serverOptions): Collection
     {
         $this->validate();
 
-        // Snapshot the selected value's name, computed price and price type onto the pivot so a
-        // later edit to a (now global, shared) option cannot retroactively change a past reservation.
-        return $this->options->mapWithKeys(function ($option) {
+        return $this->options->mapWithKeys(function ($option) use ($serverOptions) {
+            $serverOption = $serverOptions->firstWhere('id', (int) $option['id']);
+            $serverValue = $serverOption?->values->firstWhere('id', (int) $option['value']);
+
+            if (! $serverValue) {
+                throw new OptionsException(__('The selected option value is not valid.'));
+            }
+
             return [
                 $option['id'] => [
-                    'value' => $option['value'],
-                    'value_name' => $option['valueName'] ?? null,
-                    'price' => $option['price'] ?? null,
-                    'price_type' => $option['priceType'] ?? null,
+                    'value' => $serverValue->id,
+                    'value_name' => $serverValue->name,
+                    'price' => $serverValue->price->format(),
+                    'price_type' => $serverValue->price_type,
                 ],
             ];
         });

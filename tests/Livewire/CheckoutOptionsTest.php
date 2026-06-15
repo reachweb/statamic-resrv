@@ -259,4 +259,161 @@ class CheckoutOptionsTest extends TestCase
         // NOT: 22.75 * 5 days * 2 qty = 227.50 (parent collapsed dates + total qty)
         $this->assertEquals('68.25', $component->options->first()->values->first()->price);
     }
+
+    // Integrity guard: the options-updated event is client-dispatchable, so the pivot snapshot must be
+    // rebuilt from the authoritative server value (name, price, price type). A forged valueName/priceType
+    // that still clears the aggregate drift check must NOT reach reservation history, the CP or emails.
+    public function test_option_snapshot_is_built_from_server_values_not_the_submitted_payload()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $option = $this->options->first();
+        $value = $option->values->first();
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [$option->id => [
+                'id' => $option->id,
+                'value' => $value->id,
+                'price' => '45.50',           // real server price (perday 22.75 x 2 days) so drift passes
+                'optionName' => $option->name,
+                'valueName' => 'HACKED NAME', // forged
+                'priceType' => 'free',        // forged
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        // The snapshot reflects the real value, not the forged fields.
+        $this->assertDatabaseHas('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $option->id,
+            'value' => $value->id,
+            'value_name' => $value->name,
+            'price' => '45.50',
+            'price_type' => 'perday',
+        ]);
+
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'value_name' => 'HACKED NAME',
+        ]);
+    }
+
+    // Integrity guard: with two options a client can redistribute prices so the aggregate still matches
+    // (clearing the drift check) while each per-option snapshot is wrong. The snapshot must take the
+    // server-computed price for each option, never the submitted distribution.
+    public function test_redistributed_option_prices_are_overwritten_by_server_prices()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $optionA = $this->options->first();
+        $optionB = Option::factory()
+            ->has(OptionValue::factory(), 'values')
+            ->forEntry($this->entries->first()->id())
+            ->create();
+
+        $valueA = $optionA->values->first();
+        $valueB = $optionB->values->first();
+
+        // Each value is perday 22.75 x 2 days = 45.50, so the real per-option price is 45.50 each.
+        // Forge the distribution (91.00 + 0.00) — the 91.00 aggregate still clears the drift check.
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [
+                $optionA->id => [
+                    'id' => $optionA->id,
+                    'value' => $valueA->id,
+                    'price' => '91.00',
+                    'optionName' => $optionA->name,
+                    'valueName' => $valueA->name,
+                    'priceType' => 'perday',
+                ],
+                $optionB->id => [
+                    'id' => $optionB->id,
+                    'value' => $valueB->id,
+                    'price' => '0.00',
+                    'optionName' => $optionB->name,
+                    'valueName' => $valueB->name,
+                    'priceType' => 'perday',
+                ],
+            ])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $optionA->id,
+            'price' => '45.50',
+        ]);
+        $this->assertDatabaseHas('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $optionB->id,
+            'price' => '45.50',
+        ]);
+
+        // The forged distribution must not survive.
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'price' => '91.00',
+        ]);
+    }
+
+    // Parent reservations snapshot the per-child-aggregated option price once on the parent pivot.
+    // Locks that the server-authoritative snapshot persists the aggregate (not a single-range price)
+    // through handleFirstStep — the one branch of optionsToSync the non-parent tests don't exercise.
+    public function test_parent_option_snapshot_persists_the_per_child_aggregate_price()
+    {
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $this->entries->first()->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(3)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '150.00',  // child base 100 (2 nights) + 50 (1 night), all at 50/night
+            'payment' => '150.00',
+        ]);
+
+        // Child 1: 2 nights, qty 1 -> option 22.75 x 2 = 45.50
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        // Child 2: 1 night, qty 1 -> option 22.75 x 1 = 22.75
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(2)->toIso8601String(),
+            'date_end' => today()->addDays(3)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $option = $this->options->first();
+        $value = $option->values->first();
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [$option->id => [
+                'id' => $option->id,
+                'value' => $value->id,
+                'price' => '68.25',   // aggregate 45.50 + 22.75 so the parent drift check passes
+                'optionName' => $option->name,
+                'valueName' => $value->name,
+                'priceType' => 'perday',
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        // One pivot row carrying the per-child aggregate, NOT a single-range 45.50/22.75.
+        $this->assertDatabaseHas('resrv_reservation_option', [
+            'reservation_id' => $reservation->id,
+            'option_id' => $option->id,
+            'value' => $value->id,
+            'price' => '68.25',
+            'price_type' => 'perday',
+        ]);
+    }
 }

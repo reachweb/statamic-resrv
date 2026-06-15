@@ -576,7 +576,7 @@ class Checkout extends Component
     {
         if ($this->enabledOptions->options->count() > 0) {
             try {
-                $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
+                $this->reservation->options()->sync($this->enabledOptions->optionsToSync($this->getOptionsForReservation()));
             } catch (\Exception $e) {
                 $this->addError('options', 'There was an error assigning the options. Please try again.');
 

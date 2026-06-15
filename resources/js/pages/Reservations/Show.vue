@@ -145,15 +145,7 @@ const statusLabel = computed(() => props.reservation.status?.toUpperCase() ?? ''
                     <div>{{ option.name }}</div>
                     <div>{{ option.value_name }}</div>
                     <div v-if="option.price_formatted" class="font-bold">
-                        {{ option.price_formatted }}
-                        <span class="font-normal">
-                            <template v-if="option.price_type === 'fixed'">
-                                / {{ __('reservation') }}
-                            </template>
-                            <template v-if="option.price_type === 'perday'">
-                                / {{ __('day') }}
-                            </template>
-                        </span>
+                        {{ currencySymbol }} {{ option.price_formatted }}
                     </div>
                 </div>
             </Card>
