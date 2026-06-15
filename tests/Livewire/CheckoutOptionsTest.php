@@ -190,6 +190,41 @@ class CheckoutOptionsTest extends TestCase
         ]);
     }
 
+    // A forged payload repeating an option id (under distinct keys, since PHP collapses identical keys)
+    // must be rejected — otherwise the total sums every row while only one pivot persists.
+    public function test_it_rejects_a_duplicate_option_id_in_the_payload()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $option = Option::find($this->options->first()->id)->valuesPriceForDates($this->reservation);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [
+                $option->id => [
+                    'id' => $option->id,
+                    'value' => $option->values->first()->id,
+                    'price' => $option->values->first()->price->format(),
+                    'optionName' => $option->name,
+                    'valueName' => $option->values->first()->name,
+                ],
+                'forged' => [
+                    'id' => $option->id,
+                    'value' => $option->values->first()->id,
+                    'price' => $option->values->first()->price->format(),
+                    'optionName' => $option->name,
+                    'valueName' => $option->values->first()->name,
+                ],
+            ])
+            ->call('handleFirstStep')
+            ->assertHasErrors()
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $option->id,
+        ]);
+    }
+
     // A tampered payload that submits a required, paid option with a non-existent value id at a
     // zero price must be rejected at step 1 — the invalid value cannot be priced as free and synced.
     public function test_it_rejects_a_required_option_submitted_with_an_invalid_value()

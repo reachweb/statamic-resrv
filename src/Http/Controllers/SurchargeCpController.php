@@ -122,9 +122,8 @@ class SurchargeCpController extends Controller
     }
 
     /**
-     * Both compared options must live in the same collection. Options are scoped per collection and a
-     * reservation only ever holds options from its entry's collection, so a cross-collection pair can
-     * never both be selected — the surcharge would be a permanently inert rule.
+     * Both compared options must share one non-null collection. A cross-collection or null-collection
+     * pair can never both be selected on a reservation, so the surcharge would be permanently inert.
      */
     protected function sameCollectionAsFirstOption(Request $request): \Closure
     {
@@ -135,11 +134,20 @@ class SurchargeCpController extends Controller
                 return;
             }
 
-            $collections = Option::whereIn('id', [$firstId, $value])
-                ->pluck('collection')
-                ->unique();
+            $options = Option::whereIn('id', [$firstId, $value])->get(['id', 'collection']);
 
-            if ($collections->count() > 1) {
+            // Both ids resolve via the exists rules; bail defensively if not.
+            if ($options->count() < 2) {
+                return;
+            }
+
+            if ($options->contains(fn (Option $option): bool => $option->collection === null)) {
+                $fail(__('Both options must belong to a collection.'));
+
+                return;
+            }
+
+            if ($options->pluck('collection')->unique()->count() > 1) {
                 $fail(__('Both options must belong to the same collection.'));
             }
         };

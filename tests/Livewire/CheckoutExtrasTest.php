@@ -399,6 +399,42 @@ class CheckoutExtrasTest extends TestCase
             ->assertSet('step', 1);
     }
 
+    // A forged payload repeating an extra id (under distinct keys, since PHP collapses identical keys)
+    // must be rejected — otherwise the total sums every row while only one pivot persists.
+    public function test_it_rejects_a_duplicate_extra_id_in_the_payload()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [
+                $extra->id => [
+                    'id' => $extra->id,
+                    'quantity' => 3,
+                    'price' => $extra->price->format(),
+                    'name' => $extra->name,
+                ],
+                'forged' => [
+                    'id' => $extra->id,
+                    'quantity' => 3,
+                    'price' => $extra->price->format(),
+                    'name' => $extra->name,
+                ],
+            ])
+            ->call('handleFirstStep')
+            ->assertHasErrors()
+            ->assertSet('step', 1);
+
+        // Validation halts before any pivot is synced.
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+    }
+
     // Payload price is per-unit; the component multiplies by quantity for the backend drift check.
     public function test_it_accepts_an_extra_quantity_within_the_maximum()
     {
@@ -1505,6 +1541,55 @@ class CheckoutExtrasTest extends TestCase
         // NOT: 10 * 1 (session fallback) * 2 = 20
         $charges = $reservation->extraCharges();
         $this->assertEquals('60.00', $charges->format());
+    }
+
+    // The display/snapshot path must price a parent custom extra with customerData, like the validation
+    // read-back. Before the fix it fell back to multiplier 1 (20.00 instead of 60.00) → false drift.
+    public function test_parent_custom_extra_display_matches_validation_using_customer_data()
+    {
+        $item = $this->entries->first();
+
+        $customer = Customer::factory()->withGuests(3)->create();
+
+        $extra = ResrvExtra::factory()->custom()->create();
+
+        $entry = ResrvEntry::whereItemId($item->id());
+        $entry->extras()->attach($extra->id);
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(4)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+            'customer_id' => $customer->id,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        ChildReservation::factory()->create([
+            'reservation_id' => $reservation->id,
+            'date_start' => today()->addDays(2)->toIso8601String(),
+            'date_end' => today()->addDays(4)->toIso8601String(),
+            'quantity' => 1,
+        ]);
+
+        $reservation->extras()->sync([$extra->id => ['quantity' => 1, 'price' => '0']]);
+
+        $component = Livewire::test(Extras::class, ['reservation' => $reservation]);
+
+        $displayed = $component->extras->firstWhere('id', $extra->id);
+
+        // 10 * 3 guests * 2 children = 60.00, identical to extraCharges().
+        $this->assertEquals('60.00', $displayed->price);
+        $this->assertEquals($reservation->extraCharges()->format(), $displayed->price);
     }
 
     public function test_category_membership_lookup_is_memoized_across_children()

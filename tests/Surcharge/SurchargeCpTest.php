@@ -114,6 +114,24 @@ class SurchargeCpTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors('second_option_id');
     }
 
+    // Two null-collection options are orphaned and can never both be selected, so the pair must be
+    // rejected even though they share the (null) collection value.
+    public function test_options_must_belong_to_a_non_null_collection()
+    {
+        $this->withExceptionHandling();
+
+        $orphanA = Option::factory()->create(['name' => 'Orphan A', 'slug' => 'orphan-a', 'collection' => null]);
+        $orphanB = Option::factory()->create(['name' => 'Orphan B', 'slug' => 'orphan-b', 'collection' => null]);
+
+        $this->postJson(cp_route('resrv.surcharge.store'), [
+            'name' => 'Inert fee',
+            'first_option_id' => $orphanA->id,
+            'second_option_id' => $orphanB->id,
+            'comparison' => 'differs',
+            'price' => '50.00',
+        ])->assertStatus(422)->assertJsonValidationErrors('second_option_id');
+    }
+
     public function test_can_update_a_surcharge()
     {
         $surcharge = Surcharge::factory()->between($this->pickup->id, $this->return->id)->create(['name' => 'One-way fee', 'price' => '50.00']);

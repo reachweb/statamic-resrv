@@ -68,6 +68,8 @@ class EnabledOptions extends Form
             'options.*.id' => [
                 'required',
                 'integer',
+                // Reject duplicate ids: optionsToSync() collapses them to one pivot while the total sums every row.
+                'distinct',
             ],
             'options.*.price' => [
                 'required',

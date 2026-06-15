@@ -291,8 +291,10 @@ class Extra extends Model
             $customer = $reservation->customerData;
         }
 
-        if (! $customer->has($this->custom)) {
-            throw new \Exception('The custom price data is missing for extra '.$this->name);
+        // Missing custom data → multiplier 1 (mirrors the Reservation branch); must not throw, since the
+        // display path prices every published extra. A non-numeric value is still rejected below.
+        if (! $customer || ! $customer->has($this->custom)) {
+            return 1;
         }
 
         $value = $customer->get($this->custom);

@@ -50,6 +50,8 @@ class EnabledExtras extends Form
             'extras.*.id' => [
                 'required',
                 'integer',
+                // Reject duplicate ids: extrasToSync() collapses them to one pivot while the total sums every row.
+                'distinct',
             ],
             'extras.*.price' => [
                 'required',

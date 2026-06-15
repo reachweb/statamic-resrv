@@ -61,6 +61,8 @@ trait HandlesExtrasQueries
                     'quantity' => $child->quantity,
                     'item_id' => $reservation->item_id,
                     'rate_id' => $child->rate_id,
+                    // Custom-priced extras need customerData to match the validation path; without it they diverge.
+                    'customer' => $reservation->customerData,
                 ];
 
                 // Fresh instance required: Extra::priceForDates mutates $this->price via dynamic pricing
