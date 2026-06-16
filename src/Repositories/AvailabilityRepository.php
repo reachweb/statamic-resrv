@@ -136,9 +136,10 @@ class AvailabilityRepository
      *
      * $onlyDays (0=Sun..6=Sat) limits the required days to those weekdays, matching the controller
      * which only writes those weekdays. End date is INCLUSIVE (unlike the exclusive booking-engine
-     * queries) to match the full range a CP user types. Subset semantics: a date is covered if any
-     * matching priced row exists — do not restore strict row-count equality (it wrongly rejected
-     * multi-rate entries on the unscoped path).
+     * queries) to match the full range a CP user types. Subset semantics: a date is covered when a
+     * matching priced row exists, rather than comparing row counts. Every CP caller passes a concrete
+     * $rateId — the exact rate the controller will write — so the check is always rate-scoped; the
+     * nullable $rateId (an unscoped, any-rate check) is retained for the general form but unused here.
      *
      * @param  array<int, int|string>|null  $onlyDays
      */

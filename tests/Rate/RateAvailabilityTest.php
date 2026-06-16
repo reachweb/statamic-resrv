@@ -684,6 +684,126 @@ class RateAvailabilityTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors(['price']);
     }
 
+    public function test_non_grouped_single_field_edit_without_rate_ids_is_scoped_to_the_default_rate()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Two apply-to-all rates. The default (first, lowest order) rate has NO availability rows;
+        // the other rate does cover the range.
+        $defaultRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'first', 'order' => 0]);
+        $otherRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'second', 'order' => 1]);
+
+        $date = today()->toDateString();
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $otherRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // With no rate_ids the controller writes the default (first) rate, so the existence check
+        // must be scoped to THAT rate — which has no rows. It must be rejected rather than passing on
+        // the other rate's rows and creating a partial price-only row on the default rate.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 200,
+        ])->assertStatus(422)->assertJsonValidationErrors(['price']);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $entry->id(),
+            'rate_id' => $defaultRate->id,
+        ]);
+    }
+
+    public function test_non_grouped_single_field_edit_without_rate_ids_accepts_when_default_rate_is_priced()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $defaultRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'first', 'order' => 0]);
+        Rate::factory()->create(['collection' => 'pages', 'slug' => 'second', 'order' => 1]);
+
+        $date = today()->toDateString();
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $defaultRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // The default (first) rate is priced, so a price-only edit without rate_ids is accepted and
+        // updates exactly that rate.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 200,
+        ])->assertStatus(200);
+
+        $this->assertSame('200.00', Availability::where('rate_id', $defaultRate->id)
+            ->where('date', $date)
+            ->first()->price->format());
+    }
+
+    public function test_non_grouped_availability_only_edit_without_rate_ids_is_scoped_to_the_default_rate()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Symmetric to the price-only case: the default (first) rate has no rows; another rate does.
+        $defaultRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'first', 'order' => 0]);
+        $otherRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'second', 'order' => 1]);
+
+        $date = today()->toDateString();
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $otherRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // An availability-only edit must also validate against the default rate (no rows) — not the
+        // other rate — so it is rejected rather than creating a partial availability-only row.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'available' => 3,
+        ])->assertStatus(422)->assertJsonValidationErrors(['available']);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $entry->id(),
+            'rate_id' => $defaultRate->id,
+        ]);
+    }
+
+    public function test_non_grouped_single_field_edit_without_rate_ids_rejects_when_entry_has_no_rate()
+    {
+        $this->withExceptionHandling();
+
+        // The entry has no rates at all, so the controller would create a brand-new default rate with
+        // no rows — which a single-field edit can never satisfy. Validation must reject it up front.
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $date = today()->toDateString();
+
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 200,
+        ])->assertStatus(422)->assertJsonValidationErrors(['price']);
+
+        $this->assertDatabaseCount('resrv_availabilities', 0);
+    }
+
     public function test_grouped_bulk_update_creates_base_rows_for_a_dependent_price_only_group()
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();

@@ -105,6 +105,9 @@ class AvailabilityCpRequest extends FormRequest
                 // priced rows for the full range — unless a sibling combined group in this request
                 // will create them first (same rule the non-grouped path enforces via ResrvAvailabilityExists).
                 foreach ((array) ($group['rate_ids'] ?? []) as $rateId) {
+                    // Safe to skip the existence check only because the controller applies combined
+                    // groups first within the same atomic transaction (AvailabilityCpController::update),
+                    // so the resolved base row this single-field group depends on is created before it runs.
                     if (in_array(Availability::resolveBaseRateId((int) $rateId), $createdBaseRateIds, true)) {
                         continue;
                     }

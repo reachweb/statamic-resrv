@@ -7,6 +7,7 @@ use Illuminate\Contracts\Validation\DataAwareRule;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Translation\PotentiallyTranslatedString;
 use Reach\StatamicResrv\Facades\Availability;
+use Reach\StatamicResrv\Models\Rate;
 
 class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
 {
@@ -37,11 +38,19 @@ class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
                     }
                 }
             } else {
-                if (! Availability::itemsExistAndHavePrices(
+                // No rate_ids: the controller writes to the entry's default rate — the first
+                // forEntry rate (AvailabilityCpController::defaultRateIds) — so the existence check
+                // must be scoped to THAT rate. An unscoped check could be satisfied by a different
+                // rate's rows and let a single-field edit create a partial row on the default rate
+                // that has none. No resolvable default rate means the write would target a brand-new
+                // rate with no priced rows, which a single-field edit cannot satisfy.
+                $defaultRate = Rate::forEntry($this->data['statamic_id'])->first();
+
+                if (! $defaultRate || ! Availability::itemsExistAndHavePrices(
                     $this->data['date_start'],
                     $this->data['date_end'],
                     $this->data['statamic_id'],
-                    null,
+                    (int) $defaultRate->id,
                     $onlyDays
                 )) {
                     $fail(__('The availability does not exist or does not have prices for the selected date range.'));
