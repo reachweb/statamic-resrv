@@ -161,9 +161,10 @@ class AvailabilityRepository
             ->whereNotNull('price')
             ->when($rateId, fn (Builder $query, int $rateId) => $this->applyRateFilter($query, $rateId))
             ->get(['date'])
-            ->map(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString());
+            ->map(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
+            ->flip();
 
-        return $requiredDates->every(fn ($date) => $pricedDates->contains($date));
+        return $requiredDates->every(fn ($date) => $pricedDates->has($date));
     }
 
     public function itemGetRates(string $statamic_id)
