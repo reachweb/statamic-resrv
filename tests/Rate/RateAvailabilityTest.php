@@ -478,6 +478,166 @@ class RateAvailabilityTest extends TestCase
         $this->assertStringNotContainsString('groups', implode(' ', $response->json('errors')['groups.0.price']));
     }
 
+    public function test_grouped_bulk_update_returns_422_not_500_when_dates_are_invalid()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // date_start omitted: the required-rule 422 must win, not a 500 from the existence check
+        // running on a null date.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_end' => today()->toDateString(),
+            'groups' => [
+                ['price' => 100, 'available' => null, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['date_start']);
+    }
+
+    public function test_grouped_bulk_update_respects_only_days_in_existence_check()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // Priced rows only on the two targeted weekdays of a full-week range.
+        $pricedOffsets = [0, 2];
+        foreach ($pricedOffsets as $offset) {
+            Availability::factory()->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $rate->id,
+                'date' => today()->addDays($offset)->toDateString(),
+                'price' => 100,
+                'available' => 5,
+            ]);
+        }
+
+        $onlyDays = [today()->dayOfWeek, today()->addDays(2)->dayOfWeek];
+
+        // Accepted despite the other five days having no rows: only onlyDays weekdays are written.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(6)->toDateString(),
+            'onlyDays' => $onlyDays,
+            'groups' => [
+                ['price' => 200, 'available' => null, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(200);
+
+        // Both targeted weekdays repriced...
+        foreach ([0, 2] as $offset) {
+            $this->assertSame('200.00', Availability::where('rate_id', $rate->id)
+                ->where('date', today()->addDays($offset)->toDateString())
+                ->first()->price->format());
+        }
+
+        // ...and no rows created on the untouched five days.
+        $this->assertDatabaseCount('resrv_availabilities', count($pricedOffsets));
+    }
+
+    public function test_grouped_bulk_update_still_rejects_when_an_only_days_weekday_is_unpriced()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // Priced row today but not two days out, yet the edit targets both weekdays.
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->toDateString(),
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        $onlyDays = [today()->dayOfWeek, today()->addDays(2)->dayOfWeek];
+
+        // A targeted weekday with no priced row is still rejected.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(6)->toDateString(),
+            'onlyDays' => $onlyDays,
+            'groups' => [
+                ['price' => 200, 'available' => null, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0']);
+    }
+
+    public function test_grouped_bulk_update_rejects_when_only_days_does_not_intersect_the_range()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->toDateString(),
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // onlyDays targets a weekday outside the two-day range: nothing to write, so reject.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDay()->toDateString(),
+            'onlyDays' => [today()->addDays(2)->dayOfWeek],
+            'groups' => [
+                ['price' => 200, 'available' => null, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0']);
+    }
+
+    public function test_non_grouped_update_respects_only_days_in_existence_check()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // Non-grouped path reaches the same check via ResrvAvailabilityExists; priced rows only on
+        // the two targeted weekdays.
+        foreach ([0, 2] as $offset) {
+            Availability::factory()->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $rate->id,
+                'date' => today()->addDays($offset)->toDateString(),
+                'price' => 100,
+                'available' => 5,
+            ]);
+        }
+
+        // Accepted when limited to the priced weekdays...
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(6)->toDateString(),
+            'onlyDays' => [today()->dayOfWeek, today()->addDays(2)->dayOfWeek],
+            'price' => 200,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(200);
+
+        $this->assertSame('200.00', Availability::where('rate_id', $rate->id)
+            ->where('date', today()->toDateString())
+            ->first()->price->format());
+
+        // ...rejected when a targeted weekday has no priced row.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(6)->toDateString(),
+            'onlyDays' => [today()->addDay()->dayOfWeek],
+            'price' => 200,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(422)->assertJsonValidationErrors(['price']);
+    }
+
     public function test_grouped_bulk_update_creates_base_rows_for_a_dependent_price_only_group()
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();

@@ -22,13 +22,16 @@ class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
         $otherAttribute = $attribute === 'price' ? 'available' : 'price';
 
         if (! is_null($value) && is_null($this->data[$otherAttribute] ?? null)) {
+            $onlyDays = $this->data['onlyDays'] ?? null;
+
             if (array_key_exists('rate_ids', $this->data)) {
                 foreach ($this->data['rate_ids'] as $rateId) {
                     if (! Availability::itemsExistAndHavePrices(
                         $this->data['date_start'],
                         $this->data['date_end'],
                         $this->data['statamic_id'],
-                        (int) $rateId
+                        (int) $rateId,
+                        $onlyDays
                     )) {
                         $fail(__('The availability does not exist or does not have prices for the selected date range.'));
                     }
@@ -38,6 +41,8 @@ class ResrvAvailabilityExists implements DataAwareRule, ValidationRule
                     $this->data['date_start'],
                     $this->data['date_end'],
                     $this->data['statamic_id'],
+                    null,
+                    $onlyDays
                 )) {
                     $fail(__('The availability does not exist or does not have prices for the selected date range.'));
                 }

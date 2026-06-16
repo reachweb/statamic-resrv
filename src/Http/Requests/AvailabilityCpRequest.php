@@ -50,7 +50,14 @@ class AvailabilityCpRequest extends FormRequest
         }
 
         $validator->after(function (Validator $validator) {
+            // Bail if standard rules failed, so the DB-backed checks below don't run on invalid
+            // input and 500.
+            if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
             $groups = (array) $this->input('groups', []);
+            $onlyDays = $this->input('onlyDays');
 
             // Resolved base-rate ids whose availability rows a combined (both-field) group in THIS
             // request will create/update. A single-field group that depends on those rows (e.g. a
@@ -94,7 +101,8 @@ class AvailabilityCpRequest extends FormRequest
                         $this->input('date_start'),
                         $this->input('date_end'),
                         $this->input('statamic_id'),
-                        (int) $rateId
+                        (int) $rateId,
+                        $onlyDays
                     )) {
                         $validator->errors()->add("groups.{$i}", __('The availability does not exist or does not have prices for the selected date range.'));
 

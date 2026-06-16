@@ -132,28 +132,37 @@ class AvailabilityRepository
     }
 
     /**
-     * Validates that every day in date_start..date_end has an availability row WITH a price.
+     * Validates that every required day in date_start..date_end has a priced availability row.
      *
-     * NOTE: uses INCLUSIVE end-date semantics (both ends counted) — distinct from the EXCLUSIVE
-     * convention of the booking-engine queries here (availableBetween, itemAvailableBetween and
-     * getLockedAvailabilities treat date_end as the checkout/departure day, `date < date_end`).
-     * This matches its only caller, the ResrvAvailabilityExists CP rule, which validates the full
-     * range a CP user typed. Passing an engine-style exclusive range here would be off by one day.
+     * $onlyDays (0=Sun..6=Sat) limits the required days to those weekdays, matching the controller
+     * which only writes those weekdays. End date is INCLUSIVE (unlike the exclusive booking-engine
+     * queries) to match the full range a CP user types. Subset semantics: a date is covered if any
+     * matching priced row exists — do not restore strict row-count equality (it wrongly rejected
+     * multi-rate entries on the unscoped path).
+     *
+     * @param  array<int, int|string>|null  $onlyDays
      */
-    public function itemsExistAndHavePrices(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): bool
+    public function itemsExistAndHavePrices(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null, ?array $onlyDays = null): bool
     {
-        $result = Availability::selectRaw('COUNT(*) as total_days, SUM(CASE WHEN price IS NOT NULL THEN 1 ELSE 0 END) as days_with_prices')
+        $requiredDates = collect(CarbonPeriod::create($date_start, $date_end))
+            ->when($onlyDays, fn (SupportCollection $dates) => $dates->filter(fn ($day) => in_array($day->dayOfWeek, $onlyDays)))
+            ->map(fn ($day) => $day->toDateString());
+
+        // onlyDays intersects the range to nothing: reject rather than report a vacuous success.
+        if ($requiredDates->isEmpty()) {
+            return false;
+        }
+
+        $pricedDates = Availability::query()
             ->where('date', '>=', $date_start)
             ->where('date', '<=', $date_end)
             ->where('statamic_id', $statamic_id)
+            ->whereNotNull('price')
             ->when($rateId, fn (Builder $query, int $rateId) => $this->applyRateFilter($query, $rateId))
-            ->first();
+            ->get(['date'])
+            ->map(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString());
 
-        $totalDays = (int) $result->total_days;
-        $daysWithPrices = (int) $result->days_with_prices;
-        $expectedDays = (int) Carbon::parse($date_start)->diffInDays(Carbon::parse($date_end)->addDay(), true);
-
-        return $totalDays > 0 && $totalDays === $daysWithPrices && $totalDays === $expectedDays;
+        return $requiredDates->every(fn ($date) => $pricedDates->contains($date));
     }
 
     public function itemGetRates(string $statamic_id)
