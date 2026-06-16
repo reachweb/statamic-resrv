@@ -72,6 +72,7 @@ class RateCpController extends Controller
     public function forEntry(string $statamicId): JsonResponse
     {
         $rates = Rate::forEntry($statamicId)
+            ->with('baseRate:id,title')
             ->orderBy('order')
             ->get();
 

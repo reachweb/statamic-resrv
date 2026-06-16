@@ -275,6 +275,12 @@ class AvailabilityCpController extends Controller
 
         $isSharedIndependent = $rate && $rate->hasIndependentSharedPricing();
 
+        // The price is written to this rate's own availability row only for plain rates. A relative
+        // rate derives its price from the base modifier on read (never stored); a shared rate either
+        // mirrors the base price (shared+relative) or keeps per-date overrides in resrv_rate_prices
+        // (shared+independent). A legacy entry with no Rate row behaves like a plain rate.
+        $writesPriceColumn = ! $rate || (! $rate->isShared() && ! $rate->isRelative());
+
         // Shared+relative rates derive their price from the modifier — block direct price edits.
         $skipPrice = ($resolvedRateId !== $rateId) && ! $isSharedIndependent;
 
@@ -291,7 +297,7 @@ class AvailabilityCpController extends Controller
             ], 422));
         }
 
-        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $skipPrice, $isSharedIndependent) {
+        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn) {
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $onlyDays = $data['onlyDays'] ?? null;
 
@@ -327,7 +333,7 @@ class AvailabilityCpController extends Controller
 
                 $toUpdate = [];
 
-                if (! is_null($data['price']) && ! $skipPrice && ! $isSharedIndependent) {
+                if (! is_null($data['price']) && $writesPriceColumn) {
                     $toUpdate['price'] = $data['price'];
                 }
 

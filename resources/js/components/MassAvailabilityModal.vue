@@ -19,11 +19,11 @@
             </Field>
 
             <div class="grid grid-cols-2 gap-x-4 gap-y-6">
-                <Field :label="__('Available')" :errors="errors.available">
-                    <Input v-model="available" />
+                <Field :label="__('Available')" :errors="errors.available" :instructions="availabilityHint">
+                    <Input v-model="available" :disabled="selectedEditability.allAvailabilityLocked" />
                 </Field>
-                <Field :label="__('Price')" :errors="errors.price">
-                    <Input v-model="price" />
+                <Field :label="__('Price')" :errors="errors.price" :instructions="priceHint">
+                    <Input v-model="price" :disabled="selectedEditability.allPriceLocked" />
                 </Field>
             </div>
 
@@ -53,6 +53,7 @@ import { Button, Checkbox, CheckboxGroup, Combobox, DateRangePicker, Field, Inpu
 import { computed, reactive, ref } from 'vue';
 import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useFormHandler } from '../composables/useFormHandler.js';
+import { rateEditability } from '../composables/useRateEditability.js';
 
 const props = defineProps({
     parentId: {
@@ -64,6 +65,11 @@ const props = defineProps({
         required: false,
     },
     rateOptions: {
+        type: Array,
+        required: false,
+        default: () => [],
+    },
+    rates: {
         type: Array,
         required: false,
         default: () => [],
@@ -89,19 +95,75 @@ function selectAllRates() {
     selectedRateIds.value = props.rateOptions.map((option) => option.value);
 }
 
+const selectedRatesResolved = computed(() => props.rates.filter((r) => selectedRateIds.value.includes(r.id)));
+
+// Editability descriptor per selected rate, computed once and reused by both the gating logic
+// below and the submit-time rate_ids filtering, so rateEditability runs once per rate, not twice.
+const selectedDescriptors = computed(() =>
+    selectedRatesResolved.value.map((r) => ({ id: r.id, editability: rateEditability(r) }))
+);
+
+// Editability across the current multi-rate selection: a field is "all locked" only when every
+// selected rate locks it, and "mixed" when some do and some don't. Drives input disabling + hints.
+const selectedEditability = computed(() => {
+    const descriptors = selectedDescriptors.value;
+    if (!props.rate || descriptors.length === 0) {
+        return { allPriceLocked: false, allAvailabilityLocked: false, mixedPrice: false, mixedAvailability: false };
+    }
+    const priceEditable = descriptors.filter((d) => d.editability.price).length;
+    const availabilityEditable = descriptors.filter((d) => d.editability.availability).length;
+    return {
+        allPriceLocked: priceEditable === 0,
+        allAvailabilityLocked: availabilityEditable === 0,
+        mixedPrice: priceEditable > 0 && priceEditable < descriptors.length,
+        mixedAvailability: availabilityEditable > 0 && availabilityEditable < descriptors.length,
+    };
+});
+
+const priceHint = computed(() => {
+    const e = selectedEditability.value;
+    if (e.allPriceLocked) {
+        return __('All selected rates derive their price from a base rate, so the price field is read-only.');
+    }
+    if (e.mixedPrice) {
+        return __('Some selected rates derive their price from a base rate — the price you enter applies only to the rates that allow it.');
+    }
+    return null;
+});
+
+const availabilityHint = computed(() => {
+    const e = selectedEditability.value;
+    if (e.allAvailabilityLocked) {
+        return __('All selected rates share inventory with a base rate, so the availability field is read-only.');
+    }
+    if (e.mixedAvailability) {
+        return __('Some selected rates share inventory with a base rate — availability applies only to the rates that allow it.');
+    }
+    return null;
+});
+
 const submit = computed(() => {
+    const hasPrice = price.value !== null && price.value !== '';
+    const hasAvailable = available.value !== null && available.value !== '';
+
     const fields = {
         date_start: dates.start,
         date_end: dates.end,
         statamic_id: props.parentId,
-        price: price.value,
-        available: available.value,
+        price: hasPrice ? price.value : null,
+        available: hasAvailable ? available.value : null,
     };
     if (onlyDays.value.length > 0) {
         fields.onlyDays = onlyDays.value;
     }
     if (props.rate) {
-        fields.rate_ids = selectedRateIds.value;
+        // A price-only edit on a price-locked rate either errors (shared+relative aborts the
+        // whole batch) or is a dead no-op (relative). When only a price is being set, restrict
+        // it to the rates that can actually accept one.
+        const priceOnly = hasPrice && !hasAvailable && props.rates.length > 0;
+        fields.rate_ids = priceOnly
+            ? selectedDescriptors.value.filter((d) => d.editability.price).map((d) => d.id)
+            : selectedRateIds.value;
     }
     return fields;
 });
@@ -115,7 +177,10 @@ const { disableSave, errors, save } = useFormHandler({
 });
 
 // An empty rate selection would post rate_ids: [], which the backend silently no-ops; block Save instead.
-const saveDisabled = computed(() => disableSave.value || (Boolean(props.rate) && selectedRateIds.value.length === 0));
+// Likewise block Save when every selected rate locks both fields — there is nothing to submit.
+const saveDisabled = computed(() => disableSave.value
+    || (Boolean(props.rate) && selectedRateIds.value.length === 0)
+    || (selectedEditability.value.allPriceLocked && selectedEditability.value.allAvailabilityLocked));
 
 const dateErrors = computed(() => {
     const out = [];

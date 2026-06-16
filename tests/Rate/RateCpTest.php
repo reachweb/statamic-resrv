@@ -63,6 +63,41 @@ class RateCpTest extends TestCase
         $response->assertStatus(200)->assertJsonCount(1);
     }
 
+    public function test_for_entry_eager_loads_base_rate_title_and_type_fields()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Standard',
+            'slug' => 'standard',
+        ]);
+
+        Rate::factory()->create([
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Discounted',
+            'slug' => 'discounted',
+            'pricing_type' => 'relative',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 20,
+        ]);
+
+        $response = $this->get(cp_route('resrv.rate.forEntry', $item->id()));
+        $response->assertStatus(200)->assertJsonCount(2);
+
+        $derived = collect($response->json())->firstWhere('slug', 'discounted');
+
+        $this->assertSame('relative', $derived['pricing_type']);
+        $this->assertSame('shared', $derived['availability_type']);
+        $this->assertSame((string) $baseRate->id, (string) $derived['base_rate_id']);
+        $this->assertSame($baseRate->title, $derived['base_rate']['title']);
+    }
+
     public function test_for_entry_returns_apply_to_all_rates()
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();

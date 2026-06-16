@@ -2,8 +2,13 @@
     <div>
         <Modal :open="true" :title="__('Change availability')" icon="calendar-date" @dismissed="emit('cancel')">
             <div class="space-y-6 p-2">
-                <div v-if="rate" class="text-sm text-gray-700 dark:text-gray-300">
-                    <span class="text-gray-500">{{ __('For') }}:</span> {{ rate.label }}
+                <div v-if="rate" class="space-y-2">
+                    <div class="flex flex-wrap items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                        <span class="text-gray-500">{{ __('For') }}:</span>
+                        <span class="font-medium">{{ rate.label }}</span>
+                        <Badge v-for="tag in editability.tags" :key="tag" :text="tag" size="sm" variant="info" />
+                    </div>
+                    <Alert v-if="editability.notice" variant="default" :text="editability.notice" />
                 </div>
                 <div class="text-sm text-gray-700 dark:text-gray-300">{{ __('From') }} {{ date_start }} {{ __('to') }} {{ date_end }}</div>
 
@@ -14,11 +19,11 @@
                 </Alert>
 
                 <div class="grid grid-cols-2 gap-x-4 gap-y-6">
-                    <Field :label="__('Available')" :errors="errors.available">
-                        <Input v-model="available" @keyup="handleEnterKey" />
+                    <Field :label="__('Available')" :errors="errors.available" :instructions="editability.availabilityReason">
+                        <Input v-model="available" :disabled="!editability.availability" @keyup="handleEnterKey" />
                     </Field>
-                    <Field :label="__('Price')" :errors="errors.price">
-                        <Input v-model="price" @keyup="handleEnterKey" />
+                    <Field :label="__('Price')" :errors="errors.price" :instructions="editability.priceReason">
+                        <Input v-model="price" :disabled="!editability.price" @keyup="handleEnterKey" />
                     </Field>
                 </div>
             </div>
@@ -28,7 +33,7 @@
                     <Button :text="__('Delete')" variant="danger" @click="confirmDelete" />
                     <div class="flex items-center gap-2">
                         <Button :text="__('Cancel')" variant="ghost" @click="emit('cancel')" />
-                        <Button :text="__('Save')" variant="primary" :disabled="disableSave" @click="save" />
+                        <Button :text="__('Save')" variant="primary" :disabled="saveDisabled" @click="save" />
                     </div>
                 </div>
             </template>
@@ -57,12 +62,13 @@
 </template>
 
 <script setup>
-import { Alert, Button, ConfirmationModal, Field, Input, Modal } from '@statamic/cms/ui';
+import { Alert, Badge, Button, ConfirmationModal, Field, Input, Modal } from '@statamic/cms/ui';
 import { computed, ref } from 'vue';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import { useFormHandler } from '../composables/useFormHandler.js';
 import { useToast } from '../composables/useToast.js';
+import { rateEditability } from '../composables/useRateEditability.js';
 
 const props = defineProps({
     dates: {
@@ -85,6 +91,8 @@ const props = defineProps({
 
 const emit = defineEmits(['cancel', 'saved']);
 const toast = useToast();
+
+const editability = computed(() => rateEditability(props.rate));
 
 const available = ref(null);
 const price = ref(null);
@@ -118,12 +126,13 @@ const stuckHoldsMessage = computed(() => {
 });
 
 const submit = computed(() => {
+    // Never send a locked field — the backend would reject (shared+relative price) or ignore it.
     const fields = {
         date_start: date_start.value,
         date_end: date_end.value,
         statamic_id: props.parentId,
-        price: price.value,
-        available: available.value,
+        price: editability.value.price ? price.value : null,
+        available: editability.value.availability ? available.value : null,
     };
     if (props.rate) {
         fields.rate_ids = [props.rate.code];
@@ -138,6 +147,10 @@ const { disableSave, errors, save } = useFormHandler({
     successMessage: 'Availability successfully saved',
     emit,
 });
+
+// Both fields locked (a rate that mirrors its base) leaves nothing to submit — Save would post
+// two nulls and trip the backend's required_without validation. Block it; Delete stays available.
+const saveDisabled = computed(() => disableSave.value || (!editability.value.price && !editability.value.availability));
 
 function confirmDelete() {
     deleteId.value = props.parentId;

@@ -181,6 +181,49 @@ class RateAvailabilityTest extends TestCase
         $this->assertEquals('200.00', $this->getPricingForRate($data['rate'], $data['entry']));
     }
 
+    public function test_relative_rate_does_not_store_price_on_combined_cp_edit()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'standard',
+        ]);
+
+        $relativeRate = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $date = today()->toDateString();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $relativeRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 2,
+        ]);
+
+        // A combined price + availability edit: the availability must apply, but a relative
+        // rate's price is always derived from its base, so it must never be persisted here.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 999,
+            'available' => 7,
+            'rate_ids' => [$relativeRate->id],
+        ])->assertStatus(200);
+
+        $rows = Availability::where('statamic_id', $entry->id())
+            ->where('rate_id', $relativeRate->id)
+            ->get();
+
+        $this->assertTrue($rows->contains(fn ($row) => (int) $row->available === 7), 'Availability should be updated.');
+        $rows->each(fn ($row) => $this->assertNotSame('999.00', $row->price?->format(), 'Relative rate price must not be stored.'));
+    }
+
     protected function createRelativePricingSetup(
         string $modifierType,
         string $modifierOperation,
