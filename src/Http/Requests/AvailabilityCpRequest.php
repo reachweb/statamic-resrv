@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Http\Requests;
 
+use Carbon\CarbonPeriod;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -45,10 +46,6 @@ class AvailabilityCpRequest extends FormRequest
 
     public function withValidator(Validator $validator): void
     {
-        if (! $this->has('groups')) {
-            return;
-        }
-
         $validator->after(function (Validator $validator) {
             // Bail if standard rules failed, so the DB-backed checks below don't run on invalid
             // input and 500.
@@ -56,8 +53,23 @@ class AvailabilityCpRequest extends FormRequest
                 return;
             }
 
-            $groups = (array) $this->input('groups', []);
             $onlyDays = $this->input('onlyDays');
+
+            // onlyDays that intersects the selected range to nothing would write no day at all. The
+            // single-field existence check below also rejects this, but a combined edit (grouped or
+            // not) skips that check and would otherwise report a vacuous 200 with zero writes — so
+            // reject it here for every path.
+            if (! empty($onlyDays) && $this->onlyDaysMissDateRange($onlyDays)) {
+                $validator->errors()->add('onlyDays', __('The selected days of the week do not fall within the date range.'));
+
+                return;
+            }
+
+            if (! $this->has('groups')) {
+                return;
+            }
+
+            $groups = (array) $this->input('groups', []);
 
             // Resolved base-rate ids whose availability rows a combined (both-field) group in THIS
             // request will create/update. A single-field group that depends on those rows (e.g. a
@@ -111,5 +123,18 @@ class AvailabilityCpRequest extends FormRequest
                 }
             }
         });
+    }
+
+    /**
+     * True when none of the days in the (inclusive) date range fall on a selected weekday, so the
+     * edit would write nothing. Non-strict comparison + inclusive range mirror the controller's
+     * write loop (AvailabilityCpController::updateAvailability).
+     *
+     * @param  array<int, int|string>  $onlyDays
+     */
+    protected function onlyDaysMissDateRange(array $onlyDays): bool
+    {
+        return collect(CarbonPeriod::create($this->input('date_start'), $this->input('date_end')))
+            ->every(fn ($day) => ! in_array($day->dayOfWeek, $onlyDays));
     }
 }

@@ -582,7 +582,8 @@ class RateAvailabilityTest extends TestCase
             'available' => 5,
         ]);
 
-        // onlyDays targets a weekday outside the two-day range: nothing to write, so reject.
+        // onlyDays targets a weekday outside the two-day range: nothing to write, so the request is
+        // rejected up front under the onlyDays key (before any per-group existence check).
         $this->postJson(cp_route('resrv.availability.update'), [
             'statamic_id' => $entry->id(),
             'date_start' => today()->toDateString(),
@@ -591,7 +592,52 @@ class RateAvailabilityTest extends TestCase
             'groups' => [
                 ['price' => 200, 'available' => null, 'rate_ids' => [$rate->id]],
             ],
-        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0']);
+        ])->assertStatus(422)->assertJsonValidationErrors(['onlyDays']);
+    }
+
+    public function test_grouped_bulk_update_rejects_combined_group_when_only_days_misses_range()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // A COMBINED group (both fields) skips the per-group existence check, so without the
+        // request-level guard a non-intersecting onlyDays would pass validation and the controller
+        // would write nothing — a silent success. It must be rejected instead.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDay()->toDateString(),
+            'onlyDays' => [today()->addDays(2)->dayOfWeek],
+            'groups' => [
+                ['price' => 200, 'available' => 5, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['onlyDays']);
+
+        $this->assertDatabaseCount('resrv_availabilities', 0);
+    }
+
+    public function test_non_grouped_combined_update_rejects_when_only_days_misses_range()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // Same vacuous-no-op guard on the non-grouped path: a both-fields edit whose onlyDays misses
+        // the range is rejected rather than silently writing nothing.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDay()->toDateString(),
+            'onlyDays' => [today()->addDays(2)->dayOfWeek],
+            'price' => 200,
+            'available' => 5,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(422)->assertJsonValidationErrors(['onlyDays']);
+
+        $this->assertDatabaseCount('resrv_availabilities', 0);
     }
 
     public function test_non_grouped_update_respects_only_days_in_existence_check()
