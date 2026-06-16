@@ -7,6 +7,7 @@ use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class RateAvailabilityTest extends TestCase
@@ -179,6 +180,716 @@ class RateAvailabilityTest extends TestCase
 
         // 2 days * 100 = 200 (no modification)
         $this->assertEquals('200.00', $this->getPricingForRate($data['rate'], $data['entry']));
+    }
+
+    public function test_relative_independent_rate_stores_source_price_on_combined_cp_edit()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'standard',
+        ]);
+
+        $relativeRate = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $date = today()->toDateString();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $relativeRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 2,
+        ]);
+
+        // A relative+independent rate keeps its own availability rows; the price stored on them is the
+        // SOURCE the rate's modifier is applied to on read, so a combined edit must persist both fields.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 250,
+            'available' => 7,
+            'rate_ids' => [$relativeRate->id],
+        ])->assertStatus(200);
+
+        $row = Availability::where('statamic_id', $entry->id())
+            ->where('rate_id', $relativeRate->id)
+            ->where('date', $date)
+            ->first();
+
+        $this->assertNotNull($row);
+        $this->assertEquals(7, $row->available);
+        $this->assertSame('250.00', $row->price->format());
+    }
+
+    public function test_relative_independent_rate_creates_new_dated_rows_with_source_price()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'standard',
+        ]);
+
+        $relativeRate = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 25,
+        ]);
+
+        // A date with no existing availability rows: a combined edit must be able to create the row
+        // (the validator only allows single-field edits when priced rows already exist).
+        $date = today()->addDays(10)->toDateString();
+
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 200,
+            'available' => 4,
+            'rate_ids' => [$relativeRate->id],
+        ])->assertStatus(200);
+
+        $row = Availability::where('statamic_id', $entry->id())
+            ->where('rate_id', $relativeRate->id)
+            ->where('date', $date)
+            ->first();
+
+        $this->assertNotNull($row, 'A new availability row must be created for the relative+independent rate.');
+        $this->assertEquals(4, $row->available);
+        $this->assertSame('200.00', $row->price->format());
+    }
+
+    public function test_relative_independent_rate_refreshes_source_price_on_price_only_edit()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'standard',
+        ]);
+
+        $relativeRate = Rate::factory()->relative()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $date = today()->toDateString();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $relativeRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 2,
+        ]);
+
+        // A price-only edit on an existing priced row refreshes the source price.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 175,
+            'available' => null,
+            'rate_ids' => [$relativeRate->id],
+        ])->assertStatus(200);
+
+        $row = Availability::where('statamic_id', $entry->id())
+            ->where('rate_id', $relativeRate->id)
+            ->where('date', $date)
+            ->first();
+
+        $this->assertSame('175.00', $row->price->format());
+        $this->assertEquals(2, $row->available);
+    }
+
+    public function test_multi_rate_update_is_atomic_when_a_later_rate_is_rejected()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate1 = Rate::factory()->create(['collection' => 'pages', 'slug' => 'first-rate', 'order' => 0]);
+        $rate2 = Rate::factory()->create(['collection' => 'pages', 'slug' => 'second-rate', 'order' => 1]);
+
+        $date = today()->toDateString();
+
+        foreach ([$rate1, $rate2] as $rate) {
+            Availability::factory()->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $rate->id,
+                'date' => $date,
+                'price' => 100,
+                'available' => 5,
+            ]);
+        }
+
+        // An active hold on the SECOND rate blocks availability edits for its range.
+        Reservation::factory()->create([
+            'item_id' => $entry->id(),
+            'rate_id' => $rate2->id,
+            'date_start' => $date,
+            'date_end' => today()->addDay()->toDateString(),
+            'status' => 'pending',
+        ]);
+
+        // A combined edit to both rates: rate1 is written first, then rate2 is rejected by the
+        // pending-holds guard. The whole request must roll back, leaving rate1 untouched.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 250,
+            'available' => 9,
+            'rate_ids' => [$rate1->id, $rate2->id],
+        ])->assertStatus(422);
+
+        $row1 = Availability::where('rate_id', $rate1->id)->where('date', $date)->first();
+        $this->assertEquals(5, $row1->available, 'rate1 availability must be rolled back.');
+        $this->assertSame('100.00', $row1->price->format(), 'rate1 price must be rolled back.');
+    }
+
+    public function test_grouped_bulk_update_applies_price_and_availability_per_group()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+        $childRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'child',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $date = today()->toDateString();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // One atomic request: a combined group for the base rate (both fields) plus a price-only
+        // group for the shared+independent child rate (its availability is locked).
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'groups' => [
+                ['price' => 200, 'available' => 9, 'rate_ids' => [$baseRate->id]],
+                ['price' => 60, 'available' => null, 'rate_ids' => [$childRate->id]],
+            ],
+        ])->assertStatus(200);
+
+        $baseRow = Availability::where('rate_id', $baseRate->id)->where('date', $date)->first();
+        $this->assertEquals(9, $baseRow->available);
+        $this->assertSame('200.00', $baseRow->price->format());
+
+        $this->assertDatabaseHas('resrv_rate_prices', [
+            'rate_id' => $childRate->id,
+            'statamic_id' => $entry->id(),
+            'price' => 60,
+        ]);
+    }
+
+    public function test_grouped_bulk_update_combined_group_creates_new_dates()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // A date with no existing rows: a combined group must create the row.
+        $date = today()->addDays(15)->toDateString();
+
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'groups' => [
+                ['price' => 120, 'available' => 6, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(200);
+
+        $row = Availability::where('rate_id', $rate->id)->where('date', $date)->first();
+        $this->assertNotNull($row);
+        $this->assertEquals(6, $row->available);
+        $this->assertSame('120.00', $row->price->format());
+    }
+
+    public function test_grouped_bulk_update_rejects_single_field_group_on_new_dates()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // No existing rows for this date: a price-only group cannot create one, so it must be rejected.
+        $date = today()->addDays(20)->toDateString();
+
+        // The failure is keyed by its group bucket (groups.0). The CP folds group-level messages into
+        // a general alert, so this key must stay stable for the user to ever see why Save failed.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'groups' => [
+                ['price' => 100, 'available' => null, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0']);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'rate_id' => $rate->id,
+            'statamic_id' => $entry->id(),
+            'date' => $date,
+        ]);
+    }
+
+    public function test_grouped_bulk_update_keys_field_errors_under_their_group_bucket()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        $date = today()->toDateString();
+
+        // A non-numeric price fails the numeric rule under the group bucket (groups.0.price). The CP
+        // folds groups.N.price onto the visible Price field, so this key must stay stable — and the
+        // message itself must not leak the internal bucket key to the user.
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'groups' => [
+                ['price' => 'not-a-number', 'available' => 5, 'rate_ids' => [$rate->id]],
+            ],
+        ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors(['groups.0.price']);
+        $this->assertStringNotContainsString('groups', implode(' ', $response->json('errors')['groups.0.price']));
+    }
+
+    public function test_grouped_bulk_update_returns_422_not_500_when_dates_are_invalid()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // date_start omitted: the required-rule 422 must win, not a 500 from the existence check
+        // running on a null date.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_end' => today()->toDateString(),
+            'groups' => [
+                ['price' => 100, 'available' => null, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['date_start']);
+    }
+
+    public function test_grouped_bulk_update_respects_only_days_in_existence_check()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // Priced rows only on the two targeted weekdays of a full-week range.
+        $pricedOffsets = [0, 2];
+        foreach ($pricedOffsets as $offset) {
+            Availability::factory()->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $rate->id,
+                'date' => today()->addDays($offset)->toDateString(),
+                'price' => 100,
+                'available' => 5,
+            ]);
+        }
+
+        $onlyDays = [today()->dayOfWeek, today()->addDays(2)->dayOfWeek];
+
+        // Accepted despite the other five days having no rows: only onlyDays weekdays are written.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(6)->toDateString(),
+            'onlyDays' => $onlyDays,
+            'groups' => [
+                ['price' => 200, 'available' => null, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(200);
+
+        // Both targeted weekdays repriced...
+        foreach ([0, 2] as $offset) {
+            $this->assertSame('200.00', Availability::where('rate_id', $rate->id)
+                ->where('date', today()->addDays($offset)->toDateString())
+                ->first()->price->format());
+        }
+
+        // ...and no rows created on the untouched five days.
+        $this->assertDatabaseCount('resrv_availabilities', count($pricedOffsets));
+    }
+
+    public function test_grouped_bulk_update_still_rejects_when_an_only_days_weekday_is_unpriced()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // Priced row today but not two days out, yet the edit targets both weekdays.
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->toDateString(),
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        $onlyDays = [today()->dayOfWeek, today()->addDays(2)->dayOfWeek];
+
+        // A targeted weekday with no priced row is still rejected.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(6)->toDateString(),
+            'onlyDays' => $onlyDays,
+            'groups' => [
+                ['price' => 200, 'available' => null, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0']);
+    }
+
+    public function test_grouped_bulk_update_rejects_when_only_days_does_not_intersect_the_range()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->toDateString(),
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // onlyDays targets a weekday outside the two-day range: nothing to write, so the request is
+        // rejected up front under the onlyDays key (before any per-group existence check).
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDay()->toDateString(),
+            'onlyDays' => [today()->addDays(2)->dayOfWeek],
+            'groups' => [
+                ['price' => 200, 'available' => null, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['onlyDays']);
+    }
+
+    public function test_grouped_bulk_update_rejects_combined_group_when_only_days_misses_range()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // A COMBINED group (both fields) skips the per-group existence check, so without the
+        // request-level guard a non-intersecting onlyDays would pass validation and the controller
+        // would write nothing — a silent success. It must be rejected instead.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDay()->toDateString(),
+            'onlyDays' => [today()->addDays(2)->dayOfWeek],
+            'groups' => [
+                ['price' => 200, 'available' => 5, 'rate_ids' => [$rate->id]],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['onlyDays']);
+
+        $this->assertDatabaseCount('resrv_availabilities', 0);
+    }
+
+    public function test_non_grouped_combined_update_rejects_when_only_days_misses_range()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // Same vacuous-no-op guard on the non-grouped path: a both-fields edit whose onlyDays misses
+        // the range is rejected rather than silently writing nothing.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDay()->toDateString(),
+            'onlyDays' => [today()->addDays(2)->dayOfWeek],
+            'price' => 200,
+            'available' => 5,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(422)->assertJsonValidationErrors(['onlyDays']);
+
+        $this->assertDatabaseCount('resrv_availabilities', 0);
+    }
+
+    public function test_non_grouped_update_respects_only_days_in_existence_check()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        // Non-grouped path reaches the same check via ResrvAvailabilityExists; priced rows only on
+        // the two targeted weekdays.
+        foreach ([0, 2] as $offset) {
+            Availability::factory()->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $rate->id,
+                'date' => today()->addDays($offset)->toDateString(),
+                'price' => 100,
+                'available' => 5,
+            ]);
+        }
+
+        // Accepted when limited to the priced weekdays...
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(6)->toDateString(),
+            'onlyDays' => [today()->dayOfWeek, today()->addDays(2)->dayOfWeek],
+            'price' => 200,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(200);
+
+        $this->assertSame('200.00', Availability::where('rate_id', $rate->id)
+            ->where('date', today()->toDateString())
+            ->first()->price->format());
+
+        // ...rejected when a targeted weekday has no priced row.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => today()->toDateString(),
+            'date_end' => today()->addDays(6)->toDateString(),
+            'onlyDays' => [today()->addDay()->dayOfWeek],
+            'price' => 200,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(422)->assertJsonValidationErrors(['price']);
+    }
+
+    public function test_non_grouped_single_field_edit_without_rate_ids_is_scoped_to_the_default_rate()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Two apply-to-all rates. The default (first, lowest order) rate has NO availability rows;
+        // the other rate does cover the range.
+        $defaultRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'first', 'order' => 0]);
+        $otherRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'second', 'order' => 1]);
+
+        $date = today()->toDateString();
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $otherRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // With no rate_ids the controller writes the default (first) rate, so the existence check
+        // must be scoped to THAT rate — which has no rows. It must be rejected rather than passing on
+        // the other rate's rows and creating a partial price-only row on the default rate.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 200,
+        ])->assertStatus(422)->assertJsonValidationErrors(['price']);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $entry->id(),
+            'rate_id' => $defaultRate->id,
+        ]);
+    }
+
+    public function test_non_grouped_single_field_edit_without_rate_ids_accepts_when_default_rate_is_priced()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $defaultRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'first', 'order' => 0]);
+        Rate::factory()->create(['collection' => 'pages', 'slug' => 'second', 'order' => 1]);
+
+        $date = today()->toDateString();
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $defaultRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // The default (first) rate is priced, so a price-only edit without rate_ids is accepted and
+        // updates exactly that rate.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 200,
+        ])->assertStatus(200);
+
+        $this->assertSame('200.00', Availability::where('rate_id', $defaultRate->id)
+            ->where('date', $date)
+            ->first()->price->format());
+    }
+
+    public function test_non_grouped_availability_only_edit_without_rate_ids_is_scoped_to_the_default_rate()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Symmetric to the price-only case: the default (first) rate has no rows; another rate does.
+        $defaultRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'first', 'order' => 0]);
+        $otherRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'second', 'order' => 1]);
+
+        $date = today()->toDateString();
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $otherRate->id,
+            'date' => $date,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // An availability-only edit must also validate against the default rate (no rows) — not the
+        // other rate — so it is rejected rather than creating a partial availability-only row.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'available' => 3,
+        ])->assertStatus(422)->assertJsonValidationErrors(['available']);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $entry->id(),
+            'rate_id' => $defaultRate->id,
+        ]);
+    }
+
+    public function test_non_grouped_single_field_edit_without_rate_ids_rejects_when_entry_has_no_rate()
+    {
+        $this->withExceptionHandling();
+
+        // The entry has no rates at all, so the controller would create a brand-new default rate with
+        // no rows — which a single-field edit can never satisfy. Validation must reject it up front.
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $date = today()->toDateString();
+
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 200,
+        ])->assertStatus(422)->assertJsonValidationErrors(['price']);
+
+        $this->assertDatabaseCount('resrv_availabilities', 0);
+    }
+
+    public function test_grouped_bulk_update_creates_base_rows_for_a_dependent_price_only_group()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+        $childRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'child',
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        // A brand-new date with no rows. The combined base group creates the base pool that the
+        // shared child's price-only override depends on — within the same request. The client sends
+        // the price-only group FIRST to prove (a) validation does not reject it for missing rows and
+        // (b) the controller still applies combined groups before single-field groups.
+        $date = today()->addDays(12)->toDateString();
+
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'groups' => [
+                ['price' => 60, 'available' => null, 'rate_ids' => [$childRate->id]],
+                ['price' => 200, 'available' => 9, 'rate_ids' => [$baseRate->id]],
+            ],
+        ])->assertStatus(200);
+
+        $baseRow = Availability::where('rate_id', $baseRate->id)->where('date', $date)->first();
+        $this->assertNotNull($baseRow, 'The base row must be created.');
+        $this->assertEquals(9, $baseRow->available);
+        $this->assertSame('200.00', $baseRow->price->format());
+
+        // The dependent child override is applied because the base pool was created first.
+        $this->assertDatabaseHas('resrv_rate_prices', [
+            'rate_id' => $childRate->id,
+            'statamic_id' => $entry->id(),
+            'price' => 60,
+        ]);
+    }
+
+    public function test_grouped_bulk_update_is_atomic_when_a_rate_in_a_group_is_rejected()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $rate1 = Rate::factory()->create(['collection' => 'pages', 'slug' => 'first-rate', 'order' => 0]);
+        $rate2 = Rate::factory()->create(['collection' => 'pages', 'slug' => 'second-rate', 'order' => 1]);
+
+        $date = today()->toDateString();
+
+        foreach ([$rate1, $rate2] as $rate) {
+            Availability::factory()->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $rate->id,
+                'date' => $date,
+                'price' => 100,
+                'available' => 5,
+            ]);
+        }
+
+        // An active hold on rate2 blocks the availability edit for its range.
+        Reservation::factory()->create([
+            'item_id' => $entry->id(),
+            'rate_id' => $rate2->id,
+            'date_start' => $date,
+            'date_end' => today()->addDay()->toDateString(),
+            'status' => 'pending',
+        ]);
+
+        // One combined group over both rates: rate1 is written first, then rate2 is rejected by the
+        // pending-holds guard. The whole groups request must roll back.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'groups' => [
+                ['price' => 250, 'available' => 9, 'rate_ids' => [$rate1->id, $rate2->id]],
+            ],
+        ])->assertStatus(422);
+
+        $row1 = Availability::where('rate_id', $rate1->id)->where('date', $date)->first();
+        $this->assertEquals(5, $row1->available, 'rate1 availability must be rolled back.');
+        $this->assertSame('100.00', $row1->price->format(), 'rate1 price must be rolled back.');
     }
 
     protected function createRelativePricingSetup(

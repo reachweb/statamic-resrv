@@ -80,6 +80,37 @@ class AvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
+        // Bulk path: the mass-edit modal posts a single request carrying one group per
+        // editability signature ({price, available, rate_ids}). Applying every group in ONE
+        // transaction makes the whole edit atomic — a rejection on any group (the shared+relative
+        // price abort or the pending-holds guard) rolls back the groups already written, so a
+        // mixed-signature selection can never be left half-applied.
+        if (! empty($data['groups'])) {
+            // Combined (both-field) groups create the availability rows that single-field groups
+            // depend on (a shared rate's price override needs the base pool to exist), so apply them
+            // first within the shared transaction — independent of the order the client sent.
+            $groups = collect($data['groups'])
+                ->sortByDesc(fn ($group) => ! is_null($group['price'] ?? null) && ! is_null($group['available'] ?? null))
+                ->values()
+                ->all();
+
+            DB::transaction(function () use ($data, $groups) {
+                foreach ($groups as $group) {
+                    $payload = array_merge($data, [
+                        'price' => $group['price'] ?? null,
+                        'available' => $group['available'] ?? null,
+                    ]);
+                    unset($payload['groups']);
+
+                    foreach ($group['rate_ids'] as $rateId) {
+                        $this->updateAvailability($payload, (int) $rateId);
+                    }
+                }
+            });
+
+            return response()->json(['statamic_id' => $data['statamic_id']]);
+        }
+
         // validated() omits nullable keys absent from the request; normalise so the unconditional
         // is_null() reads below (and in the validation rule) don't hit undefined-array-key warnings.
         $data['price'] = $data['price'] ?? null;
@@ -87,9 +118,14 @@ class AvailabilityCpController extends Controller
 
         $rateIds = $data['rate_ids'] ?? $this->defaultRateIds($data['statamic_id']);
 
-        foreach ($rateIds as $rateId) {
-            $this->updateAvailability($data, (int) $rateId);
-        }
+        // Apply every rate in ONE transaction so a rejection on any rate (the shared+relative price
+        // abort or the pending-holds guard) rolls back the rates already written, instead of leaving
+        // a multi-rate edit half-applied. updateAvailability()'s own transaction nests as a savepoint.
+        DB::transaction(function () use ($rateIds, $data) {
+            foreach ($rateIds as $rateId) {
+                $this->updateAvailability($data, (int) $rateId);
+            }
+        });
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
@@ -275,6 +311,14 @@ class AvailabilityCpController extends Controller
 
         $isSharedIndependent = $rate && $rate->hasIndependentSharedPricing();
 
+        // Write the price to this rate's own availability row when the price belongs there: plain
+        // rates and relative+independent rates, whose own row stores the SOURCE price the relative
+        // modifier is applied to on read (see HandlesPricing::getPrices). Excluded are shared rates
+        // writing onto the base pool (resolvedRateId !== rateId) — shared+relative derives its price
+        // from the base modifier and shared+independent keeps per-date overrides in resrv_rate_prices.
+        // A legacy entry with no Rate row resolves to itself and behaves like a plain rate.
+        $writesPriceColumn = ! $isSharedIndependent && $resolvedRateId === $rateId;
+
         // Shared+relative rates derive their price from the modifier — block direct price edits.
         $skipPrice = ($resolvedRateId !== $rateId) && ! $isSharedIndependent;
 
@@ -291,7 +335,7 @@ class AvailabilityCpController extends Controller
             ], 422));
         }
 
-        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $skipPrice, $isSharedIndependent) {
+        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn) {
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $onlyDays = $data['onlyDays'] ?? null;
 
@@ -327,7 +371,7 @@ class AvailabilityCpController extends Controller
 
                 $toUpdate = [];
 
-                if (! is_null($data['price']) && ! $skipPrice && ! $isSharedIndependent) {
+                if (! is_null($data['price']) && $writesPriceColumn) {
                     $toUpdate['price'] = $data['price'];
                 }
 

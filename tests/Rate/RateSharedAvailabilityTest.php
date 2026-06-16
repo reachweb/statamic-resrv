@@ -631,6 +631,103 @@ class RateSharedAvailabilityTest extends TestCase
         $this->assertTrue($result);
     }
 
+    public function test_cp_price_only_edit_on_shared_relative_rate_is_rejected()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRelativeRate = Rate::factory()->relative()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+        ]);
+
+        $date = today()->toDateString();
+
+        // Seed base inventory via the CP endpoint so the date is stored as 'Y-m-d'.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 100,
+            'available' => 5,
+            'rate_ids' => [$baseRate->id],
+        ])->assertStatus(200);
+
+        // A price-only edit on a shared+relative rate is rejected — its price is derived from the base.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 250,
+            'available' => null,
+            'rate_ids' => [$sharedRelativeRate->id],
+        ])->assertStatus(422);
+
+        // Base price untouched and no override row created for the shared+relative rate.
+        $this->assertSame('100.00', Availability::where('rate_id', $baseRate->id)->where('date', $date)->first()->price->format());
+        $this->assertDatabaseMissing('resrv_rate_prices', [
+            'rate_id' => $sharedRelativeRate->id,
+            'statamic_id' => $entry->id(),
+        ]);
+    }
+
+    public function test_cp_combined_edit_on_shared_relative_rate_applies_availability_but_not_price()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRelativeRate = Rate::factory()->relative()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+        ]);
+
+        $date = today()->toDateString();
+
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 100,
+            'available' => 5,
+            'rate_ids' => [$baseRate->id],
+        ])->assertStatus(200);
+
+        // A combined edit (price + available) does not abort, but availability redirects to the
+        // shared base pool while the derived price is never persisted.
+        $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'price' => 250,
+            'available' => 9,
+            'rate_ids' => [$sharedRelativeRate->id],
+        ])->assertStatus(200);
+
+        $baseRow = Availability::where('rate_id', $baseRate->id)->where('date', $date)->first();
+        $this->assertEquals(9, $baseRow->available);
+        $this->assertSame('100.00', $baseRow->price->format());
+        $this->assertDatabaseMissing('resrv_rate_prices', [
+            'rate_id' => $sharedRelativeRate->id,
+            'statamic_id' => $entry->id(),
+        ]);
+    }
+
     public function test_shared_independent_rate_does_not_overwrite_base_rate_price()
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
