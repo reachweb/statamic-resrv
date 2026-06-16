@@ -143,10 +143,13 @@ const availabilityHint = computed(() => {
     return null;
 });
 
-// Build one request per field so each value only reaches the rates that accept it: availability
-// never redirects a shared rate's edit onto its (possibly unselected) base pool, and price never
-// lands on a derived/relative rate. This mirrors the single-date modal, which nulls locked fields
-// per rate — something a single multi-rate payload can't express, hence the split.
+// Build the payload(s) to POST. Each value must only reach the rates that accept it (availability
+// never redirects a shared rate's edit onto its base pool; price never lands on a mirror rate), yet
+// rates that accept BOTH fields must be edited together so the combined write can create new dates
+// (the CP validator only allows a single-field edit when priced rows already exist). When a rate is
+// in play, the selection is bucketed by (takesPrice, takesAvailable) signature and sent as ONE
+// request whose `groups` the backend applies in a single transaction — so even a mixed-signature
+// selection is fully atomic (no group can commit while another is rejected).
 function buildRequests() {
     const hasPrice = price.value !== null && price.value !== '';
     const hasAvailable = available.value !== null && available.value !== '';
@@ -169,22 +172,33 @@ function buildRequests() {
         return [fields];
     }
 
-    const idsAccepting = (field) => selectedDescriptors.value.filter((d) => d.editability[field]).map((d) => d.id);
+    // Bucket rates by their (takesPrice, takesAvailable) signature — considering only the fields the
+    // user actually filled in, so a blank field never forces a rate into its own group.
+    const groups = new Map();
+    for (const d of selectedDescriptors.value) {
+        const takesPrice = hasPrice && d.editability.price;
+        const takesAvailable = hasAvailable && d.editability.availability;
+        if (!takesPrice && !takesAvailable) {
+            continue;
+        }
+        const key = `${takesPrice ? 'p' : ''}${takesAvailable ? 'a' : ''}`;
+        if (!groups.has(key)) {
+            groups.set(key, { takesPrice, takesAvailable, ids: [] });
+        }
+        groups.get(key).ids.push(d.id);
+    }
 
-    const requests = [];
-    if (hasPrice) {
-        const ids = idsAccepting('price');
-        if (ids.length) {
-            requests.push({ ...base, price: price.value, available: null, rate_ids: ids });
-        }
+    if (groups.size === 0) {
+        return [];
     }
-    if (hasAvailable) {
-        const ids = idsAccepting('availability');
-        if (ids.length) {
-            requests.push({ ...base, price: null, available: available.value, rate_ids: ids });
-        }
-    }
-    return requests;
+
+    const groupPayload = Array.from(groups.values()).map(({ takesPrice, takesAvailable, ids }) => ({
+        price: takesPrice ? price.value : null,
+        available: takesAvailable ? available.value : null,
+        rate_ids: ids,
+    }));
+
+    return [{ ...base, groups: groupPayload }];
 }
 
 const { disableSave, errors, handleSuccess, handleErrors, clearErrors } = useFormHandler({
@@ -205,6 +219,9 @@ async function save() {
     disableSave.value = true;
     clearErrors();
     try {
+        // A rate-scoped edit is a single request whose `groups` the backend applies in one
+        // transaction, so the whole bulk edit is atomic. (The no-rate fallback is also a single
+        // request.) The loop simply posts whatever buildRequests() returns.
         for (const data of requests) {
             await axios.post('/cp/resrv/availability', data);
         }
@@ -214,9 +231,17 @@ async function save() {
     }
 }
 
+// Both fields blank means buildRequests() yields no requests and save() would no-op silently; block Save.
+const nothingToSubmit = computed(() => {
+    const hasPrice = price.value !== null && price.value !== '';
+    const hasAvailable = available.value !== null && available.value !== '';
+    return ! hasPrice && ! hasAvailable;
+});
+
 // An empty rate selection would post rate_ids: [], which the backend silently no-ops; block Save instead.
 // Likewise block Save when every selected rate locks both fields — there is nothing to submit.
 const saveDisabled = computed(() => disableSave.value
+    || nothingToSubmit.value
     || (Boolean(props.rate) && selectedRateIds.value.length === 0)
     || (selectedEditability.value.allPriceLocked && selectedEditability.value.allAvailabilityLocked));
 
