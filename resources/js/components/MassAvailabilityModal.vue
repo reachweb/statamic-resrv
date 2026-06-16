@@ -51,6 +51,7 @@
 <script setup>
 import { Button, Checkbox, CheckboxGroup, Combobox, DateRangePicker, Field, Input, Modal } from '@statamic/cms/ui';
 import { computed, reactive, ref } from 'vue';
+import axios from 'axios';
 import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useFormHandler } from '../composables/useFormHandler.js';
 import { rateEditability } from '../composables/useRateEditability.js';
@@ -142,39 +143,76 @@ const availabilityHint = computed(() => {
     return null;
 });
 
-const submit = computed(() => {
+// Build one request per field so each value only reaches the rates that accept it: availability
+// never redirects a shared rate's edit onto its (possibly unselected) base pool, and price never
+// lands on a derived/relative rate. This mirrors the single-date modal, which nulls locked fields
+// per rate — something a single multi-rate payload can't express, hence the split.
+function buildRequests() {
     const hasPrice = price.value !== null && price.value !== '';
     const hasAvailable = available.value !== null && available.value !== '';
 
-    const fields = {
+    const base = {
         date_start: dates.start,
         date_end: dates.end,
         statamic_id: props.parentId,
-        price: hasPrice ? price.value : null,
-        available: hasAvailable ? available.value : null,
     };
     if (onlyDays.value.length > 0) {
-        fields.onlyDays = onlyDays.value;
+        base.onlyDays = onlyDays.value;
     }
-    if (props.rate) {
-        // A price-only edit on a price-locked rate either errors (shared+relative aborts the
-        // whole batch) or is a dead no-op (relative). When only a price is being set, restrict
-        // it to the rates that can actually accept one.
-        const priceOnly = hasPrice && !hasAvailable && props.rates.length > 0;
-        fields.rate_ids = priceOnly
-            ? selectedDescriptors.value.filter((d) => d.editability.price).map((d) => d.id)
-            : selectedRateIds.value;
-    }
-    return fields;
-});
 
-const { disableSave, errors, save } = useFormHandler({
-    submit,
+    // No rate context (single-rate-less entry) or rate metadata unavailable: one unscoped request.
+    if (!props.rate || selectedDescriptors.value.length === 0) {
+        const fields = { ...base, price: hasPrice ? price.value : null, available: hasAvailable ? available.value : null };
+        if (props.rate) {
+            fields.rate_ids = selectedRateIds.value;
+        }
+        return [fields];
+    }
+
+    const idsAccepting = (field) => selectedDescriptors.value.filter((d) => d.editability[field]).map((d) => d.id);
+
+    const requests = [];
+    if (hasPrice) {
+        const ids = idsAccepting('price');
+        if (ids.length) {
+            requests.push({ ...base, price: price.value, available: null, rate_ids: ids });
+        }
+    }
+    if (hasAvailable) {
+        const ids = idsAccepting('availability');
+        if (ids.length) {
+            requests.push({ ...base, price: null, available: available.value, rate_ids: ids });
+        }
+    }
+    return requests;
+}
+
+const { disableSave, errors, handleSuccess, handleErrors, clearErrors } = useFormHandler({
+    // submit is unused: this modal posts one request per editable field (see save() below) rather
+    // than a single payload, so the handler is reused only for its error/toast/disable state.
+    submit: computed(() => ({})),
     postUrl: '/cp/resrv/availability',
     method: 'post',
     successMessage: 'Availability successfully saved',
     emit,
 });
+
+async function save() {
+    const requests = buildRequests();
+    if (requests.length === 0) {
+        return;
+    }
+    disableSave.value = true;
+    clearErrors();
+    try {
+        for (const data of requests) {
+            await axios.post('/cp/resrv/availability', data);
+        }
+        handleSuccess();
+    } catch (error) {
+        handleErrors(error.response);
+    }
+}
 
 // An empty rate selection would post rate_ids: [], which the backend silently no-ops; block Save instead.
 // Likewise block Save when every selected rate locks both fields — there is nothing to submit.
