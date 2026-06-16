@@ -435,6 +435,8 @@ class RateAvailabilityTest extends TestCase
         // No existing rows for this date: a price-only group cannot create one, so it must be rejected.
         $date = today()->addDays(20)->toDateString();
 
+        // The failure is keyed by its group bucket (groups.0). The CP folds group-level messages into
+        // a general alert, so this key must stay stable for the user to ever see why Save failed.
         $this->postJson(cp_route('resrv.availability.update'), [
             'statamic_id' => $entry->id(),
             'date_start' => $date,
@@ -442,13 +444,38 @@ class RateAvailabilityTest extends TestCase
             'groups' => [
                 ['price' => 100, 'available' => null, 'rate_ids' => [$rate->id]],
             ],
-        ])->assertStatus(422);
+        ])->assertStatus(422)->assertJsonValidationErrors(['groups.0']);
 
         $this->assertDatabaseMissing('resrv_availabilities', [
             'rate_id' => $rate->id,
             'statamic_id' => $entry->id(),
             'date' => $date,
         ]);
+    }
+
+    public function test_grouped_bulk_update_keys_field_errors_under_their_group_bucket()
+    {
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $rate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base']);
+
+        $date = today()->toDateString();
+
+        // A non-numeric price fails the numeric rule under the group bucket (groups.0.price). The CP
+        // folds groups.N.price onto the visible Price field, so this key must stay stable — and the
+        // message itself must not leak the internal bucket key to the user.
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $entry->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'groups' => [
+                ['price' => 'not-a-number', 'available' => 5, 'rate_ids' => [$rate->id]],
+            ],
+        ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors(['groups.0.price']);
+        $this->assertStringNotContainsString('groups', implode(' ', $response->json('errors')['groups.0.price']));
     }
 
     public function test_grouped_bulk_update_creates_base_rows_for_a_dependent_price_only_group()

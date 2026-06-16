@@ -1,6 +1,10 @@
 <template>
     <Modal :open="true" :title="__('Change availability')" icon="calendar-date" @dismissed="emit('cancel')">
         <div class="space-y-6 p-2">
+            <Alert v-if="generalErrors" variant="error">
+                <div v-for="(message, index) in generalErrors" :key="index">{{ message }}</div>
+            </Alert>
+
             <Field v-if="rate" :label="__('Rates')">
                 <template #actions>
                     <Button size="xs" variant="ghost" :text="__('Select all')" @click="selectAllRates" />
@@ -19,10 +23,10 @@
             </Field>
 
             <div class="grid grid-cols-2 gap-x-4 gap-y-6">
-                <Field :label="__('Available')" :errors="errors.available" :instructions="availabilityHint">
+                <Field :label="__('Available')" :errors="availableErrors" :instructions="availabilityHint">
                     <Input v-model="available" :disabled="selectedEditability.allAvailabilityLocked" />
                 </Field>
-                <Field :label="__('Price')" :errors="errors.price" :instructions="priceHint">
+                <Field :label="__('Price')" :errors="priceErrors" :instructions="priceHint">
                     <Input v-model="price" :disabled="selectedEditability.allPriceLocked" />
                 </Field>
             </div>
@@ -49,7 +53,7 @@
 </template>
 
 <script setup>
-import { Button, Checkbox, CheckboxGroup, Combobox, DateRangePicker, Field, Input, Modal } from '@statamic/cms/ui';
+import { Alert, Button, Checkbox, CheckboxGroup, Combobox, DateRangePicker, Field, Input, Modal } from '@statamic/cms/ui';
 import { computed, reactive, ref } from 'vue';
 import axios from 'axios';
 import { useDateRangeModel } from '../composables/useDateRangeModel.js';
@@ -154,6 +158,13 @@ function buildRequests() {
     const hasPrice = price.value !== null && price.value !== '';
     const hasAvailable = available.value !== null && available.value !== '';
 
+    // Nothing entered means there is nothing to send. Returning [] here (rather than relying on a
+    // separate guard) keeps this the single source of truth for what a save would actually post, so
+    // saveDisabled and save() can never disagree.
+    if (!hasPrice && !hasAvailable) {
+        return [];
+    }
+
     const base = {
         date_start: dates.start,
         date_end: dates.end,
@@ -202,8 +213,8 @@ function buildRequests() {
 }
 
 const { disableSave, errors, handleSuccess, handleErrors, clearErrors } = useFormHandler({
-    // submit is unused: this modal posts one request per editable field (see save() below) rather
-    // than a single payload, so the handler is reused only for its error/toast/disable state.
+    // submit is unused: save() builds and posts its own request(s) via buildRequests() (see below)
+    // rather than submitting this payload, so the handler is reused only for its error/toast/disable state.
     submit: computed(() => ({})),
     postUrl: '/cp/resrv/availability',
     method: 'post',
@@ -211,9 +222,14 @@ const { disableSave, errors, handleSuccess, handleErrors, clearErrors } = useFor
     emit,
 });
 
+// A save posts exactly what buildRequests() produces. Computing it here makes it the single source
+// of truth shared by save() and saveDisabled, so Save can never be enabled for an edit that resolves
+// to nothing — e.g. a value typed for a field that every (possibly narrowed) selected rate locks,
+// which buildRequests() drops, leaving []. (buildRequests() also returns [] when no value is entered.)
+const requests = computed(() => buildRequests());
+
 async function save() {
-    const requests = buildRequests();
-    if (requests.length === 0) {
+    if (requests.value.length === 0) {
         return;
     }
     disableSave.value = true;
@@ -221,8 +237,8 @@ async function save() {
     try {
         // A rate-scoped edit is a single request whose `groups` the backend applies in one
         // transaction, so the whole bulk edit is atomic. (The no-rate fallback is also a single
-        // request.) The loop simply posts whatever buildRequests() returns.
-        for (const data of requests) {
+        // request.) The loop simply posts whatever buildRequests() returned.
+        for (const data of requests.value) {
             await axios.post('/cp/resrv/availability', data);
         }
         handleSuccess();
@@ -231,24 +247,48 @@ async function save() {
     }
 }
 
-// Both fields blank means buildRequests() yields no requests and save() would no-op silently; block Save.
-const nothingToSubmit = computed(() => {
-    const hasPrice = price.value !== null && price.value !== '';
-    const hasAvailable = available.value !== null && available.value !== '';
-    return ! hasPrice && ! hasAvailable;
+// Block Save whenever there is nothing to post: no value entered, or every entered value is filtered
+// out because the (possibly narrowed) rate selection locks those fields — both collapse requests to
+// []. An empty rate selection would post rate_ids: [], which the backend silently no-ops, so block
+// that explicitly: buildRequests() falls back to one unscoped request in that case (length 1).
+const saveDisabled = computed(() => disableSave.value
+    || requests.value.length === 0
+    || (Boolean(props.rate) && selectedRateIds.value.length === 0));
+
+// 422s from the grouped bulk path key errors by internal bucket names the user never sees
+// (`groups.0`, `groups.0.price`, …). Fold field-scoped group errors back onto the visible Price and
+// Available fields, keep date errors on the date picker, and surface everything else (group-level
+// messages like "availability does not exist", rate_ids, statamic_id) in a general alert — so a 422
+// carrying an `errors` object is never silently swallowed (handleErrors() suppresses its toast).
+function collectErrors(matches) {
+    const all = errors.value ?? {};
+    const out = [];
+    for (const [key, messages] of Object.entries(all)) {
+        if (matches(key)) {
+            out.push(...(Array.isArray(messages) ? messages : [messages]));
+        }
+    }
+    return out;
+}
+
+const priceErrors = computed(() => {
+    const out = collectErrors((key) => key === 'price' || /^groups\.\d+\.price$/.test(key));
+    return out.length ? out : null;
 });
 
-// An empty rate selection would post rate_ids: [], which the backend silently no-ops; block Save instead.
-// Likewise block Save when every selected rate locks both fields — there is nothing to submit.
-const saveDisabled = computed(() => disableSave.value
-    || nothingToSubmit.value
-    || (Boolean(props.rate) && selectedRateIds.value.length === 0)
-    || (selectedEditability.value.allPriceLocked && selectedEditability.value.allAvailabilityLocked));
+const availableErrors = computed(() => {
+    const out = collectErrors((key) => key === 'available' || /^groups\.\d+\.available$/.test(key));
+    return out.length ? out : null;
+});
 
 const dateErrors = computed(() => {
-    const out = [];
-    if (errors.value?.date_start) out.push(...errors.value.date_start);
-    if (errors.value?.date_end) out.push(...errors.value.date_end);
+    const out = collectErrors((key) => key === 'date_start' || key === 'date_end');
     return out.length ? out : null;
+});
+
+const FIELD_SCOPED_ERROR = /^(price|available|date_start|date_end|groups\.\d+\.(price|available))$/;
+const generalErrors = computed(() => {
+    const unique = [...new Set(collectErrors((key) => ! FIELD_SCOPED_ERROR.test(key)))];
+    return unique.length ? unique : null;
 });
 </script>
