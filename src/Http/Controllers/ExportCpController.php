@@ -66,7 +66,7 @@ class ExportCpController extends Controller
             fputcsv($handle, array_map(fn ($field) => $field['label'], $fields));
 
             $this->baseQuery($data)
-                ->with(['customer', 'extras', 'options.values', 'rate', 'childs.rate'])
+                ->with(['customer', 'extras', 'options.values', 'rate', 'childs.rate', 'affiliate'])
                 ->lazyById(500)
                 ->each(function (Reservation $reservation) use ($handle, $fields) {
                     $row = [];
@@ -104,12 +104,16 @@ class ExportCpController extends Controller
             'statuses.*' => 'in:'.implode(',', self::STATUSES),
             'item_id' => 'sometimes|nullable|string',
             'affiliate_id' => 'sometimes|nullable|integer',
+            'commission_status' => 'sometimes|nullable|in:all,active,cancelled',
             'with_customer_data' => 'sometimes|boolean',
         ];
     }
 
     protected function baseQuery(array $data)
     {
+        $affiliateId = $data['affiliate_id'] ?? null;
+        $commissionStatus = $data['commission_status'] ?? 'all';
+
         return Reservation::query()
             ->whereDate('date_start', '>=', $data['start'])
             ->whereDate('date_start', '<=', $data['end'])
@@ -119,11 +123,18 @@ class ExportCpController extends Controller
                 fn ($query, $itemId) => $query->where('item_id', $itemId)
             )
             ->when(
-                $data['affiliate_id'] ?? null,
-                fn ($query, $affiliateId) => $query->whereHas(
-                    'affiliate',
-                    fn ($q) => $q->where('resrv_affiliates.id', $affiliateId)
-                )
+                $affiliateId || $commissionStatus !== 'all',
+                fn ($query) => $query->whereHas('affiliate', function ($q) use ($affiliateId, $commissionStatus) {
+                    if ($affiliateId) {
+                        $q->where('resrv_affiliates.id', $affiliateId);
+                    }
+
+                    if ($commissionStatus === 'active') {
+                        $q->whereNull('resrv_reservation_affiliate.cancelled_at');
+                    } elseif ($commissionStatus === 'cancelled') {
+                        $q->whereNotNull('resrv_reservation_affiliate.cancelled_at');
+                    }
+                })
             )
             ->when(
                 $data['with_customer_data'] ?? false,
@@ -290,9 +301,61 @@ class ExportCpController extends Controller
                     })
                     ->implode(', '),
             ],
+            'affiliate_code' => [
+                'label' => __('Affiliate code'),
+                'group' => __('Affiliate'),
+                'value' => fn (Reservation $r) => $this->reservationAffiliate($r)?->code,
+            ],
+            'affiliate_name' => [
+                'label' => __('Affiliate name'),
+                'group' => __('Affiliate'),
+                'value' => fn (Reservation $r) => $this->reservationAffiliate($r)?->name,
+            ],
+            'affiliate_email' => [
+                'label' => __('Affiliate email'),
+                'group' => __('Affiliate'),
+                'value' => fn (Reservation $r) => $this->reservationAffiliate($r)?->email,
+            ],
+            'affiliate_fee' => [
+                'label' => __('Affiliate fee (%)'),
+                'group' => __('Affiliate'),
+                'value' => fn (Reservation $r) => ($affiliate = $this->reservationAffiliate($r))
+                    ? (float) $affiliate->pivot->fee
+                    : null,
+            ],
+            'affiliate_commission' => [
+                'label' => __('Affiliate commission'),
+                'group' => __('Affiliate'),
+                'value' => function (Reservation $r) {
+                    $affiliate = $this->reservationAffiliate($r);
+
+                    if (! $affiliate) {
+                        return null;
+                    }
+
+                    // A cancelled commission is no longer payable, so it exports as a formatted zero.
+                    if ($affiliate->pivot->cancelled_at !== null) {
+                        return $r->total->multiply(0)->format();
+                    }
+
+                    return $r->total->multiply((float) $affiliate->pivot->fee / 100)->format();
+                },
+            ],
+            'affiliate_commission_status' => [
+                'label' => __('Commission status'),
+                'group' => __('Affiliate'),
+                'value' => fn (Reservation $r) => ($affiliate = $this->reservationAffiliate($r))
+                    ? ($affiliate->pivot->cancelled_at !== null ? 'cancelled' : 'active')
+                    : null,
+            ],
         ];
 
         return $base + $this->dynamicCustomerFieldDefinitions($base);
+    }
+
+    protected function reservationAffiliate(Reservation $reservation): ?Affiliate
+    {
+        return $reservation->affiliate->first();
     }
 
     /**
