@@ -12,6 +12,7 @@ use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Listeners\CancelAffiliateCommission;
 use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
@@ -79,6 +80,26 @@ class AffiliateCommissionCancellationTest extends TestCase
         $this->mockRefundGateway();
 
         $changed = app(ReservationRefundProcessor::class)->cancelByCustomer($reservation);
+
+        $this->assertTrue($changed);
+        $this->assertCommissionCancelled($reservation);
+    }
+
+    public function test_commission_is_cancelled_even_when_availability_restore_throws()
+    {
+        Mail::fake();
+
+        $affiliate = Affiliate::factory()->create(['fee' => 20]);
+        $reservation = $this->makeAffiliateReservation($affiliate, ['status' => 'confirmed', 'payment_id' => 'pi_123']);
+
+        $this->mockRefundGateway();
+
+        // Availability restore throws, halting the chain; commission cancellation runs first, so it survives.
+        $this->mock(Availability::class, function ($mock) {
+            $mock->shouldReceive('incrementAvailability')->andThrow(new \RuntimeException('availability boom'));
+        });
+
+        $changed = app(ReservationRefundProcessor::class)->refund($reservation);
 
         $this->assertTrue($changed);
         $this->assertCommissionCancelled($reservation);
