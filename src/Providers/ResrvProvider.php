@@ -37,6 +37,7 @@ use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\AddResrvEntryToDatabase;
 use Reach\StatamicResrv\Listeners\AssociateAffiliateFromCoupon;
+use Reach\StatamicResrv\Listeners\CancelAffiliateCommission;
 use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
@@ -145,6 +146,7 @@ class ResrvProvider extends AddonServiceProvider
         ReservationRefunded::class => [
             SendRefundReservationEmails::class,
             IncreaseAvailability::class,
+            CancelAffiliateCommission::class,
         ],
         CouponUpdated::class => [
             UpdateCouponAppliedToReservation::class,

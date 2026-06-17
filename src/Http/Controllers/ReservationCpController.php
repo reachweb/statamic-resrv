@@ -171,6 +171,7 @@ class ReservationCpController extends Controller
                     'email' => $affiliate->email,
                     'fee' => $fee,
                     'fee_amount_formatted' => $reservation->total->multiply($fee / 100)->format(),
+                    'commission_cancelled' => $affiliate->pivot->cancelled_at !== null,
                 ];
             })() : null,
             'dynamic_pricings' => $reservation->dynamicPricings->map(fn ($pricing) => [

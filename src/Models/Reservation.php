@@ -95,7 +95,7 @@ class Reservation extends Model
 
     public function affiliate(): BelongsToMany
     {
-        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee');
+        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee', 'cancelled_at');
     }
 
     public function rate(): BelongsTo

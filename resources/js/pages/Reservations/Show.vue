@@ -193,7 +193,12 @@ const statusLabel = computed(() => props.reservation.status?.toUpperCase() ?? ''
                 <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
                     <div>{{ __('Preliminary fee to be paid') }}</div>
                     <div class="font-bold">
-                        {{ currencySymbol }} {{ reservation.affiliate.fee_amount_formatted }}
+                        <span v-if="reservation.affiliate.commission_cancelled" class="text-red-500">
+                            {{ __('Commission cancelled') }}
+                        </span>
+                        <span v-else>
+                            {{ currencySymbol }} {{ reservation.affiliate.fee_amount_formatted }}
+                        </span>
                     </div>
                 </div>
             </Card>
