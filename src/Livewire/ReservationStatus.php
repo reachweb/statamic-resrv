@@ -120,6 +120,9 @@ class ReservationStatus extends Component
             return;
         }
 
+        // Start each attempt clean so a successful retry never renders a prior failure's error.
+        $this->resetErrorBag('cancellation');
+
         try {
             app(ReservationRefundProcessor::class)->cancelByCustomer($reservation);
         } catch (CancellationNotAllowed) {

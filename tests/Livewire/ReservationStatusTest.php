@@ -9,6 +9,7 @@ use Livewire\Livewire;
 use Reach\StatamicResrv\Events\ReservationCancelledByCustomer;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Jobs\SendCancelledReservationEmails as SendCancelledReservationEmailsJob;
@@ -518,6 +519,43 @@ class ReservationStatusTest extends TestCase
 
         Event::assertNotDispatched(ReservationRefunded::class);
         Event::assertNotDispatched(ReservationCancelledByCustomer::class);
+    }
+
+    public function test_cancel_retry_after_a_transient_failure_ends_in_a_clean_success_state()
+    {
+        Event::fake([ReservationRefunded::class, ReservationCancelledByCustomer::class]);
+
+        $reservation = $this->makeReservation();
+
+        // The first refund fails transiently; the retry succeeds.
+        $gateway = \Mockery::mock(FakePaymentGateway::class)->makePartial();
+        $attempt = 0;
+        $gateway->shouldReceive('refund')->andReturnUsing(function () use (&$attempt) {
+            if (++$attempt === 1) {
+                throw new RefundFailedException('transient gateway error');
+            }
+
+            return true;
+        });
+        $manager = \Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldReceive('forReservation')->andReturn($gateway);
+        app()->instance(PaymentGatewayManager::class, $manager);
+
+        $component = Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false)
+            ->assertSee(trans('statamic-resrv::frontend.cancellationFailed'));
+
+        // The retry succeeds: no stale "something went wrong" error beside the success notice.
+        $component->call('cancel')
+            ->assertHasNoErrors()
+            ->assertSet('cancelled', true)
+            ->assertSee(trans('statamic-resrv::frontend.reservationCancelledSuccess'))
+            ->assertDontSee(trans('statamic-resrv::frontend.cancellationFailed'));
     }
 
     public function test_offline_payment_reservations_cannot_be_cancelled_online()

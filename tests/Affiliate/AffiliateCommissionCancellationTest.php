@@ -4,12 +4,14 @@ namespace Reach\StatamicResrv\Tests\Affiliate;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationRefunded;
+use Reach\StatamicResrv\Jobs\SendRefundReservationEmails as SendRefundJob;
 use Reach\StatamicResrv\Listeners\CancelAffiliateCommission;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
@@ -103,6 +105,27 @@ class AffiliateCommissionCancellationTest extends TestCase
 
         $this->assertTrue($changed);
         $this->assertCommissionCancelled($reservation);
+    }
+
+    public function test_availability_restore_runs_before_the_refund_email()
+    {
+        Mail::fake();
+        Bus::fake([SendRefundJob::class]);
+
+        $affiliate = Affiliate::factory()->create(['fee' => 20]);
+        $reservation = $this->makeAffiliateReservation($affiliate, ['status' => 'confirmed', 'payment_id' => 'pi_123']);
+
+        $this->mockRefundGateway();
+
+        // Availability throws and halts the chain; the email listener sits after it, so it is never
+        // reached — proving the critical inventory restore is not gated behind email dispatch.
+        $this->mock(Availability::class, function ($mock) {
+            $mock->shouldReceive('incrementAvailability')->andThrow(new \RuntimeException('availability boom'));
+        });
+
+        app(ReservationRefundProcessor::class)->refund($reservation);
+
+        Bus::assertNotDispatchedAfterResponse(SendRefundJob::class);
     }
 
     public function test_a_coupon_attributed_affiliate_commission_is_cancelled_on_refund()

@@ -143,12 +143,13 @@ class ResrvProvider extends AddonServiceProvider
         ReservationCancelledByCustomer::class => [
             SendCancelledReservationEmails::class,
         ],
-        // A throwing sync listener halts the chain (the refund still reports success), so the
-        // DB-heavy availability restore runs last where its failure can't leave the commission payable.
+        // A throwing listener halts the rest of the chain (the refund still reports success), so
+        // order by descending importance — commission (money owed), then inventory, then email —
+        // and any failure only blocks lower-priority work.
         ReservationRefunded::class => [
             CancelAffiliateCommission::class,
-            SendRefundReservationEmails::class,
             IncreaseAvailability::class,
+            SendRefundReservationEmails::class,
         ],
         CouponUpdated::class => [
             UpdateCouponAppliedToReservation::class,
