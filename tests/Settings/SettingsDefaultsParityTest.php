@@ -48,6 +48,7 @@ class SettingsDefaultsParityTest extends TestCase
         'admin_email',
         'checkout_entry',
         'checkout_completed_entry',
+        'reservation_status_entry',
         'checkout_forms_default',
         'checkout_forms_collections',
         'checkout_forms_entries',

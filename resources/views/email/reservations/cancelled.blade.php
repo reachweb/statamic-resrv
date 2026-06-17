@@ -44,12 +44,20 @@
 @endforeach
 @endif
 
-@if ($reservation->hasGatewayPayment())
+@if ($reservation->refundIsAutomatic())
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|
 | {{ __("Refunded to the customer") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
 @endcomponent
+@elseif ($reservation->hasGatewayPayment())
+@component('mail::table')
+|{{ __("Refund information") }}||
+| :----------------------------- |:----------------|
+| {{ __("Action required — refund the customer manually") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
+@endcomponent
+
+{{ __("This payment method does not support automatic refunds. Please return the above amount to the customer manually.") }}
 @endif
 
 {{ __("Thank you") }},<br>

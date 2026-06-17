@@ -197,7 +197,10 @@ class ReservationEmailConfigResolver
                 'from' => ['address' => null, 'name' => null],
                 'subject' => null,
                 'markdown' => 'statamic-resrv::email.reservations.refunded',
-                'recipients' => [['type' => 'customer'], ['type' => 'admins']],
+                // Customer-facing only. Admins are notified about a customer self-cancellation via
+                // the AdminCancelled email (which also tells them when a manual refund is required);
+                // a CP-initiated refund is admin-driven, so no admin copy is needed there either.
+                'recipients' => [['type' => 'customer']],
             ],
             ReservationEmailEvent::CustomerAbandoned->value => [
                 'enabled' => true,

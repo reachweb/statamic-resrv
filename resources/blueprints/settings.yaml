@@ -293,6 +293,14 @@ tabs:
                 - required
               instructions: 'The [Checkout complete](https://resrv.dev/checkout#checkout-complete) page that includes the `resrv_checkout_redirect` tag.'
           -
+            handle: reservation_status_entry
+            field:
+              display: 'Reservation Status Entry'
+              type: entries
+              max_items: 1
+              localizable: false
+              instructions: 'Optional. The Statamic entry that loads the `reservation-status` Livewire component. When set, confirmation emails include a "Manage your booking" link to this page so customers can view or cancel their reservation without re-entering their details.'
+          -
             handle: payment
             field:
               display: 'Payment type'

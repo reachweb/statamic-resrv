@@ -325,6 +325,18 @@ class Reservation extends Model
     }
 
     /**
+     * Whether refunding this reservation returns the money automatically through the gateway —
+     * true only when a charge actually reached a gateway AND that gateway supports API refunds.
+     * False for offline/manual gateways (an admin must return the funds by hand) and for no-charge
+     * bookings (nothing to return). Drives the "refunded" vs "refund manually" wording in the
+     * customer and admin cancellation emails.
+     */
+    public function refundIsAutomatic(): bool
+    {
+        return $this->hasGatewayPayment() && $this->supportsAutomaticRefund();
+    }
+
+    /**
      * Amount actually collected: payment + payment_surcharge (the sum the intent charged and
      * the webhook verifies). Independent of current payment-mode config, which would misreport
      * bookings made before a mode change. Zero when no charge reached a gateway.
@@ -355,6 +367,43 @@ class Reservation extends Model
         $email = $this->customer?->email;
 
         return $email ? hash_hmac('sha256', $email, config('app.key')) : null;
+    }
+
+    /**
+     * Absolute "manage your booking" deep link to the reservation-status page, or null when the
+     * status page entry is unconfigured/missing/unroutable or the reservation has no customer email
+     * to authenticate with. Carries the reference plus customerLookupHash() so the page opens
+     * (and offers cancellation) without the customer re-entering anything.
+     */
+    public function customerStatusUrl(): ?string
+    {
+        $entryId = config('resrv-config.reservation_status_entry');
+
+        // The entries fieldtype may surface its single value as a one-element array.
+        if (is_array($entryId)) {
+            $entryId = $entryId[0] ?? null;
+        }
+
+        if (! is_string($entryId) || $entryId === '') {
+            return null;
+        }
+
+        $hash = $this->customerLookupHash();
+
+        if ($hash === null || ! $this->reference) {
+            return null;
+        }
+
+        $entry = Entry::find($entryId);
+
+        if (! $entry || ! $entry->url()) {
+            return null;
+        }
+
+        return $entry->absoluteUrl().'?'.http_build_query([
+            'ref' => $this->reference,
+            'hash' => $hash,
+        ]);
     }
 
     /**

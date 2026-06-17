@@ -285,7 +285,7 @@ class ReservationEmailConfigurationTest extends TestCase
         });
     }
 
-    public function test_refunded_default_recipients_include_customer_and_admins()
+    public function test_refunded_default_recipients_are_customer_only()
     {
         Mail::fake();
         $item = $this->makeStatamicItem();
@@ -301,21 +301,13 @@ class ReservationEmailConfigurationTest extends TestCase
             new ReservationRefunded($reservation),
         );
 
-        Mail::assertSent(ReservationRefunded::class, 3);
+        // The refund email is customer-facing only; admins learn about a customer self-cancellation
+        // via the AdminCancelled email (which also flags when a manual refund is required).
+        Mail::assertSent(ReservationRefunded::class, 1);
         Mail::assertSent(ReservationRefunded::class, function (ReservationRefunded $mail) use ($reservation) {
             return $mail->hasTo($reservation->customer->email)
                 && ! $mail->hasTo('admin1@example.com')
                 && ! $mail->hasTo('admin2@example.com');
-        });
-        Mail::assertSent(ReservationRefunded::class, function (ReservationRefunded $mail) use ($reservation) {
-            return $mail->hasTo('admin1@example.com')
-                && ! $mail->hasTo($reservation->customer->email)
-                && ! $mail->hasTo('admin2@example.com');
-        });
-        Mail::assertSent(ReservationRefunded::class, function (ReservationRefunded $mail) use ($reservation) {
-            return $mail->hasTo('admin2@example.com')
-                && ! $mail->hasTo($reservation->customer->email)
-                && ! $mail->hasTo('admin1@example.com');
         });
     }
 
@@ -341,15 +333,11 @@ class ReservationEmailConfigurationTest extends TestCase
             new ReservationRefunded($reservation),
         );
 
-        Mail::assertSent(ReservationRefunded::class, 2);
+        // A subject-only override preserves the (now customer-only) default recipient set.
+        Mail::assertSent(ReservationRefunded::class, 1);
         Mail::assertSent(ReservationRefunded::class, function (ReservationRefunded $mail) use ($reservation) {
             return $mail->hasTo($reservation->customer->email)
                 && ! $mail->hasTo('admin1@example.com')
-                && $mail->subject === 'Refund processed';
-        });
-        Mail::assertSent(ReservationRefunded::class, function (ReservationRefunded $mail) use ($reservation) {
-            return $mail->hasTo('admin1@example.com')
-                && ! $mail->hasTo($reservation->customer->email)
                 && $mail->subject === 'Refund processed';
         });
     }

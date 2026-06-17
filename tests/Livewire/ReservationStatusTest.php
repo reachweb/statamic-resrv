@@ -15,6 +15,7 @@ use Reach\StatamicResrv\Jobs\SendCancelledReservationEmails as SendCancelledRese
 use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails as SendCancelledReservationEmailsListener;
 use Reach\StatamicResrv\Livewire\ReservationStatus;
 use Reach\StatamicResrv\Mail\ReservationCancelled as ReservationCancelledMail;
+use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationRefunded as ReservationRefundedMail;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Reservation;
@@ -673,6 +674,57 @@ class ReservationStatusTest extends TestCase
 
         $html = (new ReservationCancelledMail($paid))->render();
         $this->assertStringContainsString('Refunded to the customer', $html);
+    }
+
+    public function test_cancelled_email_asks_admins_to_refund_manually_for_offline_gateways()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $reservation = $this->makeReservation([
+            'status' => 'refunded',
+            'payment_gateway' => 'offline',
+            'payment_id' => 'offline_test_intent',
+        ]);
+
+        $html = (new ReservationCancelledMail($reservation))->render();
+
+        $this->assertStringContainsString('refund the customer manually', $html);
+        $this->assertStringNotContainsString('Refunded to the customer', $html);
+    }
+
+    public function test_customer_status_url_is_null_without_a_configured_status_entry()
+    {
+        $reservation = $this->makeReservation();
+
+        $this->assertNull($reservation->customerStatusUrl());
+    }
+
+    public function test_customer_status_url_builds_an_authenticated_deep_link_when_configured()
+    {
+        $page = $this->makeStatamicItem();
+        Config::set('resrv-config.reservation_status_entry', $page->id());
+
+        $reservation = $this->makeReservation();
+        $url = $reservation->customerStatusUrl();
+
+        $this->assertNotNull($url);
+        $this->assertStringContainsString('ref='.$reservation->reference, $url);
+        $this->assertStringContainsString('hash='.$reservation->customerLookupHash(), $url);
+    }
+
+    public function test_confirmation_email_links_to_the_status_page_when_configured()
+    {
+        $page = $this->makeStatamicItem();
+        Config::set('resrv-config.reservation_status_entry', $page->id());
+
+        $reservation = $this->makeReservation();
+        $html = (new ReservationConfirmedMail($reservation))->render();
+
+        $this->assertStringContainsString('Manage your booking', $html);
+        $this->assertStringContainsString('ref='.$reservation->reference, $html);
     }
 
     public function test_customer_cancellation_event_is_wired_to_the_email_listener()

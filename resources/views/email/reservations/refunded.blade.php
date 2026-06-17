@@ -7,7 +7,7 @@
 {{ __("Tel:") }} {{ config('resrv-config.phone') }}<br>
 {{ __("Email:") }} {{ config('resrv-config.mail') }}
 
-@if ($reservation->hasGatewayPayment())
+@if ($reservation->refundIsAutomatic())
 {{ __("Your reservation has been refunded.") }}
 @else
 {{ __("Your reservation has been cancelled.") }}
@@ -20,7 +20,7 @@
 {{ __("Email") }}: **{{ $reservation->customer?->email }}**
 @endcomponent
 
-@if ($reservation->hasGatewayPayment())
+@if ($reservation->refundIsAutomatic())
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|
