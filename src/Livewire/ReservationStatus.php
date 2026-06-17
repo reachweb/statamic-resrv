@@ -28,6 +28,14 @@ class ReservationStatus extends Component
 
     public bool $cancelled = false;
 
+    /**
+     * Set when an attempted deep link (?ref=&hash=) failed to resolve for any reason, so the
+     * blade can show a neutral "this link didn't work, use the form" notice instead of an
+     * unexplained empty form. Never reveals which failure occurred (preserves the rate-limit
+     * and reference-enumeration posture).
+     */
+    public bool $linkFailed = false;
+
     public function mount(): void
     {
         $this->loadReservationFromUri();
@@ -41,12 +49,19 @@ class ReservationStatus extends Component
         $reference = request()->query('ref');
         $hash = request()->query('hash');
 
-        if (! is_string($reference) || ! is_string($hash) || strlen($hash) !== 64) {
+        // No deep link supplied — render the normal lookup form.
+        if (! is_string($reference) || $reference === '' || ! is_string($hash) || $hash === '') {
             return;
         }
 
-        // Shares the lookup form's per-(IP, reference) budget so mount can't brute-force the hash.
-        if (RateLimiter::tooManyAttempts($this->rateLimiterKey($reference), 10)) {
+        // A link was attempted: on any failure surface a single neutral notice (never the cause,
+        // to preserve the rate-limit/enumeration posture) so the customer knows the link — not the
+        // page — is at fault. Shares the lookup form's per-(IP, reference) budget so mount can't
+        // brute-force the hash.
+        if (strlen($hash) !== 64
+            || RateLimiter::tooManyAttempts($this->rateLimiterKey($reference), 10)) {
+            $this->linkFailed = true;
+
             return;
         }
 
@@ -54,6 +69,7 @@ class ReservationStatus extends Component
 
         if ($reservation === null) {
             RateLimiter::hit($this->rateLimiterKey($reference), 600);
+            $this->linkFailed = true;
 
             return;
         }
@@ -63,6 +79,8 @@ class ReservationStatus extends Component
 
     public function lookup(): void
     {
+        $this->linkFailed = false;
+
         $this->validate();
 
         if (RateLimiter::tooManyAttempts($this->rateLimiterKey($this->reference), 10)) {
@@ -134,6 +152,7 @@ class ReservationStatus extends Component
     {
         $this->reservationId = null;
         $this->cancelled = false;
+        $this->linkFailed = false;
         $this->reset('email', 'reference');
         $this->resetErrorBag();
 

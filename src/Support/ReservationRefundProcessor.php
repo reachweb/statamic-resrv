@@ -106,6 +106,18 @@ class ReservationRefundProcessor
             return;
         }
 
-        $fresh->resolvePaymentGateway()->refund($fresh);
+        $refund = $fresh->resolvePaymentGateway()->refund($fresh);
+
+        // Logged inside the still-open transaction so a money-moved-but-commit-failed window
+        // (deadlock victim, lock-wait timeout, or a dropped connection between this call and COMMIT —
+        // which surfaces to callers as a generic failure while the status rolls back to live) still
+        // leaves a breadcrumb that the gateway actually refunded. Without it, that case is logged
+        // identically to a refund that never reached the gateway. Matches the manual-reconciliation
+        // logging expire() and dispatchCommitted() already emit.
+        Log::info('Gateway refund processed for reservation.', [
+            'reservation_id' => $fresh->id,
+            'payment_id' => $fresh->payment_id,
+            'refund_id' => is_object($refund) ? ($refund->id ?? null) : null,
+        ]);
     }
 }

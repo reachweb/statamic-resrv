@@ -75,10 +75,12 @@ class StripePaymentGateway implements PaymentInterface
                     'reverse_transfer' => false,
                 ],
                 [
-                    // Stable per-(reservation, intent) idempotency key: when a connection
-                    // drops AFTER Stripe processed the refund, the status transition rolls
-                    // back to confirmed — the retry then replays the original response
-                    // instead of failing with "already refunded" forever.
+                    // Stable per-(reservation, intent) idempotency key: if a connection drops AFTER
+                    // Stripe processed the refund (or the status transition rolls back post-refund), a
+                    // retry within Stripe's idempotency window (~24h) replays the original response
+                    // instead of issuing a second refund. Past that window the key is forgotten; because
+                    // these refunds are always for the full intent, Stripe then rejects the retry with
+                    // "already refunded" (surfaced as RefundFailedException) rather than double-paying.
                     'idempotency_key' => 'resrv-refund-'.$reservation->id.'-'.$reservation->payment_id,
                 ]
             );

@@ -255,6 +255,20 @@ class ReservationStatusTest extends TestCase
             ->assertSee(trans('statamic-resrv::frontend.findYourReservation'));
     }
 
+    public function test_deep_link_failure_shows_a_neutral_notice()
+    {
+        $reservation = $this->makeReservation();
+
+        // A truncated/forged hash must not silently drop the customer onto a bare form with no
+        // explanation; show a neutral notice that never reveals which failure occurred.
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => str_repeat('0', 64)])
+            ->test(ReservationStatus::class)
+            ->assertSet('reservationId', null)
+            ->assertSet('linkFailed', true)
+            ->assertSee(trans('statamic-resrv::frontend.reservationLinkFailed'))
+            ->assertSee(trans('statamic-resrv::frontend.findYourReservation'));
+    }
+
     public function test_deep_link_shares_the_lookup_rate_limit()
     {
         $reservation = $this->makeReservation();
@@ -323,6 +337,63 @@ class ReservationStatusTest extends TestCase
             ->call('lookup')
             ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
             ->assertSee(trans('statamic-resrv::frontend.freeCancellationExpired'));
+    }
+
+    public function test_cancel_is_rejected_server_side_after_the_free_cancellation_window_has_passed()
+    {
+        // date_start +1 day with a 5-day free-cancellation period puts the deadline in the past.
+        $reservation = $this->makeReservation([
+            'date_start' => now()->addDay()->setTime(12, 0),
+            'date_end' => now()->addDays(3)->setTime(12, 0),
+            'free_cancellation_period' => 5,
+        ]);
+
+        // The server-side guard must reject before any gateway call — the button being hidden is
+        // not the enforcement; a stale/malicious client can still POST the cancel action.
+        $this->forbidGatewayRefunds();
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false)
+            ->assertSee(trans('statamic-resrv::frontend.cancellationNotAllowed'));
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+    }
+
+    public function test_cancel_is_allowed_on_the_last_day_of_the_free_cancellation_window()
+    {
+        Event::fake([ReservationRefunded::class, ReservationCancelledByCustomer::class]);
+
+        // deadline = date_start->startOfDay()->subDays(period). With date_start two days out and a
+        // 2-day period the deadline is the start of today, so cancelling must stay allowed through
+        // end of today (the inclusive-through-end-of-day contract).
+        $reservation = $this->makeReservation([
+            'date_start' => now()->addDays(2)->setTime(12, 0),
+            'date_end' => now()->addDays(4)->setTime(12, 0),
+            'free_cancellation_period' => 2,
+        ]);
+
+        $this->mockRefundGateway();
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->call('cancel')
+            ->assertHasNoErrors()
+            ->assertSet('cancelled', true);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
     }
 
     public function test_hides_cancel_button_when_no_cancellation_period_is_configured()

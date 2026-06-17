@@ -105,4 +105,6 @@ return [
     'reservationCancelledSuccess' => 'Your reservation has been cancelled. The amount paid will be refunded to your original payment method and a confirmation email is on its way.',
     'reservationCancelledNoPaymentSuccess' => 'Your reservation has been cancelled and a confirmation email is on its way.',
     'lookUpAnotherReservation' => 'Look up another reservation',
+    'reservationLinkFailed' => "We couldn't open your reservation from that link. Please enter your email address and booking reference below.",
+    'reservationItemUnavailable' => 'Your booking',
 ];

@@ -8,6 +8,11 @@
             <p class="text-gray-700 mb-4">
                 {{ trans('statamic-resrv::frontend.findYourReservationDescription') }}
             </p>
+            @if ($linkFailed)
+                <div class="my-4 p-4 bg-amber-50 border border-amber-300 rounded text-gray-700">
+                    {{ trans('statamic-resrv::frontend.reservationLinkFailed') }}
+                </div>
+            @endif
             @if ($errors->has('lookup'))
                 <div class="flex flex-col my-4 p-4 bg-red-50 border border-red-300 rounded">
                     <dt class="text-lg font-medium">{{ trans('statamic-resrv::frontend.somethingWentWrong') }}</dt>
@@ -62,6 +67,7 @@
         </div>
     @else
         @php($reservation = $this->reservation)
+        @php($entry = $reservation->entry)
         <div class="max-w-2xl">
             <div class="flex items-center justify-between mb-4">
                 <div class="text-lg xl:text-xl font-medium">
@@ -84,7 +90,7 @@
 
             <div class="bg-gray-100 rounded p-4 lg:p-8">
                 <div class="text-lg xl:text-xl font-medium mb-2">
-                    {{ $reservation->entry['title'] }}
+                    {{ $entry['id'] ? $entry['title'] : trans('statamic-resrv::frontend.reservationItemUnavailable') }}
                 </div>
                 <hr class="h-px mt-2 lg:my-3 bg-gray-200 border-0">
                 <div class="py-3 md:py-4 border-b border-gray-200">
@@ -170,7 +176,7 @@
                     @endforeach
                 </div>
                 @endif
-                @php($cancellationLabel = $reservation->cancellationPolicyLabel())
+                @php($cancellationLabel = $reservation->isLive() ? $reservation->cancellationPolicyLabel() : null)
                 @if ($cancellationLabel)
                 <div class="py-3 md:py-4 border-b border-gray-200">
                     <p class="font-medium text-gray-500 truncate">
@@ -226,6 +232,12 @@
                 @elseif ($reservation->freeCancellationExpired())
                 <div class="mt-6 p-4 bg-gray-100 border border-gray-200 rounded text-gray-700">
                     {{ trans('statamic-resrv::frontend.freeCancellationExpired') }}
+                </div>
+                @elseif ($reservation->isLive() && $reservation->freeCancellationDeadline())
+                {{-- Live and still inside the free-cancellation window, but the gateway can't auto-refund
+                     (e.g. offline/bank transfer): explain instead of leaving a silent dead end. --}}
+                <div class="mt-6 p-4 bg-gray-100 border border-gray-200 rounded text-gray-700">
+                    {{ trans('statamic-resrv::frontend.cancellationNotAllowed') }}
                 </div>
                 @endif
             @endif
