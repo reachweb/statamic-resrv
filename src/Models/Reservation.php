@@ -359,14 +359,36 @@ class Reservation extends Model
     }
 
     /**
-     * App-key HMAC of the customer email — proves a lookup link came from an email we sent
-     * without exposing the address in the URL.
+     * Amount the customer actually paid online at checkout, for customer-facing surfaces.
+     * Manual-confirmation gateways (offline / bank transfer) mint a payment_id without
+     * collecting any money — the funds arrive out-of-band — so amountPaid() would overstate
+     * them as paid. refundedAmount() intentionally keeps reporting the full deposit so the
+     * admin "refund manually" path still shows what to return.
+     */
+    public function amountPaidOnline(): PriceClass
+    {
+        if (! $this->hasGatewayPayment() || $this->resolvePaymentGateway()->supportsManualConfirmation()) {
+            return Price::create(0);
+        }
+
+        return $this->amountPaid();
+    }
+
+    /**
+     * App-key HMAC binding the reservation key to the customer email — proves a lookup link
+     * came from an email we sent, without exposing the address in the URL. Signing the key
+     * (not the email alone) scopes the link to this single booking, so a leaked link can't be
+     * replayed against the same customer's other reservations by swapping the reference.
      */
     public function customerLookupHash(): ?string
     {
         $email = $this->customer?->email;
 
-        return $email ? hash_hmac('sha256', $email, config('app.key')) : null;
+        if ($email === null || $this->getKey() === null) {
+            return null;
+        }
+
+        return hash_hmac('sha256', $this->getKey().'|'.$email, config('app.key'));
     }
 
     /**

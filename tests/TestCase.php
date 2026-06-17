@@ -274,14 +274,19 @@ class TestCase extends AddonTestCase
     }
 
     /**
-     * Bind a payment gateway manager that fails the test if any gateway is ever resolved —
-     * for flows that must never reach the gateway.
+     * Bind a payment gateway manager whose refund() must never run — for flows that must
+     * reject before any money moves. Read-only resolution is allowed because renders resolve
+     * the gateway for capability/display checks (refundIsAutomatic, amountPaidOnline); only an
+     * actual refund call fails the test.
      */
     protected function forbidGatewayRefunds(): void
     {
+        $gateway = \Mockery::mock(FakePaymentGateway::class)->makePartial();
+        $gateway->shouldReceive('refund')->never();
+
         $manager = \Mockery::mock(PaymentGatewayManager::class);
-        $manager->shouldNotReceive('forReservation');
-        $manager->shouldNotReceive('gateway');
+        $manager->shouldReceive('forReservation')->andReturn($gateway);
+        $manager->shouldReceive('gateway')->andReturn($gateway);
         app()->instance(PaymentGatewayManager::class, $manager);
     }
 

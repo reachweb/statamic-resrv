@@ -18,6 +18,7 @@ use Reach\StatamicResrv\Mail\ReservationCancelled as ReservationCancelledMail;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationRefunded as ReservationRefundedMail;
 use Reach\StatamicResrv\Models\ChildReservation;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -228,7 +229,7 @@ class ReservationStatusTest extends TestCase
         $first->customer->update(['email' => 'first@example.com']);
         $second->customer->update(['email' => 'second@example.com']);
 
-        $hash = hash_hmac('sha256', 'second@example.com', config('app.key'));
+        $hash = $second->customerLookupHash();
 
         Livewire::withQueryParams(['ref' => $second->reference, 'hash' => $hash])
             ->test(ReservationStatus::class)
@@ -238,7 +239,7 @@ class ReservationStatusTest extends TestCase
     public function test_deep_link_loads_reservation_with_valid_hash()
     {
         $reservation = $this->makeReservation();
-        $hash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));
+        $hash = $reservation->customerLookupHash();
 
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $hash])
             ->test(ReservationStatus::class)
@@ -281,7 +282,7 @@ class ReservationStatusTest extends TestCase
         }
 
         // Failed deep links and the lookup form share one budget: a valid deep link is now ignored.
-        $hash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));
+        $hash = $reservation->customerLookupHash();
 
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $hash])
             ->test(ReservationStatus::class)
@@ -693,6 +694,64 @@ class ReservationStatusTest extends TestCase
 
         $this->assertStringContainsString('refund the customer manually', $html);
         $this->assertStringNotContainsString('Refunded to the customer', $html);
+    }
+
+    public function test_lookup_hash_is_scoped_to_a_single_reservation()
+    {
+        // One customer, two confirmed bookings under the same email but different references.
+        $customer = Customer::factory()->create(['email' => 'shared@example.com']);
+
+        $first = $this->makeReservation(['reference' => 'BOOK01', 'customer_id' => $customer->id]);
+        $second = $this->makeReservation(['reference' => 'BOOK02', 'customer_id' => $customer->id]);
+
+        $statuses = ['confirmed', 'refunded'];
+
+        // Each manage-link resolves only its own booking.
+        $this->assertSame(
+            $first->id,
+            Reservation::findForCustomerLookup('BOOK01', $first->customerLookupHash(), $statuses)?->id
+        );
+        $this->assertSame(
+            $second->id,
+            Reservation::findForCustomerLookup('BOOK02', $second->customerLookupHash(), $statuses)?->id
+        );
+
+        // The hash is bound to the reservation, not just the email, so the two differ...
+        $this->assertNotSame($first->customerLookupHash(), $second->customerLookupHash());
+
+        // ...and the first booking's hash cannot be replayed against the second by swapping ref.
+        $this->assertNull(
+            Reservation::findForCustomerLookup('BOOK02', $first->customerLookupHash(), $statuses)
+        );
+    }
+
+    public function test_offline_bookings_are_not_reported_as_paid_online()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $reservation = $this->makeReservation([
+            'payment_gateway' => 'offline',
+            'payment_id' => 'offline_test_intent',
+            'payment' => 50,
+            'payment_surcharge' => 0,
+        ]);
+
+        // Nothing was collected online — the deposit arrives by bank transfer out-of-band.
+        $this->assertSame('0.00', $reservation->amountPaidOnline()->format());
+
+        // The recorded charge stays intact for the admin "refund manually" path.
+        $this->assertSame('50.00', $reservation->amountPaid()->format());
+
+        // The customer status page must not present that deposit as already paid.
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertSee(trans('statamic-resrv::frontend.amountPaid'))
+            ->assertDontSee('50.00');
     }
 
     public function test_customer_status_url_is_null_without_a_configured_status_entry()
