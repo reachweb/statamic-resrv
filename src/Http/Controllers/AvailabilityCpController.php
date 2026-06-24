@@ -15,6 +15,7 @@ use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Requests\AvailabilityCpRequest;
+use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
@@ -80,6 +81,11 @@ class AvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
+        // Prune stale holds first (the same lazy expiry the frontend runs on every availability
+        // search): a PENDING reservation past its minutes_to_hold window that was never pruned
+        // would otherwise keep tripping the pending-holds guard and block a legitimate edit.
+        ExpireReservations::dispatchSync();
+
         // Bulk path: the mass-edit modal posts a single request carrying one group per
         // editability signature ({price, available, rate_ids}). Applying every group in ONE
         // transaction makes the whole edit atomic — a rejection on any group (the shared+relative
@@ -139,6 +145,11 @@ class AvailabilityCpController extends Controller
             'rate_ids' => 'sometimes|array',
         ]);
 
+        // Prune stale holds before the guard check so a PENDING reservation that is past its
+        // minutes_to_hold window (but was never pruned because no frontend search ran) doesn't
+        // block deletion. Within-window and confirmed reservations are left intact and still block.
+        ExpireReservations::dispatchSync();
+
         $requestedRateIds = ! empty($data['rate_ids'])
             ? array_map(fn ($id) => (int) $id, $data['rate_ids'])
             : $this->defaultRateIds($data['statamic_id']);
@@ -185,10 +196,15 @@ class AvailabilityCpController extends Controller
     }
 
     /**
-     * Admin escape hatch: clear pending reservation IDs that should have been removed by the
-     * regular increment/expire path but somehow stuck (queue worker died, transient DB error,
-     * etc.). Default mode only clears IDs whose reservation is in a terminal status. Force mode
-     * clears every ID and logs the active ones for audit.
+     * Admin recovery for hold keys that the regular increment/expire path should have removed but
+     * didn't (queue worker died, transient DB error, etc.).
+     *
+     * Default mode clears only holds whose reservation is already terminal or gone. Force mode also
+     * expires the genuinely-stale PENDING reservations behind the holds — those past their
+     * minutes_to_hold window (see expirePendingReservationsForHold) — which both releases inventory
+     * consistently and terminalises them so edit/delete guards unblock. Holds whose reservation is
+     * still active (a within-window checkout that may be mid-payment, or a confirmed booking) are
+     * never released here; they stay blocking and are returned in `still_active`.
      */
     public function clearStuckPending(Request $request): JsonResponse
     {
@@ -201,7 +217,17 @@ class AvailabilityCpController extends Controller
 
         $force = (bool) ($data['force'] ?? false);
 
-        return DB::transaction(function () use ($data, $force) {
+        // Force mode resolves still-live holds by expiring their backing PENDING reservations —
+        // the consistent release: expire() terminalises them so the edit/delete guards stop
+        // blocking, and frees inventory via ReservationExpired → IncreaseAvailability (removing the
+        // hold key and restoring `available` exactly once). Scrubbing the pending array alone left
+        // the reservation PENDING, so the delete kept failing. Run before the locked-row read below
+        // so the listener's row mutation isn't clobbered. Returns how many holds the expiry freed.
+        $expiredHoldCount = $force
+            ? $this->expirePendingReservationsForHold($data['statamic_id'], (int) $data['rate_id'], $data['date'])
+            : 0;
+
+        return DB::transaction(function () use ($data, $expiredHoldCount) {
             $row = Availability::where([
                 'statamic_id' => $data['statamic_id'],
                 'rate_id' => $data['rate_id'],
@@ -212,7 +238,7 @@ class AvailabilityCpController extends Controller
 
             $pending = $row->pending ?? [];
             if (empty($pending)) {
-                return response()->json(['cleared' => 0, 'still_active' => []]);
+                return response()->json(['cleared' => $expiredHoldCount, 'still_active' => []]);
             }
 
             $terminal = ReservationStatus::terminal();
@@ -271,11 +297,17 @@ class AvailabilityCpController extends Controller
             }
 
             $activeIds = array_values(array_unique($activeIds));
-            $toClear = $force ? array_values($pending) : $terminalKeys;
+
+            // Clear only terminal/orphan holds. Force mode's power is expiring genuinely-stale PENDING
+            // reservations (done before the transaction) — it deliberately never force-releases a hold
+            // whose reservation is still active (a within-window checkout that may be mid-payment, or a
+            // confirmed booking). Those keep blocking and are reported as still_active so the operator
+            // resolves them properly (wait for the window, or cancel/refund the reservation first).
+            $toClear = $terminalKeys;
 
             if (empty($toClear)) {
                 return response()->json([
-                    'cleared' => 0,
+                    'cleared' => $expiredHoldCount,
                     'still_active' => $activeIds,
                 ]);
             }
@@ -290,18 +322,93 @@ class AvailabilityCpController extends Controller
                 'pending' => array_values(array_diff($pending, $toClear)),
             ]);
 
-            if ($force && ! empty($activeIds)) {
-                Log::warning('Resrv: admin force-cleared active holds from availability row', [
-                    'availability_id' => $row->id,
-                    'forced_ids' => $activeIds,
-                ]);
-            }
-
             return response()->json([
-                'cleared' => count($toClear),
-                'still_active' => $force ? [] : $activeIds,
+                'cleared' => count($toClear) + $expiredHoldCount,
+                'still_active' => $activeIds,
             ]);
         });
+    }
+
+    /**
+     * Force-clear recovery: expire the genuinely-stale PENDING reservations backing the holds on a
+     * single availability row. Expiring is the *consistent* release — Reservation::expire()
+     * terminalises the reservation (so ActiveReservationsGuard stops blocking edits/deletes) and
+     * dispatches ReservationExpired → IncreaseAvailability, which removes the hold key and restores
+     * `available` exactly once.
+     *
+     * Only reservations already past their minutes_to_hold window are expired: one still inside its
+     * window may be an in-progress checkout/payment, and releasing its inventory would break a sale
+     * that is about to complete. A reservation past its window is an abandoned hold the lazy expiry
+     * job simply hasn't pruned yet, so expiring it here is safe and merely does it sooner. With no
+     * hold window configured we can't tell stale from active, so nothing is expired. Child holds
+     * resolve to and expire their parent reservation. Returns how many hold keys the expiry removed.
+     */
+    protected function expirePendingReservationsForHold(string $statamicId, int $rateId, string $date): int
+    {
+        $holdMinutes = config('resrv-config.minutes_to_hold', false);
+
+        if ($holdMinutes == false) {
+            return 0;
+        }
+
+        $row = Availability::where([
+            'statamic_id' => $statamicId,
+            'rate_id' => $rateId,
+        ])
+            ->whereDate('date', $date)
+            ->first();
+
+        $pendingBefore = $row?->pending ?? [];
+
+        if (empty($pendingBefore)) {
+            return 0;
+        }
+
+        $normalIds = [];
+        $childIds = [];
+
+        foreach ($pendingBefore as $entry) {
+            if (is_string($entry) && preg_match('/^([rc])(\d+)$/', $entry, $matches)) {
+                if ($matches[1] === 'c') {
+                    $childIds[] = (int) $matches[2];
+                } else {
+                    $normalIds[] = (int) $matches[2];
+                }
+            } else {
+                // Legacy bare integer: could reference either table.
+                $normalIds[] = (int) $entry;
+                $childIds[] = (int) $entry;
+            }
+        }
+
+        $parentIdsFromChildren = empty($childIds)
+            ? []
+            : ChildReservation::whereIn('id', array_unique($childIds))->pluck('reservation_id')->all();
+
+        $reservationIds = collect($normalIds)->merge($parentIdsFromChildren)->unique()->values();
+
+        if ($reservationIds->isEmpty()) {
+            return 0;
+        }
+
+        Reservation::whereIn('id', $reservationIds->all())
+            ->where('status', ReservationStatus::PENDING->value)
+            ->where('created_at', '<', Carbon::now()->subMinutes($holdMinutes))
+            ->get()
+            ->each(function (Reservation $reservation) {
+                try {
+                    $reservation->expire();
+                } catch (\Throwable $e) {
+                    Log::error('Resrv: failed to expire reservation while clearing stuck holds', [
+                        'reservation_id' => $reservation->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            });
+
+        $pendingAfter = $row->fresh()?->pending ?? [];
+
+        return max(0, count($pendingBefore) - count($pendingAfter));
     }
 
     private function updateAvailability(array $data, int $rateId): void
