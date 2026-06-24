@@ -214,9 +214,7 @@ async function clearStuckHolds(force) {
             }
         }
 
-        // Non-force: surface still-active reservations so the operator can confirm expiring the
-        // abandoned ones. Force: confirmation is done — close the dialog. Anything still active
-        // afterwards is a within-window checkout or confirmed booking we deliberately left in place.
+        // Non-force shows the confirm dialog; force closes it (any still-active holds were left in place).
         const waitingForConfirmation = !force && stillActive.size > 0;
         stillActiveIds.value = waitingForConfirmation ? [...stillActive] : [];
 

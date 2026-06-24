@@ -81,9 +81,7 @@ class AvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
-        // Prune stale holds first (the same lazy expiry the frontend runs on every availability
-        // search): a PENDING reservation past its minutes_to_hold window that was never pruned
-        // would otherwise keep tripping the pending-holds guard and block a legitimate edit.
+        // Prune stale (past-window) holds first, as the frontend does, so they don't block the edit.
         ExpireReservations::dispatchSync();
 
         // Bulk path: the mass-edit modal posts a single request carrying one group per
@@ -145,9 +143,7 @@ class AvailabilityCpController extends Controller
             'rate_ids' => 'sometimes|array',
         ]);
 
-        // Prune stale holds before the guard check so a PENDING reservation that is past its
-        // minutes_to_hold window (but was never pruned because no frontend search ran) doesn't
-        // block deletion. Within-window and confirmed reservations are left intact and still block.
+        // Prune stale (past-window) holds first so they don't block the delete; active ones still do.
         ExpireReservations::dispatchSync();
 
         $requestedRateIds = ! empty($data['rate_ids'])
@@ -196,15 +192,10 @@ class AvailabilityCpController extends Controller
     }
 
     /**
-     * Admin recovery for hold keys that the regular increment/expire path should have removed but
-     * didn't (queue worker died, transient DB error, etc.).
-     *
-     * Default mode clears only holds whose reservation is already terminal or gone. Force mode also
-     * expires the genuinely-stale PENDING reservations behind the holds — those past their
-     * minutes_to_hold window (see expirePendingReservationsForHold) — which both releases inventory
-     * consistently and terminalises them so edit/delete guards unblock. Holds whose reservation is
-     * still active (a within-window checkout that may be mid-payment, or a confirmed booking) are
-     * never released here; they stay blocking and are returned in `still_active`.
+     * Admin recovery for hold keys the increment/expire path should have removed but didn't.
+     * Default clears only terminal/gone holds; force also expires the genuinely-stale (past
+     * minutes_to_hold) PENDING reservations behind them. Active holds — a within-window checkout
+     * or a confirmed booking — are never released; they stay blocking and are returned in `still_active`.
      */
     public function clearStuckPending(Request $request): JsonResponse
     {
@@ -217,12 +208,8 @@ class AvailabilityCpController extends Controller
 
         $force = (bool) ($data['force'] ?? false);
 
-        // Force mode resolves still-live holds by expiring their backing PENDING reservations —
-        // the consistent release: expire() terminalises them so the edit/delete guards stop
-        // blocking, and frees inventory via ReservationExpired → IncreaseAvailability (removing the
-        // hold key and restoring `available` exactly once). Scrubbing the pending array alone left
-        // the reservation PENDING, so the delete kept failing. Run before the locked-row read below
-        // so the listener's row mutation isn't clobbered. Returns how many holds the expiry freed.
+        // Force expires the stale PENDING reservations behind the holds (consistent release via
+        // ReservationExpired → IncreaseAvailability). Before the locked-row read so it isn't clobbered.
         $expiredHoldCount = $force
             ? $this->expirePendingReservationsForHold($data['statamic_id'], (int) $data['rate_id'], $data['date'])
             : 0;
@@ -298,11 +285,8 @@ class AvailabilityCpController extends Controller
 
             $activeIds = array_values(array_unique($activeIds));
 
-            // Clear only terminal/orphan holds. Force mode's power is expiring genuinely-stale PENDING
-            // reservations (done before the transaction) — it deliberately never force-releases a hold
-            // whose reservation is still active (a within-window checkout that may be mid-payment, or a
-            // confirmed booking). Those keep blocking and are reported as still_active so the operator
-            // resolves them properly (wait for the window, or cancel/refund the reservation first).
+            // Only terminal/orphan holds are cleared; active reservations stay blocking (reported in
+            // still_active). Force's only extra power is expiring the stale ones above.
             $toClear = $terminalKeys;
 
             if (empty($toClear)) {
@@ -330,18 +314,11 @@ class AvailabilityCpController extends Controller
     }
 
     /**
-     * Force-clear recovery: expire the genuinely-stale PENDING reservations backing the holds on a
-     * single availability row. Expiring is the *consistent* release — Reservation::expire()
-     * terminalises the reservation (so ActiveReservationsGuard stops blocking edits/deletes) and
-     * dispatches ReservationExpired → IncreaseAvailability, which removes the hold key and restores
-     * `available` exactly once.
-     *
-     * Only reservations already past their minutes_to_hold window are expired: one still inside its
-     * window may be an in-progress checkout/payment, and releasing its inventory would break a sale
-     * that is about to complete. A reservation past its window is an abandoned hold the lazy expiry
-     * job simply hasn't pruned yet, so expiring it here is safe and merely does it sooner. With no
-     * hold window configured we can't tell stale from active, so nothing is expired. Child holds
-     * resolve to and expire their parent reservation. Returns how many hold keys the expiry removed.
+     * Expire the genuinely-stale PENDING reservations behind a row's holds — a consistent release
+     * (via ReservationExpired → IncreaseAvailability) that also terminalises them so edit/delete
+     * guards unblock. Only reservations past their minutes_to_hold window are touched; one still
+     * inside it may be mid-payment. No window configured → nothing expired. Child holds expire their
+     * parent. Returns how many hold keys were removed.
      */
     protected function expirePendingReservationsForHold(string $statamicId, int $rateId, string $date): int
     {

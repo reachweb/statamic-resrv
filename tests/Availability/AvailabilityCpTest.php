@@ -877,8 +877,7 @@ class AvailabilityCpTest extends TestCase
             'force' => true,
         ]);
 
-        // Force expires the abandoned reservation rather than merely scrubbing the hold: releases
-        // inventory consistently AND terminalises the reservation so edits/deletes unblock.
+        // Force expires the stale reservation: releases inventory and terminalises it (unblocking deletes).
         $response->assertStatus(200)
             ->assertJson(['cleared' => 1, 'still_active' => []]);
 
@@ -897,8 +896,7 @@ class AvailabilityCpTest extends TestCase
         $rate = Rate::factory()->create(['collection' => 'pages']);
         $date = today()->addDay()->isoFormat('YYYY-MM-DD');
 
-        // Still inside its hold window — the customer may be mid-payment. Even a forced clear must
-        // leave it untouched, or we would cancel a sale that is about to complete.
+        // Inside its hold window — may be mid-payment; even a forced clear must leave it untouched.
         $reservation = Reservation::factory()->create([
             'item_id' => $item->id(),
             'rate_id' => $rate->id,
@@ -926,7 +924,7 @@ class AvailabilityCpTest extends TestCase
         $response->assertStatus(200)
             ->assertJson(['cleared' => 0, 'still_active' => [$reservation->id]]);
 
-        // Reservation untouched, hold intact, inventory unchanged — the in-progress checkout survives.
+        // Untouched: status, hold, and inventory all unchanged.
         $this->assertEquals('pending', $reservation->fresh()->status);
 
         $availability->refresh();
@@ -940,7 +938,7 @@ class AvailabilityCpTest extends TestCase
         $rate = Rate::factory()->create(['collection' => 'pages']);
         $date = today()->addDay()->isoFormat('YYYY-MM-DD');
 
-        // A confirmed booking is never auto-released — deleting availability under it stays blocked.
+        // A confirmed booking is never auto-released.
         $reservation = Reservation::factory()->create([
             'item_id' => $item->id(),
             'rate_id' => $rate->id,
@@ -1004,7 +1002,7 @@ class AvailabilityCpTest extends TestCase
             'pending' => [$reservation->id],
         ]);
 
-        // Force-clear the stuck hold (the "Clear stuck holds" button at force confirmation)...
+        // Force-clear the stuck hold...
         $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
             'statamic_id' => $item->id(),
             'date' => $date,
@@ -1014,7 +1012,7 @@ class AvailabilityCpTest extends TestCase
 
         $this->assertEquals('expired', $reservation->fresh()->status);
 
-        // ...and the delete the warning promised now actually goes through (was a 422 before the fix).
+        // ...then the previously-422 delete succeeds.
         $response = $this->deleteJson(cp_route('resrv.availability.delete'), [
             'statamic_id' => $item->id(),
             'date_start' => $date,
@@ -1055,8 +1053,7 @@ class AvailabilityCpTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Past its hold window but never pruned (no frontend search ran). The CP delete runs the
-        // same lazy expiry the frontend does, so this stale hold stops blocking the delete.
+        // Past its hold window but never pruned — the CP delete's lazy expiry clears it.
         $reservation->created_at = now()->subMinutes(60);
         $reservation->saveQuietly();
 
