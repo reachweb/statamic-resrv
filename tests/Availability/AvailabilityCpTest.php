@@ -4,7 +4,7 @@ namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
@@ -841,12 +841,62 @@ class AvailabilityCpTest extends TestCase
         $this->assertEquals([$reservation->id], $availability->pending);
     }
 
-    public function test_clear_stuck_pending_force_mode_clears_active_holds_and_logs()
+    public function test_clear_stuck_pending_force_mode_expires_stale_pending_reservation()
     {
+        Config::set('resrv-config.minutes_to_hold', 10);
+
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
         $date = today()->addDay()->isoFormat('YYYY-MM-DD');
 
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 3,
+            'status' => 'pending',
+        ]);
+
+        // Past its hold window — a genuinely abandoned checkout, safe to expire.
+        $reservation->created_at = now()->subMinutes(60);
+        $reservation->saveQuietly();
+
+        $availability = Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 2,
+            'pending' => [$reservation->id],
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $item->id(),
+            'date' => $date,
+            'rate_id' => $rate->id,
+            'force' => true,
+        ]);
+
+        // Force expires the stale reservation: releases inventory and terminalises it (unblocking deletes).
+        $response->assertStatus(200)
+            ->assertJson(['cleared' => 1, 'still_active' => []]);
+
+        $this->assertEquals('expired', $reservation->fresh()->status);
+
+        $availability->refresh();
+        $this->assertEquals(5, $availability->available);
+        $this->assertEquals([], $availability->pending);
+    }
+
+    public function test_clear_stuck_pending_force_mode_protects_within_window_pending_reservation()
+    {
+        Config::set('resrv-config.minutes_to_hold', 30);
+
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        // Inside its hold window — may be mid-payment; even a forced clear must leave it untouched.
         $reservation = Reservation::factory()->create([
             'item_id' => $item->id(),
             'rate_id' => $rate->id,
@@ -864,7 +914,47 @@ class AvailabilityCpTest extends TestCase
             'pending' => [$reservation->id],
         ]);
 
-        Log::spy();
+        $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $item->id(),
+            'date' => $date,
+            'rate_id' => $rate->id,
+            'force' => true,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['cleared' => 0, 'still_active' => [$reservation->id]]);
+
+        // Untouched: status, hold, and inventory all unchanged.
+        $this->assertEquals('pending', $reservation->fresh()->status);
+
+        $availability->refresh();
+        $this->assertEquals(2, $availability->available);
+        $this->assertEquals([$reservation->id], $availability->pending);
+    }
+
+    public function test_clear_stuck_pending_force_mode_leaves_confirmed_hold_blocking()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        // A confirmed booking is never auto-released.
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 3,
+            'status' => 'confirmed',
+        ]);
+
+        $availability = Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 2,
+            'pending' => [$reservation->id],
+        ]);
 
         $response = $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
             'statamic_id' => $item->id(),
@@ -874,14 +964,215 @@ class AvailabilityCpTest extends TestCase
         ]);
 
         $response->assertStatus(200)
-            ->assertJson(['cleared' => 1, 'still_active' => []]);
+            ->assertJson(['cleared' => 0, 'still_active' => [$reservation->id]]);
 
-        Log::shouldHaveReceived('warning')
-            ->once()
-            ->with('Resrv: admin force-cleared active holds from availability row', \Mockery::on(fn ($ctx) => in_array($reservation->id, $ctx['forced_ids'])));
+        $this->assertEquals('confirmed', $reservation->fresh()->status);
 
         $availability->refresh();
-        $this->assertEquals(5, $availability->available);
-        $this->assertEquals([], $availability->pending);
+        $this->assertEquals(2, $availability->available);
+        $this->assertEquals([$reservation->id], $availability->pending);
+    }
+
+    public function test_force_clearing_stuck_pending_then_deleting_succeeds()
+    {
+        Config::set('resrv-config.minutes_to_hold', 10);
+
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        // A genuinely stuck checkout: abandoned past its hold window but never pruned.
+        $reservation->created_at = now()->subMinutes(60);
+        $reservation->saveQuietly();
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 4,
+            'pending' => [$reservation->id],
+        ]);
+
+        // Force-clear the stuck hold...
+        $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $item->id(),
+            'date' => $date,
+            'rate_id' => $rate->id,
+            'force' => true,
+        ])->assertStatus(200);
+
+        $this->assertEquals('expired', $reservation->fresh()->status);
+
+        // ...then the previously-422 delete succeeds.
+        $response = $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_delete_auto_expires_stale_pending_reservation_then_succeeds()
+    {
+        Config::set('resrv-config.minutes_to_hold', 10);
+
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 4,
+            'pending' => ['r77'],
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'id' => 77,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'pending',
+        ]);
+
+        // Past its hold window but never pruned — the CP delete's lazy expiry clears it.
+        $reservation->created_at = now()->subMinutes(60);
+        $reservation->saveQuietly();
+
+        $response = $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertEquals('expired', $reservation->fresh()->status);
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_update_does_not_expire_the_admins_own_session_held_hold()
+    {
+        Config::set('resrv-config.minutes_to_hold', 30);
+
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $heldDate = today()->addDays(10)->isoFormat('YYYY-MM-DD');
+        $editDate = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $heldDate,
+            'available' => 4,
+            'pending' => ['r91'],
+        ]);
+
+        // A fresh in-progress checkout in another tab of the same session.
+        $held = Reservation::factory()->create([
+            'id' => 91,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $heldDate,
+            'date_end' => today()->addDays(11)->toDateString(),
+            'quantity' => 1,
+            'status' => 'pending',
+            'created_at' => now()->subMinutes(5),
+        ]);
+        session()->put('resrv_reservation', $held->id);
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => $editDate,
+            'date_end' => $editDate,
+            'price' => 150,
+            'available' => 3,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+
+        // The fresh hold and its reserved inventory must be left untouched.
+        $this->assertEquals('pending', $held->fresh()->status);
+        $this->assertEquals(4, Availability::where('statamic_id', $item->id())
+            ->where('rate_id', $rate->id)
+            ->whereDate('date', $heldDate)
+            ->value('available'));
+    }
+
+    public function test_delete_does_not_expire_the_admins_own_session_held_hold()
+    {
+        Config::set('resrv-config.minutes_to_hold', 30);
+
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $heldDate = today()->addDays(10)->isoFormat('YYYY-MM-DD');
+        $deleteDate = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $heldDate,
+            'available' => 4,
+            'pending' => ['r92'],
+        ]);
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $deleteDate,
+            'available' => 4,
+        ]);
+
+        // A fresh in-progress checkout in another tab of the same session.
+        $held = Reservation::factory()->create([
+            'id' => 92,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $heldDate,
+            'date_end' => today()->addDays(11)->toDateString(),
+            'quantity' => 1,
+            'status' => 'pending',
+            'created_at' => now()->subMinutes(5),
+        ]);
+        session()->put('resrv_reservation', $held->id);
+
+        $response = $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => $deleteDate,
+            'date_end' => $deleteDate,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+
+        // Deleting an unrelated date must not abandon the fresh hold or release its inventory.
+        $this->assertEquals('pending', $held->fresh()->status);
+        $this->assertEquals(4, Availability::where('statamic_id', $item->id())
+            ->where('rate_id', $rate->id)
+            ->whereDate('date', $heldDate)
+            ->value('available'));
     }
 }

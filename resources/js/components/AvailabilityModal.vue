@@ -51,12 +51,12 @@
 
         <ConfirmationModal
             :open="stillActiveIds.length > 0"
-            :title="__('Force clear active holds?')"
+            :title="__('Expire abandoned reservations?')"
             :danger="true"
             @confirm="clearStuckHolds(true)"
             @cancel="stillActiveIds = []"
         >
-            {{ __('The following reservations are still active and will be removed from the pending list anyway: :ids. This can desynchronise inventory accounting — proceed only if those reservations have already been resolved out-of-band.', { ids: stillActiveIds.join(', ') }) }}
+            {{ __('The following reservations are still active: :ids. Continuing will expire only the ones whose hold window has already passed (abandoned checkouts) and release their inventory. Reservations still within their hold window — where a customer may be mid-payment — and confirmed bookings are left untouched.', { ids: stillActiveIds.join(', ') }) }}
         </ConfirmationModal>
     </div>
 </template>
@@ -209,18 +209,14 @@ async function clearStuckHolds(force) {
             }
             const data = result.value.data || {};
             totalCleared += data.cleared || 0;
-            if (!force && Array.isArray(data.still_active)) {
+            if (Array.isArray(data.still_active)) {
                 data.still_active.forEach((id) => stillActive.add(id));
             }
         }
 
-        if (force) {
-            stillActiveIds.value = [];
-        } else if (stillActive.size > 0) {
-            stillActiveIds.value = [...stillActive];
-        }
-
+        // Non-force shows the confirm dialog; force closes it (any still-active holds were left in place).
         const waitingForConfirmation = !force && stillActive.size > 0;
+        stillActiveIds.value = waitingForConfirmation ? [...stillActive] : [];
 
         if (failedCount > 0) {
             toast.error(`${totalCleared} hold(s) cleared, ${failedCount} date(s) failed`);
@@ -228,6 +224,8 @@ async function clearStuckHolds(force) {
             if (totalCleared > 0) {
                 toast.success(`${totalCleared} stuck hold(s) cleared. Active holds need confirmation.`);
             }
+        } else if (force && stillActive.size > 0) {
+            toast.success(`${totalCleared} hold(s) cleared. ${stillActive.size} reservation(s) still active and left in place.`);
         } else {
             toast.success(`${totalCleared} hold(s) cleared`);
         }
