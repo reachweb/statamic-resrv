@@ -81,8 +81,9 @@ class AvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
-        // Prune stale (past-window) holds first, as the frontend does, so they don't block the edit.
-        ExpireReservations::dispatchSync();
+        // Prune stale holds so they don't block the edit; skip session-hold abandonment so a CP
+        // edit can't expire the admin's own in-progress checkout in another tab.
+        ExpireReservations::dispatchSync(expireSessionHold: false);
 
         // Bulk path: the mass-edit modal posts a single request carrying one group per
         // editability signature ({price, available, rate_ids}). Applying every group in ONE
@@ -143,8 +144,9 @@ class AvailabilityCpController extends Controller
             'rate_ids' => 'sometimes|array',
         ]);
 
-        // Prune stale (past-window) holds first so they don't block the delete; active ones still do.
-        ExpireReservations::dispatchSync();
+        // Prune stale holds so they don't block the delete; active ones still do. Skip session-hold
+        // abandonment so a CP delete can't expire the admin's own in-progress checkout.
+        ExpireReservations::dispatchSync(expireSessionHold: false);
 
         $requestedRateIds = ! empty($data['rate_ids'])
             ? array_map(fn ($id) => (int) $id, $data['rate_ids'])

@@ -99,6 +99,24 @@ class ExpireReservationsTest extends TestCase
         Event::assertDispatchedTimes(ReservationExpired::class, 1);
     }
 
+    public function test_keeps_the_session_held_hold_when_session_abandonment_is_disabled()
+    {
+        Event::fake([ReservationExpired::class]);
+
+        // A fresh session-held hold (within the window) plus a genuinely stale one.
+        $held = $this->pendingReservation(5);
+        $stale = $this->pendingReservation(45);
+        session()->put('resrv_reservation', $held->id);
+
+        // CP writes prune stale holds without abandoning the session's own hold.
+        (new ExpireReservations(expireSessionHold: false))->handle();
+
+        $this->assertEquals('pending', $held->fresh()->status);
+        $this->assertEquals('expired', $stale->fresh()->status);
+        Event::assertDispatchedTimes(ReservationExpired::class, 1);
+        Event::assertDispatched(ReservationExpired::class, fn ($event) => $event->reservation->id === $stale->id);
+    }
+
     public function test_prune_filters_stale_rows_in_sql_rather_than_loading_every_pending_row()
     {
         Event::fake([ReservationExpired::class]);

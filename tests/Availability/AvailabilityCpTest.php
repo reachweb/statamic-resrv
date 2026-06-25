@@ -1071,4 +1071,108 @@ class AvailabilityCpTest extends TestCase
             'rate_id' => $rate->id,
         ]);
     }
+
+    public function test_update_does_not_expire_the_admins_own_session_held_hold()
+    {
+        Config::set('resrv-config.minutes_to_hold', 30);
+
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $heldDate = today()->addDays(10)->isoFormat('YYYY-MM-DD');
+        $editDate = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $heldDate,
+            'available' => 4,
+            'pending' => ['r91'],
+        ]);
+
+        // A fresh in-progress checkout in another tab of the same session.
+        $held = Reservation::factory()->create([
+            'id' => 91,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $heldDate,
+            'date_end' => today()->addDays(11)->toDateString(),
+            'quantity' => 1,
+            'status' => 'pending',
+            'created_at' => now()->subMinutes(5),
+        ]);
+        session()->put('resrv_reservation', $held->id);
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => $editDate,
+            'date_end' => $editDate,
+            'price' => 150,
+            'available' => 3,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+
+        // The fresh hold and its reserved inventory must be left untouched.
+        $this->assertEquals('pending', $held->fresh()->status);
+        $this->assertEquals(4, Availability::where('statamic_id', $item->id())
+            ->where('rate_id', $rate->id)
+            ->whereDate('date', $heldDate)
+            ->value('available'));
+    }
+
+    public function test_delete_does_not_expire_the_admins_own_session_held_hold()
+    {
+        Config::set('resrv-config.minutes_to_hold', 30);
+
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        $heldDate = today()->addDays(10)->isoFormat('YYYY-MM-DD');
+        $deleteDate = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $heldDate,
+            'available' => 4,
+            'pending' => ['r92'],
+        ]);
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $deleteDate,
+            'available' => 4,
+        ]);
+
+        // A fresh in-progress checkout in another tab of the same session.
+        $held = Reservation::factory()->create([
+            'id' => 92,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $heldDate,
+            'date_end' => today()->addDays(11)->toDateString(),
+            'quantity' => 1,
+            'status' => 'pending',
+            'created_at' => now()->subMinutes(5),
+        ]);
+        session()->put('resrv_reservation', $held->id);
+
+        $response = $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => $deleteDate,
+            'date_end' => $deleteDate,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+
+        // Deleting an unrelated date must not abandon the fresh hold or release its inventory.
+        $this->assertEquals('pending', $held->fresh()->status);
+        $this->assertEquals(4, Availability::where('statamic_id', $item->id())
+            ->where('rate_id', $rate->id)
+            ->whereDate('date', $heldDate)
+            ->value('available'));
+    }
 }

@@ -13,6 +13,12 @@ class ExpireReservations
     use Dispatchable;
 
     /**
+     * @param  bool  $expireSessionHold  Frontend searches abandon their own hold; CP writes pass
+     *                                   false to only prune stale holds.
+     */
+    public function __construct(protected bool $expireSessionHold = true) {}
+
+    /**
      * Execute the job.
      *
      * @return void
@@ -20,7 +26,7 @@ class ExpireReservations
     public function handle()
     {
         // Expire any unfinished hold from this session right away; returning to search abandons it by design.
-        if (session()->has('resrv_reservation')) {
+        if ($this->expireSessionHold && session()->has('resrv_reservation')) {
             $this->expireSafely((new Reservation)->newQuery()->find(session('resrv_reservation')));
         }
         $holdMinutes = config('resrv-config.minutes_to_hold', false);
