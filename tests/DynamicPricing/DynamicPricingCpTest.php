@@ -393,6 +393,49 @@ class DynamicPricingCpTest extends TestCase
         $this->assertEquals($extra->id, $response->json('data.0.extras.0.id'));
     }
 
+    public function test_index_serializes_each_rules_own_assigned_extras()
+    {
+        // Each rule must serialize only its own extras; on pgsql this also exercises the
+        // cast-safe pivot read in loadAssignedExtras().
+        $extraOne = Extra::factory()->create(['id' => '1', 'slug' => 'extra-one']);
+        $extraTwo = Extra::factory()->create(['id' => '2', 'slug' => 'extra-two']);
+
+        $ruleOne = DynamicPricing::factory()->create(['title' => 'rule-one', 'order' => 1]);
+        $ruleOne->extras()->sync([$extraOne->id]);
+
+        $ruleTwo = DynamicPricing::factory()->create(['title' => 'rule-two', 'order' => 2]);
+        $ruleTwo->extras()->sync([$extraOne->id, $extraTwo->id]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index'));
+        $response->assertStatus(200);
+
+        $byTitle = collect($response->json('data'))->keyBy('title');
+
+        $this->assertEqualsCanonicalizing(
+            [$extraOne->id],
+            collect($byTitle['rule-one']['extras'])->pluck('id')->all()
+        );
+        $this->assertEqualsCanonicalizing(
+            [$extraOne->id, $extraTwo->id],
+            collect($byTitle['rule-two']['extras'])->pluck('id')->all()
+        );
+    }
+
+    public function test_coupons_only_serializes_assigned_extras()
+    {
+        // The AffiliatesPanel coupons_only request: a coupon rule with an assigned extra
+        // must serialize without the pivot join error.
+        $extra = Extra::factory()->create();
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+        $dynamic->extras()->sync([$extra->id]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?coupons_only=true');
+        $response->assertStatus(200);
+
+        $this->assertEquals($extra->id, $response->json('0.extras.0.id'));
+    }
+
     public function test_coupons_only_serializes_entries_as_assigned_item_ids()
     {
         $entryOne = $this->makeStatamicItemWithAvailability();
