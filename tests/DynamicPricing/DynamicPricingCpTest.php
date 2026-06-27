@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\DynamicPricing;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra;
@@ -423,6 +424,33 @@ class DynamicPricingCpTest extends TestCase
         $response->assertStatus(200);
 
         $this->assertEqualsCanonicalizing([$item->id()], $response->json('data.0.entries'));
+    }
+
+    public function test_index_loads_entries_without_per_rule_queries()
+    {
+        $entry = $this->makeStatamicItemWithAvailability();
+
+        $countAssignmentQueries = function () {
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $this->getJson(cp_route('resrv.dynamicpricing.index'))->assertStatus(200);
+            $count = collect(DB::getQueryLog())
+                ->filter(fn ($query) => str_contains($query['query'], 'resrv_dynamic_pricing_assignments'))
+                ->count();
+            DB::disableQueryLog();
+
+            return $count;
+        };
+
+        DynamicPricing::factory()->create(['order' => 1])->entries()->sync([$entry->id()]);
+        $withOneRule = $countAssignmentQueries();
+
+        collect(range(2, 5))->each(fn ($i) => DynamicPricing::factory()->create(['order' => $i])->entries()->sync([$entry->id()]));
+        $withManyRules = $countAssignmentQueries();
+
+        // Entry assignments are batched into a single pivot query, so adding rules must not
+        // add per-rule lookups (the previous accessor-per-row approach would scale with N).
+        $this->assertSame($withOneRule, $withManyRules);
     }
 
     public function test_order_endpoint_clamps_out_of_range_values()

@@ -3,13 +3,16 @@
 namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
+use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
 
 class DynamicPricingCpController extends Controller
@@ -47,8 +50,9 @@ class DynamicPricingCpController extends Controller
                 ->whereNotNull('coupon')
                 ->where('coupon', '!=', '')
                 ->with('extras')
-                ->get()
-                ->each->append('entries');
+                ->get();
+
+            $this->loadAssignedEntries($dynamic);
 
             return response()->json($dynamic);
         }
@@ -110,12 +114,37 @@ class DynamicPricingCpController extends Controller
         $perPage = (int) ($request->input('per_page') ?? config('statamic.cp.pagination_size', 25));
         $perPage = max(1, min($perPage, 100));
 
-        // `entries` resolves to the getEntriesAttribute accessor (the distinct assigned
-        // entry item_ids), not the morphedByMany Availability relation. Eager-loading that
-        // relation would both shadow the accessor on serialization and over-fetch every
-        // availability row for each assigned entry, so we append the accessor instead.
-        return $query->with('extras')->paginate($perPage)
-            ->through(fn (DynamicPricing $pricing) => $pricing->append('entries'));
+        $pricings = $query->with('extras')->paginate($perPage);
+
+        $this->loadAssignedEntries($pricings->getCollection());
+
+        return $pricings;
+    }
+
+    /**
+     * Expose each rule's `entries` as the distinct assigned entry item_ids.
+     *
+     * The morphedByMany entries() relation resolves to one Availability row per date (a
+     * flood with no item_id), and the getEntriesAttribute accessor would run one pivot
+     * query per rule. Instead we read every assignment for the page in a single pivot
+     * query and set it as the `entries` relation so serialization stays O(1) queries.
+     */
+    protected function loadAssignedEntries(EloquentCollection $pricings): void
+    {
+        if ($pricings->isEmpty()) {
+            return;
+        }
+
+        $assignments = DB::table('resrv_dynamic_pricing_assignments')
+            ->where('dynamic_pricing_assignment_type', Availability::class)
+            ->whereIn('dynamic_pricing_id', $pricings->modelKeys())
+            ->get(['dynamic_pricing_id', 'dynamic_pricing_assignment_id'])
+            ->groupBy('dynamic_pricing_id');
+
+        $pricings->each(fn (DynamicPricing $pricing) => $pricing->setRelation(
+            'entries',
+            $assignments->get($pricing->id, collect())->pluck('dynamic_pricing_assignment_id')->values()
+        ));
     }
 
     public function create(Request $request): JsonResponse|RedirectResponse
