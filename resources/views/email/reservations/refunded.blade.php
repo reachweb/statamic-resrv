@@ -18,11 +18,11 @@
 
 @component('mail::table')
 |{{ __("Refund information") }}||
-| :----------------------------- |:----------------| 
-@if (config('resrv-config.payment') != 'full')
-| {{ __("Refunded to your card") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
+| :----------------------------- |:----------------|
+@if ($reservation->status === 'partner')
+| {{ __("Payment") }} | {{ __("No payment was collected for this reservation.") }} |
 @else
-| {{ __("Refunded to your card") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->price->format() }} |
+| {{ __("Refunded to your card") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->totalToCharge() }} |
 @endif
 @endcomponent
 
