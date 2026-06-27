@@ -6,11 +6,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class DynamicPricingCpTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesEntries, RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -362,6 +363,66 @@ class DynamicPricingCpTest extends TestCase
         $this->assertArrayNotHasKey('data', $data);
         $this->assertCount(1, $data);
         $this->assertSame('has-coupon', $data[0]['title']);
+    }
+
+    public function test_index_serializes_entries_as_assigned_item_ids_with_extras_intact()
+    {
+        // Each entry carries 4 availability rows. The bug serialized the `entries`
+        // RELATION (one row per availability date, keyed on statamic_id) instead of the
+        // getEntriesAttribute accessor, so the panel received a flood of Availability PKs
+        // and rendered every assignment as "Unknown entry (<id>)". The serialized list
+        // must be the distinct assigned entry item_ids, one per assigned entry.
+        $entryOne = $this->makeStatamicItemWithAvailability();
+        $entryTwo = $this->makeStatamicItemWithAvailability();
+        $extra = Extra::factory()->create();
+
+        $dynamic = DynamicPricing::factory()->create();
+        $dynamic->entries()->sync([$entryOne->id(), $entryTwo->id()]);
+        $dynamic->extras()->sync([$extra->id]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index'));
+        $response->assertStatus(200);
+
+        $entries = $response->json('data.0.entries');
+
+        $this->assertCount(2, $entries);
+        $this->assertEqualsCanonicalizing([$entryOne->id(), $entryTwo->id()], $entries);
+
+        // Extras still resolve to a payload the panel can read an id off of.
+        $this->assertEquals($extra->id, $response->json('data.0.extras.0.id'));
+    }
+
+    public function test_coupons_only_serializes_entries_as_assigned_item_ids()
+    {
+        $entryOne = $this->makeStatamicItemWithAvailability();
+        $entryTwo = $this->makeStatamicItemWithAvailability();
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+        $dynamic->entries()->sync([$entryOne->id(), $entryTwo->id()]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index').'?coupons_only=true');
+        $response->assertStatus(200);
+
+        $entries = $response->json('0.entries');
+
+        $this->assertCount(2, $entries);
+        $this->assertEqualsCanonicalizing([$entryOne->id(), $entryTwo->id()], $entries);
+    }
+
+    public function test_index_serializes_assigned_entries_even_without_availability_rows()
+    {
+        // The buggy relation join was keyed on availability rows, so an assigned entry
+        // with no availability yet contributed zero rows and silently vanished from the
+        // picker. The accessor reads the pivot directly, so the assignment still shows.
+        $item = $this->makeStatamicItem();
+
+        $dynamic = DynamicPricing::factory()->create();
+        $dynamic->entries()->sync([$item->id()]);
+
+        $response = $this->getJson(cp_route('resrv.dynamicpricing.index'));
+        $response->assertStatus(200);
+
+        $this->assertEqualsCanonicalizing([$item->id()], $response->json('data.0.entries'));
     }
 
     public function test_order_endpoint_clamps_out_of_range_values()
