@@ -137,11 +137,20 @@ Alpine.data('datepicker', () => ({
 
     getInitialValue() {
         if (this.isDatesEmpty) return '';
-        let start = dayjs(this.dates.date_start).format('YYYY-MM-DD');
+        let start = this.toDateOnly(this.dates.date_start);
         if (this.mode === 'range' && this.dates.date_end) {
-            return start + ' - ' + dayjs(this.dates.date_end).format('YYYY-MM-DD');
+            return start + ' - ' + this.toDateOnly(this.dates.date_end);
         }
         return start;
+    },
+
+    // The calendar emits date-only 'YYYY-MM-DD' strings and the server reads
+    // data.dates as wall-clock dates in the app timezone. Always normalize to
+    // date-only before sending over the wire: a no-arg dayjs().format() appends
+    // the browser's UTC offset, which shifts the selected day back for visitors
+    // ahead of the server timezone (e.g. +03:00 against a UTC server).
+    toDateOnly(date) {
+        return dayjs(date).format('YYYY-MM-DD');
     },
 
     buildDateMetadata() {
@@ -176,10 +185,9 @@ Alpine.data('datepicker', () => ({
             return;
         }
 
-        const dateStart = dayjs(isoDates[0]);
         const newDates = this.mode === 'range'
-            ? { date_start: dateStart.format(), date_end: dayjs(isoDates[1]).format() }
-            : { date_start: dateStart.format(), date_end: dateStart.add(1, 'day').format() };
+            ? { date_start: this.toDateOnly(isoDates[0]), date_end: this.toDateOnly(isoDates[1]) }
+            : { date_start: this.toDateOnly(isoDates[0]), date_end: this.toDateOnly(dayjs(isoDates[0]).add(1, 'day')) };
 
         this.dates = newDates;
         $wire.set('data.dates', newDates);
