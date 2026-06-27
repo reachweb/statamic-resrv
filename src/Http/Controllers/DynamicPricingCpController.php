@@ -14,6 +14,7 @@ use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Extra;
 
 class DynamicPricingCpController extends Controller
 {
@@ -49,9 +50,9 @@ class DynamicPricingCpController extends Controller
             $dynamic = $this->dynamicPricing->query()
                 ->whereNotNull('coupon')
                 ->where('coupon', '!=', '')
-                ->with('extras')
                 ->get();
 
+            $this->loadAssignedExtras($dynamic);
             $this->loadAssignedEntries($dynamic);
 
             return response()->json($dynamic);
@@ -114,8 +115,9 @@ class DynamicPricingCpController extends Controller
         $perPage = (int) ($request->input('per_page') ?? config('statamic.cp.pagination_size', 25));
         $perPage = max(1, min($perPage, 100));
 
-        $pricings = $query->with('extras')->paginate($perPage);
+        $pricings = $query->paginate($perPage);
 
+        $this->loadAssignedExtras($pricings->getCollection());
         $this->loadAssignedEntries($pricings->getCollection());
 
         return $pricings;
@@ -145,6 +147,46 @@ class DynamicPricingCpController extends Controller
             'entries',
             $assignments->get($pricing->id, collect())->pluck('dynamic_pricing_assignment_id')->values()
         ));
+    }
+
+    /**
+     * Set each rule's assigned extras as the `extras` relation.
+     *
+     * The extras() morphedByMany joins resrv_extras.id (bigint) to dynamic_pricing_assignment_id
+     * (varchar), which PostgreSQL rejects. On pgsql we read the pivot and hydrate the extras
+     * ourselves (as DynamicPricing::getExtras() does); other drivers coerce the join fine.
+     */
+    protected function loadAssignedExtras(EloquentCollection $pricings): void
+    {
+        if ($pricings->isEmpty()) {
+            return;
+        }
+
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $pricings->load('extras');
+
+            return;
+        }
+
+        $assignments = DB::table('resrv_dynamic_pricing_assignments')
+            ->where('dynamic_pricing_assignment_type', Extra::class)
+            ->whereIn('dynamic_pricing_id', $pricings->modelKeys())
+            ->get(['dynamic_pricing_id', 'dynamic_pricing_assignment_id']);
+
+        $extras = Extra::whereIn('id', $assignments->pluck('dynamic_pricing_assignment_id')->unique())
+            ->get()
+            ->keyBy('id');
+
+        $grouped = $assignments->groupBy('dynamic_pricing_id');
+
+        $pricings->each(function (DynamicPricing $pricing) use ($grouped, $extras) {
+            $assignedIds = $grouped->get($pricing->id, collect())
+                ->pluck('dynamic_pricing_assignment_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            $pricing->setRelation('extras', $extras->only($assignedIds)->values());
+        });
     }
 
     public function create(Request $request): JsonResponse|RedirectResponse
