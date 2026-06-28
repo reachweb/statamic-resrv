@@ -6,7 +6,7 @@
         "cp:dev": "vite",
         "cp:build": "vite build",
         "frontend:dev": "vite -c vite-frontend.config.js",
-        "frontend:build": "vite build -c vite-frontend.config.js"
+        "frontend:build": "vite build -c vite-frontend.config.js && vite build -c vite-frontend-css.config.js"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
