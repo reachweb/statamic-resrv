@@ -26,7 +26,9 @@ class ResendConfirmationEmail implements ShouldQueue
     /**
      * Resend only the customer confirmation email. The admin "reservation made"
      * notification is intentionally not re-sent, since this is a manual resend
-     * for a customer who never received their original confirmation.
+     * for a customer who never received their original confirmation. The customer
+     * is forced as the recipient so the resend always reaches them even when the
+     * customer_confirmed event is configured to deliver elsewhere.
      *
      * @return void
      */
@@ -35,10 +37,11 @@ class ResendConfirmationEmail implements ShouldQueue
         /** @var ReservationEmailDispatcher $dispatcher */
         $dispatcher = app(ReservationEmailDispatcher::class);
 
-        $dispatcher->send(
+        $dispatcher->sendToRecipients(
             $this->reservation,
             ReservationEmailEvent::CustomerConfirmed,
             new ReservationConfirmed($this->reservation),
+            [$this->reservation->customer?->email],
         );
     }
 }

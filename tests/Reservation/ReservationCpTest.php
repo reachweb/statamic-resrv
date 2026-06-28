@@ -646,6 +646,49 @@ class ReservationCpTest extends TestCase
         Mail::assertNothingSent();
     }
 
+    // The manual resend must always reach the customer, even if the customer_confirmed event is
+    // configured to deliver somewhere else (e.g. only to admins). It is an explicit "send this to
+    // the customer" action, so the configured recipients must not redirect it.
+    public function test_resending_confirmation_always_targets_the_customer_even_when_event_recipients_are_admins()
+    {
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+        Config::set('resrv-config.reservation_emails_global', [
+            ['event' => 'customer_confirmed', 'recipient_sources' => ['admins']],
+        ]);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+        ])->withCustomer()->create();
+
+        $response = $this->post(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(200);
+        Mail::assertSent(ReservationConfirmed::class, fn ($mail) => $mail->hasTo($reservation->customer->email)
+            && ! $mail->hasTo('admin@example.com'));
+    }
+
+    public function test_resending_confirmation_is_rejected_when_the_confirmation_email_is_disabled()
+    {
+        Mail::fake();
+        Config::set('resrv-config.reservation_emails_global', [
+            ['event' => 'customer_confirmed', 'enabled' => false],
+        ]);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+        ])->withCustomer()->create();
+
+        $response = $this->postJson(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(422)->assertSee('disabled');
+        Mail::assertNothingSent();
+    }
+
     public function test_can_query_reservations_calendar_json()
     {
         $item = $this->makeStatamicItem();

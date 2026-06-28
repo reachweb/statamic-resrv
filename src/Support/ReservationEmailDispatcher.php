@@ -47,4 +47,40 @@ class ReservationEmailDispatcher
 
         return true;
     }
+
+    /**
+     * Send to an explicit recipient list, ignoring the event's configured recipients but
+     * still applying its from/subject/markdown overrides. Used by manual actions (e.g. an
+     * admin resending the confirmation) that must always reach a specific address regardless
+     * of how the event's recipients are configured.
+     *
+     * @param  array<int, string|null>  $recipients
+     */
+    public function sendToRecipients(Reservation $reservation, ReservationEmailEvent|string $event, Mailable $mailable, array $recipients): bool
+    {
+        $recipients = collect($recipients)
+            ->map(fn ($email) => strtolower(trim((string) $email)))
+            ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL))
+            ->unique()
+            ->values();
+
+        if ($recipients->isEmpty()) {
+            Log::debug('Resrv email skipped because no valid forced recipients were provided.', [
+                'event' => $event instanceof ReservationEmailEvent ? $event->value : (string) $event,
+                'reservation_id' => $reservation->id,
+            ]);
+
+            return false;
+        }
+
+        $config = $this->configResolver->resolveForEvent($reservation, $event);
+
+        $mailable->applyResrvEmailConfig($config);
+
+        foreach ($recipients as $recipient) {
+            Mail::to($recipient)->send(clone $mailable);
+        }
+
+        return true;
+    }
 }

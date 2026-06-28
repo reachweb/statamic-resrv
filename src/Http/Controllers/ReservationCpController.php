@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Inertia\Inertia;
+use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
@@ -16,6 +17,7 @@ use Reach\StatamicResrv\Jobs\ResendConfirmationEmail;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Resources\ReservationCalendarResource;
 use Reach\StatamicResrv\Resources\ReservationResource;
+use Reach\StatamicResrv\Support\ReservationEmailConfigResolver;
 use Statamic\Facades\Scope;
 use Statamic\Http\Requests\FilteredRequest;
 use Statamic\Query\Scopes\Filters\Concerns\QueriesFilters;
@@ -266,6 +268,15 @@ class ReservationCpController extends Controller
 
         if (blank($reservation->customer?->email)) {
             return response()->json(['error' => 'This reservation has no customer email address to send to.'], 422);
+        }
+
+        // Respect the on/off switch: if the confirmation email is disabled in the email
+        // settings there is nothing to resend, so reject instead of reporting a false success.
+        $config = app(ReservationEmailConfigResolver::class)
+            ->resolveForEvent($reservation, ReservationEmailEvent::CustomerConfirmed);
+
+        if (! data_get($config, 'enabled', true)) {
+            return response()->json(['error' => 'The confirmation email is disabled in the reservation email settings.'], 422);
         }
 
         ResendConfirmationEmail::dispatchAfterResponse($reservation);
