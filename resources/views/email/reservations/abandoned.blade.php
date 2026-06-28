@@ -11,12 +11,13 @@
 
 {{ __("It looks like you started a reservation but didn't finish the booking process. Your selected dates might still be available!") }}
 
+@php($resrvEntry = $reservation->entry())
 @component('mail::panel')
 {{ __("Reservation details") }}:<br>
 {{ __("Date") }}: **{{ $reservation->created_at->format('d-m-Y H:i') }}**<br>
 {{ __("Pick-up date") }}: **{{ $reservation->date_start->format('d-m-Y H:i') }}**<br>
 {{ __("Drop-off date") }}: **{{ $reservation->date_end->format('d-m-Y H:i') }}**<br>
-{{ __("Property") }}: **{{ $reservation->entry()->title ?? '' }}**
+{{ __("Property") }}: **{{ is_array($resrvEntry) ? ($resrvEntry['title'] ?? '') : ($resrvEntry->title ?? '') }}**
 @endcomponent
 
 @component('mail::button', ['url' => config('app.url')])

@@ -15,6 +15,21 @@ class ReservationAbandonedTest extends TestCase
 {
     use RefreshDatabase;
 
+    // The abandoned email can render long after the reservation was created, by which point the
+    // entry may have been deleted; entry() then returns the emptyEntry() array, which the template
+    // must not dereference as an object.
+    public function test_it_renders_when_the_reservation_entry_has_been_deleted()
+    {
+        $reservation = Reservation::factory([
+            'item_id' => 'deleted-entry-id',
+            'status' => 'expired',
+        ])->withCustomer()->create();
+
+        $html = (new ReservationAbandoned($reservation))->render();
+
+        $this->assertStringContainsString('## Entry deleted ##', $html);
+    }
+
     public function test_command_sends_email_for_expired_reservations_with_customer()
     {
         Config::set('resrv-config.enable_abandoned_emails', true);
