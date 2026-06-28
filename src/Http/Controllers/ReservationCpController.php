@@ -12,6 +12,7 @@ use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Jobs\ResendConfirmationEmail;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Resources\ReservationCalendarResource;
 use Reach\StatamicResrv\Resources\ReservationResource;
@@ -40,6 +41,7 @@ class ReservationCpController extends Controller
             'listUrl' => cp_route('resrv.reservation.index'),
             'showUrlTemplate' => cp_route('resrv.reservation.show', 'RESRVURL'),
             'refundUrl' => cp_route('resrv.reservation.refund'),
+            'resendUrl' => cp_route('resrv.reservation.resendConfirmation'),
             'calendarUrl' => cp_route('resrv.reservations.calendar'),
         ]);
     }
@@ -243,6 +245,30 @@ class ReservationCpController extends Controller
         if ($changed) {
             ReservationRefunded::dispatch($reservation);
         }
+
+        return response()->json($reservation->id);
+    }
+
+    public function resendConfirmation(Request $request)
+    {
+        $data = $request->validate([
+            'id' => 'required|integer',
+        ]);
+        $reservation = $this->reservation->findOrFail($data['id']);
+
+        // The confirmation email only exists for reservations that actually reached a
+        // confirmed state (a normal confirmed booking or an affiliate skip-payment one).
+        // Pending/expired/refunded reservations never had a confirmation to resend.
+        $resendable = [ReservationStatus::CONFIRMED->value, ReservationStatus::PARTNER->value];
+        if (! in_array($reservation->status, $resendable, true)) {
+            return response()->json(['error' => 'Only confirmed reservations can have their confirmation email resent.'], 422);
+        }
+
+        if (blank($reservation->customer?->email)) {
+            return response()->json(['error' => 'This reservation has no customer email address to send to.'], 422);
+        }
+
+        ResendConfirmationEmail::dispatchAfterResponse($reservation);
 
         return response()->json($reservation->id);
     }
