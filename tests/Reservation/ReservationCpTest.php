@@ -631,7 +631,26 @@ class ReservationCpTest extends TestCase
 
         $response = $this->postJson(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
 
-        $response->assertStatus(422)->assertSee('no customer email');
+        $response->assertStatus(422)->assertSee('valid customer email');
+        Mail::assertNothingSent();
+    }
+
+    // A non-empty but malformed address (e.g. legacy/imported data) would be dropped by the
+    // dispatcher and silently send nothing, so the controller must reject it up front instead of
+    // reporting success.
+    public function test_resending_confirmation_is_rejected_for_a_malformed_customer_email()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+        ])->for(Customer::factory(['email' => 'not-an-email']))->create();
+
+        $response = $this->postJson(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(422)->assertSee('valid customer email');
         Mail::assertNothingSent();
     }
 

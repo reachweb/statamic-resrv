@@ -266,8 +266,12 @@ class ReservationCpController extends Controller
             return response()->json(['error' => 'Only confirmed reservations can have their confirmation email resent.'], 422);
         }
 
-        if (blank($reservation->customer?->email)) {
-            return response()->json(['error' => 'This reservation has no customer email address to send to.'], 422);
+        // Mirror the dispatcher's own recipient validation (trim + filter_var) so the response
+        // reflects reality: a blank or malformed address would be dropped before sending, which
+        // would otherwise leave the CP reporting success while nothing actually goes out.
+        $customerEmail = trim((string) ($reservation->customer?->email ?? ''));
+        if (blank($customerEmail) || ! filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+            return response()->json(['error' => 'This reservation does not have a valid customer email address to send to.'], 422);
         }
 
         // Respect the on/off switch: if the confirmation email is disabled in the email
