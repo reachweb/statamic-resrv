@@ -457,6 +457,13 @@ class ReservationCheckoutTest extends TestCase
                 'fee' => $affiliate->fee,
             ]
         );
+
+        // The name/code snapshot keeps the reports' affiliate history readable after deletion.
+        $pivot = DB::table('resrv_reservation_affiliate')->where('affiliate_id', $affiliate->id)->first();
+        $this->assertSame(
+            ['name' => $affiliate->name, 'code' => $affiliate->code],
+            json_decode($pivot->data, true)
+        );
     }
 
     // Test if email is sent to affiliate if send_reservation_email is enabled
