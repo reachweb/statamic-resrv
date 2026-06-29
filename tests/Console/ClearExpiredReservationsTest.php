@@ -151,6 +151,21 @@ class ClearExpiredReservationsTest extends TestCase
         $this->assertDatabaseMissing('resrv_customers', ['id' => $reservation->customer_id]);
     }
 
+    public function test_removes_a_customer_shared_by_multiple_cleared_reservations()
+    {
+        $customer = Customer::factory()->create();
+
+        $first = Reservation::factory()->expired()->create(['customer_id' => $customer->id]);
+        $second = Reservation::factory()->expired()->create(['customer_id' => $customer->id]);
+        DB::table('resrv_reservations')->whereIn('id', [$first->id, $second->id])->update(['created_at' => now()->subDays(100)]);
+
+        $this->artisan('resrv:clear-expired-reservations')->assertExitCode(0);
+
+        $this->assertDatabaseMissing('resrv_reservations', ['id' => $first->id]);
+        $this->assertDatabaseMissing('resrv_reservations', ['id' => $second->id]);
+        $this->assertDatabaseMissing('resrv_customers', ['id' => $customer->id]);
+    }
+
     public function test_keeps_a_customer_still_referenced_by_another_reservation()
     {
         $customer = Customer::factory()->create();

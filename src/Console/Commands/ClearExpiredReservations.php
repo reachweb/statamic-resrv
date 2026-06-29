@@ -55,30 +55,34 @@ class ClearExpiredReservations extends Command
         }
 
         $deleted = 0;
+        $customerIds = [];
 
-        $this->expiredReservations($cutoff)->chunkById(100, function ($reservations) use (&$deleted): void {
-            $reservations->each(function (Reservation $reservation) use (&$deleted): void {
+        $this->expiredReservations($cutoff)->chunkById(100, function ($reservations) use (&$deleted, &$customerIds): void {
+            $reservations->each(function (Reservation $reservation) use (&$deleted, &$customerIds): void {
+                if (filled($reservation->customer_id)) {
+                    $customerIds[$reservation->customer_id] = $reservation->customer_id;
+                }
+
                 // The reservation child/pivot tables have no cascade constraints, so detach
                 // related rows explicitly to avoid trading one orphan problem for another.
                 DB::transaction(function () use ($reservation): void {
-                    $customerId = $reservation->customer_id;
-
                     $reservation->affiliate()->detach();
                     $reservation->dynamicPricings()->detach();
                     $reservation->options()->detach();
                     $reservation->extras()->detach();
                     $reservation->childs()->delete();
                     $reservation->delete();
-
-                    // A normal checkout creates a dedicated customer row holding email and
-                    // form PII; clear it once no reservation references it, otherwise the
-                    // cleanup strands personal data and grows the customer table unbounded.
-                    $this->deleteCustomerIfOrphaned($customerId);
                 });
 
                 $deleted++;
             });
         });
+
+        // A normal checkout creates a dedicated customer row holding email and form PII; clear
+        // it once no reservation references it. This runs only after every reservation deletion
+        // above has committed: checking inside the loop would let two concurrent runs each still
+        // see the other's not-yet-deleted reservation and skip a shared customer forever.
+        $this->deleteOrphanedCustomers($customerIds);
 
         $this->info($deleted === 0
             ? 'No expired reservations to clear.'
@@ -96,16 +100,20 @@ class ClearExpiredReservations extends Command
             ->where('created_at', '<', $cutoff);
     }
 
-    private function deleteCustomerIfOrphaned($customerId): void
+    /**
+     * @param  array<int, int|string>  $customerIds
+     */
+    private function deleteOrphanedCustomers(array $customerIds): void
     {
-        if (blank($customerId)) {
+        if ($customerIds === []) {
             return;
         }
 
-        if (Reservation::where('customer_id', $customerId)->exists()) {
-            return;
-        }
-
-        Customer::whereKey($customerId)->delete();
+        // A single correlated DELETE evaluated against committed state: each candidate is
+        // removed only if no reservation still references it, so concurrent runs converge
+        // instead of each skipping a shared customer.
+        Customer::whereKey($customerIds)
+            ->whereDoesntHave('reservations')
+            ->delete();
     }
 }
