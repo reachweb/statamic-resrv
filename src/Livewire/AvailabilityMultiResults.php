@@ -55,6 +55,13 @@ class AvailabilityMultiResults extends Component
     #[Session('resrv-options')]
     public EnabledOptions $enabledOptions;
 
+    /**
+     * Developer-supplied rate options that bypass resolution from the Rate model.
+     * MUST be an id-keyed map [rate_id => label]; a bare list breaks the auto-select
+     * in AvailabilityData::reconcileRate() (a list renders option value="0").
+     *
+     * @var array<int|string, string>
+     */
     #[Locked]
     public array $overrideRates = [];
 
@@ -131,6 +138,7 @@ class AvailabilityMultiResults extends Component
         $this->rateQuantities = [];
 
         $this->data->fill($data);
+        $this->data->reconcileRate($this->entryRates, $this->rates);
 
         try {
             $this->data->validate();

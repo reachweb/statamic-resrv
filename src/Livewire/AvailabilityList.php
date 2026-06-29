@@ -31,6 +31,13 @@ class AvailabilityList extends Component
     #[Locked]
     public bool $rates = false;
 
+    /**
+     * Developer-supplied rate options that bypass resolution from the Rate model.
+     * MUST be an id-keyed map [rate_id => label]; a bare list breaks the auto-select
+     * in AvailabilityData::reconcileRate() (a list renders option value="0").
+     *
+     * @var array<int|string, string>
+     */
     #[Locked]
     public array $overrideRates = [];
 
@@ -75,6 +82,7 @@ class AvailabilityList extends Component
         $this->availableDates = collect();
 
         $this->data->fill($data);
+        $this->data->reconcileRate($this->entryRates, $this->rates);
 
         try {
             $this->data->validate();

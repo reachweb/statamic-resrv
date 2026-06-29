@@ -105,6 +105,7 @@ class AvailabilityCollection extends Component
         $this->resetPage();
 
         $this->data->fill($data);
+        $this->data->reconcileRate($this->listingRateIds(), $this->rates || $this->showRates);
 
         try {
             $this->data->validate();
