@@ -115,9 +115,9 @@ class Housekeeping extends Command
                 $ids = $reservations->pluck('id')->all();
 
                 // The child/pivot tables have no cascade constraints, so detach related rows
-                // explicitly. One batched DELETE per table over the chunk's IDs — every target
-                // column is indexed on reservation_id — keeps each chunk a single transaction
-                // instead of six DELETEs per reservation against unindexed columns.
+                // explicitly. One batched DELETE per table over the chunk's IDs keeps each chunk a
+                // single transaction instead of N DELETEs per reservation. Consider adding indexes
+                // on reservation_id in these tables if housekeeping needs to run on large datasets.
                 DB::transaction(function () use ($ids): void {
                     DB::table('resrv_reservation_affiliate')->whereIn('reservation_id', $ids)->delete();
                     DB::table('resrv_reservation_dynamic_pricing')->whereIn('reservation_id', $ids)->delete();
