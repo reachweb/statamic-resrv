@@ -282,6 +282,17 @@ class Reservation extends Model
         return $this->belongsToMany(Option::class, 'resrv_reservation_option')->withPivot('value')->withTrashed();
     }
 
+    /**
+     * Options for display (e.g. emails), with their values eager-loaded once including
+     * soft-deleted ones. withTrashed() is required because a historical reservation can
+     * reference an option value that has since been deleted; loading it here lets callers
+     * resolve the selected value (pivot->value) in memory instead of querying per row.
+     */
+    public function optionsForEmail(): Collection
+    {
+        return $this->options()->with(['values' => fn ($query) => $query->withTrashed()])->get();
+    }
+
     public function extras()
     {
         return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot(['quantity', 'price'])->withTrashed();

@@ -18,6 +18,7 @@ const props = defineProps({
     listUrl: { type: String, required: true },
     showUrlTemplate: { type: String, required: true },
     refundUrl: { type: String, required: true },
+    resendUrl: { type: String, required: true },
     calendarUrl: { type: String, required: true },
 });
 
@@ -25,8 +26,12 @@ const toast = useToast();
 const listing = ref(null);
 const refundId = ref(null);
 const refunding = ref(false);
+const resendId = ref(null);
+const resending = ref(false);
 
 const showUrl = (reservation) => props.showUrlTemplate.replace('RESRVURL', reservation.id);
+
+const canResend = (reservation) => ['confirmed', 'partner'].includes(reservation.status);
 
 const badgeClass = (status) => {
     const map = {
@@ -60,6 +65,28 @@ const refund = async () => {
         toast.error(error?.response?.data?.error ?? __('Something went wrong'));
     } finally {
         refunding.value = false;
+    }
+};
+
+const confirmResend = (reservation) => {
+    resendId.value = reservation.id;
+};
+
+const cancelResend = () => {
+    resendId.value = null;
+};
+
+const resend = async () => {
+    if (! resendId.value) return;
+    resending.value = true;
+    try {
+        await axios.post(props.resendUrl, { id: resendId.value });
+        toast.success(__('Confirmation email sent'));
+        resendId.value = null;
+    } catch (error) {
+        toast.error(error?.response?.data?.error ?? __('Something went wrong'));
+    } finally {
+        resending.value = false;
     }
 };
 </script>
@@ -113,7 +140,13 @@ const refund = async () => {
 
             <template #prepended-row-actions="{ row: reservation }">
                 <DropdownItem :text="__('View')" :href="showUrl(reservation)" icon="eye" />
-                <DropdownItem :text="__('Refund')" icon="undo" @click="confirmRefund(reservation)" />
+                <DropdownItem
+                    v-if="canResend(reservation)"
+                    :text="__('Resend confirmation email')"
+                    icon="mail"
+                    @click="confirmResend(reservation)"
+                />
+                <DropdownItem :text="__('Refund')" icon="return-square" @click="confirmRefund(reservation)" />
             </template>
         </Listing>
 
@@ -129,6 +162,18 @@ const refund = async () => {
         >
             <p>{{ __('Are you sure you want to refund this reservation? This cannot be undone.') }}</p>
             <p>{{ __('All charges will be refunded and the customer will be notified.') }}</p>
+        </ConfirmationModal>
+
+        <ConfirmationModal
+            v-if="resendId"
+            :open="true"
+            :title="__('Resend confirmation email')"
+            :button-text="__('Send')"
+            :busy="resending"
+            @confirm="resend"
+            @cancel="cancelResend"
+        >
+            <p>{{ __('This will email the confirmation again to the customer for this reservation.') }}</p>
         </ConfirmationModal>
     </div>
 </template>

@@ -16,6 +16,7 @@
 {{ __("Email") }}: **{{ $reservation->customer->email }}** 
 @endcomponent
 
+@php($resrvEntry = $reservation->entry())
 @component('mail::table')
 |{{ __("Reservation details") }}||
 | :------------------------------------------------ |:--------------------------------------------------------------------------|
@@ -23,7 +24,7 @@
 | {{ __("Pick-up date") }}      | {{ $reservation->date_start->format('d-m-Y H:i') }} |
 | {{ __("Drop-off date") }}     | {{ $reservation->date_end->format('d-m-Y H:i') }} |
 @endif
-| {{ __("Property") }}   | {{ $reservation->entry()->title }} |
+| {{ __("Property") }}   | {{ is_array($resrvEntry) ? ($resrvEntry['title'] ?? '') : $resrvEntry->title }} |
 @if ($reservation->type !== 'parent')
 @if (config('resrv-config.maximum_quantity') > 1)
 | {{ __("Quantity") }}  | x {{ $reservation->quantity }} |
@@ -63,7 +64,7 @@
 @if (is_array($value) || $value == null)
     @continue
 @endif
-| {{ $reservation->checkoutFormFieldsArray($reservation->entry()->id)[$field] ?? $field }}      | {{ $value }} |
+| {{ $reservation->checkoutFormFieldsArray(is_array($resrvEntry) ? null : $resrvEntry->id)[$field] ?? $field }}      | {{ $value }} |
 @endforeach
 @endcomponent
 @endif
@@ -78,12 +79,13 @@
 @endcomponent
 @endif
 
-@if ($reservation->options()->get()->count() > 0)
+@php($reservationOptions = $reservation->optionsForEmail())
+@if ($reservationOptions->count() > 0)
 @component('mail::table')
 |{{ __("Options") }}||
-| :------------------------------------------------ |:--------------------------------------------------------------------------| 
-@foreach ($reservation->options()->get() as $option)
-| {{ $option->name }} | {{ $option->values->find($option->pivot->value)->name }} |
+| :------------------------------------------------ |:--------------------------------------------------------------------------|
+@foreach ($reservationOptions as $option)
+| {{ $option->name }} | {{ $option->values->find($option->pivot->value)?->name }} |
 @endforeach
 @endcomponent
 @endif
