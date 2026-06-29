@@ -49,10 +49,11 @@ class ReservationEmailDispatcher
     }
 
     /**
-     * Send to an explicit recipient list, ignoring the event's configured recipients but
-     * still applying its from/subject/markdown overrides. Used by manual actions (e.g. an
-     * admin resending the confirmation) that must always reach a specific address regardless
-     * of how the event's recipients are configured.
+     * Send to an explicit recipient list, ignoring the event's configured recipients (and its
+     * enabled on/off switch) but still applying its from/subject/markdown overrides. Used by
+     * deliberate manual actions (e.g. an admin resending the confirmation) that must always
+     * reach a specific address regardless of how the event is configured. The enabled switch
+     * only governs automatic lifecycle sending, which goes through send(), not this method.
      *
      * @param  array<int, string|null>  $recipients
      */

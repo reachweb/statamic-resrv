@@ -79,12 +79,13 @@
 @endcomponent
 @endif
 
-@if ($reservation->options()->get()->count() > 0)
+@php($reservationOptions = $reservation->optionsForEmail())
+@if ($reservationOptions->count() > 0)
 @component('mail::table')
 |{{ __("Options") }}||
-| :------------------------------------------------ |:--------------------------------------------------------------------------| 
-@foreach ($reservation->options()->get() as $option)
-| {{ $option->name }} | {{ $option->values()->withTrashed()->find($option->pivot->value)?->name }} |
+| :------------------------------------------------ |:--------------------------------------------------------------------------|
+@foreach ($reservationOptions as $option)
+| {{ $option->name }} | {{ $option->values->find($option->pivot->value)?->name }} |
 @endforeach
 @endcomponent
 @endif

@@ -689,8 +689,10 @@ class ReservationCpTest extends TestCase
             && ! $mail->hasTo('admin@example.com'));
     }
 
-    public function test_resending_confirmation_is_rejected_when_the_confirmation_email_is_disabled()
+    public function test_resending_confirmation_overrides_a_disabled_confirmation_email()
     {
+        // The enabled=false switch only governs automatic lifecycle sending. A deliberate manual
+        // resend is an explicit admin action and intentionally overrides the switch.
         Mail::fake();
         Config::set('resrv-config.reservation_emails_global', [
             ['event' => 'customer_confirmed', 'enabled' => false],
@@ -702,10 +704,10 @@ class ReservationCpTest extends TestCase
             'status' => 'confirmed',
         ])->withCustomer()->create();
 
-        $response = $this->postJson(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+        $response = $this->post(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
 
-        $response->assertStatus(422)->assertSee('disabled');
-        Mail::assertNothingSent();
+        $response->assertStatus(200)->assertSee($reservation->id);
+        Mail::assertSent(ReservationConfirmed::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
     }
 
     public function test_can_query_reservations_calendar_json()
