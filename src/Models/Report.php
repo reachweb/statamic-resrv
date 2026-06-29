@@ -160,7 +160,12 @@ class Report
             }
 
             $affiliate = $affiliates->get($affiliateId);
-            $snapshot = $this->decodeSnapshot($rows->first()->data);
+
+            // Prefer a populated snapshot: pre-snapshot bookings have null data, so first() alone
+            // could pick an empty row and mislabel a force-deleted affiliate that has a usable one.
+            $snapshot = $rows
+                ->map(fn ($row) => $this->decodeSnapshot($row->data))
+                ->first(fn ($decoded) => ! empty($decoded)) ?? [];
 
             return [
                 'id' => (int) $affiliateId,
@@ -190,9 +195,12 @@ class Report
         $rules = DynamicPricing::whereIn('id', $rows->pluck('dynamic_pricing_id'))->get()->keyBy('id');
 
         // Recover titles for hard-deleted rules from their pivot snapshot (one query, only if needed).
+        // Scope to the selected reservations so a renamed rule keeps the title it had in this range,
+        // not one leaked from an application outside it.
         $missing = $rows->pluck('dynamic_pricing_id')->reject(fn ($id) => $rules->has($id));
         $snapshots = $missing->isEmpty() ? collect() : DB::table('resrv_reservation_dynamic_pricing')
             ->whereIn('dynamic_pricing_id', $missing)
+            ->whereIn('reservation_id', $this->reservations->pluck('id'))
             ->get(['dynamic_pricing_id', 'data'])
             ->groupBy('dynamic_pricing_id')
             ->map(fn ($group) => $this->decodeSnapshot($group->first()->data));

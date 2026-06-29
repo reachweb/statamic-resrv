@@ -249,4 +249,58 @@ class ReportsCpTest extends TestCase
         $this->assertSame('Deleted Rule', $row['title']);
         $this->assertEquals(1, $row['reservations']);
     }
+
+    // A force-deleted affiliate must use a populated snapshot even when an earlier pre-snapshot
+    // (null data) booking sorts first in the group.
+    public function test_affiliate_sales_pick_a_populated_snapshot_for_a_deleted_affiliate()
+    {
+        $item = $this->makeStatamicItem();
+        $affiliate = Affiliate::factory()->create(['name' => 'Snapshot Name', 'code' => 'SNAP', 'fee' => 20]);
+
+        $legacy = Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed', 'total' => '100.00'])->create();
+        $legacy->affiliate()->attach($affiliate->id, ['fee' => $affiliate->fee]); // data = null (pre-snapshot)
+
+        $recent = Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed', 'total' => '200.00'])->create();
+        $recent->affiliate()->attach($affiliate->id, [
+            'fee' => $affiliate->fee,
+            'data' => json_encode(['name' => $affiliate->name, 'code' => $affiliate->code]),
+        ]);
+
+        $affiliate->forceDelete();
+
+        $row = (new Report(now()->toDateString(), now()->addWeek()->toDateString()))->affiliateSales()->firstWhere('id', $affiliate->id);
+        $this->assertNotNull($row);
+        $this->assertTrue($row['deleted']);
+        $this->assertSame('Snapshot Name', $row['title']);
+        $this->assertEquals(2, $row['reservations']);
+    }
+
+    // A renamed-then-deleted rule must show the title from an application inside the selected range,
+    // not one leaked from an out-of-range application.
+    public function test_dynamic_pricing_snapshot_is_scoped_to_the_selected_reservations()
+    {
+        $item = $this->makeStatamicItem();
+        $rule = DynamicPricing::factory()->create(['title' => 'New Name']);
+
+        // Out-of-range application FIRST (carries a stale snapshot title).
+        $outOfRange = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'date_start' => today()->subYear()->toIso8601String(),
+            'date_end' => today()->subYear()->addDays(2)->toIso8601String(),
+        ])->create();
+        $outOfRange->dynamicPricings()->attach($rule->id, ['data' => json_encode(['title' => 'Old Name']), 'order' => 0]);
+
+        // In-range application with the current snapshot title.
+        $inRange = Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed'])->create();
+        $inRange->dynamicPricings()->attach($rule->id, ['data' => json_encode(['title' => 'New Name']), 'order' => 0]);
+
+        $ruleId = $rule->id;
+        $rule->delete();
+
+        $row = (new Report(now()->toDateString(), now()->addWeek()->toDateString()))->dynamicPricingApplications()->firstWhere('id', $ruleId);
+        $this->assertNotNull($row);
+        $this->assertSame('New Name', $row['title']);
+        $this->assertEquals(1, $row['reservations']);
+    }
 }
