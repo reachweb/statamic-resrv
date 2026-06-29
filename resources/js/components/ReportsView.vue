@@ -49,6 +49,22 @@
             />
         </Panel>
 
+        <Panel v-if="report.affiliate_sales" :heading="__('Affiliates')" class="mb-6">
+            <ReportsItemsTable
+                :items="report.affiliate_sales"
+                :table-columns="'affiliates'"
+                :currency="currency"
+            />
+        </Panel>
+
+        <Panel v-if="report.dynamic_pricing_applications" :heading="__('Dynamic pricing')" class="mb-6">
+            <ReportsItemsTable
+                :items="report.dynamic_pricing_applications"
+                :table-columns="'dynamic'"
+                :currency="currency"
+            />
+        </Panel>
+
         <Panel v-if="report.top_seller_starting_locations" :heading="__('Top starting locations')" class="mb-6">
             <ReportsItemsTable
                 :items="report.top_seller_starting_locations"

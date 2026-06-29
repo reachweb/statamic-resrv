@@ -37,8 +37,15 @@
                         <template v-if="column.field === 'total_revenue'">
                             {{ currency }} {{ item.total_revenue }}
                         </template>
+                        <template v-else-if="column.field === 'commission'">
+                            {{ currency }} {{ item.commission }}
+                        </template>
                         <template v-else-if="column.field === 'percentage'">
                             {{ Math.round(item.percentage * 100) }}%
+                        </template>
+                        <template v-else-if="column.field === 'title'">
+                            {{ item.title }}
+                            <span v-if="item.deleted" class="text-xs text-gray-400 ml-1">({{ __('deleted') }})</span>
                         </template>
                         <template v-else>
                             {{ item[column.field] }}
@@ -70,6 +77,17 @@ const columns = {
     other: [
         { field: 'title', label: 'Title' },
         { field: 'reservations', label: 'Reservations' },
+        { field: 'percentage', label: 'Percentage' },
+    ],
+    affiliates: [
+        { field: 'title', label: 'Affiliate' },
+        { field: 'reservations', label: 'Reservations' },
+        { field: 'total_revenue', label: 'Sales' },
+        { field: 'commission', label: 'Commission' },
+    ],
+    dynamic: [
+        { field: 'title', label: 'Rule' },
+        { field: 'reservations', label: 'Times applied' },
         { field: 'percentage', label: 'Percentage' },
     ],
 };

@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Models;
 
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -120,5 +121,102 @@ class Report
             ->orderBy('occurrences', 'DESC')
             ->limit(10)
             ->get('occurrences');
+    }
+
+    public function affiliateSales(): Collection
+    {
+        $pivots = DB::table('resrv_reservation_affiliate')
+            ->whereIn('reservation_id', $this->reservations->pluck('id'))
+            ->get(['reservation_id', 'affiliate_id', 'fee', 'data']);
+
+        if ($pivots->isEmpty()) {
+            return collect();
+        }
+
+        $reservationsById = $this->reservations->keyBy('id');
+
+        // withTrashed so a soft-deleted affiliate still resolves its current name.
+        $affiliates = Affiliate::withTrashed()
+            ->whereIn('id', $pivots->pluck('affiliate_id')->unique())
+            ->get()
+            ->keyBy('id');
+
+        return $pivots->groupBy('affiliate_id')->map(function ($rows, $affiliateId) use ($reservationsById, $affiliates) {
+            // Accumulate in integer minor units via Price (CLAUDE.md forbids float-summing money).
+            $sales = Price::create(0);
+            $commission = Price::create(0);
+
+            foreach ($rows as $row) {
+                $reservation = $reservationsById->get($row->reservation_id);
+
+                // Skip a missing reservation or a null total (the total accessor would throw on null).
+                if (! $reservation || $reservation->getRawOriginal('total') === null) {
+                    continue;
+                }
+
+                // The total accessor returns a fresh Price per access, so each is safe to mutate.
+                $sales->add($reservation->total);
+                $commission->add($reservation->total->multiply($row->fee / 100));
+            }
+
+            $affiliate = $affiliates->get($affiliateId);
+            $snapshot = $this->decodeSnapshot($rows->first()->data);
+
+            return [
+                'id' => (int) $affiliateId,
+                'title' => $affiliate?->name ?? ($snapshot['name'] ?? __('Deleted affiliate')),
+                'deleted' => $affiliate ? $affiliate->trashed() : true,
+                'reservations' => $rows->count(),
+                'total_revenue' => (float) $sales->format(),
+                'commission' => (float) $commission->format(),
+            ];
+        })->sortByDesc('reservations')->values();
+    }
+
+    public function dynamicPricingApplications(): Collection
+    {
+        $rows = DB::table('resrv_reservation_dynamic_pricing')
+            ->select('dynamic_pricing_id')
+            ->addSelect(DB::raw('COUNT(reservation_id) AS occurrences'))
+            ->whereIn('reservation_id', $this->reservations->pluck('id'))
+            ->groupBy('dynamic_pricing_id')
+            ->orderBy('occurrences', 'DESC')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return collect();
+        }
+
+        $rules = DynamicPricing::whereIn('id', $rows->pluck('dynamic_pricing_id'))->get()->keyBy('id');
+
+        // Recover titles for hard-deleted rules from their pivot snapshot (one query, only if needed).
+        $missing = $rows->pluck('dynamic_pricing_id')->reject(fn ($id) => $rules->has($id));
+        $snapshots = $missing->isEmpty() ? collect() : DB::table('resrv_reservation_dynamic_pricing')
+            ->whereIn('dynamic_pricing_id', $missing)
+            ->get(['dynamic_pricing_id', 'data'])
+            ->groupBy('dynamic_pricing_id')
+            ->map(fn ($group) => $this->decodeSnapshot($group->first()->data));
+
+        $total = $this->countConfirmedReservations();
+
+        return $rows->map(function ($row) use ($rules, $snapshots, $total) {
+            $rule = $rules->get($row->dynamic_pricing_id);
+            $snapshot = $snapshots->get($row->dynamic_pricing_id, []);
+
+            return [
+                'id' => (int) $row->dynamic_pricing_id,
+                'title' => $rule?->title ?? ($snapshot['title'] ?? __('Deleted rule')),
+                'deleted' => $rule === null,
+                'reservations' => (int) $row->occurrences,
+                'percentage' => $total > 0 ? round($row->occurrences / $total, 2) : 0,
+            ];
+        })->values();
+    }
+
+    protected function decodeSnapshot(?string $data): array
+    {
+        $decoded = $data ? json_decode($data, true) : null;
+
+        return is_array($decoded) ? $decoded : [];
     }
 }

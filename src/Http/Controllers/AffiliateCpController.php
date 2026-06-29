@@ -7,7 +7,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Reach\StatamicResrv\Http\Requests\AffiliateCpRequest;
@@ -83,13 +82,9 @@ class AffiliateCpController extends Controller
 
     public function delete(Request $request, Affiliate $affiliate)
     {
-        DB::transaction(function () use ($affiliate) {
-            $affiliate->delete();
-
-            DB::table('resrv_reservation_affiliate')
-                ->where('affiliate_id', $affiliate->id)
-                ->delete();
-        });
+        // Soft delete only — keep the resrv_reservation_affiliate pivot rows so the affiliate's
+        // historical sales/commission survive in the reports (resolved via withTrashed there).
+        $affiliate->delete();
 
         return response(200);
     }
