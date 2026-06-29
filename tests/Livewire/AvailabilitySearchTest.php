@@ -244,7 +244,9 @@ class AvailabilitySearchTest extends TestCase
 
     public function test_can_set_rate()
     {
-        Livewire::test(AvailabilitySearch::class)
+        // A rate is only meaningful when rates are enabled. Without an entry the search
+        // bar can't judge the value, so reconcileRate leaves the manually-set rate intact.
+        Livewire::test(AvailabilitySearch::class, ['rates' => true])
             ->set('data.dates', [
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
@@ -265,7 +267,7 @@ class AvailabilitySearchTest extends TestCase
 
     public function test_cannot_set_rate_without_dates()
     {
-        Livewire::test(AvailabilitySearch::class)
+        Livewire::test(AvailabilitySearch::class, ['rates' => true])
             ->set('data.rate', 7)
             ->assertSet('data.rate', 7)
             ->assertHasErrors(['data.dates.date_start'])
@@ -308,47 +310,64 @@ class AvailabilitySearchTest extends TestCase
                 ])->assertStatus(200);
     }
 
-    public function test_reset_on_boot_resets_data_and_searches_on_initial_load()
+    public function test_can_return_rates_if_set()
     {
-        // Seed the session with a previous search that set a rate and quantity.
-        Livewire::test(AvailabilitySearch::class)
+        // overrideRates must be an id-keyed map [rate_id => label]; a bare list would render
+        // option value="0" and make reconcileRate auto-select rate "0".
+        $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'overrideRates' => ['10' => 'Something']])
+            ->assertSet('rates', true)
+            ->assertSet('overrideRates', ['10' => 'Something'])
+            ->assertSee('select');
+        $this->assertEquals(['10' => 'Something'], $component->__get('entryRates'));
+    }
+
+    public function test_auto_selects_the_single_rate_on_an_entry_scoped_search()
+    {
+        // 'pages' has exactly one (default) rate, so reconcileRate auto-selects it: mount()
+        // resolves it outright, and a later live date change keeps it.
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'pages');
+        $rateId = Rate::forEntry($entry->id())->first()->id;
+
+        Livewire::test(AvailabilitySearch::class, ['rates' => true, 'entry' => $entry->id()])
+            ->assertSet('data.rate', (string) $rateId)
             ->set('data.dates', [
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
             ])
-            ->set('data.quantity', 3)
-            ->set('data.rate', 5);
-
-        // A fresh load with resetOnBoot should clear the rate/quantity restored
-        // from the session and dispatch a fresh search.
-        Livewire::test(AvailabilitySearch::class, ['resetOnBoot' => true])
-            ->assertSet('data.quantity', 1)
-            ->assertSet('data.rate', null)
+            ->assertSet('data.rate', (string) $rateId)
             ->assertDispatched('availability-search-updated');
     }
 
-    public function test_reset_on_boot_does_not_reset_data_on_subsequent_requests()
+    public function test_clear_dates_re_auto_selects_the_single_rate()
     {
-        // With the reset logic in boot() it would re-run on every request and wipe
-        // the user's selection; in mount() it runs only on the initial load.
-        Livewire::test(AvailabilitySearch::class, ['resetOnBoot' => true])
-            ->set('data.rate', 5)
-            ->set('data.quantity', 3)
-            ->assertSet('data.rate', 5)
-            ->assertSet('data.quantity', 3)
-            // A later request that doesn't touch rate/quantity must leave them intact.
-            ->set('data.customer.adults', 2)
-            ->assertSet('data.rate', 5)
-            ->assertSet('data.quantity', 3);
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'pages');
+        $rateId = Rate::forEntry($entry->id())->first()->id;
+
+        Livewire::test(AvailabilitySearch::class, ['rates' => true, 'entry' => $entry->id()])
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->assertSet('data.rate', (string) $rateId)
+            ->call('clearDates')
+            ->assertSet('data.dates', [])
+            ->assertSet('data.rate', (string) $rateId);
     }
 
-    public function test_can_return_rates_if_set()
+    public function test_clear_dates_leaves_the_rate_null_with_multiple_rates()
     {
-        $component = Livewire::test(AvailabilitySearch::class, ['rates' => true, 'overrideRates' => ['something']])
-            ->assertSet('rates', true)
-            ->assertSet('overrideRates', ['something'])
-            ->assertSee('select');
-        $this->assertEquals(['something'], $component->__get('entryRates'));
+        // Two rates in the collection => nothing to auto-select; the rate stays null after reset.
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'advanced', rateSlug: 'test');
+        Rate::factory()->create(['collection' => 'advanced', 'slug' => 'test-two', 'title' => 'Test Two']);
+
+        Livewire::test(AvailabilitySearch::class, ['rates' => true, 'entry' => $entry->id()])
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->call('clearDates')
+            ->assertSet('data.dates', [])
+            ->assertSet('data.rate', null);
     }
 
     public function test_can_return_rates_from_rate_model()
@@ -444,7 +463,9 @@ class AvailabilitySearchTest extends TestCase
 
     public function test_availability_date_selected_updates_rate()
     {
-        Livewire::test(AvailabilitySearch::class)
+        // Context-less rate search bar (entry === null, rates === true): reconcileRate is
+        // skipped so a rate handed in from a sibling date grid is preserved, not dropped.
+        Livewire::test(AvailabilitySearch::class, ['rates' => true])
             ->dispatch('availability-date-selected', [
                 'date' => $this->date->copy()->add(5, 'day')->toDateString(),
                 'rate_id' => 3,

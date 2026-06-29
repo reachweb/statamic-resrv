@@ -7,6 +7,7 @@ use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Livewire\AvailabilityCollection;
+use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Rate;
@@ -804,5 +805,139 @@ class AvailabilityCollectionTest extends TestCase
             'rate_id' => $rateId,
             'status' => 'pending',
         ]);
+    }
+
+    public function test_drops_a_rate_that_belongs_to_another_collection()
+    {
+        // A rate id from collection 'other' must not survive as a WHERE filter and empty the
+        // 'pages' listing. Two pages rates => the dropped rate lands on null (no auto-select).
+        $other = $this->makeStatamicItemWithAvailability(collection: 'other', price: 40);
+        $foreignRateId = Rate::forEntry($other->id())->first()->id;
+
+        $a = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');
+        $this->createRateForEntry($a, ['slug' => 'rate-b', 'title' => 'Rate B']);
+        $this->makeStatamicItemWithAvailability(collection: 'pages', price: 30, rateSlug: 'rate-a');
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rates' => true]),
+            rate: (string) $foreignRateId,
+        );
+
+        $component->assertSet('data.rate', null);
+        $this->assertGreaterThan(0, substr_count($component->html(), 'Book now'));
+    }
+
+    public function test_drops_a_rate_restricted_to_an_entry_not_in_the_listing()
+    {
+        // Rate R is apply_to_all=false and linked only to A1, but the listing renders A2.
+        $a1 = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');
+        $restricted = $this->createRateForEntry($a1, ['slug' => 'restricted', 'title' => 'Restricted', 'apply_to_all' => false]);
+        $restricted->entries()->sync([$a1->id()]);
+
+        $a2 = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 45, rateSlug: 'rate-a');
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['entries' => [$a2->id()], 'rates' => true]),
+            rate: (string) $restricted->id,
+        );
+
+        // R is not valid for A2, so it is dropped; rate-a is the only remaining valid rate → auto-selected.
+        $rateA = Rate::where('collection', 'pages')->where('slug', 'rate-a')->first();
+        $component->assertSet('data.rate', (string) $rateA->id)
+            ->assertSee('resrv-collection-'.$a2->id());
+    }
+
+    public function test_keeps_a_rate_valid_only_for_a_later_page_under_pagination()
+    {
+        // Titles force title-asc order; with paginate=2 the first page is A,B and C lands on page 2.
+        $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a', title: 'A room');
+        $this->makeStatamicItemWithAvailability(collection: 'pages', price: 30, rateSlug: 'rate-a', title: 'B room');
+        $c = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 45, rateSlug: 'rate-a', title: 'C room');
+
+        // A restricted rate valid only for the page-2 entry C.
+        $restricted = $this->createRateForEntry($c, ['slug' => 'page-two', 'title' => 'Page Two', 'apply_to_all' => false]);
+        $restricted->entries()->sync([$c->id()]);
+
+        // Viewing page 1 (A,B), seed the page-2-only rate. listingRateIds uses the full
+        // unpaginated scope, so the rate is recognised as valid and NOT dropped.
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, [
+                'collection' => 'pages',
+                'paginate' => 2,
+                'sort' => 'title',
+                'rates' => true,
+            ]),
+            rate: (string) $restricted->id,
+        );
+
+        $component->assertSet('data.rate', (string) $restricted->id);
+    }
+
+    public function test_drops_a_rate_for_a_cross_collection_entry_id_in_the_config()
+    {
+        // collection=pages but the entries list also names an out-of-collection id. That id
+        // never passes scopedEntriesQuery (collection ∩ entries), so its rate is not valid here.
+        $x1 = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');
+        $this->createRateForEntry($x1, ['slug' => 'rate-b', 'title' => 'Rate B']);
+
+        $y = $this->makeStatamicItemWithAvailability(collection: 'other', price: 40);
+        $yRateId = Rate::forEntry($y->id())->first()->id;
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, [
+                'collection' => 'pages',
+                'entries' => [$x1->id(), $y->id()],
+                'rates' => true,
+            ]),
+            rate: (string) $yRateId,
+        );
+
+        $component->assertSet('data.rate', null)
+            ->assertSee('resrv-collection-'.$x1->id());
+    }
+
+    public function test_drops_a_rate_assigned_only_to_a_private_scheduled_entry()
+    {
+        $collection = Collection::make('events')->routes('/{slug}')->dated(true)->futureDateBehavior('private');
+        $collection->save();
+        $this->makeBlueprint($collection);
+
+        $public = $this->makeStatamicItemWithAvailability(collection: 'events', price: 50, rateSlug: 'rate-a');
+        $public->date(now()->subDay())->save();
+        $this->createRateForEntry($public, ['slug' => 'rate-b', 'title' => 'Rate B']);
+
+        // A restricted rate linked only to a future-dated (private) entry.
+        $scheduled = $this->makeStatamicItemWithAvailability(collection: 'events', price: 30, rateSlug: 'rate-a');
+        $scheduled->date(now()->addDays(10))->save();
+        $restricted = $this->createRateForEntry($scheduled, ['slug' => 'scheduled-only', 'title' => 'Scheduled Only', 'apply_to_all' => false]);
+        $restricted->entries()->sync([$scheduled->id()]);
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'events', 'rates' => true]),
+            rate: (string) $restricted->id,
+        );
+
+        // The scheduled entry is excluded by whereStatus('published'), so its rate is dropped.
+        $component->assertSet('data.rate', null)
+            ->assertSee('resrv-collection-'.$public->id())
+            ->assertDontSee('resrv-collection-'.$scheduled->id());
+    }
+
+    public function test_select_hands_off_the_chosen_rate_to_the_detail_page_results()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');
+        $rateB = $this->createRateForEntry($entry, ['slug' => 'rate-b', 'title' => 'Rate B']);
+        $this->createAvailabilityForEntry($entry, 30, 2, $rateB->id, 10);
+
+        // Clicking a rate writes it into the shared session and redirects to the detail page.
+        $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rates' => true, 'showRates' => true])
+        )->call('select', $entry->id(), $rateB->id)
+            ->assertSet('data.rate', (string) $rateB->id)
+            ->assertRedirect($entry->url());
+
+        // The detail-page Results component restores the session and keeps the chosen rate.
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'rates' => true])
+            ->assertSet('data.rate', (string) $rateB->id);
     }
 }

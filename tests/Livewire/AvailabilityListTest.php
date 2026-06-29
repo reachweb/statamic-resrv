@@ -387,4 +387,126 @@ class AvailabilityListTest extends TestCase
                 'rate_id' => 'none',
             ]);
     }
+
+    public function test_drops_a_foreign_rate_and_keeps_availability_for_a_multi_rate_entry()
+    {
+        // A rate that belongs to another collection must not survive as a hard WHERE filter
+        // and empty the listing — it is dropped to null and all rates resolve.
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'multi', rateSlug: 'rate-a');
+        $rateB = $this->createRateForEntry($entry, ['slug' => 'rate-b', 'title' => 'Rate B']);
+        $this->createAvailabilityForEntry($entry, 50, 2, $rateB->id, 10);
+
+        $foreign = $this->makeStatamicItemWithAvailability(collection: 'pages');
+        $foreignRateId = Rate::forEntry($foreign->id())->first()->id;
+
+        $component = Livewire::test(AvailabilityList::class, ['entry' => $entry->id(), 'rates' => true])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $foreignRateId,
+            ])
+            ->assertSet('data.rate', null);
+
+        $this->assertNotEmpty($component->viewData('availableDates'));
+    }
+
+    public function test_auto_selects_a_single_rate_for_the_target_entry()
+    {
+        // The 'tickets' collection has exactly one rate, so a dropped foreign rate is replaced
+        // by an outright selection of that single valid rate.
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'tickets');
+        $rateId = Rate::forEntry($entry->id())->first()->id;
+
+        $foreign = $this->makeStatamicItemWithAvailability(collection: 'pages');
+        $foreignRateId = Rate::forEntry($foreign->id())->first()->id;
+
+        Livewire::test(AvailabilityList::class, ['entry' => $entry->id(), 'rates' => true])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $foreignRateId,
+            ])
+            ->assertSet('data.rate', (string) $rateId);
+    }
+
+    public function test_clears_a_numeric_rate_when_rates_are_disabled()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'pages');
+
+        Livewire::test(AvailabilityList::class, ['entry' => $entry->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => '999',
+            ])
+            ->assertSet('data.rate', null);
+    }
+
+    public function test_preserves_a_rate_that_is_valid_for_the_entry()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'multi', rateSlug: 'rate-a');
+        $this->createRateForEntry($entry, ['slug' => 'rate-b', 'title' => 'Rate B']);
+        $rateId = Rate::forEntry($entry->id())->where('slug', 'rate-a')->first()->id;
+
+        Livewire::test(AvailabilityList::class, ['entry' => $entry->id(), 'rates' => true])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $rateId,
+            ])
+            ->assertSet('data.rate', (string) $rateId);
+    }
+
+    public function test_passes_through_the_any_sentinel()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'multi', rateSlug: 'rate-a');
+        $this->createRateForEntry($entry, ['slug' => 'rate-b', 'title' => 'Rate B']);
+
+        Livewire::test(AvailabilityList::class, ['entry' => $entry->id(), 'rates' => true])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => 'any',
+            ])
+            ->assertSet('data.rate', 'any');
+    }
+
+    public function test_drops_a_rate_when_no_rates_are_published_for_the_entry()
+    {
+        // The entry's only rate is unpublished, so entryRates is empty: the carried rate is
+        // dropped and nothing is auto-selected.
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField(collectionHandle: 'unpubrates');
+        $rate = Rate::factory()->create([
+            'collection' => 'unpubrates',
+            'slug' => 'hidden',
+            'title' => 'Hidden',
+            'published' => false,
+        ]);
+
+        Livewire::test(AvailabilityList::class, ['entry' => $entry->id(), 'rates' => true])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $rate->id,
+            ])
+            ->assertSet('data.rate', null);
+    }
 }
