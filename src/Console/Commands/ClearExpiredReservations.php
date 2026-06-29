@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Console\RunsInPlease;
 
@@ -22,13 +23,17 @@ class ClearExpiredReservations extends Command
 
     public function handle(): int
     {
-        $days = (int) $this->option('days');
+        $daysOption = (string) $this->option('days');
 
-        if ($days < 0) {
+        // Cast only after validating: (int) 'abc' would silently become 0, turning a typo
+        // into a cutoff of "now" that deletes every expired reservation.
+        if (! ctype_digit($daysOption)) {
             $this->error('The --days option must be a non-negative integer.');
 
             return self::FAILURE;
         }
+
+        $days = (int) $daysOption;
 
         $cutoff = now()->subDays($days);
 
@@ -49,12 +54,19 @@ class ClearExpiredReservations extends Command
                 // The reservation child/pivot tables have no cascade constraints, so detach
                 // related rows explicitly to avoid trading one orphan problem for another.
                 DB::transaction(function () use ($reservation): void {
+                    $customerId = $reservation->customer_id;
+
                     $reservation->affiliate()->detach();
                     $reservation->dynamicPricings()->detach();
                     $reservation->options()->detach();
                     $reservation->extras()->detach();
                     $reservation->childs()->delete();
                     $reservation->delete();
+
+                    // A normal checkout creates a dedicated customer row holding email and
+                    // form PII; clear it once no reservation references it, otherwise the
+                    // cleanup strands personal data and grows the customer table unbounded.
+                    $this->deleteCustomerIfOrphaned($customerId);
                 });
 
                 $deleted++;
@@ -72,5 +84,18 @@ class ClearExpiredReservations extends Command
     {
         return Reservation::where('status', ReservationStatus::EXPIRED->value)
             ->where('updated_at', '<', $cutoff);
+    }
+
+    private function deleteCustomerIfOrphaned($customerId): void
+    {
+        if (blank($customerId)) {
+            return;
+        }
+
+        if (Reservation::where('customer_id', $customerId)->exists()) {
+            return;
+        }
+
+        Customer::whereKey($customerId)->delete();
     }
 }

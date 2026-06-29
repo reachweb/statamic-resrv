@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Console;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -94,6 +95,47 @@ class ClearExpiredReservationsTest extends TestCase
         $this->artisan('resrv:clear-expired-reservations', ['--days' => -5])
             ->expectsOutputToContain('non-negative integer')
             ->assertExitCode(1);
+    }
+
+    public function test_non_numeric_days_option_is_rejected_without_deleting_anything()
+    {
+        $old = $this->expiredReservationUpdatedDaysAgo(100);
+
+        $this->artisan('resrv:clear-expired-reservations', ['--days' => 'abc'])
+            ->expectsOutputToContain('non-negative integer')
+            ->assertExitCode(1);
+
+        // A bad value must not fall through to a "now" cutoff that wipes everything.
+        $this->assertDatabaseHas('resrv_reservations', ['id' => $old->id]);
+    }
+
+    public function test_removes_the_orphaned_customer_when_clearing_a_reservation()
+    {
+        $reservation = Reservation::factory()->expired()->withCustomer()->create();
+        DB::table('resrv_reservations')->where('id', $reservation->id)->update(['updated_at' => now()->subDays(100)]);
+
+        $this->assertDatabaseHas('resrv_customers', ['id' => $reservation->customer_id]);
+
+        $this->artisan('resrv:clear-expired-reservations')->assertExitCode(0);
+
+        $this->assertDatabaseMissing('resrv_reservations', ['id' => $reservation->id]);
+        $this->assertDatabaseMissing('resrv_customers', ['id' => $reservation->customer_id]);
+    }
+
+    public function test_keeps_a_customer_still_referenced_by_another_reservation()
+    {
+        $customer = Customer::factory()->create();
+
+        $expired = Reservation::factory()->expired()->create(['customer_id' => $customer->id]);
+        DB::table('resrv_reservations')->where('id', $expired->id)->update(['updated_at' => now()->subDays(100)]);
+
+        $active = Reservation::factory()->create(['status' => 'confirmed', 'customer_id' => $customer->id]);
+
+        $this->artisan('resrv:clear-expired-reservations')->assertExitCode(0);
+
+        $this->assertDatabaseMissing('resrv_reservations', ['id' => $expired->id]);
+        $this->assertDatabaseHas('resrv_reservations', ['id' => $active->id]);
+        $this->assertDatabaseHas('resrv_customers', ['id' => $customer->id]);
     }
 
     private function expiredReservationUpdatedDaysAgo(int $days): Reservation
