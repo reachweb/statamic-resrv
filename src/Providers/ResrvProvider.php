@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Providers;
 
 use Illuminate\Console\Application as Artisan;
+use Reach\StatamicResrv\Console\Commands\Housekeeping;
 use Reach\StatamicResrv\Console\Commands\ImportEntries;
 use Reach\StatamicResrv\Console\Commands\InstallResrv;
 use Reach\StatamicResrv\Console\Commands\MigrateSettings;
@@ -87,6 +88,7 @@ class ResrvProvider extends AddonServiceProvider
         MigrateSettings::class,
         UpgradeToRates::class,
         SendAbandonedReservationEmails::class,
+        Housekeeping::class,
     ];
 
     /** Not auto-discovered — Statamic only scans src/Providers/UpdateScripts. */

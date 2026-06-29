@@ -168,6 +168,12 @@ class ExtraCpTest extends TestCase
 
         $this->assertFalse($entry->extras()->exists());
         $this->assertSoftDeleted($extra);
+
+        // The relationship check above passes even with orphaned rows (the join filters
+        // soft-deleted extras), so assert directly that the pivot row is gone.
+        $this->assertDatabaseMissing('resrv_entry_extra', [
+            'extra_id' => $extra->id,
+        ]);
     }
 
     public function test_can_add_extra_to_statamic_entry()
