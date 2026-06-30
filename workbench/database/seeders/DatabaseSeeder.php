@@ -3,19 +3,23 @@
 namespace Workbench\Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Reach\StatamicResrv\Tests\Browser\Concerns\SeedsBookableContent;
 
 /**
  * Browser-testing harness database seeder.
  *
- * Scaffolded as a stub in T4 so testbench.yaml's seeders list resolves. T7 ports
- * the bookable-content seeding here (a `pages` collection + resrv blueprint, a
- * Rate, a wide Availability window, an Extra, an Option, and the checkout
- * entries), reusing the logic from tests/CreatesEntries + tests/Livewire/CheckoutTest.
+ * Run by `workbench:build`'s migrate-fresh step so a `testbench serve` (and the
+ * Dusk suite) boots with one bookable entry, a rate, a wide availability window,
+ * an extra, an option, and the checkout entries. The seeding logic lives in the
+ * shared SeedsBookableContent trait so the served app and the Dusk fixtures use
+ * one implementation.
  */
 class DatabaseSeeder extends Seeder
 {
+    use SeedsBookableContent;
+
     public function run(): void
     {
-        //
+        $this->seedBookableContent();
     }
 }

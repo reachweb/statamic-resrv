@@ -9,6 +9,8 @@ use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\StatamicResrvServiceProvider;
 use ReflectionClass;
 use Statamic\Addons\Manifest;
+use Statamic\Facades\Collection;
+use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
 use Statamic\Licensing\Outpost;
 
@@ -36,6 +38,7 @@ class WorkbenchServiceProvider extends ServiceProvider
     {
         $this->registerSites();
         $this->registerLivewireUpdateRoute();
+        $this->resolveCheckoutEntries();
         $this->preventOutpostRequests();
     }
 
@@ -143,6 +146,38 @@ class WorkbenchServiceProvider extends ServiceProvider
                     ->middleware('web')
                     ->name('livewire.update');
             });
+        });
+    }
+
+    /**
+     * Point resrv-config.checkout_entry / checkout_completed_entry at the seeded
+     * entries (Gotcha #9). The served app is a separate process that never runs
+     * the SeedsBookableContent trait, so it re-resolves the same entries by slug
+     * here — the SeedsBookableContent::wireCheckoutEntries() Config::set covers
+     * the seeding/test process the same way. Resolved by slug (not a baked ID) so
+     * every process agrees on the disk-persisted Statamic IDs. Deferred to booted()
+     * and guarded on the collection so the early build phases (before the seeder
+     * has run) are a no-op rather than an error.
+     */
+    protected function resolveCheckoutEntries(): void
+    {
+        $this->app->booted(function () {
+            if (! Collection::findByHandle('pages')) {
+                return;
+            }
+
+            $resolve = fn (string $slug) => Entry::query()
+                ->where('collection', 'pages')
+                ->where('slug', $slug)
+                ->first();
+
+            if ($checkout = $resolve('checkout')) {
+                config(['resrv-config.checkout_entry' => $checkout->id()]);
+            }
+
+            if ($completed = $resolve('checkout-completed')) {
+                config(['resrv-config.checkout_completed_entry' => $completed->id()]);
+            }
         });
     }
 
