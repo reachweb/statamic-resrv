@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 10 / 23 complete**
+**Progress: 11 / 23 complete**
 
 ---
 
@@ -114,7 +114,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 
 **Phase 3 — Browser test harness**
 - [x] T10 — `Tests\Browser\BrowserTestCase` (Dusk base + Statamic boot + shared file DB + fixture-lifecycle PoC)
-- [ ] T11 — Separate `Browser` PHPUnit suite + composer script (kept out of default + pgsql runs)
+- [x] T11 — Separate `Browser` PHPUnit suite + composer script (kept out of default + pgsql runs)
 - [ ] T12 — First green browser test: global-leak regression guard + calendar renders
 
 **Phase 4 — Focused browser scenarios (6–8 high-value flows; independent — pick any unchecked)**
@@ -374,6 +374,7 @@ These validate the lifecycle itself, not just that a page renders — if either 
 **Files:** `phpunit.dusk.xml` (new), `composer.json` (scripts).
 **Acceptance:** `composer test` runs the existing PHPUnit suite with no browser; `composer test:browser` runs the T10 boot test green in headless Chrome.
 **Notes:** No `tests/Pest.php` — this project is PHPUnit-only (Decision).
+> **T11 outcome:** `phpunit.dusk.xml` (own `Browser` testsuite → `tests/Browser/`, file DB + file session, header comment guarding against a `:memory:`/`array` regression) + composer scripts `test:browser` and `test:browser:headed` (the latter sets `DUSK_HEADLESS_DISABLED=1`, which testbench-dusk honors — `vendor/orchestra/testbench-dusk/src/TestCase.php:338`). Isolation was proven cheaply with `vendor/bin/phpunit --list-tests` (default + pgsql suites enumerate **0** browser tests, so `composer test`/`test-pgsql` never load the suite or launch Chrome) instead of the full ~8.5-min run; `composer test:browser` runs the 3 T10 PoC tests green. Prerequisite stands: run `php vendor/bin/testbench workbench:build` first to create/seed the shared file DB (the build is a CI step in T21).
 
 ## T12 — First green browser test: global-leak regression guard + calendar
 **Goal:** Prove the harness end-to-end AND lock in the `window.L` global-leak fix as an automated regression.
