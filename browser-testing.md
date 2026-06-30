@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 15 / 23 complete**
+**Progress: 16 / 23 complete**
 
 ---
 
@@ -121,7 +121,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T13 — AvailabilitySearch: Alpine calendar (open/range/clear), quantity stepper, rates dropdown, live-dispatch, **session persistence on reload**
 - [x] T14 — Standard checkout **happy path** E2E (search → results → select rate → extras+option → form → offline confirm → CONFIRMED + availability decremented)
 - [x] T15 — Multi-rate **cart** happy path (`AvailabilityMultiResults`: add/remove selections, line + grand totals, checkout → multi-line reservation)
-- [ ] T16 — CheckoutForm rich JS fields (`dictionary_phone` combobox keyboard nav + filter, `toggle` Alpine switch, inline required-field validation)
+- [x] T16 — CheckoutForm rich JS fields (`dictionary_phone` combobox keyboard nav + filter, `toggle` Alpine switch, inline required-field validation)
 - [ ] T17 — Gateway picker (two gateways via `beforeServingApplication`) **+ one representative error path** (e.g. "please select a rate")
 - [ ] T18 — Coupon / dynamic-pricing reactivity on checkout totals (apply → totals change, remove → revert)
 - [ ] T19 — **(optional)** AvailabilityCollection live list (collection render, `showUnavailable` mounted true vs false, paginate, select → redirect)
@@ -438,6 +438,12 @@ These validate the lifecycle itself, not just that a page renders — if either 
 **Cover:** only the field types with a real JS surface — `dictionary_phone` (the Alpine `phonebox` combobox: country-code dropdown, arrow/enter **keyboard nav**, type-to-filter) and `toggle` (Alpine switch). Assert inline required-field validation renders for at least one field. Plain `text`/`textarea`/`select`/`radio`/`checkboxes`/`integer`/`dictionary` are left to the headless suite unless one is needed to submit the form.
 **Files:** `tests/Browser/CheckoutFormFieldsTest.php`. **Source:** `src/Livewire/CheckoutForm.php`, `resources/views/livewire/components/fields/dictionary_phone.blade.php` (+ siblings).
 **Notes:** `dictionary_phone` is the richest JS surface — explicitly test keyboard navigation and filtering, not just a value set.
+> **T16 outcome + load-bearing findings:**
+> - **Seed:** `SeedsBookableContent::ensureCheckoutForm` now appends two OPTIONAL fields to the shared checkout form — `dialing_code` (`type: dictionary`) and `newsletter` (`type: toggle`) — and **always rewrites the blueprint** (Statamic forms persist on disk and survive DB truncation, so the old early-return kept a stale form without these fields). Both are optional, so T14's standard funnel still submits untouched (full suite stays green). Run `php vendor/bin/testbench workbench:build` after the seed change so the served app's on-disk blueprint gets the fields.
+> - **🔑 `isPhoneDictionary()` matches the EXACT string `'country_phone_codes'`** (`CheckoutForm.php:72`), so the blueprint field config must be `dictionary: country_phone_codes` (string). The CP stores a dictionary field's config nested (`dictionary: {type: ...}`), which would make `isPhoneDictionary` false → the plain `dictionary_default` renders instead of the phonebox. Programmatic `setContents` keeps the string verbatim.
+> - **🔑 Phonebox keyboard nav needs `x-trap` ACTIVE.** `x-trap="openedWithKeyboard"` only scopes focus when the dropdown is opened with the keyboard — so the test opens via **arrow-down on the combobox** (`x-on:keydown.down → openedWithKeyboard = true`), NOT a click. Then arrow-down walks focus onto the option (Alpine **Focus** plugin `$focus.wrap().next()`, bundled by Livewire — the addon already uses `x-anchor`/`x-trap`), and enter on the focused option fires `setSelectedOption`, writing the dial code into `#phoneNumber`.
+> - **Selectors (no blade change for the phonebox — all semantic):** combobox `[role=combobox]`, search `input[name=searchField]`, dropdown `#statesList`, options `[role=option]`, value input `#phoneNumber`. Dictionary items expose `{value:iso, label:name, code:'+NN'}` (e.g. Greece → `+30`). The toggle's sr-only checkbox got a `dusk="toggle-{handle}"` hook; flip it by clicking its wrapping `<label>` (a native click on the sr-only input is "not interactable", same as T14's extra checkbox). Required-validation renders as `.text-red-600` on submit.
+> - `handleFirstStep()` advances to step 2 without selecting the not-required option, so the funnel-to-form helper skips extras/options. Suite: 16 browser tests / 58 assertions green, served log error-free.
 
 ## T17 — Gateway picker + one error path
 **Cover:** with **two** gateways the picker (`checkout-gateway-picker.blade.php`) renders and selects; the payment table (`checkout-payment-table.blade.php`) reflects the choice. Register the second gateway in the **served** app via `beforeServingApplication()` (Gotcha #7) — a small offline-style stub alongside `offline` (a real second gateway, not a `Config::set()` in the test process, which the browser wouldn't see). Also assert **one representative error path** renders in the browser (e.g. attempting checkout without choosing a rate → "please select a rate").

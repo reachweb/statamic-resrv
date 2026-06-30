@@ -81,20 +81,47 @@ trait SeedsBookableContent
      */
     protected function ensureCheckoutForm(): void
     {
-        if (Form::find($this->checkoutSlug)) {
-            return;
-        }
-
         $blueprintContents = YAML::file(
             dirname(__DIR__, 3).'/resources/blueprints/forms/checkout.yaml'
         )->parse();
+
+        // T16 drives the two field types with a real JS surface that the shipped form
+        // lacks: a dictionary_phone combobox (a `dictionary` field whose config is the
+        // exact string `country_phone_codes` — that is what CheckoutForm::isPhoneDictionary()
+        // matches to pick the phonebox over the plain dictionary), and a toggle switch.
+        // Both are optional, so the standard checkout funnel (T14) still submits with them
+        // left untouched. The blueprint is always (re)written — Statamic forms persist on
+        // disk and survive DB truncation, so an early return would keep a stale form from an
+        // earlier run that lacks these fields.
+        $blueprintContents['tabs']['main']['sections'][0]['fields'][] = [
+            'handle' => 'dialing_code',
+            'field' => [
+                'display' => 'Dialing code',
+                'type' => 'dictionary',
+                'dictionary' => 'country_phone_codes',
+                'width' => 50,
+                'localizable' => false,
+            ],
+        ];
+
+        $blueprintContents['tabs']['main']['sections'][0]['fields'][] = [
+            'handle' => 'newsletter',
+            'field' => [
+                'display' => 'Subscribe to the newsletter',
+                'type' => 'toggle',
+                'width' => 100,
+                'localizable' => false,
+            ],
+        ];
 
         Blueprint::make($this->checkoutSlug)
             ->setNamespace('forms')
             ->setContents($blueprintContents)
             ->save();
 
-        Form::make($this->checkoutSlug)->title('Checkout')->save();
+        if (! Form::find($this->checkoutSlug)) {
+            Form::make($this->checkoutSlug)->title('Checkout')->save();
+        }
     }
 
     /**
