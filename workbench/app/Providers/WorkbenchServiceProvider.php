@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
+use Reach\StatamicResrv\StatamicResrvServiceProvider;
+use ReflectionClass;
+use Statamic\Addons\Manifest;
 use Statamic\Facades\Site;
 use Statamic\Licensing\Outpost;
 
@@ -24,6 +27,7 @@ class WorkbenchServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->registerAddonManifest();
         $this->configureStatamic();
         $this->forceOfflineGateway();
     }
@@ -33,6 +37,38 @@ class WorkbenchServiceProvider extends ServiceProvider
         $this->registerSites();
         $this->registerLivewireUpdateRoute();
         $this->preventOutpostRequests();
+    }
+
+    /**
+     * Register the addon in Statamic's manifest the way AddonTestCase does for the
+     * headless suite. The addon is the repo's *root* composer package, so it never
+     * lands in vendor/composer/installed.json and Statamic never discovers it —
+     * leaving AddonServiceProvider::boot() to bail at its `if (! $this->getAddon())`
+     * guard, which silently skips the entire boot chain (events, tags, scopes,
+     * fieldtypes, publishables, bootAddon). Injecting the manifest entry makes
+     * getAddon() resolve by namespace, so the served app boots the addon exactly
+     * like a real install: the resrv_availability fieldtype registers, the tags
+     * render, and the frontend assets publish under the `statamic-resrv` tag.
+     */
+    protected function registerAddonManifest(): void
+    {
+        $provider = StatamicResrvServiceProvider::class;
+        $directory = dirname((new ReflectionClass($provider))->getFileName());
+        $namespace = implode('\\', explode('\\', $provider, -1));
+
+        $json = json_decode($this->app['files']->get($directory.'/../composer.json'), true);
+        $statamic = $json['extra']['statamic'] ?? [];
+
+        $this->app->make(Manifest::class)->manifest = [
+            $json['name'] => [
+                'id' => $json['name'],
+                'slug' => $statamic['slug'] ?? null,
+                'version' => 'dev-main',
+                'namespace' => $namespace,
+                'autoload' => $json['autoload']['psr-4'][$namespace.'\\'] ?? 'src',
+                'provider' => $provider,
+            ],
+        ];
     }
 
     /**

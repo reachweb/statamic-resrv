@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 5 / 23 complete**
+**Progress: 6 / 23 complete**
 
 ---
 
@@ -107,7 +107,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 
 **Phase 2 — Host app: render one bookable page**
 - [x] T5 — `WorkbenchServiceProvider` (Statamic config, offline gateway, Livewire-update route)
-- [ ] T6 — Frontend layout + publish/serve the IIFE assets (correct tag + paths + order)
+- [x] T6 — Frontend layout + publish/serve the IIFE assets (correct tag + paths + order)
 - [ ] T7 — Content + DB seeding (collection, blueprint, bookable entry, checkout entries, rate/availability) via `workbench:build`
 - [ ] T8 — Routes/templates mounting the Livewire components
 - [ ] T9 — Manual `testbench serve` smoke check (page renders, calendar works, no leak)
@@ -279,6 +279,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 **Files:** `workbench/resources/views/layout.antlers.html` (new); published assets under `public/vendor/statamic-resrv/frontend/`.
 **Acceptance:** the layout file exists and `curl -s http://127.0.0.1:8001/vendor/statamic-resrv/frontend/js/resrv-frontend.js` returns **200** and the body starts with `(function(){` (IIFE — Gotcha #3).
 **Notes:** The IIFE wrapper + the single intentional global (`window.dayjs`) come from commit `4c93a2f`; T12 asserts the leak is gone in-browser.
+> **Foundational fix made here (prerequisite, not in the original plan):** the addon is the repo's *root* composer package, so Statamic never discovers it in the served app and `AddonServiceProvider::boot()` bailed at `if (! $this->getAddon())` — silently skipping the **entire** boot chain (events, tags, scopes, fieldtypes, publishables, `bootAddon`). With nothing registered, `vendor:publish --tag=statamic-resrv` reported *"No publishable resources"* and the `resrv_availability` fieldtype never registered. `WorkbenchServiceProvider::registerAddonManifest()` now injects the addon into `Statamic\Addons\Manifest` (mirroring `AddonTestCase`), so `getAddon()` resolves by namespace and the served app boots the addon like a real install. **This also unblocks T7 (fieldtype/blueprint) and T8 (tags), and is what makes the build's `asset-publish` step ship the bundle for T21/CI.** Verified: addon discovered, `FieldtypeRepository::find('resrv_availability')` registered, publish tag present, offline gateway preserved, bundle served 200 as an IIFE.
 
 ## T7 — Content + DB seeding
 **Goal:** Seed one bookable entry (a `Rate` + a wide availability window), an extra, an option, and the checkout entries — reusing the existing test-helper logic.
