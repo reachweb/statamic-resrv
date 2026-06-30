@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 12 / 23 complete**
+**Progress: 13 / 23 complete**
 
 ---
 
@@ -118,7 +118,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T12 — First green browser test: global-leak regression guard + calendar renders
 
 **Phase 4 — Focused browser scenarios (6–8 high-value flows; independent — pick any unchecked)**
-- [ ] T13 — AvailabilitySearch: Alpine calendar (open/range/clear), quantity stepper, rates dropdown, live-dispatch, **session persistence on reload**
+- [x] T13 — AvailabilitySearch: Alpine calendar (open/range/clear), quantity stepper, rates dropdown, live-dispatch, **session persistence on reload**
 - [ ] T14 — Standard checkout **happy path** E2E (search → results → select rate → extras+option → form → offline confirm → CONFIRMED + availability decremented)
 - [ ] T15 — Multi-rate **cart** happy path (`AvailabilityMultiResults`: add/remove selections, line + grand totals, checkout → multi-line reservation)
 - [ ] T16 — CheckoutForm rich JS fields (`dictionary_phone` combobox keyboard nav + filter, `toggle` Alpine switch, inline required-field validation)
@@ -406,6 +406,11 @@ These validate the lifecycle itself, not just that a page renders — if either 
 ## T13 — AvailabilitySearch (the Alpine surface)
 **Cover:** `@reachweb/alpine-calendar` open + single vs range pick + `clearDates()`; `enableQuantity` stepper (+/- min/max) reactivity; `rates` dropdown incl. `anyRate`; `live` auto-dispatch on date pick (results update without a submit click); **session persistence** (set dates, reload page, dates still present — Gotcha #4). Assert one validation error renders in the UI (e.g. minimum-duration) — the rule logic itself is already unit-tested, here we only confirm it *renders*.
 **Files:** `tests/Browser/AvailabilitySearchTest.php`. **Source:** `src/Livewire/AvailabilitySearch.php`, `Forms/AvailabilityData.php`. (Note: this does **not** exercise `AvailabilityControl` — a separate, empty-`<div>` component that stays headless-only.)
+> **T13 outcome + load-bearing harness fix (READ before any other Phase-4 task):**
+> - **🔑 File session leaks across Dusk tests — fixed centrally in `BrowserTestCase::setUp()`.** The cart (`resrv-search`) is FILE-backed (Gotcha #4); unlike the truncated DB, those session files (and the browser cookie) **survive between tests**, so a date/rate one test leaves pollutes the next (a stale far-future date even moves the calendar view off the seeded window). `clearFrontendSessions()` now wipes `config('session.files')` — which resolves to the **same** dir the served app writes (`vendor/orchestra/testbench-dusk/laravel/storage/framework/sessions`) — before every test. **Every Phase-4 test now starts with a clean cart automatically; don't re-solve this.** Within a single test the session still persists across reloads (that's how the persistence test passes).
+> - **`$wire` is NOT a document global.** To poke a component from `$browser->script()`, use `window.Livewire.all().find(c => c.el.querySelector('…'))` then `window.Livewire.find(c.id).set(...)` (avoids CSS colon-escaping). Used to inject an invalid date pair for the validation-render check.
+> - **Seed `available=1` is a hard constraint.** Any flow that must resolve availability keeps `quantity = 1`; pushing quantity to 2 yields "no availability" (no Book Now). The quantity stepper is client-clamped (decrement disabled at 1, increment at `maximum_quantity`) so it can't drive a server error — its test is pure Alpine reactivity (read `.value`/`.disabled` DOM props, NOT text/attribute).
+> - **Range mode needs its own mount** (`$calendar` is `#[Locked]`): added `/__t/search-range` (search-only, no results component) — assert the range string in `input[name=datepicker]` (`"DD Mon YYYY – DD Mon YYYY"`, en-dash). Two day clicks must fire in ONE `script()` before Alpine re-renders. Rates dropdown auto-selects the single seeded rate (`#availability-search-rate` value = numeric id); multi-rate/anyRate deferred to T15/T20.
 
 ## T14 — Standard checkout happy path (E2E)
 **Cover:** the whole funnel in one readable test — visit bookable page → pick date range + quantity (+ rate) → see availability → proceed → add an extra + select an option → fill the customer form (all required fields) → offline "Confirm reservation" → land on the completed page.

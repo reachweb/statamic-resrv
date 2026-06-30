@@ -54,5 +54,31 @@ abstract class BrowserTestCase extends TestCase
         parent::setUp();
 
         $this->seedBookableContent();
+        $this->clearFrontendSessions();
+    }
+
+    /**
+     * Give every browser test a clean cart. The frontend persists its
+     * search/reservation cart in #[Session('resrv-search')] keys backed by the
+     * FILE session driver (Gotcha #4) — and, unlike the truncated DB, those session
+     * files survive across Dusk tests, so a date/rate left by one test would leak
+     * into the next (e.g. a stale far-future date moves the calendar view off the
+     * seeded window). config('session.files') resolves to the SAME directory the
+     * served app writes (both run on the testbench-dusk skeleton), so wiping it here
+     * makes the browser's carried session cookie resolve to a fresh empty session.
+     */
+    protected function clearFrontendSessions(): void
+    {
+        $directory = config('session.files');
+
+        if (! is_string($directory) || ! is_dir($directory)) {
+            return;
+        }
+
+        foreach (glob($directory.'/*') as $file) {
+            if (is_file($file) && basename($file) !== '.gitignore') {
+                @unlink($file);
+            }
+        }
     }
 }

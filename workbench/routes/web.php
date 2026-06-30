@@ -15,6 +15,17 @@ Route::get('/__t/search', function () {
     return view('dusk.search', ['entryId' => $entry?->id()]);
 });
 
+/*
+ * Range-calendar variant of /__t/search. `$calendar` is #[Locked], so range mode
+ * can only be exercised through a mount that sets it — T13 drives single pick on
+ * /bookable and range pick here.
+ */
+Route::get('/__t/search-range', function () {
+    $entry = Entry::query()->where('collection', 'pages')->where('slug', 'bookable')->first();
+
+    return view('dusk.search-range', ['entryId' => $entry?->id()]);
+});
+
 Route::get('/__t/checkout', fn () => view('dusk.checkout'));
 
 /*
