@@ -26,6 +26,19 @@ Route::get('/__t/search-range', function () {
     return view('dusk.search-range', ['entryId' => $entry?->id()]);
 });
 
+/*
+ * AvailabilityResults mounted alone for the MULTI entry (two rates). With rate='any'
+ * and >1 rate the results render the advanced rate selector, and checkout() guards
+ * with "Please select a rate before proceeding." — T17 drives that representative
+ * error path here (the bookable entry is single-rate, so it auto-selects and can't
+ * reach the guard).
+ */
+Route::get('/__t/results-multi', function () {
+    $entry = Entry::query()->where('collection', 'pages')->where('slug', 'multi')->first();
+
+    return view('dusk.results-multi', ['entryId' => $entry?->id()]);
+});
+
 Route::get('/__t/checkout', fn () => view('dusk.checkout'));
 
 /*

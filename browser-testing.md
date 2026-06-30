@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 16 / 23 complete**
+**Progress: 17 / 23 complete**
 
 ---
 
@@ -122,7 +122,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T14 — Standard checkout **happy path** E2E (search → results → select rate → extras+option → form → offline confirm → CONFIRMED + availability decremented)
 - [x] T15 — Multi-rate **cart** happy path (`AvailabilityMultiResults`: add/remove selections, line + grand totals, checkout → multi-line reservation)
 - [x] T16 — CheckoutForm rich JS fields (`dictionary_phone` combobox keyboard nav + filter, `toggle` Alpine switch, inline required-field validation)
-- [ ] T17 — Gateway picker (two gateways via `beforeServingApplication`) **+ one representative error path** (e.g. "please select a rate")
+- [x] T17 — Gateway picker (two gateways via `beforeServingApplication`) **+ one representative error path** (e.g. "please select a rate")
 - [ ] T18 — Coupon / dynamic-pricing reactivity on checkout totals (apply → totals change, remove → revert)
 - [ ] T19 — **(optional)** AvailabilityCollection live list (collection render, `showUnavailable` mounted true vs false, paginate, select → redirect)
 - [ ] T20 — Cross-collection rate reconciliation: select a rate on one collection, navigate to another, the carried `resrv-search` rate is **healed** (foreign rate dropped; single valid rate auto-selected) — guards the `resetOnBoot` → `reconcileRate()` change
@@ -449,6 +449,11 @@ These validate the lifecycle itself, not just that a page renders — if either 
 **Cover:** with **two** gateways the picker (`checkout-gateway-picker.blade.php`) renders and selects; the payment table (`checkout-payment-table.blade.php`) reflects the choice. Register the second gateway in the **served** app via `beforeServingApplication()` (Gotcha #7) — a small offline-style stub alongside `offline` (a real second gateway, not a `Config::set()` in the test process, which the browser wouldn't see). Also assert **one representative error path** renders in the browser (e.g. attempting checkout without choosing a rate → "please select a rate").
 **Files:** `tests/Browser/GatewayPickerTest.php`. **Source:** `src/Livewire/Checkout.php`, `resources/views/livewire/components/checkout-gateway-picker.blade.php`.
 **Notes:** With a single gateway the picker is auto-skipped — that single-gateway auto-select is already covered by T14, so this task is specifically the *multi*-gateway UI.
+> **T17 outcome + load-bearing findings (the `beforeServingApplication` recipe — READ before any test needing per-test SERVED config):**
+> - **🔑 Per-test served-app config = testbench-dusk's `#[BeforeServing('methodName')]` attribute** (`Orchestra\Testbench\Dusk\Attributes\BeforeServing`) on the test method + a **public** `methodName($app, $config)` on the test class. testbench-dusk stashes the tweak to the shared static server **before** the test's `browse()` and clears it in `afterServingApplication()` — so the second gateway is visible to the browser ONLY during T17 and does NOT leak to T14's single-gateway auto-select (verified: full suite green). The served process invokes the method on a fresh test instance, so it must be public + stateless. This is the first consumer of the hook (deferred from T10).
+> - **🔑 The tweak lands via `after_resolving('config')` BEFORE providers register**, so `WorkbenchServiceProvider::forceOfflineGateway()` would overwrite it. Fixed by making it conditional: `if (count(config('resrv-config.payment_gateways')) >= 2) return;` — a deliberate 2-gateway override survives, otherwise offline-only is forced as before. (The served PHP process reloads classes when it (re)starts in `setUpBeforeClass`, so a fresh `composer test:browser` run picks up provider edits.)
+> - **Two gateways = one class, two config keys.** Reused `OfflinePaymentGateway` for both `offline` and `offline_express` (the picker keys by config name, not `name()`); `offline_express` carries `surcharge: {type: percent, amount: 10}`. Selecting it shows the offline confirm (`@confirm-payment`) AND the payment table's surcharge line (`dusk="payment-surcharge"` added) appears — that's the "payment table reflects the choice" assertion. Picker buttons already ship `dusk="gateway-{name}"`.
+> - **Error path = the defensive "select a rate" guard.** With `rate='any'` + >1 rate the results render the advanced rate selector (`checkoutRate` buttons), NOT a Book Now button, so `checkout()`'s guard is only reachable by calling it directly — driven on a new `/__t/results-multi` route (AvailabilityResults mounted ALONE for the two-rate `multi` entry) via the `window.Livewire` poke (T13/T15 pattern): `availabilitySearchChanged({…, rate:'any'})` then `checkout()` → "Please select a rate before proceeding." renders. Suite: 18 browser tests / 64 assertions green, served log error-free.
 
 ## T18 — Coupon / dynamic-pricing reactivity
 **Cover:** apply a coupon (a `DynamicPricing` with a code) at checkout via `checkout-coupon.blade.php` → totals in the payment table change live (`coupon-applied`); remove it → totals revert (`coupon-removed`). One percentage and one flat adjustment is enough to prove the UI reflects both; the pricing math itself is unit-tested.

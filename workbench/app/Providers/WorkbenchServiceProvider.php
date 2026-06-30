@@ -122,6 +122,15 @@ class WorkbenchServiceProvider extends ServiceProvider
      */
     protected function forceOfflineGateway(): void
     {
+        // A Dusk test that needs the multi-gateway picker (T17) registers two gateways
+        // through beforeServingApplication(), which lands via after_resolving('config')
+        // before this provider registers. Leave that deliberate override in place;
+        // otherwise force the offline gateway only so the browser never meets a Stripe
+        // card iframe and the PaymentGatewayManager auto-selects it.
+        if (count((array) config('resrv-config.payment_gateways')) >= 2) {
+            return;
+        }
+
         config([
             'resrv-config.payment_gateways' => [
                 'offline' => [
