@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 4 / 23 complete**
+**Progress: 5 / 23 complete**
 
 ---
 
@@ -106,7 +106,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T4 — Configure `testbench.yaml` (providers, env, session, gateway, migrations list, build pipeline, port)
 
 **Phase 2 — Host app: render one bookable page**
-- [ ] T5 — `WorkbenchServiceProvider` (Statamic config, offline gateway, Livewire-update route)
+- [x] T5 — `WorkbenchServiceProvider` (Statamic config, offline gateway, Livewire-update route)
 - [ ] T6 — Frontend layout + publish/serve the IIFE assets (correct tag + paths + order)
 - [ ] T7 — Content + DB seeding (collection, blueprint, bookable entry, checkout entries, rate/availability) via `workbench:build`
 - [ ] T8 — Routes/templates mounting the Livewire components
