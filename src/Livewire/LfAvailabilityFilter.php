@@ -11,6 +11,7 @@ use Reach\StatamicLivewireFilters\Http\Livewire\LivewireCollection;
 use Reach\StatamicLivewireFilters\Http\Livewire\Traits\IsLivewireFilter;
 use Reach\StatamicResrv\Facades\AvailabilityField;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
+use Reach\StatamicResrv\Models\Rate;
 
 class LfAvailabilityFilter extends Component
 {
@@ -61,6 +62,17 @@ class LfAvailabilityFilter extends Component
     public function availabilityChanged($data)
     {
         $this->data->fill($data);
+
+        // The external LivewireCollection owns the visible-entry set, so this surface can
+        // only heal cross-collection and orphan rates — not a rate restricted to a private
+        // or scheduled entry within this collection (AvailabilityCollection catches that).
+        $validRateIds = $this->rates
+            ? Rate::where('collection', $this->collection)
+                ->where(fn ($q) => $q->where('apply_to_all', true)->orWhereHas('entries'))
+                ->published()->pluck('title', 'id')->toArray()
+            : [];
+        $this->data->reconcileRate($validRateIds, $this->rates);
+
         $this->dispatch('filter-updated',
             field: $this->field,
             condition: $this->condition,
