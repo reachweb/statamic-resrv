@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 11 / 23 complete**
+**Progress: 12 / 23 complete**
 
 ---
 
@@ -115,7 +115,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 **Phase 3 — Browser test harness**
 - [x] T10 — `Tests\Browser\BrowserTestCase` (Dusk base + Statamic boot + shared file DB + fixture-lifecycle PoC)
 - [x] T11 — Separate `Browser` PHPUnit suite + composer script (kept out of default + pgsql runs)
-- [ ] T12 — First green browser test: global-leak regression guard + calendar renders
+- [x] T12 — First green browser test: global-leak regression guard + calendar renders
 
 **Phase 4 — Focused browser scenarios (6–8 high-value flows; independent — pick any unchecked)**
 - [ ] T13 — AvailabilitySearch: Alpine calendar (open/range/clear), quantity stepper, rates dropdown, live-dispatch, **session persistence on reload**
@@ -386,6 +386,11 @@ These validate the lifecycle itself, not just that a page renders — if either 
 **Files:** `tests/Browser/SmokeTest.php` (new).
 **Acceptance:** `composer test:browser` runs this test green in headless Chrome.
 **Notes:** This is the concrete payoff of commit `4c93a2f` — a browser test that would have caught the Leaflet `window.L` collision.
+> **T12 outcome + selectors Phase-4 reuses:** `tests/Browser/SmokeTest.php`, 2 methods, green via `composer test:browser` (full suite now 5 tests / 16 assertions). Findings:
+> - **Globals:** in-browser `typeof window.dayjs === 'function'`, `typeof window.L === 'undefined'` — the leak guard. Asserted by name (never snapshot `Object.keys(window)` — Chrome-version-flaky).
+> - **Console:** the served harness ships no favicon, so a `favicon.ico` 404 is the **only** SEVERE entry — filtered by name (`str_contains(..., 'favicon.ico')`), so a real JS error / missing bundle still fails the assertion.
+> - **Calendar DOM (`@reachweb/alpine-calendar`):** popup = `.rc-popup-overlay`; days are `<div class="rc-day …">` (NOT buttons, no `data-date`); available/clickable day = `.rc-day--available`; price label = `.rc-day__label` (currency symbol + price). With `show-availability-on-calendar=true` the **single seeded rate auto-selects** (`reconcileRate`), so opening the calendar fires `$wire.availabilityCalendar()` and paints 20 labels. `$calendar` defaults to **`single`** → one click picks a date.
+> - **Round-trip signal:** after a date pick, `AvailabilityResults` renders the Book Now action `[wire\:click="checkout()"]` (gated on availability `message.status === true`) and writes the formatted date into `input[name=datepicker]`. Phase-4 (T13/T14) reuses these selectors.
 
 ---
 
