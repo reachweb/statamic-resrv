@@ -31,7 +31,7 @@ class StandardCheckoutFlowTest extends BrowserTestCase
             //    the results so the Book Now action appears with no submit click.
             $browser->visit('/bookable')->waitFor('[name=datepicker]')
                 ->click('[name=datepicker]')->waitFor('.rc-day__label')
-                ->click('.rc-day--available')->waitFor('[wire\\:click="checkout()"]');
+                ->click('.rc-day--available:not(.rc-day--hidden)')->waitFor('[wire\\:click="checkout()"]');
 
             // 2. Book Now creates the pending reservation and redirects to checkout step 1.
             $browser->click('[wire\\:click="checkout()"]')

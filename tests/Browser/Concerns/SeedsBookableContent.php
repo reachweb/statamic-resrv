@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Tests\Browser\Concerns;
 
 use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Str;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
@@ -129,7 +128,7 @@ trait SeedsBookableContent
     protected function ensureBookableEntry(): EntryContract
     {
         return $this->ensurePageEntry($this->bookableSlug, 'Bookable Room', [
-            'resrv_availability' => (string) Str::uuid(),
+            'resrv_availability' => fake()->uuid(),
             'template' => 'bookable',
         ]);
     }
@@ -141,7 +140,7 @@ trait SeedsBookableContent
     protected function ensureMultiEntry(Rate $rate): EntryContract
     {
         $entry = $this->ensurePageEntry($this->multiSlug, 'Multi-rate Room', [
-            'resrv_availability' => (string) Str::uuid(),
+            'resrv_availability' => fake()->uuid(),
             'template' => 'multi',
         ]);
 

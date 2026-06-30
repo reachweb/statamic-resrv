@@ -70,7 +70,7 @@ class SmokeTest extends BrowserTestCase
             // let the data.dates round-trip resolve. The Book Now action is gated on
             // availability message.status === true, so its arrival proves the pick
             // round-tripped into rendered results.
-            $browser->click('.rc-day--available')
+            $browser->click('.rc-day--available:not(.rc-day--hidden)')
                 ->waitFor('[wire\\:click="checkout()"]')
                 ->assertPresent('[wire\\:click="checkout()"]');
 

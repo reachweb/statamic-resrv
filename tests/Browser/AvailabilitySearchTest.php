@@ -35,7 +35,7 @@ class AvailabilitySearchTest extends BrowserTestCase
 
             // live=true: a single-mode pick auto-runs search() with NO submit click,
             // so the results Book Now action (gated on resolved availability) appears.
-            $browser->click('.rc-day--available')
+            $browser->click('.rc-day--available:not(.rc-day--hidden)')
                 ->waitFor('[wire\\:click="checkout()"]')
                 ->assertPresent('[wire\\:click="checkout()"]');
             $this->assertNotEmpty($browser->value('[name=datepicker]'));
@@ -55,25 +55,30 @@ class AvailabilitySearchTest extends BrowserTestCase
 
             $browser->click('[name=datepicker]')
                 ->waitFor('.rc-popup-overlay')
-                ->waitFor('.rc-day--available');
+                ->waitFor('.rc-day--available:not(.rc-day--hidden)');
 
             // Range mode needs two distinct day clicks; target two available days by
             // index in one script (real click events the calendar's delegated handler
             // processes) so both land before Alpine's reactive re-render detaches them.
+            // :not(.rc-day--hidden) is load-bearing: the 2-month grid repaints each
+            // in-window date a second time as a hidden other-month filler that still
+            // carries rc-day--available, so the unfiltered NodeList interleaves hidden
+            // duplicate dates and these indexes could land on an unclickable cell.
             $browser->script(<<<'JS'
-                const days = [...document.querySelectorAll('.rc-day--available')];
+                const days = [...document.querySelectorAll('.rc-day--available:not(.rc-day--hidden)')];
                 days[1].click();
                 days[4].click();
             JS);
 
             // The calendar writes "DD Mon YYYY – DD Mon YYYY" into the readonly input.
+            $rangePattern = '/\d{1,2} \w{3} \d{4}.+\d{1,2} \w{3} \d{4}/u';
             $browser->waitUsing(5, 100, fn () => preg_match(
-                '/\d{1,2} \w{3} \d{4}.+\d{1,2} \w{3} \d{4}/u',
+                $rangePattern,
                 (string) $browser->value('[name=datepicker]')
             ) === 1);
 
             $this->assertMatchesRegularExpression(
-                '/\d{1,2} \w{3} \d{4}.+\d{1,2} \w{3} \d{4}/u',
+                $rangePattern,
                 (string) $browser->value('[name=datepicker]')
             );
         });
@@ -122,7 +127,7 @@ class AvailabilitySearchTest extends BrowserTestCase
 
             $browser->click('[name=datepicker]')
                 ->waitFor('.rc-day__label')
-                ->click('.rc-day--available')
+                ->click('.rc-day--available:not(.rc-day--hidden)')
                 ->waitFor('[wire\\:click="checkout()"]');
 
             $picked = $browser->value('[name=datepicker]');
@@ -150,7 +155,7 @@ class AvailabilitySearchTest extends BrowserTestCase
             // tested; this only confirms the error UI renders in a real browser.
             $browser->click('[name=datepicker]')
                 ->waitFor('.rc-day__label')
-                ->click('.rc-day--available')
+                ->click('.rc-day--available:not(.rc-day--hidden)')
                 ->waitFor('[wire\\:click="checkout()"]');
 
             $browser->script(<<<'JS'
