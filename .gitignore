@@ -12,3 +12,5 @@ coverage
 .mcp.json
 ISSUES.md
 PLAN.md
+# claude-loop run logs
+.loop-logs/

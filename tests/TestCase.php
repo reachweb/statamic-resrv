@@ -84,6 +84,19 @@ class TestCase extends AddonTestCase
     {
         parent::resolveApplicationConfiguration($app);
 
+        // Disable Statamic's search indexing during tests. Every Entry::save()
+        // fires EntrySaved, whose Statamic\Search\UpdateItemIndexes listener
+        // re-indexes the configured local indexes — ~0.7s per save and the
+        // single largest cost in the suite. The addon uses its own resrv_search
+        // scope, never Statamic's search index, so this is safe.
+        //
+        // Note: Statamic's IndexManager always injects a hardcoded "cp" index on
+        // the local driver, so emptying the array isn't enough — the cp index
+        // must be explicitly redefined onto the no-op "null" driver.
+        $app['config']->set('statamic.search.indexes', [
+            'cp' => ['driver' => 'null'],
+        ]);
+
         // Force the cache driver to be array for testing
         $app['config']->set('cache.default', 'array');
 
