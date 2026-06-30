@@ -1,15 +1,26 @@
 laravel: '@testbench-dusk'
 
 providers:
-  # - Workbench\App\Providers\WorkbenchServiceProvider
+  - Statamic\Providers\StatamicServiceProvider
+  - Inertia\ServiceProvider                       # Gotcha #10 — required by Statamic 6
+  - Livewire\LivewireServiceProvider
+  - MarcoRieser\Livewire\ServiceProvider          # statamic-livewire bridge for <livewire:…> in Antlers
+  - Reach\StatamicResrv\StatamicResrvServiceProvider
+  - Workbench\App\Providers\WorkbenchServiceProvider
 
 env:
-  - APP_ENV=testing
+  - APP_ENV=testing                 # REQUIRED — Statamic auto-boots; its CheckComposerJsonScripts middleware 500s unless env=testing
+  - APP_URL=http://127.0.0.1:8001   # app self-URL; must match the served port (Gotcha #6). Bind port is set by `serve --port=8001`.
+  - DB_CONNECTION=sqlite            # no DB_DATABASE — share the skeleton default database_path('database.sqlite') across processes (Gotcha #5)
+  - SESSION_DRIVER=file             # cart (resrv-search/-reservation) persists in session across requests (Gotcha #4)
   - CACHE_STORE=file
-  - SESSION_DRIVER=file
+  - QUEUE_CONNECTION=sync
+  - MAIL_MAILER=log
+  - STATAMIC_LICENSE_KEY=
 
 migrations:
-  - workbench/database/migrations
+  - database/migrations            # the addon's own 64 migrations — loadMigrationsFrom isn't picked up by the CLI migrate-fresh, so list it explicitly
+  - workbench/database/migrations  # any extra workbench-only migrations
 
 seeders:
   - Workbench\Database\Seeders\DatabaseSeeder
@@ -24,15 +35,12 @@ workbench:
     commands: true
     components: false
     factories: true
-    views: false
+    views: true
+  assets:
+    - laravel-assets
+    - statamic-resrv   # publishes the addon's compiled frontend bundle (publish tag = addon slug); without it CI ships no bundle
   build:
     - asset-publish
     - create-sqlite-db
     - db-wipe
-    - migrate-fresh
-  assets:
-    - laravel-assets
-  sync:
-    - from: storage
-      to: workbench/storage
-      reverse: true
+    - migrate-fresh    # runs the addon migrations via loadMigrationsFrom; seeders run separately (T7)

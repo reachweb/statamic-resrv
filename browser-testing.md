@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 3 / 23 complete**
+**Progress: 4 / 23 complete**
 
 ---
 
@@ -103,7 +103,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T1 — Add `orchestra/testbench-dusk` dev dependency (no Pest)
 - [x] T2 — Install / pin ChromeDriver
 - [x] T3 — Scaffold the Testbench Workbench app
-- [ ] T4 — Configure `testbench.yaml` (providers, env, session, gateway, migrations list, build pipeline, port)
+- [x] T4 — Configure `testbench.yaml` (providers, env, session, gateway, migrations list, build pipeline, port)
 
 **Phase 2 — Host app: render one bookable page**
 - [ ] T5 — `WorkbenchServiceProvider` (Statamic config, offline gateway, Livewire-update route)
