@@ -14,6 +14,8 @@ use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
+use Statamic\Facades\Form;
+use Statamic\Facades\YAML;
 
 /**
  * Shared bookable-content seeding for the browser-test harness.
@@ -58,9 +60,40 @@ trait SeedsBookableContent
         $this->attachOption($entry);
 
         $this->ensureMultiEntry($rate);
+        $this->ensureCheckoutForm();
         $this->wireCheckoutEntries();
 
         return $entry;
+    }
+
+    /**
+     * Provision the Statamic `checkout` form the served app needs at checkout step
+     * 2. CheckoutFormResolver does `Form::find('checkout')`; a real install ships
+     * the form + its field blueprint via the addon's `resrv-forms`/`resrv-blueprints`
+     * publish tags, but the workbench build never publishes them, so the served app
+     * (a separate process from the seeding test) would throw CheckoutFormNotFoundException
+     * — the checkout-form render 500s and step 2 silently never appears. Recreate the
+     * form and its fields blueprint from the addon's own shipped YAML so the resolver
+     * resolves the same first_name/last_name/email/repeat_email fields as production.
+     * Find-or-create keeps it truncate-then-reseed safe; both files land under the
+     * shared skeleton resource_path the served app reads.
+     */
+    protected function ensureCheckoutForm(): void
+    {
+        if (Form::find($this->checkoutSlug)) {
+            return;
+        }
+
+        $blueprintContents = YAML::file(
+            dirname(__DIR__, 3).'/resources/blueprints/forms/checkout.yaml'
+        )->parse();
+
+        Blueprint::make($this->checkoutSlug)
+            ->setNamespace('forms')
+            ->setContents($blueprintContents)
+            ->save();
+
+        Form::make($this->checkoutSlug)->title('Checkout')->save();
     }
 
     /**

@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 13 / 23 complete**
+**Progress: 14 / 23 complete**
 
 ---
 
@@ -119,7 +119,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 
 **Phase 4 — Focused browser scenarios (6–8 high-value flows; independent — pick any unchecked)**
 - [x] T13 — AvailabilitySearch: Alpine calendar (open/range/clear), quantity stepper, rates dropdown, live-dispatch, **session persistence on reload**
-- [ ] T14 — Standard checkout **happy path** E2E (search → results → select rate → extras+option → form → offline confirm → CONFIRMED + availability decremented)
+- [x] T14 — Standard checkout **happy path** E2E (search → results → select rate → extras+option → form → offline confirm → CONFIRMED + availability decremented)
 - [ ] T15 — Multi-rate **cart** happy path (`AvailabilityMultiResults`: add/remove selections, line + grand totals, checkout → multi-line reservation)
 - [ ] T16 — CheckoutForm rich JS fields (`dictionary_phone` combobox keyboard nav + filter, `toggle` Alpine switch, inline required-field validation)
 - [ ] T17 — Gateway picker (two gateways via `beforeServingApplication`) **+ one representative error path** (e.g. "please select a rate")
@@ -417,6 +417,10 @@ These validate the lifecycle itself, not just that a page renders — if either 
 **Files:** `tests/Browser/StandardCheckoutFlowTest.php`. **Source:** `AvailabilitySearch`, `AvailabilityResults`, `Checkout`, `CheckoutForm`, `CheckoutPayment`, `OfflinePaymentGateway`.
 **Acceptance addition:** completed-page URL reached (with `?payment_pending={id}`), reservation row is **CONFIRMED** (query the shared file DB in the test process), and availability is **decremented** (listener side effect) — assert all three.
 **Notes:** This is the headline test the user asked for. It is the living documentation of the flow.
+> **T14 outcome + load-bearing harness fix (READ before T15–T18 — anything reaching the customer form):**
+> - **🔑 Served app needs a Statamic `checkout` FORM — now provisioned in `SeedsBookableContent::ensureCheckoutForm()`.** `CheckoutFormResolver` does `Form::find('checkout')`; a real install ships it via the `resrv-forms`/`resrv-blueprints` publish tags, but the workbench build never published them. Without it, `handleFirstStep()` *does* advance to step 2, but rendering `<livewire:checkout-form>` throws `CheckoutFormNotFoundException` → the Livewire update 500s → **the DOM silently never advances (no error box)**. The seeder now recreates the form + its fields blueprint from the addon's own `resources/blueprints/forms/checkout.yaml` (first_name/last_name/email/repeat_email required), written to the shared skeleton `resource_path` the served app reads. Symptom to recognise: proceed click does nothing, `testbench-dusk/.../storage/logs/laravel.log` shows "No valid checkout form was found. Tried: [checkout]."
+> - **Funnel selectors (reused by T15–T18):** Book Now `[wire\:click="checkout()"]` → redirects to `/checkout`; step-1 proceed `[wire\:click="handleFirstStep()"]`; step-2 fields `#first_name`/`#last_name`/`#email`/`#repeat_email` (`wire:model` deferred, synced on submit) + submit `[wire\:click="submit()"]`; step-3 offline confirm `@confirm-payment`; completed URL `/checkout-completed?payment_pending={id}`. Extra = an **sr-only** checkbox and Option = a styled radio — toggle each by clicking its wrapping `<label>` (a native click on the sr-only input is "not interactable"); pause ~800ms after for the `wire:change.throttle` round-trip before proceeding.
+> - **Single offline gateway auto-selects** (no picker — that's T17). **Availability decrements at `ReservationCreated`** (the Book Now step), not at confirm. Asserted all three acceptance points: completed URL with `payment_pending={id}`, reservation `CONFIRMED`, booked night's availability 0 (overall available count −1).
 
 ## T15 — Multi-rate cart happy path (`AvailabilityMultiResults`)
 **Cover:** the v6 cart-based multi-rate / multi-date component (this **replaces** the old "advanced/per-property availability", which was removed in v6 — see `RELEASE-v6.0.0.md`). Build a cart of **three** selections via `updateRateQuantity` + `addSelections()` (each cart line shows the correct `lineTotal`); `removeSelection()` on one updates the grand `totalPrice`/`totalQuantity` and leaves **two** lines; `checkout()` → a single reservation with **multiple** lines, redirect to checkout. (Starting with three keeps the post-removal cart multi-line, which a 2→1 removal would not.) Include the empty-cart error path ("Please select at least one rate").
