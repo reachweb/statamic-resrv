@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 7 / 23 complete**
+**Progress: 8 / 23 complete**
 
 ---
 
@@ -109,7 +109,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T5 — `WorkbenchServiceProvider` (Statamic config, offline gateway, Livewire-update route)
 - [x] T6 — Frontend layout + publish/serve the IIFE assets (correct tag + paths + order)
 - [x] T7 — Content + DB seeding (collection, blueprint, bookable entry, checkout entries, rate/availability) via `workbench:build`
-- [ ] T8 — Routes/templates mounting the Livewire components
+- [x] T8 — Routes/templates mounting the Livewire components
 - [ ] T9 — Manual `testbench serve` smoke check (page renders, calendar works, no leak)
 
 **Phase 3 — Browser test harness**
@@ -315,6 +315,11 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 **Files:** `workbench/routes/web.php`, `workbench/resources/views/dusk/*.blade.php` and/or `workbench/content/collections/pages/*.md`; plus `dusk=`/`data-*` attributes in the relevant `resources/views/livewire/**` blades.
 **Acceptance:** `curl -s http://127.0.0.1:8001/<bookable-slug>` (or `/__t/search`) returns HTML containing a Livewire component root (`wire:id`) and the calendar container.
 **Notes:** Keep both a Statamic-entry path (faithful) and a direct-route path (fast/isolated) — Phase-4 tasks use whichever fits.
+> **Two load-bearing discoveries in T8 (both differ from the plan's draft snippets):**
+> 1. **Templates are Blade, not Antlers.** The plan showed `<livewire:… :rates="true" />` in `.antlers.html`, but (a) Blade's `<livewire:…>` is *literal text* inside Antlers — the MarcoRieser bridge only mounts via the Antlers tag `{{ livewire:component }}`; and (b) that Antlers tag evaluates `:rates="true"` by **looking up a variable named `true` → null**, which then trips `TypeError: Cannot assign null to … $rates of type bool`. Blade's `<livewire:…>` evaluates booleans + maps kebab→camel correctly. AND Statamic only auto-wraps a layout around **Antlers** templates (`View::shouldUseLayout` → `isUsingAntlersTemplate`), so a Blade template must `@extends` its own layout. ⇒ the harness is **all-Blade**: `layout.antlers.html` (T6) became `layout.blade.php` (`@livewireStyles`/`@livewireScripts`, bundle before scripts), and each template `@extends('layout')`. Entries carry a `template` field (`bookable`/`checkout`/`checkout-completed`/`multi`); a `multi` entry was added for T15.
+> 2. **Manifest must append, not replace.** T6's `registerAddonManifest()` *overwrote* the manifest with resrv only, which dropped `marcorieser/statamic-livewire` — itself an `AddonServiceProvider` whose **gated `bootTags()` registers the `livewire` Antlers tag** (so `{{ livewire:scripts }}` and the whole bridge). Now it `build()`s the discovered manifest first, then appends resrv. Without this, `{{ livewire:scripts }}` and every bridge tag render as nothing.
+>
+> Verified: `/bookable` (search+results), `/checkout`, `/multi`, `/checkout-completed`, `/__t/search`, `/__t/checkout` all 200 with full layout, `wire:id`, calendar container, and **resrv-frontend.js before the Livewire runtime** (Gotcha #1). Selectors: `SeedsBookableContent::browserSelectors()` maps the plan's controls (existing hooks where present; `dusk=` added to the hook-less quantity stepper, coupon input, gateway button, offline confirm). Headless Livewire suite still green (346 tests).
 
 ## T9 — Manual `testbench serve` smoke check
 **Goal:** Eyes-on confirmation the host app actually works before automating — the riskiest integration points (Gotchas #1–#10) all surface here.

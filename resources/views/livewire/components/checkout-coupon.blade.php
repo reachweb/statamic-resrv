@@ -31,8 +31,9 @@
         </span>
     </div>
     <div x-cloak x-show="open && $wire.selectedGateway === ''" x-on:click.outside="toggle" class="relative" x-trap="open">
-        <input 
+        <input
             x-model="coupon"
+            dusk="coupon-input"
             type="text"
             placeholder="{{ trans('statamic-resrv::frontend.addCoupon') }}"
             x-on:keyup.enter="$wire.addCoupon(coupon)"

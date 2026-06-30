@@ -52,6 +52,14 @@ class WorkbenchServiceProvider extends ServiceProvider
      * getAddon() resolve by namespace, so the served app boots the addon exactly
      * like a real install: the resrv_availability fieldtype registers, the tags
      * render, and the frontend assets publish under the `statamic-resrv` tag.
+     *
+     * Unlike AddonTestCase we must *append* to — not replace — the discovered
+     * manifest: marcorieser/statamic-livewire is itself an AddonServiceProvider and
+     * registers the `livewire` Antlers tag (the <livewire:…> bridge) through its
+     * own gated bootTags(). Wiping it from the manifest leaves that tag
+     * unregistered, so <livewire:…> renders as literal text. build() repopulates
+     * the in-memory manifest from installed.json (restoring the bridge); we then
+     * add the root package on top.
      */
     protected function registerAddonManifest(): void
     {
@@ -62,7 +70,10 @@ class WorkbenchServiceProvider extends ServiceProvider
         $json = json_decode($this->app['files']->get($directory.'/../composer.json'), true);
         $statamic = $json['extra']['statamic'] ?? [];
 
-        $this->app->make(Manifest::class)->manifest = [
+        $manifest = $this->app->make(Manifest::class);
+        $manifest->build();
+
+        $manifest->manifest = array_merge($manifest->manifest, [
             $json['name'] => [
                 'id' => $json['name'],
                 'slug' => $statamic['slug'] ?? null,
@@ -71,7 +82,7 @@ class WorkbenchServiceProvider extends ServiceProvider
                 'autoload' => $json['autoload']['psr-4'][$namespace.'\\'] ?? 'src',
                 'provider' => $provider,
             ],
-        ];
+        ]);
     }
 
     /**

@@ -36,6 +36,8 @@ trait SeedsBookableContent
 
     protected string $bookableSlug = 'bookable';
 
+    protected string $multiSlug = 'multi';
+
     protected string $rateSlug = 'default';
 
     protected string $checkoutSlug = 'checkout';
@@ -54,6 +56,8 @@ trait SeedsBookableContent
         $this->seedAvailabilityWindow($entry, $rate);
         $this->attachExtra($entry);
         $this->attachOption($entry);
+
+        $this->ensureMultiEntry($rate);
         $this->wireCheckoutEntries();
 
         return $entry;
@@ -93,7 +97,26 @@ trait SeedsBookableContent
     {
         return $this->ensurePageEntry($this->bookableSlug, 'Bookable Room', [
             'resrv_availability' => (string) Str::uuid(),
+            'template' => 'bookable',
         ]);
+    }
+
+    /**
+     * The cart-flow entry (T15). Seeded like the bookable entry — one rate is
+     * enough to render `availability-multi-results`; T15 adds the second rate.
+     */
+    protected function ensureMultiEntry(Rate $rate): EntryContract
+    {
+        $entry = $this->ensurePageEntry($this->multiSlug, 'Multi-rate Room', [
+            'resrv_availability' => (string) Str::uuid(),
+            'template' => 'multi',
+        ]);
+
+        $this->seedAvailabilityWindow($entry, $rate);
+        $this->attachExtra($entry);
+        $this->attachOption($entry);
+
+        return $entry;
     }
 
     /**
@@ -177,10 +200,45 @@ trait SeedsBookableContent
      */
     protected function wireCheckoutEntries(): void
     {
-        $checkout = $this->ensurePageEntry($this->checkoutSlug, 'Checkout');
-        $completed = $this->ensurePageEntry($this->checkoutCompletedSlug, 'Checkout Completed');
+        $checkout = $this->ensurePageEntry($this->checkoutSlug, 'Checkout', ['template' => 'checkout']);
+        $completed = $this->ensurePageEntry($this->checkoutCompletedSlug, 'Checkout Completed', ['template' => 'checkout-completed']);
 
         Config::set('resrv-config.checkout_entry', $checkout->id());
         Config::set('resrv-config.checkout_completed_entry', $completed->id());
+    }
+
+    /**
+     * One shared source of stable browser selectors so Phase-4 tests don't depend
+     * on translated text or Tailwind classes. Most controls reuse hooks already in
+     * the markup (`name`, `aria-label`, `wire:click`/`wire:model`); the few with no
+     * stable hook carry a `dusk="…"` attribute added to the package blade in T8
+     * (quantity stepper, coupon input, gateway buttons, offline confirm). Values
+     * are Dusk-ready: `@name` resolves to `[dusk="name"]`, the rest are CSS.
+     *
+     * @return array<string, string>
+     */
+    protected function browserSelectors(): array
+    {
+        return [
+            // AvailabilitySearch — calendar + controls
+            'dateInput' => '[name=datepicker]',
+            'clearDates' => '[aria-label="Clear selection"]',
+            'rateSelect' => '[wire\:model\.live="data.rate"]',
+            'quantityDecrease' => '@quantity-decrease',
+            'quantityIncrease' => '@quantity-increase',
+            'quantityInput' => '@quantity-input',
+            'searchSubmit' => '[wire\:click="submit()"]',
+
+            // Checkout flow — actions, coupon, gateways, confirm
+            'proceed' => '[wire\:click="handleFirstStep()"]',
+            'couponInput' => '@coupon-input',
+            'couponApply' => '[wire\:click\.debounce="addCoupon(coupon)"]',
+            'couponRemove' => '[wire\:click\.debounce="removeCoupon()"]',
+            'confirmPayment' => '@confirm-payment',
+
+            // Gateway buttons are keyed by name: append the gateway, e.g.
+            // $this->browserSelectors()['gatewayPrefix'].'offline' → '@gateway-offline'.
+            'gatewayPrefix' => '@gateway-',
+        ];
     }
 }
