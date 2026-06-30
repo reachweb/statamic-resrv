@@ -923,6 +923,31 @@ class AvailabilityCollectionTest extends TestCase
             ->assertDontSee('resrv-collection-'.$scheduled->id());
     }
 
+    public function test_drops_a_rate_assigned_only_to_a_resrv_disabled_entry()
+    {
+        // An enabled entry the listing can show, carrying two apply_to_all rates.
+        $public = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');
+        $this->createRateForEntry($public, ['slug' => 'rate-b', 'title' => 'Rate B']);
+
+        // A restricted rate linked only to a Resrv-disabled entry. The entry stays published in
+        // Statamic, so scopedEntriesQuery() still returns it, but availableForDates() rejects it.
+        $disabled = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 30, rateSlug: 'rate-a');
+        $restricted = $this->createRateForEntry($disabled, ['slug' => 'disabled-only', 'title' => 'Disabled Only', 'apply_to_all' => false]);
+        $restricted->entries()->sync([$disabled->id()]);
+        $disabled->set('resrv_availability_field', 'disabled')->save();
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['collection' => 'pages', 'rates' => true]),
+            rate: (string) $restricted->id,
+        );
+
+        // The only entry the restricted rate covers is disabled, so it can never produce
+        // availability; the rate is dropped rather than left to empty the listing.
+        $component->assertSet('data.rate', null)
+            ->assertSee('resrv-collection-'.$public->id())
+            ->assertDontSee('resrv-collection-'.$disabled->id());
+    }
+
     public function test_select_hands_off_the_chosen_rate_to_the_detail_page_results()
     {
         $entry = $this->makeStatamicItemWithAvailability(collection: 'pages', price: 50, rateSlug: 'rate-a');

@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\CutoffException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\EntryCollection;
@@ -184,9 +185,10 @@ class AvailabilityCollection extends Component
 
     /**
      * [rate_id => title] for rates valid for at least one entry the listing can actually show.
-     * Uses the full unpaginated scoped set (collection ∩ entries ∩ site ∩ status) → origin ids,
-     * so out-of-collection / private / wrong-site entries' rates never leak in, and pagination
-     * cannot narrow it. Excludes orphan rates (apply_to_all = false AND no entries).
+     * Uses the full unpaginated scoped set (collection ∩ entries ∩ site ∩ status ∩ enabled) →
+     * origin ids, so out-of-collection / private / wrong-site / Resrv-disabled entries' rates
+     * never leak in, and pagination cannot narrow it. Excludes orphan rates (apply_to_all = false
+     * AND no entries).
      *
      * @return array<int|string, string>
      */
@@ -200,7 +202,18 @@ class AvailabilityCollection extends Component
             return $this->overrideRates;
         }
 
-        $items = $this->scopedEntriesQuery()->get();
+        // Drop Resrv-disabled entries using the SAME set availableForDates() rejects by, so a
+        // rate counts as valid here only if it covers an entry that can actually produce
+        // availability. Otherwise a rate pinned to a disabled entry stays "valid", survives
+        // reconciliation, and silently empties the listing.
+        $disabled = array_flip(ResrvEntry::getDisabledIds());
+
+        $items = $this->scopedEntriesQuery()->get()
+            ->reject(function ($entry) use ($disabled) {
+                $originId = $entry->hasOrigin() ? $entry->origin()->id() : $entry->id();
+
+                return isset($disabled[$originId]);
+            });
 
         if ($items->isEmpty()) {
             return [];
