@@ -41,6 +41,8 @@ trait SeedsBookableContent
 
     protected string $rateSlug = 'default';
 
+    protected string $multiSecondRateSlug = 'children';
+
     protected string $checkoutSlug = 'checkout';
 
     protected string $checkoutCompletedSlug = 'checkout-completed';
@@ -134,8 +136,12 @@ trait SeedsBookableContent
     }
 
     /**
-     * The cart-flow entry (T15). Seeded like the bookable entry — one rate is
-     * enough to render `availability-multi-results`; T15 adds the second rate.
+     * The cart-flow entry (T15). Carries TWO rates so the cart has more than one
+     * line to combine: the shared apply_to_all `default` rate, plus a second rate
+     * scoped to *only* this entry. Scoping the second rate via the pivot (with
+     * apply_to_all = false) keeps the single-rate bookable entry that T13/T14 rely
+     * on untouched. Each rate gets its own availability window (independent rates
+     * don't share inventory).
      */
     protected function ensureMultiEntry(Rate $rate): EntryContract
     {
@@ -144,11 +150,38 @@ trait SeedsBookableContent
             'template' => 'multi',
         ]);
 
+        $secondRate = $this->ensureMultiSecondRate($entry);
+
         $this->seedAvailabilityWindow($entry, $rate);
+        $this->seedAvailabilityWindow($entry, $secondRate);
         $this->attachExtra($entry);
         $this->attachOption($entry);
 
         return $entry;
+    }
+
+    /**
+     * A second rate that applies to ONLY the multi entry: apply_to_all = false and
+     * attached through the resrv_rate_entries pivot (find-or-create, so truncate-
+     * then-reseed safe). Independent pricing/availability with no max cap, mirroring
+     * tests/Livewire/AvailabilityMultiResultsTest::createMultiRateEntry()'s children
+     * rate, so the cart resolves it at availability=1, quantity=1.
+     */
+    protected function ensureMultiSecondRate(EntryContract $entry): Rate
+    {
+        $rate = Rate::where('collection', $this->bookableCollection)
+            ->where('slug', $this->multiSecondRateSlug)
+            ->first()
+            ?? Rate::factory()->create([
+                'collection' => $this->bookableCollection,
+                'slug' => $this->multiSecondRateSlug,
+                'title' => 'Children',
+                'apply_to_all' => false,
+            ]);
+
+        $rate->entries()->syncWithoutDetaching([$entry->id()]);
+
+        return $rate;
     }
 
     /**

@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 14 / 23 complete**
+**Progress: 15 / 23 complete**
 
 ---
 
@@ -120,7 +120,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 **Phase 4 — Focused browser scenarios (6–8 high-value flows; independent — pick any unchecked)**
 - [x] T13 — AvailabilitySearch: Alpine calendar (open/range/clear), quantity stepper, rates dropdown, live-dispatch, **session persistence on reload**
 - [x] T14 — Standard checkout **happy path** E2E (search → results → select rate → extras+option → form → offline confirm → CONFIRMED + availability decremented)
-- [ ] T15 — Multi-rate **cart** happy path (`AvailabilityMultiResults`: add/remove selections, line + grand totals, checkout → multi-line reservation)
+- [x] T15 — Multi-rate **cart** happy path (`AvailabilityMultiResults`: add/remove selections, line + grand totals, checkout → multi-line reservation)
 - [ ] T16 — CheckoutForm rich JS fields (`dictionary_phone` combobox keyboard nav + filter, `toggle` Alpine switch, inline required-field validation)
 - [ ] T17 — Gateway picker (two gateways via `beforeServingApplication`) **+ one representative error path** (e.g. "please select a rate")
 - [ ] T18 — Coupon / dynamic-pricing reactivity on checkout totals (apply → totals change, remove → revert)
@@ -426,6 +426,13 @@ These validate the lifecycle itself, not just that a page renders — if either 
 **Cover:** the v6 cart-based multi-rate / multi-date component (this **replaces** the old "advanced/per-property availability", which was removed in v6 — see `RELEASE-v6.0.0.md`). Build a cart of **three** selections via `updateRateQuantity` + `addSelections()` (each cart line shows the correct `lineTotal`); `removeSelection()` on one updates the grand `totalPrice`/`totalQuantity` and leaves **two** lines; `checkout()` → a single reservation with **multiple** lines, redirect to checkout. (Starting with three keeps the post-removal cart multi-line, which a 2→1 removal would not.) Include the empty-cart error path ("Please select at least one rate").
 **Files:** `tests/Browser/MultiRateCartTest.php`. **Source:** `src/Livewire/AvailabilityMultiResults.php`.
 **Notes:** Seed at least two rates on the entry so the cart has more than one line to combine.
+> **T15 outcome + load-bearing findings (READ before any task that reaches /checkout via a PARENT/multi reservation):**
+> - **Seed:** `SeedsBookableContent::ensureMultiEntry` now attaches a SECOND, entry-scoped rate to the `multi` entry (slug `children`, `apply_to_all=false` + `resrv_rate_entries` pivot, own availability window). Scoping via the pivot keeps the **bookable** entry single-rate, so T13/T14 are untouched. The cart thus has two rate lines.
+> - **Calendar on /multi:** added `:show-availability-on-calendar="true"` to the `/multi` search. With two rates `reconcileRate()` can't auto-select one, and the JS calendar only paints `.rc-day--available`/`.rc-day__label` once a rate is chosen (`fetchAvailability()` returns `[]` while `data.rate===null`). So the test **selects a rate in the dropdown first**, then opens the calendar. This only paints the calendar — the multi-results cart still resolves ALL rates (it forces `rate_id='any'` in `queryAvailabilityForAllRates`), so picking one rate does NOT restrict the cart.
+> - **Three lines from two rates:** add `default`+`children` (round 1 → 2 lines), then `default` again (round 2 → a 3rd, duplicate line). `addSelections` doesn't cross-check cumulative demand, so duplicates add fine; the duplicate is removed before checkout, leaving two **distinct-rate** lines. Dusk hooks added to the steppers (`@multi-rate-increase/decrease/quantity-{rateId}`) + the grand total (`@multi-grand-total`); cart lines/actions reuse the existing `wire:click` hooks (`addSelections`, `removeSelection(i)`, `checkout`).
+> - **🔑 Served /checkout RE-PRICES a parent reservation per child line** (`HandlesPricing::calculateReservationTotals` → `getUpdatedPricesForParent` → `Availability::getPricing`). If the booking took the **last** unit (seed `available=1` → 0), that query returns no usable row and the served render 500s ("Trying to access array offset on false"), poisoning the reused browser. Fix = the sanctioned **per-test availability bump** (`Availability::where('statamic_id',$multiId)->update(['available'=>5])`); the bookable entry keeps `available=1`.
+> - **🔑 Don't leave the browser mid-mount on /checkout.** Assert step-1 rendered (`waitFor('[wire\:click="handleFirstStep()"]')`) BEFORE navigating away — navigating during the mount aborts the round-trip (surfaced as a stray "reservation has expired"/"reservation not found" log line). Then `visit('/bookable')` so the live, session-bound Checkout page doesn't linger into the next test (whose setUp clears the session → the lingering page would 500 and poison the browser). With both, the full Browser suite is order-independent and the served log is error-free.
+> - Empty-cart error path: the cart's Book Now button is gated on `count(selections)>0`, so the guard can't be click-reached — invoke `checkout()` via `window.Livewire` on the multi-results root (T13's poke) with dates set, then assert "Please select at least one rate." renders. Suite: 14 browser tests / 49 assertions green.
 
 ## T16 — CheckoutForm rich JS fields
 **Cover:** only the field types with a real JS surface — `dictionary_phone` (the Alpine `phonebox` combobox: country-code dropdown, arrow/enter **keyboard nav**, type-to-filter) and `toggle` (Alpine switch). Assert inline required-field validation renders for at least one field. Plain `text`/`textarea`/`select`/`radio`/`checkboxes`/`integer`/`dictionary` are left to the headless suite unless one is needed to submit the form.
