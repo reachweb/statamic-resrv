@@ -13,6 +13,7 @@ use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
 use Statamic\Licensing\Outpost;
+use Statamic\Statamic;
 
 use function Orchestra\Testbench\workbench_path;
 
@@ -144,14 +145,29 @@ class WorkbenchServiceProvider extends ServiceProvider
     }
 
     /**
-     * Replicate tests/TestCase::registerLivewireUpdateRoute() (Gotcha #8). Livewire
-     * 4 mints a dynamic update endpoint; registering it inside booted() lands it
-     * before Statamic's catch-all web route, so /livewire/update returns 200 rather
-     * than being shadowed into a 404 that kills every interactive round-trip.
+     * Register Livewire's /livewire/update endpoint ahead of Statamic's front-end
+     * catch-all (Gotcha #8). Statamic's routes/web.php registers an `ANY {segments?}`
+     * site route (name `statamic.site`) that matches every method and path — POST
+     * /livewire/update included — and returns its own 404 when no entry resolves at
+     * that URI. Same-method routes match in registration order, so whatever lands
+     * before that catch-all wins.
+     *
+     * Routes pushed through Statamic::pushWebRoutes() flush at
+     * `Statamic::additionalWebRoutes()`, which Statamic calls immediately *before*
+     * registering the catch-all — so they take precedence (the addon's own
+     * resrv/api/webhook routes ride in exactly this way). setUpdateRoute() registers
+     * the route synchronously, so calling it inside the pushed closure places
+     * /livewire/update before the catch-all and the interactive round-trip 200s.
+     *
+     * The headless tests/TestCase registers this inside $app->booted() instead, which
+     * fires *after* the catch-all is already in the table — that never wins the match,
+     * but the headless suite never noticed because Livewire::test() bypasses HTTP
+     * routing. The served browser app is the first place a real POST is issued, so it
+     * must use the pushWebRoutes path.
      */
     protected function registerLivewireUpdateRoute(): void
     {
-        $this->app->booted(function () {
+        Statamic::pushWebRoutes(function () {
             Livewire::setUpdateRoute(function ($handle) {
                 return Route::post('/livewire/update', $handle)
                     ->middleware('web')

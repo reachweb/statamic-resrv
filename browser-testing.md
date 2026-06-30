@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 8 / 23 complete**
+**Progress: 10 / 23 complete**
 
 ---
 
@@ -110,10 +110,10 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T6 — Frontend layout + publish/serve the IIFE assets (correct tag + paths + order)
 - [x] T7 — Content + DB seeding (collection, blueprint, bookable entry, checkout entries, rate/availability) via `workbench:build`
 - [x] T8 — Routes/templates mounting the Livewire components
-- [ ] T9 — Manual `testbench serve` smoke check (page renders, calendar works, no leak)
+- [X] T9 — Manual `testbench serve` smoke check (page renders, calendar works, no leak)
 
 **Phase 3 — Browser test harness**
-- [ ] T10 — `Tests\Browser\BrowserTestCase` (Dusk base + Statamic boot + shared file DB + fixture-lifecycle PoC)
+- [x] T10 — `Tests\Browser\BrowserTestCase` (Dusk base + Statamic boot + shared file DB + fixture-lifecycle PoC)
 - [ ] T11 — Separate `Browser` PHPUnit suite + composer script (kept out of default + pgsql runs)
 - [ ] T12 — First green browser test: global-leak regression guard + calendar renders
 
@@ -355,6 +355,11 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - **(b) clean-but-seeded isolation** — a second test starts with no leftover rows from the first, yet still has the seed fixtures (truncation re-seeds in `setUp()`, or migrate-once+truncate retains them).
 These validate the lifecycle itself, not just that a page renders — if either fails, fix the lifecycle (Step 2) before continuing.
 **Notes:** This is the trickiest file — it merges Dusk's base with Statamic's boot AND settles the DB lifecycle. Budget time here; everything downstream depends on it.
+> **T10 outcome + load-bearing findings (read before T11/T12):**
+> - **Base stays thin.** `BrowserTestCase` does NOT re-port `defineEnvironment()`/`getPackageProviders()`: `WithWorkbench` loads `testbench.yaml` (providers + env) and the `WorkbenchServiceProvider` supplies the Statamic config, sites, offline gateway, manifest and `/livewire/update` route — so the Dusk base only adds the headless Chrome args (`--no-sandbox`, `--disable-gpu`, `--window-size`) and the `setUp()` reseed. `beforeServingApplication()` is intentionally deferred to T17 (its first consumer).
+> - **DB lifecycle settled = `DatabaseTruncation` (NOT `DatabaseMigrations`).** PoC `tests/Browser/HarnessTest.php` proves all three acceptance gates green & repeatable: (1) boots + renders, (2) **cross-process visibility** — a row the *served* process writes is read back by the *test* process over the shared file SQLite at `database_path('database.sqlite')`, (3) **clean-but-seeded isolation** via truncation + `setUp()` reseed (ordered with `#[Depends]`). The shared file (`vendor/orchestra/testbench-dusk/laravel/database/database.sqlite`) is created/migrated/seeded by `php vendor/bin/testbench workbench:build`.
+> - **Cross-process write is a deterministic support route, not the funnel.** Added `GET /__t/write-reservation` (workbench, `/__t/` harness namespace) so the served process writes a `Reservation` on demand. The organic search→confirm funnel that creates a reservation is **T14**; coupling the *gate* to the Alpine surface (T13) would make everything downstream flaky.
+> - **Two translation gotchas for T11/T12.** (1) The Dusk **test process must not inherit `phpunit.xml`'s `DB_DATABASE=:memory:` / `SESSION_DRIVER=array`** — they would break the shared file DB (Gotcha #5) and the session cart (Gotcha #4). T11's `phpunit.dusk.xml` must set `SESSION_DRIVER=file`, `CACHE_STORE=file` and **omit `DB_DATABASE`** (fall through to the file path). (2) Dusk's resolver **prefixes selectors with `body `**, so `assertPresent('body')` becomes the impossible `body body` — assert a real descendant instead (`[wire\:id]`, `[name=datepicker]`); and the harness content set seeds **no home entry**, so `visit('/')` is a bodyless 404 — smoke checks visit **`/bookable`**.
 
 ## T11 — Separate `Browser` PHPUnit suite + composer script
 **Goal:** Run browser tests via PHPUnit, isolated from the fast unit/feature suite so `composer test` never launches Chrome.
