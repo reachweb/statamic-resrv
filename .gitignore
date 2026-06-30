@@ -14,3 +14,8 @@ ISSUES.md
 PLAN.md
 # claude-loop run logs
 .loop-logs/
+# Testbench Workbench + Dusk browser tests
+/workbench/storage
+/workbench/database/*.sqlite
+/tests/Browser/screenshots
+/tests/Browser/console
