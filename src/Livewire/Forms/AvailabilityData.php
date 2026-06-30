@@ -80,8 +80,11 @@ class AvailabilityData extends Form
             return;
         }
 
-        // Drop a numeric rate that isn't valid here (foreign collection, entry-restricted, unpublished, deleted).
-        if (is_numeric($this->rate) && ! isset($validRateIds[$this->rate])) {
+        // Drop anything that isn't valid for this context: a foreign numeric rate (other collection,
+        // entry-restricted, unpublished, deleted) or an unexpected non-numeric sentinel carried in from
+        // the shared 'resrv-search' session (legacy value, tampering). null and 'any' are the only
+        // cross-context-safe values and pass through untouched.
+        if ($this->rate !== null && $this->rate !== 'any' && ! isset($validRateIds[$this->rate])) {
             $this->rate = null;
         }
 

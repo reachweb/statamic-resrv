@@ -413,6 +413,28 @@ class AvailabilityListTest extends TestCase
         $this->assertNotEmpty($component->viewData('availableDates'));
     }
 
+    public function test_drops_an_unexpected_non_numeric_rate_sentinel()
+    {
+        // A non-numeric value that isn't 'any' (legacy session data or tampering) must not survive
+        // as a hard WHERE filter and empty the listing — only null/'any' are cross-context-safe.
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'multi', rateSlug: 'rate-a');
+        $rateB = $this->createRateForEntry($entry, ['slug' => 'rate-b', 'title' => 'Rate B']);
+        $this->createAvailabilityForEntry($entry, 50, 2, $rateB->id, 10);
+
+        $component = Livewire::test(AvailabilityList::class, ['entry' => $entry->id(), 'rates' => true])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(1, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => 'garbage',
+            ])
+            ->assertSet('data.rate', null);
+
+        $this->assertNotEmpty($component->viewData('availableDates'));
+    }
+
     public function test_auto_selects_a_single_rate_for_the_target_entry()
     {
         // The 'tickets' collection has exactly one rate, so a dropped foreign rate is replaced
