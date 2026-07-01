@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 18 / 23 complete**
+**Progress: 19 / 23 complete**
 
 ---
 
@@ -125,7 +125,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T17 — Gateway picker (two gateways via `beforeServingApplication`) **+ one representative error path** (e.g. "please select a rate")
 - [x] T18 — Coupon / dynamic-pricing reactivity on checkout totals (apply → totals change, remove → revert)
 - [ ] T19 — **(optional)** AvailabilityCollection live list (collection render, `showUnavailable` mounted true vs false, paginate, select → redirect)
-- [ ] T20 — Cross-collection rate reconciliation: select a rate on one collection, navigate to another, the carried `resrv-search` rate is **healed** (foreign rate dropped; single valid rate auto-selected) — guards the `resetOnBoot` → `reconcileRate()` change
+- [x] T20 — Cross-collection rate reconciliation: select a rate on one collection, navigate to another, the carried `resrv-search` rate is **healed** (foreign rate dropped; single valid rate auto-selected) — guards the `resetOnBoot` → `reconcileRate()` change
 
 **Phase 5 — CI & maintenance**
 - [ ] T21 — CI workflow (Chrome + ChromeDriver, run Browser suite, upload failure screenshots)
@@ -479,6 +479,11 @@ These validate the lifecycle itself, not just that a page renders — if either 
 **Seed (extend T7 / `SeedsBookableContent`):** a **second** collection `B` (own route + resrv blueprint) with entry **B1** (two rates) and entry **B2** (one rate), alongside collection A's existing entry. Use different rate slugs per collection so their ids are mutually foreign.
 **Acceptance:** passes via `composer test:browser`; each step asserts the **rendered** rate options after navigation (foreign rate absent, single rate auto-selected), not just DB/server state. The negative guard (step 4) must also pass.
 **Notes:** Logic-level coverage already exists headless on this branch (`tests/Livewire/AvailabilityCollectionTest` — `test_drops_a_rate_that_belongs_to_another_collection`, `…restricted_to_an_entry_not_in_the_listing`, `…cross_collection_entry_id_in_the_config`; `AvailabilitySearchTest` — the context-less-bar case). This task's unique value is the **shared session carried across actual browser navigations** with reconciliation visible in the DOM.
+> **T20 outcome + load-bearing findings:**
+> - **Seed:** `SeedsBookableContent::ensureRoomsContent` adds a SECOND collection `rooms` (route `/rooms/{slug}`) with `room-flex` (two entry-scoped rates `rooms-flex`/`rooms-standard`) and `room-solo` (one rate `rooms-solo`). All rates are `apply_to_all = false` + pivot, so `Rate::forEntry()` returns exactly two / one and their ids are mutually foreign to collection A (`pages`; A1 = the two-rate `multi` entry incl. `children`). **🔑 Because these are new Statamic ENTRIES (disk-backed Stache), `php vendor/bin/testbench workbench:build` must run before the served app starts** (the long-running server caches the Stache at boot) — the build is already the T21 CI step.
+> - **Pages:** a parameterized `/__t/rate-entry/{slug}` (search + results for A1/B1/B2 by slug), `/__t/rate-collection` (`availability-collection collection="rooms"`), `/__t/rate-bar` (a context-less `<livewire:availability-search :rates>` with NO entry).
+> - **🔑 Reconciliation is visible across REAL full-page navigations.** `#[Session('resrv-search')]` persists on each page's initial render, so: pick foreign rate + dates on A1 → on **B1** (two rates) the foreign rate is dropped (select value ≠ it, not among its `<option>`s, results still render B's rates) and the reconciled `null` persists → on **B2** (one rate) that null auto-selects `rooms-solo`. The collection listing reconciles via `listingRateIds()` (scoped to `rooms`) so a foreign rate never survives as a WHERE filter that empties the list.
+> - **🔑 Negative guard is a STATE assertion, not DOM.** A context-less bar has `entryRates = []`, so its rate `<select>` offers only "any" and can't render an injected rate. `reconcileRateForContext()` deliberately skips it (`entry || !rates` is false), so a manually `window.Livewire.set('data.rate', …)` survives a round-trip — asserted via `window.Livewire…get('data.rate')`. Selectors reused (no new blade hooks): `#availability-search-rate` + its `<option>`s, `[wire\:click^="checkoutRate"]`, and the collection's `select(entry, rateId)` buttons. Suite: 22 browser tests / 79 assertions green, served log error-free.
 
 ---
 

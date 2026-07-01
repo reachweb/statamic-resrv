@@ -45,6 +45,12 @@ trait SeedsBookableContent
 
     protected string $multiSecondRateSlug = 'children';
 
+    protected string $roomsCollection = 'rooms';
+
+    protected string $roomTwoRateSlug = 'room-flex';
+
+    protected string $roomOneRateSlug = 'room-solo';
+
     protected string $checkoutSlug = 'checkout';
 
     protected string $checkoutCompletedSlug = 'checkout-completed';
@@ -64,6 +70,7 @@ trait SeedsBookableContent
         $this->attachCoupons($entry);
 
         $this->ensureMultiEntry($rate);
+        $this->ensureRoomsContent();
         $this->ensureCheckoutForm();
         $this->wireCheckoutEntries();
 
@@ -212,6 +219,81 @@ trait SeedsBookableContent
         $rate->entries()->syncWithoutDetaching([$entry->id()]);
 
         return $rate;
+    }
+
+    /**
+     * A SECOND collection ('rooms') for T20's cross-collection rate reconciliation: an
+     * entry with two rates and one with a single rate, whose rate ids are mutually
+     * foreign to collection A ('pages'). Entry-scoped rates (apply_to_all = false + pivot)
+     * so `Rate::forEntry()` returns exactly two for the flex room and one for the solo room.
+     */
+    protected function ensureRoomsContent(): void
+    {
+        $this->ensureRoomsCollection();
+
+        $flexRoom = $this->ensureRoomEntry($this->roomTwoRateSlug, 'Flex Room');
+        $soloRoom = $this->ensureRoomEntry($this->roomOneRateSlug, 'Solo Room');
+
+        $this->ensureRoomRate('rooms-flex', 'Flex', $flexRoom);
+        $this->ensureRoomRate('rooms-standard', 'Standard', $flexRoom);
+        $this->ensureRoomRate('rooms-solo', 'Solo', $soloRoom);
+    }
+
+    protected function ensureRoomsCollection(): void
+    {
+        if (Collection::findByHandle($this->roomsCollection)) {
+            return;
+        }
+
+        Collection::make($this->roomsCollection)->routes('/rooms/{slug}')->save();
+
+        Blueprint::make()
+            ->setHandle($this->roomsCollection)
+            ->setNamespace('collections.'.$this->roomsCollection)
+            ->setContents([
+                'sections' => [
+                    'main' => [
+                        'fields' => [
+                            ['handle' => 'title', 'field' => ['type' => 'text', 'display' => 'Title']],
+                            ['handle' => 'slug', 'field' => ['type' => 'text', 'display' => 'Slug']],
+                            ['handle' => 'resrv_availability_field', 'field' => ['type' => 'resrv_availability', 'display' => 'Resrv Availability']],
+                        ],
+                    ],
+                ],
+            ])
+            ->save();
+    }
+
+    protected function ensureRoomEntry(string $slug, string $title): EntryContract
+    {
+        $entry = Entry::query()
+            ->where('collection', $this->roomsCollection)
+            ->where('slug', $slug)
+            ->first();
+
+        if (! $entry) {
+            $entry = Entry::make()->collection($this->roomsCollection)->slug($slug);
+        }
+
+        $entry->data(['title' => $title, 'resrv_availability' => fake()->uuid()])->save();
+
+        return $entry;
+    }
+
+    protected function ensureRoomRate(string $slug, string $title, EntryContract $entry): void
+    {
+        $rate = Rate::where('collection', $this->roomsCollection)
+            ->where('slug', $slug)
+            ->first()
+            ?? Rate::factory()->create([
+                'collection' => $this->roomsCollection,
+                'slug' => $slug,
+                'title' => $title,
+                'apply_to_all' => false,
+            ]);
+
+        $rate->entries()->syncWithoutDetaching([$entry->id()]);
+        $this->seedAvailabilityWindow($entry, $rate);
     }
 
     /**

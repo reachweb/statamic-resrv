@@ -42,6 +42,24 @@ Route::get('/__t/results-multi', function () {
 Route::get('/__t/checkout', fn () => view('dusk.checkout'));
 
 /*
+ * T20 — cross-collection rate reconciliation. `rate-entry/{slug}` mounts a
+ * search + results for any entry by slug (A1 = `multi`, two 'pages' rates; B1 =
+ * `room-flex`, two 'rooms' rates; B2 = `room-solo`, one 'rooms' rate) so a rate
+ * chosen on one is carried through the shared session to the next. `rate-collection`
+ * mounts availability-collection for the 'rooms' collection, and `rate-bar` a
+ * context-less search bar (no entry) for the negative-guard step.
+ */
+Route::get('/__t/rate-entry/{slug}', function (string $slug) {
+    $entry = Entry::query()->where('slug', $slug)->first();
+
+    return view('dusk.rate-entry', ['entryId' => $entry?->id()]);
+});
+
+Route::get('/__t/rate-collection', fn () => view('dusk.rate-collection'));
+
+Route::get('/__t/rate-bar', fn () => view('dusk.rate-bar'));
+
+/*
  * Test-support route for the T10 DB-lifecycle PoC. Hitting it makes the *served*
  * (browser) process write a reservation row into the shared file SQLite, so the
  * Dusk test process can prove it reads back the very row the other process wrote
