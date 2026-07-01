@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 22 / 23 complete**
+**Progress: 23 / 23 complete**
 
 ---
 
@@ -130,7 +130,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 **Phase 5 — CI & maintenance**
 - [x] T21 — CI workflow (Chrome + ChromeDriver, run Browser suite, upload failure screenshots)
 - [x] T22 — Developer docs (README "Browser tests" section + CLAUDE.md note)
-- [ ] T23 — **(optional)** Evaluate Pest v4 Playwright as a cross-browser smoke layer (must not disturb the PHPUnit pin)
+- [x] T23 — **(optional)** Evaluate Pest v4 Playwright as a cross-browser smoke layer (must not disturb the PHPUnit pin)
 
 > **Intentionally NOT browser-tested** (already covered by the 328 headless Livewire tests; adding
 > Chrome copies would be slow and brittle): `AvailabilityResults`/`AvailabilityCollection` state
@@ -533,6 +533,13 @@ These validate the lifecycle itself, not just that a page renders — if either 
 3. Record a go/no-go note with evidence. If it can't be isolated from the main PHPUnit pin, **stop** — Dusk remains the spine.
 **Files:** spike branch only; do not merge unless it is provably isolated from `composer.lock`'s PHPUnit version.
 **Acceptance:** a written go/no-go note in this task with evidence (works → minimal example; doesn't → the blocker, incl. the PHPUnit-version conflict if that's what stops it).
+> **T23 outcome — NO-GO (evidence-based; nothing installed, `composer.json`/`composer.lock` left pristine).**
+> Step 1's constraint check is a hard stop, so the Step 2 spike was intentionally not run. **Verdict: do NOT add a Pest 4 / Playwright layer to this repo's shared composer setup; `orchestra/testbench-dusk` (PHPUnit 13) stays the sole browser spine.** The layer is only viable in an *isolated* composer project/container (its own `phpunit ^12.5` lock) or once Pest supports PHPUnit 13.
+> - **Repo pin:** `phpunit/phpunit` is locked at **13.1.10** (`composer.json` allows `^12.0 || ^13.0`, so composer would resolve *down*, not error-free).
+> - **Pest 4 excludes PHPUnit 13:** every 4.x release requires `phpunit/phpunit ^12.5.x` — latest `v4.7.4 → ^12.5.30`, `v4.7.3 → ^12.5.29`; none allow 13.x (packagist metadata).
+> - **The browser plugin drags Pest 4 in:** `pestphp/pest-plugin-browser v4.3.1` requires `pestphp/pest ^4.4.5` (⇒ phpunit `^12.5.x`) **and** `symfony/process ^7.3.x` while this repo is locked to `symfony/process v8.0.11` — a *second*, independent downgrade.
+> - **Composer's own verdict** (`composer require --dev pestphp/pest-plugin-browser:^4.0 --dry-run`, restored after): *"Your requirements could not be resolved to an installable set of packages"* — every Pest 4.x `requires phpunit/phpunit ^12.5.x … but the package is fixed to 13.1.10 (lock file version)`. Composer says you'd need `-W` (allow **downgrades**) — precisely the "PHPUnit 13, additive, existing suite unchanged" guarantee the Decision protects (T1). The dry-run persisted nothing (composer.json/lock verified byte-identical afterward).
+> - **Payoff if ever isolated:** cross-browser (Firefox/WebKit) smoke + `assertNoSmoke()` on top of the already-green Chrome Dusk suite — not worth a second lock, a second toolchain and `npx playwright install` diverging the pin today. Revisit when `pestphp/pest` ships a `phpunit ^13` constraint.
 
 ---
 
