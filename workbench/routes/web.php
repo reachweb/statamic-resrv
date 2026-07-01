@@ -60,6 +60,18 @@ Route::get('/__t/rate-collection', fn () => view('dusk.rate-collection'));
 Route::get('/__t/rate-bar', fn () => view('dusk.rate-bar'));
 
 /*
+ * T19 — AvailabilityCollection live list (the `rooms` collection). `collection` mounts one
+ * instance for the listing render + select → detail-page redirect; `collection-compare` mounts
+ * two instances (showUnavailable true vs false — a #[Locked] mount option, compared by mounting,
+ * not toggling); `collection-paginate` mounts one paginate=1 instance for page navigation.
+ */
+Route::get('/__t/collection', fn () => view('dusk.collection'));
+
+Route::get('/__t/collection-compare', fn () => view('dusk.collection-compare'));
+
+Route::get('/__t/collection-paginate', fn () => view('dusk.collection-paginate'));
+
+/*
  * Test-support route for the T10 DB-lifecycle PoC. Hitting it makes the *served*
  * (browser) process write a reservation row into the shared file SQLite, so the
  * Dusk test process can prove it reads back the very row the other process wrote

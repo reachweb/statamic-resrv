@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 21 / 23 complete**
+**Progress: 22 / 23 complete**
 
 ---
 
@@ -124,7 +124,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T16 — CheckoutForm rich JS fields (`dictionary_phone` combobox keyboard nav + filter, `toggle` Alpine switch, inline required-field validation)
 - [x] T17 — Gateway picker (two gateways via `beforeServingApplication`) **+ one representative error path** (e.g. "please select a rate")
 - [x] T18 — Coupon / dynamic-pricing reactivity on checkout totals (apply → totals change, remove → revert)
-- [ ] T19 — **(optional)** AvailabilityCollection live list (collection render, `showUnavailable` mounted true vs false, paginate, select → redirect)
+- [x] T19 — **(optional)** AvailabilityCollection live list (collection render, `showUnavailable` mounted true vs false, paginate, select → redirect)
 - [x] T20 — Cross-collection rate reconciliation: select a rate on one collection, navigate to another, the carried `resrv-search` rate is **healed** (foreign rate dropped; single valid rate auto-selected) — guards the `resetOnBoot` → `reconcileRate()` change
 
 **Phase 5 — CI & maintenance**
@@ -467,6 +467,12 @@ These validate the lifecycle itself, not just that a page renders — if either 
 **Cover:** the no-extra-package collection list — mount by `collection`; compare which rows render with `showUnavailable` **mounted `true` vs `false`** (it's a `#[Locked]` mount option, not a UI toggle — mount two component instances to compare, don't click a switch); `paginate` page nav; `select($entryId,$rateId)` → redirect. Borderline vs the headless suite; include it only if the live list/pagination JS proves worth a browser assertion.
 **Files:** `tests/Browser/AvailabilityCollectionTest.php`. **Source:** `src/Livewire/AvailabilityCollection.php`.
 **Notes:** **`LfAvailabilityFilter` is deliberately excluded** from core coverage: it is registered only when `reachweb/statamic-livewire-filters` is installed (`src/Providers/ResrvLivewireProvider.php:60`) and that package is not a dependency. If you want it covered, make a *separate optional suite* that `composer require --dev`s `reachweb/statamic-livewire-filters` first, then drives `filters/lf-availability.blade.php`.
+> **T19 outcome + load-bearing findings:**
+> - **Done because all mandatory tasks were complete** (optional-tasks rule: "skip unless nothing else remains"). 4 tests over the `rooms` collection: listing render, showUnavailable true-vs-false, pagination page nav, select → detail-page redirect. Suite: 26 browser tests / 92 assertions green, served log error-free.
+> - **🔑 Redirect target needs a template.** `select()` redirects to `$entry->url()` (→ `/rooms/{slug}`) when the entry has a detail page. The `rooms` entries had NO `template`, so that URL would 500 on a missing template and pollute the served log. Fix: rooms entries now carry `template = 'room'` (`SeedsBookableContent::ensureRoomEntry`) + a static `workbench/resources/views/room.blade.php` (`[dusk=room-detail]`, no Livewire — a deterministic 200). Additive and invisible to T20 (which drives `/__t/rate-entry/*` + `/__t/rate-collection`, never the `/rooms/{slug}` Statamic route). Because it's a disk-backed Stache field, `php vendor/bin/testbench workbench:build` must run before the served app starts (already the T21 CI step).
+> - **showUnavailable is #[Locked] → compared by MOUNTING, not toggling.** `/__t/collection-compare` mounts two `rooms` instances (`show-unavailable` true + false, `[dusk=col-show]`/`[dusk=col-hide]`). A per-test `Availability::where('statamic_id',$soloId)->update(['available'=>0])` sells out the solo room; the served process reads it from the shared file DB (availability isn't Stache-cached, unlike entries — same cross-process pattern as T15's bump). Result: `col-show` renders 2 rows / 1 bookable (sold-out row present, no Book Now), `col-hide` renders 1 row (sold-out row filtered).
+> - **Pagination (Livewire 4):** the paginator renders `dusk="nextPage"` + `wire:click="nextPage('page')"`. Driven via the proven `window.Livewire.all().find(...).call('nextPage')` poke (T14/T20 pattern) to avoid the tailwind view's dual mobile/desktop `dusk=nextPage` hooks; `paginate=1` → page 1 has one row, the round-trip renders the *other* entry on page 2.
+> - **Text-independent assertions** (plan rule): rows counted by `[role=listitem]`, bookability by scraping `button` `wire:click="select('{id}'…"` ids (mirrors T20's wire:click scrape) — no reliance on translated "Book now"/"No availability". Dates carried into the shared `#[Session('resrv-search')]` via `/__t/rate-entry/room-flex` then a full-page nav (T20 pattern); room-flex's two rates mean no rate auto-selects, so the collection resolves all rates for the listing.
 
 ## T20 — Cross-collection rate reconciliation (shared session, real navigations)
 **Why this exists:** the branch `fix/stale-rate-session-reconcile` removed the opt-in `resetOnBoot` wipe and replaced it with `AvailabilityData::reconcileRate($validRateIds, $ratesEnabled)`, which every availability component now calls in `availabilitySearchChanged()`/`mount()`. Because `#[Session('resrv-search')]` is shared across **all** availability components **and across page loads** (Gotcha #4), a rate chosen on one collection is carried to the next. `reconcileRate()` heals it: it **drops a numeric rate not valid in the current context** (foreign collection, entry-restricted, unpublished/deleted) and **auto-selects when exactly one valid rate exists**. This is a session-spanning, multi-page behavior — the one thing the headless `Livewire::test` suite can only approximate, so it earns a browser test.

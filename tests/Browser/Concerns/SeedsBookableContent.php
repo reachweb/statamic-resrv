@@ -236,7 +236,11 @@ trait SeedsBookableContent
     {
         $entry = $this->firstOrMakeEntry($this->roomsCollection, $slug);
 
-        $entry->data(['title' => $title, 'resrv_availability' => fake()->uuid()])->save();
+        // template => 'room' gives the entry a detail page that renders (workbench/resources/
+        // views/room.blade.php) so AvailabilityCollection::select()'s redirect target
+        // ($entry->url() → /rooms/{slug}) is a clean 200 rather than a missing-template 500 —
+        // T19 drives that select → detail-page redirect.
+        $entry->data(['title' => $title, 'resrv_availability' => fake()->uuid(), 'template' => 'room'])->save();
 
         return $entry;
     }
