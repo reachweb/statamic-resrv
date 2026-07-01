@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 19 / 23 complete**
+**Progress: 20 / 23 complete**
 
 ---
 
@@ -128,7 +128,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T20 — Cross-collection rate reconciliation: select a rate on one collection, navigate to another, the carried `resrv-search` rate is **healed** (foreign rate dropped; single valid rate auto-selected) — guards the `resetOnBoot` → `reconcileRate()` change
 
 **Phase 5 — CI & maintenance**
-- [ ] T21 — CI workflow (Chrome + ChromeDriver, run Browser suite, upload failure screenshots)
+- [x] T21 — CI workflow (Chrome + ChromeDriver, run Browser suite, upload failure screenshots)
 - [ ] T22 — Developer docs (README "Browser tests" section + CLAUDE.md note)
 - [ ] T23 — **(optional)** Evaluate Pest v4 Playwright as a cross-browser smoke layer (must not disturb the PHPUnit pin)
 
@@ -498,6 +498,14 @@ These validate the lifecycle itself, not just that a page renders — if either 
 **Files:** `.github/workflows/*.yml`.
 **Acceptance:** CI runs both jobs; the browser job is green and uploads screenshots on induced failure.
 **Notes:** Gotcha #11 — pin/detect the driver; consider a Selenium service container if runner-Chrome drift becomes painful.
+> **T21 outcome + decisions:**
+> - **Separate workflow file, not a second job in `tests.yml`.** `.github/workflows/browser-tests.yml` is new; `tests.yml` stays byte-for-byte untouched (the cleanest reading of "keep the unit/feature job untouched"). Both files trigger on `push`/`pull_request`, so a push runs BOTH jobs (the acceptance's "both jobs"), and the fast unit/feature job never launches Chrome.
+> - **Single PHP 8.4 run, `composer install` (no matrix).** `composer.lock` is committed and pins `orchestra/testbench-dusk` + PHPUnit 13, so `install` reproduces the locked stack. The browser suite tests JS/DOM, not the Laravel 12/13 × PHP 8.4/8.5 matrix — that stays `tests.yml`'s job. Keeps the Chrome job lean.
+> - **Chrome = the runner's preinstalled `google-chrome`** (task-sanctioned), NOT `browser-actions/setup-chrome`. `dusk:chrome-driver --detect` reads that same `google-chrome` and downloads the matching driver, so the driver can't drift from the browser Dusk launches (Gotcha #11) — a `setup-chrome` install could shadow it with a different version and reintroduce skew. `chmod -R 0755 vendor/laravel/dusk/bin/` after `--detect` (order matters — chmod the freshly-downloaded driver).
+> - **No `npm` step:** the compiled frontend bundle (`resources/frontend/js/resrv-frontend.js`, `.../css/resrv-frontend.css`, `resrv-tailwind.css`) is git-tracked, so `workbench:build`'s `asset-publish` ships it without a Node build. No DB service either — SQLite file created by `workbench:build`.
+> - **Build BEFORE test:** `php vendor/bin/testbench workbench:build` (create + wipe + migrate + seed the shared file SQLite + publish assets) then `composer test:browser`.
+> - **Failure artifacts:** Dusk auto-captures screenshot + console + page source; the step (`if: failure()`, `if-no-files-found: ignore`) uploads `tests/Browser/{screenshots,console,source}` **plus** the served app's `vendor/orchestra/testbench-dusk/laravel/storage/logs/laravel.log` (the log the Phase-4 notes keep reaching for to debug served-process 500s). gitignored dirs upload fine — upload-artifact reads the filesystem, not git.
+> - **Verified locally (proxy for the CI-only acceptance):** both workflow YAMLs parse (Symfony YAML); the exact job command chain runs green — `workbench:build` exits 0 with a seeded DB (`resrv_entries = 6`), `composer test:browser` = **22 tests / 79 assertions OK** in headless Chrome; `pint --dirty` clean (only YAML touched).
 
 ## T22 — Developer docs
 **Goal:** Make the harness discoverable and runnable by the next developer.
