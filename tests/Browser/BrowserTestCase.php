@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Browser;
 
 use Illuminate\Foundation\Testing\DatabaseTruncation;
+use Orchestra\Sidekick\Env;
 use Orchestra\Testbench\Concerns\WithWorkbench;
 use Orchestra\Testbench\Dusk\Options as DuskOptions;
 use Orchestra\Testbench\Dusk\TestCase;
@@ -40,11 +41,19 @@ abstract class BrowserTestCase extends TestCase
 
     public static function setUpBeforeClass(): void
     {
-        // Headless is testbench-dusk's default; these make the headless run
-        // deterministic and CI-safe (T21) and are harmless locally.
+        // testbench-dusk only auto-enables headless when CI is set (Options::shouldUsesWithoutUI());
+        // a plain `composer test:browser` on a workstation would otherwise launch a *visible* Chrome
+        // and fail on headless machines/containers. Opt into headless ourselves for every run except
+        // the explicit `test:browser:headed` path (DUSK_HEADLESS_DISABLED=1) — which driver() then
+        // honours by calling withUI() to strip the headless/gpu arguments back off. withoutUI() adds
+        // both --disable-gpu and --headless; --no-sandbox/--window-size stay unconditional so headed
+        // runs keep the same deterministic viewport.
         DuskOptions::addArgument('--no-sandbox');
-        DuskOptions::addArgument('--disable-gpu');
         DuskOptions::addArgument('--window-size=1400,1200');
+
+        if (! Env::get('DUSK_HEADLESS_DISABLED', false)) {
+            DuskOptions::withoutUI();
+        }
 
         parent::setUpBeforeClass();
     }

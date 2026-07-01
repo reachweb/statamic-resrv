@@ -139,14 +139,21 @@ trait SeedsBookableContent
      * resrv_availability fieldtype, mirroring tests/CreatesEntries::makeBlueprint().
      * Shared by the `pages` (route `/{slug}`) and `rooms` (route `/rooms/{slug}`)
      * collections.
+     *
+     * The collection is created conditionally, but the blueprint is ALWAYS (re)written —
+     * the two live in different persistence domains: the collection persists in the
+     * gitignored workbench/content, while its blueprint lives under the Testbench skeleton's
+     * resource_path (inside vendor/). A dependency reinstall wipes the blueprint while the
+     * collection survives, so guarding the blueprint on the collection's existence would leave
+     * entries with no resrv_availability field. Entry::syncToDatabase() then skips them, no
+     * resrv_entries rows are written, and a later workbench:build fails with "No query results
+     * for model [Reach\StatamicResrv\Models\Entry]". Mirrors ensureCheckoutForm()'s always-write.
      */
     protected function ensureAvailabilityCollection(string $handle, string $route): void
     {
-        if (Collection::findByHandle($handle)) {
-            return;
+        if (! Collection::findByHandle($handle)) {
+            Collection::make($handle)->routes($route)->save();
         }
-
-        Collection::make($handle)->routes($route)->save();
 
         Blueprint::make()
             ->setHandle($handle)
