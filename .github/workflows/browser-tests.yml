@@ -1,0 +1,72 @@
+name: Browser Tests
+
+# testbench-dusk (PHPUnit) browser suite — deliberately a SEPARATE workflow from
+# tests.yml so the fast unit/feature job stays Chrome-free and untouched. Both
+# workflows trigger on push/PR, so CI runs both jobs. This one boots the Workbench
+# app (Statamic 6 + the addon + Livewire), serves it to a real headless Chrome, and
+# drives the frontend funnel end-to-end (`composer test:browser`). See browser-testing.md.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  browser-tests:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[ci skip]')"
+
+    name: Browser (Dusk) - P8.4
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo, :php-psr
+          coverage: none
+
+      # ubuntu-latest ships Google Chrome preinstalled; `dusk:chrome-driver --detect`
+      # below reads THIS version and downloads the matching driver, so the driver can
+      # never drift from the browser Dusk actually launches (Gotcha #11).
+      - name: Report Chrome version
+        run: google-chrome --version
+
+      # composer.lock is committed and pins orchestra/testbench-dusk + PHPUnit 13, so a
+      # plain `install` reproduces the locked stack (no matrix — the browser suite tests
+      # JS/DOM, not the Laravel version matrix, which tests.yml already covers).
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Match ChromeDriver to installed Chrome
+        run: php vendor/bin/testbench dusk:chrome-driver --detect
+
+      - name: Make Dusk binaries executable
+        run: chmod -R 0755 vendor/laravel/dusk/bin/
+
+      # Creates + wipes + migrates + seeds the shared file SQLite DB the served app and
+      # the test process both read (Gotcha #5), and publishes the addon's compiled
+      # frontend bundle into public/ (asset-publish). Must run before test:browser.
+      - name: Build the Workbench app
+        run: php vendor/bin/testbench workbench:build
+
+      - name: Run the browser suite (headless Chrome)
+        run: composer test:browser
+
+      # Dusk auto-captures a screenshot + console log + page source on failure; also grab
+      # the served app's log to debug 500s in the separate serve process. gitignored dirs
+      # upload fine (upload-artifact reads the filesystem, not git).
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dusk-failure-artifacts
+          path: |
+            tests/Browser/screenshots
+            tests/Browser/console
+            tests/Browser/source
+            vendor/orchestra/testbench-dusk/laravel/storage/logs/laravel.log
+          if-no-files-found: ignore
+          retention-days: 7

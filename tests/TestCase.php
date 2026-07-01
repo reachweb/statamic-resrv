@@ -32,9 +32,25 @@ class TestCase extends AddonTestCase
 
     protected string $addonServiceProvider = StatamicResrvServiceProvider::class;
 
+    /** @var callable|null */
+    private $baselineErrorHandler;
+
+    /** @var callable|null */
+    private $baselineExceptionHandler;
+
     protected function setUp(): void
     {
+        $this->captureHandlerBaseline();
+
         parent::setUp();
+
+        // Clear any Stache items left in the fake directory by a previous test
+        // process that was interrupted before its tearDown ran (a killed run, a
+        // crash, a Ctrl-C). Statamic only wipes this directory in tearDown, so a
+        // stray entry file otherwise survives on disk and the first test to query
+        // that collection loads it as a phantom extra entry — a flaky, run-to-run
+        // contamination that never reproduces in a clean checkout.
+        $this->deleteFakeStacheDirectory();
 
         $this->resetPostgresSequences();
 
@@ -54,9 +70,67 @@ class TestCase extends AddonTestCase
         ]);
     }
 
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+
+        $this->restoreHandlerBaseline();
+    }
+
     protected function setUpFaker()
     {
         $this->faker = $this->makeFaker();
+    }
+
+    /**
+     * Record the error/exception handlers that are active before the application
+     * boots, so any handlers leaked during the test can be drained back to this
+     * baseline in tearDown.
+     *
+     * Testbench rebuilds the whole application for every test, and each boot of
+     * Laravel's HandleExceptions bootstrapper pushes PHP error/exception handlers
+     * that the framework never pops. Once the stack is left unbalanced, PHPUnit
+     * reports the *next* test as an error ("did not remove its own exception
+     * handlers") — a cross-test artifact that surfaces intermittently in the full
+     * suite while every test still passes in isolation.
+     */
+    private function captureHandlerBaseline(): void
+    {
+        $this->baselineErrorHandler = set_error_handler(null);
+        restore_error_handler();
+
+        $this->baselineExceptionHandler = set_exception_handler(null);
+        restore_exception_handler();
+    }
+
+    /**
+     * Pop any error/exception handlers pushed during the test until the stack is
+     * back at the baseline captured in setUp. Only handlers above the baseline are
+     * removed, so PHPUnit's own handler is left untouched.
+     */
+    private function restoreHandlerBaseline(): void
+    {
+        while (true) {
+            $handler = set_error_handler(null);
+            restore_error_handler();
+
+            if ($handler === null || $handler === $this->baselineErrorHandler) {
+                break;
+            }
+
+            restore_error_handler();
+        }
+
+        while (true) {
+            $handler = set_exception_handler(null);
+            restore_exception_handler();
+
+            if ($handler === null || $handler === $this->baselineExceptionHandler) {
+                break;
+            }
+
+            restore_exception_handler();
+        }
     }
 
     // Stop the licensing Outpost (hit by the ContactOutpost CP middleware on
@@ -83,6 +157,19 @@ class TestCase extends AddonTestCase
     protected function resolveApplicationConfiguration($app)
     {
         parent::resolveApplicationConfiguration($app);
+
+        // Disable Statamic's search indexing during tests. Every Entry::save()
+        // fires EntrySaved, whose Statamic\Search\UpdateItemIndexes listener
+        // re-indexes the configured local indexes — ~0.7s per save and the
+        // single largest cost in the suite. The addon uses its own resrv_search
+        // scope, never Statamic's search index, so this is safe.
+        //
+        // Note: Statamic's IndexManager always injects a hardcoded "cp" index on
+        // the local driver, so emptying the array isn't enough — the cp index
+        // must be explicitly redefined onto the no-op "null" driver.
+        $app['config']->set('statamic.search.indexes', [
+            'cp' => ['driver' => 'null'],
+        ]);
 
         // Force the cache driver to be array for testing
         $app['config']->set('cache.default', 'array');

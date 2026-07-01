@@ -15,6 +15,7 @@
             </div>
             <button
                 type="button"
+                dusk="confirm-payment"
                 class="flex items-center justify-center w-full relative px-6 py-3.5 text-base font-medium text-white bg-blue-700 hover:bg-blue-800 focus:ring-4
                 focus:outline-none focus:ring-blue-300 rounded-lg text-center disabled:opacity-70 transition-opacity duration-300"
                 x-on:click="confirmReservation()"

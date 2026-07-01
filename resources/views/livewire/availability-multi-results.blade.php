@@ -42,12 +42,14 @@
                         <button
                             type="button"
                             class="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 hover:bg-gray-200 text-sm font-medium"
+                            dusk="multi-rate-decrease-{{ $rateId }}"
                             wire:click="updateRateQuantity({{ $rateId }}, {{ ($rateQuantities[$rateId] ?? 0) - 1 }})"
                         >-</button>
-                        <span class="w-6 text-center text-sm font-medium">{{ $rateQuantities[$rateId] ?? 0 }}</span>
+                        <span class="w-6 text-center text-sm font-medium" dusk="multi-rate-quantity-{{ $rateId }}">{{ $rateQuantities[$rateId] ?? 0 }}</span>
                         <button
                             type="button"
                             class="w-8 h-8 flex items-center justify-center rounded-full border border-gray-300 hover:bg-gray-200 text-sm font-medium"
+                            dusk="multi-rate-increase-{{ $rateId }}"
                             wire:click="updateRateQuantity({{ $rateId }}, {{ ($rateQuantities[$rateId] ?? 0) + 1 }})"
                         >+</button>
                     </div>
@@ -122,7 +124,7 @@
         <div class="flex items-center justify-between mt-4 pt-3 border-t border-gray-200">
             <div>
                 <span class="text-lg font-bold">{{ trans('statamic-resrv::frontend.total') }}:</span>
-                <span class="text-lg font-bold ml-1">{{ config('resrv-config.currency_symbol') }} {{ $this->totalPrice }}</span>
+                <span class="text-lg font-bold ml-1" dusk="multi-grand-total">{{ config('resrv-config.currency_symbol') }} {{ $this->totalPrice }}</span>
             </div>
             <button
                 type="button"

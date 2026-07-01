@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Browser (testbench-dusk) test suite — deliberately separate from phpunit.xml.
+
+    `composer test` / `composer test-pgsql` enumerate their testsuites explicitly and
+    do NOT list tests/Browser, so they never load this suite or launch Chrome. This
+    config is the only entry point for the browser tests (`composer test:browser`).
+
+    The env here is NOT a copy of phpunit.xml's: the browser runs in a *separate*
+    PHP process from the test process, so the two must share state on disk —
+      * DB_DATABASE is omitted on purpose so sqlite falls through to the file path
+        database_path('database.sqlite'), the same file the served app uses
+        (Gotcha #5). phpunit.xml's `:memory:` would be invisible across processes.
+      * SESSION_DRIVER / CACHE_STORE are `file`, never `array`, so the session cart
+        (resrv-search/-reservation) survives across requests (Gotcha #4).
+
+    Prerequisite: `php vendor/bin/testbench workbench:build` creates + migrates +
+    seeds that shared file DB before this suite runs (a CI step in T21).
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/13.1/phpunit.xsd" backupGlobals="false" bootstrap="vendor/autoload.php" colors="true" stopOnFailure="false" cacheDirectory=".phpunit.cache" backupStaticProperties="false">
+  <testsuites>
+    <testsuite name="Browser">
+      <directory suffix="Test.php">tests/Browser/</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <env name="APP_ENV" value="testing"/>
+    <env name="APP_KEY" value="base64:tIt56v64/nM+5fAClHWccPRxbhvdgeRsiYDHyqXh37Y="/>
+    <env name="BCRYPT_ROUNDS" value="4"/>
+    <env name="DB_CONNECTION" value="sqlite"/>
+    <env name="SESSION_DRIVER" value="file"/>
+    <env name="CACHE_STORE" value="file"/>
+    <env name="QUEUE_CONNECTION" value="sync"/>
+    <env name="MAIL_MAILER" value="log"/>
+    <ini name="memory_limit" value="4096M"/>
+  </php>
+</phpunit>

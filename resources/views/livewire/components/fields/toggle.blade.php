@@ -2,7 +2,7 @@
 
 <div {{ $attributes->class(['relative', 'md:col-span-2' => $field['width'] === 100, 'md:col-span-1' => $field['width'] === 50,]) }} wire:key="{{ $key }}">
     <label class="inline-flex items-center cursor-pointer">
-        <input type="checkbox" class="sr-only peer" wire:model="form.{{ $field['handle'] }}">
+        <input type="checkbox" class="sr-only peer" dusk="toggle-{{ $field['handle'] }}" wire:model="form.{{ $field['handle'] }}">
         <div 
             class="relative flex-shrink-0 w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 
             rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white 

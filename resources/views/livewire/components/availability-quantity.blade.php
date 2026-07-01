@@ -2,8 +2,9 @@
 
 <div class="{{ $attributes->get('class') }}">
     <div class="relative flex items-center min-w-32" x-data="{ quantity: $wire.entangle('data.quantity').live }">
-        <button 
-            type="button" 
+        <button
+            type="button"
+            dusk="quantity-decrease"
             class="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-s-lg p-2.5 h-11 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             x-on:click="quantity--"
             x-bind:disabled="quantity === 1"
@@ -12,12 +13,13 @@
                 <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1h16"/>
             </svg>
         </button>
-        <input type="text" class="bg-gray-50 border-x-0 border-gray-300 h-11 font-medium text-center text-gray-900 text-sm block w-full pb-4" placeholder="" x-bind:value="quantity" required disabled />
+        <input type="text" dusk="quantity-input" class="bg-gray-50 border-x-0 border-gray-300 h-11 font-medium text-center text-gray-900 text-sm block w-full pb-4" placeholder="" x-bind:value="quantity" required disabled />
         <div class="absolute bottom-1 start-1/2 -translate-x-1/2 rtl:translate-x-1/2 flex items-center text-xs text-gray-400 space-x-1 rtl:space-x-reverse">
             <span>{{ trans('statamic-resrv::frontend.quantityLabel') }}</span>
         </div>
-        <button 
-            type="button" 
+        <button
+            type="button"
+            dusk="quantity-increase"
             class="bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-e-lg p-2.5 h-11 focus:ring-gray-100 focus:ring-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             x-on:click="quantity++"
             x-bind:disabled="quantity === {{ $maxQuantity }}"
