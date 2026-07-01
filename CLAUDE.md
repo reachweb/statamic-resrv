@@ -28,6 +28,11 @@ vendor/bin/phpunit --configuration phpunit.pgsql.xml --stop-on-defect
 # Run tests with coverage
 composer test-coverage
 
+# Run browser tests (testbench-dusk + headless Chrome; PHPUnit, separate from the default suite — needs Chrome)
+# Prerequisite: php vendor/bin/testbench workbench:build (creates + seeds the shared file SQLite DB)
+composer test:browser
+composer test:browser:headed   # visible browser
+
 # Run specific test file
 vendor/bin/phpunit tests/Availability/AvailabilityTest.php
 

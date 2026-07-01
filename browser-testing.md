@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 20 / 23 complete**
+**Progress: 21 / 23 complete**
 
 ---
 
@@ -129,7 +129,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 
 **Phase 5 — CI & maintenance**
 - [x] T21 — CI workflow (Chrome + ChromeDriver, run Browser suite, upload failure screenshots)
-- [ ] T22 — Developer docs (README "Browser tests" section + CLAUDE.md note)
+- [x] T22 — Developer docs (README "Browser tests" section + CLAUDE.md note)
 - [ ] T23 — **(optional)** Evaluate Pest v4 Playwright as a cross-browser smoke layer (must not disturb the PHPUnit pin)
 
 > **Intentionally NOT browser-tested** (already covered by the 328 headless Livewire tests; adding
@@ -514,6 +514,10 @@ These validate the lifecycle itself, not just that a page renders — if either 
 2. Add a short note to `CLAUDE.md` Commands section: `composer test:browser` (testbench-dusk, **PHPUnit** — separate from the default suite; needs Chrome).
 **Files:** `README.md` (or docs), `CLAUDE.md`.
 **Acceptance:** a fresh clone can follow the docs to a green `composer test:browser`.
+> **T22 outcome + decisions:**
+> - **README gets a `## Testing` section** (inserted between Features and License) with a `### Browser tests` subsection. Chose the README over a new `CONTRIBUTING.md` because it's the guaranteed-visible entry point for a fresh clone (the acceptance) and the task lists it first. The section frames the two suites as **additive** (headless owns validation/pricing/state; browser owns JS/funnel), then documents: prerequisites (Chrome + `dusk:chrome-driver --detect`), the **build-then-test** run order (`workbench:build` → `composer test:browser`, plus `:headed`), how to add a scenario (extend `BrowserTestCase`, `SeedsBookableContent` fixtures, `#[BeforeServing]` for served-app config), a 4-bullet gotchas summary that **points to `browser-testing.md`** for the full reasoning (kept DRY — didn't duplicate the 11-item gotchas list), and a what-is/isn't table.
+> - **CLAUDE.md Commands block** gains `composer test:browser` + `:headed` next to the other test commands, with the one-line "testbench-dusk + headless Chrome; PHPUnit, separate from the default suite" note and the `workbench:build` prerequisite inline.
+> - **Verified:** README fenced blocks balanced (6), table well-formed; every command referenced in both docs resolves (`composer test:browser`/`:headed` in composer.json, `dusk:chrome-driver`/`workbench:build` in the testbench CLI, `browser-testing.md` link target present). The documented sequence is the exact chain proven green in T21 this session (`workbench:build` → `composer test:browser` = 22 tests / 79 assertions). No PHP touched → `pint --dirty` clean.
 
 ## T23 — (optional) Evaluate Pest v4 Playwright as a cross-browser smoke layer
 **Goal:** Decide whether to add a *thin* Playwright layer for `assertNoSmoke()` + cross-browser (Firefox/WebKit) smoke, **on top of** (not replacing) the Dusk harness — only if it can be done without disturbing the PHPUnit 13 pin.
