@@ -59,7 +59,7 @@ trait SeedsBookableContent
 
     protected function seedBookableContent(): EntryContract
     {
-        $this->ensureBookableCollection();
+        $this->ensureAvailabilityCollection($this->bookableCollection, '/{slug}');
 
         $entry = $this->ensureBookableEntry();
         $rate = $this->ensureRate();
@@ -135,21 +135,22 @@ trait SeedsBookableContent
     }
 
     /**
-     * Create the `pages` collection (route `/{slug}`) and a blueprint carrying
-     * the resrv_availability fieldtype, mirroring
-     * tests/CreatesEntries::makeBlueprint().
+     * Find-or-create a collection with the given route and a blueprint carrying the
+     * resrv_availability fieldtype, mirroring tests/CreatesEntries::makeBlueprint().
+     * Shared by the `pages` (route `/{slug}`) and `rooms` (route `/rooms/{slug}`)
+     * collections.
      */
-    protected function ensureBookableCollection(): void
+    protected function ensureAvailabilityCollection(string $handle, string $route): void
     {
-        if (Collection::findByHandle($this->bookableCollection)) {
+        if (Collection::findByHandle($handle)) {
             return;
         }
 
-        Collection::make($this->bookableCollection)->routes('/{slug}')->save();
+        Collection::make($handle)->routes($route)->save();
 
         Blueprint::make()
-            ->setHandle($this->bookableCollection)
-            ->setNamespace('collections.'.$this->bookableCollection)
+            ->setHandle($handle)
+            ->setNamespace('collections.'.$handle)
             ->setContents([
                 'sections' => [
                     'main' => [
@@ -206,15 +207,7 @@ trait SeedsBookableContent
      */
     protected function ensureMultiSecondRate(EntryContract $entry): Rate
     {
-        $rate = Rate::where('collection', $this->bookableCollection)
-            ->where('slug', $this->multiSecondRateSlug)
-            ->first()
-            ?? Rate::factory()->create([
-                'collection' => $this->bookableCollection,
-                'slug' => $this->multiSecondRateSlug,
-                'title' => 'Children',
-                'apply_to_all' => false,
-            ]);
+        $rate = $this->firstOrCreateRate($this->bookableCollection, $this->multiSecondRateSlug, 'Children', false);
 
         $rate->entries()->syncWithoutDetaching([$entry->id()]);
 
@@ -229,7 +222,7 @@ trait SeedsBookableContent
      */
     protected function ensureRoomsContent(): void
     {
-        $this->ensureRoomsCollection();
+        $this->ensureAvailabilityCollection($this->roomsCollection, '/rooms/{slug}');
 
         $flexRoom = $this->ensureRoomEntry($this->roomTwoRateSlug, 'Flex Room');
         $soloRoom = $this->ensureRoomEntry($this->roomOneRateSlug, 'Solo Room');
@@ -239,41 +232,9 @@ trait SeedsBookableContent
         $this->ensureRoomRate('rooms-solo', 'Solo', $soloRoom);
     }
 
-    protected function ensureRoomsCollection(): void
-    {
-        if (Collection::findByHandle($this->roomsCollection)) {
-            return;
-        }
-
-        Collection::make($this->roomsCollection)->routes('/rooms/{slug}')->save();
-
-        Blueprint::make()
-            ->setHandle($this->roomsCollection)
-            ->setNamespace('collections.'.$this->roomsCollection)
-            ->setContents([
-                'sections' => [
-                    'main' => [
-                        'fields' => [
-                            ['handle' => 'title', 'field' => ['type' => 'text', 'display' => 'Title']],
-                            ['handle' => 'slug', 'field' => ['type' => 'text', 'display' => 'Slug']],
-                            ['handle' => 'resrv_availability_field', 'field' => ['type' => 'resrv_availability', 'display' => 'Resrv Availability']],
-                        ],
-                    ],
-                ],
-            ])
-            ->save();
-    }
-
     protected function ensureRoomEntry(string $slug, string $title): EntryContract
     {
-        $entry = Entry::query()
-            ->where('collection', $this->roomsCollection)
-            ->where('slug', $slug)
-            ->first();
-
-        if (! $entry) {
-            $entry = Entry::make()->collection($this->roomsCollection)->slug($slug);
-        }
+        $entry = $this->firstOrMakeEntry($this->roomsCollection, $slug);
 
         $entry->data(['title' => $title, 'resrv_availability' => fake()->uuid()])->save();
 
@@ -282,15 +243,7 @@ trait SeedsBookableContent
 
     protected function ensureRoomRate(string $slug, string $title, EntryContract $entry): void
     {
-        $rate = Rate::where('collection', $this->roomsCollection)
-            ->where('slug', $slug)
-            ->first()
-            ?? Rate::factory()->create([
-                'collection' => $this->roomsCollection,
-                'slug' => $slug,
-                'title' => $title,
-                'apply_to_all' => false,
-            ]);
+        $rate = $this->firstOrCreateRate($this->roomsCollection, $slug, $title, false);
 
         $rate->entries()->syncWithoutDetaching([$entry->id()]);
         $this->seedAvailabilityWindow($entry, $rate);
@@ -304,32 +257,39 @@ trait SeedsBookableContent
      */
     protected function ensurePageEntry(string $slug, string $title, array $data = []): EntryContract
     {
-        $entry = Entry::query()
-            ->where('collection', $this->bookableCollection)
-            ->where('slug', $slug)
-            ->first();
-
-        if (! $entry) {
-            $entry = Entry::make()
-                ->collection($this->bookableCollection)
-                ->slug($slug);
-        }
+        $entry = $this->firstOrMakeEntry($this->bookableCollection, $slug);
 
         $entry->data(array_merge(['title' => $title], $data))->save();
 
         return $entry;
     }
 
+    /**
+     * Find an entry by (collection, slug) or make a fresh unsaved one — the shared
+     * find-or-make skeleton behind the page and room entry seeders.
+     */
+    protected function firstOrMakeEntry(string $collection, string $slug): EntryContract
+    {
+        return Entry::query()->where('collection', $collection)->where('slug', $slug)->first()
+            ?? Entry::make()->collection($collection)->slug($slug);
+    }
+
     protected function ensureRate(): Rate
     {
-        return Rate::where('collection', $this->bookableCollection)
-            ->where('slug', $this->rateSlug)
-            ->first()
+        return $this->firstOrCreateRate($this->bookableCollection, $this->rateSlug, 'Default', true);
+    }
+
+    /**
+     * Find-or-create a Rate for the given collection/slug pair (truncate-then-reseed safe).
+     */
+    protected function firstOrCreateRate(string $collection, string $slug, string $title, bool $applyToAll): Rate
+    {
+        return Rate::where('collection', $collection)->where('slug', $slug)->first()
             ?? Rate::factory()->create([
-                'collection' => $this->bookableCollection,
-                'slug' => $this->rateSlug,
-                'title' => 'Default',
-                'apply_to_all' => true,
+                'collection' => $collection,
+                'slug' => $slug,
+                'title' => $title,
+                'apply_to_all' => $applyToAll,
             ]);
     }
 

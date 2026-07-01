@@ -2,6 +2,8 @@
 
 namespace Reach\StatamicResrv\Tests\Browser;
 
+use Illuminate\Contracts\Config\Repository;
+use Illuminate\Foundation\Application;
 use Laravel\Dusk\Browser;
 use Orchestra\Testbench\Dusk\Attributes\BeforeServing;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
@@ -77,7 +79,7 @@ class GatewayPickerTest extends BrowserTestCase
      * deliberate 2-gateway override in place instead of forcing offline-only. Public and
      * stateless: the served process invokes it on a fresh test instance.
      */
-    public function registerSecondGateway($app, $config): void
+    public function registerSecondGateway(Application $app, Repository $config): void
     {
         $config->set('resrv-config.payment_gateways', [
             'offline' => [
