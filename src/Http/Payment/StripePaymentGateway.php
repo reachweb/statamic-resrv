@@ -9,9 +9,11 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
+use Stripe\ApiRequestor;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Exception\UnexpectedValueException;
+use Stripe\HttpClient\CurlClient;
 use Stripe\StripeClient;
 use Stripe\Webhook;
 
@@ -32,9 +34,25 @@ class StripePaymentGateway implements PaymentInterface
         return 'statamic-resrv::livewire.checkout-payment';
     }
 
+    /**
+     * All Stripe calls go through here so they share short HTTP timeouts. stripe-php defaults to
+     * 80s request / 30s connect, but refund() runs inside transitionTo()'s row lock — a Stripe
+     * brownout at those defaults would pin the reservation row (and a DB connection) long enough
+     * to stall webhooks, expiry sweeps and concurrent status transitions.
+     */
+    protected function getClient($reservation): StripeClient
+    {
+        $httpClient = CurlClient::instance();
+        $httpClient->setTimeout(15);
+        $httpClient->setConnectTimeout(5);
+        ApiRequestor::setHttpClient($httpClient);
+
+        return new StripeClient($this->getSecretKey($reservation));
+    }
+
     public function paymentIntent($payment, Reservation $reservation, $data)
     {
-        $stripe = new StripeClient($this->getSecretKey($reservation));
+        $stripe = $this->getClient($reservation);
         $paymentIntent = $stripe->paymentIntents->create([
             'amount' => $payment->raw(),
             'currency' => Str::lower(config('resrv-config.currency_isoCode')),
@@ -49,7 +67,7 @@ class StripePaymentGateway implements PaymentInterface
 
     public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
     {
-        $stripe = new StripeClient($this->getSecretKey($reservation));
+        $stripe = $this->getClient($reservation);
 
         try {
             $intent = $stripe->paymentIntents->retrieve($paymentId);
@@ -67,31 +85,48 @@ class StripePaymentGateway implements PaymentInterface
 
     public function refund($reservation)
     {
-        $stripe = new StripeClient($this->getSecretKey($reservation));
-        try {
-            $attemptRefund = $stripe->refunds->create(
-                [
-                    'payment_intent' => $reservation->payment_id,
-                    'reverse_transfer' => false,
-                ],
-                [
-                    // Stable per-(reservation, intent) idempotency key: if a connection drops AFTER
-                    // Stripe processed the refund (or the status transition rolls back post-refund), a
-                    // retry within Stripe's idempotency window (~24h) replays the original response
-                    // instead of issuing a second refund. Past that window the key is forgotten; because
-                    // these refunds are always for the full intent, Stripe then rejects the retry with
-                    // "already refunded" (surfaced as RefundFailedException) rather than double-paying.
-                    'idempotency_key' => 'resrv-refund-'.$reservation->id.'-'.$reservation->payment_id,
-                ]
-            );
-        } catch (ApiErrorException $exception) {
-            // Every Stripe failure mode (invalid request, connection, auth, rate limit)
-            // must surface as RefundFailedException so callers roll back the status
-            // transition and show their refund-failed message instead of a 500.
-            throw new RefundFailedException($exception->getMessage());
-        }
+        $stripe = $this->getClient($reservation);
 
-        return $attemptRefund;
+        $params = [
+            'payment_intent' => $reservation->payment_id,
+            'reverse_transfer' => false,
+        ];
+
+        // Stable per-(reservation, intent) idempotency key: if a connection drops AFTER
+        // Stripe processed the refund (or the status transition rolls back post-refund), a
+        // retry within Stripe's idempotency window (~24h) replays the original response
+        // instead of issuing a second refund. Past that window the key is forgotten; because
+        // these refunds are always for the full intent, Stripe then rejects the retry with
+        // "already refunded" (surfaced as RefundFailedException) rather than double-paying.
+        $idempotencyKey = 'resrv-refund-'.$reservation->id.'-'.$reservation->payment_id;
+
+        try {
+            return $stripe->refunds->create($params, ['idempotency_key' => $idempotencyKey]);
+        } catch (ApiErrorException $exception) {
+            // Stripe replays the FIRST response recorded under a key — errors included — for the
+            // whole idempotency window. A replayed error means a previous attempt definitively
+            // failed (no refund exists), so one retry under a fresh key is safe and lets a fixed
+            // cause (e.g. a topped-up balance) succeed instead of re-surfacing the stale failure.
+            if (! $this->isReplayedError($exception)) {
+                // Every Stripe failure mode (invalid request, connection, auth, rate limit)
+                // must surface as RefundFailedException so callers roll back the status
+                // transition and show their refund-failed message instead of a 500.
+                throw new RefundFailedException($exception->getMessage());
+            }
+
+            try {
+                return $stripe->refunds->create($params, ['idempotency_key' => $idempotencyKey.'-'.now()->timestamp]);
+            } catch (ApiErrorException $retryException) {
+                throw new RefundFailedException($retryException->getMessage());
+            }
+        }
+    }
+
+    protected function isReplayedError(ApiErrorException $exception): bool
+    {
+        $headers = $exception->getHttpHeaders();
+
+        return $headers !== null && strtolower((string) ($headers['Idempotent-Replayed'] ?? '')) === 'true';
     }
 
     protected function filterCustomerData($data)
@@ -182,7 +217,7 @@ class StripePaymentGateway implements PaymentInterface
             ];
         }
 
-        $stripe = new StripeClient($this->getSecretKey($reservation));
+        $stripe = $this->getClient($reservation);
 
         $status = $stripe->paymentIntents->retrieve($paymentIntent, []);
 

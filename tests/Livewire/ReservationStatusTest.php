@@ -22,6 +22,7 @@ use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
+use Statamic\Facades\Entry;
 
 class ReservationStatusTest extends TestCase
 {
@@ -810,6 +811,36 @@ class ReservationStatusTest extends TestCase
         $this->assertNotNull($url);
         $this->assertStringContainsString('ref='.$reservation->reference, $url);
         $this->assertStringContainsString('hash='.$reservation->customerLookupHash(), $url);
+    }
+
+    public function test_customer_status_url_accepts_an_integer_entry_id()
+    {
+        // Eloquent-driver sites can store integer entry IDs, which the settings YAML
+        // round-trips as a real int — the URL must still build.
+        $this->ensureCollectionExists('pages');
+        Entry::make()->collection('pages')->id('4242')->slug('status-page')->data(['title' => 'Status'])->save();
+
+        Config::set('resrv-config.reservation_status_entry', 4242);
+
+        $reservation = $this->makeReservation();
+        $url = $reservation->customerStatusUrl();
+
+        $this->assertNotNull($url);
+        $this->assertStringContainsString('ref='.$reservation->reference, $url);
+    }
+
+    public function test_customer_status_url_is_null_for_an_unpublished_status_entry()
+    {
+        // url() ignores publish state, so the guard must — a draft status page would
+        // email customers a link that 404s.
+        $page = $this->makeStatamicItem();
+        $page->published(false)->save();
+
+        Config::set('resrv-config.reservation_status_entry', $page->id());
+
+        $reservation = $this->makeReservation();
+
+        $this->assertNull($reservation->customerStatusUrl());
     }
 
     public function test_confirmation_email_links_to_the_status_page_when_configured()

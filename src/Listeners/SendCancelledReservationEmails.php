@@ -7,7 +7,7 @@ use Reach\StatamicResrv\Jobs\SendCancelledReservationEmails as SendEmails;
 
 class SendCancelledReservationEmails
 {
-    public function handle(ReservationCancelledByCustomer $event)
+    public function handle(ReservationCancelledByCustomer $event): void
     {
         SendEmails::dispatchAfterResponse($event->reservation);
     }

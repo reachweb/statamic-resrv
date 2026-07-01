@@ -56,6 +56,7 @@ Resrv now handles this for you, with **no configuration required**: it allow‑l
 - Platform floor raised to PHP 8.4 / Laravel 12–13 / Statamic 6.11+ / Livewire 3.6.4+.
 - The `property` column, `advanced_availability` and `connected_availabilities` are removed — run `php artisan resrv:upgrade-to-rates` after migrating.
 - Custom payment gateways must implement six new `PaymentInterface` methods (including `supportsAutomaticRefunds()`).
+- The `{{ resrv:reservation_from_uri }}` tag now verifies a booking‑scoped hash (HMAC of `id|email`, exposed as `Reservation::customerLookupHash()`) instead of the previous email‑only HMAC, so a leaked link can no longer be replayed against the same customer's other reservations. Links built by site code with the old formula stop resolving — generate them with `$reservation->customerStatusUrl()` instead.
 - Options were refactored from per‑entry to **collection‑scoped**: the `item_id` column on `resrv_options` is replaced by a `collection` column plus a `resrv_option_entries` pivot. Existing options migrate automatically on `php artisan migrate` — **verify your options still appear on the expected entries afterwards**. Multisite installs that bound an option to a non‑default site's localized entry may need to re‑attach it on the default (root) site.
 - CP‑managed settings move out of `config/resrv-config.php` into the Control Panel.
 - Published frontend views, language overrides and custom gateways need updating.

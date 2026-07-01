@@ -359,6 +359,20 @@ class Reservation extends Model
     }
 
     /**
+     * Commission owed to the given affiliate for this reservation (total × pivot fee %), zero once
+     * the commission has been cancelled. Single owner of the formula so the CP serializer and the
+     * CSV export can never drift apart.
+     */
+    public function affiliateCommissionFor(Affiliate $affiliate): PriceClass
+    {
+        if ($affiliate->pivot->cancelled_at !== null) {
+            return Price::create(0);
+        }
+
+        return $this->total->multiply((float) $affiliate->pivot->fee / 100);
+    }
+
+    /**
      * Amount the customer actually paid online at checkout, for customer-facing surfaces.
      * Manual-confirmation gateways (offline / bank transfer) mint a payment_id without
      * collecting any money — the funds arrive out-of-band — so amountPaid() would overstate
@@ -393,9 +407,9 @@ class Reservation extends Model
 
     /**
      * Absolute "manage your booking" deep link to the reservation-status page, or null when the
-     * status page entry is unconfigured/missing/unroutable or the reservation has no customer email
-     * to authenticate with. Carries the reference plus customerLookupHash() so the page opens
-     * (and offers cancellation) without the customer re-entering anything.
+     * status page entry is unconfigured/missing/unpublished/unroutable or the reservation has no
+     * customer email to authenticate with. Carries the reference plus customerLookupHash() so the
+     * page opens (and offers cancellation) without the customer re-entering anything.
      */
     public function customerStatusUrl(): ?string
     {
@@ -406,7 +420,14 @@ class Reservation extends Model
             $entryId = $entryId[0] ?? null;
         }
 
-        if (! is_string($entryId) || $entryId === '') {
+        // Eloquent-driver sites can store integer entry IDs, so accept any non-empty scalar.
+        if (! is_string($entryId) && ! is_int($entryId)) {
+            return null;
+        }
+
+        $entryId = (string) $entryId;
+
+        if ($entryId === '') {
             return null;
         }
 
@@ -418,7 +439,9 @@ class Reservation extends Model
 
         $entry = Entry::find($entryId);
 
-        if (! $entry || ! $entry->url()) {
+        // url() ignores publish state, so check it explicitly — a draft or private status page
+        // must hide the button rather than email a link that 404s for guests.
+        if (! $entry || ! $entry->published() || $entry->private() || ! $entry->url()) {
             return null;
         }
 

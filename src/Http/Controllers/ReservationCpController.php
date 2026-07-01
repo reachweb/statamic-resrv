@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Inertia\Inertia;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -166,13 +167,12 @@ class ReservationCpController extends Controller
             ])->values()->all(),
             'affiliate' => $reservation->affiliate->isNotEmpty() ? (function () use ($reservation) {
                 $affiliate = $reservation->affiliate->first();
-                $fee = (float) $affiliate->pivot->fee;
 
                 return [
                     'name' => $affiliate->name,
                     'email' => $affiliate->email,
-                    'fee' => $fee,
-                    'fee_amount_formatted' => $reservation->total->multiply($fee / 100)->format(),
+                    'fee' => (float) $affiliate->pivot->fee,
+                    'fee_amount_formatted' => $reservation->affiliateCommissionFor($affiliate)->format(),
                     'commission_cancelled' => $affiliate->pivot->cancelled_at !== null,
                 ];
             })() : null,

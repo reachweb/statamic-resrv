@@ -326,20 +326,9 @@ class ExportCpController extends Controller
             'affiliate_commission' => [
                 'label' => __('Affiliate commission'),
                 'group' => __('Affiliate'),
-                'value' => function (Reservation $r) {
-                    $affiliate = $this->reservationAffiliate($r);
-
-                    if (! $affiliate) {
-                        return null;
-                    }
-
-                    // A cancelled commission is no longer payable, so it exports as a formatted zero.
-                    if ($affiliate->pivot->cancelled_at !== null) {
-                        return $r->total->multiply(0)->format();
-                    }
-
-                    return $r->total->multiply((float) $affiliate->pivot->fee / 100)->format();
-                },
+                'value' => fn (Reservation $r) => ($affiliate = $this->reservationAffiliate($r))
+                    ? $r->affiliateCommissionFor($affiliate)->format()
+                    : null,
             ],
             'affiliate_commission_status' => [
                 'label' => __('Commission status'),

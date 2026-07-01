@@ -23,12 +23,7 @@ class SendCancelledReservationEmails implements ShouldQueue
         $this->reservation = $reservation;
     }
 
-    /**
-     * Execute the job.
-     *
-     * @return void
-     */
-    public function handle()
+    public function handle(): void
     {
         /** @var ReservationEmailDispatcher $dispatcher */
         $dispatcher = app(ReservationEmailDispatcher::class);
