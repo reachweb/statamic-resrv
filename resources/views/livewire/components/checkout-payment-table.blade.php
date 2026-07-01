@@ -77,7 +77,7 @@
                         {{ trans('statamic-resrv::frontend.total') }}
                     </div>
                     <div class="flex justify-end">
-                        <span class="md:text-lg text-gray-900">
+                        <span class="md:text-lg text-gray-900" dusk="payment-total">
                             {{ config('resrv-config.currency_symbol') }} {{ $totals->get('total')->format() }}
                         </span>
                     </div>

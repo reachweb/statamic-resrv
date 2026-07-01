@@ -3,7 +3,9 @@
 namespace Reach\StatamicResrv\Tests\Browser\Concerns;
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
@@ -59,6 +61,7 @@ trait SeedsBookableContent
         $this->seedAvailabilityWindow($entry, $rate);
         $this->attachExtra($entry);
         $this->attachOption($entry);
+        $this->attachCoupons($entry);
 
         $this->ensureMultiEntry($rate);
         $this->ensureCheckoutForm();
@@ -283,6 +286,43 @@ trait SeedsBookableContent
             ->notRequired()
             ->has(OptionValue::factory()->fixed(), 'values')
             ->create(['item_id' => $entry->id()]);
+    }
+
+    /**
+     * Attach two coupons (a percentage and a flat discount) to the bookable entry for
+     * T18. Coupons are DynamicPricing rows carrying a `coupon` code; they only discount
+     * when their code is the active session coupon, so their presence never changes the
+     * base totals the other funnel tasks (T14/T16/T17) assert. `noDates()` skips the
+     * date-window check, and duration >= 1 matches the one-night funnel booking.
+     */
+    protected function attachCoupons(EntryContract $entry): void
+    {
+        $this->ensureCoupon($entry, 'SAVE20', 'percent', '20');
+        $this->ensureCoupon($entry, 'SAVE5', 'fixed', '5');
+    }
+
+    protected function ensureCoupon(EntryContract $entry, string $code, string $amountType, string $amount): void
+    {
+        $coupon = DynamicPricing::where('coupon', $code)->first()
+            ?? DynamicPricing::factory()->noDates()->create([
+                'title' => 'Browser coupon '.$code,
+                'coupon' => $code,
+                'amount_type' => $amountType,
+                'amount_operation' => 'decrease',
+                'amount' => $amount,
+                'condition_type' => 'reservation_duration',
+                'condition_comparison' => '>=',
+                'condition_value' => '1',
+            ]);
+
+        // The entries() morph maps the pivot's assignment_id to Availability.statamic_id,
+        // so store the entry's statamic id (mirrors tests/Livewire/CheckoutTest). Idempotent
+        // for truncate-then-reseed.
+        DB::table('resrv_dynamic_pricing_assignments')->updateOrInsert([
+            'dynamic_pricing_id' => $coupon->id,
+            'dynamic_pricing_assignment_id' => $entry->id(),
+            'dynamic_pricing_assignment_type' => Availability::class,
+        ]);
     }
 
     /**

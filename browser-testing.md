@@ -25,7 +25,7 @@ combobox, the multi-step checkout, offline payment → confirmed reservation).
 > green. Phase 5 is CI/docs, do last. Tasks marked **(optional)** can be skipped without
 > blocking anything.
 
-**Progress: 17 / 23 complete**
+**Progress: 18 / 23 complete**
 
 ---
 
@@ -123,7 +123,7 @@ search → checkout → **confirmed** end-to-end. Real-Stripe-in-a-browser is ou
 - [x] T15 — Multi-rate **cart** happy path (`AvailabilityMultiResults`: add/remove selections, line + grand totals, checkout → multi-line reservation)
 - [x] T16 — CheckoutForm rich JS fields (`dictionary_phone` combobox keyboard nav + filter, `toggle` Alpine switch, inline required-field validation)
 - [x] T17 — Gateway picker (two gateways via `beforeServingApplication`) **+ one representative error path** (e.g. "please select a rate")
-- [ ] T18 — Coupon / dynamic-pricing reactivity on checkout totals (apply → totals change, remove → revert)
+- [x] T18 — Coupon / dynamic-pricing reactivity on checkout totals (apply → totals change, remove → revert)
 - [ ] T19 — **(optional)** AvailabilityCollection live list (collection render, `showUnavailable` mounted true vs false, paginate, select → redirect)
 - [ ] T20 — Cross-collection rate reconciliation: select a rate on one collection, navigate to another, the carried `resrv-search` rate is **healed** (foreign rate dropped; single valid rate auto-selected) — guards the `resetOnBoot` → `reconcileRate()` change
 
@@ -458,6 +458,10 @@ These validate the lifecycle itself, not just that a page renders — if either 
 ## T18 — Coupon / dynamic-pricing reactivity
 **Cover:** apply a coupon (a `DynamicPricing` with a code) at checkout via `checkout-coupon.blade.php` → totals in the payment table change live (`coupon-applied`); remove it → totals revert (`coupon-removed`). One percentage and one flat adjustment is enough to prove the UI reflects both; the pricing math itself is unit-tested.
 **Files:** `tests/Browser/CouponPricingTest.php`. **Source:** `HandlesPricing`, `DynamicPricing`, `resources/views/livewire/components/checkout-coupon.blade.php`.
+> **T18 outcome + load-bearing findings:**
+> - **Seed:** `SeedsBookableContent::attachCoupons` creates two `DynamicPricing` rows carrying a `coupon` code — `SAVE20` (percent 20% off) and `SAVE5` (flat 5 off) — and assigns each to the bookable entry via `resrv_dynamic_pricing_assignments`. **🔑 The assignment id is the entry's STATAMIC id** (`$entry->id()`), not the resrv_entries PK: `DynamicPricing::entries()` is a `morphedByMany(Availability::class, …, relatedKey: 'statamic_id')`, so the pivot's `dynamic_pricing_assignment_id` is matched against `Availability.statamic_id` (mirrors `tests/Livewire/CheckoutTest`). `noDates()` + `condition reservation_duration >= 1` make them apply to the one-night funnel booking. Coupons discount ONLY while their code is the active `session('resrv_coupon')`, so their presence never moves the base totals T14/T16/T17 assert (verified: full suite green).
+> - **🔑 Applying a coupon is a two-round-trip live update.** `addCoupon()` sets `session('resrv_coupon')` + dispatches `coupon-applied`; the browser fires it back to `#[On('coupon-applied')] updateTotals()`, which re-prices the reservation (`getUpdatedPrices()` reads the session coupon) and `unset($this->reservation)` so the payment table morphs to the discounted total. The test `waitUsing`s on the `@payment-total` text changing (not an exact value — robust to the currency symbol / rounding), then reverts on remove.
+> - **UI/selectors:** the coupon field is collapsed by default (`enableCoupon` defaults true, shows at step < 3). Added `dusk` hooks: `coupon-toggle` (opens the field), `coupon-remove` (the applied chip's ✕), and `payment-total` on the payment table's total line. Apply via the input's own `keyup.enter` (`$wire.addCoupon`) — no extra hook needed; the input already ships `dusk="coupon-input"`. Suite: 19 browser tests / 68 assertions green, served log error-free.
 
 ## T19 — (optional) AvailabilityCollection live list
 **Cover:** the no-extra-package collection list — mount by `collection`; compare which rows render with `showUnavailable` **mounted `true` vs `false`** (it's a `#[Locked]` mount option, not a UI toggle — mount two component instances to compare, don't click a switch); `paginate` page nav; `select($entryId,$rateId)` → redirect. Borderline vs the headless suite; include it only if the live list/pagination JS proves worth a browser assertion.
