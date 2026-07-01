@@ -15,6 +15,7 @@ use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Requests\AvailabilityCpRequest;
+use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
@@ -80,6 +81,41 @@ class AvailabilityCpController extends Controller
     {
         $data = $request->validated();
 
+        // Prune stale holds so they don't block the edit; skip session-hold abandonment so a CP
+        // edit can't expire the admin's own in-progress checkout in another tab.
+        ExpireReservations::dispatchSync(expireSessionHold: false);
+
+        // Bulk path: the mass-edit modal posts a single request carrying one group per
+        // editability signature ({price, available, rate_ids}). Applying every group in ONE
+        // transaction makes the whole edit atomic — a rejection on any group (the shared+relative
+        // price abort or the pending-holds guard) rolls back the groups already written, so a
+        // mixed-signature selection can never be left half-applied.
+        if (! empty($data['groups'])) {
+            // Combined (both-field) groups create the availability rows that single-field groups
+            // depend on (a shared rate's price override needs the base pool to exist), so apply them
+            // first within the shared transaction — independent of the order the client sent.
+            $groups = collect($data['groups'])
+                ->sortByDesc(fn ($group) => ! is_null($group['price'] ?? null) && ! is_null($group['available'] ?? null))
+                ->values()
+                ->all();
+
+            DB::transaction(function () use ($data, $groups) {
+                foreach ($groups as $group) {
+                    $payload = array_merge($data, [
+                        'price' => $group['price'] ?? null,
+                        'available' => $group['available'] ?? null,
+                    ]);
+                    unset($payload['groups']);
+
+                    foreach ($group['rate_ids'] as $rateId) {
+                        $this->updateAvailability($payload, (int) $rateId);
+                    }
+                }
+            });
+
+            return response()->json(['statamic_id' => $data['statamic_id']]);
+        }
+
         // validated() omits nullable keys absent from the request; normalise so the unconditional
         // is_null() reads below (and in the validation rule) don't hit undefined-array-key warnings.
         $data['price'] = $data['price'] ?? null;
@@ -87,9 +123,14 @@ class AvailabilityCpController extends Controller
 
         $rateIds = $data['rate_ids'] ?? $this->defaultRateIds($data['statamic_id']);
 
-        foreach ($rateIds as $rateId) {
-            $this->updateAvailability($data, (int) $rateId);
-        }
+        // Apply every rate in ONE transaction so a rejection on any rate (the shared+relative price
+        // abort or the pending-holds guard) rolls back the rates already written, instead of leaving
+        // a multi-rate edit half-applied. updateAvailability()'s own transaction nests as a savepoint.
+        DB::transaction(function () use ($rateIds, $data) {
+            foreach ($rateIds as $rateId) {
+                $this->updateAvailability($data, (int) $rateId);
+            }
+        });
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
@@ -102,6 +143,10 @@ class AvailabilityCpController extends Controller
             'date_end' => 'required|date',
             'rate_ids' => 'sometimes|array',
         ]);
+
+        // Prune stale holds so they don't block the delete; active ones still do. Skip session-hold
+        // abandonment so a CP delete can't expire the admin's own in-progress checkout.
+        ExpireReservations::dispatchSync(expireSessionHold: false);
 
         $requestedRateIds = ! empty($data['rate_ids'])
             ? array_map(fn ($id) => (int) $id, $data['rate_ids'])
@@ -149,10 +194,10 @@ class AvailabilityCpController extends Controller
     }
 
     /**
-     * Admin escape hatch: clear pending reservation IDs that should have been removed by the
-     * regular increment/expire path but somehow stuck (queue worker died, transient DB error,
-     * etc.). Default mode only clears IDs whose reservation is in a terminal status. Force mode
-     * clears every ID and logs the active ones for audit.
+     * Admin recovery for hold keys the increment/expire path should have removed but didn't.
+     * Default clears only terminal/gone holds; force also expires the genuinely-stale (past
+     * minutes_to_hold) PENDING reservations behind them. Active holds — a within-window checkout
+     * or a confirmed booking — are never released; they stay blocking and are returned in `still_active`.
      */
     public function clearStuckPending(Request $request): JsonResponse
     {
@@ -165,7 +210,13 @@ class AvailabilityCpController extends Controller
 
         $force = (bool) ($data['force'] ?? false);
 
-        return DB::transaction(function () use ($data, $force) {
+        // Force expires the stale PENDING reservations behind the holds (consistent release via
+        // ReservationExpired → IncreaseAvailability). Before the locked-row read so it isn't clobbered.
+        $expiredHoldCount = $force
+            ? $this->expirePendingReservationsForHold($data['statamic_id'], (int) $data['rate_id'], $data['date'])
+            : 0;
+
+        return DB::transaction(function () use ($data, $expiredHoldCount) {
             $row = Availability::where([
                 'statamic_id' => $data['statamic_id'],
                 'rate_id' => $data['rate_id'],
@@ -176,7 +227,7 @@ class AvailabilityCpController extends Controller
 
             $pending = $row->pending ?? [];
             if (empty($pending)) {
-                return response()->json(['cleared' => 0, 'still_active' => []]);
+                return response()->json(['cleared' => $expiredHoldCount, 'still_active' => []]);
             }
 
             $terminal = ReservationStatus::terminal();
@@ -235,11 +286,14 @@ class AvailabilityCpController extends Controller
             }
 
             $activeIds = array_values(array_unique($activeIds));
-            $toClear = $force ? array_values($pending) : $terminalKeys;
+
+            // Only terminal/orphan holds are cleared; active reservations stay blocking (reported in
+            // still_active). Force's only extra power is expiring the stale ones above.
+            $toClear = $terminalKeys;
 
             if (empty($toClear)) {
                 return response()->json([
-                    'cleared' => 0,
+                    'cleared' => $expiredHoldCount,
                     'still_active' => $activeIds,
                 ]);
             }
@@ -254,18 +308,86 @@ class AvailabilityCpController extends Controller
                 'pending' => array_values(array_diff($pending, $toClear)),
             ]);
 
-            if ($force && ! empty($activeIds)) {
-                Log::warning('Resrv: admin force-cleared active holds from availability row', [
-                    'availability_id' => $row->id,
-                    'forced_ids' => $activeIds,
-                ]);
-            }
-
             return response()->json([
-                'cleared' => count($toClear),
-                'still_active' => $force ? [] : $activeIds,
+                'cleared' => count($toClear) + $expiredHoldCount,
+                'still_active' => $activeIds,
             ]);
         });
+    }
+
+    /**
+     * Expire the genuinely-stale PENDING reservations behind a row's holds — a consistent release
+     * (via ReservationExpired → IncreaseAvailability) that also terminalises them so edit/delete
+     * guards unblock. Only reservations past their minutes_to_hold window are touched; one still
+     * inside it may be mid-payment. No window configured → nothing expired. Child holds expire their
+     * parent. Returns how many hold keys were removed.
+     */
+    protected function expirePendingReservationsForHold(string $statamicId, int $rateId, string $date): int
+    {
+        $holdMinutes = config('resrv-config.minutes_to_hold', false);
+
+        if ($holdMinutes == false) {
+            return 0;
+        }
+
+        $row = Availability::where([
+            'statamic_id' => $statamicId,
+            'rate_id' => $rateId,
+        ])
+            ->whereDate('date', $date)
+            ->first();
+
+        $pendingBefore = $row?->pending ?? [];
+
+        if (empty($pendingBefore)) {
+            return 0;
+        }
+
+        $normalIds = [];
+        $childIds = [];
+
+        foreach ($pendingBefore as $entry) {
+            if (is_string($entry) && preg_match('/^([rc])(\d+)$/', $entry, $matches)) {
+                if ($matches[1] === 'c') {
+                    $childIds[] = (int) $matches[2];
+                } else {
+                    $normalIds[] = (int) $matches[2];
+                }
+            } else {
+                // Legacy bare integer: could reference either table.
+                $normalIds[] = (int) $entry;
+                $childIds[] = (int) $entry;
+            }
+        }
+
+        $parentIdsFromChildren = empty($childIds)
+            ? []
+            : ChildReservation::whereIn('id', array_unique($childIds))->pluck('reservation_id')->all();
+
+        $reservationIds = collect($normalIds)->merge($parentIdsFromChildren)->unique()->values();
+
+        if ($reservationIds->isEmpty()) {
+            return 0;
+        }
+
+        Reservation::whereIn('id', $reservationIds->all())
+            ->where('status', ReservationStatus::PENDING->value)
+            ->where('created_at', '<', Carbon::now()->subMinutes($holdMinutes))
+            ->get()
+            ->each(function (Reservation $reservation) {
+                try {
+                    $reservation->expire();
+                } catch (\Throwable $e) {
+                    Log::error('Resrv: failed to expire reservation while clearing stuck holds', [
+                        'reservation_id' => $reservation->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            });
+
+        $pendingAfter = $row->fresh()?->pending ?? [];
+
+        return max(0, count($pendingBefore) - count($pendingAfter));
     }
 
     private function updateAvailability(array $data, int $rateId): void
@@ -274,6 +396,14 @@ class AvailabilityCpController extends Controller
         $resolvedRateId = AvailabilityRepository::resolveBaseRateId($rateId);
 
         $isSharedIndependent = $rate && $rate->hasIndependentSharedPricing();
+
+        // Write the price to this rate's own availability row when the price belongs there: plain
+        // rates and relative+independent rates, whose own row stores the SOURCE price the relative
+        // modifier is applied to on read (see HandlesPricing::getPrices). Excluded are shared rates
+        // writing onto the base pool (resolvedRateId !== rateId) — shared+relative derives its price
+        // from the base modifier and shared+independent keeps per-date overrides in resrv_rate_prices.
+        // A legacy entry with no Rate row resolves to itself and behaves like a plain rate.
+        $writesPriceColumn = ! $isSharedIndependent && $resolvedRateId === $rateId;
 
         // Shared+relative rates derive their price from the modifier — block direct price edits.
         $skipPrice = ($resolvedRateId !== $rateId) && ! $isSharedIndependent;
@@ -291,7 +421,7 @@ class AvailabilityCpController extends Controller
             ], 422));
         }
 
-        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $skipPrice, $isSharedIndependent) {
+        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn) {
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $onlyDays = $data['onlyDays'] ?? null;
 
@@ -327,7 +457,7 @@ class AvailabilityCpController extends Controller
 
                 $toUpdate = [];
 
-                if (! is_null($data['price']) && ! $skipPrice && ! $isSharedIndependent) {
+                if (! is_null($data['price']) && $writesPriceColumn) {
                     $toUpdate['price'] = $data['price'];
                 }
 

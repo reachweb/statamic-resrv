@@ -1,6 +1,6 @@
 <template>
     <element-container>
-        <Alert v-if="newItem" :title="__('You need to save this entry before you can add options.')" variant="info" />
+        <Alert v-if="newItem" :text="__('You need to save this entry before you can add options.')" variant="default" />
         <div class="statamic-resrv-options relative" v-else :inert="isReadOnly">
             <OptionsList :parent="props.meta.parent" />
         </div>

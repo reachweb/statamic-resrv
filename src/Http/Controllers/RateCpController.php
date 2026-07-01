@@ -72,8 +72,32 @@ class RateCpController extends Controller
     public function forEntry(string $statamicId): JsonResponse
     {
         $rates = Rate::forEntry($statamicId)
+            ->with('baseRate:id,title')
             ->orderBy('order')
             ->get();
+
+        // A shared rate is read-only in the availability UI and points the admin at its base rate to
+        // manage inventory. If that base rate isn't itself assigned to this entry it would be absent
+        // from the selector, leaving no editable rate at all — so pull in any such base rates. Their
+        // inventory is what the shared children share, and a base rate is never itself shared/relative
+        // (enforced on save), so it is always directly editable.
+        $presentIds = $rates->pluck('id')->map(fn ($id) => (string) $id)->all();
+
+        $missingBaseRateIds = $rates
+            ->filter(fn (Rate $rate) => $rate->isShared() && $rate->base_rate_id)
+            ->pluck('base_rate_id')
+            ->map(fn ($id) => (string) $id)
+            ->reject(fn (string $id) => in_array($id, $presentIds, true))
+            ->unique()
+            ->values();
+
+        if ($missingBaseRateIds->isNotEmpty()) {
+            $baseRates = Rate::whereIn('id', $missingBaseRateIds->all())
+                ->with('baseRate:id,title')
+                ->get();
+
+            $rates = $rates->concat($baseRates)->sortBy('order')->values();
+        }
 
         return response()->json($rates);
     }

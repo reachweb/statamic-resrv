@@ -74,6 +74,39 @@
     :is(.dark .resrv-cell-price) {
         @apply bg-gray-800 text-gray-200;
     }
+
+    /* Derived / non-editable value (relative price or shared availability). The cue is
+       shape + opacity + a lock glyph (and a native title tooltip set in JS), never colour
+       alone — the colour slot is already used for inventory state. */
+    .resrv-cell-locked {
+        @apply opacity-60;
+        outline: 1px dashed currentColor;
+        outline-offset: -1px;
+    }
+    .resrv-cell-locked::before {
+        content: "";
+        display: inline-block;
+        width: 0.625rem;
+        height: 0.625rem;
+        margin-inline-end: 0.2rem;
+        vertical-align: -1px;
+        background-color: currentColor;
+        -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='11' width='18' height='11' rx='2' ry='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E") center / contain no-repeat;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='11' width='18' height='11' rx='2' ry='2'/%3E%3Cpath d='M7 11V7a5 5 0 0 1 10 0v4'/%3E%3C/svg%3E") center / contain no-repeat;
+    }
+
+    /* Shared+independent rate, date with no override: showing the base rate's price as a fallback. */
+    .resrv-cell-price-inherited {
+        @apply italic opacity-75;
+    }
+
+    /* Shared+independent rate that requires an override, on a date with none: unbookable, needs action. */
+    .resrv-cell-price-required {
+        @apply bg-amber-100 text-amber-900 not-italic;
+    }
+    :is(.dark .resrv-cell-price-required) {
+        @apply bg-amber-900/40 text-amber-100;
+    }
 }
 
 .statamic-resrv-reservations {
@@ -267,6 +300,11 @@
     .vs__dropdown-toggle {
         height: auto;
     }
+}
+
+/* In dark mode Statamic's multi-select chips (Combobox selected options) use a gray-800 fill with no border, which matches the Modal/Panel surface they sit on and makes them read as flat text. Give them a lighter fill and a border so they keep their pill shape. */
+.dark [data-ui-combobox-selected-options] [data-ui-badge] {
+    @apply bg-gray-700 border border-gray-600;
 }
 
 .\@container {

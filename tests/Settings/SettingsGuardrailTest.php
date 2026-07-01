@@ -20,9 +20,13 @@ class SettingsGuardrailTest extends TestCase
 
         static::$configPath = $app->configPath('resrv-config.php');
 
-        $contents = str_contains($this->name(), 'developer_only')
-            ? "<?php\n\nreturn ['payment_gateways' => []];"
-            : "<?php\n\nreturn ['maximum_quantity' => 8, 'currency_isoCode' => 'USD'];";
+        if (str_contains($this->name(), 'developer_only')) {
+            $contents = "<?php\n\nreturn ['payment_gateways' => []];";
+        } elseif (str_contains($this->name(), 'nested')) {
+            $contents = "<?php\n\nreturn ['checkout_forms' => ['default' => 'checkout'], 'reservation_emails' => ['global' => []]];";
+        } else {
+            $contents = "<?php\n\nreturn ['maximum_quantity' => 8, 'currency_isoCode' => 'USD'];";
+        }
 
         file_put_contents(static::$configPath, $contents);
     }
@@ -65,5 +69,17 @@ class SettingsGuardrailTest extends TestCase
         $firstSection = collect($contents['tabs'])->first()['sections'][0];
 
         $this->assertNotSame('⚠ Published config file detected', $firstSection['display']);
+    }
+
+    public function test_warns_when_published_config_defines_retired_nested_keys()
+    {
+        $contents = Addon::get('reachweb/statamic-resrv')->settingsBlueprint()->contents();
+
+        $firstSection = collect($contents['tabs'])->first()['sections'][0];
+
+        $this->assertSame('⚠ Published config file detected', $firstSection['display']);
+        $this->assertStringContainsString('checkout_forms', $firstSection['instructions']);
+        $this->assertStringContainsString('reservation_emails', $firstSection['instructions']);
+        $this->assertStringContainsString('resrv:settings:migrate', $firstSection['instructions']);
     }
 }

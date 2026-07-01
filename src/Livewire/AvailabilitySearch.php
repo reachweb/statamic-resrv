@@ -36,9 +36,6 @@ class AvailabilitySearch extends Component
     public bool $anyRate = false;
 
     #[Locked]
-    public bool $resetOnBoot = false;
-
-    #[Locked]
     public bool $enableQuantity = false;
 
     #[Locked]
@@ -53,18 +50,19 @@ class AvailabilitySearch extends Component
     #[Locked]
     public array $calendarRules = [];
 
+    /**
+     * Developer-supplied rate options that bypass resolution from the Rate model.
+     * MUST be an id-keyed map [rate_id => label]; a bare list breaks the auto-select
+     * in AvailabilityData::reconcileRate() (a list renders option value="0").
+     *
+     * @var array<int|string, string>
+     */
     #[Locked]
     public array $overrideRates = [];
 
     public function mount(): void
     {
-        // mount() runs once per component lifecycle; boot() would re-run on every
-        // subsequent request, resetting the user's rate/quantity selection each time.
-        if ($this->resetOnBoot) {
-            $this->data->quantity = 1;
-            $this->data->rate = null;
-            $this->search(true);
-        }
+        $this->reconcileRateForContext();
     }
 
     #[Computed(persist: true)]
@@ -101,6 +99,8 @@ class AvailabilitySearch extends Component
             $this->data->validate();
         }
 
+        $this->reconcileRateForContext();
+
         if (! $this->data->rate && $this->anyRate) {
             $this->data->rate = 'any';
         }
@@ -131,6 +131,8 @@ class AvailabilitySearch extends Component
         $this->data->reset();
         // Apparently validation errors don't reset with the above
         $this->resetValidation();
+        // Re-heal / auto-select after the reset wiped the rate, before dispatch.
+        $this->reconcileRateForContext();
 
         $this->dispatch('availability-search-updated', $this->data);
 
@@ -139,6 +141,20 @@ class AvailabilitySearch extends Component
             if (! $this->redirectTo) {
                 $this->js('window.location.reload()');
             }
+        }
+    }
+
+    /**
+     * Heal only when we can judge the rate: an entry-scoped search validates/auto-selects
+     * against that entry's rates; a rates-disabled search clears any carried value. A
+     * context-less rate search bar (entry === null, rates === true) cannot judge, so it
+     * leaves the value for the receiving List/Collection/Results to reconcile — and must NOT
+     * drop a rate just set by availabilityDateSelected() from a sibling date grid.
+     */
+    protected function reconcileRateForContext(): void
+    {
+        if ($this->entry || ! $this->rates) {
+            $this->data->reconcileRate($this->entryRates, $this->rates);
         }
     }
 

@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Providers;
 
 use Illuminate\Console\Application as Artisan;
+use Reach\StatamicResrv\Console\Commands\Housekeeping;
 use Reach\StatamicResrv\Console\Commands\ImportEntries;
 use Reach\StatamicResrv\Console\Commands\InstallResrv;
 use Reach\StatamicResrv\Console\Commands\MigrateSettings;
@@ -42,6 +43,7 @@ use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
+use Reach\StatamicResrv\Listeners\NormalizeAvailabilityFieldValue;
 use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
 use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
@@ -57,8 +59,10 @@ use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
 use Reach\StatamicResrv\UpdateScripts\MigrateConfigToSettings;
 use Statamic\Events\BlueprintSaved;
+use Statamic\Events\EntryCreated;
 use Statamic\Events\EntryDeleting;
 use Statamic\Events\EntrySaved;
+use Statamic\Events\EntrySaving;
 use Statamic\Facades\Addon;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
@@ -87,6 +91,7 @@ class ResrvProvider extends AddonServiceProvider
         MigrateSettings::class,
         UpgradeToRates::class,
         SendAbandonedReservationEmails::class,
+        Housekeeping::class,
     ];
 
     /** Not auto-discovered — Statamic only scans src/Providers/UpdateScripts. */
@@ -154,6 +159,12 @@ class ResrvProvider extends AddonServiceProvider
         CouponUpdated::class => [
             UpdateCouponAppliedToReservation::class,
             AssociateAffiliateFromCoupon::class,
+        ],
+        EntrySaving::class => [
+            NormalizeAvailabilityFieldValue::class,
+        ],
+        EntryCreated::class => [
+            NormalizeAvailabilityFieldValue::class.'@handleCreated',
         ],
         EntrySaved::class => [
             AddResrvEntryToDatabase::class,
@@ -364,7 +375,10 @@ class ResrvProvider extends AddonServiceProvider
             return $blueprint;
         }
 
-        $shadowed = array_keys(array_intersect_key($published, $blueprintFields));
+        $shadowed = array_keys(array_intersect_key(
+            $published,
+            $blueprintFields + array_flip(SettingsMigrator::MIGRATABLE_NESTED_KEYS)
+        ));
 
         if (empty($shadowed)) {
             return $blueprint;
@@ -389,7 +403,7 @@ class ResrvProvider extends AddonServiceProvider
 
     protected function bootPermissions(): void
     {
-        $this->app->booted(function () {
+        Permission::extend(function () {
             Permission::group('statamic-resrv', 'Reserv Permissions', function () {
                 Permission::register('use resrv', function ($permission) {
                     $permission

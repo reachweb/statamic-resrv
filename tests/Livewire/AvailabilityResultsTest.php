@@ -448,7 +448,7 @@ class AvailabilityResultsTest extends TestCase
     {
         $rateId = $this->getFirstAdvancedEntryRateId();
 
-        Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id(), 'rates' => true])
             ->dispatch('availability-search-updated',
                 [
                     'dates' => [
@@ -459,22 +459,26 @@ class AvailabilityResultsTest extends TestCase
                     'rate' => (string) $rateId,
                 ]
             )
+            ->assertSet('data.rate', (string) $rateId)
             ->assertViewHas('availability.data')
             ->assertViewHas('availability.data.price', '100.00')
             ->assertViewHas('availability.request')
-            ->assertViewHas('availability.request.days', 2)
-            ->dispatch('availability-search-updated',
-                [
-                    'dates' => [
-                        'date_start' => $this->date->toISOString(),
-                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
-                    ],
-                    'quantity' => 1,
-                    'rate' => '99999',
-                ]
-            )
-            ->assertViewHas('availability.message')
-            ->assertViewHas('availability.message.status', false);
+            ->assertViewHas('availability.request.days', 2);
+
+        // A non-existent rate id is healed (dropped → 'any') instead of poisoning the query
+        // and returning an empty result for rate 99999.
+        $component->dispatch('availability-search-updated',
+            [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => '99999',
+            ]
+        )
+            ->assertSet('data.rate', 'any')
+            ->assertViewHas('availability.'.$rateId.'.message.status', true);
     }
 
     public function test_returns_availability_for_all_rates_sorted_by_price()
@@ -833,6 +837,51 @@ class AvailabilityResultsTest extends TestCase
             ->assertSet('data.rate', (string) $testRate->id)
             ->assertViewHas('availability.data.price')
             ->assertViewHas('availability.data.rate_id', $testRate->id);
+    }
+
+    public function test_normalizes_a_dropped_foreign_rate_to_any_for_a_multi_rate_entry()
+    {
+        // The advanced entry has several rates; a rate carried in from another collection is
+        // dropped, and Results normalizes the resulting null to 'any' (all rates) — not empty.
+        $entryId = $this->advancedEntries->first()->id();
+        $foreign = $this->makeStatamicItemWithAvailability(collection: 'pages');
+        $foreignRateId = Rate::forEntry($foreign->id())->first()->id;
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $foreignRateId,
+            ])
+            ->assertSet('data.rate', 'any');
+
+        $component->assertViewHas('availability.'.$this->getFirstAdvancedEntryRateId().'.message.status', true);
+    }
+
+    public function test_auto_selects_a_single_rate_for_the_target_entry()
+    {
+        // A 'tickets' entry has exactly one rate, so the dropped foreign rate is replaced by an
+        // outright selection of that single valid rate — Results keeps the concrete id, not 'any'.
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'tickets', price: 50);
+        $rateId = Rate::forEntry($entry->id())->first()->id;
+
+        $foreign = $this->makeStatamicItemWithAvailability(collection: 'pages');
+        $foreignRateId = Rate::forEntry($foreign->id())->first()->id;
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'rates' => true])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => (string) $foreignRateId,
+            ])
+            ->assertSet('data.rate', (string) $rateId)
+            ->assertViewHas('availability.data.price', '100.00');
     }
 
     public function test_gets_options_if_show_options_is_enabled()

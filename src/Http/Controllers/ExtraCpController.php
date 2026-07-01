@@ -213,6 +213,12 @@ class ExtraCpController extends Controller
             ->where('dynamic_pricing_assignment_id', $data['id'])
             ->delete();
 
+        // The Extra is soft-deleted, so the cascadeOnDelete() FK never fires — remove the
+        // entry pivot rows explicitly to avoid leaving them orphaned behind a trashed extra.
+        DB::table('resrv_entry_extra')
+            ->where('extra_id', $data['id'])
+            ->delete();
+
         return response(200);
     }
 

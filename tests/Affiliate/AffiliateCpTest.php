@@ -3,10 +3,10 @@
 namespace Reach\StatamicResrv\Tests\Extra;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AffiliateCpTest extends TestCase
@@ -88,21 +88,23 @@ class AffiliateCpTest extends TestCase
         $this->assertSoftDeleted($affiliate);
     }
 
-    public function test_deleting_an_affiliate_rolls_back_when_pivot_cleanup_fails()
+    public function test_deleting_an_affiliate_keeps_its_reservation_history()
     {
         $affiliate = Affiliate::factory()->create();
+        $reservation = Reservation::factory()->create(['status' => 'confirmed', 'total' => '300.00']);
+        $reservation->affiliate()->attach($affiliate->id, [
+            'fee' => $affiliate->fee,
+            'data' => json_encode(['name' => $affiliate->name, 'code' => $affiliate->code]),
+        ]);
 
-        // Force the pivot cleanup (the second write) to fail so we can assert the delete is atomic:
-        // the affiliate removal must roll back rather than leave a half-applied state.
-        Schema::drop('resrv_reservation_affiliate');
+        $this->delete(cp_route('resrv.affiliate.delete', $affiliate->id))->assertStatus(200);
 
-        try {
-            $this->delete(cp_route('resrv.affiliate.delete', $affiliate->id));
-        } catch (\Throwable $e) {
-            // Expected: the missing pivot table makes the cleanup throw.
-        }
-
-        $this->assertNotSoftDeleted($affiliate);
+        // The affiliate is soft-deleted, but its pivot row survives so the reports keep its history.
+        $this->assertSoftDeleted($affiliate);
+        $this->assertDatabaseHas('resrv_reservation_affiliate', [
+            'reservation_id' => $reservation->id,
+            'affiliate_id' => $affiliate->id,
+        ]);
     }
 
     public function test_can_create_affiliate_with_coupons()

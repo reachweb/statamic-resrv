@@ -63,6 +63,41 @@ class RateCpTest extends TestCase
         $response->assertStatus(200)->assertJsonCount(1);
     }
 
+    public function test_for_entry_eager_loads_base_rate_title_and_type_fields()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Standard',
+            'slug' => 'standard',
+        ]);
+
+        Rate::factory()->create([
+            'collection' => 'pages',
+            'apply_to_all' => true,
+            'title' => 'Discounted',
+            'slug' => 'discounted',
+            'pricing_type' => 'relative',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 20,
+        ]);
+
+        $response = $this->get(cp_route('resrv.rate.forEntry', $item->id()));
+        $response->assertStatus(200)->assertJsonCount(2);
+
+        $derived = collect($response->json())->firstWhere('slug', 'discounted');
+
+        $this->assertSame('relative', $derived['pricing_type']);
+        $this->assertSame('shared', $derived['availability_type']);
+        $this->assertSame((string) $baseRate->id, (string) $derived['base_rate_id']);
+        $this->assertSame($baseRate->title, $derived['base_rate']['title']);
+    }
+
     public function test_for_entry_returns_apply_to_all_rates()
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
@@ -101,6 +136,59 @@ class RateCpTest extends TestCase
         // Not assigned to this entry
         $response = $this->get(cp_route('resrv.rate.forEntry', $item->id()));
         $response->assertStatus(200)->assertJsonCount(0);
+    }
+
+    public function test_for_entry_includes_base_rate_needed_by_an_assigned_shared_rate()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // The base rate is NOT assigned to this entry (apply_to_all false, no pivot).
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base',
+            'apply_to_all' => false,
+        ]);
+
+        // A shared child IS assigned to this entry. Its inventory comes from the base rate, which the
+        // availability UI is read-only for and directs the admin to edit — so the base must be present
+        // in the selector, otherwise availability for this entry cannot be managed at all.
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-child',
+            'apply_to_all' => false,
+            'base_rate_id' => $baseRate->id,
+        ]);
+        $sharedRate->entries()->attach($item->id());
+
+        $response = $this->get(cp_route('resrv.rate.forEntry', $item->id()));
+
+        $response->assertStatus(200)->assertJsonCount(2);
+        $ids = collect($response->json())->pluck('id')->map(fn ($id) => (string) $id);
+        $this->assertTrue($ids->contains((string) $baseRate->id), 'Base rate must be pulled in so availability is editable.');
+        $this->assertTrue($ids->contains((string) $sharedRate->id));
+    }
+
+    public function test_for_entry_does_not_duplicate_a_base_rate_already_returned()
+    {
+        $item = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        // Both the base rate and its shared child apply to all entries, so the base is already in the
+        // result — it must not be added a second time.
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base',
+            'apply_to_all' => true,
+        ]);
+        Rate::factory()->shared()->create([
+            'collection' => 'pages',
+            'slug' => 'shared-child',
+            'apply_to_all' => true,
+            'base_rate_id' => $baseRate->id,
+        ]);
+
+        $response = $this->get(cp_route('resrv.rate.forEntry', $item->id()));
+
+        $response->assertStatus(200)->assertJsonCount(2);
     }
 
     public function test_can_create_independent_rate()

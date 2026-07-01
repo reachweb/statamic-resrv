@@ -91,7 +91,11 @@ class SettingsDefaultsParityTest extends TestCase
         $this->assertSame('', config('resrv-config.stripe_secret_key'));
         $this->assertSame('', config('resrv-config.stripe_publishable_key'));
         $this->assertSame('', config('resrv-config.stripe_webhook_secret'));
-        $this->assertSame(['default' => null, 'collections' => [], 'entries' => []], config('resrv-config.checkout_forms'));
-        $this->assertSame(['global' => [], 'forms' => []], config('resrv-config.reservation_emails'));
+    }
+
+    public function test_retired_nested_checkout_and_email_keys_are_no_longer_shipped()
+    {
+        $this->assertNull(config('resrv-config.checkout_forms'));
+        $this->assertNull(config('resrv-config.reservation_emails'));
     }
 }

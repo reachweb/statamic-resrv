@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Jobs\ResendConfirmationEmail;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Resources\ReservationCalendarResource;
 use Reach\StatamicResrv\Resources\ReservationResource;
@@ -39,6 +40,7 @@ class ReservationCpController extends Controller
             'listUrl' => cp_route('resrv.reservation.index'),
             'showUrlTemplate' => cp_route('resrv.reservation.show', 'RESRVURL'),
             'refundUrl' => cp_route('resrv.reservation.refund'),
+            'resendUrl' => cp_route('resrv.reservation.resendConfirmation'),
             'calendarUrl' => cp_route('resrv.reservations.calendar'),
         ]);
     }
@@ -219,6 +221,37 @@ class ReservationCpController extends Controller
         if (! $changed) {
             return response()->json(['error' => 'This reservation has already been refunded.'], 409);
         }
+
+        return response()->json($reservation->id);
+    }
+
+    public function resendConfirmation(Request $request)
+    {
+        $data = $request->validate([
+            'id' => 'required|integer',
+        ]);
+        $reservation = $this->reservation->findOrFail($data['id']);
+
+        // The confirmation email only exists for reservations that actually reached a
+        // confirmed state (a normal confirmed booking or an affiliate skip-payment one).
+        // Pending/expired/refunded reservations never had a confirmation to resend.
+        $resendable = [ReservationStatus::CONFIRMED->value, ReservationStatus::PARTNER->value];
+        if (! in_array($reservation->status, $resendable, true)) {
+            return response()->json(['error' => 'Only confirmed reservations can have their confirmation email resent.'], 422);
+        }
+
+        // Mirror the dispatcher's own recipient validation (trim + filter_var) so the response
+        // reflects reality: a blank or malformed address would be dropped before sending, which
+        // would otherwise leave the CP reporting success while nothing actually goes out.
+        $customerEmail = trim((string) ($reservation->customer?->email ?? ''));
+        if (blank($customerEmail) || ! filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+            return response()->json(['error' => 'This reservation does not have a valid customer email address to send to.'], 422);
+        }
+
+        // The disabled (enabled=false) email switch only governs automatic lifecycle sending.
+        // This is a deliberate, permission-gated manual action behind a confirmation modal, so it
+        // intentionally overrides that switch and always resends — see ResendConfirmationEmail.
+        ResendConfirmationEmail::dispatchAfterResponse($reservation);
 
         return response()->json($reservation->id);
     }

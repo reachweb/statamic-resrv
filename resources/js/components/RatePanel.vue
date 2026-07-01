@@ -96,7 +96,7 @@
             <Panel v-if="needsBaseRate" :heading="__('Base rate')">
                 <Card>
                     <div class="space-y-6">
-                        <Alert variant="info">
+                        <Alert variant="default">
                             <div>{{ baseRateExplanation }}</div>
                         </Alert>
                         <Field :label="__('Base rate')" :instructions="__('Only published, non-shared, non-relative rates in the same collection can be selected.')" :error="form.errors.base_rate_id">

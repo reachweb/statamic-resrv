@@ -449,10 +449,13 @@ class ReservationEmailConfigurationTest extends TestCase
         ]);
 
         Config::set('resrv-config.admin_email', 'admin1@example.com');
-        Config::set('resrv-config.reservation_emails.global.customer_confirmed', [
-            'recipients' => [
-                'customer' => true,
-                'admins' => true,
+        Config::set('resrv-config.reservation_emails_global', [
+            [
+                'event' => ReservationEmailEvent::CustomerConfirmed->value,
+                'recipients' => [
+                    'customer' => true,
+                    'admins' => true,
+                ],
             ],
         ]);
 
@@ -471,5 +474,49 @@ class ReservationEmailConfigurationTest extends TestCase
             return $mail->hasTo('admin1@example.com')
                 && ! $mail->hasTo($reservation->customer->email);
         });
+    }
+
+    public function test_retired_nested_email_config_is_ignored()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $item->id(),
+        ]);
+
+        Config::set('resrv-config.admin_email', 'admin1@example.com');
+        // The retired nested shape must no longer influence resolution.
+        Config::set('resrv-config.reservation_emails.global.customer_confirmed', [
+            'recipients' => ['customer' => true, 'admins' => true],
+        ]);
+
+        app(ReservationEmailDispatcher::class)->send(
+            $reservation,
+            ReservationEmailEvent::CustomerConfirmed,
+            new ReservationConfirmed($reservation),
+        );
+
+        // Falls back to the built-in default (customer only); the nested override is ignored.
+        Mail::assertSent(ReservationConfirmed::class, 1);
+        Mail::assertSent(ReservationConfirmed::class, function (ReservationConfirmed $mail) use ($reservation) {
+            return $mail->hasTo($reservation->customer->email)
+                && ! $mail->hasTo('admin1@example.com');
+        });
+    }
+
+    public function test_retired_nested_checkout_form_config_is_ignored()
+    {
+        $item = $this->makeStatamicItem();
+
+        // The retired nested shape maps the entry to a valid form, but must be ignored;
+        // only the flat CP key is read, so resolution falls through to the missing default.
+        Config::set('resrv-config.checkout_forms.entries', [
+            ['entry' => $item->id(), 'form' => 'checkout'],
+        ]);
+        Config::set('resrv-config.checkout_forms_default', 'missing-default-form');
+
+        $this->expectException(CheckoutFormNotFoundException::class);
+
+        app(CheckoutFormResolver::class)->resolveForEntryId($item->id());
     }
 }

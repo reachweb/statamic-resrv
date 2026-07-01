@@ -34,9 +34,14 @@ class AssociateAffiliateFromCoupon
             return;
         }
 
-        // Associate the affiliate with the reservation
+        // Associate the affiliate with the reservation. Snapshot the name/code so the report
+        // keeps history even after the affiliate is deleted.
         $event->reservation->affiliate()->attach($affiliate->id, [
             'fee' => $affiliate->fee,
+            'data' => json_encode([
+                'name' => $affiliate->name,
+                'code' => $affiliate->code,
+            ]),
         ]);
     }
 }

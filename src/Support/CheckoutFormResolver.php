@@ -150,10 +150,7 @@ class CheckoutFormResolver
 
     protected function entryMappings(): array
     {
-        $mappings = config('resrv-config.checkout_forms.entries');
-        if (! is_array($mappings) || $mappings === []) {
-            $mappings = config('resrv-config.checkout_forms_entries', []);
-        }
+        $mappings = config('resrv-config.checkout_forms_entries', []);
 
         if (is_array($mappings) && Arr::isAssoc($mappings)) {
             // Allow associative syntax: ["entry-id" => "form-handle"].
@@ -168,10 +165,7 @@ class CheckoutFormResolver
 
     protected function collectionMappings(): array
     {
-        $mappings = config('resrv-config.checkout_forms.collections');
-        if (! is_array($mappings) || $mappings === []) {
-            $mappings = config('resrv-config.checkout_forms_collections', []);
-        }
+        $mappings = config('resrv-config.checkout_forms_collections', []);
 
         if (is_array($mappings) && Arr::isAssoc($mappings)) {
             // Allow associative syntax: ["collection-handle" => "form-handle"].
@@ -186,8 +180,7 @@ class CheckoutFormResolver
 
     protected function defaultFormHandle(): string
     {
-        $default = config('resrv-config.checkout_forms.default')
-            ?? config('resrv-config.checkout_forms_default');
+        $default = config('resrv-config.checkout_forms_default');
 
         $handle = $this->extractFormHandle($default);
 

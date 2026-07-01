@@ -1,6 +1,6 @@
 <template>
     <element-container>
-        <Alert v-if="newItem" :title="__('You need to save this entry before you can add fixed pricing.')" variant="info" />
+        <Alert v-if="newItem" :text="__('You need to save this entry before you can add fixed pricing.')" variant="default" />
         <div class="statamic-resrv-extras relative" v-else :inert="isReadOnly">
             <FixedPricingList :parent="props.meta.parent" />
         </div>

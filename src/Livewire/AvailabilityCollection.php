@@ -13,12 +13,14 @@ use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\CutoffException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\EntryCollection;
 use Statamic\Extensions\Pagination\LengthAwarePaginator;
 use Statamic\Facades\Entry;
 use Statamic\Facades\Site;
+use Statamic\Query\Builder;
 use Statamic\Support\Traits\Hookable;
 
 class AvailabilityCollection extends Component
@@ -58,6 +60,13 @@ class AvailabilityCollection extends Component
     #[Locked]
     public string $rateSorting = 'order';
 
+    /**
+     * Developer-supplied rate options that bypass resolution from the Rate model.
+     * MUST be an id-keyed map [rate_id => label]; a bare list breaks the auto-select
+     * in AvailabilityData::reconcileRate() (a list renders option value="0").
+     *
+     * @var array<int|string, string>
+     */
     #[Locked]
     public array $overrideRates = [];
 
@@ -97,6 +106,7 @@ class AvailabilityCollection extends Component
         $this->resetPage();
 
         $this->data->fill($data);
+        $this->data->reconcileRate($this->listingRateIds(), $this->rates || $this->showRates);
 
         try {
             $this->data->validate();
@@ -119,8 +129,12 @@ class AvailabilityCollection extends Component
         $this->dispatch('availability-results-updated');
     }
 
-    #[Computed]
-    public function resolvedEntries(): EntryCollection|LengthAwarePaginator
+    /**
+     * The entry query shared by the rendered listing and the rate-validity resolver:
+     * collection ∩ configured entries ∩ current site ∩ published-status. No ordering or
+     * pagination, so listingRateIds() can read the full visible set in one go.
+     */
+    protected function scopedEntriesQuery(): Builder
     {
         $query = Entry::query();
 
@@ -146,6 +160,14 @@ class AvailabilityCollection extends Component
         // private scheduled/expired entries that are still published === true.
         $query->whereStatus('published');
 
+        return $query;
+    }
+
+    #[Computed]
+    public function resolvedEntries(): EntryCollection|LengthAwarePaginator
+    {
+        $query = $this->scopedEntriesQuery();
+
         if ($this->sort === 'title') {
             $query->orderBy('title');
         } elseif ($this->sort === 'order' && $this->collection) {
@@ -159,6 +181,57 @@ class AvailabilityCollection extends Component
         return $this->paginate
             ? $query->paginate($this->paginate)
             : $query->get();
+    }
+
+    /**
+     * [rate_id => title] for rates valid for at least one entry the listing can actually show.
+     * Uses the full unpaginated scoped set (collection ∩ entries ∩ site ∩ status ∩ enabled) →
+     * origin ids, so out-of-collection / private / wrong-site / Resrv-disabled entries' rates
+     * never leak in, and pagination cannot narrow it. Excludes orphan rates (apply_to_all = false
+     * AND no entries).
+     *
+     * @return array<int|string, string>
+     */
+    protected function listingRateIds(): array
+    {
+        if (! $this->rates && ! $this->showRates) {
+            return [];
+        }
+
+        if (! empty($this->overrideRates)) {
+            return $this->overrideRates;
+        }
+
+        // Drop Resrv-disabled entries using the SAME set availableForDates() rejects by, so a
+        // rate counts as valid here only if it covers an entry that can actually produce
+        // availability. Otherwise a rate pinned to a disabled entry stays "valid", survives
+        // reconciliation, and silently empties the listing.
+        $disabled = array_flip(ResrvEntry::getDisabledIds());
+
+        $items = $this->scopedEntriesQuery()->get()
+            ->reject(function ($entry) use ($disabled) {
+                $originId = $entry->hasOrigin() ? $entry->origin()->id() : $entry->id();
+
+                return isset($disabled[$originId]);
+            });
+
+        if ($items->isEmpty()) {
+            return [];
+        }
+
+        $originIds = $items->map(fn ($entry) => $entry->hasOrigin() ? $entry->origin()->id() : $entry->id())
+            ->unique()->values()->all();
+        $collections = $items->map(fn ($entry) => $entry->collection()?->handle())
+            ->filter()->unique()->values()->all();
+
+        return Rate::whereIn('collection', $collections)
+            ->where(function ($query) use ($originIds) {
+                $query->where('apply_to_all', true)
+                    ->orWhereHas('entries', fn ($q) => $q->whereIn('resrv_entries.item_id', $originIds));
+            })
+            ->published()
+            ->pluck('title', 'id')
+            ->toArray();
     }
 
     /**

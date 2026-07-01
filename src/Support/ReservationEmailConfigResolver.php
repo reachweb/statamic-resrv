@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Support;
 
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Exceptions\CheckoutFormNotFoundException;
 use Reach\StatamicResrv\Models\Reservation;
@@ -42,17 +41,7 @@ class ReservationEmailConfigResolver
 
     protected function globalEventConfig(string $eventKey): array
     {
-        $nestedGlobal = config("resrv-config.reservation_emails.global.{$eventKey}");
         $flatGlobalRow = $this->flatGlobalEventRow($eventKey);
-        if (is_array($nestedGlobal)) {
-            if ($flatGlobalRow) {
-                Log::warning('Both nested and flat global reservation email config are set for the same event. Nested config will be used.', [
-                    'event' => $eventKey,
-                ]);
-            }
-
-            return $this->normalizeEventConfig($nestedGlobal);
-        }
 
         if (! $flatGlobalRow) {
             return [];
@@ -63,18 +52,7 @@ class ReservationEmailConfigResolver
 
     protected function formEventConfig(string $formHandle, string $eventKey): array
     {
-        $nestedForms = config("resrv-config.reservation_emails.forms.{$formHandle}.{$eventKey}");
         $flatFormRow = $this->flatFormEventRow($formHandle, $eventKey);
-        if (is_array($nestedForms)) {
-            if ($flatFormRow) {
-                Log::warning('Both nested and flat per-form reservation email config are set for the same event/form. Nested config will be used.', [
-                    'event' => $eventKey,
-                    'form' => $formHandle,
-                ]);
-            }
-
-            return $this->normalizeEventConfig($nestedForms);
-        }
 
         if (! $flatFormRow) {
             return [];

@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Tests\TestCase;
+use Statamic\Facades\Permission;
 use Statamic\Facades\Role;
 use Statamic\Facades\User;
 use Statamic\Support\Str;
@@ -102,5 +103,13 @@ class CpRoutePermissionTest extends TestCase
 
         $this->getJson(cp_route('resrv.reservation.index'))
             ->assertOk();
+    }
+
+    public function test_use_resrv_permission_is_registered_exactly_once()
+    {
+        $group = collect(Permission::boot()->tree())->firstWhere('handle', 'statamic-resrv');
+
+        $this->assertNotNull($group, 'The statamic-resrv permission group is not registered.');
+        $this->assertCount(1, collect($group['permissions'])->where('value', 'use resrv'));
     }
 }

@@ -44,10 +44,14 @@ class Mailable extends LaravelMailable
 
     protected function buildMarkdownView()
     {
+        $published = resource_path('views/vendor/statamic-resrv/email/theme');
+        $default = __DIR__.'/../../resources/views/email/theme';
+
+        // A published theme overrides individual mail components; the packaged
+        // theme is always registered as a fallback so a partial or empty publish
+        // never falls through to Laravel's logo-less default header.
         $this->markdownRenderer()->loadComponentsFrom(
-            file_exists(resource_path().'/views/vendor/statamic-resrv/email/theme')
-                ? [resource_path().'/views/vendor/statamic-resrv/email/theme']
-                : [__DIR__.'/../../resources/views/email/theme']
+            is_dir($published) ? [$published, $default] : [$default]
         );
 
         return parent::buildMarkdownView();

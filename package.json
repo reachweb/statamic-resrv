@@ -6,7 +6,7 @@
         "cp:dev": "vite",
         "cp:build": "vite build",
         "frontend:dev": "vite -c vite-frontend.config.js",
-        "frontend:build": "vite build -c vite-frontend.config.js"
+        "frontend:build": "vite build -c vite-frontend.config.js && vite build -c vite-frontend-css.config.js"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
@@ -19,7 +19,7 @@
         "@fullcalendar/interaction": "^6.1.0",
         "@fullcalendar/vue3": "^6.1.0",
         "@internationalized/date": "^3.12.1",
-        "@reachweb/alpine-calendar": "^1.0.0",
+        "@reachweb/alpine-calendar": "^1.2.0",
         "@statamic/cms": "file:./vendor/statamic/cms/resources/dist-package",
         "axios": "^1.6.0",
         "dayjs": "^1.10.4",

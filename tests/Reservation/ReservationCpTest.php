@@ -11,6 +11,8 @@ use Mockery;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\ChildReservation;
@@ -577,6 +579,164 @@ class ReservationCpTest extends TestCase
 
         $response->assertNotFound();
         Mail::assertNothingSent();
+    }
+
+    public function test_can_resend_confirmation_email_to_the_customer()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+        ])->withCustomer()->create();
+
+        $response = $this->post(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(200)->assertSee($reservation->id);
+
+        // Only the customer confirmation is resent — the admin "reservation made" notice is not.
+        Mail::assertSent(ReservationConfirmed::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
+        Mail::assertNotSent(ReservationMade::class);
+    }
+
+    public function test_can_resend_confirmation_email_for_a_partner_reservation()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'partner',
+        ])->withCustomer()->create();
+
+        $response = $this->post(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(200)->assertSee($reservation->id);
+        Mail::assertSent(ReservationConfirmed::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
+    }
+
+    public function test_resending_confirmation_is_rejected_for_a_pending_reservation()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'pending',
+        ])->withCustomer()->create();
+
+        $response = $this->postJson(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(422)->assertSee('Only confirmed reservations');
+        Mail::assertNothingSent();
+    }
+
+    public function test_resending_confirmation_is_rejected_for_a_refunded_reservation()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'refunded',
+        ])->withCustomer()->create();
+
+        $response = $this->postJson(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(422);
+        Mail::assertNothingSent();
+    }
+
+    public function test_resending_confirmation_is_rejected_when_there_is_no_customer_email()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+        ])->create();
+
+        $response = $this->postJson(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(422)->assertSee('valid customer email');
+        Mail::assertNothingSent();
+    }
+
+    // A non-empty but malformed address (e.g. legacy/imported data) would be dropped by the
+    // dispatcher and silently send nothing, so the controller must reject it up front instead of
+    // reporting success.
+    public function test_resending_confirmation_is_rejected_for_a_malformed_customer_email()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+        ])->for(Customer::factory(['email' => 'not-an-email']))->create();
+
+        $response = $this->postJson(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(422)->assertSee('valid customer email');
+        Mail::assertNothingSent();
+    }
+
+    public function test_resending_confirmation_for_a_non_existent_reservation_returns_404()
+    {
+        Mail::fake();
+        $this->withExceptionHandling();
+
+        $response = $this->postJson(cp_route('resrv.reservation.resendConfirmation'), ['id' => 99999]);
+
+        $response->assertNotFound();
+        Mail::assertNothingSent();
+    }
+
+    // The manual resend must always reach the customer, even if the customer_confirmed event is
+    // configured to deliver somewhere else (e.g. only to admins). It is an explicit "send this to
+    // the customer" action, so the configured recipients must not redirect it.
+    public function test_resending_confirmation_always_targets_the_customer_even_when_event_recipients_are_admins()
+    {
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+        Config::set('resrv-config.reservation_emails_global', [
+            ['event' => 'customer_confirmed', 'recipient_sources' => ['admins']],
+        ]);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+        ])->withCustomer()->create();
+
+        $response = $this->post(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(200);
+        Mail::assertSent(ReservationConfirmed::class, fn ($mail) => $mail->hasTo($reservation->customer->email)
+            && ! $mail->hasTo('admin@example.com'));
+    }
+
+    public function test_resending_confirmation_overrides_a_disabled_confirmation_email()
+    {
+        // The enabled=false switch only governs automatic lifecycle sending. A deliberate manual
+        // resend is an explicit admin action and intentionally overrides the switch.
+        Mail::fake();
+        Config::set('resrv-config.reservation_emails_global', [
+            ['event' => 'customer_confirmed', 'enabled' => false],
+        ]);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+        ])->withCustomer()->create();
+
+        $response = $this->post(cp_route('resrv.reservation.resendConfirmation'), ['id' => $reservation->id]);
+
+        $response->assertStatus(200)->assertSee($reservation->id);
+        Mail::assertSent(ReservationConfirmed::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
     }
 
     public function test_can_query_reservations_calendar_json()

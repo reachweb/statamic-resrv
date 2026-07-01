@@ -63,6 +63,37 @@ class AvailabilityData extends Form
         ];
     }
 
+    /**
+     * Reconcile the (context-scoped) rate against the rates valid for the component's
+     * current context. Heals a stale/foreign rate carried in from the shared 'resrv-search'
+     * session key, and auto-selects when exactly one rate exists. null/'any' are the only
+     * cross-context-safe values; every read path treats null as "no rate filter / all rates".
+     *
+     * @param  array<int|string, string>  $validRateIds  [rate_id => title] for the current context.
+     *                                                   MUST be id-keyed (see overrideRates contract).
+     */
+    public function reconcileRate(array $validRateIds, bool $ratesEnabled): void
+    {
+        if (! $ratesEnabled) {
+            $this->rate = null;
+
+            return;
+        }
+
+        // Drop anything that isn't valid for this context: a foreign numeric rate (other collection,
+        // entry-restricted, unpublished, deleted) or an unexpected non-numeric sentinel carried in from
+        // the shared 'resrv-search' session (legacy value, tampering). null and 'any' are the only
+        // cross-context-safe values and pass through untouched.
+        if ($this->rate !== null && $this->rate !== 'any' && ! isset($validRateIds[$this->rate])) {
+            $this->rate = null;
+        }
+
+        // With exactly one valid rate, select it outright instead of leaving the search rate-less.
+        if (($this->rate === null || $this->rate === 'any') && count($validRateIds) === 1) {
+            $this->rate = (string) array_key_first($validRateIds);
+        }
+    }
+
     public function hasDates(): bool
     {
         return isset($this->dates['date_start']) && isset($this->dates['date_end']);
