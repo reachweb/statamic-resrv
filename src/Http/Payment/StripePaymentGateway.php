@@ -4,13 +4,11 @@ namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Reach\StatamicResrv\Enums\ReservationLogReason;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
-use Reach\StatamicResrv\Support\ActivityLog;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\InvalidRequestException;
 use Stripe\Exception\SignatureVerificationException;
@@ -300,18 +298,10 @@ class StripePaymentGateway implements PaymentInterface
             }
 
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
-                app(ActivityLog::class)->logReservation(
-                    reservation: $reservation,
-                    from: ReservationStatus::PENDING,
-                    to: ReservationStatus::CONFIRMED,
-                    reason: ReservationLogReason::WebhookConfirmed,
-                    context: [
-                        'gateway' => $reservation->payment_gateway ?: 'stripe',
-                        'payment_id' => $data['id'],
-                    ],
-                );
-
-                ReservationConfirmed::dispatch($reservation);
+                ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, [
+                    'gateway' => $reservation->payment_gateway ?: 'stripe',
+                    'payment_id' => $data['id'],
+                ]);
 
                 return response()->json([], 200);
             }

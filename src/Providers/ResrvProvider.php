@@ -42,6 +42,7 @@ use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Listeners\LogReservationCancelled;
+use Reach\StatamicResrv\Listeners\LogReservationConfirmed;
 use Reach\StatamicResrv\Listeners\LogReservationCreated;
 use Reach\StatamicResrv\Listeners\LogReservationExpired;
 use Reach\StatamicResrv\Listeners\NormalizeAvailabilityFieldValue;
@@ -140,6 +141,7 @@ class ResrvProvider extends AddonServiceProvider
             LogReservationExpired::class,
         ],
         ReservationConfirmed::class => [
+            LogReservationConfirmed::class,
             SendNewReservationEmails::class,
         ],
         ReservationCancelled::class => [
