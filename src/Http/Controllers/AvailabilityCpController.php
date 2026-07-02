@@ -112,7 +112,7 @@ class AvailabilityCpController extends Controller
                     unset($payload['groups']);
 
                     foreach ($group['rate_ids'] as $rateId) {
-                        $changes = array_merge($changes, $this->updateAvailability($payload, (int) $rateId));
+                        array_push($changes, ...$this->updateAvailability($payload, (int) $rateId));
                     }
                 }
             });
@@ -136,7 +136,7 @@ class AvailabilityCpController extends Controller
 
         DB::transaction(function () use ($rateIds, $data, &$changes) {
             foreach ($rateIds as $rateId) {
-                $changes = array_merge($changes, $this->updateAvailability($data, (int) $rateId));
+                array_push($changes, ...$this->updateAvailability($data, (int) $rateId));
             }
         });
 

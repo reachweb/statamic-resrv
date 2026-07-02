@@ -211,7 +211,9 @@ class Housekeeping extends Command
     /**
      * Prunes both activity log tables by created_at. Runs regardless of the enable_activity_log
      * toggle — a site that disabled the feature still wants old rows gone. Log rows have no FKs,
-     * so a plain chunked delete per table is safe.
+     * so a plain chunked delete per table is safe. The limited delete is driver-safe: Laravel
+     * compiles it to a ctid/rowid subselect on PostgreSQL/SQLite and a native ORDER BY/LIMIT
+     * delete on MySQL.
      */
     private function clearOldActivityLogs(Carbon $logCutoff): int
     {
