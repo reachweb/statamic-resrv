@@ -2,6 +2,10 @@
 
 namespace Reach\StatamicResrv\Listeners;
 
+use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
+use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Events\ReservationExpired;
+use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Models\Availability;
 
 class IncreaseAvailability
@@ -10,8 +14,10 @@ class IncreaseAvailability
 
     public function handle($event): void
     {
+        $reason = $this->reasonForEvent($event);
+
         if ($event->reservation->type === 'parent') {
-            $this->incrementMultiple($event);
+            $this->incrementMultiple($event, $reason);
         } else {
             $this->availability->incrementAvailability(
                 date_start: $event->reservation->date_start,
@@ -20,14 +26,15 @@ class IncreaseAvailability
                 statamic_id: $event->reservation->item_id,
                 reservationId: $event->reservation->id,
                 rateId: $event->reservation->rate_id,
+                reason: $reason,
             );
         }
     }
 
-    protected function incrementMultiple($event): void
+    protected function incrementMultiple($event, ?AvailabilityChangeReason $reason): void
     {
         $childs = $event->reservation->childs;
-        $childs->each(function ($child) use ($event) {
+        $childs->each(function ($child) use ($event, $reason) {
             $this->availability->incrementAvailability(
                 date_start: $child->date_start,
                 date_end: $child->date_end,
@@ -36,7 +43,18 @@ class IncreaseAvailability
                 reservationId: $child->id,
                 rateId: $child->rate_id,
                 isChildReservation: true,
+                reason: $reason,
             );
         });
+    }
+
+    protected function reasonForEvent($event): ?AvailabilityChangeReason
+    {
+        return match (true) {
+            $event instanceof ReservationExpired => AvailabilityChangeReason::ReservationExpired,
+            $event instanceof ReservationCancelled => AvailabilityChangeReason::ReservationCancelled,
+            $event instanceof ReservationRefunded => AvailabilityChangeReason::ReservationRefunded,
+            default => null,
+        };
     }
 }

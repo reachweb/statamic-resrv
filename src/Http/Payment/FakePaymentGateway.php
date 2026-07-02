@@ -4,10 +4,12 @@ namespace Reach\StatamicResrv\Http\Payment;
 
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Enums\ReservationLogReason;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ActivityLog;
 
 class FakePaymentGateway implements PaymentInterface
 {
@@ -164,6 +166,17 @@ class FakePaymentGateway implements PaymentInterface
             }
 
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
+                app(ActivityLog::class)->logReservation(
+                    reservation: $reservation,
+                    from: ReservationStatus::PENDING,
+                    to: ReservationStatus::CONFIRMED,
+                    reason: ReservationLogReason::WebhookConfirmed,
+                    context: [
+                        'gateway' => $reservation->payment_gateway ?: 'fake',
+                        'payment_id' => $paymentId,
+                    ],
+                );
+
                 ReservationConfirmed::dispatch($reservation);
 
                 return response()->json([], 200);

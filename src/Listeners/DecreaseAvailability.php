@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Listeners;
 
+use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Models\Availability;
 
@@ -21,6 +22,7 @@ class DecreaseAvailability
                 statamic_id: $event->reservation->item_id,
                 reservationId: $event->reservation->id,
                 rateId: $event->reservation->rate_id,
+                reason: AvailabilityChangeReason::ReservationCreated,
             );
         }
     }
@@ -37,6 +39,7 @@ class DecreaseAvailability
                 reservationId: $child->id,
                 rateId: $child->rate_id,
                 isChildReservation: true,
+                reason: AvailabilityChangeReason::ReservationCreated,
             );
         });
     }

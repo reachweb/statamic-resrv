@@ -2,9 +2,11 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Reach\StatamicResrv\Enums\ReservationLogReason;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ActivityLog;
 
 trait HandlesReservationConfirmation
 {
@@ -17,6 +19,13 @@ trait HandlesReservationConfirmation
     protected function confirmOrAlreadyConfirmed(Reservation $reservation, ReservationStatus $target): bool
     {
         if ($reservation->transitionTo($target, tolerant: true)) {
+            app(ActivityLog::class)->logReservation(
+                reservation: $reservation,
+                from: ReservationStatus::PENDING,
+                to: $target,
+                reason: ReservationLogReason::CheckoutConfirmed,
+            );
+
             ReservationConfirmed::dispatch($reservation);
 
             return true;

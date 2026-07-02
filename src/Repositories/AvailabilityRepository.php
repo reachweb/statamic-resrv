@@ -9,12 +9,14 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ActivityLog;
 
 class AvailabilityRepository
 {
@@ -191,19 +193,19 @@ class AvailabilityRepository
             ->havingRaw('count(resrv_availabilities.date) = ?', [$duration]);
     }
 
-    public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false): void
+    public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null): void
     {
         if ($rateId) {
             $rate = Rate::findOrFail($rateId);
 
             if ($rate->isShared()) {
-                $this->decrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation);
+                $this->decrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation, $reason);
 
                 return;
             }
         }
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId, $isChildReservation) {
+        $changes = DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $rateId);
 
             foreach ($availabilities as $availability) {
@@ -212,27 +214,31 @@ class AvailabilityRepository
                 }
             }
 
-            $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
+            return $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
+
+        $this->logReservationDrivenChanges($reason, $changes, $reservationId);
     }
 
-    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false): void
+    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null): void
     {
         if ($rateId) {
             $rate = Rate::findOrFail($rateId);
 
             if ($rate->isShared()) {
-                $this->incrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation);
+                $this->incrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation, $reason);
 
                 return;
             }
         }
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId, $isChildReservation) {
+        $changes = DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $rateId, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $rateId);
 
-            $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
+            return $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
+
+        $this->logReservationDrivenChanges($reason, $changes, $reservationId);
     }
 
     public function delete(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): int
@@ -244,11 +250,11 @@ class AvailabilityRepository
             ->delete();
     }
 
-    protected function decrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false): void
+    protected function decrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null): void
     {
         $baseRateId = $rate->base_rate_id ?? $rate->id;
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $rate, $reservationId, $isChildReservation) {
+        $changes = DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $rate, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $baseRateId);
 
             foreach ($availabilities as $availability) {
@@ -259,19 +265,23 @@ class AvailabilityRepository
 
             $this->validateMaxAvailableForDateRange($rate, $date_start, $date_end, $reservationId, $quantity, $isChildReservation);
 
-            $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
+            return $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
+
+        $this->logReservationDrivenChanges($reason, $changes, $reservationId);
     }
 
-    protected function incrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false): void
+    protected function incrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null): void
     {
         $baseRateId = $rate->base_rate_id ?? $rate->id;
 
-        DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $reservationId, $isChildReservation) {
+        $changes = DB::transaction(function () use ($date_start, $date_end, $quantity, $statamic_id, $baseRateId, $reservationId, $isChildReservation) {
             $availabilities = $this->getLockedAvailabilities($date_start, $date_end, $statamic_id, $baseRateId);
 
-            $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
+            return $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
+
+        $this->logReservationDrivenChanges($reason, $changes, $reservationId);
     }
 
     /** @return Collection<int, Availability> */
@@ -294,9 +304,11 @@ class AvailabilityRepository
         return ($isChildReservation ? 'c' : 'r').$reservationId;
     }
 
-    protected function addToPending($availabilities, int $reservationId, int $quantity, bool $isChildReservation = false): void
+    /** @return list<array<string, mixed>> The change rows for rows actually updated (skipped rows are not logged). */
+    protected function addToPending($availabilities, int $reservationId, int $quantity, bool $isChildReservation = false): array
     {
         $key = $this->pendingKey($reservationId, $isChildReservation);
+        $changes = [];
 
         foreach ($availabilities as $availability) {
             $pending = $availability->pending ?? [];
@@ -307,16 +319,24 @@ class AvailabilityRepository
                 continue;
             }
 
+            $oldAvailable = $availability->available;
+
             $availability->update([
                 'available' => $availability->available - $quantity,
                 'pending' => array_merge($pending, [$key]),
             ]);
+
+            $changes[] = $this->availabilityChangeRow($availability, $oldAvailable, $oldAvailable - $quantity);
         }
+
+        return $changes;
     }
 
-    protected function removeFromPending($availabilities, int $reservationId, int $quantity, bool $isChildReservation = false): void
+    /** @return list<array<string, mixed>> The change rows for rows actually updated (skipped rows are not logged). */
+    protected function removeFromPending($availabilities, int $reservationId, int $quantity, bool $isChildReservation = false): array
     {
         $key = $this->pendingKey($reservationId, $isChildReservation);
+        $changes = [];
 
         foreach ($availabilities as $availability) {
             $pending = $availability->pending ?? [];
@@ -337,11 +357,46 @@ class AvailabilityRepository
 
             unset($pending[$position]);
 
+            $oldAvailable = $availability->available;
+
             $availability->update([
                 'available' => $availability->available + $quantity,
                 'pending' => array_values($pending),
             ]);
+
+            $changes[] = $this->availabilityChangeRow($availability, $oldAvailable, $oldAvailable + $quantity);
         }
+
+        return $changes;
+    }
+
+    /** @return array<string, mixed> */
+    protected function availabilityChangeRow(Availability $availability, int $oldAvailable, int $newAvailable): array
+    {
+        return [
+            'statamic_id' => $availability->statamic_id,
+            'rate_id' => $availability->rate_id,
+            'date' => $availability->date,
+            'action' => 'update',
+            'field' => 'available',
+            'old_value' => $oldAvailable,
+            'new_value' => $newAvailable,
+        ];
+    }
+
+    /**
+     * Reservation-driven changes are logged after the wrapping transaction commits, so a failed
+     * log insert can never poison the booking transaction and rolled-back operations never log.
+     *
+     * @param  list<array<string, mixed>>  $changes
+     */
+    protected function logReservationDrivenChanges(?AvailabilityChangeReason $reason, array $changes, int $reservationId): void
+    {
+        if ($reason === null || $changes === []) {
+            return;
+        }
+
+        app(ActivityLog::class)->logAvailabilityChanges($reason, $changes, reservationId: $reservationId);
     }
 
     public function validateMaxAvailable(int $rateId, string $dateStart, string $dateEnd, int $quantity): void

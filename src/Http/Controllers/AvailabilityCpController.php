@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
@@ -22,6 +23,7 @@ use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\RatePrice;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ActiveReservationsGuard;
+use Reach\StatamicResrv\Support\ActivityLog;
 
 class AvailabilityCpController extends Controller
 {
@@ -99,7 +101,9 @@ class AvailabilityCpController extends Controller
                 ->values()
                 ->all();
 
-            DB::transaction(function () use ($data, $groups) {
+            $changes = [];
+
+            DB::transaction(function () use ($data, $groups, &$changes) {
                 foreach ($groups as $group) {
                     $payload = array_merge($data, [
                         'price' => $group['price'] ?? null,
@@ -108,10 +112,12 @@ class AvailabilityCpController extends Controller
                     unset($payload['groups']);
 
                     foreach ($group['rate_ids'] as $rateId) {
-                        $this->updateAvailability($payload, (int) $rateId);
+                        $changes = array_merge($changes, $this->updateAvailability($payload, (int) $rateId));
                     }
                 }
             });
+
+            $this->logCpChanges(AvailabilityChangeReason::CpEdit, $changes);
 
             return response()->json(['statamic_id' => $data['statamic_id']]);
         }
@@ -126,11 +132,15 @@ class AvailabilityCpController extends Controller
         // Apply every rate in ONE transaction so a rejection on any rate (the shared+relative price
         // abort or the pending-holds guard) rolls back the rates already written, instead of leaving
         // a multi-rate edit half-applied. updateAvailability()'s own transaction nests as a savepoint.
-        DB::transaction(function () use ($rateIds, $data) {
+        $changes = [];
+
+        DB::transaction(function () use ($rateIds, $data, &$changes) {
             foreach ($rateIds as $rateId) {
-                $this->updateAvailability($data, (int) $rateId);
+                $changes = array_merge($changes, $this->updateAvailability($data, (int) $rateId));
             }
         });
+
+        $this->logCpChanges(AvailabilityChangeReason::CpEdit, $changes);
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
@@ -174,6 +184,53 @@ class AvailabilityCpController extends Controller
             ->pluck('id')
             ->all();
 
+        // Snapshot the rows about to be deleted so the activity log keeps their last values.
+        $changes = [];
+
+        if (app(ActivityLog::class)->enabled()) {
+            Availability::where('date', '>=', $data['date_start'])
+                ->where('date', '<=', $data['date_end'])
+                ->where('statamic_id', $data['statamic_id'])
+                ->whereIn('rate_id', $rateIds)
+                ->get(['date', 'rate_id', 'available', 'price'])
+                ->each(function ($row) use ($data, &$changes) {
+                    foreach (['available', 'price'] as $field) {
+                        if ($row->getRawOriginal($field) === null) {
+                            continue;
+                        }
+
+                        $changes[] = [
+                            'statamic_id' => $data['statamic_id'],
+                            'rate_id' => $row->rate_id,
+                            'date' => $row->getRawOriginal('date'),
+                            'action' => 'delete',
+                            'field' => $field,
+                            'old_value' => $row->getRawOriginal($field),
+                            'new_value' => null,
+                        ];
+                    }
+                });
+
+            if (! empty($sharedIndependentRateIds)) {
+                RatePrice::where('date', '>=', $data['date_start'])
+                    ->where('date', '<=', $data['date_end'])
+                    ->where('statamic_id', $data['statamic_id'])
+                    ->whereIn('rate_id', $sharedIndependentRateIds)
+                    ->get(['date', 'rate_id', 'price'])
+                    ->each(function ($row) use ($data, &$changes) {
+                        $changes[] = [
+                            'statamic_id' => $data['statamic_id'],
+                            'rate_id' => $row->rate_id,
+                            'date' => $row->getRawOriginal('date'),
+                            'action' => 'delete',
+                            'field' => 'price',
+                            'old_value' => $row->getRawOriginal('price'),
+                            'new_value' => null,
+                        ];
+                    });
+            }
+        }
+
         DB::transaction(function () use ($data, $rateIds, $sharedIndependentRateIds) {
             Availability::where('date', '>=', $data['date_start'])
                 ->where('date', '<=', $data['date_end'])
@@ -189,6 +246,8 @@ class AvailabilityCpController extends Controller
                     ->delete();
             }
         });
+
+        $this->logCpChanges(AvailabilityChangeReason::CpDelete, $changes);
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
@@ -216,7 +275,9 @@ class AvailabilityCpController extends Controller
             ? $this->expirePendingReservationsForHold($data['statamic_id'], (int) $data['rate_id'], $data['date'])
             : 0;
 
-        return DB::transaction(function () use ($data, $expiredHoldCount) {
+        $stuckChange = null;
+
+        $response = DB::transaction(function () use ($data, $expiredHoldCount, &$stuckChange) {
             $row = Availability::where([
                 'statamic_id' => $data['statamic_id'],
                 'rate_id' => $data['rate_id'],
@@ -303,16 +364,46 @@ class AvailabilityCpController extends Controller
                 $restoredQuantity += $quantityByKey[$key] ?? 0;
             }
 
+            $oldAvailable = $row->available;
+
             $row->update([
                 'available' => $row->available + $restoredQuantity,
                 'pending' => array_values(array_diff($pending, $toClear)),
             ]);
+
+            $stuckChange = [
+                'statamic_id' => $data['statamic_id'],
+                'rate_id' => (int) $data['rate_id'],
+                'date' => $data['date'],
+                'action' => 'update',
+                'field' => 'available',
+                'old_value' => $oldAvailable,
+                'new_value' => $oldAvailable + $restoredQuantity,
+            ];
 
             return response()->json([
                 'cleared' => count($toClear) + $expiredHoldCount,
                 'still_active' => $activeIds,
             ]);
         });
+
+        if ($stuckChange !== null) {
+            $this->logCpChanges(AvailabilityChangeReason::StuckPendingCleared, [$stuckChange]);
+        }
+
+        return $response;
+    }
+
+    /** @param  list<array<string, mixed>>  $changes */
+    private function logCpChanges(AvailabilityChangeReason $reason, array $changes): void
+    {
+        if ($changes === []) {
+            return;
+        }
+
+        $activityLog = app(ActivityLog::class);
+
+        $activityLog->logAvailabilityChanges($reason, $changes, actor: $activityLog->cpActor());
     }
 
     /**
@@ -390,7 +481,8 @@ class AvailabilityCpController extends Controller
         return max(0, count($pendingBefore) - count($pendingAfter));
     }
 
-    private function updateAvailability(array $data, int $rateId): void
+    /** @return list<array<string, mixed>> The activity-log change rows for this rate's writes. */
+    private function updateAvailability(array $data, int $rateId): array
     {
         $rate = Rate::withoutGlobalScopes()->find($rateId);
         $resolvedRateId = AvailabilityRepository::resolveBaseRateId($rateId);
@@ -421,7 +513,31 @@ class AvailabilityCpController extends Controller
             ], 422));
         }
 
-        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn) {
+        // Pre-read the current values for the range so the writes below can be diffed for the
+        // activity log. Skipped entirely (no extra queries) when logging is off.
+        $logEnabled = app(ActivityLog::class)->enabled();
+
+        $existingRows = $logEnabled
+            ? Availability::where('statamic_id', $data['statamic_id'])
+                ->where('date', '>=', $data['date_start'])
+                ->where('date', '<=', $data['date_end'])
+                ->where('rate_id', $resolvedRateId)
+                ->get(['date', 'available', 'price'])
+                ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
+            : collect();
+
+        $existingOverrides = ($logEnabled && $isSharedIndependent)
+            ? RatePrice::where('rate_id', $rateId)
+                ->where('statamic_id', $data['statamic_id'])
+                ->where('date', '>=', $data['date_start'])
+                ->where('date', '<=', $data['date_end'])
+                ->get(['date', 'price'])
+                ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
+            : collect();
+
+        $changes = [];
+
+        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn, $logEnabled, $existingRows, $existingOverrides, &$changes) {
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $onlyDays = $data['onlyDays'] ?? null;
 
@@ -452,6 +568,19 @@ class AvailabilityCpController extends Controller
                         ], [
                             'price' => $data['price'],
                         ]);
+
+                        if ($logEnabled) {
+                            $override = $existingOverrides->get($date);
+                            $changes[] = [
+                                'statamic_id' => $data['statamic_id'],
+                                'rate_id' => $rateId,
+                                'date' => $date,
+                                'action' => $override ? 'update' : 'create',
+                                'field' => 'price',
+                                'old_value' => $override?->getRawOriginal('price'),
+                                'new_value' => $data['price'],
+                            ];
+                        }
                     }
                 }
 
@@ -475,17 +604,33 @@ class AvailabilityCpController extends Controller
                         'date' => $date,
                         'rate_id' => $resolvedRateId,
                     ])->update($toUpdate);
-
-                    continue;
+                } else {
+                    Availability::updateOrCreate([
+                        'statamic_id' => $data['statamic_id'],
+                        'date' => $date,
+                        'rate_id' => $resolvedRateId,
+                    ], $toUpdate);
                 }
 
-                Availability::updateOrCreate([
-                    'statamic_id' => $data['statamic_id'],
-                    'date' => $date,
-                    'rate_id' => $resolvedRateId,
-                ], $toUpdate);
+                if ($logEnabled) {
+                    $existing = $existingRows->get($date);
+
+                    foreach ($toUpdate as $field => $newValue) {
+                        $changes[] = [
+                            'statamic_id' => $data['statamic_id'],
+                            'rate_id' => $resolvedRateId,
+                            'date' => $date,
+                            'action' => $existing ? 'update' : 'create',
+                            'field' => $field,
+                            'old_value' => $existing?->getRawOriginal($field),
+                            'new_value' => $newValue,
+                        ];
+                    }
+                }
             }
         });
+
+        return $changes;
     }
 
     private function defaultRateIds(string $statamicId): array

@@ -11,17 +11,26 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
 use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\RatePrice;
 use Reach\StatamicResrv\Repositories\AvailabilityRepository;
+use Reach\StatamicResrv\Support\ActivityLog;
 
 class ProcessDataImport implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(protected string $cacheKey = 'resrv-data-import') {}
+    /**
+     * The actor is captured at dispatch time (see DataImportCpController@store) because the job
+     * may run queued, where the current CP user is no longer resolvable.
+     *
+     * @param  array{id: string, name: string}|null  $actor
+     */
+    public function __construct(protected string $cacheKey = 'resrv-data-import', protected ?array $actor = null) {}
 
     /**
      * Execute the job.
@@ -38,10 +47,15 @@ class ProcessDataImport implements ShouldQueue
             return;
         }
 
-        $dataImport->prepare()->each(function ($item, $id) {
+        $activityLog = app(ActivityLog::class);
+        $logEnabled = $activityLog->enabled();
+        // One batch uuid for the entire import run, shared across every logger call below.
+        $batch = $logEnabled ? (string) Str::uuid() : null;
+
+        $dataImport->prepare()->each(function ($item, $id) use ($activityLog, $logEnabled, $batch) {
             $defaultRateId = null;
 
-            $item->each(function ($data) use ($id, &$defaultRateId) {
+            $item->each(function ($data) use ($id, &$defaultRateId, $activityLog, $logEnabled, $batch) {
                 // upsert() bypasses Eloquent casts, so validate before writing. Fractional
                 // availability (e.g. 1.9) is rejected rather than silently truncated to 1.
                 if (! is_numeric($data['price'] ?? null) || (float) $data['price'] < 0
@@ -119,18 +133,26 @@ class ProcessDataImport implements ShouldQueue
                 }
 
                 if ($isSharedRate) {
-                    $existingDates = Availability::where('statamic_id', $id)
+                    // Also selects `available` so the activity log can diff old vs new below.
+                    $existingRows = Availability::where('statamic_id', $id)
                         ->where('rate_id', $rateId)
                         ->whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])
-                        ->pluck('date')
-                        ->map(fn ($d) => $d instanceof Carbon ? $d->toDateString() : $d)
-                        ->all();
+                        ->get(['date', 'available'])
+                        ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString());
+
+                    $existingOverrides = ($logEnabled && $sharedIndependentRateId !== null)
+                        ? RatePrice::where('rate_id', $sharedIndependentRateId)
+                            ->where('statamic_id', $id)
+                            ->whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                            ->get(['date', 'price'])
+                            ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
+                        : collect();
 
                     $dataToAdd = [];
                     $priceOverrides = [];
                     foreach ($period as $day) {
                         $dateStr = $day->isoFormat('YYYY-MM-DD');
-                        if (in_array($dateStr, $existingDates)) {
+                        if ($existingRows->has($dateStr)) {
                             $dataToAdd[] = [
                                 'statamic_id' => $id,
                                 'date' => $dateStr,
@@ -156,7 +178,52 @@ class ProcessDataImport implements ShouldQueue
                     if (! empty($priceOverrides)) {
                         RatePrice::upsert($priceOverrides, ['rate_id', 'statamic_id', 'date'], ['price']);
                     }
+
+                    if ($logEnabled) {
+                        $changes = [];
+
+                        // This upsert only updates `available` — the base pool's price is untouched.
+                        foreach ($dataToAdd as $row) {
+                            $changes[] = [
+                                'statamic_id' => $id,
+                                'rate_id' => $rateId,
+                                'date' => $row['date'],
+                                'action' => 'update',
+                                'field' => 'available',
+                                'old_value' => $existingRows->get($row['date'])?->getRawOriginal('available'),
+                                'new_value' => $row['available'],
+                            ];
+                        }
+
+                        foreach ($priceOverrides as $row) {
+                            $existingOverride = $existingOverrides->get($row['date']);
+                            $changes[] = [
+                                'statamic_id' => $id,
+                                'rate_id' => $sharedIndependentRateId,
+                                'date' => $row['date'],
+                                'action' => $existingOverride ? 'update' : 'create',
+                                'field' => 'price',
+                                'old_value' => $existingOverride?->getRawOriginal('price'),
+                                'new_value' => $row['price'],
+                            ];
+                        }
+
+                        $activityLog->logAvailabilityChanges(
+                            AvailabilityChangeReason::Import,
+                            $changes,
+                            actor: $this->actor,
+                            batch: $batch,
+                        );
+                    }
                 } else {
+                    $existingRows = $logEnabled
+                        ? Availability::where('statamic_id', $id)
+                            ->where('rate_id', $rateId)
+                            ->whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])
+                            ->get(['date', 'available', 'price'])
+                            ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
+                        : collect();
+
                     $dataToAdd = [];
                     foreach ($period as $day) {
                         $dataToAdd[] = [
@@ -169,6 +236,33 @@ class ProcessDataImport implements ShouldQueue
                     }
 
                     Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], ['price', 'available']);
+
+                    if ($logEnabled) {
+                        $changes = [];
+
+                        foreach ($dataToAdd as $row) {
+                            $existing = $existingRows->get($row['date']);
+
+                            foreach (['available', 'price'] as $field) {
+                                $changes[] = [
+                                    'statamic_id' => $id,
+                                    'rate_id' => $rateId,
+                                    'date' => $row['date'],
+                                    'action' => $existing ? 'update' : 'create',
+                                    'field' => $field,
+                                    'old_value' => $existing?->getRawOriginal($field),
+                                    'new_value' => $row[$field],
+                                ];
+                            }
+                        }
+
+                        $activityLog->logAvailabilityChanges(
+                            AvailabilityChangeReason::Import,
+                            $changes,
+                            actor: $this->actor,
+                            batch: $batch,
+                        );
+                    }
                 }
             });
         });

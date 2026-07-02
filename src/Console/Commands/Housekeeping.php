@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Customer;
@@ -50,43 +51,48 @@ class Housekeeping extends Command
 
     protected $signature = 'resrv:housekeeping
         {--days=30 : Retention window in days; expired reservations and availability for dates that passed more than this many days ago are cleared}
+        {--log-days=365 : Retention window in days for activity log entries}
         {--dry-run : Report what would be cleared without deleting anything}';
 
-    protected $description = 'Housekeeping: delete long-expired reservations (with their related rows and orphaned customer PII) and availability for dates that have passed';
+    protected $description = 'Housekeeping: delete long-expired reservations (with their related rows and orphaned customer PII), availability for dates that have passed, and old activity log entries';
 
     public function handle(): int
     {
-        $days = $this->validatedDays();
+        $days = $this->validatedDays('days');
+        $logDays = $this->validatedDays('log-days');
 
-        if ($days === null) {
+        if ($days === null || $logDays === null) {
             return self::FAILURE;
         }
 
         $cutoff = now()->subDays($days);
         $customerCutoff = now()->subDays(self::CUSTOMER_GRACE_DAYS);
+        $logCutoff = now()->subDays($logDays);
 
         if ($this->option('dry-run')) {
-            return $this->reportDryRun($cutoff, $customerCutoff, $days);
+            return $this->reportDryRun($cutoff, $customerCutoff, $logCutoff, $days, $logDays);
         }
 
         $reservations = $this->clearExpiredReservations($cutoff);
         $customers = $this->clearOrphanedCustomers($customerCutoff);
         $availability = $this->clearPastAvailability($cutoff);
+        $logs = $this->clearOldActivityLogs($logCutoff);
 
         $this->info("Cleared {$reservations} expired reservation(s), {$customers} orphaned customer(s) and {$availability} past availability record(s) older than {$days} day(s).");
+        $this->info("Cleared {$logs} activity log entrie(s) older than {$logDays} day(s).");
 
         return self::SUCCESS;
     }
 
-    private function validatedDays(): ?int
+    private function validatedDays(string $option): ?int
     {
-        $daysOption = (string) $this->option('days');
+        $daysOption = (string) $this->option($option);
 
         // Validate before casting: (int) "abc" silently becomes 0, and a value large enough to
         // overflow now()->subDays() wraps the cutoff into the future — either way the cutoff
         // collapses and everything in range would be deleted.
         if (! ctype_digit($daysOption) || (int) $daysOption > self::MAX_DAYS) {
-            $this->error('The --days option must be a whole number between 0 and '.self::MAX_DAYS.'.');
+            $this->error("The --{$option} option must be a whole number between 0 and ".self::MAX_DAYS.'.');
 
             return null;
         }
@@ -94,13 +100,15 @@ class Housekeeping extends Command
         return (int) $daysOption;
     }
 
-    private function reportDryRun(Carbon $cutoff, Carbon $customerCutoff, int $days): int
+    private function reportDryRun(Carbon $cutoff, Carbon $customerCutoff, Carbon $logCutoff, int $days, int $logDays): int
     {
         $reservations = $this->expiredReservations($cutoff)->count();
         $customers = $this->orphanableCustomers($cutoff, $customerCutoff)->count();
         $availability = $this->pastAvailability($cutoff)->count();
+        $logs = $this->oldActivityLogs($logCutoff)->sum(fn (QueryBuilder $query) => $query->count());
 
         $this->info("Dry run: {$reservations} expired reservation(s), {$customers} orphaned customer(s) and {$availability} past availability record(s) older than {$days} day(s) would be cleared.");
+        $this->info("Dry run: {$logs} activity log entrie(s) older than {$logDays} day(s) would be cleared.");
 
         return self::SUCCESS;
     }
@@ -197,5 +205,39 @@ class Housekeeping extends Command
     private function pastAvailability(Carbon $cutoff): QueryBuilder
     {
         return DB::table('resrv_availabilities')->where('date', '<', $cutoff->toDateString());
+    }
+
+    /**
+     * Prunes both activity log tables by created_at. Runs regardless of the enable_activity_log
+     * toggle — a site that disabled the feature still wants old rows gone. Log rows have no FKs,
+     * so a plain chunked delete per table is safe.
+     */
+    private function clearOldActivityLogs(Carbon $logCutoff): int
+    {
+        $deleted = 0;
+
+        foreach ($this->oldActivityLogs($logCutoff) as $query) {
+            while (true) {
+                $count = (clone $query)
+                    ->orderBy('id')
+                    ->limit(self::CHUNK_SIZE)
+                    ->delete();
+
+                $deleted += $count;
+
+                if ($count < self::CHUNK_SIZE) {
+                    break;
+                }
+            }
+        }
+
+        return $deleted;
+    }
+
+    /** @return SupportCollection<int, QueryBuilder> One prunable query per activity log table. */
+    private function oldActivityLogs(Carbon $logCutoff): SupportCollection
+    {
+        return collect(['resrv_availability_changes', 'resrv_reservation_logs'])
+            ->map(fn (string $table) => DB::table($table)->where('created_at', '<', $logCutoff));
     }
 }
