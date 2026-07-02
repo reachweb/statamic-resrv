@@ -64,7 +64,7 @@ class ActivityLog
                     'statamic_id' => $change['statamic_id'],
                     'rate_id' => $change['rate_id'] ?? null,
                     'date' => $this->normalizeDate($change['date']),
-                    'action' => $change['action'],
+                    'action' => $change['action'] ?? 'update',
                     'field' => $change['field'],
                     'old_value' => $this->normalizeValue($change['old_value'] ?? null),
                     'new_value' => $this->normalizeValue($change['new_value'] ?? null),

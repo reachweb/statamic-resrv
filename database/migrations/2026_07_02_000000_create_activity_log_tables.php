@@ -35,7 +35,7 @@ return new class extends Migration
             $table->string('reference');
             $table->string('status_from')->nullable();
             $table->string('status_to');
-            $table->string('reason');
+            $table->string('reason')->index();
             $table->json('context')->nullable();
             $table->string('actor_id')->nullable();
             $table->string('actor_name')->nullable();
