@@ -161,10 +161,18 @@ trait HandlesQueryStringSeeding
         }
 
         try {
-            $date = Carbon::createFromFormat('Y-m-d', $value)->startOfDay();
+            $date = Carbon::createFromFormat('Y-m-d', $value);
         } catch (InvalidFormatException) {
             return null;
         }
+
+        // createFromFormat() returns null instead of throwing when the host app
+        // disables Carbon strict mode.
+        if ($date === null) {
+            return null;
+        }
+
+        $date = $date->startOfDay();
 
         // Reject roll-over dates (2026-02-30 parses as March 2nd).
         return $date->toDateString() === $value ? $date : null;
