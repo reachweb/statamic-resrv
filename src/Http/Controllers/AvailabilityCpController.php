@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Facades\Price;
@@ -22,6 +23,7 @@ use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\RatePrice;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ActiveReservationsGuard;
+use Reach\StatamicResrv\Support\ActivityLog;
 
 class AvailabilityCpController extends Controller
 {
@@ -99,7 +101,9 @@ class AvailabilityCpController extends Controller
                 ->values()
                 ->all();
 
-            DB::transaction(function () use ($data, $groups) {
+            $changes = [];
+
+            DB::transaction(function () use ($data, $groups, &$changes) {
                 foreach ($groups as $group) {
                     $payload = array_merge($data, [
                         'price' => $group['price'] ?? null,
@@ -108,10 +112,12 @@ class AvailabilityCpController extends Controller
                     unset($payload['groups']);
 
                     foreach ($group['rate_ids'] as $rateId) {
-                        $this->updateAvailability($payload, (int) $rateId);
+                        array_push($changes, ...$this->updateAvailability($payload, (int) $rateId));
                     }
                 }
             });
+
+            $this->logCpChanges(AvailabilityChangeReason::CpEdit, $changes);
 
             return response()->json(['statamic_id' => $data['statamic_id']]);
         }
@@ -126,11 +132,15 @@ class AvailabilityCpController extends Controller
         // Apply every rate in ONE transaction so a rejection on any rate (the shared+relative price
         // abort or the pending-holds guard) rolls back the rates already written, instead of leaving
         // a multi-rate edit half-applied. updateAvailability()'s own transaction nests as a savepoint.
-        DB::transaction(function () use ($rateIds, $data) {
+        $changes = [];
+
+        DB::transaction(function () use ($rateIds, $data, &$changes) {
             foreach ($rateIds as $rateId) {
-                $this->updateAvailability($data, (int) $rateId);
+                array_push($changes, ...$this->updateAvailability($data, (int) $rateId));
             }
         });
+
+        $this->logCpChanges(AvailabilityChangeReason::CpEdit, $changes);
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
@@ -174,21 +184,87 @@ class AvailabilityCpController extends Controller
             ->pluck('id')
             ->all();
 
-        DB::transaction(function () use ($data, $rateIds, $sharedIndependentRateIds) {
-            Availability::where('date', '>=', $data['date_start'])
+        $changes = [];
+
+        DB::transaction(function () use ($data, $rateIds, $sharedIndependentRateIds, &$changes) {
+            if (! app(ActivityLog::class)->enabled()) {
+                Availability::where('date', '>=', $data['date_start'])
+                    ->where('date', '<=', $data['date_end'])
+                    ->where('statamic_id', $data['statamic_id'])
+                    ->whereIn('rate_id', $rateIds)
+                    ->delete();
+
+                if (! empty($sharedIndependentRateIds)) {
+                    RatePrice::where('date', '>=', $data['date_start'])
+                        ->where('date', '<=', $data['date_end'])
+                        ->where('statamic_id', $data['statamic_id'])
+                        ->whereIn('rate_id', $sharedIndependentRateIds)
+                        ->delete();
+                }
+
+                return;
+            }
+
+            // Snapshot the rows about to be deleted so the activity log keeps their last values.
+            // Taken under the delete's own write lock — an unlocked pre-read could record values
+            // a concurrent edit or import changed before the delete ran.
+            $availabilityRows = Availability::where('date', '>=', $data['date_start'])
                 ->where('date', '<=', $data['date_end'])
                 ->where('statamic_id', $data['statamic_id'])
                 ->whereIn('rate_id', $rateIds)
-                ->delete();
+                ->lockForUpdate()
+                ->get(['id', 'date', 'rate_id', 'available', 'price']);
 
-            if (! empty($sharedIndependentRateIds)) {
-                RatePrice::where('date', '>=', $data['date_start'])
+            $availabilityRows->each(function ($row) use ($data, &$changes) {
+                foreach (['available', 'price'] as $field) {
+                    if ($row->getRawOriginal($field) === null) {
+                        continue;
+                    }
+
+                    $changes[] = [
+                        'statamic_id' => $data['statamic_id'],
+                        'rate_id' => $row->rate_id,
+                        'date' => $row->getRawOriginal('date'),
+                        'action' => 'delete',
+                        'field' => $field,
+                        'old_value' => $row->getRawOriginal($field),
+                        'new_value' => null,
+                    ];
+                }
+            });
+
+            $ratePriceRows = empty($sharedIndependentRateIds)
+                ? collect()
+                : RatePrice::where('date', '>=', $data['date_start'])
                     ->where('date', '<=', $data['date_end'])
                     ->where('statamic_id', $data['statamic_id'])
                     ->whereIn('rate_id', $sharedIndependentRateIds)
-                    ->delete();
-            }
+                    ->lockForUpdate()
+                    ->get(['id', 'date', 'rate_id', 'price']);
+
+            $ratePriceRows->each(function ($row) use ($data, &$changes) {
+                $changes[] = [
+                    'statamic_id' => $data['statamic_id'],
+                    'rate_id' => $row->rate_id,
+                    'date' => $row->getRawOriginal('date'),
+                    'action' => 'delete',
+                    'field' => 'price',
+                    'old_value' => $row->getRawOriginal('price'),
+                    'new_value' => null,
+                ];
+            });
+
+            // Delete exactly the snapshotted rows. Re-running the range predicate could remove a
+            // row a concurrent request inserted after the snapshot (FOR UPDATE cannot lock rows
+            // that don't exist yet on PostgreSQL), destroying data the log never recorded. Chunked
+            // to stay below driver placeholder limits on large ranges.
+            $availabilityRows->pluck('id')->chunk(1000)
+                ->each(fn ($ids) => Availability::whereKey($ids->all())->delete());
+            $ratePriceRows->pluck('id')->chunk(1000)
+                ->each(fn ($ids) => RatePrice::whereKey($ids->all())->delete());
         });
+
+        $this->logCpChanges(AvailabilityChangeReason::CpDelete, $changes);
 
         return response()->json(['statamic_id' => $data['statamic_id']]);
     }
@@ -216,7 +292,9 @@ class AvailabilityCpController extends Controller
             ? $this->expirePendingReservationsForHold($data['statamic_id'], (int) $data['rate_id'], $data['date'])
             : 0;
 
-        return DB::transaction(function () use ($data, $expiredHoldCount) {
+        $stuckChange = null;
+
+        $response = DB::transaction(function () use ($data, $expiredHoldCount, &$stuckChange) {
             $row = Availability::where([
                 'statamic_id' => $data['statamic_id'],
                 'rate_id' => $data['rate_id'],
@@ -303,16 +381,48 @@ class AvailabilityCpController extends Controller
                 $restoredQuantity += $quantityByKey[$key] ?? 0;
             }
 
+            $oldAvailable = $row->available;
+
             $row->update([
                 'available' => $row->available + $restoredQuantity,
                 'pending' => array_values(array_diff($pending, $toClear)),
             ]);
+
+            $stuckChange = [
+                'statamic_id' => $data['statamic_id'],
+                'rate_id' => (int) $data['rate_id'],
+                'date' => $data['date'],
+                'action' => 'update',
+                'field' => 'available',
+                'old_value' => $oldAvailable,
+                'new_value' => $oldAvailable + $restoredQuantity,
+            ];
 
             return response()->json([
                 'cleared' => count($toClear) + $expiredHoldCount,
                 'still_active' => $activeIds,
             ]);
         });
+
+        if ($stuckChange !== null) {
+            // filterNoOps: false — when the purged holders restore quantity 0, old == new but the
+            // admin action (holds released, date bookable again) must still leave an audit row.
+            $this->logCpChanges(AvailabilityChangeReason::StuckPendingCleared, [$stuckChange], filterNoOps: false);
+        }
+
+        return $response;
+    }
+
+    /** @param  list<array<string, mixed>>  $changes */
+    private function logCpChanges(AvailabilityChangeReason $reason, array $changes, bool $filterNoOps = true): void
+    {
+        if ($changes === []) {
+            return;
+        }
+
+        $activityLog = app(ActivityLog::class);
+
+        $activityLog->logAvailabilityChanges($reason, $changes, actor: $activityLog->cpActor(), filterNoOps: $filterNoOps);
     }
 
     /**
@@ -390,7 +500,8 @@ class AvailabilityCpController extends Controller
         return max(0, count($pendingBefore) - count($pendingAfter));
     }
 
-    private function updateAvailability(array $data, int $rateId): void
+    /** @return list<array<string, mixed>> The activity-log change rows for this rate's writes. */
+    private function updateAvailability(array $data, int $rateId): array
     {
         $rate = Rate::withoutGlobalScopes()->find($rateId);
         $resolvedRateId = AvailabilityRepository::resolveBaseRateId($rateId);
@@ -421,7 +532,34 @@ class AvailabilityCpController extends Controller
             ], 422));
         }
 
-        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn) {
+        $logEnabled = app(ActivityLog::class)->enabled();
+
+        $changes = [];
+
+        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn, $logEnabled, &$changes) {
+            // Lock the range so a concurrent edit or import can't change row values between
+            // the per-row prior-value reads below and the writes. Skipped entirely (no extra
+            // queries) when logging is off. FOR UPDATE can't lock absent rows (PostgreSQL has
+            // no gap locks), so create races are handled per row instead: the insert loser
+            // re-reads the winner's committed row and diffs against that.
+            if ($logEnabled) {
+                Availability::where('statamic_id', $data['statamic_id'])
+                    ->where('date', '>=', $data['date_start'])
+                    ->where('date', '<=', $data['date_end'])
+                    ->where('rate_id', $resolvedRateId)
+                    ->lockForUpdate()
+                    ->get(['id']);
+
+                if ($isSharedIndependent) {
+                    RatePrice::where('rate_id', $rateId)
+                        ->where('statamic_id', $data['statamic_id'])
+                        ->where('date', '>=', $data['date_start'])
+                        ->where('date', '<=', $data['date_end'])
+                        ->lockForUpdate()
+                        ->get(['id']);
+                }
+            }
+
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $onlyDays = $data['onlyDays'] ?? null;
 
@@ -433,25 +571,52 @@ class AvailabilityCpController extends Controller
                 $date = $day->isoFormat('YYYY-MM-DD');
 
                 if ($isSharedIndependent) {
-                    // No base row = no inventory; a price override here would be orphaned. Skip silently.
-                    $baseRowExists = Availability::where([
+                    // No base row = no inventory; a price override here would be orphaned. Skip
+                    // silently. Fetched with its own lock: a row created by a concurrent request
+                    // after the range lock above couldn't have been covered by it.
+                    $baseRow = Availability::where([
                         'statamic_id' => $data['statamic_id'],
                         'date' => $date,
                         'rate_id' => $resolvedRateId,
-                    ])->exists();
+                    ])->lockForUpdate()->first();
 
-                    if (! $baseRowExists) {
+                    if (! $baseRow) {
                         continue;
                     }
 
                     if (! is_null($data['price'])) {
-                        RatePrice::updateOrCreate([
+                        // firstOrCreate + explicit save instead of updateOrCreate so the prior
+                        // price is captured from the row about to be overwritten. When two
+                        // requests race to create the same missing date, the insert loser's
+                        // re-read returns the winner's committed row — the correct old value,
+                        // which the range lock above couldn't have seen or locked.
+                        $override = RatePrice::firstOrCreate([
                             'rate_id' => $rateId,
                             'statamic_id' => $data['statamic_id'],
                             'date' => $date,
                         ], [
                             'price' => $data['price'],
                         ]);
+
+                        $priorOverridePrice = $override->wasRecentlyCreated
+                            ? null
+                            : $override->getRawOriginal('price');
+
+                        if (! $override->wasRecentlyCreated) {
+                            $override->fill(['price' => $data['price']])->save();
+                        }
+
+                        if ($logEnabled) {
+                            $changes[] = [
+                                'statamic_id' => $data['statamic_id'],
+                                'rate_id' => $rateId,
+                                'date' => $date,
+                                'action' => $override->wasRecentlyCreated ? 'create' : 'update',
+                                'field' => 'price',
+                                'old_value' => $priorOverridePrice,
+                                'new_value' => $data['price'],
+                            ];
+                        }
                     }
                 }
 
@@ -469,23 +634,61 @@ class AvailabilityCpController extends Controller
                     continue;
                 }
 
+                $priorValues = [];
+
                 if ($isSharedIndependent) {
-                    Availability::where([
+                    // The $baseRow guard above ensures the row exists (and holds its lock), so
+                    // this branch can only ever log an update.
+                    $priorValues = [
+                        'price' => $baseRow->getRawOriginal('price'),
+                        'available' => $baseRow->getRawOriginal('available'),
+                    ];
+
+                    $baseRow->fill($toUpdate)->save();
+
+                    $rowWasCreated = false;
+                } else {
+                    // firstOrCreate + explicit save instead of updateOrCreate so the prior
+                    // values are captured from the row about to be overwritten (see the
+                    // range-lock note above for why a pre-write snapshot can't supply them
+                    // when two requests race to create the same missing date).
+                    $row = Availability::firstOrCreate([
                         'statamic_id' => $data['statamic_id'],
                         'date' => $date,
                         'rate_id' => $resolvedRateId,
-                    ])->update($toUpdate);
+                    ], $toUpdate);
 
-                    continue;
+                    $rowWasCreated = $row->wasRecentlyCreated;
+
+                    if (! $rowWasCreated) {
+                        $priorValues = [
+                            'price' => $row->getRawOriginal('price'),
+                            'available' => $row->getRawOriginal('available'),
+                        ];
+
+                        $row->fill($toUpdate)->save();
+                    }
                 }
 
-                Availability::updateOrCreate([
-                    'statamic_id' => $data['statamic_id'],
-                    'date' => $date,
-                    'rate_id' => $resolvedRateId,
-                ], $toUpdate);
+                if ($logEnabled) {
+                    foreach ($toUpdate as $field => $newValue) {
+                        $changes[] = [
+                            'statamic_id' => $data['statamic_id'],
+                            'rate_id' => $resolvedRateId,
+                            'date' => $date,
+                            // From the write's outcome: only the insert winner may log a create,
+                            // the loser logs an update diffed against the winner's values.
+                            'action' => $rowWasCreated ? 'create' : 'update',
+                            'field' => $field,
+                            'old_value' => $priorValues[$field] ?? null,
+                            'new_value' => $newValue,
+                        ];
+                    }
+                }
             }
         });
+
+        return $changes;
     }
 
     private function defaultRateIds(string $statamicId): array

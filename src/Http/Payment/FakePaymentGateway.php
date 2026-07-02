@@ -164,7 +164,10 @@ class FakePaymentGateway implements PaymentInterface
             }
 
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
-                ReservationConfirmed::dispatch($reservation);
+                ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, [
+                    'gateway' => $reservation->payment_gateway ?: 'fake',
+                    'payment_id' => $paymentId,
+                ]);
 
                 return response()->json([], 200);
             }

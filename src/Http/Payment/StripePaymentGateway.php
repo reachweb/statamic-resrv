@@ -298,7 +298,10 @@ class StripePaymentGateway implements PaymentInterface
             }
 
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
-                ReservationConfirmed::dispatch($reservation);
+                ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, [
+                    'gateway' => $reservation->payment_gateway ?: 'stripe',
+                    'payment_id' => $data['id'],
+                ]);
 
                 return response()->json([], 200);
             }

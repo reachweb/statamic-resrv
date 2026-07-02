@@ -76,6 +76,14 @@ class Reservation extends Model
 
     protected $appends = ['entry'];
 
+    /**
+     * The source status observed under the row lock by the last transitionTo() call that
+     * changed state. This is the accurate "from" for activity logging — a caller's pre-check
+     * read can go stale while a concurrent writer (e.g. a webhook confirm racing a CP refund)
+     * moves the row before the lock is taken.
+     */
+    public ?ReservationStatus $lastTransitionFrom = null;
+
     protected static function newFactory()
     {
         return ReservationFactory::new();
@@ -346,6 +354,7 @@ class Reservation extends Model
             $fresh->status = $to->value;
             $fresh->save();
 
+            $this->lastTransitionFrom = $current;
             $this->setRawAttributes($fresh->getAttributes(), true);
 
             return true;

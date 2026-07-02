@@ -72,6 +72,10 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/reports', 'ReportsCpController@indexCp')->name('reports.index');
         Route::get('/resrv/reports/index', 'ReportsCpController@index')->name('report.index');
 
+        Route::get('/resrv/logs', 'ActivityLogCpController@indexCp')->name('logs.index');
+        Route::get('/resrv/logs/availability', 'ActivityLogCpController@availability')->name('logs.availability');
+        Route::get('/resrv/logs/reservations', 'ActivityLogCpController@reservations')->name('logs.reservations');
+
         Route::get('/resrv/export', 'ExportCpController@indexCp')->name('export.index');
         Route::get('/resrv/export/count', 'ExportCpController@count')->name('export.count');
         Route::post('/resrv/export/download', 'ExportCpController@download')->name('export.download');

@@ -243,6 +243,9 @@ class ReservationCpController extends Controller
         }
 
         if ($changed) {
+            // The reservation log entry is written by LogReservationRefunded, listening on
+            // this event like every other lifecycle log — lastTransitionFrom carries the
+            // status observed under the transition lock.
             ReservationRefunded::dispatch($reservation);
         }
 
