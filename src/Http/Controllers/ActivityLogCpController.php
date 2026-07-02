@@ -2,6 +2,8 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -41,15 +43,73 @@ class ActivityLogCpController extends Controller
             'page' => 'sometimes|integer',
         ]);
 
-        // Ordered explicitly — the CP listing sort bug taught us not to trust default ordering
-        // on paginated output.
-        $changes = AvailabilityChange::query()
+        $query = AvailabilityChange::query()
             ->when($data['statamic_id'] ?? null, fn ($query, $id) => $query->forEntry($id))
             ->when($data['date_start'] ?? null, fn ($query, $date) => $query->whereDate('date', '>=', $date))
             ->when($data['date_end'] ?? null, fn ($query, $date) => $query->whereDate('date', '<=', $date))
             ->when($data['reason'] ?? null, fn ($query, $reason) => $query->where('reason', $reason))
             ->when($data['batch'] ?? null, fn ($query, $batch) => $query->forBatch($batch))
-            ->when($data['reservation_id'] ?? null, fn ($query, $id) => $query->where('reservation_id', $id))
+            ->when($data['reservation_id'] ?? null, fn ($query, $id) => $query->where('reservation_id', $id));
+
+        // Without a batch filter the listing paginates whole batches (one operation each) —
+        // paginating raw rows would split a large import or bulk edit across pages and report
+        // only the current slice as its change count. Rows for one batch are fetched on expand
+        // via the batch filter.
+        if (! ($data['batch'] ?? null)) {
+            return $this->availabilityBatches($query);
+        }
+
+        return $this->availabilityRows($query);
+    }
+
+    private function availabilityBatches(Builder $query): JsonResponse
+    {
+        $batches = $query
+            ->selectRaw('batch')
+            ->selectRaw('count(*) as change_count')
+            ->selectRaw('count(distinct statamic_id) as entry_count')
+            ->selectRaw('max(id) as last_id')
+            ->selectRaw('min(created_at) as first_created_at')
+            ->groupBy('batch')
+            ->orderByDesc('last_id')
+            ->paginate($this->perPage());
+
+        // reason/actor/reservation are constant within a batch, so any row can represent it.
+        $representatives = AvailabilityChange::query()
+            ->whereIn('id', $batches->getCollection()->pluck('last_id'))
+            ->get()
+            ->keyBy('batch');
+
+        $entryTitles = Entry::withTrashed()
+            ->whereIn('item_id', $representatives->pluck('statamic_id')->unique())
+            ->pluck('title', 'item_id');
+
+        $batches->through(function ($batch) use ($representatives, $entryTitles) {
+            $representative = $representatives->get($batch->batch);
+
+            return [
+                'batch' => $batch->batch,
+                'change_count' => (int) $batch->change_count,
+                'entry_count' => (int) $batch->entry_count,
+                'entry_title' => (int) $batch->entry_count === 1
+                    ? $entryTitles->get($representative->statamic_id, $representative->statamic_id)
+                    : null,
+                'reason' => $representative->reason->value,
+                'reason_label' => $representative->reason->label(),
+                'reservation_id' => $representative->reservation_id,
+                'actor_name' => $representative->actor_name,
+                'created_at' => Carbon::parse($batch->first_created_at)->format('Y-m-d H:i:s'),
+            ];
+        });
+
+        return response()->json($batches);
+    }
+
+    private function availabilityRows(Builder $query): JsonResponse
+    {
+        // Ordered explicitly — the CP listing sort bug taught us not to trust default ordering
+        // on paginated output.
+        $changes = $query
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate($this->perPage());

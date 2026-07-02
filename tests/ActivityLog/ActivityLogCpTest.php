@@ -85,7 +85,7 @@ class ActivityLogCpTest extends TestCase
         $this->getJson(cp_route('resrv.logs.reservations'))->assertForbidden();
     }
 
-    public function test_availability_changes_are_paginated_and_explicitly_ordered()
+    public function test_availability_batches_are_paginated_and_explicitly_ordered()
     {
         $this->signInAdmin();
 
@@ -97,18 +97,18 @@ class ActivityLogCpTest extends TestCase
         $response = $this->getJson(cp_route('resrv.logs.availability'))->assertOk();
 
         $this->assertEquals(2, $response->json('total'));
-        $this->assertEquals($recent->id, $response->json('data.0.id'));
-        $this->assertEquals($old->id, $response->json('data.1.id'));
+        $this->assertEquals($recent->batch, $response->json('data.0.batch'));
+        $this->assertEquals($old->batch, $response->json('data.1.batch'));
     }
 
-    public function test_availability_rows_are_enriched_with_titles_and_labels()
+    public function test_availability_batches_and_rows_are_enriched_with_titles_and_labels()
     {
         $this->signInAdmin();
 
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        $this->makeAvailabilityChange([
+        $live = $this->makeAvailabilityChange([
             'statamic_id' => $item->id(),
             'rate_id' => $rate->id,
         ]);
@@ -117,14 +117,77 @@ class ActivityLogCpTest extends TestCase
 
         $response = $this->getJson(cp_route('resrv.logs.availability'))->assertOk();
 
-        $rows = collect($response->json('data'))->keyBy('statamic_id');
+        $batches = collect($response->json('data'))->keyBy('batch');
 
-        $this->assertEquals($item->title, $rows[$item->id()]['entry_title']);
-        $this->assertEquals($rate->title, $rows[$item->id()]['rate_title']);
-        $this->assertEquals('Edited in the Control Panel', $rows[$item->id()]['reason_label']);
+        $this->assertEquals($item->title, $batches[$live->batch]['entry_title']);
+        $this->assertEquals(1, $batches[$live->batch]['change_count']);
+        $this->assertEquals('Edited in the Control Panel', $batches[$live->batch]['reason_label']);
 
-        $this->assertEquals('gone-entry', $rows['gone-entry']['entry_title']);
-        $this->assertEquals('#999', $rows['gone-entry']['rate_title']);
+        $goneBatch = $batches->keys()->first(fn ($batch) => $batch !== $live->batch);
+        $this->assertEquals('gone-entry', $batches[$goneBatch]['entry_title']);
+
+        $rows = collect($this->getJson(cp_route('resrv.logs.availability', ['batch' => $live->batch]))
+            ->assertOk()
+            ->json('data'));
+
+        $this->assertEquals($rate->title, $rows->first()['rate_title']);
+        $this->assertEquals($item->title, $rows->first()['entry_title']);
+
+        $goneRows = $this->getJson(cp_route('resrv.logs.availability', ['batch' => $goneBatch]))->json('data');
+        $this->assertEquals('#999', $goneRows[0]['rate_title']);
+    }
+
+    public function test_a_batch_larger_than_the_page_size_stays_one_summary_with_the_full_count()
+    {
+        $this->signInAdmin();
+
+        $other = $this->makeAvailabilityChange();
+
+        $batch = (string) SupportStr::uuid();
+        foreach (range(1, 30) as $day) {
+            $this->makeAvailabilityChange([
+                'batch' => $batch,
+                'date' => today()->addDays($day)->toDateString(),
+            ]);
+        }
+
+        $response = $this->getJson(cp_route('resrv.logs.availability', ['perPage' => 25]))->assertOk();
+
+        $this->assertEquals(2, $response->json('total'));
+        $this->assertEquals(1, $response->json('last_page'));
+        $this->assertEquals($batch, $response->json('data.0.batch'));
+        $this->assertEquals(30, $response->json('data.0.change_count'));
+        $this->assertEquals($other->batch, $response->json('data.1.batch'));
+
+        $rows = $this->getJson(cp_route('resrv.logs.availability', ['batch' => $batch, 'perPage' => 25]))->assertOk();
+        $this->assertEquals(30, $rows->json('total'));
+        $this->assertCount(25, $rows->json('data'));
+    }
+
+    public function test_a_multi_entry_batch_reports_its_entry_count_and_per_row_titles()
+    {
+        $this->signInAdmin();
+
+        $itemA = $this->makeStatamicItem();
+        $itemB = $this->makeStatamicItem();
+
+        $batch = (string) SupportStr::uuid();
+        $this->makeAvailabilityChange(['batch' => $batch, 'statamic_id' => $itemA->id(), 'reason' => 'import']);
+        $this->makeAvailabilityChange(['batch' => $batch, 'statamic_id' => $itemB->id(), 'reason' => 'import']);
+
+        $response = $this->getJson(cp_route('resrv.logs.availability'))->assertOk();
+
+        $this->assertEquals(1, $response->json('total'));
+        $this->assertEquals(2, $response->json('data.0.entry_count'));
+        $this->assertEquals(2, $response->json('data.0.change_count'));
+        $this->assertNull($response->json('data.0.entry_title'));
+
+        $rows = collect($this->getJson(cp_route('resrv.logs.availability', ['batch' => $batch]))->json('data'));
+
+        $this->assertEqualsCanonicalizing(
+            [$itemA->title, $itemB->title],
+            $rows->pluck('entry_title')->all(),
+        );
     }
 
     public function test_availability_changes_can_be_filtered()

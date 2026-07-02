@@ -248,7 +248,7 @@ class ReservationCpController extends Controller
             $activityLog = app(ActivityLog::class);
             $activityLog->logReservation(
                 reservation: $reservation,
-                from: $currentStatus,
+                from: $reservation->lastTransitionFrom ?? $currentStatus,
                 to: ReservationStatus::REFUNDED,
                 reason: ReservationLogReason::CpRefund,
                 context: ['amount' => $reservation->payment->format()],

@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Livewire\Traits\HandlesReservationConfirmation;
 use Reach\StatamicResrv\Models\Reservation;
@@ -199,6 +201,40 @@ class ReservationLogTest extends TestCase
             'reason' => 'cp_refund',
             'actor_id' => '1',
             'actor_name' => 'test@test.com',
+        ]);
+    }
+
+    public function test_cp_refund_logs_the_status_observed_under_the_transition_lock()
+    {
+        $this->signInAdmin();
+
+        // The controller pre-check reads PENDING, then a webhook confirm lands during the
+        // gateway refund call — before the transition takes the row lock. The log must
+        // record the observed confirmed → refunded, not the stale pending → refunded.
+        $reservation = $this->makeReservation([
+            'status' => 'pending',
+            'payment_id' => 'abcdef',
+        ]);
+
+        $gateway = \Mockery::mock(PaymentInterface::class);
+        $gateway->shouldReceive('refund')->andReturnUsing(function ($refunding) {
+            Reservation::whereKey($refunding->id)->update(['status' => 'confirmed']);
+
+            return true;
+        });
+
+        $this->mock(PaymentGatewayManager::class, function ($mock) use ($gateway) {
+            $mock->shouldReceive('forReservation')->andReturn($gateway);
+        });
+
+        $this->patch(cp_route('resrv.reservation.refund'), ['id' => $reservation->id])
+            ->assertOk();
+
+        $this->assertDatabaseHas('resrv_reservation_logs', [
+            'reservation_id' => $reservation->id,
+            'status_from' => 'confirmed',
+            'status_to' => 'refunded',
+            'reason' => 'cp_refund',
         ]);
     }
 

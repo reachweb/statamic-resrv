@@ -24,7 +24,7 @@ const meta = ref({ current_page: 1, last_page: 1, total: 0 });
 const page = ref(1);
 
 const entries = ref([]);
-const expandedBatches = ref(new Set());
+const expandedBatches = ref({});
 
 const filters = ref({
     statamic_id: null,
@@ -53,27 +53,8 @@ const dateFilterLabel = computed(() =>
     tab.value === 'availability' ? __('Availability date') : __('Logged between'),
 );
 
-const availabilityGroups = computed(() => {
-    const groups = new Map();
-    rows.value.forEach((row) => {
-        if (! groups.has(row.batch)) {
-            groups.set(row.batch, []);
-        }
-        groups.get(row.batch).push(row);
-    });
-
-    return Array.from(groups.entries()).map(([batch, batchRows]) => ({
-        batch,
-        rows: batchRows,
-        first: batchRows[0],
-    }));
-});
-
-const load = async () => {
-    loading.value = true;
-
+const activeParams = () => {
     const params = {
-        page: page.value,
         ...(filters.value.reason ? { reason: filters.value.reason } : {}),
         ...(filters.value.date_start ? { date_start: filters.value.date_start } : {}),
         ...(filters.value.date_end ? { date_end: filters.value.date_end } : {}),
@@ -86,9 +67,22 @@ const load = async () => {
         params.reference = filters.value.reference;
     }
 
+    return params;
+};
+
+// Responses landing out of order (fast tab, filter, or page changes) must not overwrite
+// the state of a newer request — only the latest sequence number may commit.
+let loadSequence = 0;
+
+const load = async () => {
+    const sequence = ++loadSequence;
+    loading.value = true;
+    expandedBatches.value = {};
+
     try {
         const url = tab.value === 'availability' ? props.availabilityUrl : props.reservationsUrl;
-        const response = await axios.get(url, { params });
+        const response = await axios.get(url, { params: { page: page.value, ...activeParams() } });
+        if (sequence !== loadSequence) return;
         rows.value = response.data.data;
         meta.value = {
             current_page: response.data.current_page,
@@ -96,9 +90,12 @@ const load = async () => {
             total: response.data.total,
         };
     } catch (error) {
+        if (sequence !== loadSequence) return;
         toast.error(error?.response?.data?.message ?? __('Something went wrong'));
     } finally {
-        loading.value = false;
+        if (sequence === loadSequence) {
+            loading.value = false;
+        }
     }
 };
 
@@ -116,17 +113,46 @@ const switchTab = (newTab) => {
     tab.value = newTab;
     filters.value.reason = null;
     page.value = 1;
+    rows.value = [];
+    meta.value = { current_page: 1, last_page: 1, total: 0 };
     load();
 };
 
-const toggleBatch = (batch) => {
-    const expanded = new Set(expandedBatches.value);
-    if (expanded.has(batch)) {
-        expanded.delete(batch);
-    } else {
-        expanded.add(batch);
+const toggleBatch = (group) => {
+    const existing = expandedBatches.value[group.batch];
+    if (existing) {
+        existing.open = ! existing.open;
+        return;
     }
-    expandedBatches.value = expanded;
+
+    expandedBatches.value[group.batch] = {
+        open: true,
+        loading: false,
+        rows: [],
+        page: 0,
+        lastPage: 1,
+        total: 0,
+    };
+    loadBatchRows(group.batch);
+};
+
+const loadBatchRows = async (batch) => {
+    const state = expandedBatches.value[batch];
+    state.loading = true;
+
+    try {
+        const response = await axios.get(props.availabilityUrl, {
+            params: { ...activeParams(), batch, page: state.page + 1, perPage: 100 },
+        });
+        state.rows.push(...response.data.data);
+        state.page = response.data.current_page;
+        state.lastPage = response.data.last_page;
+        state.total = response.data.total;
+    } catch (error) {
+        toast.error(error?.response?.data?.message ?? __('Something went wrong'));
+    } finally {
+        state.loading = false;
+    }
 };
 
 const previousPage = () => {
@@ -265,42 +291,63 @@ onMounted(() => {
                             {{ __('No activity recorded') }}
                         </td>
                     </tr>
-                    <template v-for="group in availabilityGroups" :key="group.batch">
+                    <template v-for="group in rows" :key="group.batch">
                         <tr
                             class="border-b border-gray-200 dark:border-gray-700/80 bg-gray-50/50 dark:bg-gray-800/50 cursor-pointer select-none"
-                            @click="toggleBatch(group.batch)"
+                            @click="toggleBatch(group)"
                         >
                             <td class="px-4 py-3 text-gray-900 dark:text-gray-200">
                                 <span aria-hidden="true" class="inline-block w-4 text-gray-400">
-                                    {{ expandedBatches.has(group.batch) ? '▾' : '▸' }}
+                                    {{ expandedBatches[group.batch]?.open ? '▾' : '▸' }}
                                 </span>
-                                <span class="font-medium">{{ group.first.reason_label }}</span>
+                                <span class="font-medium">{{ group.reason_label }}</span>
                                 <span class="text-gray-500 dark:text-gray-400 ml-2">
-                                    {{ group.rows.length }} {{ group.rows.length === 1 ? __('change') : __('changes') }}
+                                    {{ group.change_count }} {{ group.change_count === 1 ? __('change') : __('changes') }}
                                 </span>
-                                <span v-if="group.first.reservation_id" class="text-gray-500 dark:text-gray-400 ml-2">
-                                    {{ __('Reservation') }} #{{ group.first.reservation_id }}
+                                <span v-if="group.reservation_id" class="text-gray-500 dark:text-gray-400 ml-2">
+                                    {{ __('Reservation') }} #{{ group.reservation_id }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 text-gray-900 dark:text-gray-200">{{ group.first.entry_title }}</td>
-                            <td class="px-4 py-3 text-gray-900 dark:text-gray-200">{{ group.first.actor_name ?? '—' }}</td>
-                            <td class="px-4 py-3 text-gray-900 dark:text-gray-200">{{ group.first.created_at }}</td>
-                        </tr>
-                        <tr
-                            v-for="row in (expandedBatches.has(group.batch) ? group.rows : [])"
-                            :key="row.id"
-                            class="border-b border-gray-100 dark:border-gray-700/40"
-                        >
-                            <td colspan="4" class="px-4 py-2 ps-12">
-                                <div class="flex flex-wrap items-center gap-3 text-gray-700 dark:text-gray-300">
-                                    <span class="font-mono">{{ row.date }}</span>
-                                    <Badge :color="actionBadgeColor(row.action)" size="sm">{{ row.action }}</Badge>
-                                    <span>{{ row.field }}</span>
-                                    <span class="font-mono">{{ formatValue(row.old_value) }} → {{ formatValue(row.new_value) }}</span>
-                                    <span v-if="row.rate_title" class="text-gray-500 dark:text-gray-400">{{ row.rate_title }}</span>
-                                </div>
+                            <td class="px-4 py-3 text-gray-900 dark:text-gray-200">
+                                {{ group.entry_count > 1 ? __(':count entries', { count: group.entry_count }) : group.entry_title }}
                             </td>
+                            <td class="px-4 py-3 text-gray-900 dark:text-gray-200">{{ group.actor_name ?? '—' }}</td>
+                            <td class="px-4 py-3 text-gray-900 dark:text-gray-200">{{ group.created_at }}</td>
                         </tr>
+                        <template v-if="expandedBatches[group.batch]?.open">
+                            <tr
+                                v-for="row in expandedBatches[group.batch].rows"
+                                :key="row.id"
+                                class="border-b border-gray-100 dark:border-gray-700/40"
+                            >
+                                <td colspan="4" class="px-4 py-2 ps-12">
+                                    <div class="flex flex-wrap items-center gap-3 text-gray-700 dark:text-gray-300">
+                                        <span v-if="group.entry_count > 1" class="font-medium">{{ row.entry_title }}</span>
+                                        <span class="font-mono">{{ row.date }}</span>
+                                        <Badge :color="actionBadgeColor(row.action)" size="sm">{{ row.action }}</Badge>
+                                        <span>{{ row.field }}</span>
+                                        <span class="font-mono">{{ formatValue(row.old_value) }} → {{ formatValue(row.new_value) }}</span>
+                                        <span v-if="row.rate_title" class="text-gray-500 dark:text-gray-400">{{ row.rate_title }}</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr v-if="expandedBatches[group.batch].loading" class="border-b border-gray-100 dark:border-gray-700/40">
+                                <td colspan="4" class="px-4 py-2 ps-12 text-gray-500 dark:text-gray-400">
+                                    {{ __('Loading...') }}
+                                </td>
+                            </tr>
+                            <tr
+                                v-else-if="expandedBatches[group.batch].page < expandedBatches[group.batch].lastPage"
+                                class="border-b border-gray-100 dark:border-gray-700/40"
+                            >
+                                <td colspan="4" class="px-4 py-2 ps-12">
+                                    <Button size="sm" :text="__('Load more')" @click="loadBatchRows(group.batch)" />
+                                    <span class="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                        {{ __('Showing :shown of :total changes', { shown: expandedBatches[group.batch].rows.length, total: expandedBatches[group.batch].total }) }}
+                                    </span>
+                                </td>
+                            </tr>
+                        </template>
                     </template>
                 </tbody>
             </table>

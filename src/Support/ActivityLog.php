@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Support;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
@@ -16,8 +17,9 @@ use Throwable;
 /**
  * Writes the owner-facing activity log (availability changes and reservation
  * lifecycle events). Every write is a no-op when the enable_activity_log
- * setting is off and is wrapped in try/catch — a log failure must never block
- * a booking, refund, or CP edit.
+ * setting is off, is deferred until the surrounding transaction commits, and
+ * is wrapped in try/catch — a log failure must never block a booking, refund,
+ * or CP edit.
  */
 class ActivityLog
 {
@@ -71,7 +73,10 @@ class ActivityLog
                 ->all();
 
             if ($rows !== []) {
-                AvailabilityChange::insert($rows);
+                $this->persistAfterCommit(
+                    fn () => AvailabilityChange::insert($rows),
+                    ['type' => 'availability', 'reason' => $reason->value],
+                );
             }
         } catch (Throwable $e) {
             Log::error('Resrv activity log write failed', [
@@ -98,7 +103,7 @@ class ActivityLog
         }
 
         try {
-            ReservationLog::create([
+            $attributes = [
                 'reservation_id' => $reservation->id,
                 'reference' => (string) $reservation->reference,
                 'status_from' => $from?->value,
@@ -107,7 +112,12 @@ class ActivityLog
                 'context' => $context === [] ? null : $context,
                 'actor_id' => $actor['id'] ?? null,
                 'actor_name' => $actor['name'] ?? null,
-            ]);
+            ];
+
+            $this->persistAfterCommit(
+                fn () => ReservationLog::create($attributes),
+                ['type' => 'reservation', 'reservation_id' => $reservation->id, 'reason' => $reason->value],
+            );
         } catch (Throwable $e) {
             Log::error('Resrv activity log write failed', [
                 'type' => 'reservation',
@@ -116,6 +126,28 @@ class ActivityLog
                 'exception' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Run the write once the surrounding transaction (if any) commits; outside a
+     * transaction it runs immediately. PostgreSQL aborts the whole transaction on any
+     * failed statement, so an in-transaction insert failure (e.g. during the checkout
+     * transaction that dispatches ReservationCreated) would sink the booking despite
+     * the catch. Deferring also drops the log rows when the business operation rolls
+     * back — a change that never committed must not be logged.
+     */
+    private function persistAfterCommit(callable $write, array $logContext): void
+    {
+        DB::afterCommit(function () use ($write, $logContext) {
+            try {
+                $write();
+            } catch (Throwable $e) {
+                Log::error('Resrv activity log write failed', [
+                    ...$logContext,
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 
     /**

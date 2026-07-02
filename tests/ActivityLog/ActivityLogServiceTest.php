@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\ActivityLog;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
@@ -133,6 +134,53 @@ class ActivityLogServiceTest extends TestCase
             'actor_id' => '1',
             'actor_name' => 'Admin',
         ]);
+    }
+
+    public function test_log_writes_are_deferred_until_the_surrounding_transaction_commits()
+    {
+        Config::set('resrv-config.enable_activity_log', true);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory()->withCustomer()->create(['item_id' => $item->id()]);
+
+        DB::transaction(function () use ($reservation) {
+            $activityLog = app(ActivityLog::class);
+
+            $activityLog->logAvailabilityChanges(AvailabilityChangeReason::ReservationCreated, [$this->change()]);
+            $activityLog->logReservation($reservation, null, ReservationStatus::PENDING, ReservationLogReason::CheckoutStarted);
+
+            // A write inside the transaction could poison it on PostgreSQL — nothing may
+            // hit the tables until the commit.
+            $this->assertDatabaseCount('resrv_availability_changes', 0);
+            $this->assertDatabaseCount('resrv_reservation_logs', 0);
+        });
+
+        $this->assertDatabaseCount('resrv_availability_changes', 1);
+        $this->assertDatabaseCount('resrv_reservation_logs', 1);
+    }
+
+    public function test_log_writes_are_discarded_when_the_surrounding_transaction_rolls_back()
+    {
+        Config::set('resrv-config.enable_activity_log', true);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory()->withCustomer()->create(['item_id' => $item->id()]);
+
+        try {
+            DB::transaction(function () use ($reservation) {
+                $activityLog = app(ActivityLog::class);
+
+                $activityLog->logAvailabilityChanges(AvailabilityChangeReason::ReservationCreated, [$this->change()]);
+                $activityLog->logReservation($reservation, null, ReservationStatus::PENDING, ReservationLogReason::CheckoutStarted);
+
+                throw new \RuntimeException('Booking failed after the log calls.');
+            });
+        } catch (\RuntimeException $e) {
+            // The business operation rolled back — the changes it described never happened.
+        }
+
+        $this->assertDatabaseCount('resrv_availability_changes', 0);
+        $this->assertDatabaseCount('resrv_reservation_logs', 0);
     }
 
     public function test_a_failed_log_write_never_throws()
