@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
@@ -356,6 +357,24 @@ class AvailabilitySearchQueryParamsTest extends TestCase
                 ->assertSet('data.rate', null)
                 ->assertHasNoErrors();
         }
+    }
+
+    public function test_later_search_bar_on_same_page_still_seeds_url_rate()
+    {
+        // Two bars on one page share the 'resrv-search' session: the rates-disabled
+        // bar renders first, consumes the one-shot dispatch and clears the rate for
+        // its own context before the second bar mounts. The rates-enabled bar must
+        // still seed ?rate= from the URL instead of inheriting the reconciled copy.
+        request()->merge([
+            'rate' => '7',
+            'date_start' => $this->day(5),
+            'date_end' => $this->day(7),
+        ]);
+
+        Blade::render('@livewire("availability-search")@livewire("availability-search", ["rates" => true])');
+
+        Livewire::test(AvailabilitySearch::class, ['rates' => true])
+            ->assertSet('data.rate', '7');
     }
 
     public function test_seeding_never_redirects_redirect_style_search_bar()

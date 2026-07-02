@@ -16,19 +16,21 @@ trait HandlesQueryStringSeeding
      */
     protected function seedFromQueryString(): void
     {
-        // A page can hold several search bars; the first one seeds the shared
-        // session (its dehydrate runs before later components mount), so only
-        // seed/dispatch once per request.
-        if (request()->attributes->get('resrv-url-seeded')) {
-            return;
-        }
-
         $query = request()->query();
 
         $rateSeeded = $this->applyRateFromQuery($query);
         $datesSeeded = $this->applyDatesFromQuery($query);
 
         if (! $rateSeeded && ! $datesSeeded) {
+            return;
+        }
+
+        // A page can hold several search bars with different rate contexts, and an
+        // earlier bar's dehydrate rewrites the shared session before a later one
+        // mounts. Each bar therefore seeds its own state from the URL (a
+        // rates-enabled bar must not inherit a sibling's context-reconciled copy),
+        // but only the first seeded bar dispatches the search.
+        if (request()->attributes->get('resrv-url-seeded')) {
             return;
         }
 
