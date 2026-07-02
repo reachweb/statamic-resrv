@@ -168,8 +168,10 @@ class ReservationLogTest extends TestCase
         ]);
     }
 
-    public function test_checkout_cancellation_logs_the_current_state()
+    public function test_a_reservation_cancelled_dispatch_logs_the_current_state()
     {
+        // The addon never dispatches ReservationCancelled itself — this covers
+        // site-level code using the public event.
         $reservation = $this->makeReservation();
 
         Event::dispatch(new ReservationCancelled($reservation));
@@ -178,7 +180,7 @@ class ReservationLogTest extends TestCase
             'reservation_id' => $reservation->id,
             'status_from' => 'pending',
             'status_to' => 'pending',
-            'reason' => 'checkout_cancelled',
+            'reason' => 'cancelled',
         ]);
     }
 

@@ -210,6 +210,12 @@ class ActivityLogCpTest extends TestCase
         $this->withExceptionHandling()
             ->getJson(cp_route('resrv.logs.availability', ['reason' => 'not-a-reason']))
             ->assertStatus(422);
+
+        // Must fail validation, not reach the query — batch is a native uuid
+        // column on PostgreSQL, where a non-uuid value throws 22P02.
+        $this->withExceptionHandling()
+            ->getJson(cp_route('resrv.logs.availability', ['batch' => 'not-a-uuid']))
+            ->assertStatus(422);
     }
 
     public function test_reservation_logs_are_paginated_filtered_and_labelled()

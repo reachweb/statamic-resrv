@@ -10,7 +10,7 @@ enum ReservationLogReason: string
 
     case WebhookConfirmed = 'webhook_confirmed';
 
-    case CheckoutCancelled = 'checkout_cancelled';
+    case Cancelled = 'cancelled';
 
     case Expired = 'expired';
 
@@ -22,7 +22,7 @@ enum ReservationLogReason: string
             self::CheckoutStarted => __('Checkout started'),
             self::CheckoutConfirmed => __('Confirmed at checkout'),
             self::WebhookConfirmed => __('Confirmed by payment webhook'),
-            self::CheckoutCancelled => __('Cancelled at checkout'),
+            self::Cancelled => __('Reservation cancelled'),
             self::Expired => __('Expired'),
             self::CpRefund => __('Refunded in the Control Panel'),
         };

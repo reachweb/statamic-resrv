@@ -73,8 +73,16 @@ class ActivityLog
                 ->all();
 
             if ($rows !== []) {
+                // Chunked so a large batch (13 bind params per row) stays below the driver
+                // placeholder limits — SQLite caps at 32,766, so ~2,500 rows in one insert
+                // (e.g. a mass edit of several rates over a year) would silently lose the
+                // whole batch. The shared batch uuid is on every row, so chunks regroup.
                 $this->persistAfterCommit(
-                    fn () => AvailabilityChange::insert($rows),
+                    function () use ($rows) {
+                        foreach (array_chunk($rows, 1000) as $chunk) {
+                            AvailabilityChange::insert($chunk);
+                        }
+                    },
                     ['type' => 'availability', 'reason' => $reason->value],
                 );
             }

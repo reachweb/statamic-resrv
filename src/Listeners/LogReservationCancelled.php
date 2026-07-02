@@ -11,6 +11,10 @@ class LogReservationCancelled
 {
     public function __construct(protected ActivityLog $activityLog) {}
 
+    /**
+     * Nothing in the addon dispatches ReservationCancelled — it is a public extension
+     * point for site-level cancellation flows, so the reason stays generic.
+     */
     public function handle(ReservationCancelled $event): void
     {
         // The in-memory model may still carry the enum it was created with, while a
@@ -22,7 +26,7 @@ class LogReservationCancelled
             reservation: $event->reservation,
             from: $status,
             to: $status,
-            reason: ReservationLogReason::CheckoutCancelled,
+            reason: ReservationLogReason::Cancelled,
         );
     }
 }

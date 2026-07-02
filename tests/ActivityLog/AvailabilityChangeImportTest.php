@@ -44,7 +44,7 @@ class AvailabilityChangeImportTest extends TestCase
         Cache::put('resrv-data-import', $fakeImport);
     }
 
-    public function test_importing_over_existing_rows_logs_only_the_diffs_in_one_batch()
+    public function test_an_import_logs_the_values_it_writes_in_one_batch()
     {
         Availability::factory()
             ->count(2)
@@ -71,18 +71,18 @@ class AvailabilityChangeImportTest extends TestCase
 
         (new ProcessDataImport('resrv-data-import', ['id' => '1', 'name' => 'Admin']))->handle();
 
-        // Two existing dates change available (price unchanged, skipped); the new third date
-        // logs a create row per field.
-        $this->assertDatabaseCount('resrv_availability_changes', 4);
+        // Imports log what was written (no old-value diffing — see importChanges()):
+        // three dates times two fields, all sharing one batch.
+        $this->assertDatabaseCount('resrv_availability_changes', 6);
         $this->assertCount(1, AvailabilityChange::pluck('batch')->unique());
 
         $this->assertDatabaseHas('resrv_availability_changes', [
             'statamic_id' => $this->item->id(),
             'rate_id' => $this->rate->id,
             'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
-            'action' => 'update',
+            'action' => 'import',
             'field' => 'available',
-            'old_value' => 2,
+            'old_value' => null,
             'new_value' => 5,
             'reason' => 'import',
             'actor_id' => '1',
@@ -90,14 +90,14 @@ class AvailabilityChangeImportTest extends TestCase
         ]);
         $this->assertDatabaseHas('resrv_availability_changes', [
             'date' => today()->addDays(3)->isoFormat('YYYY-MM-DD'),
-            'action' => 'create',
+            'action' => 'import',
             'field' => 'price',
             'old_value' => null,
             'new_value' => 100,
         ]);
         $this->assertDatabaseHas('resrv_availability_changes', [
             'date' => today()->addDays(3)->isoFormat('YYYY-MM-DD'),
-            'action' => 'create',
+            'action' => 'import',
             'field' => 'available',
             'old_value' => null,
             'new_value' => 5,
@@ -132,23 +132,52 @@ class AvailabilityChangeImportTest extends TestCase
 
         (new ProcessDataImport('resrv-data-import', ['id' => '1', 'name' => 'Admin']))->handle();
 
-        // The base pool logs the available change; the price override logs against the shared rate.
+        // The base pool logs the available value written; the price override logs
+        // against the shared rate.
         $this->assertDatabaseCount('resrv_availability_changes', 2);
 
         $this->assertDatabaseHas('resrv_availability_changes', [
             'rate_id' => $this->rate->id,
-            'action' => 'update',
+            'action' => 'import',
             'field' => 'available',
-            'old_value' => 2,
+            'old_value' => null,
             'new_value' => 6,
             'reason' => 'import',
         ]);
         $this->assertDatabaseHas('resrv_availability_changes', [
             'rate_id' => $sharedRate->id,
-            'action' => 'create',
+            'action' => 'import',
             'field' => 'price',
             'old_value' => null,
             'new_value' => 120,
+        ]);
+    }
+
+    public function test_a_job_serialized_before_the_actor_property_existed_still_runs()
+    {
+        $this->cacheImport([
+            [
+                'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+                'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+                'price' => 100,
+                'available' => 5,
+                'rate_id' => $this->rate->id,
+            ],
+        ]);
+
+        // Jobs queued by a previous addon version unserialize without running the
+        // constructor, so `actor` is absent from the payload and must fall back to
+        // its class-level default instead of staying uninitialized.
+        $job = (new \ReflectionClass(ProcessDataImport::class))->newInstanceWithoutConstructor();
+        (new \ReflectionProperty(ProcessDataImport::class, 'cacheKey'))->setValue($job, 'resrv-data-import');
+
+        $job->handle();
+
+        $this->assertDatabaseHas('resrv_availabilities', ['available' => 5]);
+        $this->assertDatabaseHas('resrv_availability_changes', [
+            'reason' => 'import',
+            'actor_id' => null,
+            'actor_name' => null,
         ]);
     }
 

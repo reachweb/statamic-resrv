@@ -184,54 +184,58 @@ class AvailabilityCpController extends Controller
             ->pluck('id')
             ->all();
 
-        // Snapshot the rows about to be deleted so the activity log keeps their last values.
         $changes = [];
 
-        if (app(ActivityLog::class)->enabled()) {
-            Availability::where('date', '>=', $data['date_start'])
-                ->where('date', '<=', $data['date_end'])
-                ->where('statamic_id', $data['statamic_id'])
-                ->whereIn('rate_id', $rateIds)
-                ->get(['date', 'rate_id', 'available', 'price'])
-                ->each(function ($row) use ($data, &$changes) {
-                    foreach (['available', 'price'] as $field) {
-                        if ($row->getRawOriginal($field) === null) {
-                            continue;
-                        }
-
-                        $changes[] = [
-                            'statamic_id' => $data['statamic_id'],
-                            'rate_id' => $row->rate_id,
-                            'date' => $row->getRawOriginal('date'),
-                            'action' => 'delete',
-                            'field' => $field,
-                            'old_value' => $row->getRawOriginal($field),
-                            'new_value' => null,
-                        ];
-                    }
-                });
-
-            if (! empty($sharedIndependentRateIds)) {
-                RatePrice::where('date', '>=', $data['date_start'])
+        DB::transaction(function () use ($data, $rateIds, $sharedIndependentRateIds, &$changes) {
+            // Snapshot the rows about to be deleted so the activity log keeps their last values.
+            // Taken under the delete's own write lock — an unlocked pre-read could record values
+            // a concurrent edit or import changed (or miss rows it created) before the delete ran.
+            if (app(ActivityLog::class)->enabled()) {
+                Availability::where('date', '>=', $data['date_start'])
                     ->where('date', '<=', $data['date_end'])
                     ->where('statamic_id', $data['statamic_id'])
-                    ->whereIn('rate_id', $sharedIndependentRateIds)
-                    ->get(['date', 'rate_id', 'price'])
+                    ->whereIn('rate_id', $rateIds)
+                    ->lockForUpdate()
+                    ->get(['date', 'rate_id', 'available', 'price'])
                     ->each(function ($row) use ($data, &$changes) {
-                        $changes[] = [
-                            'statamic_id' => $data['statamic_id'],
-                            'rate_id' => $row->rate_id,
-                            'date' => $row->getRawOriginal('date'),
-                            'action' => 'delete',
-                            'field' => 'price',
-                            'old_value' => $row->getRawOriginal('price'),
-                            'new_value' => null,
-                        ];
-                    });
-            }
-        }
+                        foreach (['available', 'price'] as $field) {
+                            if ($row->getRawOriginal($field) === null) {
+                                continue;
+                            }
 
-        DB::transaction(function () use ($data, $rateIds, $sharedIndependentRateIds) {
+                            $changes[] = [
+                                'statamic_id' => $data['statamic_id'],
+                                'rate_id' => $row->rate_id,
+                                'date' => $row->getRawOriginal('date'),
+                                'action' => 'delete',
+                                'field' => $field,
+                                'old_value' => $row->getRawOriginal($field),
+                                'new_value' => null,
+                            ];
+                        }
+                    });
+
+                if (! empty($sharedIndependentRateIds)) {
+                    RatePrice::where('date', '>=', $data['date_start'])
+                        ->where('date', '<=', $data['date_end'])
+                        ->where('statamic_id', $data['statamic_id'])
+                        ->whereIn('rate_id', $sharedIndependentRateIds)
+                        ->lockForUpdate()
+                        ->get(['date', 'rate_id', 'price'])
+                        ->each(function ($row) use ($data, &$changes) {
+                            $changes[] = [
+                                'statamic_id' => $data['statamic_id'],
+                                'rate_id' => $row->rate_id,
+                                'date' => $row->getRawOriginal('date'),
+                                'action' => 'delete',
+                                'field' => 'price',
+                                'old_value' => $row->getRawOriginal('price'),
+                                'new_value' => null,
+                            ];
+                        });
+                }
+            }
+
             Availability::where('date', '>=', $data['date_start'])
                 ->where('date', '<=', $data['date_end'])
                 ->where('statamic_id', $data['statamic_id'])
@@ -513,31 +517,35 @@ class AvailabilityCpController extends Controller
             ], 422));
         }
 
-        // Pre-read the current values for the range so the writes below can be diffed for the
-        // activity log. Skipped entirely (no extra queries) when logging is off.
         $logEnabled = app(ActivityLog::class)->enabled();
-
-        $existingRows = $logEnabled
-            ? Availability::where('statamic_id', $data['statamic_id'])
-                ->where('date', '>=', $data['date_start'])
-                ->where('date', '<=', $data['date_end'])
-                ->where('rate_id', $resolvedRateId)
-                ->get(['date', 'available', 'price'])
-                ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
-            : collect();
-
-        $existingOverrides = ($logEnabled && $isSharedIndependent)
-            ? RatePrice::where('rate_id', $rateId)
-                ->where('statamic_id', $data['statamic_id'])
-                ->where('date', '>=', $data['date_start'])
-                ->where('date', '<=', $data['date_end'])
-                ->get(['date', 'price'])
-                ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
-            : collect();
 
         $changes = [];
 
-        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn, $logEnabled, $existingRows, $existingOverrides, &$changes) {
+        DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn, $logEnabled, &$changes) {
+            // Pre-read the current values for the range so the writes below can be diffed for the
+            // activity log. Skipped entirely (no extra queries) when logging is off. Read under
+            // the write lock — an unlocked pre-read could diff against values a concurrent edit
+            // or import changed before the writes landed.
+            $existingRows = $logEnabled
+                ? Availability::where('statamic_id', $data['statamic_id'])
+                    ->where('date', '>=', $data['date_start'])
+                    ->where('date', '<=', $data['date_end'])
+                    ->where('rate_id', $resolvedRateId)
+                    ->lockForUpdate()
+                    ->get(['date', 'available', 'price'])
+                    ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
+                : collect();
+
+            $existingOverrides = ($logEnabled && $isSharedIndependent)
+                ? RatePrice::where('rate_id', $rateId)
+                    ->where('statamic_id', $data['statamic_id'])
+                    ->where('date', '>=', $data['date_start'])
+                    ->where('date', '<=', $data['date_end'])
+                    ->lockForUpdate()
+                    ->get(['date', 'price'])
+                    ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
+                : collect();
+
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $onlyDays = $data['onlyDays'] ?? null;
 

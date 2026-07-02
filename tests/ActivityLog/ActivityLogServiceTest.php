@@ -136,6 +136,28 @@ class ActivityLogServiceTest extends TestCase
         ]);
     }
 
+    public function test_a_batch_beyond_the_bind_parameter_limit_is_chunked_and_fully_written()
+    {
+        Config::set('resrv-config.enable_activity_log', true);
+
+        // 2,600 rows × 13 bind params = 33,800 — over SQLite's 32,766 cap in a single
+        // insert, which would silently drop the whole batch through the fail-safe catch.
+        $changes = [];
+        foreach (range(1, 2600) as $i) {
+            $changes[] = $this->change([
+                'action' => 'create',
+                'date' => today()->addDays($i % 400)->toDateString(),
+                'old_value' => null,
+                'new_value' => $i,
+            ]);
+        }
+
+        app(ActivityLog::class)->logAvailabilityChanges(AvailabilityChangeReason::CpEdit, $changes);
+
+        $this->assertDatabaseCount('resrv_availability_changes', 2600);
+        $this->assertCount(1, AvailabilityChange::query()->distinct()->pluck('batch'));
+    }
+
     public function test_log_writes_are_deferred_until_the_surrounding_transaction_commits()
     {
         Config::set('resrv-config.enable_activity_log', true);

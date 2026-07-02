@@ -38,7 +38,9 @@ class ActivityLogCpController extends Controller
             'date_start' => 'sometimes|date',
             'date_end' => 'sometimes|date',
             'reason' => ['sometimes', Rule::enum(AvailabilityChangeReason::class)],
-            'batch' => 'sometimes|string',
+            // Must be `uuid`, not `string`: batch is a native uuid column on PostgreSQL,
+            // where a non-uuid value would throw 22P02 instead of failing validation.
+            'batch' => 'sometimes|uuid',
             'reservation_id' => 'sometimes|integer',
             'page' => 'sometimes|integer',
         ]);

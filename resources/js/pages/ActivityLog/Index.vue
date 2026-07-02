@@ -184,7 +184,7 @@ const contextSummary = (context) => {
 };
 
 const actionBadgeColor = (action) => {
-    const map = { create: 'green', update: 'blue', delete: 'red' };
+    const map = { create: 'green', update: 'blue', delete: 'red', import: 'yellow' };
     return map[action] ?? 'default';
 };
 
@@ -326,7 +326,9 @@ onMounted(() => {
                                         <span class="font-mono">{{ row.date }}</span>
                                         <Badge :color="actionBadgeColor(row.action)" size="sm">{{ row.action }}</Badge>
                                         <span>{{ row.field }}</span>
-                                        <span class="font-mono">{{ formatValue(row.old_value) }} → {{ formatValue(row.new_value) }}</span>
+                                        <!-- Imports log what was written, not a diff — showing "— → x" would imply the value was empty before. -->
+                                        <span v-if="row.action === 'import'" class="font-mono">{{ formatValue(row.new_value) }}</span>
+                                        <span v-else class="font-mono">{{ formatValue(row.old_value) }} → {{ formatValue(row.new_value) }}</span>
                                         <span v-if="row.rate_title" class="text-gray-500 dark:text-gray-400">{{ row.rate_title }}</span>
                                     </div>
                                 </td>

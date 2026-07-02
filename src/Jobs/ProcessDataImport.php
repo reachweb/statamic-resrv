@@ -26,11 +26,21 @@ class ProcessDataImport implements ShouldQueue
 
     /**
      * The actor is captured at dispatch time (see DataImportCpController@store) because the job
-     * may run queued, where the current CP user is no longer resolvable.
+     * may run queued, where the current CP user is no longer resolvable. Declared with a
+     * class-level default (not promoted) so jobs serialized before this property existed
+     * unserialize to null instead of an uninitialized property.
      *
+     * @var array{id: string, name: string}|null
+     */
+    protected ?array $actor = null;
+
+    /**
      * @param  array{id: string, name: string}|null  $actor
      */
-    public function __construct(protected string $cacheKey = 'resrv-data-import', protected ?array $actor = null) {}
+    public function __construct(protected string $cacheKey = 'resrv-data-import', ?array $actor = null)
+    {
+        $this->actor = $actor;
+    }
 
     /**
      * Execute the job.
@@ -133,20 +143,11 @@ class ProcessDataImport implements ShouldQueue
                 }
 
                 if ($isSharedRate) {
-                    // Also selects `available` so the activity log can diff old vs new below.
                     $existingRows = Availability::where('statamic_id', $id)
                         ->where('rate_id', $rateId)
                         ->whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])
-                        ->get(['date', 'available'])
+                        ->get(['date'])
                         ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString());
-
-                    $existingOverrides = ($logEnabled && $sharedIndependentRateId !== null)
-                        ? RatePrice::where('rate_id', $sharedIndependentRateId)
-                            ->where('statamic_id', $id)
-                            ->whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])
-                            ->get(['date', 'price'])
-                            ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
-                        : collect();
 
                     $dataToAdd = [];
                     $priceOverrides = [];
@@ -180,50 +181,18 @@ class ProcessDataImport implements ShouldQueue
                     }
 
                     if ($logEnabled) {
-                        $changes = [];
-
-                        // This upsert only updates `available` — the base pool's price is untouched.
-                        foreach ($dataToAdd as $row) {
-                            $changes[] = [
-                                'statamic_id' => $id,
-                                'rate_id' => $rateId,
-                                'date' => $row['date'],
-                                'action' => 'update',
-                                'field' => 'available',
-                                'old_value' => $existingRows->get($row['date'])?->getRawOriginal('available'),
-                                'new_value' => $row['available'],
-                            ];
-                        }
-
-                        foreach ($priceOverrides as $row) {
-                            $existingOverride = $existingOverrides->get($row['date']);
-                            $changes[] = [
-                                'statamic_id' => $id,
-                                'rate_id' => $sharedIndependentRateId,
-                                'date' => $row['date'],
-                                'action' => $existingOverride ? 'update' : 'create',
-                                'field' => 'price',
-                                'old_value' => $existingOverride?->getRawOriginal('price'),
-                                'new_value' => $row['price'],
-                            ];
-                        }
-
+                        // The base pool upsert only updates `available` — its price is untouched.
                         $activityLog->logAvailabilityChanges(
                             AvailabilityChangeReason::Import,
-                            $changes,
+                            [
+                                ...$this->importChanges($dataToAdd, 'available'),
+                                ...$this->importChanges($priceOverrides, 'price'),
+                            ],
                             actor: $this->actor,
                             batch: $batch,
                         );
                     }
                 } else {
-                    $existingRows = $logEnabled
-                        ? Availability::where('statamic_id', $id)
-                            ->where('rate_id', $rateId)
-                            ->whereBetween('date', [$periodStart->toDateString(), $periodEnd->toDateString()])
-                            ->get(['date', 'available', 'price'])
-                            ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
-                        : collect();
-
                     $dataToAdd = [];
                     foreach ($period as $day) {
                         $dataToAdd[] = [
@@ -238,27 +207,9 @@ class ProcessDataImport implements ShouldQueue
                     Availability::upsert($dataToAdd, ['statamic_id', 'date', 'rate_id'], ['price', 'available']);
 
                     if ($logEnabled) {
-                        $changes = [];
-
-                        foreach ($dataToAdd as $row) {
-                            $existing = $existingRows->get($row['date']);
-
-                            foreach (['available', 'price'] as $field) {
-                                $changes[] = [
-                                    'statamic_id' => $id,
-                                    'rate_id' => $rateId,
-                                    'date' => $row['date'],
-                                    'action' => $existing ? 'update' : 'create',
-                                    'field' => $field,
-                                    'old_value' => $existing?->getRawOriginal($field),
-                                    'new_value' => $row[$field],
-                                ];
-                            }
-                        }
-
                         $activityLog->logAvailabilityChanges(
                             AvailabilityChangeReason::Import,
-                            $changes,
+                            $this->importChanges($dataToAdd, 'available', 'price'),
                             actor: $this->actor,
                             batch: $batch,
                         );
@@ -270,6 +221,35 @@ class ProcessDataImport implements ShouldQueue
         $this->deleteImportFile($dataImport);
 
         Cache::forget($this->cacheKey);
+    }
+
+    /**
+     * Map upserted rows to activity-log changes. The import is an unconditional upsert, so the
+     * log records what was written (action `import`, no old value) rather than per-field diffs —
+     * snapshotting old values for a diff would race concurrent bookings between read and write.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    protected function importChanges(array $rows, string ...$fields): array
+    {
+        $changes = [];
+
+        foreach ($rows as $row) {
+            foreach ($fields as $field) {
+                $changes[] = [
+                    'statamic_id' => $row['statamic_id'],
+                    'rate_id' => $row['rate_id'],
+                    'date' => $row['date'],
+                    'action' => 'import',
+                    'field' => $field,
+                    'old_value' => null,
+                    'new_value' => $row[$field],
+                ];
+            }
+        }
+
+        return $changes;
     }
 
     /**
