@@ -8,6 +8,7 @@ use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Livewire\AvailabilityCollection;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
+use Reach\StatamicResrv\Livewire\AvailabilitySearch;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Rate;
@@ -964,5 +965,19 @@ class AvailabilityCollectionTest extends TestCase
         // The detail-page Results component restores the session and keeps the chosen rate.
         Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'rates' => true])
             ->assertSet('data.rate', (string) $rateB->id);
+    }
+
+    public function test_collection_renders_from_url_seeded_search()
+    {
+        $entry = $this->pagesEntry(50);
+
+        // Mounting the search bar with a URL date seeds the shared session, so the
+        // collection component lists available entries without any interaction.
+        Livewire::withQueryParams(['date' => $this->date->toDateString()])
+            ->test(AvailabilitySearch::class);
+
+        Livewire::withQueryParams([])
+            ->test(AvailabilityCollection::class, ['collection' => 'pages'])
+            ->assertSee('resrv-collection-'.$entry->id());
     }
 }

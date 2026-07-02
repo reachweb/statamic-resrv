@@ -48,6 +48,25 @@ class AvailabilitySearchTest extends BrowserTestCase
         });
     }
 
+    public function test_url_params_seed_search_and_results_on_page_load(): void
+    {
+        $this->browse(function (Browser $browser) {
+            // Deep-linking with ?date_start/?date_end seeds the search in mount():
+            // the results Book Now action must resolve WITHOUT any calendar
+            // interaction, and the calendar input must render the seeded range
+            // (getInitialValue() feeds server-seeded dates into the Alpine calendar).
+            $browser->visit(
+                '/bookable?date_start='.today()->addDays(2)->toDateString()
+                .'&date_end='.today()->addDays(3)->toDateString()
+            )
+                ->waitFor('[name=datepicker]')
+                ->waitFor('[wire\\:click="checkout()"]')
+                ->assertPresent('[wire\\:click="checkout()"]');
+
+            $this->assertNotEmpty($browser->value('[name=datepicker]'));
+        });
+    }
+
     public function test_range_mode_selects_a_two_date_span(): void
     {
         $this->browse(function (Browser $browser) {

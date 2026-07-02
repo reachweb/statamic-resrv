@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\AvailabilityResults;
+use Reach\StatamicResrv\Livewire\AvailabilitySearch;
 use Reach\StatamicResrv\Livewire\Traits\HandlesCutoffValidation;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
@@ -128,6 +129,21 @@ class AvailabilityResultsTest extends TestCase
             )
             ->assertViewHas('availability.message')
             ->assertViewHas('availability.message.status', false);
+    }
+
+    public function test_results_render_from_url_seeded_search()
+    {
+        // Mounting the search bar with URL params seeds the shared session, so the
+        // detail-page results component renders availability without any interaction.
+        Livewire::withQueryParams([
+            'date_start' => $this->date->toDateString(),
+            'date_end' => $this->date->copy()->add(2, 'day')->toDateString(),
+        ])->test(AvailabilitySearch::class);
+
+        Livewire::withQueryParams([])
+            ->test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->assertViewHas('availability.data.price', '100.00')
+            ->assertViewHas('availability.request.days', 2);
     }
 
     public function test_returns_no_availability_if_zero()

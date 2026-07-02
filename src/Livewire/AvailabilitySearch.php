@@ -13,7 +13,7 @@ use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 
 class AvailabilitySearch extends Component
 {
-    use Traits\HandlesAvailabilityQueries, Traits\HandlesStatamicQueries;
+    use Traits\HandlesAvailabilityQueries, Traits\HandlesQueryStringSeeding, Traits\HandlesStatamicQueries;
 
     public string $view = 'availability-search';
 
@@ -62,6 +62,8 @@ class AvailabilitySearch extends Component
 
     public function mount(): void
     {
+        $this->seedFromQueryString();
+
         $this->reconcileRateForContext();
     }
 
@@ -99,6 +101,15 @@ class AvailabilitySearch extends Component
             $this->data->validate();
         }
 
+        $this->dispatchSearch();
+
+        if ($this->redirectTo && ! $this->live) {
+            redirect($this->redirectTo);
+        }
+    }
+
+    protected function dispatchSearch(): void
+    {
         $this->reconcileRateForContext();
 
         if (! $this->data->rate && $this->anyRate) {
@@ -106,10 +117,6 @@ class AvailabilitySearch extends Component
         }
 
         $this->dispatch('availability-search-updated', $this->data);
-
-        if ($this->redirectTo && ! $this->live) {
-            redirect($this->redirectTo);
-        }
     }
 
     public function submit(): void
