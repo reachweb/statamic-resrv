@@ -412,6 +412,31 @@ class AvailabilitySearchQueryParamsTest extends TestCase
             ->assertSet('data.rate', '7');
     }
 
+    public function test_redirect_style_bar_leaves_the_dispatch_to_a_later_live_bar()
+    {
+        // A redirect-style bar seeds but never dispatches, so it must not claim
+        // the one-shot flag: a live bar later on the same page still has to
+        // notify the receivers (some, like LfAvailabilityFilter, only learn
+        // about the search through the event).
+        request()->merge([
+            'date_start' => $this->day(5),
+            'date_end' => $this->day(7),
+        ]);
+
+        $html = Blade::render(
+            '@livewire("availability-search", ["live" => false, "redirectTo" => "/results"])'
+            .'@livewire("availability-search")'
+        );
+
+        // The live bar's dispatch is queued in its wire:effects on initial render
+        // (asserting the raw event name is useless — the calendar markup listens
+        // for it on every bar).
+        $this->assertStringContainsString(
+            'dispatches&quot;:[{&quot;name&quot;:&quot;availability-search-updated',
+            $html
+        );
+    }
+
     public function test_seeding_never_redirects_redirect_style_search_bar()
     {
         // A redirect-style search bar (redirectTo && !live) shows results on another

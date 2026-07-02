@@ -30,12 +30,10 @@ trait HandlesQueryStringSeeding
         // earlier bar's dehydrate rewrites the shared session before a later one
         // mounts. Each bar therefore seeds its own state from the URL (a
         // rates-enabled bar must not inherit a sibling's context-reconciled copy),
-        // but only the first seeded bar dispatches the search.
-        if (request()->attributes->get('resrv-url-seeded')) {
+        // and exactly one bar dispatches the search.
+        if (request()->attributes->get('resrv-url-seed-dispatched')) {
             return;
         }
-
-        request()->attributes->set('resrv-url-seeded', true);
 
         // Nothing to search without dates (URL-seeded or carried in the session);
         // the seeded rate still preselects the control and persists via #[Session].
@@ -45,7 +43,9 @@ trait HandlesQueryStringSeeding
 
         // A redirect-style search bar (redirectTo && !live) shows its results on
         // another page: seed only, never redirect() from mount. The session
-        // carries the search over when the visitor submits.
+        // carries the search over when the visitor submits. The one-shot flag
+        // stays unclaimed so a later live bar can still dispatch for this page's
+        // receivers.
         if ($this->redirectTo && ! $this->live) {
             return;
         }
@@ -53,6 +53,8 @@ trait HandlesQueryStringSeeding
         // Guards against invalid session-carried state (stale dates or quantity):
         // a seeded page load never dispatches a search the receivers would reject.
         if ($this->searchDataIsValid()) {
+            request()->attributes->set('resrv-url-seed-dispatched', true);
+
             $this->dispatchSeededSearch();
         }
     }
