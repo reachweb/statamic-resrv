@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Livewire\Traits;
 
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
+use Illuminate\Support\Arr;
 
 trait HandlesQueryStringSeeding
 {
@@ -49,10 +50,30 @@ trait HandlesQueryStringSeeding
             return;
         }
 
-        // Guards the rate-only seed against invalid session-carried dates.
+        // Guards against invalid session-carried state (stale dates or quantity):
+        // a seeded page load never dispatches a search the receivers would reject.
         if ($this->searchDataIsValid()) {
-            $this->dispatchSearch();
+            $this->dispatchSeededSearch();
         }
+    }
+
+    /**
+     * The seeded dispatch carries the URL values verbatim instead of this bar's
+     * context-reconciled copy: dispatch() is global, so on a page mixing rate
+     * contexts the one dispatching bar speaks for the URL, and every receiving
+     * component already reconciles the rate for its own context on receipt.
+     * A snapshot array (not $this->data itself) keeps the payload immune to the
+     * reconciliation mount() runs right after seeding.
+     */
+    protected function dispatchSeededSearch(): void
+    {
+        $payload = $this->data->all();
+
+        if (! $payload['rate'] && $this->anyRate) {
+            $payload['rate'] = 'any';
+        }
+
+        $this->dispatch('availability-search-updated', $payload);
     }
 
     protected function applyRateFromQuery(array $query): bool
@@ -81,7 +102,7 @@ trait HandlesQueryStringSeeding
         $previous = $this->data->dates;
         $this->data->dates = $dates;
 
-        if (! $this->searchDataIsValid()) {
+        if (! $this->candidateDatesAreValid()) {
             // Invalid URL dates are ignored silently.
             $this->data->dates = $previous;
 
@@ -89,6 +110,18 @@ trait HandlesQueryStringSeeding
         }
 
         return true;
+    }
+
+    /**
+     * Judges candidate URL dates on the date rules alone: unrelated stale session
+     * state (e.g. a quantity above a since-lowered maximum) must not reject a
+     * valid deep link.
+     */
+    protected function candidateDatesAreValid(): bool
+    {
+        return $this->searchDataIsValid(
+            Arr::only($this->data->rules(), ['dates', 'dates.date_start', 'dates.date_end'])
+        );
     }
 
     protected function datesFromQuery(array $query): ?array
@@ -136,16 +169,15 @@ trait HandlesQueryStringSeeding
     }
 
     /**
-     * Runs the form's own rules (ResrvAfterToday, ResrvMinimumDate, duration,
-     * before/after) without letting a failure surface on page load. Broad catch
-     * on purpose: the Resrv rules Carbon::create() their values (no `bail`), so
-     * stale session data can throw non-validation exceptions — a seeded page
-     * load must never 500.
+     * Runs the form's rules — all of them, or the given subset — without letting
+     * a failure surface on page load. Broad catch on purpose: the Resrv rules
+     * Carbon::create() their values (no `bail`), so stale session data can throw
+     * non-validation exceptions — a seeded page load must never 500.
      */
-    protected function searchDataIsValid(): bool
+    protected function searchDataIsValid(?array $rules = null): bool
     {
         try {
-            $this->data->validate();
+            $this->data->validate($rules);
 
             return true;
         } catch (\Throwable) {

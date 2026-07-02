@@ -289,8 +289,11 @@ class AvailabilitySearchQueryParamsTest extends TestCase
             ->assertDispatched('availability-search-updated');
     }
 
-    public function test_rate_is_cleared_when_rates_disabled()
+    public function test_rates_disabled_bar_clears_its_rate_but_dispatches_it_verbatim()
     {
+        // The bar's own control drops the rate it cannot use, but the seeded
+        // dispatch is global and context-neutral: a rates-enabled results
+        // component elsewhere on the page reconciles the URL rate for itself.
         Livewire::withQueryParams([
             'rate' => '5',
             'date_start' => $this->day(5),
@@ -298,7 +301,39 @@ class AvailabilitySearchQueryParamsTest extends TestCase
         ])
             ->test(AvailabilitySearch::class)
             ->assertSet('data.rate', null)
-            ->assertDispatched('availability-search-updated');
+            ->assertDispatched('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->day(5),
+                    'date_end' => $this->day(7),
+                ],
+                'quantity' => 1,
+                'rate' => '5',
+                'customer' => [],
+            ]);
+    }
+
+    public function test_url_dates_override_session_despite_unrelated_stale_session_state()
+    {
+        Config::set('resrv-config.maximum_quantity', 5);
+
+        Livewire::test(AvailabilitySearch::class)->set('data.quantity', 5);
+
+        // The persisted quantity is now above the maximum: it must not reject
+        // the URL dates, only hold back the auto-dispatch (a seeded page load
+        // never dispatches a search the receivers would reject).
+        Config::set('resrv-config.maximum_quantity', 2);
+
+        Livewire::withQueryParams([
+            'date_start' => $this->day(5),
+            'date_end' => $this->day(7),
+        ])
+            ->test(AvailabilitySearch::class)
+            ->assertSet('data.dates', [
+                'date_start' => $this->day(5),
+                'date_end' => $this->day(7),
+            ])
+            ->assertNotDispatched('availability-search-updated')
+            ->assertHasNoErrors();
     }
 
     public function test_rate_only_seed_reuses_session_dates()
