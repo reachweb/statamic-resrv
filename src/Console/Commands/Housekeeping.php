@@ -8,6 +8,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
@@ -79,7 +80,7 @@ class Housekeeping extends Command
         $logs = $this->clearOldActivityLogs($logCutoff);
 
         $this->info("Cleared {$reservations} expired reservation(s), {$customers} orphaned customer(s) and {$availability} past availability record(s) older than {$days} day(s).");
-        $this->info("Cleared {$logs} activity log entrie(s) older than {$logDays} day(s).");
+        $this->info("Cleared {$logs} activity log record(s) older than {$logDays} day(s).");
 
         return self::SUCCESS;
     }
@@ -108,7 +109,7 @@ class Housekeeping extends Command
         $logs = $this->oldActivityLogs($logCutoff)->sum(fn (QueryBuilder $query) => $query->count());
 
         $this->info("Dry run: {$reservations} expired reservation(s), {$customers} orphaned customer(s) and {$availability} past availability record(s) older than {$days} day(s) would be cleared.");
-        $this->info("Dry run: {$logs} activity log entrie(s) older than {$logDays} day(s) would be cleared.");
+        $this->info("Dry run: {$logs} activity log record(s) older than {$logDays} day(s) would be cleared.");
 
         return self::SUCCESS;
     }
@@ -237,7 +238,10 @@ class Housekeeping extends Command
     /** @return SupportCollection<int, QueryBuilder> One prunable query per activity log table. */
     private function oldActivityLogs(Carbon $logCutoff): SupportCollection
     {
+        // A scheduled run can fire between a composer update and `artisan migrate` — skip
+        // tables that don't exist yet instead of crashing after the earlier purges already ran.
         return collect(['resrv_availability_changes', 'resrv_reservation_logs'])
+            ->filter(fn (string $table) => Schema::hasTable($table))
             ->map(fn (string $table) => DB::table($table)->where('created_at', '<', $logCutoff));
     }
 }

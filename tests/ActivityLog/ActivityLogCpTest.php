@@ -240,6 +240,10 @@ class ActivityLogCpTest extends TestCase
         $this->assertEquals('Confirmed by payment webhook', $filtered->json('data.0.reason_label'));
         $this->assertEquals(['gateway' => 'stripe'], $filtered->json('data.0.context'));
 
+        // Case-insensitive on every driver — LIKE is case-sensitive on PostgreSQL and
+        // references are stored uppercase, so a lowercase search must still match.
+        $this->assertEquals(1, $this->getJson(cp_route('resrv.logs.reservations', ['reference' => 'bbb']))->json('total'));
+
         $this->assertEquals(1, $this->getJson(cp_route('resrv.logs.reservations', ['reservation_id' => 2]))->json('total'));
         $this->assertEquals(1, $this->getJson(cp_route('resrv.logs.reservations', ['reason' => 'checkout_started']))->json('total'));
     }

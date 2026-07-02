@@ -45,6 +45,7 @@ use Reach\StatamicResrv\Listeners\LogReservationCancelled;
 use Reach\StatamicResrv\Listeners\LogReservationConfirmed;
 use Reach\StatamicResrv\Listeners\LogReservationCreated;
 use Reach\StatamicResrv\Listeners\LogReservationExpired;
+use Reach\StatamicResrv\Listeners\LogReservationRefunded;
 use Reach\StatamicResrv\Listeners\NormalizeAvailabilityFieldValue;
 use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
@@ -151,6 +152,7 @@ class ResrvProvider extends AddonServiceProvider
         ReservationRefunded::class => [
             SendRefundReservationEmails::class,
             IncreaseAvailability::class,
+            LogReservationRefunded::class,
         ],
         CouponUpdated::class => [
             UpdateCouponAppliedToReservation::class,

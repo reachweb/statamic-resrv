@@ -144,7 +144,10 @@ const loadBatchRows = async (batch) => {
         const response = await axios.get(props.availabilityUrl, {
             params: { ...activeParams(), batch, page: state.page + 1, perPage: 100 },
         });
-        state.rows.push(...response.data.data);
+        // Rows written to the batch between page loads (e.g. a still-running import) shift the
+        // desc-ordered page boundaries, so a later page can resend rows we already have.
+        const seenIds = new Set(state.rows.map((row) => row.id));
+        state.rows.push(...response.data.data.filter((row) => ! seenIds.has(row.id)));
         state.page = response.data.current_page;
         state.lastPage = response.data.last_page;
         state.total = response.data.total;

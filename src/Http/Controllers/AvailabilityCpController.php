@@ -405,14 +405,16 @@ class AvailabilityCpController extends Controller
         });
 
         if ($stuckChange !== null) {
-            $this->logCpChanges(AvailabilityChangeReason::StuckPendingCleared, [$stuckChange]);
+            // filterNoOps: false — when the purged holders restore quantity 0, old == new but the
+            // admin action (holds released, date bookable again) must still leave an audit row.
+            $this->logCpChanges(AvailabilityChangeReason::StuckPendingCleared, [$stuckChange], filterNoOps: false);
         }
 
         return $response;
     }
 
     /** @param  list<array<string, mixed>>  $changes */
-    private function logCpChanges(AvailabilityChangeReason $reason, array $changes): void
+    private function logCpChanges(AvailabilityChangeReason $reason, array $changes, bool $filterNoOps = true): void
     {
         if ($changes === []) {
             return;
@@ -420,7 +422,7 @@ class AvailabilityCpController extends Controller
 
         $activityLog = app(ActivityLog::class);
 
-        $activityLog->logAvailabilityChanges($reason, $changes, actor: $activityLog->cpActor());
+        $activityLog->logAvailabilityChanges($reason, $changes, actor: $activityLog->cpActor(), filterNoOps: $filterNoOps);
     }
 
     /**

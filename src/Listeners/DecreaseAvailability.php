@@ -31,6 +31,8 @@ class DecreaseAvailability
     {
         $childs = $event->reservation->childs;
         $childs->each(function ($child) use ($event) {
+            // parentReservationId: child ids live in their own sequence — the activity log
+            // must record the parent booking id, which is what the CP links and filters use.
             $this->availability->decrementAvailability(
                 date_start: $child->date_start,
                 date_end: $child->date_end,
@@ -40,6 +42,7 @@ class DecreaseAvailability
                 rateId: $child->rate_id,
                 isChildReservation: true,
                 reason: AvailabilityChangeReason::ReservationCreated,
+                parentReservationId: $event->reservation->id,
             );
         });
     }

@@ -18,13 +18,22 @@ class LogReservationCancelled
     public function handle(ReservationCancelled $event): void
     {
         // The in-memory model may still carry the enum it was created with, while a
-        // re-fetched row carries the plain string — normalise both.
+        // re-fetched row carries the plain string — normalise both. tryFrom, not from:
+        // site code may have written a status outside the enum before dispatching, and
+        // a log gap must never break the dispatching flow with a ValueError.
         $status = $event->reservation->status;
-        $status = $status instanceof ReservationStatus ? $status : ReservationStatus::from($status);
+
+        if (! $status instanceof ReservationStatus) {
+            $status = is_string($status) ? ReservationStatus::tryFrom($status) : null;
+        }
+
+        if ($status === null) {
+            return;
+        }
 
         $this->activityLog->logReservation(
             reservation: $event->reservation,
-            from: $status,
+            from: $event->reservation->lastTransitionFrom ?? $status,
             to: $status,
             reason: ReservationLogReason::Cancelled,
         );

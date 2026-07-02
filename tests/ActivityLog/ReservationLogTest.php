@@ -184,6 +184,35 @@ class ReservationLogTest extends TestCase
         ]);
     }
 
+    public function test_a_reservation_cancelled_dispatch_records_the_transition_from_status()
+    {
+        // A site flow that transitions before dispatching carries the pre-transition
+        // status on the instance — the log must record it, not from == to.
+        $reservation = $this->makeReservation();
+        $reservation->lastTransitionFrom = ReservationStatus::CONFIRMED;
+
+        Event::dispatch(new ReservationCancelled($reservation));
+
+        $this->assertDatabaseHas('resrv_reservation_logs', [
+            'reservation_id' => $reservation->id,
+            'status_from' => 'confirmed',
+            'status_to' => 'pending',
+            'reason' => 'cancelled',
+        ]);
+    }
+
+    public function test_a_reservation_cancelled_dispatch_tolerates_a_status_outside_the_enum()
+    {
+        // Site code may write a custom status before dispatching the public event — the
+        // listener must skip logging, never throw a ValueError into the dispatch chain.
+        $reservation = $this->makeReservation();
+        Reservation::whereKey($reservation->id)->update(['status' => 'custom_status']);
+
+        Event::dispatch(new ReservationCancelled($reservation->fresh()));
+
+        $this->assertDatabaseCount('resrv_reservation_logs', 0);
+    }
+
     public function test_cp_refund_logs_the_actor_snapshot_from_confirmed()
     {
         $this->signInAdmin();

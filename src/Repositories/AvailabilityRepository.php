@@ -193,13 +193,13 @@ class AvailabilityRepository
             ->havingRaw('count(resrv_availabilities.date) = ?', [$duration]);
     }
 
-    public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null): void
+    public function decrement(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null, ?int $parentReservationId = null): void
     {
         if ($rateId) {
             $rate = Rate::findOrFail($rateId);
 
             if ($rate->isShared()) {
-                $this->decrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation, $reason);
+                $this->decrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation, $reason, $parentReservationId);
 
                 return;
             }
@@ -217,16 +217,16 @@ class AvailabilityRepository
             return $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
 
-        $this->logReservationDrivenChanges($reason, $changes, $reservationId);
+        $this->logReservationDrivenChanges($reason, $changes, $parentReservationId ?? $reservationId);
     }
 
-    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null): void
+    public function increment(string $date_start, string $date_end, int $quantity, string $statamic_id, ?int $rateId, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null, ?int $parentReservationId = null): void
     {
         if ($rateId) {
             $rate = Rate::findOrFail($rateId);
 
             if ($rate->isShared()) {
-                $this->incrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation, $reason);
+                $this->incrementShared($date_start, $date_end, $quantity, $statamic_id, $rate, $reservationId, $isChildReservation, $reason, $parentReservationId);
 
                 return;
             }
@@ -238,7 +238,7 @@ class AvailabilityRepository
             return $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
 
-        $this->logReservationDrivenChanges($reason, $changes, $reservationId);
+        $this->logReservationDrivenChanges($reason, $changes, $parentReservationId ?? $reservationId);
     }
 
     public function delete(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): int
@@ -250,7 +250,7 @@ class AvailabilityRepository
             ->delete();
     }
 
-    protected function decrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null): void
+    protected function decrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null, ?int $parentReservationId = null): void
     {
         $baseRateId = $rate->base_rate_id ?? $rate->id;
 
@@ -268,10 +268,10 @@ class AvailabilityRepository
             return $this->addToPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
 
-        $this->logReservationDrivenChanges($reason, $changes, $reservationId);
+        $this->logReservationDrivenChanges($reason, $changes, $parentReservationId ?? $reservationId);
     }
 
-    protected function incrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null): void
+    protected function incrementShared(string $date_start, string $date_end, int $quantity, string $statamic_id, Rate $rate, int $reservationId, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null, ?int $parentReservationId = null): void
     {
         $baseRateId = $rate->base_rate_id ?? $rate->id;
 
@@ -281,7 +281,7 @@ class AvailabilityRepository
             return $this->removeFromPending($availabilities, $reservationId, $quantity, $isChildReservation);
         });
 
-        $this->logReservationDrivenChanges($reason, $changes, $reservationId);
+        $this->logReservationDrivenChanges($reason, $changes, $parentReservationId ?? $reservationId);
     }
 
     /** @return Collection<int, Availability> */

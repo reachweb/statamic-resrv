@@ -42,9 +42,9 @@ final class ActiveReservationsGuard
         }
 
         return ChildReservation::whereHas('parent', function ($q) use ($statamicId) {
-                $q->where('item_id', $statamicId)
-                    ->whereNotIn('status', ReservationStatus::terminal());
-            })
+            $q->where('item_id', $statamicId)
+                ->whereNotIn('status', ReservationStatus::terminal());
+        })
             ->where('date_start', '<', $exclusiveEnd)
             ->where('date_end', '>', $dateStart)
             ->when($rateIds, fn ($q, $ids) => $q->whereIn('rate_id', $ids))

@@ -224,6 +224,34 @@ class AvailabilityChangeCpTest extends TestCase
         ]);
     }
 
+    public function test_clearing_stuck_pending_with_purged_holders_still_logs()
+    {
+        // The holder is gone from both reservation tables, so the restored quantity is 0
+        // and old == new — the admin action must still leave an audit row (holds released,
+        // date bookable again), which requires bypassing the no-op filter.
+        Availability::where('statamic_id', $this->item->id())
+            ->whereDate('date', today())
+            ->update(['pending' => json_encode(['r999999'])]);
+
+        $this->postJson(cp_route('resrv.availability.clearStuckPending'), [
+            'statamic_id' => $this->item->id(),
+            'date' => today()->isoFormat('YYYY-MM-DD'),
+            'rate_id' => $this->rate->id,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('resrv_availability_changes', [
+            'statamic_id' => $this->item->id(),
+            'rate_id' => $this->rate->id,
+            'date' => today()->isoFormat('YYYY-MM-DD'),
+            'action' => 'update',
+            'field' => 'available',
+            'old_value' => 2,
+            'new_value' => 2,
+            'reason' => 'stuck_pending_cleared',
+            'actor_id' => '1',
+        ]);
+    }
+
     public function test_nothing_is_logged_when_the_toggle_is_off()
     {
         Config::set('resrv-config.enable_activity_log', false);

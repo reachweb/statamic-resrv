@@ -157,10 +157,12 @@ class AvailabilityChangeReservationTest extends TestCase
 
         Event::dispatch(new ReservationCreated($parent));
 
-        // Two children × one date each: two rows, one batch per child, keyed by the child id.
+        // Two children × one date each: two rows, one batch per child, every row recording
+        // the PARENT booking id — child ids live in their own sequence and would collide
+        // with unrelated reservations in the CP reservation_id filter.
         $this->assertDatabaseCount('resrv_availability_changes', 2);
         $this->assertCount(2, AvailabilityChange::pluck('batch')->unique());
-        $this->assertCount(2, AvailabilityChange::pluck('reservation_id')->unique());
+        $this->assertEquals([$parent->id], AvailabilityChange::pluck('reservation_id')->unique()->all());
 
         $this->assertDatabaseHas('resrv_availability_changes', [
             'date' => today()->isoFormat('YYYY-MM-DD'),

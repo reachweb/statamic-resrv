@@ -32,7 +32,9 @@ class ActivityLog
      * Bulk-log a batch of availability changes. Each change is an array with
      * keys: statamic_id, rate_id, date, action (create|update|delete),
      * field (available|price), old_value, new_value. No-op updates
-     * (old == new) are skipped. All rows share one batch uuid.
+     * (old == new) are skipped unless $filterNoOps is false — stuck-pending
+     * clears pass false because releasing holds is auditable even when the
+     * restored quantity is zero. All rows share one batch uuid.
      *
      * @param  array<int, array{statamic_id: string, rate_id: int|null, date: mixed, action: string, field: string, old_value: mixed, new_value: mixed}>  $changes
      * @param  array{id: string|int|null, name: string|null}|null  $actor
@@ -43,6 +45,7 @@ class ActivityLog
         ?int $reservationId = null,
         ?array $actor = null,
         ?string $batch = null,
+        bool $filterNoOps = true,
     ): void {
         if (! $this->enabled() || $changes === []) {
             return;
@@ -53,7 +56,8 @@ class ActivityLog
             $now = now();
 
             $rows = collect($changes)
-                ->reject(fn (array $change) => ($change['action'] ?? 'update') === 'update'
+                ->reject(fn (array $change) => $filterNoOps
+                    && ($change['action'] ?? 'update') === 'update'
                     && $this->normalizeValue($change['old_value'] ?? null) === $this->normalizeValue($change['new_value'] ?? null))
                 ->map(fn (array $change) => [
                     'batch' => $batch,

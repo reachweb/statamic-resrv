@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\ActivityLog;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -44,7 +45,7 @@ class HousekeepingLogPruneTest extends TestCase
         $this->seedLogRows(daysOld: 10);
 
         $this->artisan('resrv:housekeeping')
-            ->expectsOutputToContain('Cleared 4 activity log entrie(s) older than 365 day(s).')
+            ->expectsOutputToContain('Cleared 4 activity log record(s) older than 365 day(s).')
             ->assertExitCode(0);
 
         $this->assertDatabaseCount('resrv_availability_changes', 1);
@@ -57,7 +58,7 @@ class HousekeepingLogPruneTest extends TestCase
         $this->seedLogRows(daysOld: 10);
 
         $this->artisan('resrv:housekeeping', ['--log-days' => 30])
-            ->expectsOutputToContain('Cleared 2 activity log entrie(s) older than 30 day(s).')
+            ->expectsOutputToContain('Cleared 2 activity log record(s) older than 30 day(s).')
             ->assertExitCode(0);
 
         $this->assertDatabaseCount('resrv_availability_changes', 1);
@@ -69,7 +70,7 @@ class HousekeepingLogPruneTest extends TestCase
         $this->seedLogRows(daysOld: 400, count: 3);
 
         $this->artisan('resrv:housekeeping', ['--dry-run' => true])
-            ->expectsOutputToContain('Dry run: 6 activity log entrie(s) older than 365 day(s) would be cleared.')
+            ->expectsOutputToContain('Dry run: 6 activity log record(s) older than 365 day(s) would be cleared.')
             ->assertExitCode(0);
 
         $this->assertDatabaseCount('resrv_availability_changes', 3);
@@ -84,5 +85,21 @@ class HousekeepingLogPruneTest extends TestCase
             ->assertExitCode(1);
 
         $this->assertDatabaseCount('resrv_availability_changes', 1);
+    }
+
+    public function test_the_run_survives_when_the_log_tables_do_not_exist_yet()
+    {
+        // A scheduled run can fire between a composer update and `artisan migrate` —
+        // the command must skip the missing tables, not crash mid-housekeeping.
+        Schema::drop('resrv_availability_changes');
+        Schema::drop('resrv_reservation_logs');
+
+        $this->artisan('resrv:housekeeping')
+            ->expectsOutputToContain('Cleared 0 activity log record(s) older than 365 day(s).')
+            ->assertExitCode(0);
+
+        $this->artisan('resrv:housekeeping', ['--dry-run' => true])
+            ->expectsOutputToContain('Dry run: 0 activity log record(s) older than 365 day(s) would be cleared.')
+            ->assertExitCode(0);
     }
 }

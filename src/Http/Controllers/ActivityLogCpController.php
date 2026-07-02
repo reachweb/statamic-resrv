@@ -82,6 +82,15 @@ class ActivityLogCpController extends Controller
             ->get()
             ->keyBy('batch');
 
+        // A housekeeping prune can delete a batch between the grouped query and the
+        // representative fetch — drop it instead of dereferencing a missing row. The page
+        // may briefly undercount during a prune; the next load is consistent.
+        $batches->setCollection(
+            $batches->getCollection()
+                ->filter(fn ($batch) => $representatives->has($batch->batch))
+                ->values()
+        );
+
         $entryTitles = Entry::withTrashed()
             ->whereIn('item_id', $representatives->pluck('statamic_id')->unique())
             ->pluck('title', 'item_id');
@@ -158,7 +167,9 @@ class ActivityLogCpController extends Controller
         ]);
 
         $logs = ReservationLog::query()
-            ->when($data['reference'] ?? null, fn ($query, $reference) => $query->where('reference', 'like', "%{$reference}%"))
+            // UPPER() on both sides: LIKE is case-sensitive on PostgreSQL (unlike MySQL/SQLite),
+            // and references are stored uppercase — a lowercase search must still match.
+            ->when($data['reference'] ?? null, fn ($query, $reference) => $query->whereRaw('UPPER(reference) LIKE ?', ['%'.mb_strtoupper($reference).'%']))
             ->when($data['reservation_id'] ?? null, fn ($query, $id) => $query->forReservation($id))
             ->when($data['reason'] ?? null, fn ($query, $reason) => $query->where('reason', $reason))
             ->when($data['date_start'] ?? null, fn ($query, $date) => $query->whereDate('created_at', '>=', $date))

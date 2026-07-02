@@ -35,6 +35,8 @@ class IncreaseAvailability
     {
         $childs = $event->reservation->childs;
         $childs->each(function ($child) use ($event, $reason) {
+            // parentReservationId: child ids live in their own sequence — the activity log
+            // must record the parent booking id, which is what the CP links and filters use.
             $this->availability->incrementAvailability(
                 date_start: $child->date_start,
                 date_end: $child->date_end,
@@ -44,6 +46,7 @@ class IncreaseAvailability
                 rateId: $child->rate_id,
                 isChildReservation: true,
                 reason: $reason,
+                parentReservationId: $event->reservation->id,
             );
         });
     }

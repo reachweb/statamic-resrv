@@ -6,7 +6,6 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Inertia\Inertia;
-use Reach\StatamicResrv\Enums\ReservationLogReason;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
@@ -17,7 +16,6 @@ use Reach\StatamicResrv\Jobs\ResendConfirmationEmail;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Resources\ReservationCalendarResource;
 use Reach\StatamicResrv\Resources\ReservationResource;
-use Reach\StatamicResrv\Support\ActivityLog;
 use Statamic\Facades\Scope;
 use Statamic\Http\Requests\FilteredRequest;
 use Statamic\Query\Scopes\Filters\Concerns\QueriesFilters;
@@ -245,16 +243,9 @@ class ReservationCpController extends Controller
         }
 
         if ($changed) {
-            $activityLog = app(ActivityLog::class);
-            $activityLog->logReservation(
-                reservation: $reservation,
-                from: $reservation->lastTransitionFrom ?? $currentStatus,
-                to: ReservationStatus::REFUNDED,
-                reason: ReservationLogReason::CpRefund,
-                context: ['amount' => $reservation->payment->format()],
-                actor: $activityLog->cpActor(),
-            );
-
+            // The reservation log entry is written by LogReservationRefunded, listening on
+            // this event like every other lifecycle log — lastTransitionFrom carries the
+            // status observed under the transition lock.
             ReservationRefunded::dispatch($reservation);
         }
 
