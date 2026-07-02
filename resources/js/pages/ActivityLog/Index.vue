@@ -132,6 +132,7 @@ const toggleBatch = (group) => {
         page: 0,
         lastPage: 1,
         total: 0,
+        maxId: null,
     };
     loadBatchRows(group.batch);
 };
@@ -142,10 +143,22 @@ const loadBatchRows = async (batch) => {
 
     try {
         const response = await axios.get(props.availabilityUrl, {
-            params: { ...activeParams(), batch, page: state.page + 1, perPage: 100 },
+            params: {
+                ...activeParams(),
+                batch,
+                page: state.page + 1,
+                perPage: 100,
+                // Pin follow-up pages to the ids the first page saw — rows written to the
+                // batch between page loads (a still-running import) would otherwise shift
+                // the desc-ordered page boundaries and skip the newly prepended rows.
+                ...(state.maxId ? { max_id: state.maxId } : {}),
+            },
         });
-        // Rows written to the batch between page loads (e.g. a still-running import) shift the
-        // desc-ordered page boundaries, so a later page can resend rows we already have.
+        if (state.maxId === null && response.data.data.length) {
+            state.maxId = Math.max(...response.data.data.map((row) => row.id));
+        }
+        // The max_id pin keeps page boundaries stable; the dedup stays as a render guard so
+        // a resent row can never produce duplicate keys.
         const seenIds = new Set(state.rows.map((row) => row.id));
         state.rows.push(...response.data.data.filter((row) => ! seenIds.has(row.id)));
         state.page = response.data.current_page;

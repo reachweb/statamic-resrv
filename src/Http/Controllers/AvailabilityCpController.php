@@ -537,29 +537,28 @@ class AvailabilityCpController extends Controller
         $changes = [];
 
         DB::transaction(function () use ($data, $rateId, $resolvedRateId, $isSharedIndependent, $writesPriceColumn, $logEnabled, &$changes) {
-            // Pre-read the current values for the range so the writes below can be diffed for the
-            // activity log. Skipped entirely (no extra queries) when logging is off. Read under
-            // the write lock — an unlocked pre-read could diff against values a concurrent edit
-            // or import changed before the writes landed.
-            $existingRows = $logEnabled
-                ? Availability::where('statamic_id', $data['statamic_id'])
+            // Lock the range so a concurrent edit or import can't change row values between
+            // the per-row prior-value reads below and the writes. Skipped entirely (no extra
+            // queries) when logging is off. FOR UPDATE can't lock absent rows (PostgreSQL has
+            // no gap locks), so create races are handled per row instead: the insert loser
+            // re-reads the winner's committed row and diffs against that.
+            if ($logEnabled) {
+                Availability::where('statamic_id', $data['statamic_id'])
                     ->where('date', '>=', $data['date_start'])
                     ->where('date', '<=', $data['date_end'])
                     ->where('rate_id', $resolvedRateId)
                     ->lockForUpdate()
-                    ->get(['date', 'available', 'price'])
-                    ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
-                : collect();
+                    ->get(['id']);
 
-            $existingOverrides = ($logEnabled && $isSharedIndependent)
-                ? RatePrice::where('rate_id', $rateId)
-                    ->where('statamic_id', $data['statamic_id'])
-                    ->where('date', '>=', $data['date_start'])
-                    ->where('date', '<=', $data['date_end'])
-                    ->lockForUpdate()
-                    ->get(['date', 'price'])
-                    ->keyBy(fn ($row) => Carbon::parse($row->getRawOriginal('date'))->toDateString())
-                : collect();
+                if ($isSharedIndependent) {
+                    RatePrice::where('rate_id', $rateId)
+                        ->where('statamic_id', $data['statamic_id'])
+                        ->where('date', '>=', $data['date_start'])
+                        ->where('date', '<=', $data['date_end'])
+                        ->lockForUpdate()
+                        ->get(['id']);
+                }
+            }
 
             $period = CarbonPeriod::create($data['date_start'], $data['date_end']);
             $onlyDays = $data['onlyDays'] ?? null;
@@ -572,19 +571,26 @@ class AvailabilityCpController extends Controller
                 $date = $day->isoFormat('YYYY-MM-DD');
 
                 if ($isSharedIndependent) {
-                    // No base row = no inventory; a price override here would be orphaned. Skip silently.
-                    $baseRowExists = Availability::where([
+                    // No base row = no inventory; a price override here would be orphaned. Skip
+                    // silently. Fetched with its own lock: a row created by a concurrent request
+                    // after the range lock above couldn't have been covered by it.
+                    $baseRow = Availability::where([
                         'statamic_id' => $data['statamic_id'],
                         'date' => $date,
                         'rate_id' => $resolvedRateId,
-                    ])->exists();
+                    ])->lockForUpdate()->first();
 
-                    if (! $baseRowExists) {
+                    if (! $baseRow) {
                         continue;
                     }
 
                     if (! is_null($data['price'])) {
-                        $override = RatePrice::updateOrCreate([
+                        // firstOrCreate + explicit save instead of updateOrCreate so the prior
+                        // price is captured from the row about to be overwritten. When two
+                        // requests race to create the same missing date, the insert loser's
+                        // re-read returns the winner's committed row — the correct old value,
+                        // which the range lock above couldn't have seen or locked.
+                        $override = RatePrice::firstOrCreate([
                             'rate_id' => $rateId,
                             'statamic_id' => $data['statamic_id'],
                             'date' => $date,
@@ -592,17 +598,22 @@ class AvailabilityCpController extends Controller
                             'price' => $data['price'],
                         ]);
 
+                        $priorOverridePrice = $override->wasRecentlyCreated
+                            ? null
+                            : $override->getRawOriginal('price');
+
+                        if (! $override->wasRecentlyCreated) {
+                            $override->fill(['price' => $data['price']])->save();
+                        }
+
                         if ($logEnabled) {
                             $changes[] = [
                                 'statamic_id' => $data['statamic_id'],
                                 'rate_id' => $rateId,
                                 'date' => $date,
-                                // From the write's outcome, not the snapshot: FOR UPDATE can't lock
-                                // absent rows, so two concurrent edits of a missing date both snapshot
-                                // "no row" — only the insert winner may log a create.
                                 'action' => $override->wasRecentlyCreated ? 'create' : 'update',
                                 'field' => 'price',
-                                'old_value' => $existingOverrides->get($date)?->getRawOriginal('price'),
+                                'old_value' => $priorOverridePrice,
                                 'new_value' => $data['price'],
                             ];
                         }
@@ -623,40 +634,53 @@ class AvailabilityCpController extends Controller
                     continue;
                 }
 
+                $priorValues = [];
+
                 if ($isSharedIndependent) {
-                    // update() never inserts (the baseRowExists guard above ensures the row is
-                    // there), so this branch can only ever log an update.
-                    Availability::where([
-                        'statamic_id' => $data['statamic_id'],
-                        'date' => $date,
-                        'rate_id' => $resolvedRateId,
-                    ])->update($toUpdate);
+                    // The $baseRow guard above ensures the row exists (and holds its lock), so
+                    // this branch can only ever log an update.
+                    $priorValues = [
+                        'price' => $baseRow->getRawOriginal('price'),
+                        'available' => $baseRow->getRawOriginal('available'),
+                    ];
+
+                    $baseRow->fill($toUpdate)->save();
 
                     $rowWasCreated = false;
                 } else {
-                    $row = Availability::updateOrCreate([
+                    // firstOrCreate + explicit save instead of updateOrCreate so the prior
+                    // values are captured from the row about to be overwritten (see the
+                    // range-lock note above for why a pre-write snapshot can't supply them
+                    // when two requests race to create the same missing date).
+                    $row = Availability::firstOrCreate([
                         'statamic_id' => $data['statamic_id'],
                         'date' => $date,
                         'rate_id' => $resolvedRateId,
                     ], $toUpdate);
 
                     $rowWasCreated = $row->wasRecentlyCreated;
+
+                    if (! $rowWasCreated) {
+                        $priorValues = [
+                            'price' => $row->getRawOriginal('price'),
+                            'available' => $row->getRawOriginal('available'),
+                        ];
+
+                        $row->fill($toUpdate)->save();
+                    }
                 }
 
                 if ($logEnabled) {
-                    $existing = $existingRows->get($date);
-
                     foreach ($toUpdate as $field => $newValue) {
                         $changes[] = [
                             'statamic_id' => $data['statamic_id'],
                             'rate_id' => $resolvedRateId,
                             'date' => $date,
-                            // From the write's outcome, not the snapshot: FOR UPDATE can't lock
-                            // absent rows, so two concurrent edits of a missing date both snapshot
-                            // "no row" — only the insert winner may log a create.
+                            // From the write's outcome: only the insert winner may log a create,
+                            // the loser logs an update diffed against the winner's values.
                             'action' => $rowWasCreated ? 'create' : 'update',
                             'field' => $field,
-                            'old_value' => $existing?->getRawOriginal($field),
+                            'old_value' => $priorValues[$field] ?? null,
                             'new_value' => $newValue,
                         ];
                     }

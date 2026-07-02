@@ -43,6 +43,7 @@ class ActivityLogCpController extends Controller
             'batch' => 'sometimes|uuid',
             'reservation_id' => 'sometimes|integer',
             'page' => 'sometimes|integer',
+            'max_id' => 'sometimes|integer',
         ]);
 
         $query = AvailabilityChange::query()
@@ -61,7 +62,7 @@ class ActivityLogCpController extends Controller
             return $this->availabilityBatches($query);
         }
 
-        return $this->availabilityRows($query);
+        return $this->availabilityRows($query, $data['max_id'] ?? null);
     }
 
     private function availabilityBatches(Builder $query): JsonResponse
@@ -116,11 +117,15 @@ class ActivityLogCpController extends Controller
         return response()->json($batches);
     }
 
-    private function availabilityRows(Builder $query): JsonResponse
+    private function availabilityRows(Builder $query, ?int $maxId = null): JsonResponse
     {
         // Ordered explicitly — the CP listing sort bug taught us not to trust default ordering
         // on paginated output.
         $changes = $query
+            // The client pins follow-up pages to the ids its first page saw — a batch still
+            // being written to (a running import) would otherwise shift the desc-ordered page
+            // boundaries and silently drop the newly prepended rows from "Load more".
+            ->when($maxId, fn ($query, $maxId) => $query->where('id', '<=', $maxId))
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate($this->perPage());

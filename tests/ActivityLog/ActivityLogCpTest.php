@@ -164,6 +164,45 @@ class ActivityLogCpTest extends TestCase
         $this->assertCount(25, $rows->json('data'));
     }
 
+    public function test_batch_rows_can_be_pinned_to_a_max_id_so_a_growing_batch_paginates_stably()
+    {
+        $this->signInAdmin();
+
+        $batch = (string) SupportStr::uuid();
+        foreach (range(1, 3) as $day) {
+            $this->makeAvailabilityChange([
+                'batch' => $batch,
+                'date' => today()->addDays($day)->toDateString(),
+            ]);
+        }
+
+        $firstPage = $this->getJson(cp_route('resrv.logs.availability', ['batch' => $batch, 'perPage' => 2]))->assertOk();
+        $maxId = collect($firstPage->json('data'))->max('id');
+
+        // Rows an import appends after the client's first page load must not shift
+        // the pinned pagination — only the two rows below the pin remain.
+        $this->makeAvailabilityChange([
+            'batch' => $batch,
+            'date' => today()->addDays(4)->toDateString(),
+        ]);
+
+        $pinned = $this->getJson(cp_route('resrv.logs.availability', [
+            'batch' => $batch,
+            'perPage' => 2,
+            'max_id' => $maxId,
+            'page' => 2,
+        ]))->assertOk();
+
+        $this->assertEquals(3, $pinned->json('total'));
+        $this->assertEquals(2, $pinned->json('last_page'));
+        $this->assertCount(1, $pinned->json('data'));
+        $this->assertTrue(collect($pinned->json('data'))->pluck('id')->every(fn ($id) => $id <= $maxId));
+
+        // Without the pin the new row is counted and shifts the boundaries.
+        $unpinned = $this->getJson(cp_route('resrv.logs.availability', ['batch' => $batch, 'perPage' => 2]))->assertOk();
+        $this->assertEquals(4, $unpinned->json('total'));
+    }
+
     public function test_a_multi_entry_batch_reports_its_entry_count_and_per_row_titles()
     {
         $this->signInAdmin();
