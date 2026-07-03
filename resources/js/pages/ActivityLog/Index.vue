@@ -270,7 +270,7 @@ onMounted(() => {
             <div class="flex flex-wrap items-end gap-4">
                 <div v-if="tab === 'availability'" class="min-w-[220px]">
                     <Field :label="__('Entry')">
-                        <Select v-model="filters.statamic_id" :options="entryOptions" clearable />
+                        <Select v-model="filters.statamic_id" :options="entryOptions" clearable :searchable="true" />
                     </Field>
                 </div>
                 <div v-if="tab === 'reservations'" class="min-w-[220px]">
