@@ -43,6 +43,11 @@ use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
+use Reach\StatamicResrv\Listeners\LogReservationCancelled;
+use Reach\StatamicResrv\Listeners\LogReservationConfirmed;
+use Reach\StatamicResrv\Listeners\LogReservationCreated;
+use Reach\StatamicResrv\Listeners\LogReservationExpired;
+use Reach\StatamicResrv\Listeners\LogReservationRefunded;
 use Reach\StatamicResrv\Listeners\NormalizeAvailabilityFieldValue;
 use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
 use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails;
@@ -52,6 +57,7 @@ use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
+use Reach\StatamicResrv\Support\ActivityLog;
 use Reach\StatamicResrv\Support\SettingsBlueprint;
 use Reach\StatamicResrv\Support\SettingsMigrator;
 use Reach\StatamicResrv\Tags\Resrv;
@@ -131,16 +137,20 @@ class ResrvProvider extends AddonServiceProvider
             AddAffiliateToReservation::class,
             AddDynamicPricingsToReservation::class,
             DecreaseAvailability::class,
+            LogReservationCreated::class,
             AddReservationIdToSession::class,
         ],
         ReservationExpired::class => [
             IncreaseAvailability::class,
+            LogReservationExpired::class,
         ],
         ReservationConfirmed::class => [
+            LogReservationConfirmed::class,
             SendNewReservationEmails::class,
         ],
         ReservationCancelled::class => [
             IncreaseAvailability::class,
+            LogReservationCancelled::class,
         ],
         // Availability restore and the customer refund email are handled by ReservationRefunded,
         // which the refund processor dispatches in the same flow — this event only adds the
@@ -149,11 +159,13 @@ class ResrvProvider extends AddonServiceProvider
             SendCancelledReservationEmails::class,
         ],
         // A throwing listener halts the rest of the chain (the refund still reports success), so
-        // order by descending importance — commission (money owed), then inventory, then email —
+        // order by descending importance — commission (money owed), then inventory, then the
+        // audit log, then email (the most failure-prone, so its failure blocks nothing) —
         // and any failure only blocks lower-priority work.
         ReservationRefunded::class => [
             CancelAffiliateCommission::class,
             IncreaseAvailability::class,
+            LogReservationRefunded::class,
             SendRefundReservationEmails::class,
         ],
         CouponUpdated::class => [
@@ -199,6 +211,8 @@ class ResrvProvider extends AddonServiceProvider
         parent::register();
 
         $this->app->singleton(PaymentGatewayManager::class, fn () => new PaymentGatewayManager);
+
+        $this->app->singleton(ActivityLog::class, fn () => new ActivityLog);
 
         $this->registerSerializableCacheClasses();
     }
@@ -287,6 +301,14 @@ class ResrvProvider extends AddonServiceProvider
                 ->can('use resrv')
                 ->route('resrv.reservations.calendar')
                 ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" class="h-4 w-4 text-grey-80 group-hover:text-blue"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-miterlimit="10" d="M15.5 14.5c0 .6-.4 1-1 1h-13c-.6 0-1-.4-1-1v-11c0-.6.4-1 1-1h13c.6 0 1 .4 1 1v11zm-15-8h15M4.5 4V.5m7 3.5V.5"></path></svg>');
+
+            if (config('resrv-config.enable_activity_log') === true) {
+                $nav->create(ucfirst(__('Activity Log')))
+                    ->section('Resrv')
+                    ->can('use resrv')
+                    ->route('resrv.logs.index')
+                    ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24" width="24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><circle cx="12" cy="12" r="9.25"/><path d="M12 7v5l3.5 2"/></g></svg>');
+            }
 
             if (config('resrv-config.enable_affiliates', true)) {
                 $nav->create(ucfirst(__('Affiliates')))

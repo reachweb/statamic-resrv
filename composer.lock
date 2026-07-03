@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "bd8d3ba3c46f5aedbd92f9957d7d0054",
+    "content-hash": "6a70d85d3dba298dd503b9ef5089158d",
     "packages": [
         {
             "name": "ajthinking/archetype",
@@ -10109,6 +10109,80 @@
             "time": "2026-04-28T11:52:01+00:00"
         },
         {
+            "name": "laravel/dusk",
+            "version": "v8.6.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/laravel/dusk.git",
+                "reference": "e7fd48762c6a82ad2cd311db07587aa2a97ce143"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/laravel/dusk/zipball/e7fd48762c6a82ad2cd311db07587aa2a97ce143",
+                "reference": "e7fd48762c6a82ad2cd311db07587aa2a97ce143",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "ext-zip": "*",
+                "guzzlehttp/guzzle": "^7.5",
+                "illuminate/console": "^10.0|^11.0|^12.0|^13.0",
+                "illuminate/support": "^10.0|^11.0|^12.0|^13.0",
+                "php": "^8.1",
+                "php-webdriver/webdriver": "^1.15.2",
+                "symfony/console": "^6.2|^7.0|^8.0",
+                "symfony/finder": "^6.2|^7.0|^8.0",
+                "symfony/process": "^6.2|^7.0|^8.0",
+                "vlucas/phpdotenv": "^5.2"
+            },
+            "require-dev": {
+                "laravel/framework": "^10.0|^11.0|^12.0|^13.0",
+                "mockery/mockery": "^1.6",
+                "orchestra/testbench-core": "^8.19|^9.17|^10.8|^11.0",
+                "phpstan/phpstan": "^1.10",
+                "phpunit/phpunit": "^10.1|^11.0|^12.0.1",
+                "psy/psysh": "^0.11.12|^0.12",
+                "symfony/yaml": "^6.2|^7.0|^8.0"
+            },
+            "suggest": {
+                "ext-pcntl": "Used to gracefully terminate Dusk when tests are running."
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Laravel\\Dusk\\DuskServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Laravel\\Dusk\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Taylor Otwell",
+                    "email": "taylor@laravel.com"
+                }
+            ],
+            "description": "Laravel Dusk provides simple end-to-end testing and browser automation.",
+            "keywords": [
+                "laravel",
+                "testing",
+                "webdriver"
+            ],
+            "support": {
+                "issues": "https://github.com/laravel/dusk/issues",
+                "source": "https://github.com/laravel/dusk/tree/v8.6.0"
+            },
+            "time": "2026-04-15T14:50:40+00:00"
+        },
+        {
             "name": "laravel/mcp",
             "version": "v0.7.0",
             "source": {
@@ -10835,6 +10909,132 @@
             "time": "2026-03-16T15:10:50+00:00"
         },
         {
+            "name": "orchestra/dusk-updater",
+            "version": "v3.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/orchestral/dusk-updater.git",
+                "reference": "6e9e76fc05a62cdcb191abc8a1756039aa4c327d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/orchestral/dusk-updater/zipball/6e9e76fc05a62cdcb191abc8a1756039aa4c327d",
+                "reference": "6e9e76fc05a62cdcb191abc8a1756039aa4c327d",
+                "shasum": ""
+            },
+            "require": {
+                "composer-runtime-api": "^2.2",
+                "composer/semver": "^3.0",
+                "ext-openssl": "*",
+                "ext-zip": "*",
+                "guzzlehttp/guzzle": "^7.9",
+                "laravel/prompts": "^0.1.25|^0.2|^0.3",
+                "orchestra/dusk-updater-api": "^1.0.4",
+                "orchestra/sidekick": "~1.1.23|~1.2.20",
+                "php": "^8.1",
+                "symfony/console": "^6.2|^7.0|^8.0",
+                "symfony/polyfill-php83": "^1.33",
+                "symfony/process": "^6.2|^7.0|^8.0"
+            },
+            "conflict": {
+                "laravel/dusk": "<8.0.0|>=9.0.0"
+            },
+            "require-dev": {
+                "laravel/dusk": "^8.0",
+                "laravel/pint": "^1.20",
+                "pestphp/pest": "^2.0|^3.0|^4.0",
+                "phpstan/phpstan": "^2.1"
+            },
+            "bin": [
+                "dusk-updater"
+            ],
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "src/functions.php"
+                ],
+                "psr-4": {
+                    "Orchestra\\DuskUpdater\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Jonas Staudenmeir",
+                    "email": "mail@jonas-staudenmeir.de"
+                },
+                {
+                    "name": "Mior Muhammad Zaki",
+                    "email": "crynobone@gmail.com"
+                }
+            ],
+            "description": "Updater for Laravel Dusk ChromeDriver binaries",
+            "support": {
+                "issues": "https://github.com/orchestral/dusk-updater/issues",
+                "source": "https://github.com/orchestral/dusk-updater/tree/v3.1.0"
+            },
+            "time": "2026-01-20T03:00:41+00:00"
+        },
+        {
+            "name": "orchestra/dusk-updater-api",
+            "version": "v1.0.4",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/orchestral/dusk-updater-api.git",
+                "reference": "006fc94eee2e0756af5fe8d927d24455c1bbce1b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/orchestral/dusk-updater-api/zipball/006fc94eee2e0756af5fe8d927d24455c1bbce1b",
+                "reference": "006fc94eee2e0756af5fe8d927d24455c1bbce1b",
+                "shasum": ""
+            },
+            "require": {
+                "composer-runtime-api": "^2.2",
+                "ext-openssl": "*",
+                "guzzlehttp/guzzle": "^7.2",
+                "orchestra/sidekick": "^1.0.2",
+                "php": "^8.0",
+                "symfony/polyfill-ctype": "^1.9",
+                "symfony/process": "^6.0|^7.0|^8.0"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.4",
+                "mockery/mockery": "^1.5.1",
+                "pestphp/pest": "^1.0|^2.0|^3.0|^4.0",
+                "phpstan/phpstan": "^2.1.14"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Orchestra\\DuskUpdaterApi\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Jonas Staudenmeir",
+                    "email": "mail@jonas-staudenmeir.de"
+                },
+                {
+                    "name": "Mior Muhammad Zaki",
+                    "email": "crynobone@gmail.com"
+                }
+            ],
+            "description": "Updater API for Laravel Dusk ChromeDriver binaries",
+            "support": {
+                "issues": "https://github.com/orchestral/dusk-updater-api/issues",
+                "source": "https://github.com/orchestral/dusk-updater-api/tree/v1.0.4"
+            },
+            "time": "2026-01-20T02:27:07+00:00"
+        },
+        {
             "name": "orchestra/sidekick",
             "version": "v1.2.20",
             "source": {
@@ -11040,6 +11240,74 @@
                 "source": "https://github.com/orchestral/testbench-core"
             },
             "time": "2026-05-14T11:22:09+00:00"
+        },
+        {
+            "name": "orchestra/testbench-dusk",
+            "version": "v11.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/orchestral/testbench-dusk.git",
+                "reference": "70f70f16739764ba86de0274a06aad5da9296b5c"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/orchestral/testbench-dusk/zipball/70f70f16739764ba86de0274a06aad5da9296b5c",
+                "reference": "70f70f16739764ba86de0274a06aad5da9296b5c",
+                "shasum": ""
+            },
+            "require": {
+                "composer-runtime-api": "^2.2",
+                "laravel/dusk": "^8.5.0",
+                "laravel/serializable-closure": "^1.3|^2.0.7",
+                "orchestra/dusk-updater": "^3.0.2",
+                "orchestra/sidekick": "~1.1.23|~1.2.20",
+                "orchestra/testbench": "^11.0.0",
+                "orchestra/testbench-core": ">=11.3.0 <11.4.0",
+                "php": "^8.3",
+                "php-webdriver/webdriver": "^1.15.1"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.26",
+                "laravel/tinker": "^3.0.0",
+                "phpstan/phpstan": "^2.1.33",
+                "phpunit/phpunit": "^11.5.50|^12.5.8|^13.0.0"
+            },
+            "bin": [
+                "testbench-dusk"
+            ],
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "src/functions.php"
+                ],
+                "psr-4": {
+                    "Orchestra\\Testbench\\Dusk\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Keoghan Litchfield",
+                    "email": "keoghan@klever.co.uk",
+                    "homepage": "https://klever.co.uk",
+                    "role": "Developer"
+                },
+                {
+                    "name": "Mior Muhammad Zaki",
+                    "email": "crynobone@gmail.com",
+                    "homepage": "https://github.com/crynobone",
+                    "role": "Organization Maintainer"
+                }
+            ],
+            "description": "Laravel Dusk Testing Helper for Packages Development",
+            "support": {
+                "issues": "https://github.com/orchestral/testbench-dusk/issues",
+                "source": "https://github.com/orchestral/testbench-dusk/tree/v11.2.0"
+            },
+            "time": "2026-04-23T11:11:36+00:00"
         },
         {
             "name": "orchestra/workbench",
@@ -11353,6 +11621,72 @@
                 }
             ],
             "time": "2025-08-16T11:10:48+00:00"
+        },
+        {
+            "name": "php-webdriver/webdriver",
+            "version": "1.16.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-webdriver/php-webdriver.git",
+                "reference": "ac0662863aa120b4f645869f584013e4c4dba46a"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/php-webdriver/php-webdriver/zipball/ac0662863aa120b4f645869f584013e4c4dba46a",
+                "reference": "ac0662863aa120b4f645869f584013e4c4dba46a",
+                "shasum": ""
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "ext-zip": "*",
+                "php": "^7.3 || ^8.0",
+                "symfony/polyfill-mbstring": "^1.12",
+                "symfony/process": "^5.0 || ^6.0 || ^7.0 || ^8.0"
+            },
+            "replace": {
+                "facebook/webdriver": "*"
+            },
+            "require-dev": {
+                "ergebnis/composer-normalize": "^2.20.0",
+                "ondram/ci-detector": "^4.0",
+                "php-coveralls/php-coveralls": "^2.4",
+                "php-mock/php-mock-phpunit": "^2.0",
+                "php-parallel-lint/php-parallel-lint": "^1.2",
+                "phpunit/phpunit": "^9.3",
+                "squizlabs/php_codesniffer": "^3.5",
+                "symfony/var-dumper": "^5.0 || ^6.0 || ^7.0 || ^8.0"
+            },
+            "suggest": {
+                "ext-simplexml": "For Firefox profile creation"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "lib/Exception/TimeoutException.php"
+                ],
+                "psr-4": {
+                    "Facebook\\WebDriver\\": "lib/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "A PHP client for Selenium WebDriver. Previously facebook/webdriver.",
+            "homepage": "https://github.com/php-webdriver/php-webdriver",
+            "keywords": [
+                "Chromedriver",
+                "geckodriver",
+                "php",
+                "selenium",
+                "webdriver"
+            ],
+            "support": {
+                "issues": "https://github.com/php-webdriver/php-webdriver/issues",
+                "source": "https://github.com/php-webdriver/php-webdriver/tree/1.16.0"
+            },
+            "time": "2025-12-28T23:57:40+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",

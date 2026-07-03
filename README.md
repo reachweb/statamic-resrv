@@ -43,6 +43,61 @@ Upgrading from v5? Read the upgrade guide first: https://resrv.dev/upgrading
 * Reporting and CSV export: see a quick summary of how your business is doing, run reports by reservation date or booking date, and export reservations to CSV with filters.
 * Highly tested codebase: over 1,200 tests with thousands of assertions.
 
+## Testing
+
+The addon ships two independent, additive test suites.
+
+**Headless suite (default).** Over 1,200 PHPUnit tests on Orchestra Testbench with in-memory SQLite. This suite owns validation, pricing and availability math, cutoff/quantity/date rules, checkout orchestration and every state transition.
+
+```bash
+composer test          # full suite (SQLite in-memory)
+composer test-pgsql    # the same suite against PostgreSQL
+vendor/bin/pint        # code style
+```
+
+### Browser tests
+
+A separate [`orchestra/testbench-dusk`](https://packagist.org/packages/orchestra/testbench-dusk) suite — still plain PHPUnit, no Pest — drives a **real headless Chrome** through the frontend Livewire funnel. It covers only what the headless suite cannot: Alpine/JS behaviour (the date calendar, steppers, the phone combobox), real `/livewire/update` round-trips through Statamic's routing, asset load order, and the whole search → checkout → confirmed flow in a real DOM. Browser tests are **not** a second copy of the headless suite; everything else stays headless.
+
+**Prerequisites:** Google Chrome (or Chromium) installed locally, plus a matching ChromeDriver:
+
+```bash
+php vendor/bin/testbench dusk:chrome-driver --detect
+```
+
+**Running:**
+
+```bash
+# 1. Build the Workbench host app: creates, migrates and seeds the shared file
+#    SQLite DB and publishes the frontend bundle. Re-run after editing the
+#    seeder or adding Statamic fixtures.
+php vendor/bin/testbench workbench:build
+
+# 2. Run the suite (headless), or headed to watch it in a visible browser:
+composer test:browser
+composer test:browser:headed
+```
+
+`composer test` never launches Chrome: the browser suite has its own `phpunit.dusk.xml` and is deliberately absent from the default and PostgreSQL suites.
+
+**Adding a scenario.** Drop a `*Test.php` in `tests/Browser/` extending `Reach\StatamicResrv\Tests\Browser\BrowserTestCase`. The base boots the same Statamic + addon + Livewire stack as the served app, truncates and re-seeds the shared DB before each test, and clears the session cart. Fixtures come from the `SeedsBookableContent` trait (a collection, a bookable entry, a rate, a wide availability window, an extra, an option, checkout entries); add per-test variants as needed, and register any per-served-app config (e.g. a second payment gateway) through testbench-dusk's `#[BeforeServing]` hook rather than `Config::set()` in the test body.
+
+**Gotchas** (full reasoning in [`browser-testing.md`](browser-testing.md)):
+
+* `resrv-frontend.js` must load **before** Livewire's scripts, and there must be exactly one Alpine — a second instance silently kills the calendar.
+* The browser runs in a **separate process** from the test, so both share a **file** SQLite DB and a **file** session (never `:memory:` / `array`).
+* The frontend bundle publishes to `public/vendor/statamic-resrv/frontend/…` under the addon slug tag `statamic-resrv`.
+* Keep `APP_URL` aligned with the Dusk serve port (default `8001`).
+
+**What is and isn't browser-tested**
+
+| Headless suite owns | Browser suite owns |
+| --- | --- |
+| Validation, pricing & availability math, cutoff/quantity/date rules | The Alpine date calendar (open / range / clear) |
+| Checkout step orchestration & state transitions | Quantity steppers, rate dropdowns, the `dictionary_phone` combobox, toggles |
+| Extras/Options enable-disable & price math | The full search → checkout → offline-**confirmed** funnel in a real DOM |
+| All non-JS field types | Coupon / dynamic-pricing reactivity, the `window.L` global-leak guard, cross-collection rate reconciliation |
+
 ## License
 
 When you are ready to deploy to production you need to buy a license at the Statamic Marketplace.

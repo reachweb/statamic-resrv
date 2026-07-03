@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Listeners;
 
+use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Models\Availability;
 
@@ -21,6 +22,7 @@ class DecreaseAvailability
                 statamic_id: $event->reservation->item_id,
                 reservationId: $event->reservation->id,
                 rateId: $event->reservation->rate_id,
+                reason: AvailabilityChangeReason::ReservationCreated,
             );
         }
     }
@@ -29,6 +31,8 @@ class DecreaseAvailability
     {
         $childs = $event->reservation->childs;
         $childs->each(function ($child) use ($event) {
+            // parentReservationId: child ids live in their own sequence — the activity log
+            // must record the parent booking id, which is what the CP links and filters use.
             $this->availability->decrementAvailability(
                 date_start: $child->date_start,
                 date_end: $child->date_end,
@@ -37,6 +41,8 @@ class DecreaseAvailability
                 reservationId: $child->id,
                 rateId: $child->rate_id,
                 isChildReservation: true,
+                reason: AvailabilityChangeReason::ReservationCreated,
+                parentReservationId: $event->reservation->id,
             );
         });
     }

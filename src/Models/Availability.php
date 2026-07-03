@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Contracts\Models\AvailabilityContract;
 use Reach\StatamicResrv\Database\Factories\AvailabilityFactory;
+use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
@@ -189,7 +190,7 @@ class Availability extends Model implements AvailabilityContract
             ->get();
     }
 
-    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null, bool $isChildReservation = false): void
+    public function decrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null, ?int $parentReservationId = null): void
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
@@ -206,10 +207,12 @@ class Availability extends Model implements AvailabilityContract
             rateId: $rateId,
             reservationId: $reservationId,
             isChildReservation: $isChildReservation,
+            reason: $reason,
+            parentReservationId: $parentReservationId,
         );
     }
 
-    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null, bool $isChildReservation = false): void
+    public function incrementAvailability(string $date_start, string $date_end, int $quantity, string $statamic_id, int $reservationId, ?int $rateId = null, bool $isChildReservation = false, ?AvailabilityChangeReason $reason = null, ?int $parentReservationId = null): void
     {
         $this->initiateAvailabilityUnsafe([
             'date_start' => $date_start,
@@ -226,6 +229,8 @@ class Availability extends Model implements AvailabilityContract
             rateId: $rateId,
             reservationId: $reservationId,
             isChildReservation: $isChildReservation,
+            reason: $reason,
+            parentReservationId: $parentReservationId,
         );
     }
 

@@ -111,6 +111,16 @@ tabs:
                 - required
               instructions: 'Enable the ability to set cutoff times for bookings based on starting times and schedules. When enabled, entries can specify how many hours before a scheduled start time bookings must be made.'
           -
+            handle: enable_activity_log
+            field:
+              display: 'Enable activity log'
+              type: toggle
+              localizable: false
+              default: false
+              validate:
+                - required
+              instructions: 'Log availability changes and reservation status changes for auditing. Prune old entries with the housekeeping command.'
+          -
             handle: minimum_days_before
             field:
               display: 'Minimum days before'

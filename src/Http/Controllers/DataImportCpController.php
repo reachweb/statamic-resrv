@@ -10,6 +10,7 @@ use Inertia\Inertia;
 use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Helpers\ResrvHelper;
 use Reach\StatamicResrv\Jobs\ProcessDataImport;
+use Reach\StatamicResrv\Support\ActivityLog;
 use Statamic\Facades\User;
 
 class DataImportCpController extends Controller
@@ -71,7 +72,8 @@ class DataImportCpController extends Controller
             return $this->renderConfirm(['No data import object found in cache, please try again']);
         }
 
-        ProcessDataImport::dispatch($cacheKey);
+        // Capture the actor at dispatch time — the job may run queued, where User::current() is null.
+        ProcessDataImport::dispatch($cacheKey, app(ActivityLog::class)->cpActor());
 
         return Inertia::render('resrv::DataImport/Store', [
             'indexUrl' => cp_route('resrv.dataimport.index'),
