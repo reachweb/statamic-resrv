@@ -87,6 +87,40 @@ class AffiliateCommissionCancellationTest extends TestCase
         $this->assertCommissionCancelled($reservation);
     }
 
+    public function test_no_refund_cancellation_of_a_paid_booking_keeps_the_commission()
+    {
+        Mail::fake();
+
+        $affiliate = Affiliate::factory()->create(['fee' => 20]);
+        $reservation = $this->makeAffiliateReservation($affiliate, ['status' => 'confirmed', 'payment_id' => 'pi_123']);
+
+        $changed = app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation);
+
+        // The business kept the payment, so the commission is still owed — only refunds
+        // (money returned) and no-charge voids (no revenue existed) cancel it.
+        $this->assertTrue($changed);
+        $this->assertDatabaseHas('resrv_reservations', ['id' => $reservation->id, 'status' => 'cancelled']);
+        $this->assertNull($this->pivotRow($reservation->id)->cancelled_at);
+    }
+
+    public function test_no_charge_void_cancels_the_affiliate_commission()
+    {
+        Mail::fake();
+
+        $affiliate = Affiliate::factory()->create(['fee' => 20]);
+        $reservation = $this->makeAffiliateReservation($affiliate, ['status' => 'partner', 'payment_id' => '']);
+
+        $this->forbidGatewayRefunds();
+
+        // Routed through refund() the way the CP does it: no charge → CANCELLED, and since
+        // no revenue ever existed for the booking, the commission is voided.
+        $changed = app(ReservationRefundProcessor::class)->refund($reservation);
+
+        $this->assertTrue($changed);
+        $this->assertDatabaseHas('resrv_reservations', ['id' => $reservation->id, 'status' => 'cancelled']);
+        $this->assertCommissionCancelled($reservation);
+    }
+
     public function test_commission_is_cancelled_even_when_availability_restore_throws()
     {
         Mail::fake();

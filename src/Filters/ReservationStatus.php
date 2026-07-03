@@ -22,6 +22,7 @@ class ReservationStatus extends Filter
                     'confirmed' => 'Confirmed',
                     'partner' => 'Partner',
                     'refunded' => 'Refunded',
+                    'cancelled' => 'Cancelled',
                     'pending' => 'Pending',
                     'expired' => 'Expired',
                 ],

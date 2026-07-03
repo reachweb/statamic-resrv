@@ -180,6 +180,17 @@ class ReservationEmailConfigResolver
                 // a CP-initiated refund is admin-driven, so no admin copy is needed there either.
                 'recipients' => [['type' => 'customer']],
             ],
+            ReservationEmailEvent::CustomerCancelled->value => [
+                'enabled' => true,
+                'from' => ['address' => null, 'name' => null],
+                'subject' => null,
+                'markdown' => 'statamic-resrv::email.reservations.cancelled-customer',
+                // Customer-facing only: fires on every no-refund termination (customer cancel
+                // outside the window, CP void of a no-charge booking). Admin copies follow the
+                // same rule as CustomerRefunded — AdminCancelled covers customer-initiated
+                // cancellations, and CP-initiated ones are admin-driven already.
+                'recipients' => [['type' => 'customer']],
+            ],
             ReservationEmailEvent::CustomerAbandoned->value => [
                 'enabled' => true,
                 'from' => ['address' => null, 'name' => null],

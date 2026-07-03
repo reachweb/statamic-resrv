@@ -399,6 +399,9 @@ tabs:
                         key: customer_refunded
                         value: 'Customer refunded'
                       -
+                        key: customer_cancelled
+                        value: 'Customer cancelled (no refund)'
+                      -
                         key: customer_abandoned
                         value: 'Customer abandoned'
                       -
@@ -484,6 +487,9 @@ tabs:
                       -
                         key: customer_refunded
                         value: 'Customer refunded'
+                      -
+                        key: customer_cancelled
+                        value: 'Customer cancelled (no refund)'
                       -
                         key: customer_abandoned
                         value: 'Customer abandoned'

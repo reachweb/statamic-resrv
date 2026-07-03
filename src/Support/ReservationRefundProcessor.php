@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Support;
 
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationCancelledByCustomer;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\CancellationNotAllowed;
@@ -15,10 +16,12 @@ use Reach\StatamicResrv\Models\Reservation;
 class ReservationRefundProcessor
 {
     /**
-     * Refund a reservation: return the charge through the payment gateway when one exists,
-     * transition to REFUNDED and dispatch ReservationRefunded (which restores availability
-     * and sends the refund emails). Shared by the CP refund action and the customer-facing
-     * ReservationStatus component so both flows stay behaviorally identical.
+     * Refund a reservation: return the charge through the payment gateway, transition to
+     * REFUNDED and dispatch ReservationRefunded (which restores availability and sends the
+     * refund emails). No-charge bookings (partner / zero-payment) route to
+     * cancelWithoutRefund() instead — nothing can be returned, so they end CANCELLED.
+     * Shared by the CP refund action and the customer-facing ReservationStatus component
+     * so both flows stay behaviorally identical.
      *
      * The gateway call rides inside transitionTo()'s row lock — unlike expire(), which
      * releases its lock before the network call — because a concurrent caller must block
@@ -37,6 +40,15 @@ class ReservationRefundProcessor
      */
     public function refund(Reservation $reservation): bool
     {
+        // No charge ever reached a gateway (partner / zero-payment booking): there is no
+        // money to return, so terminating it is a cancellation, not a refund — REFUNDED is
+        // reserved for reservations whose charge actually went back. transitionTo() still
+        // re-validates the status under the row lock, so a stale in-memory read here can
+        // only end in InvalidStateTransition, never a wrong terminal state.
+        if ($reservation->gatewayHoldsNoCharge()) {
+            return $this->cancelWithoutRefund($reservation);
+        }
+
         $changed = $reservation->transitionTo(
             ReservationStatus::REFUNDED,
             inTransaction: fn (Reservation $fresh) => $this->refundThroughGateway($fresh),
@@ -44,6 +56,25 @@ class ReservationRefundProcessor
 
         if ($changed) {
             $this->dispatchCommitted(ReservationRefunded::class, $reservation);
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Terminate a booking without returning any money: transition to CANCELLED and dispatch
+     * ReservationCancelled (commission handling, availability restore, activity log). Used for
+     * no-charge bookings voided from the CP and for customer cancellations outside the free
+     * cancellation window, where the payment stays with the business.
+     *
+     * @throws InvalidStateTransition when the current status cannot transition to CANCELLED
+     */
+    public function cancelWithoutRefund(Reservation $reservation): bool
+    {
+        $changed = $reservation->transitionTo(ReservationStatus::CANCELLED);
+
+        if ($changed) {
+            $this->dispatchCommitted(ReservationCancelled::class, $reservation);
         }
 
         return $changed;
@@ -98,10 +129,12 @@ class ReservationRefundProcessor
 
     /**
      * Reservations whose gateway holds no charge (partner / zero-payment) skip the gateway
-     * call entirely or Stripe rejects the empty payment_intent and blocks the refund.
-     * Anything else with an empty payment_id (e.g. a PENDING row whose cancelled intent may
-     * still carry an orphaned charge) keeps going through the gateway so the failure surfaces
-     * to the caller instead of silently marking captured money as refunded.
+     * call entirely or Stripe rejects the empty payment_intent and blocks the refund. refund()
+     * already routes them to cancelWithoutRefund() from the in-memory state; this re-check on
+     * the locked fresh row is the race backstop. Anything else with an empty payment_id (e.g.
+     * a PENDING row whose cancelled intent may still carry an orphaned charge) keeps going
+     * through the gateway so the failure surfaces to the caller instead of silently marking
+     * captured money as refunded.
      */
     protected function refundThroughGateway(Reservation $fresh): void
     {

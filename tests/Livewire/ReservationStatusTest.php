@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Events\ReservationCancelled as ReservationCancelledEvent;
 use Reach\StatamicResrv\Events\ReservationCancelledByCustomer;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
@@ -687,7 +688,7 @@ class ReservationStatusTest extends TestCase
 
     public function test_partner_reservations_cancel_without_claiming_a_refund()
     {
-        Event::fake([ReservationRefunded::class, ReservationCancelledByCustomer::class]);
+        Event::fake([ReservationRefunded::class, ReservationCancelledEvent::class, ReservationCancelledByCustomer::class]);
 
         $reservation = $this->makeReservation([
             'status' => 'partner',
@@ -710,12 +711,15 @@ class ReservationStatusTest extends TestCase
             ->assertDontSee(trans('statamic-resrv::frontend.reservationCancelledSuccess'))
             ->assertDontSee(trans('statamic-resrv::frontend.statusCancelled'));
 
+        // Nothing was returned, so the terminal state is CANCELLED and the cancelled event
+        // chain fires — REFUNDED and its event are reserved for money actually moving back.
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $reservation->id,
-            'status' => 'refunded',
+            'status' => 'cancelled',
         ]);
 
-        Event::assertDispatched(ReservationRefunded::class);
+        Event::assertNotDispatched(ReservationRefunded::class);
+        Event::assertDispatched(ReservationCancelledEvent::class);
         Event::assertDispatched(ReservationCancelledByCustomer::class);
     }
 

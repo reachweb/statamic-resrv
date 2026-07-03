@@ -51,6 +51,7 @@ use Reach\StatamicResrv\Listeners\LogReservationRefunded;
 use Reach\StatamicResrv\Listeners\NormalizeAvailabilityFieldValue;
 use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
 use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails;
+use Reach\StatamicResrv\Listeners\SendCustomerCancelledEmail;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
@@ -148,9 +149,15 @@ class ResrvProvider extends AddonServiceProvider
             LogReservationConfirmed::class,
             SendNewReservationEmails::class,
         ],
+        // No-refund termination (customer cancel outside the window, or a no-charge booking
+        // voided from the CP). Same descending-importance ordering as ReservationRefunded:
+        // commission (guarded — only voided when no payment was retained), inventory, audit
+        // log, then the customer email.
         ReservationCancelled::class => [
+            CancelAffiliateCommission::class,
             IncreaseAvailability::class,
             LogReservationCancelled::class,
+            SendCustomerCancelledEmail::class,
         ],
         // Availability restore and the customer refund email are handled by ReservationRefunded,
         // which the refund processor dispatches in the same flow — this event only adds the

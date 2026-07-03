@@ -272,7 +272,7 @@ class ReservationLogTest extends TestCase
         ]);
     }
 
-    public function test_cp_refund_logs_the_partner_from_state()
+    public function test_cp_void_of_a_partner_reservation_logs_the_cancelled_transition()
     {
         $this->signInAdmin();
 
@@ -285,10 +285,17 @@ class ReservationLogTest extends TestCase
         $this->patch(cp_route('resrv.reservation.refund'), ['id' => $reservation->id])
             ->assertOk();
 
+        // No charge ever reached a gateway, so the CP "refund" action is really a void:
+        // the refund processor routes it to CANCELLED and the cancelled log entry is
+        // written instead of a cp_refund one.
         $this->assertDatabaseHas('resrv_reservation_logs', [
             'reservation_id' => $reservation->id,
             'status_from' => 'partner',
-            'status_to' => 'refunded',
+            'status_to' => 'cancelled',
+            'reason' => 'cancelled',
+        ]);
+        $this->assertDatabaseMissing('resrv_reservation_logs', [
+            'reservation_id' => $reservation->id,
             'reason' => 'cp_refund',
         ]);
     }

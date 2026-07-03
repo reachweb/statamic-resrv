@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
+use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
@@ -99,6 +100,67 @@ class ReservationRefundProcessorTest extends TestCase
         $this->expectException(InvalidStateTransition::class);
 
         app(ReservationRefundProcessor::class)->refund($reservation);
+    }
+
+    public function test_cancel_without_refund_lands_in_cancelled_and_never_touches_the_gateway()
+    {
+        Event::fake([ReservationCancelled::class, ReservationRefunded::class]);
+
+        $reservation = $this->makeConfirmedReservation();
+
+        // The payment stays with the business — no gateway interaction of any kind.
+        $this->forbidGatewayRefunds();
+
+        $changed = app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation);
+
+        $this->assertTrue($changed);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'cancelled',
+        ]);
+        Event::assertDispatched(ReservationCancelled::class);
+        Event::assertNotDispatched(ReservationRefunded::class);
+    }
+
+    public function test_cancel_without_refund_returns_false_when_a_concurrent_caller_already_cancelled()
+    {
+        Event::fake([ReservationCancelled::class]);
+
+        $reservation = $this->makeConfirmedReservation();
+
+        $stale = Reservation::find($reservation->id);
+        Reservation::where('id', $reservation->id)->update(['status' => 'cancelled']);
+
+        $changed = app(ReservationRefundProcessor::class)->cancelWithoutRefund($stale);
+
+        $this->assertFalse($changed);
+        Event::assertNotDispatched(ReservationCancelled::class);
+    }
+
+    public function test_refund_routes_no_charge_bookings_to_cancelled()
+    {
+        Event::fake([ReservationCancelled::class, ReservationRefunded::class]);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'status' => 'partner',
+            'item_id' => $item->id(),
+            'payment_id' => '',
+        ]);
+
+        $this->forbidGatewayRefunds();
+
+        // The CP "refund" of a booking whose gateway holds no charge is really a void:
+        // nothing can be returned, so it must end CANCELLED with the cancelled event chain.
+        $changed = app(ReservationRefundProcessor::class)->refund($reservation);
+
+        $this->assertTrue($changed);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'cancelled',
+        ]);
+        Event::assertDispatched(ReservationCancelled::class);
+        Event::assertNotDispatched(ReservationRefunded::class);
     }
 
     public function test_fails_closed_when_the_recorded_gateway_is_no_longer_configured()
