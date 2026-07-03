@@ -11,7 +11,19 @@ enum ReservationStatus: string
 
     case CONFIRMED = 'confirmed';
 
+    /**
+     * The gateway returned the charge to the customer. Rows written before CANCELLED
+     * existed may also be no-charge voids that would land in CANCELLED today.
+     */
     case REFUNDED = 'refunded';
+
+    /**
+     * Terminated without money moving back through a gateway: a customer no-refund
+     * cancellation, or a no-charge booking (partner / zero-payment) voided from the CP.
+     * Terminal — a later goodwill refund must happen directly on the provider's dashboard,
+     * because re-entering REFUNDED would rerun IncreaseAvailability and double-restore stock.
+     */
+    case CANCELLED = 'cancelled';
 
     /** Reserved for future use. No writer currently produces this status. */
     case COMPLETED = 'completed';
@@ -28,9 +40,9 @@ enum ReservationStatus: string
     {
         return in_array($to, match ($this) {
             self::PENDING => [self::CONFIRMED, self::EXPIRED, self::REFUNDED, self::PARTNER],
-            self::CONFIRMED => [self::REFUNDED],
-            self::PARTNER => [self::REFUNDED],
-            self::EXPIRED, self::REFUNDED => [],
+            self::CONFIRMED => [self::REFUNDED, self::CANCELLED],
+            self::PARTNER => [self::REFUNDED, self::CANCELLED],
+            self::EXPIRED, self::REFUNDED, self::CANCELLED => [],
             self::WEBHOOK, self::COMPLETED => [],
         }, true);
     }
@@ -41,7 +53,7 @@ enum ReservationStatus: string
     public function isTerminal(): bool
     {
         return match ($this) {
-            self::EXPIRED, self::REFUNDED => true,
+            self::EXPIRED, self::REFUNDED, self::CANCELLED => true,
             default => false,
         };
     }
@@ -70,6 +82,7 @@ enum ReservationStatus: string
         return [
             self::COMPLETED->value,
             self::REFUNDED->value,
+            self::CANCELLED->value,
             self::EXPIRED->value,
         ];
     }
