@@ -59,4 +59,20 @@ enum ReservationStatus: string
             self::EXPIRED->value,
         ];
     }
+
+    /**
+     * Status values for checkouts still in flight — holds that may release asynchronously
+     * (expiry restores +quantity), which would corrupt an absolute CP inventory edit.
+     * Confirmed/partner bookings keep their hold key for life but only release on an
+     * explicit refund, so they are not in flight.
+     *
+     * @return string[]
+     */
+    public static function inFlight(): array
+    {
+        return [
+            self::PENDING->value,
+            self::WEBHOOK->value,
+        ];
+    }
 }

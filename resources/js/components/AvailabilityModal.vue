@@ -50,13 +50,13 @@
         </ConfirmationModal>
 
         <ConfirmationModal
-            :open="stillActiveIds.length > 0"
-            :title="__('Expire abandoned reservations?')"
+            :open="expirableIds.length > 0"
+            :title="__('Expire abandoned checkouts?')"
             :danger="true"
             @confirm="clearStuckHolds(true)"
-            @cancel="stillActiveIds = []"
+            @cancel="expirableIds = []"
         >
-            {{ __('The following reservations are still active: :ids. Continuing will expire only the ones whose hold window has already passed (abandoned checkouts) and release their inventory. Reservations still within their hold window — where a customer may be mid-payment — and confirmed bookings are left untouched.', { ids: stillActiveIds.join(', ') }) }}
+            {{ __('These reservations look like abandoned checkouts — still pending but past their hold window: :ids. Continuing will expire them and release their inventory. Confirmed bookings and checkouts still within their hold window are never touched.', { ids: expirableIds.join(', ') }) }}
         </ConfirmationModal>
     </div>
 </template>
@@ -83,7 +83,7 @@ const props = defineProps({
         type: Object,
         required: false,
     },
-    pendingByDate: {
+    stuckByDate: {
         type: Object,
         default: () => ({}),
     },
@@ -97,32 +97,34 @@ const editability = computed(() => rateEditability(props.rate));
 const available = ref(null);
 const price = ref(null);
 const deleteId = ref(null);
-const stillActiveIds = ref([]);
+const expirableIds = ref([]);
 const clearingPending = ref(false);
 
 const date_start = computed(() => dayjs(props.dates.start).format('YYYY-MM-DD'));
 const date_end = computed(() => dayjs(props.dates.end).subtract(1, 'day').format('YYYY-MM-DD'));
 
-const datesWithPending = computed(() => {
-    return Object.entries(props.pendingByDate)
-        .filter(([, ids]) => Array.isArray(ids) && ids.length > 0)
+// Holds backed by confirmed bookings or in-progress checkouts are the normal state of a
+// booked date — only genuinely stuck holds (classified by the backend) surface here.
+const datesWithStuck = computed(() => {
+    return Object.entries(props.stuckByDate)
+        .filter(([, count]) => count > 0)
         .map(([date]) => date);
 });
 
-const totalHoldsCount = computed(() => {
-    return Object.values(props.pendingByDate)
-        .reduce((sum, ids) => sum + (Array.isArray(ids) ? ids.length : 0), 0);
+const totalStuckCount = computed(() => {
+    return Object.values(props.stuckByDate)
+        .reduce((sum, count) => sum + (count || 0), 0);
 });
 
-const canClearStuckPending = computed(() => datesWithPending.value.length > 0 && props.rate);
+const canClearStuckPending = computed(() => datesWithStuck.value.length > 0 && props.rate);
 
 const stuckHoldsMessage = computed(() => {
-    const holds = totalHoldsCount.value;
-    const days = datesWithPending.value.length;
+    const holds = totalStuckCount.value;
+    const days = datesWithStuck.value.length;
     if (days === 1) {
-        return __(':count reservation hold(s) are recorded on this date. Inventory edits/deletes are blocked while holds exist.', { count: holds });
+        return __(':count hold(s) on this date look stuck — their reservations are missing, already finished, or abandoned past the hold window. Clearing them releases the inventory they still hold.', { count: holds });
     }
-    return __(':count reservation hold(s) across :days date(s) in this range. Inventory edits/deletes are blocked while holds exist.', { count: holds, days });
+    return __(':count stuck hold(s) across :days date(s) in this range — their reservations are missing, already finished, or abandoned past the hold window. Clearing them releases the inventory they still hold.', { count: holds, days });
 });
 
 const submit = computed(() => {
@@ -188,12 +190,13 @@ async function clearStuckHolds(force) {
     let totalCleared = 0;
     let failedCount = 0;
     const stillActive = new Set();
+    const expirable = new Set();
 
     try {
         // allSettled (not all) so one failed date doesn't discard the holds other dates cleared —
         // this is the recovery path, partial progress must be kept and reported.
         const results = await Promise.allSettled(
-            datesWithPending.value.map((date) => axios.post('/cp/resrv/availability/clear-stuck-pending', {
+            datesWithStuck.value.map((date) => axios.post('/cp/resrv/availability/clear-stuck-pending', {
                 statamic_id: props.parentId,
                 date,
                 rate_id: props.rate.code,
@@ -212,20 +215,25 @@ async function clearStuckHolds(force) {
             if (Array.isArray(data.still_active)) {
                 data.still_active.forEach((id) => stillActive.add(id));
             }
+            if (Array.isArray(data.expirable)) {
+                data.expirable.forEach((id) => expirable.add(id));
+            }
         }
 
-        // Non-force shows the confirm dialog; force closes it (any still-active holds were left in place).
-        const waitingForConfirmation = !force && stillActive.size > 0;
-        stillActiveIds.value = waitingForConfirmation ? [...stillActive] : [];
+        // Only expirable holds (abandoned checkouts past their hold window) warrant the force
+        // confirmation — asking about holds that belong to confirmed bookings or in-window
+        // checkouts would offer an action that does nothing. Force closes the dialog.
+        const waitingForConfirmation = !force && expirable.size > 0;
+        expirableIds.value = waitingForConfirmation ? [...expirable] : [];
 
         if (failedCount > 0) {
             toast.error(`${totalCleared} hold(s) cleared, ${failedCount} date(s) failed`);
         } else if (waitingForConfirmation) {
             if (totalCleared > 0) {
-                toast.success(`${totalCleared} stuck hold(s) cleared. Active holds need confirmation.`);
+                toast.success(`${totalCleared} stuck hold(s) cleared. Abandoned checkouts need confirmation.`);
             }
-        } else if (force && stillActive.size > 0) {
-            toast.success(`${totalCleared} hold(s) cleared. ${stillActive.size} reservation(s) still active and left in place.`);
+        } else if (stillActive.size > 0) {
+            toast.success(`${totalCleared} hold(s) cleared. ${stillActive.size} hold(s) belong to active reservations and were left in place.`);
         } else {
             toast.success(`${totalCleared} hold(s) cleared`);
         }
