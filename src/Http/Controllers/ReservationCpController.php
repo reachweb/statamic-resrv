@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Jobs\ResendConfirmationEmail;
@@ -210,6 +211,8 @@ class ReservationCpController extends Controller
             return response()->json(['error' => $exception->getMessage()], 400);
         } catch (InvalidStateTransition $e) {
             return response()->json(['error' => 'Cannot refund a reservation in the '.$e->from->value.' state.'], 422);
+        } catch (UnknownPaymentGateway $e) {
+            return response()->json(['error' => 'The payment gateway ['.$e->gateway.'] recorded for this reservation is no longer configured. Refund the charge manually through that provider.'], 422);
         } catch (\Throwable $e) {
             // Unmapped failure (e.g. lock-wait QueryException under contention); transaction
             // rolled back so the charge was never touched. Return a retryable 503, not a raw 500.

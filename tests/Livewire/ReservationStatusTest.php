@@ -589,6 +589,43 @@ class ReservationStatusTest extends TestCase
         ]);
     }
 
+    public function test_unknown_recorded_gateway_blocks_self_cancel_but_keeps_the_page_viewable()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        // The gateway this reservation paid through has since been removed from config —
+        // nobody can move that money automatically, so the page must degrade to view-only
+        // instead of routing the foreign payment_id to the current default gateway.
+        $reservation = $this->makeReservation([
+            'payment_gateway' => 'legacy-stripe',
+        ]);
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertSee($reservation->reference)
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+
+        // Display still works without the gateway: the recorded charge is reported
+        // instead of throwing while asking the missing gateway how it collects.
+        $this->assertSame(
+            $reservation->amountPaid()->format(),
+            $reservation->fresh()->amountPaidOnline()->format()
+        );
+    }
+
     public function test_cancel_reports_success_even_when_a_post_refund_listener_fails()
     {
         Mail::fake();

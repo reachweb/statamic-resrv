@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\CancellationNotAllowed;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationRefundProcessor
@@ -31,6 +32,8 @@ class ReservationRefundProcessor
      *
      * @throws InvalidStateTransition when the current status cannot transition to REFUNDED
      * @throws RefundFailedException when the payment gateway rejects the refund
+     * @throws UnknownPaymentGateway when the recorded gateway is no longer configured — the
+     *                               transaction rolls back and the charge must be refunded manually
      */
     public function refund(Reservation $reservation): bool
     {

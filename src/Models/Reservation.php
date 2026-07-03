@@ -21,6 +21,7 @@ use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationDriftException;
+use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -276,7 +277,9 @@ class Reservation extends Model
 
     /**
      * Whether cancelling can return the money without manual work: no charge reached a
-     * gateway, or the gateway supports API refunds. Offline gateways (bank transfer) cannot.
+     * gateway, or the gateway supports API refunds. Offline gateways (bank transfer) cannot,
+     * and neither can a recorded gateway that is no longer configured — nobody can move
+     * that money automatically, so such reservations require manual handling.
      */
     public function supportsAutomaticRefund(): bool
     {
@@ -284,7 +287,11 @@ class Reservation extends Model
             return true;
         }
 
-        return $this->resolvePaymentGateway()->supportsAutomaticRefunds();
+        try {
+            return $this->resolvePaymentGateway()->supportsAutomaticRefunds();
+        } catch (UnknownPaymentGateway) {
+            return false;
+        }
     }
 
     /**
@@ -298,8 +305,10 @@ class Reservation extends Model
     }
 
     /**
-     * The gateway this reservation was paid through, falling back to the default for legacy
-     * rows whose recorded gateway is empty or no longer configured.
+     * The gateway this reservation was paid through. Only legacy rows with a BLANK recorded
+     * gateway fall back to the default; a non-empty gateway that is no longer configured
+     * fails closed with UnknownPaymentGateway — silently substituting the current default
+     * would hand this reservation's foreign payment_id to a provider that never charged it.
      */
     public function resolvePaymentGateway(): PaymentInterface
     {
@@ -307,8 +316,14 @@ class Reservation extends Model
 
         try {
             return $manager->forReservation($this);
-        } catch (\InvalidArgumentException) {
-            return $manager->gateway();
+        } catch (UnknownPaymentGateway $e) {
+            throw $e;
+        } catch (\InvalidArgumentException $e) {
+            if (blank($this->payment_gateway)) {
+                return $manager->gateway();
+            }
+
+            throw new UnknownPaymentGateway($this->payment_gateway, $this->id, $e);
         }
     }
 
@@ -389,8 +404,18 @@ class Reservation extends Model
      */
     public function amountPaidOnline(): PriceClass
     {
-        if (! $this->hasGatewayPayment() || $this->resolvePaymentGateway()->supportsManualConfirmation()) {
+        if (! $this->hasGatewayPayment()) {
             return Price::create(0);
+        }
+
+        try {
+            if ($this->resolvePaymentGateway()->supportsManualConfirmation()) {
+                return Price::create(0);
+            }
+        } catch (UnknownPaymentGateway) {
+            // Display-only: with the gateway gone we cannot ask it whether it collected
+            // online, so report the amount the reservation itself recorded rather than
+            // breaking the customer status page.
         }
 
         return $this->amountPaid();

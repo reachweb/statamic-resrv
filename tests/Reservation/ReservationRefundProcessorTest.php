@@ -2,10 +2,14 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -95,5 +99,65 @@ class ReservationRefundProcessorTest extends TestCase
         $this->expectException(InvalidStateTransition::class);
 
         app(ReservationRefundProcessor::class)->refund($reservation);
+    }
+
+    public function test_fails_closed_when_the_recorded_gateway_is_no_longer_configured()
+    {
+        Event::fake([ReservationRefunded::class]);
+
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'status' => 'confirmed',
+            'item_id' => $item->id(),
+            'payment_id' => 'pi_123',
+            'payment_gateway' => 'legacy-stripe',
+        ]);
+
+        // Substituting the current default would hand this reservation's foreign
+        // payment_id to a provider that never charged it — the refund must abort.
+        try {
+            app(ReservationRefundProcessor::class)->refund($reservation);
+            $this->fail('Expected UnknownPaymentGateway was not thrown.');
+        } catch (UnknownPaymentGateway $e) {
+            $this->assertSame('legacy-stripe', $e->gateway);
+        }
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+        Event::assertNotDispatched(ReservationRefunded::class);
+    }
+
+    public function test_blank_recorded_gateway_still_falls_back_to_the_default()
+    {
+        Event::fake([ReservationRefunded::class]);
+
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $item = $this->makeStatamicItem();
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'status' => 'confirmed',
+            'item_id' => $item->id(),
+            'payment_id' => 'pi_123',
+            'payment_gateway' => '',
+        ]);
+
+        $changed = app(ReservationRefundProcessor::class)->refund($reservation);
+
+        $this->assertTrue($changed);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
+        Event::assertDispatched(ReservationRefunded::class);
     }
 }

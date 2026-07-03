@@ -475,6 +475,36 @@ class ReservationCpTest extends TestCase
         Mail::assertSent(ReservationRefunded::class);
     }
 
+    public function test_refund_is_rejected_when_the_recorded_gateway_is_no_longer_configured()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'pi_123',
+            'payment_gateway' => 'legacy-stripe',
+        ])->withCustomer()->create();
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        // The unknown gateway must surface as an explicit manual-handling error, not fall
+        // back to the default provider or hide behind a retryable 503.
+        $response->assertStatus(422);
+        $this->assertStringContainsString('legacy-stripe', $response->json('error'));
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+        Mail::assertNotSent(ReservationRefunded::class);
+    }
+
     public function test_refunding_pending_reservation_with_cleared_payment_id_still_calls_gateway()
     {
         Mail::fake();
