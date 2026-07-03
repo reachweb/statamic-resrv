@@ -199,6 +199,36 @@ class ReservationStatusTest extends TestCase
             ->assertSet('reservationId', $second->id);
     }
 
+    public function test_varying_the_reference_cannot_bypass_the_ip_wide_lookup_limit()
+    {
+        $reservation = $this->makeReservation();
+
+        // Each distinct reference gets a fresh per-(IP, reference) bucket, so without an
+        // IP-wide cap an attacker could enumerate references indefinitely from one address.
+        foreach (range(1, 30) as $attempt) {
+            Livewire::test(ReservationStatus::class)
+                ->set('email', 'wrong@example.com')
+                ->set('reference', 'GUESS'.$attempt)
+                ->call('lookup')
+                ->assertSee(trans('statamic-resrv::frontend.reservationNotFound'));
+        }
+
+        // A fresh reference — even with valid credentials — is now rejected by the IP bucket.
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertHasErrors(['lookup'])
+            ->assertSet('reservationId', null)
+            ->assertSee(trans('statamic-resrv::frontend.tooManyLookupAttempts'));
+
+        // Deep links share the same budget, so mount() can't be used to keep guessing either.
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => str_repeat('a', 64)])
+            ->test(ReservationStatus::class)
+            ->assertSet('linkFailed', true)
+            ->assertSet('reservationId', null);
+    }
+
     public function test_lookup_disambiguates_reservations_sharing_a_reference()
     {
         $first = $this->makeReservation();

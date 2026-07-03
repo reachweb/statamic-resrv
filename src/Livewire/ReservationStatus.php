@@ -58,8 +58,7 @@ class ReservationStatus extends Component
         // to preserve the rate-limit/enumeration posture) so the customer knows the link — not the
         // page — is at fault. Shares the lookup form's per-(IP, reference) budget so mount can't
         // brute-force the hash.
-        if (strlen($hash) !== 64
-            || RateLimiter::tooManyAttempts($this->rateLimiterKey($reference), 10)) {
+        if (strlen($hash) !== 64 || $this->tooManyLookupAttempts($reference)) {
             $this->linkFailed = true;
 
             return;
@@ -68,7 +67,7 @@ class ReservationStatus extends Component
         $reservation = Reservation::findForCustomerLookup($reference, $hash, $this->visibleStatuses());
 
         if ($reservation === null) {
-            RateLimiter::hit($this->rateLimiterKey($reference), 600);
+            $this->recordFailedLookup($reference);
             $this->linkFailed = true;
 
             return;
@@ -83,7 +82,7 @@ class ReservationStatus extends Component
 
         $this->validate();
 
-        if (RateLimiter::tooManyAttempts($this->rateLimiterKey($this->reference), 10)) {
+        if ($this->tooManyLookupAttempts($this->reference)) {
             $this->addError('lookup', trans('statamic-resrv::frontend.tooManyLookupAttempts'));
 
             return;
@@ -92,9 +91,9 @@ class ReservationStatus extends Component
         $reservation = Reservation::findByReferenceForCustomer($this->reference, $this->email, $this->visibleStatuses());
 
         // Generic error so responses don't reveal whether a reference exists. Success never clears
-        // the bucket, so a valid email can't reset a reference's budget; failures decay after 10 min.
+        // the buckets, so a valid email can't reset a reference's budget; failures decay after 10 min.
         if (! $reservation) {
-            RateLimiter::hit($this->rateLimiterKey($this->reference), 600);
+            $this->recordFailedLookup($this->reference);
             $this->addError('lookup', trans('statamic-resrv::frontend.reservationNotFound'));
 
             return;
@@ -104,12 +103,34 @@ class ReservationStatus extends Component
     }
 
     /**
-     * Throttle per (IP, reference), not per IP, so shared egress IPs aren't exhausted by one user
-     * while still capping guesses per reference. Reference is normalized to match the lookup path.
+     * Two buckets guard every lookup path. The tight per-(IP, reference) bucket caps guesses
+     * per reference without letting one user exhaust a shared egress IP; on its own it is
+     * bypassable by varying the reference (every guess gets a fresh bucket), so a looser
+     * IP-wide bucket caps total failed lookups from one address across all references.
+     */
+    protected function tooManyLookupAttempts(string $reference): bool
+    {
+        return RateLimiter::tooManyAttempts($this->rateLimiterKey($reference), 10)
+            || RateLimiter::tooManyAttempts($this->ipRateLimiterKey(), 30);
+    }
+
+    protected function recordFailedLookup(string $reference): void
+    {
+        RateLimiter::hit($this->rateLimiterKey($reference), 600);
+        RateLimiter::hit($this->ipRateLimiterKey(), 600);
+    }
+
+    /**
+     * Reference is normalized to match the lookup path.
      */
     protected function rateLimiterKey(string $reference): string
     {
         return 'resrv-status-lookup:'.sha1((string) request()->ip().'|'.strtoupper(trim($reference)));
+    }
+
+    protected function ipRateLimiterKey(): string
+    {
+        return 'resrv-status-lookup-ip:'.sha1((string) request()->ip());
     }
 
     public function cancel(): void
