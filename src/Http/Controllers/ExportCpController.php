@@ -30,13 +30,20 @@ class ExportCpController extends Controller
 
     protected ?array $cachedFieldDefinitions = null;
 
+    /**
+     * The affiliate the current download is filtered to. A reservation can carry several
+     * attributions (cookie + coupon), so the affiliate_* columns must serialize the affiliate
+     * the export was filtered by — not whichever pivot happens to come first.
+     */
+    protected ?int $exportAffiliateId = null;
+
     public function indexCp()
     {
         return Inertia::render('resrv::Export/Index', [
             'fields' => $this->fieldMetadata(),
             'statuses' => self::STATUSES,
             'entries' => Entry::query()->orderBy('title')->get(['item_id', 'title'])->values(),
-            'affiliates' => Affiliate::query()->orderBy('name')->get(['id', 'name', 'code'])->values(),
+            'affiliates' => Affiliate::withTrashed()->orderBy('name')->get(['id', 'name', 'code'])->values(),
             'countUrl' => cp_route('resrv.export.count'),
             'downloadUrl' => cp_route('resrv.export.download'),
         ]);
@@ -54,6 +61,7 @@ class ExportCpController extends Controller
     public function download(Request $request)
     {
         $data = $this->validateForDownload($request);
+        $this->exportAffiliateId = $data['affiliate_id'] ?? null;
         $definitions = $this->fieldDefinitions();
         $fields = array_map(
             fn (string $key) => ['key' => $key] + $definitions[$key],
@@ -66,7 +74,7 @@ class ExportCpController extends Controller
             fputcsv($handle, array_map(fn ($field) => $field['label'], $fields));
 
             $this->baseQuery($data)
-                ->with(['customer', 'extras', 'options.values', 'rate', 'childs.rate', 'affiliate'])
+                ->with(['customer', 'extras', 'options.values', 'rate', 'childs.rate', 'affiliate' => fn ($query) => $query->withTrashed()])
                 ->lazyById(500)
                 ->each(function (Reservation $reservation) use ($handle, $fields) {
                     $row = [];
@@ -125,6 +133,10 @@ class ExportCpController extends Controller
             ->when(
                 $affiliateId || $commissionStatus !== 'all',
                 fn ($query) => $query->whereHas('affiliate', function ($q) use ($affiliateId, $commissionStatus) {
+                    // Affiliates are soft-deleted precisely so their reservation history
+                    // survives — exports must keep reporting their commissions.
+                    $q->withTrashed();
+
                     if ($affiliateId) {
                         $q->where('resrv_affiliates.id', $affiliateId);
                     }
@@ -344,6 +356,10 @@ class ExportCpController extends Controller
 
     protected function reservationAffiliate(Reservation $reservation): ?Affiliate
     {
+        if ($this->exportAffiliateId !== null) {
+            return $reservation->affiliate->firstWhere('id', $this->exportAffiliateId);
+        }
+
         return $reservation->affiliate->first();
     }
 

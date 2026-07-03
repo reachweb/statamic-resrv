@@ -676,6 +676,71 @@ class ExportCpTest extends TestCase
         $this->assertStringNotContainsString('DROP', $csv);
     }
 
+    public function test_soft_deleted_affiliates_stay_in_filters_columns_and_the_picker()
+    {
+        $affiliate = Affiliate::factory()->create(['code' => 'GONE', 'name' => 'Gone Agency']);
+        $this->makeAffiliateReservation($affiliate, ['reference' => 'HIST1'], 20);
+
+        $affiliate->delete();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        // Affiliates are soft-deleted precisely so commission history survives — the
+        // whereHas filter must not let the SoftDeletes scope drop their reservations.
+        $this->get(cp_route('resrv.export.count')."?start={$start}&end={$end}&affiliate_id={$affiliate->id}")
+            ->assertStatus(200)
+            ->assertJson(['count' => 1]);
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'affiliate_id' => $affiliate->id,
+            'fields' => ['reference', 'affiliate_code', 'affiliate_name', 'affiliate_commission_status'],
+        ]);
+
+        $response->assertStatus(200);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($response->streamedContent()))));
+
+        $this->assertEquals(['HIST1', 'GONE', 'Gone Agency', 'active'], $rows[1]);
+
+        // The export page picker must still offer the deleted affiliate so its history
+        // remains filterable.
+        $this->get(cp_route('resrv.export.index'))
+            ->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('resrv::Export/Index')
+                ->where('affiliates.0.code', 'GONE')
+            );
+    }
+
+    public function test_download_serializes_the_filtered_affiliate_when_a_reservation_has_multiple()
+    {
+        $cookieAffiliate = Affiliate::factory()->create(['code' => 'COOKIE', 'name' => 'Cookie', 'email' => 'cookie@example.com']);
+        $couponAffiliate = Affiliate::factory()->create(['code' => 'COUPON', 'name' => 'Coupon', 'email' => 'coupon@example.com']);
+
+        // One reservation, two attributions (e.g. cookie tracking + an affiliate coupon).
+        $reservation = $this->makeAffiliateReservation($cookieAffiliate, ['reference' => 'MULTI1'], 20);
+        $reservation->affiliate()->attach($couponAffiliate->id, ['fee' => 10]);
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => today()->toDateString(),
+            'end' => today()->addWeek()->toDateString(),
+            'affiliate_id' => $couponAffiliate->id,
+            'fields' => ['reference', 'affiliate_code', 'affiliate_fee', 'affiliate_commission'],
+        ]);
+
+        $response->assertStatus(200);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($response->streamedContent()))));
+
+        // The affiliate_* columns must describe the affiliate the export was filtered by,
+        // not whichever pivot happens to come first.
+        $this->assertEquals('MULTI1', $rows[1][0]);
+        $this->assertEquals('COUPON', $rows[1][1]);
+        $this->assertEquals('10', $rows[1][2]);
+        $this->assertEquals($reservation->total->multiply(0.1)->format(), $rows[1][3]);
+    }
+
     protected function makeAffiliateReservation(Affiliate $affiliate, array $attributes = [], float $fee = 20, bool $cancelled = false): Reservation
     {
         $item = $this->makeStatamicItem();
