@@ -208,24 +208,52 @@ class ReservationStatus extends Component
             return trans('statamic-resrv::frontend.statusConfirmed');
         }
 
-        if ($reservation->status !== ReservationStatusEnum::REFUNDED->value) {
-            return '';
+        if ($reservation->status === ReservationStatusEnum::REFUNDED->value) {
+            // Rows refunded before CANCELLED existed include no-charge voids; don't claim
+            // a refund when no money moved.
+            return $reservation->hasGatewayPayment()
+                ? trans('statamic-resrv::frontend.statusCancelled')
+                : trans('statamic-resrv::frontend.statusCancelledNoRefund');
         }
 
-        // No-charge cancellations also end in REFUNDED; don't claim a refund when no money moved.
-        return $reservation->hasGatewayPayment()
-            ? trans('statamic-resrv::frontend.statusCancelled')
-            : trans('statamic-resrv::frontend.statusCancelledNoRefund');
+        if ($reservation->status === ReservationStatusEnum::CANCELLED->value) {
+            // A retained payment must read as such — never as a refund.
+            return $reservation->hasGatewayPayment()
+                ? trans('statamic-resrv::frontend.statusCancelledNoRefundIssued')
+                : trans('statamic-resrv::frontend.statusCancelledNoRefund');
+        }
+
+        return '';
     }
 
     /**
-     * Lookable statuses: live and cancelled. PENDING/EXPIRED were never confirmed, so no reference was issued.
+     * What the just-completed cancellation did with the money, keyed off the terminal
+     * status the processor chose — the blade must never claim a refund that didn't happen.
+     */
+    #[Computed]
+    public function cancellationSuccessMessage(): string
+    {
+        $reservation = $this->reservation;
+
+        if (! $reservation || ! $reservation->hasGatewayPayment()) {
+            return trans('statamic-resrv::frontend.reservationCancelledNoPaymentSuccess');
+        }
+
+        return $reservation->status === ReservationStatusEnum::REFUNDED->value
+            ? trans('statamic-resrv::frontend.reservationCancelledSuccess')
+            : trans('statamic-resrv::frontend.reservationCancelledNoRefundSuccess');
+    }
+
+    /**
+     * Lookable statuses: live and terminated-after-confirmation. PENDING/EXPIRED were never
+     * confirmed, so no reference was issued.
      */
     protected function visibleStatuses(): array
     {
         return [
             ...ReservationStatusEnum::live(),
             ReservationStatusEnum::REFUNDED->value,
+            ReservationStatusEnum::CANCELLED->value,
         ];
     }
 

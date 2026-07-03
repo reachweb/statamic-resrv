@@ -14,9 +14,12 @@ use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Jobs\SendCancelledReservationEmails as SendCancelledReservationEmailsJob;
+use Reach\StatamicResrv\Jobs\SendCustomerCancelledEmail as SendCustomerCancelledEmailJob;
 use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails as SendCancelledReservationEmailsListener;
+use Reach\StatamicResrv\Listeners\SendCustomerCancelledEmail as SendCustomerCancelledEmailListener;
 use Reach\StatamicResrv\Livewire\ReservationStatus;
 use Reach\StatamicResrv\Mail\ReservationCancelled as ReservationCancelledMail;
+use Reach\StatamicResrv\Mail\ReservationCancelledCustomer as ReservationCancelledCustomerMail;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationRefunded as ReservationRefundedMail;
 use Reach\StatamicResrv\Models\ChildReservation;
@@ -342,23 +345,28 @@ class ReservationStatusTest extends TestCase
             ->assertDontSee(trans('statamic-resrv::frontend.freeCancellationExpired'));
     }
 
-    public function test_hides_cancel_button_for_non_refundable_reservations()
+    public function test_non_refundable_reservations_offer_a_cancel_without_refund()
     {
         $reservation = $this->makeReservation([
             'cancellation_policy' => 'non_refundable',
             'free_cancellation_period' => null,
         ]);
 
+        // The policy never had a window, so the wording must say "non-refundable" —
+        // not "the free cancellation period has expired".
         Livewire::test(ReservationStatus::class)
             ->set('email', $reservation->customer->email)
             ->set('reference', $reservation->reference)
             ->call('lookup')
             ->assertSee(trans('statamic-resrv::frontend.nonRefundable'))
-            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
-            ->assertDontSee(trans('statamic-resrv::frontend.freeCancellationExpired'));
+            ->assertSee(trans('statamic-resrv::frontend.cancelReservationNoRefund'))
+            ->assertSee(trans('statamic-resrv::frontend.cancelReservationNoRefundWarning'))
+            ->assertSee(trans('statamic-resrv::frontend.cancelReservationNonRefundableDescription'))
+            ->assertDontSee(trans('statamic-resrv::frontend.freeCancellationExpired'))
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationDescription'));
     }
 
-    public function test_hides_cancel_button_when_the_window_has_passed()
+    public function test_expired_window_offers_a_cancel_without_refund()
     {
         $reservation = $this->makeReservation([
             'date_start' => now()->addDay()->setTime(12, 0),
@@ -370,12 +378,16 @@ class ReservationStatusTest extends TestCase
             ->set('email', $reservation->customer->email)
             ->set('reference', $reservation->reference)
             ->call('lookup')
-            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
-            ->assertSee(trans('statamic-resrv::frontend.freeCancellationExpired'));
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationDescription'))
+            ->assertSee(trans('statamic-resrv::frontend.cancelReservationNoRefund'))
+            ->assertSee(trans('statamic-resrv::frontend.cancelReservationNoRefundWarning'))
+            ->assertSee(trans('statamic-resrv::frontend.cancelReservationNoRefundDescription'));
     }
 
-    public function test_cancel_is_rejected_server_side_after_the_free_cancellation_window_has_passed()
+    public function test_cancel_after_the_window_keeps_the_payment_and_lands_in_cancelled()
     {
+        Event::fake([ReservationRefunded::class, ReservationCancelledEvent::class, ReservationCancelledByCustomer::class]);
+
         // date_start +1 day with a 5-day free-cancellation period puts the deadline in the past.
         $reservation = $this->makeReservation([
             'date_start' => now()->addDay()->setTime(12, 0),
@@ -383,14 +395,47 @@ class ReservationStatusTest extends TestCase
             'free_cancellation_period' => 5,
         ]);
 
-        // The server-side guard must reject before any gateway call — the button being hidden is
-        // not the enforcement; a stale/malicious client can still POST the cancel action.
+        // The payment stays with the business, so the gateway must never see a refund call.
         $this->forbidGatewayRefunds();
 
         Livewire::test(ReservationStatus::class)
             ->set('email', $reservation->customer->email)
             ->set('reference', $reservation->reference)
             ->call('lookup')
+            ->call('cancel')
+            ->assertHasNoErrors()
+            ->assertSet('cancelled', true)
+            ->assertSee(trans('statamic-resrv::frontend.reservationCancelledNoRefundSuccess'))
+            ->assertDontSee(trans('statamic-resrv::frontend.reservationCancelledSuccess'));
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'cancelled',
+        ]);
+
+        Event::assertNotDispatched(ReservationRefunded::class);
+        Event::assertDispatched(ReservationCancelledEvent::class);
+        Event::assertDispatched(ReservationCancelledByCustomer::class);
+    }
+
+    public function test_cancel_is_rejected_server_side_once_the_stay_has_started()
+    {
+        // Live booking whose date_start already passed: neither cancel path applies, and the
+        // button being hidden is not the enforcement — a stale/malicious client can still
+        // POST the cancel action.
+        $reservation = $this->makeReservation([
+            'date_start' => now()->subDay()->setTime(12, 0),
+            'date_end' => now()->addDay()->setTime(12, 0),
+            'free_cancellation_period' => 5,
+        ]);
+
+        $this->forbidGatewayRefunds();
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationNoRefund'))
             ->call('cancel')
             ->assertHasErrors(['cancellation'])
             ->assertSet('cancelled', false)
@@ -475,13 +520,16 @@ class ReservationStatusTest extends TestCase
         Event::assertDispatched(ReservationCancelledByCustomer::class, fn ($event) => $event->reservation->id === $reservation->id);
     }
 
-    public function test_cancel_is_rejected_server_side_when_not_allowed()
+    public function test_non_refundable_reservations_cancel_without_a_refund()
     {
+        Event::fake([ReservationRefunded::class, ReservationCancelledEvent::class, ReservationCancelledByCustomer::class]);
+
         $reservation = $this->makeReservation([
             'cancellation_policy' => 'non_refundable',
             'free_cancellation_period' => null,
         ]);
 
+        // Non-refundable means the money stays put — the gateway must never see a refund call.
         $this->forbidGatewayRefunds();
 
         Livewire::test(ReservationStatus::class)
@@ -489,13 +537,18 @@ class ReservationStatusTest extends TestCase
             ->set('reference', $reservation->reference)
             ->call('lookup')
             ->call('cancel')
-            ->assertHasErrors(['cancellation'])
-            ->assertSee(trans('statamic-resrv::frontend.cancellationNotAllowed'));
+            ->assertHasNoErrors()
+            ->assertSet('cancelled', true)
+            ->assertSee(trans('statamic-resrv::frontend.reservationCancelledNoRefundSuccess'));
 
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $reservation->id,
-            'status' => 'confirmed',
+            'status' => 'cancelled',
         ]);
+
+        Event::assertNotDispatched(ReservationRefunded::class);
+        Event::assertDispatched(ReservationCancelledEvent::class);
+        Event::assertDispatched(ReservationCancelledByCustomer::class);
     }
 
     public function test_cancel_shows_generic_error_when_the_gateway_refund_fails()
@@ -947,6 +1000,126 @@ class ReservationStatusTest extends TestCase
 
         Mail::assertSent(ReservationCancelledMail::class, fn ($mail) => $mail->hasTo('admin@example.com'));
         Mail::assertNotSent(ReservationCancelledMail::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
+    }
+
+    public function test_cancelled_event_is_wired_to_the_customer_email_listener()
+    {
+        Event::fake();
+
+        Event::assertListening(
+            ReservationCancelledEvent::class,
+            SendCustomerCancelledEmailListener::class
+        );
+    }
+
+    public function test_customer_cancelled_email_job_notifies_the_customer_but_not_the_admin()
+    {
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = $this->makeReservation();
+
+        (new SendCustomerCancelledEmailJob($reservation))->handle();
+
+        Mail::assertSent(ReservationCancelledCustomerMail::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
+        Mail::assertNotSent(ReservationCancelledCustomerMail::class, fn ($mail) => $mail->hasTo('admin@example.com'));
+    }
+
+    public function test_offline_reservations_stay_view_only_even_after_the_window_expires()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        // Expired window + offline gateway: the no-refund path is for online self-service
+        // payments only — offline arrangements are "contact us" by design.
+        $reservation = $this->makeReservation([
+            'payment_gateway' => 'offline',
+            'payment_id' => 'offline_test_intent',
+            'date_start' => now()->addDay()->setTime(12, 0),
+            'date_end' => now()->addDays(3)->setTime(12, 0),
+            'free_cancellation_period' => 5,
+        ]);
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationNoRefund'))
+            ->assertSee(trans('statamic-resrv::frontend.cancellationNotAllowed'))
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+    }
+
+    public function test_partner_reservations_stay_view_only_after_the_window_expires()
+    {
+        // Partner bookings hold no gateway payment, so the no-refund path (which exists to
+        // retain a payment) does not apply — outside the window they are "contact us" cases.
+        $reservation = $this->makeReservation([
+            'status' => 'partner',
+            'payment_id' => '',
+            'date_start' => now()->addDay()->setTime(12, 0),
+            'date_end' => now()->addDays(3)->setTime(12, 0),
+            'free_cancellation_period' => 5,
+        ]);
+
+        $this->forbidGatewayRefunds();
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationNoRefund'))
+            ->assertSee(trans('statamic-resrv::frontend.cancellationNotAllowed'))
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'partner',
+        ]);
+    }
+
+    public function test_period_zero_allows_a_full_refund_cancel_on_arrival_day()
+    {
+        Event::fake([ReservationRefunded::class, ReservationCancelledByCustomer::class]);
+
+        // deadlineFor() = date_start->startOfDay()->subDays(period); with period 0 the deadline
+        // is the start of arrival day, and the inclusive-through-end-of-day contract keeps the
+        // refund cancel available ON the arrival day itself. This matches the "free cancellation
+        // until <date>" label advertised at checkout — a deliberate, documented boundary.
+        $reservation = $this->makeReservation([
+            'date_start' => now()->endOfDay()->subMinutes(5),
+            'date_end' => now()->addDays(2)->setTime(12, 0),
+            'free_cancellation_period' => 0,
+        ]);
+
+        $this->mockRefundGateway();
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertSee(trans('statamic-resrv::frontend.cancelReservation'))
+            ->call('cancel')
+            ->assertHasNoErrors()
+            ->assertSet('cancelled', true)
+            ->assertSee(trans('statamic-resrv::frontend.reservationCancelledSuccess'));
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'refunded',
+        ]);
+
+        Event::assertDispatched(ReservationRefunded::class);
     }
 
     public function test_displays_parent_reservation_children()

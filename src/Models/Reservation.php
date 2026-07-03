@@ -257,10 +257,19 @@ class Reservation extends Model
     }
 
     /**
+     * Whether the customer may self-cancel at all — with a refund inside the free
+     * cancellation window, or without one after it closes.
+     */
+    public function canBeCancelledByCustomer(): bool
+    {
+        return $this->canCancelWithRefund() || $this->canCancelWithoutRefund();
+    }
+
+    /**
      * Whether the customer may self-cancel with automatic full refund: live, within an
      * unexpired free-cancellation window, and the money can flow back without manual work.
      */
-    public function canBeCancelledByCustomer(): bool
+    public function canCancelWithRefund(): bool
     {
         if (! $this->isLive()) {
             return false;
@@ -273,6 +282,27 @@ class Reservation extends Model
         }
 
         return $this->supportsAutomaticRefund();
+    }
+
+    /**
+     * Whether the customer may self-cancel WITHOUT a refund: a live booking paid online
+     * through a gateway that could refund automatically, before the stay starts, once the
+     * free-cancellation window has closed (or the policy is non-refundable). The payment
+     * stays with the business. hasGatewayPayment() keeps partner and zero-charge bookings
+     * out, and supportsAutomaticRefund() keeps offline/manual and no-longer-configured
+     * gateways out — all of those are "contact us to cancel" cases by design.
+     */
+    public function canCancelWithoutRefund(): bool
+    {
+        if (! $this->isLive() || $this->canCancelWithRefund()) {
+            return false;
+        }
+
+        if (! now()->lt($this->date_start)) {
+            return false;
+        }
+
+        return $this->hasGatewayPayment() && $this->supportsAutomaticRefund();
     }
 
     /**

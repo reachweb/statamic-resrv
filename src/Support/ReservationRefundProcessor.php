@@ -81,24 +81,27 @@ class ReservationRefundProcessor
     }
 
     /**
-     * Customer-initiated cancellation: the self-cancel policy guard, the refund, and the
-     * "cancelled by the customer" admin notification in one place, so every surface that
-     * lets a customer cancel behaves identically. Availability restore and the customer
-     * refund email still come from ReservationRefunded via refund().
+     * Customer-initiated cancellation: the self-cancel policy guards, the terminal-state
+     * routing, and the "cancelled by the customer" admin notification in one place, so
+     * every surface that lets a customer cancel behaves identically. Inside the free
+     * cancellation window the charge is refunded (REFUNDED); after it closes — or when
+     * the policy is non-refundable — the booking is cancelled with the payment retained
+     * (CANCELLED). Availability restore and the customer email come from the respective
+     * ReservationRefunded / ReservationCancelled chains.
      *
-     * @throws CancellationNotAllowed when the booking is outside its free cancellation window
-     *                                or its gateway cannot refund automatically (e.g. offline
-     *                                bank transfer — money would be marked returned without moving)
-     * @throws InvalidStateTransition when the current status cannot transition to REFUNDED
+     * @throws CancellationNotAllowed when the booking is not customer-cancellable (not live,
+     *                                stay already started, or its gateway cannot self-serve —
+     *                                offline/partner/unknown gateways are "contact us" cases)
+     * @throws InvalidStateTransition when the current status cannot reach the terminal state
      * @throws RefundFailedException when the payment gateway rejects the refund
      */
     public function cancelByCustomer(Reservation $reservation): bool
     {
-        if (! $reservation->canBeCancelledByCustomer()) {
-            throw new CancellationNotAllowed($reservation->id);
-        }
-
-        $changed = $this->refund($reservation);
+        $changed = match (true) {
+            $reservation->canCancelWithRefund() => $this->refund($reservation),
+            $reservation->canCancelWithoutRefund() => $this->cancelWithoutRefund($reservation),
+            default => throw new CancellationNotAllowed($reservation->id),
+        };
 
         if ($changed) {
             $this->dispatchCommitted(ReservationCancelledByCustomer::class, $reservation);

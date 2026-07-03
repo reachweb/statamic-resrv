@@ -76,7 +76,7 @@
                 <span @class([
                     'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium',
                     'bg-green-100 text-green-800' => $reservation->isLive(),
-                    'bg-gray-100 text-gray-800' => $reservation->status === ReservationStatus::REFUNDED->value,
+                    'bg-gray-100 text-gray-800' => in_array($reservation->status, [ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value], true),
                 ])>
                     {{ $this->statusLabel }}
                 </span>
@@ -84,7 +84,7 @@
 
             @if ($cancelled)
             <div class="flex flex-col my-4 p-4 bg-green-50 border border-green-300 rounded">
-                <dd class="text-gray-700">{{ trans($reservation->hasGatewayPayment() ? 'statamic-resrv::frontend.reservationCancelledSuccess' : 'statamic-resrv::frontend.reservationCancelledNoPaymentSuccess') }}</dd>
+                <dd class="text-gray-700">{{ $this->cancellationSuccessMessage }}</dd>
             </div>
             @endif
 
@@ -213,7 +213,7 @@
             @endif
 
             @if (! $cancelled)
-                @if ($reservation->canBeCancelledByCustomer())
+                @if ($reservation->canCancelWithRefund())
                 <div class="mt-6">
                     <p class="text-gray-700 mb-4">
                         {{ trans($reservation->hasGatewayPayment() ? 'statamic-resrv::frontend.cancelReservationDescription' : 'statamic-resrv::frontend.cancelReservationNoPaymentDescription') }}
@@ -229,15 +229,35 @@
                         <span wire:loading wire:target="cancel">{{ trans('statamic-resrv::frontend.cancelReservation') }}&hellip;</span>
                     </button>
                 </div>
-                @elseif ($reservation->freeCancellationExpired())
-                <div class="mt-6 p-4 bg-gray-100 border border-gray-200 rounded text-gray-700">
-                    {{ trans('statamic-resrv::frontend.freeCancellationExpired') }}
+                @elseif ($reservation->canCancelWithoutRefund())
+                <div class="mt-6">
+                    <div class="mb-4 p-4 bg-red-50 border border-red-300 rounded">
+                        <p class="text-gray-700 mb-2">
+                            {{ trans($reservation->freeCancellationExpired() ? 'statamic-resrv::frontend.cancelReservationNoRefundDescription' : 'statamic-resrv::frontend.cancelReservationNonRefundableDescription') }}
+                        </p>
+                        <p class="font-semibold text-red-700">
+                            {{ trans('statamic-resrv::frontend.cancelReservationNoRefundWarning') }}
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        wire:click="cancel"
+                        wire:confirm="{{ trans('statamic-resrv::frontend.cancelReservationNoRefundConfirmation') }}"
+                        wire:loading.attr="disabled"
+                        class="relative w-full px-6 py-3.5 text-base font-medium focus:ring-4 focus:outline-none focus:ring-red-300 rounded-lg text-center disabled:opacity-70 transition-all duration-300 border border-red-700 text-red-700 hover:bg-red-700 hover:text-white"
+                    >
+                        <span wire:loading.remove wire:target="cancel">{{ trans('statamic-resrv::frontend.cancelReservationNoRefund') }}</span>
+                        <span wire:loading wire:target="cancel">{{ trans('statamic-resrv::frontend.cancelReservationNoRefund') }}&hellip;</span>
+                    </button>
                 </div>
-                @elseif ($reservation->isLive() && $reservation->freeCancellationDeadline())
-                {{-- Live and still inside the free-cancellation window, but the gateway can't auto-refund
-                     (e.g. offline/bank transfer): explain instead of leaving a silent dead end. --}}
+                @elseif ($reservation->isLive())
+                {{-- Live but not self-serviceable (offline/manual gateway, partner booking, or a
+                     no-longer-configured gateway): explain instead of leaving a silent dead end. --}}
                 <div class="mt-6 p-4 bg-gray-100 border border-gray-200 rounded text-gray-700">
-                    {{ trans('statamic-resrv::frontend.cancellationNotAllowed') }}
+                    @if ($reservation->freeCancellationExpired())
+                    <p class="mb-1">{{ trans('statamic-resrv::frontend.freeCancellationExpired') }}</p>
+                    @endif
+                    <p>{{ trans('statamic-resrv::frontend.cancellationNotAllowed') }}</p>
                 </div>
                 @endif
             @endif
