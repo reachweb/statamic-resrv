@@ -1,6 +1,8 @@
 @use(Reach\StatamicResrv\Enums\ReservationStatus)
 <div class="w-full">
-    @if ($this->reservation === null)
+    @if (! config('resrv-config.enable_reservation_status_page'))
+        {{-- Feature is opt-in: render nothing at all when disabled. --}}
+    @elseif ($this->reservation === null)
         <div class="max-w-xl">
             <div class="text-lg xl:text-xl font-medium mb-2">
                 {{ trans('statamic-resrv::frontend.findYourReservation') }}
@@ -76,7 +78,7 @@
                 <span @class([
                     'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium',
                     'bg-green-100 text-green-800' => $reservation->isLive(),
-                    'bg-gray-100 text-gray-800' => in_array($reservation->status, [ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value], true),
+                    'bg-gray-100 text-gray-800' => in_array($reservation->status, [ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value, ReservationStatus::COMPLETED->value], true),
                 ])>
                     {{ $this->statusLabel }}
                 </span>
@@ -212,7 +214,7 @@
             </div>
             @endif
 
-            @if (! $cancelled)
+            @if (! $cancelled && config('resrv-config.enable_customer_cancellations'))
                 @if ($reservation->canCancelWithRefund())
                 <div class="mt-6">
                     <p class="text-gray-700 mb-4">

@@ -95,6 +95,7 @@ return [
     'statusCancelled' => 'Cancelled & refunded',
     'statusCancelledNoRefund' => 'Cancelled',
     'statusCancelledNoRefundIssued' => 'Cancelled — no refund issued',
+    'statusCompleted' => 'Completed',
     'amountPaid' => 'Amount paid',
     'cancelReservation' => 'Cancel reservation',
     'cancelReservationConfirmation' => 'Are you sure you want to cancel this reservation? This action cannot be undone.',

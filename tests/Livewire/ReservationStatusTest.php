@@ -30,6 +30,16 @@ use Statamic\Facades\Entry;
 
 class ReservationStatusTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The customer status feature is off by default; every test in this file exercises
+        // it enabled unless it explicitly turns a toggle back off.
+        Config::set('resrv-config.enable_reservation_status_page', true);
+        Config::set('resrv-config.enable_customer_cancellations', true);
+    }
+
     protected function makeReservation(array $attributes = []): Reservation
     {
         $item = $this->makeStatamicItem();
@@ -1120,6 +1130,87 @@ class ReservationStatusTest extends TestCase
         ]);
 
         Event::assertDispatched(ReservationRefunded::class);
+    }
+
+    public function test_disabled_status_page_renders_nothing_and_blocks_every_action()
+    {
+        Config::set('resrv-config.enable_reservation_status_page', false);
+
+        $reservation = $this->makeReservation();
+
+        // Hidden UI is not enforcement: the actions themselves must no-op. Valid credentials
+        // and a valid deep link both resolve nothing while the feature is off.
+        Livewire::test(ReservationStatus::class)
+            ->assertDontSee(trans('statamic-resrv::frontend.findYourReservation'))
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertSet('reservationId', null)
+            ->call('cancel')
+            ->assertSet('cancelled', false);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationStatus::class)
+            ->assertSet('reservationId', null);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+    }
+
+    public function test_disabled_cancellations_keep_the_page_view_only()
+    {
+        Config::set('resrv-config.enable_customer_cancellations', false);
+
+        $reservation = $this->makeReservation();
+
+        // The page itself still works, but no cancel path is offered or accepted.
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertSet('reservationId', $reservation->id)
+            ->assertSee($reservation->reference)
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationNoRefund'))
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+    }
+
+    public function test_customer_status_url_is_null_when_the_page_toggle_is_off()
+    {
+        Config::set('resrv-config.enable_reservation_status_page', false);
+
+        $page = $this->makeStatamicItem();
+        Config::set('resrv-config.reservation_status_entry', $page->id());
+
+        $reservation = $this->makeReservation();
+
+        // A configured entry alone must not produce email links while the feature is off.
+        $this->assertNull($reservation->customerStatusUrl());
+    }
+
+    public function test_completed_reservations_are_viewable_with_their_own_label()
+    {
+        $reservation = $this->makeReservation(['status' => 'completed']);
+
+        // A post-stay link visit must resolve — not claim the reservation doesn't exist —
+        // and must not offer any cancel action.
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertSet('reservationId', $reservation->id)
+            ->assertSee(trans('statamic-resrv::frontend.statusCompleted'))
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
+            ->assertDontSee(trans('statamic-resrv::frontend.cancellationNotAllowed'));
     }
 
     public function test_displays_parent_reservation_children()

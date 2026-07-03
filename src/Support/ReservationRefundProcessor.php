@@ -97,6 +97,12 @@ class ReservationRefundProcessor
      */
     public function cancelByCustomer(Reservation $reservation): bool
     {
+        // Server-side gate for the opt-in feature: hiding the buttons is not enforcement —
+        // a Livewire action can still be invoked directly.
+        if (! config('resrv-config.enable_customer_cancellations')) {
+            throw new CancellationNotAllowed($reservation->id);
+        }
+
         $changed = match (true) {
             $reservation->canCancelWithRefund() => $this->refund($reservation),
             $reservation->canCancelWithoutRefund() => $this->cancelWithoutRefund($reservation),

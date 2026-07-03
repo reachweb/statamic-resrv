@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Affiliate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
@@ -65,6 +66,7 @@ class AffiliateCommissionCancellationTest extends TestCase
     public function test_customer_self_cancellation_cancels_the_affiliate_commission()
     {
         Mail::fake();
+        Config::set('resrv-config.enable_customer_cancellations', true);
 
         $affiliate = Affiliate::factory()->create(['fee' => 15]);
         $reservation = $this->makeAffiliateReservation($affiliate, [

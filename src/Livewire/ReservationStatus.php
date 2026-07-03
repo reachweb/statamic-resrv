@@ -38,7 +38,20 @@ class ReservationStatus extends Component
 
     public function mount(): void
     {
+        if (! $this->featureEnabled()) {
+            return;
+        }
+
         $this->loadReservationFromUri();
+    }
+
+    /**
+     * The whole page is opt-in. When disabled the blade renders nothing, and every action
+     * no-ops server-side — Livewire actions can be invoked without the UI.
+     */
+    protected function featureEnabled(): bool
+    {
+        return (bool) config('resrv-config.enable_reservation_status_page');
     }
 
     /**
@@ -78,6 +91,10 @@ class ReservationStatus extends Component
 
     public function lookup(): void
     {
+        if (! $this->featureEnabled()) {
+            return;
+        }
+
         $this->linkFailed = false;
 
         $this->validate();
@@ -135,6 +152,10 @@ class ReservationStatus extends Component
 
     public function cancel(): void
     {
+        if (! $this->featureEnabled()) {
+            return;
+        }
+
         $reservation = $this->reservation;
 
         if (! $reservation) {
@@ -223,6 +244,10 @@ class ReservationStatus extends Component
                 : trans('statamic-resrv::frontend.statusCancelledNoRefund');
         }
 
+        if ($reservation->status === ReservationStatusEnum::COMPLETED->value) {
+            return trans('statamic-resrv::frontend.statusCompleted');
+        }
+
         return '';
     }
 
@@ -245,8 +270,9 @@ class ReservationStatus extends Component
     }
 
     /**
-     * Lookable statuses: live and terminated-after-confirmation. PENDING/EXPIRED were never
-     * confirmed, so no reference was issued.
+     * Lookable statuses: live, terminated-after-confirmation, and completed stays — a
+     * post-stay link visit must resolve, not claim the reservation doesn't exist.
+     * PENDING/EXPIRED were never confirmed, so no reference was issued.
      */
     protected function visibleStatuses(): array
     {
@@ -254,6 +280,7 @@ class ReservationStatus extends Component
             ...ReservationStatusEnum::live(),
             ReservationStatusEnum::REFUNDED->value,
             ReservationStatusEnum::CANCELLED->value,
+            ReservationStatusEnum::COMPLETED->value,
         ];
     }
 

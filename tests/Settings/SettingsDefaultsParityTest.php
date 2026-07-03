@@ -67,6 +67,12 @@ class SettingsDefaultsParityTest extends TestCase
         }
     }
 
+    public function test_customer_status_feature_toggles_default_to_off()
+    {
+        $this->assertFalse(config('resrv-config.enable_reservation_status_page'));
+        $this->assertFalse(config('resrv-config.enable_customer_cancellations'));
+    }
+
     public function test_keys_without_a_blueprint_default_resolve_to_null()
     {
         foreach (self::NO_DEFAULT_KEYS as $key) {

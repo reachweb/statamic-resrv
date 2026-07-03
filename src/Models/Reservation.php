@@ -476,6 +476,12 @@ class Reservation extends Model
      */
     public function customerStatusUrl(): ?string
     {
+        // The whole customer status feature is opt-in; without the toggle the emails must
+        // not link to a page whose component renders nothing.
+        if (! config('resrv-config.enable_reservation_status_page')) {
+            return null;
+        }
+
         $entryId = config('resrv-config.reservation_status_entry');
 
         // The entries fieldtype may surface its single value as a one-element array.
