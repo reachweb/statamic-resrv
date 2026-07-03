@@ -222,7 +222,7 @@ class ReservationCpController extends Controller
         }
 
         if (! $changed) {
-            return response()->json(['error' => 'This reservation has already been refunded.'], 409);
+            return response()->json(['error' => 'This reservation has already been refunded or cancelled.'], 409);
         }
 
         return response()->json($reservation->id);

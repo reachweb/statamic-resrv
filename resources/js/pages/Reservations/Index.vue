@@ -33,11 +33,16 @@ const showUrl = (reservation) => props.showUrlTemplate.replace('RESRVURL', reser
 
 const canResend = (reservation) => ['confirmed', 'partner'].includes(reservation.status);
 
+// Mirrors the state machine: only these states may transition to REFUNDED/CANCELLED,
+// so terminal rows don't offer an action the server will reject anyway.
+const canRefund = (reservation) => ['pending', 'confirmed', 'partner'].includes(reservation.status);
+
 const badgeClass = (status) => {
     const map = {
         confirmed: 'bg-green-800',
         partner: 'bg-green-600',
         refunded: 'bg-yellow-800',
+        cancelled: 'bg-orange-800',
         expired: 'bg-red-800',
     };
     return map[status] ?? 'bg-gray-800';
@@ -146,7 +151,12 @@ const resend = async () => {
                     icon="mail"
                     @click="confirmResend(reservation)"
                 />
-                <DropdownItem :text="__('Refund')" icon="return-square" @click="confirmRefund(reservation)" />
+                <DropdownItem
+                    v-if="canRefund(reservation)"
+                    :text="__('Refund')"
+                    icon="return-square"
+                    @click="confirmRefund(reservation)"
+                />
             </template>
         </Listing>
 
