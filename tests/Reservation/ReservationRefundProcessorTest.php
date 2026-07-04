@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
@@ -160,6 +161,37 @@ class ReservationRefundProcessorTest extends TestCase
             'status' => 'cancelled',
         ]);
         Event::assertDispatched(ReservationCancelled::class);
+        Event::assertNotDispatched(ReservationRefunded::class);
+    }
+
+    public function test_refund_expires_a_pending_no_charge_reservation_instead_of_cancelling()
+    {
+        Event::fake([ReservationExpired::class, ReservationCancelled::class, ReservationRefunded::class]);
+
+        $item = $this->makeStatamicItem();
+
+        // Abandoned zero-payment checkout: a mid-checkout hold, not a booking. CANCELLED is
+        // unreachable from PENDING, so the refund action must release the hold the way the
+        // expiry sweep would — through the expired chain, which never emails the customer.
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'status' => 'pending',
+            'item_id' => $item->id(),
+            'payment_id' => '',
+            'payment' => 0,
+        ]);
+
+        $this->forbidGatewayRefunds();
+
+        $changed = app(ReservationRefundProcessor::class)->refund($reservation);
+
+        $this->assertTrue($changed);
+        $this->assertSame('expired', $reservation->status);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'expired',
+        ]);
+        Event::assertDispatched(ReservationExpired::class);
+        Event::assertNotDispatched(ReservationCancelled::class);
         Event::assertNotDispatched(ReservationRefunded::class);
     }
 

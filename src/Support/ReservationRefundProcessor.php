@@ -19,7 +19,10 @@ class ReservationRefundProcessor
      * Refund a reservation: return the charge through the payment gateway, transition to
      * REFUNDED and dispatch ReservationRefunded (which restores availability and sends the
      * refund emails). No-charge bookings (partner / zero-payment) route to
-     * cancelWithoutRefund() instead — nothing can be returned, so they end CANCELLED.
+     * cancelWithoutRefund() instead — nothing can be returned, so they end CANCELLED;
+     * except PENDING no-charge rows, which are abandoned checkouts rather than bookings
+     * and are expired instead (CANCELLED is unreachable from PENDING, and the cancelled
+     * chain would email a cancellation notice for a booking that never completed).
      * Shared by the CP refund action and the customer-facing ReservationStatus component
      * so both flows stay behaviorally identical.
      *
@@ -46,6 +49,18 @@ class ReservationRefundProcessor
         // re-validates the status under the row lock, so a stale in-memory read here can
         // only end in InvalidStateTransition, never a wrong terminal state.
         if ($reservation->gatewayHoldsNoCharge()) {
+            // A PENDING no-charge row (abandoned zero-payment checkout) releases its hold the
+            // way the expiry sweep would: expire() re-checks PENDING under its own row lock
+            // and syncs this model on success. If a concurrent confirm won the race the model
+            // stays stale, and the cancel path below re-validates against the fresh row.
+            if ($reservation->status === ReservationStatus::PENDING->value) {
+                $reservation->expire();
+
+                if ($reservation->status === ReservationStatus::EXPIRED->value) {
+                    return true;
+                }
+            }
+
             return $this->cancelWithoutRefund($reservation);
         }
 

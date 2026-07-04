@@ -428,6 +428,38 @@ class ReservationCpTest extends TestCase
         );
     }
 
+    public function test_refunding_a_pending_zero_payment_reservation_expires_it()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        // Abandoned zero-payment checkout: the CP offers Refund for pending rows, but
+        // CANCELLED is unreachable from PENDING (and would email a cancellation notice for
+        // a booking that never completed) — the hold is released via the expired chain.
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'pending',
+            'payment_id' => '',
+            'payment' => 0,
+        ])->withCustomer()->create();
+
+        // No payment intent was ever created, so the gateway must not be touched at all.
+        $manager = Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldNotReceive('forReservation');
+        $manager->shouldNotReceive('gateway');
+        app()->instance(PaymentGatewayManager::class, $manager);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(200)->assertJson(['id' => $reservation->id, 'status' => 'expired']);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'expired',
+        ]);
+        Mail::assertNotSent(ReservationCancelledCustomer::class);
+        Mail::assertNotSent(ReservationRefunded::class);
+    }
+
     public function test_refunding_partner_reservation_with_payment_still_calls_gateway()
     {
         Mail::fake();
