@@ -72,6 +72,15 @@ Route::get('/__t/collection-compare', fn () => view('dusk.collection-compare'));
 Route::get('/__t/collection-paginate', fn () => view('dusk.collection-paginate'));
 
 /*
+ * Customer reservation-status page: lookup form, ?ref=&hash= deep link, and
+ * self-service cancellation. Mounts the reservation-status component alone — the
+ * deep-link query string rides the real navigation straight into mount(). The two
+ * off-by-default feature toggles it needs are enabled app-wide in
+ * WorkbenchServiceProvider::enableCustomerStatusFeature().
+ */
+Route::get('/__t/status', fn () => view('dusk.status'));
+
+/*
  * Test-support route for the T10 DB-lifecycle PoC. Hitting it makes the *served*
  * (browser) process write a reservation row into the shared file SQLite, so the
  * Dusk test process can prove it reads back the very row the other process wrote

@@ -33,6 +33,7 @@ class WorkbenchServiceProvider extends ServiceProvider
         $this->registerAddonManifest();
         $this->configureStatamic();
         $this->forceOfflineGateway();
+        $this->enableCustomerStatusFeature();
     }
 
     public function boot(): void
@@ -138,6 +139,26 @@ class WorkbenchServiceProvider extends ServiceProvider
                     'label' => 'Pay on arrival',
                 ],
             ],
+        ]);
+    }
+
+    /**
+     * Turn on the two off-by-default customer-status toggles for the whole browser app,
+     * so /__t/status renders (the component renders NOTHING when the page toggle is off)
+     * and cancelByCustomer()'s server-side gate passes. A test-process Config::set could
+     * never reach the served process, and per-test #[BeforeServing] would re-declare this
+     * on every status test — app-wide is safe because nothing else reads these keys: the
+     * emails' customerStatusUrl() short-circuits on the unset reservation_status_entry, so
+     * the checkout-funnel tests see no change. Runtime config wins over the blueprint
+     * defaults in ResrvProvider::mergeAddonSettings() (same mechanism forceOfflineGateway
+     * relies on), and the test process gets the same values through WithWorkbench, so both
+     * sides of the HTTP boundary agree.
+     */
+    protected function enableCustomerStatusFeature(): void
+    {
+        config([
+            'resrv-config.enable_reservation_status_page' => true,
+            'resrv-config.enable_customer_cancellations' => true,
         ]);
     }
 
