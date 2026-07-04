@@ -225,7 +225,12 @@ class ReservationCpController extends Controller
             return response()->json(['error' => 'This reservation has already been refunded or cancelled.'], 409);
         }
 
-        return response()->json($reservation->id);
+        // The processor lands no-charge bookings in CANCELLED instead of REFUNDED; return the
+        // terminal status so the UI can say "cancelled" instead of claiming money moved.
+        return response()->json([
+            'id' => $reservation->id,
+            'status' => $reservation->status,
+        ]);
     }
 
     public function resendConfirmation(Request $request)

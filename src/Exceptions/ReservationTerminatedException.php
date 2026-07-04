@@ -6,7 +6,7 @@ use Reach\StatamicResrv\Enums\ReservationStatus;
 
 /**
  * Thrown when the checkout flow encounters a reservation in a terminal non-expired state
- * (CONFIRMED, REFUNDED, PARTNER). Terminal, but semantically different from expired —
+ * (CONFIRMED, REFUNDED, CANCELLED, PARTNER). Terminal, but semantically different from expired —
  * CONFIRMED reservations should redirect to the checkout-completed entry so the user lands
  * on a success page instead of an error page.
  */

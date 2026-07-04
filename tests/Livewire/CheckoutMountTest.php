@@ -105,6 +105,28 @@ class CheckoutMountTest extends TestCase
         $this->assertEquals('fake', $fresh->payment_gateway);
     }
 
+    public function test_mount_with_cancelled_reservation_redirects_and_preserves_payment_fields()
+    {
+        // A booking can turn CANCELLED (no-refund customer cancel) while its checkout session
+        // is still alive. The terminal guard must fire, or checkout would happily create a
+        // fresh payment intent for a booking that can never be confirmed.
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'cancelled',
+            'payment_id' => 'pi_cancelled_preserve',
+            'payment_gateway' => 'fake',
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->assertRedirect();
+
+        $fresh = $reservation->fresh();
+        $this->assertEquals('pi_cancelled_preserve', $fresh->payment_id, 'mount() must not clear payment_id on a CANCELLED reservation — the retained charge is the audit trail');
+        $this->assertEquals('fake', $fresh->payment_gateway);
+    }
+
     public function test_mount_with_expired_reservation_shows_terminal_error()
     {
         $reservation = Reservation::factory()->withCustomer()->create([

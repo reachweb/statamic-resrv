@@ -37,6 +37,12 @@ class ExportCpController extends Controller
      */
     protected ?int $exportAffiliateId = null;
 
+    /**
+     * The commission_status filter of the current download, so reservationAffiliate() picks
+     * a pivot matching the requested status instead of the first attribution.
+     */
+    protected string $exportCommissionStatus = 'all';
+
     public function indexCp()
     {
         return Inertia::render('resrv::Export/Index', [
@@ -62,6 +68,7 @@ class ExportCpController extends Controller
     {
         $data = $this->validateForDownload($request);
         $this->exportAffiliateId = $data['affiliate_id'] ?? null;
+        $this->exportCommissionStatus = $data['commission_status'] ?? 'all';
         $definitions = $this->fieldDefinitions();
         $fields = array_map(
             fn (string $key) => ['key' => $key] + $definitions[$key],
@@ -74,7 +81,7 @@ class ExportCpController extends Controller
             fputcsv($handle, array_map(fn ($field) => $field['label'], $fields));
 
             $this->baseQuery($data)
-                ->with(['customer', 'extras', 'options.values', 'rate', 'childs.rate', 'affiliate' => fn ($query) => $query->withTrashed()])
+                ->with(['customer', 'extras', 'options.values' => fn ($query) => $query->withTrashed(), 'rate', 'childs.rate', 'affiliate' => fn ($query) => $query->withTrashed()])
                 ->lazyById(500)
                 ->each(function (Reservation $reservation) use ($handle, $fields) {
                     $row = [];
@@ -354,13 +361,25 @@ class ExportCpController extends Controller
         return $base + $this->dynamicCustomerFieldDefinitions($base);
     }
 
+    /**
+     * The affiliate whose pivot the affiliate_* columns serialize. Must honor the same
+     * filters baseQuery() admitted the reservation under: with multiple attributions on one
+     * reservation, picking an arbitrary pivot could emit a cancelled commission inside an
+     * "active" export (or vice versa).
+     */
     protected function reservationAffiliate(Reservation $reservation): ?Affiliate
     {
+        $affiliates = $reservation->affiliate;
+
         if ($this->exportAffiliateId !== null) {
-            return $reservation->affiliate->firstWhere('id', $this->exportAffiliateId);
+            $affiliates = $affiliates->where('id', $this->exportAffiliateId);
         }
 
-        return $reservation->affiliate->first();
+        return match ($this->exportCommissionStatus) {
+            'active' => $affiliates->first(fn (Affiliate $affiliate) => $affiliate->pivot->cancelled_at === null),
+            'cancelled' => $affiliates->first(fn (Affiliate $affiliate) => $affiliate->pivot->cancelled_at !== null),
+            default => $affiliates->first(),
+        };
     }
 
     /**

@@ -62,8 +62,14 @@ const refund = async () => {
     if (! refundId.value) return;
     refunding.value = true;
     try {
-        await axios.patch(props.refundUrl, { id: refundId.value });
-        toast.success(__('Reservation refunded'));
+        // No-charge bookings (partner / zero payment) end as a cancellation, not a refund —
+        // report what the server actually did so admins aren't told money moved.
+        const { data } = await axios.patch(props.refundUrl, { id: refundId.value });
+        toast.success(
+            data?.status === 'cancelled'
+                ? __('Reservation cancelled — no charges to refund')
+                : __('Reservation refunded'),
+        );
         refundId.value = null;
         listing.value?.refresh();
     } catch (error) {
@@ -165,13 +171,13 @@ const resend = async () => {
             :open="true"
             :title="__('Refund and cancel reservation')"
             :danger="true"
-            :button-text="__('Refund')"
+            :button-text="__('Confirm')"
             :busy="refunding"
             @confirm="refund"
             @cancel="cancelRefund"
         >
-            <p>{{ __('Are you sure you want to refund this reservation? This cannot be undone.') }}</p>
-            <p>{{ __('All charges will be refunded and the customer will be notified.') }}</p>
+            <p>{{ __('Are you sure you want to cancel this reservation? This cannot be undone.') }}</p>
+            <p>{{ __('Any charges collected will be refunded and the customer will be notified.') }}</p>
         </ConfirmationModal>
 
         <ConfirmationModal

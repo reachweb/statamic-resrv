@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Affiliate;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -56,6 +57,10 @@ class CancelledAtBackfillMigrationTest extends TestCase
         $this->assertSame($refundedAt, $this->pivotCancelledAt($refunded->id));
         $this->assertNull($this->pivotCancelledAt($confirmed->id));
         $this->assertNull($this->pivotCancelledAt($partner->id));
+
+        // The index keeps the per-reservation backfill updates (and every affiliate()
+        // relation load) from scanning the whole pivot table.
+        $this->assertTrue(Schema::hasIndex('resrv_reservation_affiliate', ['reservation_id']));
     }
 
     public function test_backfill_covers_multiple_pivots_on_the_same_refunded_reservation()

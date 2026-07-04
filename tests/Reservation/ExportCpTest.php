@@ -676,6 +676,30 @@ class ExportCpTest extends TestCase
         $this->assertStringNotContainsString('DROP', $csv);
     }
 
+    public function test_download_serializes_the_affiliate_matching_the_commission_status_filter()
+    {
+        $activeAffiliate = Affiliate::factory()->create(['code' => 'ACTIVE', 'email' => 'active@example.com']);
+        $cancelledAffiliate = Affiliate::factory()->create(['code' => 'VOIDED', 'email' => 'voided@example.com']);
+
+        // One reservation carrying two attributions in different states: the affiliate_*
+        // columns must describe a pivot matching the requested filter, not whichever
+        // attribution happens to load first.
+        $reservation = $this->makeAffiliateReservation($cancelledAffiliate, ['reference' => 'MIXED'], 20, cancelled: true);
+        $reservation->affiliate()->attach($activeAffiliate->id, ['fee' => 10]);
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => today()->toDateString(),
+            'end' => today()->addWeek()->toDateString(),
+            'commission_status' => 'active',
+            'fields' => ['reference', 'affiliate_code', 'affiliate_commission_status'],
+        ]);
+
+        $response->assertStatus(200);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($response->streamedContent()))));
+
+        $this->assertEquals(['MIXED', 'ACTIVE', 'active'], $rows[1]);
+    }
+
     public function test_soft_deleted_affiliates_stay_in_filters_columns_and_the_picker()
     {
         $affiliate = Affiliate::factory()->create(['code' => 'GONE', 'name' => 'Gone Agency']);

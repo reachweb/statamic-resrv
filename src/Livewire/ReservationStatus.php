@@ -211,8 +211,10 @@ class ReservationStatus extends Component
             return null;
         }
 
+        // Option values are soft-deleted to preserve reservation history — a value removed
+        // after booking must still render, so load them withTrashed() like optionsForEmail().
         return Reservation::query()
-            ->with(['customer', 'rate', 'extras', 'options.values', 'childs.rate'])
+            ->with(['customer', 'rate', 'extras', 'options.values' => fn ($query) => $query->withTrashed(), 'childs.rate'])
             ->find($this->reservationId);
     }
 

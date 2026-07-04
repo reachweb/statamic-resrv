@@ -24,6 +24,8 @@ use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationRefunded as ReservationRefundedMail;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
+use Reach\StatamicResrv\Models\Option;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Entry;
@@ -490,17 +492,33 @@ class ReservationStatusTest extends TestCase
     {
         Config::set('resrv-config.free_cancellation_period', 0);
 
+        // Paid booking, no policy ever configured (NULL period): nothing was advertised at
+        // checkout, so neither cancel path — especially not the no-refund one, which would
+        // silently forfeit the payment — may be offered, and the server must reject a direct
+        // cancel call too.
         $reservation = $this->makeReservation([
             'cancellation_policy' => null,
             'free_cancellation_period' => null,
         ]);
+
+        $this->forbidGatewayRefunds();
 
         Livewire::test(ReservationStatus::class)
             ->set('email', $reservation->customer->email)
             ->set('reference', $reservation->reference)
             ->call('lookup')
             ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
-            ->assertDontSee(trans('statamic-resrv::frontend.freeCancellationExpired'));
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationNoRefund'))
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationNoRefundWarning'))
+            ->assertDontSee(trans('statamic-resrv::frontend.freeCancellationExpired'))
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false);
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
     }
 
     public function test_cancel_refunds_through_the_gateway_and_dispatches_events()
@@ -848,6 +866,30 @@ class ReservationStatusTest extends TestCase
 
         $html = (new ReservationCancelledMail($paid))->render();
         $this->assertStringContainsString('Refunded to the customer', $html);
+    }
+
+    public function test_cancelled_email_reports_a_retained_payment_instead_of_a_refund()
+    {
+        // A no-refund customer cancellation lands in CANCELLED with the charge retained. The
+        // gateway could refund it (refundIsAutomatic() is about capability), but no money
+        // moved — the admin email must say so and must not ask for a manual refund either.
+        $retained = $this->makeReservation(['status' => 'cancelled']);
+
+        $html = (new ReservationCancelledMail($retained))->render();
+
+        $this->assertStringContainsString('payment retained', $html);
+        $this->assertStringNotContainsString('Refunded to the customer', $html);
+        $this->assertStringNotContainsString('refund the customer manually', $html);
+
+        // A cancelled no-charge booking (partner / zero payment) has nothing to report.
+        $noCharge = $this->makeReservation([
+            'status' => 'cancelled',
+            'payment_id' => '',
+        ]);
+
+        $html = (new ReservationCancelledMail($noCharge))->render();
+
+        $this->assertStringNotContainsString('Refund information', $html);
     }
 
     public function test_cancelled_email_asks_admins_to_refund_manually_for_offline_gateways()
@@ -1253,5 +1295,25 @@ class ReservationStatusTest extends TestCase
             ->assertSet('reservationId', $reservation->id)
             ->assertSee(trans('statamic-resrv::frontend.statusCancelled'))
             ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'));
+    }
+
+    public function test_shows_option_values_deleted_after_booking()
+    {
+        // Option values are soft-deleted to preserve reservation history — the status page
+        // must keep showing the value the customer originally booked.
+        $reservation = $this->makeReservation();
+
+        $option = Option::factory()->create(['item_id' => $reservation->item_id]);
+        $value = OptionValue::factory()->create(['option_id' => $option->id]);
+        $reservation->options()->attach($option->id, ['value' => $value->id]);
+
+        $value->delete();
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertSee($option->name)
+            ->assertSee($value->name);
     }
 }

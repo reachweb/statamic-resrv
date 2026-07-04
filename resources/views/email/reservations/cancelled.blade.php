@@ -45,13 +45,22 @@
 @endforeach
 @endif
 
-@if ($reservation->refundIsAutomatic())
+@php($paymentRetained = $reservation->status === \Reach\StatamicResrv\Enums\ReservationStatus::CANCELLED->value)
+@if ($paymentRetained && $reservation->hasGatewayPayment())
+@component('mail::table')
+|{{ __("Refund information") }}||
+| :----------------------------- |:----------------|
+| {{ __("No refund issued — payment retained") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountPaid()->format() }} |
+@endcomponent
+
+{{ __("The reservation was cancelled without a refund, so the payment stays with the business. No action is required.") }}
+@elseif (! $paymentRetained && $reservation->refundIsAutomatic())
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|
 | {{ __("Refunded to the customer") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
 @endcomponent
-@elseif ($reservation->hasGatewayPayment())
+@elseif (! $paymentRetained && $reservation->hasGatewayPayment())
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|

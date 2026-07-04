@@ -382,7 +382,7 @@ class ReservationCpTest extends TestCase
 
         $response = $this->patch(cp_route('resrv.reservation.refund', $payload));
 
-        $response->assertStatus(200)->assertSee($reservation->id);
+        $response->assertStatus(200)->assertJson(['id' => $reservation->id, 'status' => 'refunded']);
         Mail::assertSent(ReservationRefunded::class);
     }
 
@@ -409,10 +409,11 @@ class ReservationCpTest extends TestCase
         $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
 
         // Nothing was returned to anyone, so the terminal state is CANCELLED — REFUNDED is
-        // reserved for charges the gateway actually gave back. The customer gets the
-        // cancellation email (not a refund claim) and the commission is still voided,
-        // since the business retained no revenue for the booking.
-        $response->assertStatus(200)->assertSee($reservation->id);
+        // reserved for charges the gateway actually gave back. The response reports that
+        // status so the CP can say "cancelled" instead of claiming money moved. The customer
+        // gets the cancellation email (not a refund claim) and the commission is still
+        // voided, since the business retained no revenue for the booking.
+        $response->assertStatus(200)->assertJson(['id' => $reservation->id, 'status' => 'cancelled']);
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $reservation->id,
             'status' => 'cancelled',

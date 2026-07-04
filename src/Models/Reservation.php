@@ -288,13 +288,23 @@ class Reservation extends Model
      * Whether the customer may self-cancel WITHOUT a refund: a live booking paid online
      * through a gateway that could refund automatically, before the stay starts, once the
      * free-cancellation window has closed (or the policy is non-refundable). The payment
-     * stays with the business. hasGatewayPayment() keeps partner and zero-charge bookings
-     * out, and supportsAutomaticRefund() keeps offline/manual and no-longer-configured
-     * gateways out — all of those are "contact us to cancel" cases by design.
+     * stays with the business — so the forfeit must stem from terms the customer actually
+     * agreed to: a NonRefundable policy, or a free-cancellation window that existed and
+     * closed. A NULL period means no policy was ever configured (nothing was advertised at
+     * checkout), which fails closed to "contact us" rather than silently forfeiting the
+     * payment. hasGatewayPayment() keeps partner and zero-charge bookings out, and
+     * supportsAutomaticRefund() keeps offline/manual and no-longer-configured gateways
+     * out — all of those are "contact us to cancel" cases by design.
      */
     public function canCancelWithoutRefund(): bool
     {
         if (! $this->isLive() || $this->canCancelWithRefund()) {
+            return false;
+        }
+
+        $policy = $this->effectiveCancellationPolicy()['policy'];
+
+        if ($policy !== CancellationPolicy::NonRefundable && $this->freeCancellationDeadline() === null) {
             return false;
         }
 
