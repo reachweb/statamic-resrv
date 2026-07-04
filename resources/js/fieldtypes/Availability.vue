@@ -34,7 +34,7 @@
                 :dates="selectedDates"
                 :parent-id="props.meta.parent"
                 :rate="rateForChild"
-                :pending-by-date="pendingByDateForSelection"
+                :stuck-by-date="stuckByDateForSelection"
                 @cancel="toggleModal"
                 @saved="availabilitySaved"
             />
@@ -115,7 +115,9 @@ function rateOptionLabel(rate) {
     return tags.length ? `${rate.title} (${tags.join(', ')})` : rate.title;
 }
 
-const pendingByDateForSelection = computed(() => {
+// Per-date STUCK hold counts (classified server-side) — holds backed by confirmed bookings
+// or in-progress checkouts are the normal state of a booked date and are not included.
+const stuckByDateForSelection = computed(() => {
     if (!selectedDates.value || !availability.value) return {};
     const start = dayjs(selectedDates.value.start);
     // FullCalendar gives an exclusive end; iterate up to (but not including) it.
@@ -125,8 +127,8 @@ const pendingByDateForSelection = computed(() => {
     while (cursor.isBefore(endExclusive)) {
         const key = cursor.format('YYYY-MM-DD');
         const row = availability.value[key];
-        if (row?.pending && row.pending.length) {
-            result[key] = row.pending;
+        if (row?.stuck_holds) {
+            result[key] = row.stuck_holds;
         }
         cursor = cursor.add(1, 'day');
     }

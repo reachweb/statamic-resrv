@@ -9,6 +9,7 @@ use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\AvailabilityChangeReason;
@@ -73,10 +74,80 @@ class AvailabilityCpController extends Controller
             });
         }
 
+        $stuckCounts = $this->stuckHoldCounts($results);
+
+        $results = $results->map(function ($row, $date) use ($stuckCounts) {
+            $row->stuck_holds = $stuckCounts[$date] ?? 0;
+
+            return $row;
+        });
+
         return response()->json([
             'data' => $results,
             'max_available' => (int) ($results->max('available') ?? 0),
         ]);
+    }
+
+    /**
+     * Per-date count of hold keys that are genuinely stuck: their holder is gone from both
+     * reservation tables, already terminal, or a PENDING checkout abandoned past the
+     * minutes_to_hold window. Holds backed by confirmed/partner bookings or within-window
+     * checkouts are the normal state of a booked date and are never counted.
+     *
+     * @param  Collection<string, Availability>  $rows
+     * @return array<string, int>
+     */
+    private function stuckHoldCounts($rows): array
+    {
+        $parsedByDate = [];
+
+        foreach ($rows as $date => $row) {
+            $pending = $row->pending ?? [];
+
+            if (! empty($pending)) {
+                $parsedByDate[$date] = array_map(fn ($entry) => $this->parseHoldKey($entry), $pending);
+            }
+        }
+
+        if ($parsedByDate === []) {
+            return [];
+        }
+
+        [$reservations, $childReservations] = $this->holdersForHoldKeys(collect($parsedByDate)->flatten(1));
+
+        $terminal = ReservationStatus::terminal();
+        $staleBefore = $this->staleHoldCutoff();
+
+        $counts = [];
+
+        foreach ($parsedByDate as $date => $entries) {
+            $stuck = 0;
+
+            foreach ($entries as $entry) {
+                $status = null;
+                $createdAt = null;
+
+                if ($entry['type'] !== 'child' && $reservations->has($entry['id'])) {
+                    $status = $reservations[$entry['id']]->status;
+                    $createdAt = $reservations[$entry['id']]->created_at;
+                } elseif ($entry['type'] !== 'normal' && $childReservations->has($entry['id'])) {
+                    $status = $childReservations[$entry['id']]->parent_status;
+                    $createdAt = $childReservations[$entry['id']]->parent_created_at;
+                }
+
+                if ($status === null || in_array($status, $terminal, true)) {
+                    $stuck++;
+                } elseif ($this->isStalePendingHold($status, $createdAt, $staleBefore)) {
+                    $stuck++;
+                }
+            }
+
+            if ($stuck > 0) {
+                $counts[$date] = $stuck;
+            }
+        }
+
+        return $counts;
     }
 
     public function update(AvailabilityCpRequest $request): JsonResponse
@@ -167,11 +238,14 @@ class AvailabilityCpController extends Controller
             $requestedRateIds
         ));
 
+        // Unlike inventory edits, deletion blocks on ALL non-terminal reservations: removing the
+        // rows would orphan the hold keys of confirmed bookings, so a later refund's
+        // removeFromPending would find nothing to restore.
         if (ActiveReservationsGuard::hasActiveReservationsForRange(
             $data['statamic_id'], $data['date_start'], $data['date_end'], $rateIds
         )) {
             return response()->json([
-                'message' => __('Cannot delete availability while reservations are pending for this date range.'),
+                'message' => __('Cannot delete availability while active reservations exist for this date range.'),
             ], 422);
         }
 
@@ -305,51 +379,36 @@ class AvailabilityCpController extends Controller
 
             $pending = $row->pending ?? [];
             if (empty($pending)) {
-                return response()->json(['cleared' => $expiredHoldCount, 'still_active' => []]);
+                return response()->json(['cleared' => $expiredHoldCount, 'still_active' => [], 'expirable' => []]);
             }
 
             $terminal = ReservationStatus::terminal();
+            $staleBefore = $this->staleHoldCutoff();
 
-            // Keys are namespaced ('r'<id> / 'c'<id>); bare integers are legacy entries resolved against both tables.
-            $parsed = collect($pending)->map(function ($entry) {
-                if (is_string($entry) && preg_match('/^([rc])(\d+)$/', $entry, $matches)) {
-                    return ['key' => $entry, 'type' => $matches[1] === 'c' ? 'child' : 'normal', 'id' => (int) $matches[2]];
-                }
+            $parsed = collect($pending)->map(fn ($entry) => $this->parseHoldKey($entry));
 
-                return ['key' => $entry, 'type' => 'legacy', 'id' => (int) $entry];
-            });
-
-            $normalIds = $parsed->whereIn('type', ['normal', 'legacy'])->pluck('id')->unique();
-            $childIds = $parsed->whereIn('type', ['child', 'legacy'])->pluck('id')->unique();
-
-            $reservations = $normalIds->isEmpty()
-                ? collect()
-                : Reservation::whereIn('id', $normalIds->all())->get(['id', 'status', 'quantity'])->keyBy('id');
-
-            $childReservations = $childIds->isEmpty()
-                ? collect()
-                : ChildReservation::whereIn('resrv_child_reservations.id', $childIds->all())
-                    ->join('resrv_reservations', 'resrv_child_reservations.reservation_id', '=', 'resrv_reservations.id')
-                    ->get([
-                        'resrv_child_reservations.id',
-                        'resrv_child_reservations.quantity',
-                        'resrv_reservations.status as parent_status',
-                    ])
-                    ->keyBy('id');
+            [$reservations, $childReservations] = $this->holdersForHoldKeys($parsed);
 
             $terminalKeys = [];
             $activeIds = [];
+            // Active holds force could still expire: stale PENDING checkouts past their hold
+            // window. Confirmed bookings and within-window checkouts are never expirable — the
+            // UI uses this to skip the force confirmation when it would be a no-op.
+            $expirableIds = [];
             $quantityByKey = [];
 
             foreach ($parsed as $entry) {
                 $status = null;
+                $createdAt = null;
                 $quantity = 0;
 
                 if ($entry['type'] !== 'child' && $reservations->has($entry['id'])) {
                     $status = $reservations[$entry['id']]->status;
+                    $createdAt = $reservations[$entry['id']]->created_at;
                     $quantity = (int) $reservations[$entry['id']]->quantity;
                 } elseif ($entry['type'] !== 'normal' && $childReservations->has($entry['id'])) {
                     $status = $childReservations[$entry['id']]->parent_status;
+                    $createdAt = $childReservations[$entry['id']]->parent_created_at;
                     $quantity = (int) $childReservations[$entry['id']]->quantity;
                 }
 
@@ -360,10 +419,15 @@ class AvailabilityCpController extends Controller
                     $terminalKeys[] = $entry['key'];
                 } else {
                     $activeIds[] = $entry['id'];
+
+                    if ($this->isStalePendingHold($status, $createdAt, $staleBefore)) {
+                        $expirableIds[] = $entry['id'];
+                    }
                 }
             }
 
             $activeIds = array_values(array_unique($activeIds));
+            $expirableIds = array_values(array_unique($expirableIds));
 
             // Only terminal/orphan holds are cleared; active reservations stay blocking (reported in
             // still_active). Force's only extra power is expiring the stale ones above.
@@ -373,6 +437,7 @@ class AvailabilityCpController extends Controller
                 return response()->json([
                     'cleared' => $expiredHoldCount,
                     'still_active' => $activeIds,
+                    'expirable' => $expirableIds,
                 ]);
             }
 
@@ -401,6 +466,7 @@ class AvailabilityCpController extends Controller
             return response()->json([
                 'cleared' => count($toClear) + $expiredHoldCount,
                 'still_active' => $activeIds,
+                'expirable' => $expirableIds,
             ]);
         });
 
@@ -411,6 +477,68 @@ class AvailabilityCpController extends Controller
         }
 
         return $response;
+    }
+
+    /**
+     * Keys are namespaced ('r'<id> / 'c'<id>); bare integers are legacy entries resolved against both tables.
+     *
+     * @return array{key: mixed, type: string, id: int}
+     */
+    private function parseHoldKey(mixed $entry): array
+    {
+        if (is_string($entry) && preg_match('/^([rc])(\d+)$/', $entry, $matches)) {
+            return ['key' => $entry, 'type' => $matches[1] === 'c' ? 'child' : 'normal', 'id' => (int) $matches[2]];
+        }
+
+        return ['key' => $entry, 'type' => 'legacy', 'id' => (int) $entry];
+    }
+
+    /**
+     * Batch-fetch the reservations behind a set of parsed hold keys.
+     *
+     * @param  Collection<int, array{key: mixed, type: string, id: int}>  $parsed
+     * @return array{0: Collection, 1: Collection} Reservations and child reservations, keyed by id.
+     */
+    private function holdersForHoldKeys($parsed): array
+    {
+        $normalIds = $parsed->whereIn('type', ['normal', 'legacy'])->pluck('id')->unique();
+        $childIds = $parsed->whereIn('type', ['child', 'legacy'])->pluck('id')->unique();
+
+        $reservations = $normalIds->isEmpty()
+            ? collect()
+            : Reservation::whereIn('id', $normalIds->all())
+                ->get(['id', 'status', 'quantity', 'created_at'])
+                ->keyBy('id');
+
+        $childReservations = $childIds->isEmpty()
+            ? collect()
+            : ChildReservation::whereIn('resrv_child_reservations.id', $childIds->all())
+                ->join('resrv_reservations', 'resrv_child_reservations.reservation_id', '=', 'resrv_reservations.id')
+                ->get([
+                    'resrv_child_reservations.id',
+                    'resrv_child_reservations.quantity',
+                    'resrv_reservations.status as parent_status',
+                    'resrv_reservations.created_at as parent_created_at',
+                ])
+                ->keyBy('id');
+
+        return [$reservations, $childReservations];
+    }
+
+    /** Timestamp before which a PENDING hold counts as abandoned; null when no hold window is configured. */
+    private function staleHoldCutoff(): ?Carbon
+    {
+        $holdMinutes = config('resrv-config.minutes_to_hold', false);
+
+        return $holdMinutes ? Carbon::now()->subMinutes((int) $holdMinutes) : null;
+    }
+
+    private function isStalePendingHold(?string $status, mixed $createdAt, ?Carbon $staleBefore): bool
+    {
+        return $status === ReservationStatus::PENDING->value
+            && $staleBefore !== null
+            && $createdAt !== null
+            && Carbon::parse($createdAt)->lt($staleBefore);
     }
 
     /** @param  list<array<string, mixed>>  $changes */
@@ -523,8 +651,11 @@ class AvailabilityCpController extends Controller
             abort(422, __('Price cannot be edited directly for shared rates. Edit the base rate instead.'));
         }
 
-        // Only block on inventory changes — price-only edits don't disturb the available/pending invariant.
-        if (! is_null($data['available']) && ActiveReservationsGuard::hasActiveReservationsForRange(
+        // Only block on inventory changes — price-only edits don't disturb the available/pending
+        // invariant. And only in-flight checkouts block: their asynchronous expiry would release
+        // +quantity on top of the admin's absolute value. Confirmed bookings keep their hold key
+        // for life, so blocking on them would make any date with a booking permanently uneditable.
+        if (! is_null($data['available']) && ActiveReservationsGuard::hasInFlightReservationsForRange(
             $data['statamic_id'], $data['date_start'], $data['date_end'], [$resolvedRateId]
         )) {
             throw new HttpResponseException(response()->json([
