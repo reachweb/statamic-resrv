@@ -133,17 +133,17 @@ class ReservationRefundProcessor
 
     /**
      * Dispatch a post-commit event without letting a throwing synchronous listener
-     * (availability restore, emails) masquerade as a failed refund: by the time these
-     * events fire, the status change — and any gateway refund — has already committed,
-     * so callers must be told the refund succeeded. The failed side effect is logged
-     * for manual reconciliation; retrying the refund could not rerun it anyway.
+     * (availability restore, emails) masquerade as a failed refund or cancellation: by
+     * the time these events fire, the status change — and any gateway refund — has
+     * already committed, so callers must be told the operation succeeded. The failed
+     * side effect is logged for manual reconciliation; retrying could not rerun it anyway.
      */
     protected function dispatchCommitted(string $event, Reservation $reservation): void
     {
         try {
             $event::dispatch($reservation);
         } catch (\Throwable $e) {
-            Log::error('Post-refund side effects failed; manual reconciliation may be required.', [
+            Log::error('Post-commit reservation side effects failed; manual reconciliation may be required.', [
                 'reservation_id' => $reservation->id,
                 'event' => $event,
                 'error' => $e->getMessage(),

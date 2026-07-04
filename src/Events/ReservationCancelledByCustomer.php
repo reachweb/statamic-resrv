@@ -9,10 +9,11 @@ use Reach\StatamicResrv\Models\Reservation;
 
 /**
  * Fired when a customer self-cancels a reservation from the reservation-status component,
- * after the refund has gone through. Distinct from ReservationCancelled (whose listeners
- * restore availability for abandoned checkouts) and from ReservationRefunded (which already
- * fires for every refund and handles availability + the customer refund email) — this event
- * only carries the "the customer did this themselves" signal for the admin notification.
+ * after the terminal transition has committed — REFUNDED (charge returned) inside the free
+ * cancellation window, CANCELLED (payment retained) outside it. Availability restore and
+ * the customer email are handled by the ReservationRefunded / ReservationCancelled chains
+ * dispatched in the same flow — this event only carries the "the customer did this
+ * themselves" signal for the admin notification.
  */
 class ReservationCancelledByCustomer
 {
