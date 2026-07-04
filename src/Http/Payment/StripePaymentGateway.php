@@ -14,6 +14,7 @@ use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Exception\UnexpectedValueException;
 use Stripe\HttpClient\CurlClient;
+use Stripe\Refund;
 use Stripe\StripeClient;
 use Stripe\Webhook;
 
@@ -96,17 +97,24 @@ class StripePaymentGateway implements PaymentInterface
         // Stripe processed the refund (or the status transition rolls back post-refund), a
         // retry within Stripe's idempotency window (~24h) replays the original response
         // instead of issuing a second refund. Past that window the key is forgotten; because
-        // these refunds are always for the full intent, Stripe then rejects the retry with
-        // "already refunded" (surfaced as RefundFailedException) rather than double-paying.
+        // these refunds are always for the full intent, Stripe then rejects the retry as
+        // already refunded, which reconciles below to the existing refund instead of double-paying.
         $idempotencyKey = 'resrv-refund-'.$reservation->id.'-'.$reservation->payment_id;
 
         try {
             return $stripe->refunds->create($params, ['idempotency_key' => $idempotencyKey]);
         } catch (ApiErrorException $exception) {
+            if ($existing = $this->findRefundWhenAlreadyRefunded($stripe, $reservation, $exception)) {
+                return $existing;
+            }
+
             // Stripe replays the FIRST response recorded under a key — errors included — for the
-            // whole idempotency window. A replayed error means a previous attempt definitively
-            // failed (no refund exists), so one retry under a fresh key is safe and lets a fixed
-            // cause (e.g. a topped-up balance) succeed instead of re-surfacing the stale failure.
+            // whole idempotency window. Most replayed errors are definitive failures (4xx), so one
+            // retry under a fresh key lets a fixed cause (e.g. a topped-up balance) succeed instead
+            // of re-surfacing the stale failure. A replayed 500 is NOT definitive — its side effects
+            // are indeterminate — but the fresh-key retry stays money-safe because these refunds are
+            // always for the full intent: if a hidden refund exists, Stripe rejects the retry as
+            // already refunded and the reconciliation below surfaces that refund as the result.
             if (! $this->isReplayedError($exception)) {
                 // Every Stripe failure mode (invalid request, connection, auth, rate limit)
                 // must surface as RefundFailedException so callers roll back the status
@@ -117,8 +125,37 @@ class StripePaymentGateway implements PaymentInterface
             try {
                 return $stripe->refunds->create($params, ['idempotency_key' => $idempotencyKey.'-'.now()->timestamp]);
             } catch (ApiErrorException $retryException) {
+                if ($existing = $this->findRefundWhenAlreadyRefunded($stripe, $reservation, $retryException)) {
+                    return $existing;
+                }
+
                 throw new RefundFailedException($retryException->getMessage());
             }
+        }
+    }
+
+    /**
+     * When Stripe rejects the refund because the charge is already fully refunded, the money
+     * is exactly where the caller wants it — return the existing refund as success instead of
+     * throwing (which would roll back the status transition and strand a refunded charge on a
+     * CONFIRMED reservation). Covers a first attempt whose replayed 500 actually had side
+     * effects, a re-run past the idempotency window, and out-of-band dashboard refunds.
+     * Returns null for every other error — and when the lookup itself fails — so the caller's
+     * RefundFailedException path runs with the original message.
+     */
+    protected function findRefundWhenAlreadyRefunded(StripeClient $stripe, Reservation $reservation, ApiErrorException $exception): ?Refund
+    {
+        if ($exception->getError()?->code !== 'charge_already_refunded') {
+            return null;
+        }
+
+        try {
+            return $stripe->refunds->all([
+                'payment_intent' => $reservation->payment_id,
+                'limit' => 1,
+            ])->data[0] ?? null;
+        } catch (ApiErrorException) {
+            return null;
         }
     }
 
