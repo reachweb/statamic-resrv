@@ -267,7 +267,8 @@ class Reservation extends Model
 
     /**
      * Whether the customer may self-cancel with automatic full refund: live, within an
-     * unexpired free-cancellation window, and the money can flow back without manual work.
+     * unexpired free-cancellation window, not after a timed check-in has begun, and the
+     * money can flow back without manual work.
      */
     public function canCancelWithRefund(): bool
     {
@@ -281,7 +282,28 @@ class Reservation extends Model
             return false;
         }
 
+        if ($this->timedCheckInHasStarted()) {
+            return false;
+        }
+
         return $this->supportsAutomaticRefund();
+    }
+
+    /**
+     * Whether a real check-in moment has already passed. Only bookings whose date_start
+     * carries a time-of-day are judged: the standard flow stores date-only starts (midnight),
+     * where "check-in has begun" is meaningless on the arrival day and would wrongly close
+     * the deliberate zero-day arrival-day refund window. For timed bookings the window must
+     * cap at the start moment — a zero-day policy keeps the refund cancel open through the
+     * end of the arrival day, which would otherwise let an already-started stay self-refund.
+     */
+    protected function timedCheckInHasStarted(): bool
+    {
+        if ($this->date_start->copy()->startOfDay()->eq($this->date_start)) {
+            return false;
+        }
+
+        return ! now()->lt($this->date_start);
     }
 
     /**

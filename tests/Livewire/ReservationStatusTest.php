@@ -1174,6 +1174,39 @@ class ReservationStatusTest extends TestCase
         Event::assertDispatched(ReservationRefunded::class);
     }
 
+    public function test_period_zero_refund_is_blocked_after_a_timed_check_in_has_started()
+    {
+        // Freeze mid-afternoon so "after the 12:00 check-in, before midnight" is deterministic.
+        $this->travelTo(now()->setTime(18, 0));
+
+        // The zero-day window stays open through the end of the arrival day (deliberate,
+        // pinned above), but this booking carries a real check-in time that has passed —
+        // an already-started stay must not self-refund during the remaining evening hours.
+        $reservation = $this->makeReservation([
+            'date_start' => now()->setTime(12, 0),
+            'date_end' => now()->addDays(2)->setTime(12, 0),
+            'free_cancellation_period' => 0,
+        ]);
+
+        $this->forbidGatewayRefunds();
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationDescription'))
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservationNoRefund'))
+            ->call('cancel')
+            ->assertHasErrors(['cancellation'])
+            ->assertSet('cancelled', false)
+            ->assertSee(trans('statamic-resrv::frontend.cancellationNotAllowed'));
+
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+    }
+
     public function test_disabled_status_page_renders_nothing_and_blocks_every_action()
     {
         Config::set('resrv-config.enable_reservation_status_page', false);
