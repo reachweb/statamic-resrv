@@ -25,18 +25,29 @@ class Report
         $this->date_start = $date_start;
         $this->date_end = $date_end;
         $this->dateField = $dateField;
+        // Follow the money: the report covers reservations whose revenue the business holds —
+        // confirmed/partner bookings plus no-refund cancellations that kept their gateway payment.
+        // A returned charge always ends REFUNDED, and no-charge voids (partner / zero-payment)
+        // carry an empty payment_id, so "cancelled with a payment_id" is exactly the retained set.
         $this->reservations = Reservation::whereDate($this->dateField, '>=', $this->date_start)
             ->whereDate($this->dateField, '<=', $this->date_end)
-            ->whereIn('status', ['confirmed', 'partner'])
+            ->where(function ($query) {
+                $query->whereIn('status', ['confirmed', 'partner'])
+                    ->orWhere(function ($query) {
+                        $query->where('status', 'cancelled')
+                            ->whereNotNull('payment_id')
+                            ->where('payment_id', '!=', '');
+                    });
+            })
             ->get();
     }
 
-    public function countConfirmedReservations()
+    public function countReservations()
     {
         return $this->reservations->count();
     }
 
-    public function sumConfirmedReservations(): PriceClass
+    public function sumRevenue(): PriceClass
     {
         // Accumulate in integer minor units (Money::add) rather than summing formatted decimal
         // strings as floats, which CLAUDE.md forbids and which can drift by a cent over many rows.
@@ -46,15 +57,15 @@ class Report
         );
     }
 
-    public function avgConfirmedReservations(): PriceClass
+    public function avgRevenue(): PriceClass
     {
-        $count = $this->countConfirmedReservations();
+        $count = $this->countReservations();
 
         if ($count === 0) {
             return Price::create(0);
         }
 
-        return $this->sumConfirmedReservations()->divide((string) $count);
+        return $this->sumRevenue()->divide((string) $count);
     }
 
     public function topSellerItems()
@@ -74,7 +85,7 @@ class Report
         return $topItems->map(function ($reservations, $itemId) use ($entries) {
             $entry = $reservations->first()->entryToArray($entries->get($itemId));
 
-            // Accumulate in integer minor units like sumConfirmedReservations() above — not
+            // Accumulate in integer minor units like sumRevenue() above — not
             // Collection::sum() over format() strings, which adds money as floats. The single
             // terminal (float) cast keeps the JSON numeric for the table sort and cannot drift.
             $totalRevenue = $reservations->reduce(
@@ -89,7 +100,7 @@ class Report
                 'reservations' => $reservations->count(),
                 'total_revenue' => (float) $totalRevenue->format(),
                 'avg_revenue' => (float) (clone $totalRevenue)->divide((string) $reservations->count())->format(),
-                'percentage' => round($reservations->count() / $this->countConfirmedReservations(), 2),
+                'percentage' => round($reservations->count() / $this->countReservations(), 2),
             ];
         })->values();
     }
@@ -104,7 +115,7 @@ class Report
                 'id' => $item->extra_id,
                 'title' => $extra->name,
                 'reservations' => (int) $item->occurrences,
-                'percentage' => round($item->occurrences / $this->countConfirmedReservations(), 2),
+                'percentage' => round($item->occurrences / $this->countReservations(), 2),
             ];
         });
 
@@ -127,6 +138,10 @@ class Report
     {
         $pivots = DB::table('resrv_reservation_affiliate')
             ->whereIn('reservation_id', $this->reservations->pluck('id'))
+            // Voided commissions (refunds, no-charge voids) must never report. The status set
+            // loaded above happens to exclude reservations with stamped pivots today, but this
+            // filter — not that coincidence — is the contract.
+            ->whereNull('cancelled_at')
             ->get(['reservation_id', 'affiliate_id', 'fee', 'data']);
 
         if ($pivots->isEmpty()) {
@@ -205,7 +220,7 @@ class Report
             ->groupBy('dynamic_pricing_id')
             ->map(fn ($group) => $this->decodeSnapshot($group->first()->data));
 
-        $total = $this->countConfirmedReservations();
+        $total = $this->countReservations();
 
         return $rows->map(function ($row) use ($rules, $snapshots, $total) {
             $rule = $rules->get($row->dynamic_pricing_id);
