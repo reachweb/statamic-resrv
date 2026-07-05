@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Models;
 
 use Carbon\Carbon;
+use Closure;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,8 +21,10 @@ use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\ReservationDriftException;
+use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Statamic\Contracts\Entries\Entry as EntryContract;
@@ -101,7 +104,7 @@ class Reservation extends Model
 
     public function affiliate(): BelongsToMany
     {
-        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee');
+        return $this->belongsToMany(Affiliate::class, 'resrv_reservation_affiliate')->withPivot('fee', 'cancelled_at');
     }
 
     public function rate(): BelongsTo
@@ -230,6 +233,388 @@ class Reservation extends Model
     }
 
     /**
+     * Last day the customer may cancel free of charge (inclusive through end of day). NULL
+     * when non-refundable or no period was configured.
+     */
+    public function freeCancellationDeadline(): ?Carbon
+    {
+        $cancellation = $this->effectiveCancellationPolicy();
+
+        if ($cancellation['policy'] !== CancellationPolicy::FreeCancellation || $cancellation['period'] === null) {
+            return null;
+        }
+
+        return CancellationPolicy::deadlineFor($this->date_start, $cancellation['period']);
+    }
+
+    /**
+     * Confirmed (directly or via partner flow) and not yet terminal. PENDING rows are
+     * mid-checkout and excluded.
+     */
+    public function isLive(): bool
+    {
+        return in_array($this->status, ReservationStatus::live(), true);
+    }
+
+    /**
+     * Whether the customer may self-cancel at all — with a refund inside the free
+     * cancellation window, or without one after it closes.
+     */
+    public function canBeCancelledByCustomer(): bool
+    {
+        return $this->canCancelWithRefund() || $this->canCancelWithoutRefund();
+    }
+
+    /**
+     * Whether the customer may self-cancel with automatic full refund: live, within an
+     * unexpired free-cancellation window, not after a timed check-in has begun, and the
+     * money can flow back without manual work.
+     */
+    public function canCancelWithRefund(): bool
+    {
+        if (! $this->isLive()) {
+            return false;
+        }
+
+        $deadline = $this->freeCancellationDeadline();
+
+        if ($deadline === null || now()->gt($deadline->endOfDay())) {
+            return false;
+        }
+
+        if ($this->timedCheckInHasStarted()) {
+            return false;
+        }
+
+        return $this->supportsAutomaticRefund();
+    }
+
+    /**
+     * Whether a real check-in moment has already passed. Only bookings whose date_start
+     * carries a time-of-day are judged: the standard flow stores date-only starts (midnight),
+     * where "check-in has begun" is meaningless on the arrival day and would wrongly close
+     * the deliberate zero-day arrival-day refund window. For timed bookings the window must
+     * cap at the start moment — a zero-day policy keeps the refund cancel open through the
+     * end of the arrival day, which would otherwise let an already-started stay self-refund.
+     */
+    protected function timedCheckInHasStarted(): bool
+    {
+        if ($this->date_start->copy()->startOfDay()->eq($this->date_start)) {
+            return false;
+        }
+
+        return ! now()->lt($this->date_start);
+    }
+
+    /**
+     * Whether the customer may self-cancel WITHOUT a refund: a live booking paid online
+     * through a gateway that could refund automatically, before the stay starts, once the
+     * free-cancellation window has closed (or the policy is non-refundable). The payment
+     * stays with the business — so the forfeit must stem from terms the customer actually
+     * agreed to: a NonRefundable policy, or a free-cancellation window that existed and
+     * closed. A NULL period means no policy was ever configured (nothing was advertised at
+     * checkout), which fails closed to "contact us" rather than silently forfeiting the
+     * payment. hasGatewayPayment() keeps partner and zero-charge bookings out, and
+     * supportsAutomaticRefund() keeps offline/manual and no-longer-configured gateways
+     * out — all of those are "contact us to cancel" cases by design.
+     */
+    public function canCancelWithoutRefund(): bool
+    {
+        if (! $this->isLive() || $this->canCancelWithRefund()) {
+            return false;
+        }
+
+        $policy = $this->effectiveCancellationPolicy()['policy'];
+
+        if ($policy !== CancellationPolicy::NonRefundable && $this->freeCancellationDeadline() === null) {
+            return false;
+        }
+
+        if (! now()->lt($this->date_start)) {
+            return false;
+        }
+
+        return $this->hasGatewayPayment() && $this->supportsAutomaticRefund();
+    }
+
+    /**
+     * Whether cancelling can return the money without manual work: no charge reached a
+     * gateway, or the gateway supports API refunds. Offline gateways (bank transfer) cannot,
+     * and neither can a recorded gateway that is no longer configured — nobody can move
+     * that money automatically, so such reservations require manual handling.
+     */
+    public function supportsAutomaticRefund(): bool
+    {
+        if ($this->gatewayHoldsNoCharge()) {
+            return true;
+        }
+
+        try {
+            return $this->resolvePaymentGateway()->supportsAutomaticRefunds();
+        } catch (UnknownPaymentGateway) {
+            return false;
+        }
+    }
+
+    /**
+     * True when no charge exists to refund: empty payment_id AND (partner or zero payment).
+     * Other empty-payment_id rows (e.g. PENDING with an orphaned charge) are assumed to hold one.
+     */
+    public function gatewayHoldsNoCharge(): bool
+    {
+        return ($this->payment_id === '' || $this->payment_id === null)
+            && ($this->status === ReservationStatus::PARTNER->value || $this->payment->isZero());
+    }
+
+    /**
+     * The gateway this reservation was paid through. Only legacy rows with a BLANK recorded
+     * gateway fall back to the default; a non-empty gateway that is no longer configured
+     * fails closed with UnknownPaymentGateway — silently substituting the current default
+     * would hand this reservation's foreign payment_id to a provider that never charged it.
+     */
+    public function resolvePaymentGateway(): PaymentInterface
+    {
+        $manager = app(PaymentGatewayManager::class);
+
+        try {
+            return $manager->forReservation($this);
+        } catch (UnknownPaymentGateway $e) {
+            throw $e;
+        } catch (\InvalidArgumentException $e) {
+            if (blank($this->payment_gateway)) {
+                return $manager->gateway();
+            }
+
+            throw new UnknownPaymentGateway($this->payment_gateway, $this->id, $e);
+        }
+    }
+
+    /**
+     * Whether a live booking's free-cancellation window has closed — used to explain the
+     * missing cancel button.
+     */
+    public function freeCancellationExpired(): bool
+    {
+        $deadline = $this->freeCancellationDeadline();
+
+        return $this->isLive() && $deadline !== null && now()->gt($deadline->endOfDay());
+    }
+
+    /**
+     * Whether a payment intent ever reached a gateway (payment_id non-empty). Unlike
+     * gatewayHoldsNoCharge() it ignores status, so it stays correct after REFUNDED.
+     */
+    public function hasGatewayPayment(): bool
+    {
+        return $this->payment_id !== '' && $this->payment_id !== null;
+    }
+
+    /**
+     * Whether refunding this reservation returns the money automatically through the gateway —
+     * true only when a charge actually reached a gateway AND that gateway supports API refunds.
+     * False for offline/manual gateways (an admin must return the funds by hand) and for no-charge
+     * bookings (nothing to return). Drives the "refunded" vs "refund manually" wording in the
+     * customer and admin cancellation emails.
+     */
+    public function refundIsAutomatic(): bool
+    {
+        return $this->hasGatewayPayment() && $this->supportsAutomaticRefund();
+    }
+
+    /**
+     * Amount actually collected: payment + payment_surcharge (the sum the intent charged and
+     * the webhook verifies). Independent of current payment-mode config, which would misreport
+     * bookings made before a mode change. Zero when no charge reached a gateway.
+     */
+    public function amountPaid(): PriceClass
+    {
+        if (! $this->hasGatewayPayment()) {
+            return Price::create(0);
+        }
+
+        return $this->payment->add($this->payment_surcharge);
+    }
+
+    /**
+     * Amount a refund returns — the full intent, i.e. exactly what was collected.
+     */
+    public function refundedAmount(): PriceClass
+    {
+        return $this->amountPaid();
+    }
+
+    /**
+     * Commission owed to the given affiliate for this reservation (total × pivot fee %), zero once
+     * the commission has been cancelled. Single owner of the formula so the CP serializer and the
+     * CSV export can never drift apart.
+     */
+    public function affiliateCommissionFor(Affiliate $affiliate): PriceClass
+    {
+        if ($affiliate->pivot->cancelled_at !== null) {
+            return Price::create(0);
+        }
+
+        return $this->total->multiply((float) $affiliate->pivot->fee / 100);
+    }
+
+    /**
+     * Amount the customer actually paid online at checkout, for customer-facing surfaces.
+     * Manual-confirmation gateways (offline / bank transfer) mint a payment_id without
+     * collecting any money — the funds arrive out-of-band — so amountPaid() would overstate
+     * them as paid. refundedAmount() intentionally keeps reporting the full deposit so the
+     * admin "refund manually" path still shows what to return.
+     */
+    public function amountPaidOnline(): PriceClass
+    {
+        if (! $this->hasGatewayPayment()) {
+            return Price::create(0);
+        }
+
+        try {
+            if ($this->resolvePaymentGateway()->supportsManualConfirmation()) {
+                return Price::create(0);
+            }
+        } catch (UnknownPaymentGateway) {
+            // Display-only: with the gateway gone we cannot ask it whether it collected
+            // online, so report the amount the reservation itself recorded rather than
+            // breaking the customer status page.
+        }
+
+        return $this->amountPaid();
+    }
+
+    /**
+     * App-key HMAC binding the reservation key to the customer email — proves a lookup link
+     * came from an email we sent, without exposing the address in the URL. Signing the key
+     * (not the email alone) scopes the link to this single booking, so a leaked link can't be
+     * replayed against the same customer's other reservations by swapping the reference.
+     */
+    public function customerLookupHash(): ?string
+    {
+        $email = $this->customer?->email;
+
+        if ($email === null || $this->getKey() === null) {
+            return null;
+        }
+
+        return hash_hmac('sha256', $this->getKey().'|'.$email, config('app.key'));
+    }
+
+    /**
+     * Absolute "manage your booking" deep link to the reservation-status page, or null when the
+     * status page entry is unconfigured/missing/unpublished/unroutable or the reservation has no
+     * customer email to authenticate with. Carries the reference plus customerLookupHash() so the
+     * page opens (and offers cancellation) without the customer re-entering anything.
+     */
+    public function customerStatusUrl(): ?string
+    {
+        // The whole customer status feature is opt-in; without the toggle the emails must
+        // not link to a page whose component renders nothing.
+        if (! config('resrv-config.enable_reservation_status_page')) {
+            return null;
+        }
+
+        $entryId = config('resrv-config.reservation_status_entry');
+
+        // The entries fieldtype may surface its single value as a one-element array.
+        if (is_array($entryId)) {
+            $entryId = $entryId[0] ?? null;
+        }
+
+        // Eloquent-driver sites can store integer entry IDs, so accept any non-empty scalar.
+        if (! is_string($entryId) && ! is_int($entryId)) {
+            return null;
+        }
+
+        $entryId = (string) $entryId;
+
+        if ($entryId === '') {
+            return null;
+        }
+
+        $hash = $this->customerLookupHash();
+
+        if ($hash === null || ! $this->reference) {
+            return null;
+        }
+
+        $entry = Entry::find($entryId);
+
+        // url() ignores publish state, so check it explicitly — a draft or private status page
+        // must hide the button rather than email a link that 404s for guests.
+        if (! $entry || ! $entry->published() || $entry->private() || ! $entry->url()) {
+            return null;
+        }
+
+        return $entry->absoluteUrl().'?'.http_build_query([
+            'ref' => $this->reference,
+            'hash' => $hash,
+        ]);
+    }
+
+    /**
+     * Find a reservation by reference code + booking email (case/whitespace tolerant). Email is
+     * part of selection, not a post-check, because the reference column is not unique.
+     */
+    public static function findByReferenceForCustomer(string $reference, string $email, array $statuses): ?self
+    {
+        $email = strtolower(trim($email));
+
+        if ($email === '') {
+            return null;
+        }
+
+        return static::customerLookupCandidates($reference, $statuses)
+            ->first(fn (self $reservation) => $reservation->customer?->email
+                && hash_equals(strtolower($reservation->customer->email), $email));
+    }
+
+    /**
+     * Resolve a customer deep link (reference + customerLookupHash()) to its reservation, or
+     * null. The hash disambiguates reservations sharing a reference, like email above.
+     */
+    public static function findForCustomerLookup(string $reference, string $hash, array $statuses): ?self
+    {
+        $match = static::customerLookupCandidates($reference, $statuses)
+            ->first(function (self $reservation) use ($hash) {
+                $expectedHash = $reservation->customerLookupHash();
+
+                return $expectedHash !== null && hash_equals($expectedHash, $hash);
+            });
+
+        // Dummy HMAC on the no-candidate branch so it isn't trivially faster than one with rows
+        // to compare. Not constant-time, and need not be: the reference isn't the secret — the
+        // app-key HMAC is, compared with hash_equals above.
+        if ($match === null) {
+            hash_equals(hash_hmac('sha256', 'resrv-missing-reservation', config('app.key')), $hash);
+
+            return null;
+        }
+
+        return $match;
+    }
+
+    /**
+     * All visible reservations matching a reference code (column isn't unique; callers
+     * disambiguate by credential). Ordered by id so duplicates resolve deterministically.
+     */
+    protected static function customerLookupCandidates(string $reference, array $statuses): Collection
+    {
+        $reference = strtoupper(trim($reference));
+
+        if ($reference === '') {
+            return collect();
+        }
+
+        return static::query()
+            ->with('customer')
+            ->where('reference', $reference)
+            ->whereIn('status', $statuses)
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
      * Pick the strictest policy from a set of selections: any non-refundable wins outright;
      * otherwise the one whose free-cancellation deadline (its own check-in date minus its
      * period) falls earliest. Periods belonging to different check-in dates are not directly
@@ -257,7 +642,7 @@ class Reservation extends Model
 
         $checkIns = $policies->map(fn ($policy) => Carbon::parse($policy['date_start'])->startOfDay());
         $deadlines = $policies->map(
-            fn ($policy) => Carbon::parse($policy['date_start'])->startOfDay()->subDays((int) $policy['period'])
+            fn ($policy) => CancellationPolicy::deadlineFor(Carbon::parse($policy['date_start']), (int) $policy['period'])
         );
 
         return [
@@ -325,10 +710,13 @@ class Reservation extends Model
      * changed the row after their in-memory pre-check is treated as a no-op (returns false) rather
      * than throwing — avoiding a spurious HTTP 500 / webhook retry. Explicit callers (CP refund)
      * keep the default and catch InvalidStateTransition to surface the error.
+     *
+     * $inTransaction runs on the locked row after the guard, before the save — for work that
+     * must commit/roll back atomically (e.g. the refund gateway call). A throw aborts the transition.
      */
-    public function transitionTo(ReservationStatus $to, bool $tolerant = false): bool
+    public function transitionTo(ReservationStatus $to, bool $tolerant = false, ?Closure $inTransaction = null): bool
     {
-        return (bool) DB::transaction(function () use ($to, $tolerant) {
+        return (bool) DB::transaction(function () use ($to, $tolerant, $inTransaction) {
             $fresh = static::query()->lockForUpdate()->findOrFail($this->id);
 
             if ($fresh->status === $to->value) {
@@ -349,6 +737,10 @@ class Reservation extends Model
                 }
 
                 throw new InvalidStateTransition($current, $to, $fresh->id);
+            }
+
+            if ($inTransaction) {
+                $inTransaction($fresh);
             }
 
             $fresh->status = $to->value;
@@ -663,9 +1055,22 @@ class Reservation extends Model
         return $requiredOptionIds->every(fn ($id) => array_key_exists($id, $checkoutOptions));
     }
 
-    public function createRandomReference()
+    /**
+     * Retry a random 6-char [A-Z0-9] reference until unused (column has no unique index;
+     * legacy installs may hold duplicates). Capped at 100 so a saturated table fails loudly
+     * rather than spinning inside the caller's transaction; lookups also disambiguate by credential.
+     */
+    public function createRandomReference(): string
     {
-        return Str::upper(Str::random(6));
+        for ($attempt = 0; $attempt < 100; $attempt++) {
+            $reference = Str::upper(Str::random(6));
+
+            if (! static::query()->where('reference', $reference)->exists()) {
+                return $reference;
+            }
+        }
+
+        throw new \RuntimeException('Unable to generate a unique reservation reference after 100 attempts.');
     }
 
     // TODO: cleanup these methods

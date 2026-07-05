@@ -76,18 +76,16 @@ class ResrvTagTest extends TestCase
             'email' => 'test@example.com',
         ]);
 
-        Reservation::factory()->create([
+        $reservation = Reservation::factory()->create([
             'item_id' => $this->entry->id(),
             'status' => ReservationStatus::CONFIRMED,
             'reference' => 'TEST02',
             'customer_id' => $customer->id,
         ]);
 
-        $expectedHash = hash_hmac('sha256', 'test@example.com', config('app.key'));
-
         request()->merge([
             'ref' => 'TEST02',
-            'hash' => $expectedHash,
+            'hash' => $reservation->customerLookupHash(),
         ]);
 
         $reservation = $this->tag->reservationFromUri();
@@ -102,18 +100,16 @@ class ResrvTagTest extends TestCase
 
         $longRef = 'ABCDEFGHIJKLMNO';
 
-        Reservation::factory()->create([
+        $reservation = Reservation::factory()->create([
             'item_id' => $this->entry->id(),
             'status' => ReservationStatus::CONFIRMED,
             'reference' => $longRef,
             'customer_id' => $customer->id,
         ]);
 
-        $expectedHash = hash_hmac('sha256', 'long@example.com', config('app.key'));
-
         request()->merge([
             'ref' => $longRef,
-            'hash' => $expectedHash,
+            'hash' => $reservation->customerLookupHash(),
         ]);
 
         $reservation = $this->tag->reservationFromUri();

@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
+use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -42,5 +43,40 @@ class ReservationPriceCastTest extends TestCase
 
         $this->assertSame('200.00', $array['price']);
         $this->assertSame('50.00', $array['payment']);
+    }
+
+    public function test_refunded_amount_reports_the_recorded_charge_with_surcharge()
+    {
+        $reservation = Reservation::factory()->create([
+            'price' => 200,
+            'payment' => 50,
+            'payment_surcharge' => 4,
+            'total' => 200,
+            'payment_id' => 'pi_123',
+        ]);
+
+        // Checkout charges payment + surcharge in one intent and the gateway refunds the
+        // intent in full — independent of the payment mode configured at read time, which
+        // may have changed since the booking was made.
+        Config::set('resrv-config.payment', 'percent');
+        $this->assertSame('54.00', $reservation->amountPaid()->format());
+        $this->assertSame('54.00', $reservation->refundedAmount()->format());
+
+        Config::set('resrv-config.payment', 'full');
+        $this->assertSame('54.00', $reservation->amountPaid()->format());
+        $this->assertSame('54.00', $reservation->refundedAmount()->format());
+    }
+
+    public function test_refunded_amount_is_zero_when_no_payment_reached_a_gateway()
+    {
+        $reservation = Reservation::factory()->create([
+            'price' => 200,
+            'payment' => 100,
+            'payment_id' => '',
+            'total' => 200,
+        ]);
+
+        $this->assertSame('0.00', $reservation->amountPaid()->format());
+        $this->assertSame('0.00', $reservation->refundedAmount()->format());
     }
 }

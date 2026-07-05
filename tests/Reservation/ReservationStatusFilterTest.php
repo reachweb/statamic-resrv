@@ -39,6 +39,22 @@ class ReservationStatusFilterTest extends TestCase
         $this->assertSame(2, $missingQuery->count());
     }
 
+    public function test_cancelled_is_offered_and_filterable()
+    {
+        Reservation::factory()->create(['status' => 'cancelled']);
+        Reservation::factory()->create(['status' => 'confirmed']);
+
+        $this->assertArrayHasKey(
+            'cancelled',
+            (new ReservationStatus)->fieldItems()['status']['options']
+        );
+
+        $query = Reservation::query();
+        (new ReservationStatus)->apply($query, ['status' => ['cancelled']]);
+
+        $this->assertEquals(['cancelled'], $query->pluck('status')->all());
+    }
+
     public function test_badge_handles_null_status_values()
     {
         $filter = new ReservationStatus;

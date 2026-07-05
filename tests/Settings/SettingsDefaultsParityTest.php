@@ -48,6 +48,7 @@ class SettingsDefaultsParityTest extends TestCase
         'admin_email',
         'checkout_entry',
         'checkout_completed_entry',
+        'reservation_status_entry',
         'checkout_forms_default',
         'checkout_forms_collections',
         'checkout_forms_entries',
@@ -64,6 +65,12 @@ class SettingsDefaultsParityTest extends TestCase
                 "Effective default for [{$key}] drifted from the legacy config value."
             );
         }
+    }
+
+    public function test_customer_status_feature_toggles_default_to_off()
+    {
+        $this->assertFalse(config('resrv-config.enable_reservation_status_page'));
+        $this->assertFalse(config('resrv-config.enable_customer_cancellations'));
     }
 
     public function test_keys_without_a_blueprint_default_resolve_to_null()

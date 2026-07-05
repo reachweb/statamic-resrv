@@ -12,8 +12,9 @@ class LogReservationCancelled
     public function __construct(protected ActivityLog $activityLog) {}
 
     /**
-     * Nothing in the addon dispatches ReservationCancelled — it is a public extension
-     * point for site-level cancellation flows, so the reason stays generic.
+     * Dispatched by ReservationRefundProcessor::cancelWithoutRefund() (customer no-refund
+     * cancellations and no-charge CP voids), and open to site-level cancellation flows as
+     * an extension point, so the reason stays generic.
      */
     public function handle(ReservationCancelled $event): void
     {

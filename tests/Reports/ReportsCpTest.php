@@ -45,7 +45,7 @@ class ReportsCpTest extends TestCase
         $response = $this->get(cp_route('resrv.report.index').'?start='.now()->toDateString().'&end='.now()->addWeek()->toDateString());
         $response->assertStatus(200)
             ->assertJson([
-                'total_confirmed_reservations' => 6,
+                'total_reservations' => 6,
                 'total_revenue' => '1200.00',
                 'avg_revenue' => '200.00',
             ])
@@ -55,7 +55,7 @@ class ReportsCpTest extends TestCase
     // Revenue is accumulated in integer minor units and returned as a Price, not summed as floats
     // (which CLAUDE.md forbids). Reverting to Collection::sum() on formatted strings would return a
     // float and fail the instanceof assertion.
-    public function test_sum_and_avg_confirmed_reservations_return_exact_money()
+    public function test_sum_and_avg_revenue_return_exact_money()
     {
         $item = $this->makeStatamicItem();
 
@@ -64,9 +64,9 @@ class ReportsCpTest extends TestCase
 
         $report = new Report(now()->toDateString(), now()->addWeek()->toDateString());
 
-        $this->assertInstanceOf(Price::class, $report->sumConfirmedReservations());
-        $this->assertSame('30.03', $report->sumConfirmedReservations()->format());
-        $this->assertSame('10.01', $report->avgConfirmedReservations()->format());
+        $this->assertInstanceOf(Price::class, $report->sumRevenue());
+        $this->assertSame('30.03', $report->sumRevenue()->format());
+        $this->assertSame('10.01', $report->avgRevenue()->format());
 
         // Per-item revenue aggregates through the same Price path; the payload stays numeric
         // (floats) on purpose — ReportsItemsTable.vue only number-sorts `typeof === 'number'`
@@ -94,11 +94,11 @@ class ReportsCpTest extends TestCase
 
         $this->get(cp_route('resrv.report.index')."?start={$start}&end={$end}&date_field=created_at")
             ->assertStatus(200)
-            ->assertJson(['total_confirmed_reservations' => 3]);
+            ->assertJson(['total_reservations' => 3]);
 
         $this->get(cp_route('resrv.report.index')."?start={$start}&end={$end}&date_field=date_start")
             ->assertStatus(200)
-            ->assertJson(['total_confirmed_reservations' => 0]);
+            ->assertJson(['total_reservations' => 0]);
     }
 
     // occurrences (count), revenue, and percentage must all use the same status set
@@ -127,6 +127,50 @@ class ReportsCpTest extends TestCase
         $this->assertSame(400.0, $top[1]['total_revenue']);
         $this->assertSame(200.0, $top[1]['avg_revenue']);
         $this->assertEquals(0.33, $top[1]['percentage']);
+    }
+
+    // Follow the money: a no-refund cancellation kept its payment, so the booking stays in the
+    // report; refunds and no-charge voids (empty payment_id) drop out. Every section shares the
+    // same reservation set, so the top-seller counts and percentages must agree with the totals.
+    public function test_report_includes_cancelled_reservations_that_kept_their_payment()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed'])->count(2)->create();
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'cancelled', 'payment_id' => 'pi_kept'])->create();
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'cancelled'])->create();
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'refunded', 'payment_id' => 'pi_returned'])->create();
+
+        $report = new Report(now()->toDateString(), now()->addWeek()->toDateString());
+
+        $this->assertSame(3, $report->countReservations());
+        $this->assertSame('600.00', $report->sumRevenue()->format());
+
+        $top = $report->topSellerItems();
+        $this->assertEquals(3, $top[0]['reservations']);
+        $this->assertEquals(1.0, $top[0]['percentage']);
+    }
+
+    // The retained commission of a paid no-refund cancellation must report; a voided pivot on a
+    // loaded reservation must not. The second half can't occur through current flows (voiding and
+    // the status whitelist track together), so it's manufactured — the explicit cancelled_at
+    // filter is the contract, not that coincidence.
+    public function test_affiliate_sales_count_retained_commissions_and_skip_voided_pivots()
+    {
+        $item = $this->makeStatamicItem();
+        $affiliate = Affiliate::factory()->create(['name' => 'Affiliate A', 'code' => 'AFA', 'fee' => 20]);
+
+        $kept = Reservation::factory(['item_id' => $item->id(), 'status' => 'cancelled', 'payment_id' => 'pi_kept', 'total' => '300.00'])->create();
+        $kept->affiliate()->attach($affiliate->id, ['fee' => $affiliate->fee]);
+
+        $voided = Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed', 'total' => '500.00'])->create();
+        $voided->affiliate()->attach($affiliate->id, ['fee' => $affiliate->fee, 'cancelled_at' => now()]);
+
+        $row = (new Report(now()->toDateString(), now()->addWeek()->toDateString()))->affiliateSales()->firstWhere('id', $affiliate->id);
+
+        $this->assertEquals(1, $row['reservations']);
+        $this->assertSame(300.0, $row['total_revenue']);
+        $this->assertSame(60.0, $row['commission']);
     }
 
     public function test_validates_date_field()

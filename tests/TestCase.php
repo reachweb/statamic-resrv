@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 use Livewire\LivewireServiceProvider;
 use MarcoRieser\Livewire\ServiceProvider;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\StatamicResrvServiceProvider;
 use Spatie\LaravelRay\RayServiceProvider;
@@ -339,6 +341,40 @@ class TestCase extends AddonTestCase
         }
 
         $this->assertTrue($query->exists(), "Failed asserting that table [{$table}] has matching record with {$jsonColumn} = {$jsonString}");
+    }
+
+    /**
+     * Bind a payment gateway mock whose refund() runs exactly once, returning $outcome or
+     * throwing it when it is an exception.
+     */
+    protected function mockRefundGateway(bool|\Throwable $outcome = true): void
+    {
+        $gateway = \Mockery::mock(FakePaymentGateway::class)->makePartial();
+        $expectation = $gateway->shouldReceive('refund')->once();
+        $outcome instanceof \Throwable ? $expectation->andThrow($outcome) : $expectation->andReturn($outcome);
+
+        // No call-count constraint: Reservation::canBeCancelledByCustomer() also resolves
+        // the gateway (capability check) on every render, not just during the refund.
+        $manager = \Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldReceive('forReservation')->andReturn($gateway);
+        app()->instance(PaymentGatewayManager::class, $manager);
+    }
+
+    /**
+     * Bind a payment gateway manager whose refund() must never run — for flows that must
+     * reject before any money moves. Read-only resolution is allowed because renders resolve
+     * the gateway for capability/display checks (refundIsAutomatic, amountPaidOnline); only an
+     * actual refund call fails the test.
+     */
+    protected function forbidGatewayRefunds(): void
+    {
+        $gateway = \Mockery::mock(FakePaymentGateway::class)->makePartial();
+        $gateway->shouldReceive('refund')->never();
+
+        $manager = \Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldReceive('forReservation')->andReturn($gateway);
+        $manager->shouldReceive('gateway')->andReturn($gateway);
+        app()->instance(PaymentGatewayManager::class, $manager);
     }
 
     /**

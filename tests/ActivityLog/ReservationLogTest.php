@@ -239,9 +239,12 @@ class ReservationLogTest extends TestCase
     {
         $this->signInAdmin();
 
-        // The controller pre-check reads PENDING, then a webhook confirm lands during the
-        // gateway refund call — before the transition takes the row lock. The log must
-        // record the observed confirmed → refunded, not the stale pending → refunded.
+        // The gateway refund call rides inside transitionTo()'s row lock (see
+        // ReservationRefundProcessor), so the from-status is the one read under the lock
+        // before the gateway is called — a concurrent webhook confirm blocks on the lock
+        // until the refund commits and can never interleave. A status write during the
+        // gateway call (same-connection here, since SQLite has no real lock contention)
+        // must not leak into the log: pending → refunded is the observed transition.
         $reservation = $this->makeReservation([
             'status' => 'pending',
             'payment_id' => 'abcdef',
@@ -263,13 +266,13 @@ class ReservationLogTest extends TestCase
 
         $this->assertDatabaseHas('resrv_reservation_logs', [
             'reservation_id' => $reservation->id,
-            'status_from' => 'confirmed',
+            'status_from' => 'pending',
             'status_to' => 'refunded',
             'reason' => 'cp_refund',
         ]);
     }
 
-    public function test_cp_refund_logs_the_partner_from_state()
+    public function test_cp_void_of_a_partner_reservation_logs_the_cancelled_transition()
     {
         $this->signInAdmin();
 
@@ -282,10 +285,17 @@ class ReservationLogTest extends TestCase
         $this->patch(cp_route('resrv.reservation.refund'), ['id' => $reservation->id])
             ->assertOk();
 
+        // No charge ever reached a gateway, so the CP "refund" action is really a void:
+        // the refund processor routes it to CANCELLED and the cancelled log entry is
+        // written instead of a cp_refund one.
         $this->assertDatabaseHas('resrv_reservation_logs', [
             'reservation_id' => $reservation->id,
             'status_from' => 'partner',
-            'status_to' => 'refunded',
+            'status_to' => 'cancelled',
+            'reason' => 'cancelled',
+        ]);
+        $this->assertDatabaseMissing('resrv_reservation_logs', [
+            'reservation_id' => $reservation->id,
             'reason' => 'cp_refund',
         ]);
     }

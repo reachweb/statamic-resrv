@@ -12,6 +12,7 @@ use Reach\StatamicResrv\Console\Commands\UpgradeToRates;
 use Reach\StatamicResrv\Dictionaries\CountryPhoneCodes;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Events\ReservationCancelledByCustomer;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -37,6 +38,7 @@ use Reach\StatamicResrv\Listeners\AddDynamicPricingsToReservation;
 use Reach\StatamicResrv\Listeners\AddReservationIdToSession;
 use Reach\StatamicResrv\Listeners\AddResrvEntryToDatabase;
 use Reach\StatamicResrv\Listeners\AssociateAffiliateFromCoupon;
+use Reach\StatamicResrv\Listeners\CancelAffiliateCommission;
 use Reach\StatamicResrv\Listeners\ClearAvailabilityFieldCache;
 use Reach\StatamicResrv\Listeners\DecreaseAvailability;
 use Reach\StatamicResrv\Listeners\EntryDeleted;
@@ -48,6 +50,8 @@ use Reach\StatamicResrv\Listeners\LogReservationExpired;
 use Reach\StatamicResrv\Listeners\LogReservationRefunded;
 use Reach\StatamicResrv\Listeners\NormalizeAvailabilityFieldValue;
 use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
+use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails;
+use Reach\StatamicResrv\Listeners\SendCustomerCancelledEmail;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
@@ -145,14 +149,31 @@ class ResrvProvider extends AddonServiceProvider
             LogReservationConfirmed::class,
             SendNewReservationEmails::class,
         ],
+        // No-refund termination (customer cancel outside the window, or a no-charge booking
+        // voided from the CP). Same descending-importance ordering as ReservationRefunded:
+        // commission (guarded — only voided when no payment was retained), inventory, audit
+        // log, then the customer email.
         ReservationCancelled::class => [
+            CancelAffiliateCommission::class,
             IncreaseAvailability::class,
             LogReservationCancelled::class,
+            SendCustomerCancelledEmail::class,
         ],
+        // Availability restore and the customer refund email are handled by ReservationRefunded,
+        // which the refund processor dispatches in the same flow — this event only adds the
+        // admin "cancelled by the customer" notification.
+        ReservationCancelledByCustomer::class => [
+            SendCancelledReservationEmails::class,
+        ],
+        // A throwing listener halts the rest of the chain (the refund still reports success), so
+        // order by descending importance — commission (money owed), then inventory, then the
+        // audit log, then email (the most failure-prone, so its failure blocks nothing) —
+        // and any failure only blocks lower-priority work.
         ReservationRefunded::class => [
-            SendRefundReservationEmails::class,
+            CancelAffiliateCommission::class,
             IncreaseAvailability::class,
             LogReservationRefunded::class,
+            SendRefundReservationEmails::class,
         ],
         CouponUpdated::class => [
             UpdateCouponAppliedToReservation::class,

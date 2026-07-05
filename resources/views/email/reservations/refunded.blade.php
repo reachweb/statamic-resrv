@@ -7,7 +7,11 @@
 {{ __("Tel:") }} {{ config('resrv-config.phone') }}<br>
 {{ __("Email:") }} {{ config('resrv-config.mail') }}
 
+@if ($reservation->refundIsAutomatic())
 {{ __("Your reservation has been refunded.") }}
+@else
+{{ __("Your reservation has been cancelled.") }}
+@endif
 
 @component('mail::panel')
 {{ __("Reservation code") }} **{{ $reservation->id }}**<br>
@@ -16,15 +20,13 @@
 {{ __("Email") }}: **{{ $reservation->customer?->email }}**
 @endcomponent
 
+@if ($reservation->refundIsAutomatic())
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|
-@if ($reservation->status === 'partner')
-| {{ __("Payment") }} | {{ __("No payment was collected for this reservation.") }} |
-@else
-| {{ __("Refunded to your card") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->totalToCharge() }} |
-@endif
+| {{ __("Refunded to your card") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
 @endcomponent
+@endif
 
 {{ __("Thank you") }},<br>
 {{ config('app.name') }}

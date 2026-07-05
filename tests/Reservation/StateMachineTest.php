@@ -144,7 +144,7 @@ class StateMachineTest extends TestCase
         $this->assertEquals('partner', $reservation->fresh()->status);
     }
 
-    public function test_confirmed_can_only_transition_to_refunded()
+    public function test_confirmed_can_transition_to_refunded()
     {
         $reservation = $this->reservation('confirmed');
 
@@ -153,13 +153,51 @@ class StateMachineTest extends TestCase
         $this->assertEquals('refunded', $reservation->fresh()->status);
     }
 
-    public function test_partner_can_only_transition_to_refunded()
+    public function test_partner_can_transition_to_refunded()
     {
         $reservation = $this->reservation('partner');
 
         $reservation->transitionTo(ReservationStatus::REFUNDED);
 
         $this->assertEquals('refunded', $reservation->fresh()->status);
+    }
+
+    public function test_live_statuses_can_transition_to_cancelled()
+    {
+        foreach (['confirmed', 'partner'] as $status) {
+            $reservation = $this->reservation($status);
+
+            $reservation->transitionTo(ReservationStatus::CANCELLED);
+
+            $this->assertEquals('cancelled', $reservation->fresh()->status);
+        }
+    }
+
+    public function test_pending_cannot_transition_to_cancelled()
+    {
+        // PENDING rows are mid-checkout; abandonment is handled by expire(), never by a cancel.
+        $reservation = $this->reservation('pending');
+
+        $this->expectException(InvalidStateTransition::class);
+
+        $reservation->transitionTo(ReservationStatus::CANCELLED);
+    }
+
+    public function test_cancelled_to_any_other_state_is_rejected()
+    {
+        // Including REFUNDED: re-entering it would rerun IncreaseAvailability and double-restore
+        // stock, so a goodwill refund after a no-refund cancellation happens on the provider's
+        // dashboard, not through the state machine.
+        foreach ([ReservationStatus::PENDING, ReservationStatus::CONFIRMED, ReservationStatus::EXPIRED, ReservationStatus::PARTNER, ReservationStatus::REFUNDED] as $target) {
+            $reservation = $this->reservation('cancelled');
+
+            try {
+                $reservation->transitionTo($target);
+                $this->fail("Expected transition from cancelled to {$target->value} to be rejected.");
+            } catch (InvalidStateTransition $e) {
+                $this->assertEquals('cancelled', $reservation->fresh()->status);
+            }
+        }
     }
 
     public function test_expired_to_confirmed_is_rejected()
@@ -195,7 +233,7 @@ class StateMachineTest extends TestCase
 
     public function test_refunded_to_any_other_state_is_rejected()
     {
-        foreach ([ReservationStatus::PENDING, ReservationStatus::CONFIRMED, ReservationStatus::EXPIRED, ReservationStatus::PARTNER] as $target) {
+        foreach ([ReservationStatus::PENDING, ReservationStatus::CONFIRMED, ReservationStatus::EXPIRED, ReservationStatus::PARTNER, ReservationStatus::CANCELLED] as $target) {
             $reservation = $this->reservation('refunded');
 
             try {
@@ -228,6 +266,12 @@ class StateMachineTest extends TestCase
     public function test_refunded_is_terminal()
     {
         $this->assertTrue(ReservationStatus::REFUNDED->isTerminal());
+    }
+
+    public function test_cancelled_is_terminal_and_excluded_from_availability()
+    {
+        $this->assertTrue(ReservationStatus::CANCELLED->isTerminal());
+        $this->assertContains(ReservationStatus::CANCELLED->value, ReservationStatus::terminal());
     }
 
     public function test_pending_is_not_terminal()

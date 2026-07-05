@@ -49,6 +49,19 @@
                             :placeholder="__('All affiliates')"
                         />
                     </Field>
+                    <Field v-if="affiliates.length > 0" :label="__('Commission status')">
+                        <Combobox
+                            v-model="selectedCommissionStatus"
+                            :options="[
+                                { label: __('All'), value: 'all' },
+                                { label: __('Active'), value: 'active' },
+                                { label: __('Cancelled'), value: 'cancelled' },
+                            ]"
+                            option-label="label"
+                            option-value="value"
+                            :placeholder="__('All commissions')"
+                        />
+                    </Field>
                 </div>
 
                 <Field :label="__('Fields to export')">
@@ -128,6 +141,7 @@ const dateRange = useDateRangeModel(
 const selectedStatuses = ref(props.statuses.filter((s) => ['confirmed', 'partner'].includes(s)));
 const selectedEntry = ref(null);
 const selectedAffiliate = ref(null);
+const selectedCommissionStatus = ref('all');
 const withCustomerData = ref(false);
 const selectedFields = ref(loadSelectedFields());
 const count = ref(0);
@@ -153,7 +167,7 @@ const canDownload = computed(() =>
     && selectedStatuses.value.length > 0,
 );
 
-watch([dateStart, dateEnd, selectedStatuses, selectedEntry, selectedAffiliate, withCustomerData], () => scheduleCount());
+watch([dateStart, dateEnd, selectedStatuses, selectedEntry, selectedAffiliate, selectedCommissionStatus, withCustomerData], () => scheduleCount());
 
 watch(selectedFields, (value) => {
     try {
@@ -233,6 +247,7 @@ function buildBody() {
     };
     if (selectedEntry.value) body.item_id = selectedEntry.value;
     if (selectedAffiliate.value) body.affiliate_id = selectedAffiliate.value;
+    if (selectedCommissionStatus.value && selectedCommissionStatus.value !== 'all') body.commission_status = selectedCommissionStatus.value;
     if (withCustomerData.value) body.with_customer_data = 1;
     return body;
 }

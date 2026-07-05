@@ -7,15 +7,16 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Inertia\Inertia;
 use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Jobs\ResendConfirmationEmail;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Resources\ReservationCalendarResource;
 use Reach\StatamicResrv\Resources\ReservationResource;
+use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Statamic\Facades\Scope;
 use Statamic\Http\Requests\FilteredRequest;
 use Statamic\Query\Scopes\Filters\Concerns\QueriesFilters;
@@ -167,13 +168,13 @@ class ReservationCpController extends Controller
             ])->values()->all(),
             'affiliate' => $reservation->affiliate->isNotEmpty() ? (function () use ($reservation) {
                 $affiliate = $reservation->affiliate->first();
-                $fee = (float) $affiliate->pivot->fee;
 
                 return [
                     'name' => $affiliate->name,
                     'email' => $affiliate->email,
-                    'fee' => $fee,
-                    'fee_amount_formatted' => $reservation->total->multiply($fee / 100)->format(),
+                    'fee' => (float) $affiliate->pivot->fee,
+                    'fee_amount_formatted' => $reservation->affiliateCommissionFor($affiliate)->format(),
+                    'commission_cancelled' => $affiliate->pivot->cancelled_at !== null,
                 ];
             })() : null,
             'dynamic_pricings' => $reservation->dynamicPricings->map(fn ($pricing) => [
@@ -204,52 +205,32 @@ class ReservationCpController extends Controller
         ]);
         $reservation = $this->reservation->findOrFail($data['id']);
 
-        if ($reservation->status === ReservationStatus::REFUNDED->value) {
-            return response()->json(['error' => 'This reservation has already been refunded.'], 409);
-        }
-
-        $currentStatus = ReservationStatus::from($reservation->status);
-        if (! $currentStatus->canTransitionTo(ReservationStatus::REFUNDED)) {
-            return response()->json(['error' => 'Cannot refund a reservation in the '.$reservation->status.' state.'], 422);
-        }
-
-        // Partner (affiliate skip-payment) and zero-payment reservations never create a payment
-        // intent, so payment_id stays '' — there is no charge on the gateway to refund. Skip the
-        // gateway call entirely or Stripe rejects the empty payment_intent and blocks the refund.
-        // Anything else with an empty payment_id (e.g. a PENDING row whose cancelled intent may
-        // still carry an orphaned charge) keeps going through the gateway so the failure surfaces
-        // to the admin instead of silently marking captured money as refunded.
-        $gatewayHoldsNoCharge = ($reservation->payment_id === '' || $reservation->payment_id === null)
-            && ($currentStatus === ReservationStatus::PARTNER || $reservation->payment->isZero());
-
-        if (! $gatewayHoldsNoCharge) {
-            $manager = app(PaymentGatewayManager::class);
-            try {
-                $payment = $manager->forReservation($reservation);
-            } catch (\InvalidArgumentException $e) {
-                $payment = $manager->gateway();
-            }
-            try {
-                $payment->refund($reservation);
-            } catch (RefundFailedException $exception) {
-                return response()->json(['error' => $exception->getMessage()], 400);
-            }
-        }
-
         try {
-            $changed = $reservation->transitionTo(ReservationStatus::REFUNDED);
+            $changed = app(ReservationRefundProcessor::class)->refund($reservation);
+        } catch (RefundFailedException $exception) {
+            return response()->json(['error' => $exception->getMessage()], 400);
         } catch (InvalidStateTransition $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
+            return response()->json(['error' => 'Cannot refund a reservation in the '.$e->from->value.' state.'], 422);
+        } catch (UnknownPaymentGateway $e) {
+            return response()->json(['error' => 'The payment gateway ['.$e->gateway.'] recorded for this reservation is no longer configured. Refund the charge manually through that provider.'], 422);
+        } catch (\Throwable $e) {
+            // Unmapped failure (e.g. lock-wait QueryException under contention); transaction
+            // rolled back so the charge was never touched. Return a retryable 503, not a raw 500.
+            report($e);
+
+            return response()->json(['error' => 'The refund could not be completed. Please try again.'], 503);
         }
 
-        if ($changed) {
-            // The reservation log entry is written by LogReservationRefunded, listening on
-            // this event like every other lifecycle log — lastTransitionFrom carries the
-            // status observed under the transition lock.
-            ReservationRefunded::dispatch($reservation);
+        if (! $changed) {
+            return response()->json(['error' => 'This reservation has already been refunded or cancelled.'], 409);
         }
 
-        return response()->json($reservation->id);
+        // The processor lands no-charge bookings in CANCELLED instead of REFUNDED; return the
+        // terminal status so the UI can say "cancelled" instead of claiming money moved.
+        return response()->json([
+            'id' => $reservation->id,
+            'status' => $reservation->status,
+        ]);
     }
 
     public function resendConfirmation(Request $request)

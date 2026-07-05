@@ -45,6 +45,10 @@ trait HandlesReservationQueries
             throw new ReservationTerminatedException(ReservationStatus::REFUNDED, 'This reservation has been cancelled.');
         }
 
+        if ($reservation->status === ReservationStatus::CANCELLED->value) {
+            throw new ReservationTerminatedException(ReservationStatus::CANCELLED, 'This reservation has been cancelled.');
+        }
+
         if ($reservation->status === ReservationStatus::WEBHOOK->value) {
             throw new ReservationException('This reservation is already paid. You cannot modify it.');
         }

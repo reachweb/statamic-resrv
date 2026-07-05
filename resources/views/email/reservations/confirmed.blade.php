@@ -13,8 +13,15 @@
 {{ __("Reservation code") }} **{{ $reservation->id }}**<br>
 {{ __("Date") }}: **{{ $reservation->updated_at->format('d-m-Y H:i') }}**<br>
 {{ __("Booking reference") }}: **{{ $reservation->reference }}**<br>
-{{ __("Email") }}: **{{ $reservation->customer->email }}** 
+{{ __("Email") }}: **{{ $reservation->customer->email }}**
 @endcomponent
+
+@php($manageUrl = $reservation->customerStatusUrl())
+@if ($manageUrl)
+@component('mail::button', ['url' => $manageUrl])
+{{ __("Manage your booking") }}
+@endcomponent
+@endif
 
 @php($resrvEntry = $reservation->entry())
 @component('mail::table')

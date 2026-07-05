@@ -7,7 +7,9 @@ enum ReservationEmailEvent: string
     case CustomerConfirmed = 'customer_confirmed';
     case AdminMade = 'admin_made';
     case CustomerRefunded = 'customer_refunded';
+    case CustomerCancelled = 'customer_cancelled';
     case CustomerAbandoned = 'customer_abandoned';
+    case AdminCancelled = 'admin_cancelled';
     case AdminOrphanedPayment = 'admin_orphaned_payment';
 
     public static function values(): array

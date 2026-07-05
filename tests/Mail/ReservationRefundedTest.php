@@ -21,6 +21,7 @@ class ReservationRefundedTest extends TestCase
             'status' => 'refunded',
             'price' => '200.00',
             'payment' => '120.00',
+            'payment_id' => 'pi_123',
         ])->withCustomer()->create();
 
         $html = (new ReservationRefunded($reservation))->render();
@@ -43,6 +44,7 @@ class ReservationRefundedTest extends TestCase
             'price' => '200.00',
             'payment' => '120.00',
             'payment_surcharge' => '5.00',
+            'payment_id' => 'pi_123',
         ])->withCustomer()->create();
 
         $html = (new ReservationRefunded($reservation))->render();
@@ -69,7 +71,7 @@ class ReservationRefundedTest extends TestCase
 
         $this->assertStringNotContainsString('Refunded to your card', $html);
         $this->assertStringNotContainsString($reservation->payment->format(), $html);
-        $this->assertStringContainsString('No payment was collected for this reservation', $html);
+        $this->assertStringContainsString('Your reservation has been cancelled.', $html);
     }
 
     public function test_partner_guard_holds_regardless_of_payment_mode()
@@ -89,7 +91,7 @@ class ReservationRefundedTest extends TestCase
             $html = (new ReservationRefunded($reservation))->render();
 
             $this->assertStringNotContainsString('Refunded to your card', $html, "Mode [$mode] still claimed a card refund for a partner reservation.");
-            $this->assertStringContainsString('No payment was collected for this reservation', $html, "Mode [$mode] dropped the no-payment notice for a partner reservation.");
+            $this->assertStringContainsString('Your reservation has been cancelled.', $html, "Mode [$mode] dropped the cancellation notice for a partner reservation.");
         }
     }
 }

@@ -33,17 +33,13 @@ class Resrv extends Tags
             abort(400, 'Invalid reservation parameters.');
         }
 
-        $reservation = Reservation::where('reference', request()->get('ref'))
-            ->where('status', ReservationStatus::CONFIRMED->value)
-            ->firstOrFail();
+        $reservation = Reservation::findForCustomerLookup(
+            request()->get('ref'),
+            request()->get('hash'),
+            [ReservationStatus::CONFIRMED->value],
+        );
 
-        if (! $reservation->customer) {
-            abort(404);
-        }
-
-        $expectedHash = hash_hmac('sha256', $reservation->customer->email, config('app.key'));
-
-        if (! hash_equals($expectedHash, request()->get('hash'))) {
+        if (! $reservation) {
             abort(404);
         }
 

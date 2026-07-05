@@ -534,4 +534,257 @@ class ExportCpTest extends TestCase
         $count = substr_count($body, 'customer_first_name');
         $this->assertSame(1, $count, 'customer_first_name should appear exactly once in the field metadata');
     }
+
+    public function test_download_includes_affiliate_columns_for_active_commission()
+    {
+        $affiliate = Affiliate::factory()->create([
+            'code' => 'LARRY',
+            'name' => 'Larry',
+            'email' => 'larry@example.com',
+        ]);
+        $reservation = $this->makeAffiliateReservation($affiliate, ['reference' => 'AFF001'], 20);
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => today()->toDateString(),
+            'end' => today()->addWeek()->toDateString(),
+            'fields' => ['reference', 'affiliate_code', 'affiliate_name', 'affiliate_email', 'affiliate_fee', 'affiliate_commission', 'affiliate_commission_status'],
+        ]);
+
+        $response->assertStatus(200);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($response->streamedContent()))));
+
+        $this->assertEquals(
+            ['Reference', 'Affiliate code', 'Affiliate name', 'Affiliate email', 'Affiliate fee (%)', 'Affiliate commission', 'Commission status'],
+            $rows[0]
+        );
+        $this->assertEquals('AFF001', $rows[1][0]);
+        $this->assertEquals('LARRY', $rows[1][1]);
+        $this->assertEquals('Larry', $rows[1][2]);
+        $this->assertEquals('larry@example.com', $rows[1][3]);
+        $this->assertEquals('20', $rows[1][4]);
+        $this->assertEquals($reservation->total->multiply(0.2)->format(), $rows[1][5]);
+        $this->assertEquals('active', $rows[1][6]);
+    }
+
+    public function test_download_shows_zero_commission_and_cancelled_status_for_cancelled_commission()
+    {
+        $affiliate = Affiliate::factory()->create();
+        $reservation = $this->makeAffiliateReservation($affiliate, ['reference' => 'AFF002'], 20, cancelled: true);
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => today()->toDateString(),
+            'end' => today()->addWeek()->toDateString(),
+            'fields' => ['reference', 'affiliate_commission', 'affiliate_commission_status'],
+        ]);
+
+        $response->assertStatus(200);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($response->streamedContent()))));
+
+        $this->assertEquals('AFF002', $rows[1][0]);
+        $this->assertEquals($reservation->total->multiply(0)->format(), $rows[1][1]);
+        $this->assertEquals('cancelled', $rows[1][2]);
+    }
+
+    public function test_download_leaves_affiliate_columns_blank_when_no_affiliate()
+    {
+        $item = $this->makeStatamicItem();
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'reference' => 'NOAFF',
+            'total' => 20000,
+        ])->withCustomer()->create();
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => today()->toDateString(),
+            'end' => today()->addWeek()->toDateString(),
+            'fields' => ['reference', 'affiliate_name', 'affiliate_commission', 'affiliate_commission_status'],
+        ]);
+
+        $response->assertStatus(200);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($response->streamedContent()))));
+
+        $this->assertEquals('NOAFF', $rows[1][0]);
+        $this->assertSame('', $rows[1][1]);
+        $this->assertSame('', $rows[1][2]);
+        $this->assertSame('', $rows[1][3]);
+    }
+
+    public function test_count_filters_by_active_commission_status()
+    {
+        $affiliate = Affiliate::factory()->create();
+        $this->makeAffiliateReservation($affiliate, ['reference' => 'A1'], 20);
+        $this->makeAffiliateReservation($affiliate, ['reference' => 'A2'], 20);
+        $this->makeAffiliateReservation($affiliate, ['reference' => 'C1'], 20, cancelled: true);
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $this->get(cp_route('resrv.export.count')."?start={$start}&end={$end}&commission_status=active")
+            ->assertStatus(200)
+            ->assertJson(['count' => 2]);
+    }
+
+    public function test_count_filters_by_cancelled_commission_status()
+    {
+        $affiliate = Affiliate::factory()->create();
+        $this->makeAffiliateReservation($affiliate, ['reference' => 'A1'], 20);
+        $this->makeAffiliateReservation($affiliate, ['reference' => 'C1'], 20, cancelled: true);
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $this->get(cp_route('resrv.export.count')."?start={$start}&end={$end}&commission_status=cancelled")
+            ->assertStatus(200)
+            ->assertJson(['count' => 1]);
+    }
+
+    public function test_commission_status_filter_combines_with_affiliate_id()
+    {
+        $affiliateA = Affiliate::factory()->create(['code' => 'AAA', 'email' => 'a@example.com']);
+        $affiliateB = Affiliate::factory()->create(['code' => 'BBB', 'email' => 'b@example.com']);
+
+        $this->makeAffiliateReservation($affiliateA, ['reference' => 'A_ACTIVE'], 20);
+        $this->makeAffiliateReservation($affiliateA, ['reference' => 'A_CANCELLED'], 20, cancelled: true);
+        $this->makeAffiliateReservation($affiliateB, ['reference' => 'B_ACTIVE'], 20);
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        $this->get(cp_route('resrv.export.count')."?start={$start}&end={$end}&affiliate_id={$affiliateA->id}&commission_status=active")
+            ->assertStatus(200)
+            ->assertJson(['count' => 1]);
+    }
+
+    public function test_download_respects_active_commission_status_filter()
+    {
+        $affiliate = Affiliate::factory()->create();
+        $this->makeAffiliateReservation($affiliate, ['reference' => 'KEEP'], 20);
+        $this->makeAffiliateReservation($affiliate, ['reference' => 'DROP'], 20, cancelled: true);
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => today()->toDateString(),
+            'end' => today()->addWeek()->toDateString(),
+            'commission_status' => 'active',
+            'fields' => ['reference', 'affiliate_commission_status'],
+        ]);
+
+        $response->assertStatus(200);
+        $csv = $response->streamedContent();
+
+        $this->assertStringContainsString('KEEP', $csv);
+        $this->assertStringNotContainsString('DROP', $csv);
+    }
+
+    public function test_download_serializes_the_affiliate_matching_the_commission_status_filter()
+    {
+        $activeAffiliate = Affiliate::factory()->create(['code' => 'ACTIVE', 'email' => 'active@example.com']);
+        $cancelledAffiliate = Affiliate::factory()->create(['code' => 'VOIDED', 'email' => 'voided@example.com']);
+
+        // One reservation carrying two attributions in different states: the affiliate_*
+        // columns must describe a pivot matching the requested filter, not whichever
+        // attribution happens to load first.
+        $reservation = $this->makeAffiliateReservation($cancelledAffiliate, ['reference' => 'MIXED'], 20, cancelled: true);
+        $reservation->affiliate()->attach($activeAffiliate->id, ['fee' => 10]);
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => today()->toDateString(),
+            'end' => today()->addWeek()->toDateString(),
+            'commission_status' => 'active',
+            'fields' => ['reference', 'affiliate_code', 'affiliate_commission_status'],
+        ]);
+
+        $response->assertStatus(200);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($response->streamedContent()))));
+
+        $this->assertEquals(['MIXED', 'ACTIVE', 'active'], $rows[1]);
+    }
+
+    public function test_soft_deleted_affiliates_stay_in_filters_columns_and_the_picker()
+    {
+        $affiliate = Affiliate::factory()->create(['code' => 'GONE', 'name' => 'Gone Agency']);
+        $this->makeAffiliateReservation($affiliate, ['reference' => 'HIST1'], 20);
+
+        $affiliate->delete();
+
+        $start = today()->toDateString();
+        $end = today()->addWeek()->toDateString();
+
+        // Affiliates are soft-deleted precisely so commission history survives — the
+        // whereHas filter must not let the SoftDeletes scope drop their reservations.
+        $this->get(cp_route('resrv.export.count')."?start={$start}&end={$end}&affiliate_id={$affiliate->id}")
+            ->assertStatus(200)
+            ->assertJson(['count' => 1]);
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => $start,
+            'end' => $end,
+            'affiliate_id' => $affiliate->id,
+            'fields' => ['reference', 'affiliate_code', 'affiliate_name', 'affiliate_commission_status'],
+        ]);
+
+        $response->assertStatus(200);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($response->streamedContent()))));
+
+        $this->assertEquals(['HIST1', 'GONE', 'Gone Agency', 'active'], $rows[1]);
+
+        // The export page picker must still offer the deleted affiliate so its history
+        // remains filterable.
+        $this->get(cp_route('resrv.export.index'))
+            ->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('resrv::Export/Index')
+                ->where('affiliates.0.code', 'GONE')
+            );
+    }
+
+    public function test_download_serializes_the_filtered_affiliate_when_a_reservation_has_multiple()
+    {
+        $cookieAffiliate = Affiliate::factory()->create(['code' => 'COOKIE', 'name' => 'Cookie', 'email' => 'cookie@example.com']);
+        $couponAffiliate = Affiliate::factory()->create(['code' => 'COUPON', 'name' => 'Coupon', 'email' => 'coupon@example.com']);
+
+        // One reservation, two attributions (e.g. cookie tracking + an affiliate coupon).
+        $reservation = $this->makeAffiliateReservation($cookieAffiliate, ['reference' => 'MULTI1'], 20);
+        $reservation->affiliate()->attach($couponAffiliate->id, ['fee' => 10]);
+
+        $response = $this->post(cp_route('resrv.export.download'), [
+            'start' => today()->toDateString(),
+            'end' => today()->addWeek()->toDateString(),
+            'affiliate_id' => $couponAffiliate->id,
+            'fields' => ['reference', 'affiliate_code', 'affiliate_fee', 'affiliate_commission'],
+        ]);
+
+        $response->assertStatus(200);
+        $rows = array_map('str_getcsv', array_filter(explode("\n", trim($response->streamedContent()))));
+
+        // The affiliate_* columns must describe the affiliate the export was filtered by,
+        // not whichever pivot happens to come first.
+        $this->assertEquals('MULTI1', $rows[1][0]);
+        $this->assertEquals('COUPON', $rows[1][1]);
+        $this->assertEquals('10', $rows[1][2]);
+        $this->assertEquals($reservation->total->multiply(0.1)->format(), $rows[1][3]);
+    }
+
+    protected function makeAffiliateReservation(Affiliate $affiliate, array $attributes = [], float $fee = 20, bool $cancelled = false): Reservation
+    {
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory(array_merge([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(2)->toIso8601String(),
+            'total' => 20000,
+        ], $attributes))->withCustomer()->create();
+
+        $reservation->affiliate()->attach($affiliate->id, ['fee' => $fee]);
+
+        if ($cancelled) {
+            DB::table('resrv_reservation_affiliate')
+                ->where('reservation_id', $reservation->id)
+                ->update(['cancelled_at' => now()]);
+        }
+
+        return $reservation;
+    }
 }

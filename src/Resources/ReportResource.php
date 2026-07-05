@@ -15,9 +15,9 @@ class ReportResource extends ResourceCollection
     public function toArray($request)
     {
         $data = [
-            'total_confirmed_reservations' => $this->report->countConfirmedReservations(),
-            'total_revenue' => $this->report->sumConfirmedReservations()->format(),
-            'avg_revenue' => $this->report->avgConfirmedReservations()->format(),
+            'total_reservations' => $this->report->countReservations(),
+            'total_revenue' => $this->report->sumRevenue()->format(),
+            'avg_revenue' => $this->report->avgRevenue()->format(),
             'top_seller_items' => $this->report->topSellerItems(),
             'top_seller_extras' => $this->report->topSellerExtras(),
             'dynamic_pricing_applications' => $this->report->dynamicPricingApplications(),

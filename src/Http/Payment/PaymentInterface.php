@@ -28,6 +28,13 @@ interface PaymentInterface
 
     public function supportsManualConfirmation(): bool;
 
+    /**
+     * Whether refund() actually returns money through the gateway's API. Gateways that
+     * collect payment out of band (e.g. bank transfer) must return false so automated
+     * flows never mark a reservation refunded without money moving.
+     */
+    public function supportsAutomaticRefunds(): bool;
+
     public function redirectsForPayment(): bool;
 
     public function handleRedirectBack(): array;

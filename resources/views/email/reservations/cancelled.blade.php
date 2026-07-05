@@ -1,0 +1,75 @@
+@component('mail::message')
+
+{{ __("A reservation has been cancelled by the customer.") }}
+
+@component('mail::panel')
+{{ __("Reservation code") }} **{{ $reservation->id }}**<br>
+{{ __("Date") }}: **{{ $reservation->updated_at->format('d-m-Y H:i') }}**<br>
+{{ __("Booking reference") }}: **{{ $reservation->reference }}**<br>
+{{ __("Email") }}: **{{ $reservation->customer?->email }}**
+@endcomponent
+
+@php($resrvEntry = $reservation->entry())
+@component('mail::table')
+|{{ __("Reservation details") }}||
+| :------------------------------------------------ |:--------------------------------------------------------------------------|
+@if ($reservation->type !== 'parent')
+| {{ __("Pick-up date") }}      | {{ $reservation->date_start->format('d-m-Y H:i') }} |
+| {{ __("Drop-off date") }}     | {{ $reservation->date_end->format('d-m-Y H:i') }} |
+@endif
+| {{ __("Property") }}   | {{ is_array($resrvEntry) ? ($resrvEntry['title'] ?? '') : $resrvEntry->title }} |
+@if ($reservation->type !== 'parent')
+@if (config('resrv-config.maximum_quantity') > 1)
+| {{ __("Quantity") }}  | x {{ $reservation->quantity }} |
+@endif
+@if ($reservation->rate_id)
+| {{ __("Rate") }} | {{ $reservation->getRateLabel() }} |
+@endif
+@endif
+@endcomponent
+
+@if ($reservation->type === 'parent')
+@foreach ($reservation->childs as $child)
+@component('mail::table')
+|{{ __("Reservation") }} # {{ $loop->iteration }}||
+| :---------------------------------------- |:------------------------------------------|
+| {{ __("Pick-up date") }}      | {{ $child->date_start->format('d-m-Y H:i') }} |
+| {{ __("Drop-off date") }}     | {{ $child->date_end->format('d-m-Y H:i') }} |
+@if (config('resrv-config.maximum_quantity') > 1)
+| {{ __("Quantity") }}  | x {{ $child->quantity }} |
+@endif
+@if ($child->rate_id)
+| {{ __("Rate") }} | {{ $child->getRateLabel() }} |
+@endif
+@endcomponent
+@endforeach
+@endif
+
+@php($paymentRetained = $reservation->status === \Reach\StatamicResrv\Enums\ReservationStatus::CANCELLED->value)
+@if ($paymentRetained && $reservation->hasGatewayPayment())
+@component('mail::table')
+|{{ __("Refund information") }}||
+| :----------------------------- |:----------------|
+| {{ __("No refund issued — payment retained") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountPaid()->format() }} |
+@endcomponent
+
+{{ __("The reservation was cancelled without a refund, so the payment stays with the business. No action is required.") }}
+@elseif (! $paymentRetained && $reservation->refundIsAutomatic())
+@component('mail::table')
+|{{ __("Refund information") }}||
+| :----------------------------- |:----------------|
+| {{ __("Refunded to the customer") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
+@endcomponent
+@elseif (! $paymentRetained && $reservation->hasGatewayPayment())
+@component('mail::table')
+|{{ __("Refund information") }}||
+| :----------------------------- |:----------------|
+| {{ __("Action required — refund the customer manually") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
+@endcomponent
+
+{{ __("This payment method does not support automatic refunds. Please return the above amount to the customer manually.") }}
+@endif
+
+{{ __("Thank you") }},<br>
+{{ config('app.name') }}
+@endcomponent

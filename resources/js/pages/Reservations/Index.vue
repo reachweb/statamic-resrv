@@ -33,11 +33,16 @@ const showUrl = (reservation) => props.showUrlTemplate.replace('RESRVURL', reser
 
 const canResend = (reservation) => ['confirmed', 'partner'].includes(reservation.status);
 
+// Mirrors the state machine: only these states may transition to REFUNDED/CANCELLED,
+// so terminal rows don't offer an action the server will reject anyway.
+const canRefund = (reservation) => ['pending', 'confirmed', 'partner'].includes(reservation.status);
+
 const badgeClass = (status) => {
     const map = {
         confirmed: 'bg-green-800',
         partner: 'bg-green-600',
         refunded: 'bg-yellow-800',
+        cancelled: 'bg-orange-800',
         expired: 'bg-red-800',
     };
     return map[status] ?? 'bg-gray-800';
@@ -57,8 +62,14 @@ const refund = async () => {
     if (! refundId.value) return;
     refunding.value = true;
     try {
-        await axios.patch(props.refundUrl, { id: refundId.value });
-        toast.success(__('Reservation refunded'));
+        // No-charge bookings (partner / zero payment) end as a cancellation, not a refund —
+        // report what the server actually did so admins aren't told money moved.
+        const { data } = await axios.patch(props.refundUrl, { id: refundId.value });
+        toast.success(
+            data?.status === 'cancelled'
+                ? __('Reservation cancelled — no charges to refund')
+                : __('Reservation refunded'),
+        );
         refundId.value = null;
         listing.value?.refresh();
     } catch (error) {
@@ -146,7 +157,12 @@ const resend = async () => {
                     icon="mail"
                     @click="confirmResend(reservation)"
                 />
-                <DropdownItem :text="__('Refund')" icon="return-square" @click="confirmRefund(reservation)" />
+                <DropdownItem
+                    v-if="canRefund(reservation)"
+                    :text="__('Refund')"
+                    icon="return-square"
+                    @click="confirmRefund(reservation)"
+                />
             </template>
         </Listing>
 
@@ -155,13 +171,13 @@ const resend = async () => {
             :open="true"
             :title="__('Refund and cancel reservation')"
             :danger="true"
-            :button-text="__('Refund')"
+            :button-text="__('Confirm')"
             :busy="refunding"
             @confirm="refund"
             @cancel="cancelRefund"
         >
-            <p>{{ __('Are you sure you want to refund this reservation? This cannot be undone.') }}</p>
-            <p>{{ __('All charges will be refunded and the customer will be notified.') }}</p>
+            <p>{{ __('Are you sure you want to cancel this reservation? This cannot be undone.') }}</p>
+            <p>{{ __('Any charges collected will be refunded and the customer will be notified.') }}</p>
         </ConfirmationModal>
 
         <ConfirmationModal

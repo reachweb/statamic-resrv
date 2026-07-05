@@ -162,7 +162,7 @@ tabs:
               default: 0
               validate:
                 - required
-              instructions: 'The number of days before the reservation start date that the user can cancel the reservation. Please note that cancellations are manual; this is mainly used to display that info in the frontend.'
+              instructions: 'The number of days before the reservation start date that the user can cancel the reservation. Displayed in the frontend and used by the reservation status component to allow self-service cancellation with an automatic refund.'
           -
             handle: full_payment_after_free_cancellation
             field:
@@ -303,6 +303,34 @@ tabs:
                 - required
               instructions: 'The [Checkout complete](https://resrv.dev/checkout#checkout-complete) page that includes the `resrv_checkout_redirect` tag.'
           -
+            handle: enable_reservation_status_page
+            field:
+              display: 'Enable the reservation status page'
+              type: toggle
+              default: false
+              localizable: false
+              instructions: 'Lets customers look up their reservation on the status page and adds a "Manage your booking" link to confirmation emails. Requires a Reservation Status Entry below.'
+          -
+            handle: enable_customer_cancellations
+            field:
+              display: 'Enable customer cancellations'
+              type: toggle
+              default: false
+              localizable: false
+              instructions: 'Lets customers cancel their own reservation from the status page - with a refund inside the free cancellation window, without one after it. Requires the reservation status page to be enabled.'
+              if:
+                enable_reservation_status_page: 'equals true'
+          -
+            handle: reservation_status_entry
+            field:
+              display: 'Reservation Status Entry'
+              type: entries
+              max_items: 1
+              localizable: false
+              instructions: 'The Statamic entry that loads the `reservation-status` Livewire component. Customers land here from the "Manage your booking" email link to view or cancel their reservation without re-entering their details.'
+              if:
+                enable_reservation_status_page: 'equals true'
+          -
             handle: payment
             field:
               display: 'Payment type'
@@ -391,8 +419,14 @@ tabs:
                         key: customer_refunded
                         value: 'Customer refunded'
                       -
+                        key: customer_cancelled
+                        value: 'Customer cancelled (no refund)'
+                      -
                         key: customer_abandoned
                         value: 'Customer abandoned'
+                      -
+                        key: admin_cancelled
+                        value: 'Admin cancelled (by customer)'
                 -
                   handle: enabled
                   field:
@@ -474,8 +508,14 @@ tabs:
                         key: customer_refunded
                         value: 'Customer refunded'
                       -
+                        key: customer_cancelled
+                        value: 'Customer cancelled (no refund)'
+                      -
                         key: customer_abandoned
                         value: 'Customer abandoned'
+                      -
+                        key: admin_cancelled
+                        value: 'Admin cancelled (by customer)'
                 -
                   handle: enabled
                   field:

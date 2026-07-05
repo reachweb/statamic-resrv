@@ -11,6 +11,7 @@ use Mockery;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Mail\ReservationCancelledCustomer;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
@@ -18,6 +19,7 @@ use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationCpTest extends TestCase
@@ -380,11 +382,11 @@ class ReservationCpTest extends TestCase
 
         $response = $this->patch(cp_route('resrv.reservation.refund', $payload));
 
-        $response->assertStatus(200)->assertSee($reservation->id);
+        $response->assertStatus(200)->assertJson(['id' => $reservation->id, 'status' => 'refunded']);
         Mail::assertSent(ReservationRefunded::class);
     }
 
-    public function test_can_refund_partner_reservation_that_skipped_payment()
+    public function test_voiding_a_partner_reservation_lands_in_cancelled_not_refunded()
     {
         Mail::fake();
         $item = $this->makeStatamicItem();
@@ -406,12 +408,56 @@ class ReservationCpTest extends TestCase
 
         $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
 
-        $response->assertStatus(200)->assertSee($reservation->id);
+        // Nothing was returned to anyone, so the terminal state is CANCELLED — REFUNDED is
+        // reserved for charges the gateway actually gave back. The response reports that
+        // status so the CP can say "cancelled" instead of claiming money moved. The customer
+        // gets the cancellation email (not a refund claim) and the commission is still
+        // voided, since the business retained no revenue for the booking.
+        $response->assertStatus(200)->assertJson(['id' => $reservation->id, 'status' => 'cancelled']);
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $reservation->id,
-            'status' => 'refunded',
+            'status' => 'cancelled',
         ]);
-        Mail::assertSent(ReservationRefunded::class);
+        Mail::assertSent(ReservationCancelledCustomer::class);
+        Mail::assertNotSent(ReservationRefunded::class);
+        $this->assertTrue(
+            DB::table('resrv_reservation_affiliate')
+                ->where('reservation_id', $reservation->id)
+                ->whereNotNull('cancelled_at')
+                ->exists()
+        );
+    }
+
+    public function test_refunding_a_pending_zero_payment_reservation_expires_it()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        // Abandoned zero-payment checkout: the CP offers Refund for pending rows, but
+        // CANCELLED is unreachable from PENDING (and would email a cancellation notice for
+        // a booking that never completed) — the hold is released via the expired chain.
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'pending',
+            'payment_id' => '',
+            'payment' => 0,
+        ])->withCustomer()->create();
+
+        // No payment intent was ever created, so the gateway must not be touched at all.
+        $manager = Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldNotReceive('forReservation');
+        $manager->shouldNotReceive('gateway');
+        app()->instance(PaymentGatewayManager::class, $manager);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(200)->assertJson(['id' => $reservation->id, 'status' => 'expired']);
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'expired',
+        ]);
+        Mail::assertNotSent(ReservationCancelledCustomer::class);
+        Mail::assertNotSent(ReservationRefunded::class);
     }
 
     public function test_refunding_partner_reservation_with_payment_still_calls_gateway()
@@ -446,7 +492,7 @@ class ReservationCpTest extends TestCase
         Mail::assertSent(ReservationRefunded::class);
     }
 
-    public function test_can_refund_zero_payment_reservation_without_touching_gateway()
+    public function test_voiding_a_zero_payment_reservation_lands_in_cancelled_without_touching_gateway()
     {
         Mail::fake();
         $item = $this->makeStatamicItem();
@@ -469,9 +515,40 @@ class ReservationCpTest extends TestCase
         $response->assertStatus(200)->assertSee($reservation->id);
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $reservation->id,
-            'status' => 'refunded',
+            'status' => 'cancelled',
         ]);
-        Mail::assertSent(ReservationRefunded::class);
+        Mail::assertSent(ReservationCancelledCustomer::class);
+        Mail::assertNotSent(ReservationRefunded::class);
+    }
+
+    public function test_refund_is_rejected_when_the_recorded_gateway_is_no_longer_configured()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'pi_123',
+            'payment_gateway' => 'legacy-stripe',
+        ])->withCustomer()->create();
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        // The unknown gateway must surface as an explicit manual-handling error, not fall
+        // back to the default provider or hide behind a retryable 503.
+        $response->assertStatus(422);
+        $this->assertStringContainsString('legacy-stripe', $response->json('error'));
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
+        Mail::assertNotSent(ReservationRefunded::class);
     }
 
     public function test_refunding_pending_reservation_with_cleared_payment_id_still_calls_gateway()
@@ -538,6 +615,34 @@ class ReservationCpTest extends TestCase
         $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
 
         $response->assertStatus(422)->assertSee('Cannot refund');
+        Mail::assertNothingSent();
+    }
+
+    public function test_refund_returns_a_retryable_503_when_the_refund_throws_an_unexpected_error()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'pi_123',
+        ])->withCustomer()->create();
+
+        // An unmapped Throwable (e.g. lock-wait timeout) must yield a retryable 503, not a raw 500.
+        $processor = Mockery::mock(ReservationRefundProcessor::class);
+        $processor->shouldReceive('refund')
+            ->once()
+            ->andThrow(new \RuntimeException('SQLSTATE[HY000]: Lock wait timeout exceeded.'));
+        app()->instance(ReservationRefundProcessor::class, $processor);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(503)->assertSee('could not be completed');
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+        ]);
         Mail::assertNothingSent();
     }
 
