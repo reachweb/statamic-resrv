@@ -66,6 +66,15 @@ class StripePaymentGateway implements PaymentInterface
         return $paymentIntent;
     }
 
+    public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+    {
+        try {
+            return $this->getClient($reservation)->paymentIntents->retrieve($paymentId);
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
     {
         $stripe = $this->getClient($reservation);

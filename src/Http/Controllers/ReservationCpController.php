@@ -205,6 +205,7 @@ class ReservationCpController extends Controller
                 : null,
             'hold_expires_at' => $reservation->hold_expires_at?->format('d-m-Y H:i'),
             'payment_request_email_sent_at' => $reservation->payment_request_email_sent_at?->format('d-m-Y H:i'),
+            'payment_url' => $reservation->customerPaymentUrl(),
         ];
     }
 

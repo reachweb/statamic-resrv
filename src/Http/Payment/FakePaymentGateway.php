@@ -20,6 +20,15 @@ class FakePaymentGateway implements PaymentInterface
      */
     public array $cancelledIntents = [];
 
+    /**
+     * In-memory log of every intent this instance created. Tests assert on this to
+     * verify resume-payment flows reuse an existing intent instead of creating (and
+     * potentially double-charging) a second one.
+     *
+     * @var array<int, array{payment_id: string, reservation_id: int|string|null}>
+     */
+    public array $createdIntents = [];
+
     public function name(): string
     {
         return 'fake';
@@ -42,6 +51,21 @@ class FakePaymentGateway implements PaymentInterface
         $data->client_secret = Str::random(56);
         $data->reservation = '';
         $data->key = $this->getPublicKey($reservation);
+
+        $this->createdIntents[] = [
+            'payment_id' => $data->id,
+            'reservation_id' => $reservation->id ?? null,
+        ];
+
+        return $data;
+    }
+
+    public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+    {
+        $data = new \stdClass;
+        $data->id = $paymentId;
+        $data->client_secret = 'cs_'.$paymentId;
+        $data->status = 'requires_payment_method';
 
         return $data;
     }

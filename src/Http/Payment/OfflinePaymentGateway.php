@@ -31,6 +31,12 @@ class OfflinePaymentGateway implements PaymentInterface
         return $intent;
     }
 
+    public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+    {
+        // Offline payments have no remote intent to resume.
+        return null;
+    }
+
     public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
     {
         //

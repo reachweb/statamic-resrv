@@ -1,0 +1,256 @@
+<?php
+
+namespace Reach\StatamicResrv\Tests\ManualReservation;
+
+use Illuminate\Support\Facades\Config;
+use Livewire\Livewire;
+use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Livewire\ReservationPayment;
+use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\TestCase;
+
+class ReservationPaymentPageTest extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Fake Online'],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $page = $this->makeStatamicItem();
+        Config::set('resrv-config.manual_reservations_payment_entry', [$page->id()]);
+    }
+
+    protected function makeAwaitingReservation(array $attributes = []): Reservation
+    {
+        $item = $this->makeStatamicItem();
+
+        return Reservation::factory()->withCustomer()->create(array_merge([
+            'status' => ReservationStatus::AWAITING_PAYMENT->value,
+            'item_id' => $item->id(),
+            'payment' => 50,
+            'payment_surcharge' => 5,
+            'payment_gateway' => 'fake',
+            'payment_id' => '',
+            'date_start' => now()->addDays(10)->setTime(12, 0),
+            'date_end' => now()->addDays(12)->setTime(12, 0),
+        ], $attributes));
+    }
+
+    protected function fakeGateway(): FakePaymentGateway
+    {
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->createdIntents = [];
+        $gateway->cancelledIntents = [];
+
+        return $gateway;
+    }
+
+    public function test_valid_link_renders_the_awaiting_state_with_the_stored_amount()
+    {
+        $reservation = $this->makeAwaitingReservation();
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSet('reservationId', $reservation->id)
+            ->assertSet('linkFailed', false)
+            ->assertSee(trans('statamic-resrv::frontend.amountToPay'))
+            ->assertSee('55.00')
+            ->assertSee($reservation->reference);
+    }
+
+    public function test_absent_or_invalid_hash_fails_the_link()
+    {
+        $reservation = $this->makeAwaitingReservation();
+
+        Livewire::test(ReservationPayment::class)
+            ->assertSet('linkFailed', true)
+            ->assertSee(trans('statamic-resrv::frontend.paymentLinkFailed'));
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => str_repeat('0', 64)])
+            ->test(ReservationPayment::class)
+            ->assertSet('linkFailed', true)
+            ->assertSet('reservationId', null);
+    }
+
+    public function test_lookups_are_rate_limited_after_ten_failures()
+    {
+        $reservation = $this->makeAwaitingReservation();
+
+        foreach (range(1, 10) as $i) {
+            Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => str_repeat('0', 64)])
+                ->test(ReservationPayment::class)
+                ->assertSet('linkFailed', true);
+        }
+
+        // Budget exhausted: even the correct hash no longer resolves.
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSet('linkFailed', true)
+            ->assertSet('reservationId', null);
+    }
+
+    public function test_deadline_passed_link_shows_expired_state_and_refuses_payment()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation([
+            'hold_expires_at' => now()->subHour(),
+        ]);
+
+        $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentLinkExpired'));
+
+        // The pay action must refuse even when invoked directly — the hidden button is no guard.
+        $component->call('pay')
+            ->assertSet('paymentView', '')
+            ->assertSet('clientSecret', '');
+
+        $this->assertCount(0, $gateway->createdIntents);
+        $this->assertSame('', $reservation->fresh()->payment_id);
+    }
+
+    public function test_pay_creates_an_intent_and_persists_the_payment_id()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation();
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('amount', 55.0)
+            ->assertSet('paymentView', 'statamic-resrv::livewire.checkout-payment');
+
+        $this->assertCount(1, $gateway->createdIntents);
+
+        $fresh = $reservation->fresh();
+        $this->assertNotSame('', $fresh->payment_id);
+        $this->assertSame($gateway->createdIntents[0]['payment_id'], $fresh->payment_id);
+    }
+
+    public function test_second_pay_reuses_the_existing_intent()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation();
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay');
+
+        $paymentId = $reservation->fresh()->payment_id;
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('clientSecret', 'cs_'.$paymentId);
+
+        $this->assertCount(1, $gateway->createdIntents, 'A second pay must resume the intent, not create another.');
+        $this->assertSame($paymentId, $reservation->fresh()->payment_id);
+    }
+
+    public function test_full_round_trip_pay_webhook_confirm_shows_paid()
+    {
+        $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation();
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay');
+
+        $this->post(route('resrv.webhook.gateway.store', ['gateway' => 'fake', 'reservation_id' => $reservation->id, 'status' => 'success']))
+            ->assertStatus(200);
+
+        $this->assertSame('confirmed', $reservation->fresh()->status);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentAlreadyCompleted'));
+    }
+
+    public function test_offline_gateway_shows_instructions_and_never_creates_an_intent()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_gateway' => 'offline',
+        ]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentOfflineInstructions'))
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentLinkExpired'))
+            ->call('pay')
+            ->assertSet('paymentView', '');
+
+        $this->assertCount(0, $gateway->createdIntents);
+        $this->assertSame('', $reservation->fresh()->payment_id);
+    }
+
+    public function test_cancelled_reservation_link_shows_unavailable()
+    {
+        $reservation = $this->makeAwaitingReservation([
+            'status' => ReservationStatus::CANCELLED->value,
+        ]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentUnavailable'));
+    }
+
+    public function test_return_from_gateway_shows_processing_while_still_awaiting()
+    {
+        $reservation = $this->makeAwaitingReservation([
+            'payment_id' => 'pi_processing',
+        ]);
+
+        Livewire::withQueryParams([
+            'ref' => $reservation->reference,
+            'hash' => $reservation->customerLookupHash(),
+            'payment_intent' => 'pi_processing',
+            'redirect_status' => 'processing',
+        ])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentProcessing'));
+    }
+
+    public function test_customer_payment_url_null_matrix()
+    {
+        // Unconfigured entry.
+        Config::set('resrv-config.manual_reservations_payment_entry', null);
+        $reservation = $this->makeAwaitingReservation();
+        $this->assertNull($reservation->customerPaymentUrl());
+
+        // Draft entry.
+        $draft = $this->makeStatamicItem();
+        $draft->published(false)->save();
+        Config::set('resrv-config.manual_reservations_payment_entry', [$draft->id()]);
+        $this->assertNull($reservation->fresh()->customerPaymentUrl());
+
+        // No customer email.
+        $page = $this->makeStatamicItem();
+        Config::set('resrv-config.manual_reservations_payment_entry', [$page->id()]);
+        $item = $this->makeStatamicItem();
+        $noCustomer = Reservation::factory()->create([
+            'status' => ReservationStatus::AWAITING_PAYMENT->value,
+            'item_id' => $item->id(),
+        ]);
+        $this->assertNull($noCustomer->customerPaymentUrl());
+
+        // Fully configured.
+        $url = $reservation->fresh()->customerPaymentUrl();
+        $this->assertNotNull($url);
+        $this->assertStringContainsString('ref='.$reservation->reference, $url);
+        $this->assertStringContainsString('hash='.$reservation->customerLookupHash(), $url);
+    }
+}

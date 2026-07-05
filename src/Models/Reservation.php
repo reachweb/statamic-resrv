@@ -528,8 +528,27 @@ class Reservation extends Model
             return null;
         }
 
-        $entryId = config('resrv-config.reservation_status_entry');
+        return $this->customerPageUrl(config('resrv-config.reservation_status_entry'));
+    }
 
+    /**
+     * Absolute deep link to the manual-reservation payment page, or null when the payment
+     * entry is unconfigured/missing/unpublished/unroutable or the reservation has no
+     * customer email to authenticate with. No feature toggle exists — configuring the
+     * entry IS the opt-in (an unconfigured entry disables online gateways in the CP).
+     */
+    public function customerPaymentUrl(): ?string
+    {
+        return $this->customerPageUrl(config('resrv-config.manual_reservations_payment_entry'));
+    }
+
+    /**
+     * Shared builder for customer-facing deep links (status page, payment page): the
+     * configured entry must be published, public and routable, and the reservation must
+     * carry a reference + customer email to authenticate the ?ref=&hash= pair with.
+     */
+    protected function customerPageUrl(mixed $entryId): ?string
+    {
         // The entries fieldtype may surface its single value as a one-element array.
         if (is_array($entryId)) {
             $entryId = $entryId[0] ?? null;
@@ -554,7 +573,7 @@ class Reservation extends Model
 
         $entry = Entry::find($entryId);
 
-        // url() ignores publish state, so check it explicitly — a draft or private status page
+        // url() ignores publish state, so check it explicitly — a draft or private page
         // must hide the button rather than email a link that 404s for guests.
         if (! $entry || ! $entry->published() || $entry->private() || ! $entry->url()) {
             return null;

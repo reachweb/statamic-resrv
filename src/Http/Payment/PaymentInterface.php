@@ -14,6 +14,13 @@ interface PaymentInterface
 
     public function paymentIntent($amount, Reservation $reservation, $data);
 
+    /**
+     * Fetch a previously created payment intent so an interrupted payment can resume
+     * without creating (and potentially double-charging) a second intent. Return null
+     * when the intent cannot be retrieved — callers then create a fresh one.
+     */
+    public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object;
+
     public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void;
 
     public function refund(Reservation $reservation);
