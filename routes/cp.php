@@ -60,6 +60,12 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/reservation/{id}/confirm-payment', 'ReservationCpController@confirmPayment')->name('reservation.confirmPayment');
         Route::post('/resrv/reservation/{id}/cancel-awaiting', 'ReservationCpController@cancelAwaitingPayment')->name('reservation.cancelAwaiting');
 
+        Route::get('/resrv/manual/entries', 'ManualReservationCpController@entries')->name('manual.entries');
+        Route::get('/resrv/manual/entry/{item_id}', 'ManualReservationCpController@entry')->name('manual.entry');
+        Route::get('/resrv/manual/meta', 'ManualReservationCpController@meta')->name('manual.meta');
+        Route::post('/resrv/manual/quote', 'ManualReservationCpController@quote')->name('manual.quote');
+        Route::post('/resrv/manual', 'ManualReservationCpController@store')->name('manual.store');
+
         Route::get('/resrv/fixedpricing/{statamic_id}', 'FixedPricingCpController@index')->name('fixedpricing.index');
         Route::post('/resrv/fixedpricing', 'FixedPricingCpController@update')->name('fixedpricing.update');
         Route::delete('/resrv/fixedpricing', 'FixedPricingCpController@delete')->name('fixedpricing.delete');

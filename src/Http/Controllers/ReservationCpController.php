@@ -20,6 +20,7 @@ use Reach\StatamicResrv\Resources\ReservationCalendarResource;
 use Reach\StatamicResrv\Resources\ReservationResource;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Statamic\Facades\Scope;
+use Statamic\Facades\User as StatamicUser;
 use Statamic\Http\Requests\FilteredRequest;
 use Statamic\Query\Scopes\Filters\Concerns\QueriesFilters;
 
@@ -197,6 +198,13 @@ class ReservationCpController extends Controller
             'total_to_charge_formatted' => $reservation->totalToCharge(),
             'price_formatted' => $reservation->price->format(),
             'total_formatted' => $reservation->total->format(),
+            'affects_availability' => (bool) $reservation->affects_availability,
+            'created_by' => $reservation->created_by,
+            'created_by_name' => $reservation->created_by
+                ? (StatamicUser::find($reservation->created_by)?->name() ?? $reservation->created_by)
+                : null,
+            'hold_expires_at' => $reservation->hold_expires_at?->format('d-m-Y H:i'),
+            'payment_request_email_sent_at' => $reservation->payment_request_email_sent_at?->format('d-m-Y H:i'),
         ];
     }
 
