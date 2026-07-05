@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Support;
 
+use Closure;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
@@ -82,14 +83,19 @@ class ReservationRefundProcessor
      * no-charge bookings voided from the CP and for customer cancellations outside the free
      * cancellation window, where the payment stays with the business.
      *
+     * @param  ?Closure  $inTransaction  Runs on the locked fresh row before the status
+     *                                   write — throw to abort (e.g. an origin-status
+     *                                   re-check by sweeps whose target is reachable
+     *                                   from more than one state).
+     *
      * @throws InvalidStateTransition when the current status cannot transition to CANCELLED
      */
-    public function cancelWithoutRefund(Reservation $reservation): bool
+    public function cancelWithoutRefund(Reservation $reservation, ?string $context = null, ?Closure $inTransaction = null): bool
     {
-        $changed = $reservation->transitionTo(ReservationStatus::CANCELLED);
+        $changed = $reservation->transitionTo(ReservationStatus::CANCELLED, inTransaction: $inTransaction);
 
         if ($changed) {
-            $this->dispatchCommitted(ReservationCancelled::class, $reservation);
+            $this->dispatchCommitted(ReservationCancelled::class, $reservation, $context);
         }
 
         return $changed;
@@ -138,10 +144,10 @@ class ReservationRefundProcessor
      * already committed, so callers must be told the operation succeeded. The failed
      * side effect is logged for manual reconciliation; retrying could not rerun it anyway.
      */
-    protected function dispatchCommitted(string $event, Reservation $reservation): void
+    protected function dispatchCommitted(string $event, Reservation $reservation, mixed ...$args): void
     {
         try {
-            $event::dispatch($reservation);
+            $event::dispatch($reservation, ...$args);
         } catch (\Throwable $e) {
             Log::error('Post-commit reservation side effects failed; manual reconciliation may be required.', [
                 'reservation_id' => $reservation->id,

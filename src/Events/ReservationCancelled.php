@@ -11,9 +11,17 @@ class ReservationCancelled
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    /** The cancellation came from the hold-lapse sweep: the customer never paid in time. */
+    public const CONTEXT_HOLD_LAPSED = 'hold_lapsed';
+
     public $reservation;
 
-    public function __construct(Reservation $reservation)
+    /**
+     * @param  ?string  $context  Why the booking was cancelled (CONTEXT_* constants), so the
+     *                            notification emails can adjust their wording. Null for the
+     *                            existing customer/CP cancellation flows.
+     */
+    public function __construct(Reservation $reservation, public ?string $context = null)
     {
         $this->reservation = $reservation;
     }

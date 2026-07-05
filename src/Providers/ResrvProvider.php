@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Providers;
 
 use Illuminate\Console\Application as Artisan;
+use Reach\StatamicResrv\Console\Commands\CancelLapsedHolds;
 use Reach\StatamicResrv\Console\Commands\Housekeeping;
 use Reach\StatamicResrv\Console\Commands\ImportEntries;
 use Reach\StatamicResrv\Console\Commands\InstallResrv;
@@ -98,6 +99,7 @@ class ResrvProvider extends AddonServiceProvider
         MigrateSettings::class,
         UpgradeToRates::class,
         SendAbandonedReservationEmails::class,
+        CancelLapsedHolds::class,
         Housekeeping::class,
     ];
 

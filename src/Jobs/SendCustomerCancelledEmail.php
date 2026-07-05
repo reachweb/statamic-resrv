@@ -18,7 +18,7 @@ class SendCustomerCancelledEmail implements ShouldQueue
 
     protected $reservation;
 
-    public function __construct(Reservation $reservation)
+    public function __construct(Reservation $reservation, protected ?string $context = null)
     {
         $this->reservation = $reservation;
     }
@@ -31,7 +31,7 @@ class SendCustomerCancelledEmail implements ShouldQueue
         $dispatcher->send(
             $this->reservation,
             ReservationEmailEvent::CustomerCancelled,
-            new ReservationCancelledCustomer($this->reservation),
+            new ReservationCancelledCustomer($this->reservation, $this->context),
         );
     }
 }

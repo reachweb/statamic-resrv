@@ -36,14 +36,17 @@ class OrphanedPaymentNotification extends Mailable
 
     /**
      * Notify admins when a succeeded payment lands on a reservation that can no longer be
-     * confirmed (EXPIRED/REFUNDED/PARTNER), leaving the charge orphaned. Returns true when an
-     * orphan was detected, so gateways can short-circuit on it.
+     * confirmed (EXPIRED/REFUNDED/CANCELLED/PARTNER), leaving the charge orphaned. Returns
+     * true when an orphan was detected, so gateways can short-circuit on it. CANCELLED
+     * covers the hold-lapse race: the sweep cancels an awaiting-payment reservation while
+     * the customer's payment is in flight and the charge lands afterwards.
      */
     public static function notifyIfOrphaned(Reservation $reservation, string $paymentIntentId, ?string $stripeEventId = null): bool
     {
         if (! in_array($reservation->status, [
             ReservationStatus::EXPIRED->value,
             ReservationStatus::REFUNDED->value,
+            ReservationStatus::CANCELLED->value,
             ReservationStatus::PARTNER->value,
         ], true)) {
             return false;

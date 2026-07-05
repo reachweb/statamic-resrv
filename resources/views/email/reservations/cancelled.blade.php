@@ -1,6 +1,10 @@
 @component('mail::message')
 
+@if ($holdLapsed ?? false)
+{{ __("A reservation has been cancelled because its payment hold lapsed — the customer did not pay in time.") }}
+@else
 {{ __("A reservation has been cancelled by the customer.") }}
+@endif
 
 @component('mail::panel')
 {{ __("Reservation code") }} **{{ $reservation->id }}**<br>

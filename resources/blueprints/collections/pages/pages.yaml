@@ -1,0 +1,20 @@
+tabs:
+  main:
+    sections:
+      -
+        fields:
+          -
+            handle: title
+            field:
+              type: text
+              display: Title
+          -
+            handle: slug
+            field:
+              type: text
+              display: Slug
+          -
+            handle: resrv_availability_field
+            field:
+              type: resrv_availability
+              display: 'Resrv Availability'

@@ -7,7 +7,11 @@
 {{ __("Tel:") }} {{ config('resrv-config.phone') }}<br>
 {{ __("Email:") }} {{ config('resrv-config.mail') }}
 
+@if ($holdLapsed ?? false)
+{{ __("Your reservation has been cancelled because the payment hold lapsed — we did not receive your payment in time, so the reserved dates have been released.") }}
+@else
 {{ __("Your reservation has been cancelled.") }}
+@endif
 
 @component('mail::panel')
 {{ __("Reservation code") }} **{{ $reservation->id }}**<br>
@@ -16,7 +20,9 @@
 {{ __("Email") }}: **{{ $reservation->customer?->email }}**
 @endcomponent
 
-@if ($reservation->hasGatewayPayment())
+@if ($holdLapsed ?? false)
+{{ __("If you still want these dates, please contact us — subject to availability, we will be happy to set up a new reservation.") }}
+@elseif ($reservation->hasGatewayPayment())
 **{{ __("No refund has been issued for this cancellation. The payment for this reservation is non-refundable.") }}**
 @else
 {{ __("No payment was collected for this reservation, so there is nothing to refund.") }}
