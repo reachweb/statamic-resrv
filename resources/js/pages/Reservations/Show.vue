@@ -1,7 +1,9 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import axios from 'axios';
 import { Head } from '@statamic/cms/inertia';
-import { Card, Icon } from '@statamic/cms/ui';
+import { Button, Card, ConfirmationModal, Icon } from '@statamic/cms/ui';
+import { useToast } from '../../composables/useToast.js';
 
 const props = defineProps({
     reservation: { type: Object, required: true },
@@ -10,13 +12,55 @@ const props = defineProps({
     maximumQuantity: { type: Number, default: 1 },
     backUrl: { type: String, required: true },
     refundUrl: { type: String, required: true },
+    confirmPaymentUrl: { type: String, default: null },
+    cancelAwaitingUrl: { type: String, default: null },
+    sendPaymentRequestUrl: { type: String, default: null },
 });
 
-const isParent = computed(() => props.reservation.type === 'parent');
+const toast = useToast();
+
+// Local copy so the awaiting-payment actions can refresh the page state from the
+// serialized reservation the endpoints return, without a full Inertia reload.
+const reservation = ref(props.reservation);
+
+const isParent = computed(() => reservation.value.type === 'parent');
+const isAwaitingPayment = computed(() => reservation.value.status === 'awaiting_payment');
 const showQuantityColumn = computed(() => props.maximumQuantity > 1);
 
 const fieldLabel = (handle) => props.fields[handle] ?? handle;
-const statusLabel = computed(() => props.reservation.status?.toUpperCase() ?? '');
+const statusLabel = computed(() => reservation.value.status?.replace(/_/g, ' ').toUpperCase() ?? '');
+
+const showConfirmModal = ref(false);
+const showCancelModal = ref(false);
+const busy = ref(false);
+
+const runAction = async (url, successMessage) => {
+    busy.value = true;
+    try {
+        const { data } = await axios.post(url);
+        reservation.value = data;
+        toast.success(successMessage);
+        showConfirmModal.value = false;
+        showCancelModal.value = false;
+    } catch (error) {
+        toast.error(error?.response?.data?.error ?? __('Something went wrong'));
+    } finally {
+        busy.value = false;
+    }
+};
+
+const confirmPayment = () => runAction(props.confirmPaymentUrl, __('Reservation confirmed'));
+const cancelAwaiting = () => runAction(props.cancelAwaitingUrl, __('Reservation cancelled'));
+const sendPaymentRequest = () => runAction(props.sendPaymentRequestUrl, __('Payment request email sent'));
+
+const copyPaymentLink = async () => {
+    try {
+        await navigator.clipboard.writeText(reservation.value.payment_url);
+        toast.success(__('Payment link copied'));
+    } catch (error) {
+        toast.error(__('Could not copy the payment link'));
+    }
+};
 </script>
 
 <template>
@@ -83,8 +127,96 @@ const statusLabel = computed(() => props.reservation.status?.toUpperCase() ?? ''
                         <div>{{ reservation.rate_label }}</div>
                     </div>
                 </div>
+
+                <div v-if="reservation.created_by" class="grid grid-cols-2 my-2 pt-2">
+                    <div>
+                        <div class="font-bold mb-2">{{ __('Created by') }}</div>
+                        <div>{{ reservation.created_by_name ?? reservation.created_by }}</div>
+                    </div>
+                    <div>
+                        <div class="font-bold mb-2">{{ __('Decreases availability') }}</div>
+                        <div>{{ reservation.affects_availability ? __('Yes') : __('No') }}</div>
+                    </div>
+                </div>
             </Card>
         </section>
+
+        <section v-if="isAwaitingPayment">
+            <div class="mb-2 content flex">
+                <h2 class="text-base">{{ __('Awaiting payment') }}</h2>
+            </div>
+            <Card class="px-6 py-4 mb-8 divide-y">
+                <div class="grid grid-cols-2 xl:grid-cols-3 my-2 gap-y-4">
+                    <div>
+                        <div class="font-bold mb-2">{{ __('Amount requested') }}</div>
+                        <div>
+                            {{ currencySymbol }} {{ reservation.payment_formatted }}
+                            <span v-if="!reservation.payment_surcharge_is_zero" class="text-gray-600 dark:text-gray-400">
+                                (+ {{ currencySymbol }} {{ reservation.payment_surcharge_formatted }} {{ __('surcharge') }})
+                            </span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="font-bold mb-2">{{ __('Payment method') }}</div>
+                        <div>{{ reservation.payment_gateway_label ?? '-' }}</div>
+                    </div>
+                    <div>
+                        <div class="font-bold mb-2">{{ __('Hold deadline') }}</div>
+                        <div>{{ reservation.hold_expires_at ?? __('No deadline') }}</div>
+                    </div>
+                    <div>
+                        <div class="font-bold mb-2">{{ __('Payment request emailed') }}</div>
+                        <div>{{ reservation.payment_request_email_sent_at ?? __('Not sent') }}</div>
+                    </div>
+                    <div class="col-span-2">
+                        <div class="font-bold mb-2">{{ __('Payment link') }}</div>
+                        <div v-if="reservation.payment_url" class="flex items-center gap-2">
+                            <span class="truncate">{{ reservation.payment_url }}</span>
+                            <Button size="xs" :text="__('Copy')" @click="copyPaymentLink" />
+                        </div>
+                        <div v-else class="text-gray-600 dark:text-gray-400">
+                            {{ __('Payment page not configured') }}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-3 pt-4">
+                    <Button variant="primary" :text="__('Confirm payment')" :disabled="busy" @click="showConfirmModal = true" />
+                    <Button :text="__('Resend payment request')" :disabled="busy" @click="sendPaymentRequest" />
+                    <Button v-if="reservation.payment_url" :text="__('Copy payment link')" :disabled="busy" @click="copyPaymentLink" />
+                    <Button variant="danger" :text="__('Cancel reservation')" :disabled="busy" @click="showCancelModal = true" />
+                </div>
+            </Card>
+        </section>
+
+        <ConfirmationModal
+            v-if="showConfirmModal"
+            :open="true"
+            :title="__('Confirm payment')"
+            :button-text="__('Confirm')"
+            :busy="busy"
+            @confirm="confirmPayment"
+            @cancel="showConfirmModal = false"
+        >
+            <p>{{ __('Mark this reservation as paid and confirm it? Confirmation emails will be sent.') }}</p>
+        </ConfirmationModal>
+
+        <ConfirmationModal
+            v-if="showCancelModal"
+            :open="true"
+            :title="__('Cancel reservation')"
+            :danger="true"
+            :button-text="__('Cancel reservation')"
+            :busy="busy"
+            @confirm="cancelAwaiting"
+            @cancel="showCancelModal = false"
+        >
+            <p v-if="reservation.affects_availability">
+                {{ __('Cancel this reservation and release its inventory? The customer will be notified by email.') }}
+            </p>
+            <p v-else>
+                {{ __('Cancel this reservation? It never took inventory, so none will be restored. The customer will be notified by email.') }}
+            </p>
+        </ConfirmationModal>
 
         <section v-if="isParent && reservation.childs.length">
             <div class="mb-2 content flex">

@@ -49,6 +49,9 @@ class ReservationCpController extends Controller
             'resendUrl' => cp_route('resrv.reservation.resendConfirmation'),
             'calendarUrl' => cp_route('resrv.reservations.calendar'),
             'createUrl' => cp_route('resrv.reservations.create'),
+            'confirmPaymentUrlTemplate' => cp_route('resrv.reservation.confirmPayment', 'RESRVURL'),
+            'cancelAwaitingUrlTemplate' => cp_route('resrv.reservation.cancelAwaiting', 'RESRVURL'),
+            'sendPaymentRequestUrlTemplate' => cp_route('resrv.reservation.sendPaymentRequest', 'RESRVURL'),
         ]);
     }
 
@@ -116,6 +119,9 @@ class ReservationCpController extends Controller
             'maximumQuantity' => (int) config('resrv-config.maximum_quantity'),
             'backUrl' => cp_route('resrv.reservations.index'),
             'refundUrl' => cp_route('resrv.reservation.refund'),
+            'confirmPaymentUrl' => cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]),
+            'cancelAwaitingUrl' => cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]),
+            'sendPaymentRequestUrl' => cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]),
         ]);
     }
 
