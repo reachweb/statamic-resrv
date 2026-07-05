@@ -59,6 +59,10 @@ class Reservation extends Model
         'total',
         'customer_id',
         'abandoned_email_sent_at',
+        'affects_availability',
+        'created_by',
+        'hold_expires_at',
+        'payment_request_email_sent_at',
         'created_at',
         'updated_at',
     ];
@@ -75,6 +79,9 @@ class Reservation extends Model
         'total' => PriceClass::class,
         'abandoned_email_sent_at' => 'datetime',
         'free_cancellation_period' => 'integer',
+        'affects_availability' => 'boolean',
+        'hold_expires_at' => 'datetime',
+        'payment_request_email_sent_at' => 'datetime',
     ];
 
     protected $appends = ['entry'];

@@ -28,6 +28,14 @@ enum ReservationStatus: string
     /** Reserved for future use. No writer currently produces this status. */
     case COMPLETED = 'completed';
 
+    /**
+     * Created directly by the CP manual-reservation flow — never transitioned into.
+     * An unpaid admin-created hold: exempt from minutes_to_hold expiry, abandoned
+     * emails and housekeeping (all keyed off PENDING/EXPIRED). Leaves only via a
+     * payment/CP confirmation (CONFIRMED) or a CP/hold-lapse cancellation (CANCELLED).
+     */
+    case AWAITING_PAYMENT = 'awaiting_payment';
+
     case EXPIRED = 'expired';
 
     case PARTNER = 'partner';
@@ -42,6 +50,7 @@ enum ReservationStatus: string
             self::PENDING => [self::CONFIRMED, self::EXPIRED, self::REFUNDED, self::PARTNER],
             self::CONFIRMED => [self::REFUNDED, self::CANCELLED],
             self::PARTNER => [self::REFUNDED, self::CANCELLED],
+            self::AWAITING_PAYMENT => [self::CONFIRMED, self::CANCELLED],
             self::EXPIRED, self::REFUNDED, self::CANCELLED => [],
             self::WEBHOOK, self::COMPLETED => [],
         }, true);

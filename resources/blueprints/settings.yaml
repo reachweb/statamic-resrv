@@ -387,6 +387,18 @@ tabs:
               validate:
                 - required
               instructions: 'When a user initiates a checkout, the availability for their reservation is temporarily blocked for the given number of minutes. This helps to prevent double bookings, especially when availability is low.'
+      -
+        display: 'Manual reservations'
+        instructions: 'Settings for reservations created manually from the Control Panel.'
+        fields:
+          -
+            handle: manual_reservations_payment_entry
+            field:
+              display: 'Payment Page Entry'
+              type: entries
+              max_items: 1
+              localizable: false
+              instructions: 'The Statamic entry that loads the `reservation-payment` Livewire component. Customers land here from the payment request email link to pay for a manually created reservation. Without it, online payment gateways are disabled for manual reservations.'
   emails_settings:
     display: Emails
     sections:
