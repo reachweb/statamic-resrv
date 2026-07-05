@@ -48,6 +48,7 @@ class ReservationCpController extends Controller
             'refundUrl' => cp_route('resrv.reservation.refund'),
             'resendUrl' => cp_route('resrv.reservation.resendConfirmation'),
             'calendarUrl' => cp_route('resrv.reservations.calendar'),
+            'createUrl' => cp_route('resrv.reservations.create'),
         ]);
     }
 

@@ -20,6 +20,7 @@ const props = defineProps({
     refundUrl: { type: String, required: true },
     resendUrl: { type: String, required: true },
     calendarUrl: { type: String, required: true },
+    createUrl: { type: String, default: null },
 });
 
 const toast = useToast();
@@ -108,6 +109,7 @@ const resend = async () => {
 
         <Header :title="__('Reservations')" icon="add-item">
             <Button :href="calendarUrl" :text="__('Calendar view')" />
+            <Button v-if="createUrl" :href="createUrl" variant="primary" :text="__('Create reservation')" />
         </Header>
 
         <Listing

@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Routing\Controller;
+use Inertia\Inertia;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\ManualReservationException;
@@ -27,6 +28,37 @@ class ManualReservationCpController extends Controller
         protected ManualReservationCreator $creator,
         protected PaymentGatewayManager $gatewayManager,
     ) {}
+
+    public function createCp()
+    {
+        return Inertia::render('resrv::Reservations/Create', [
+            'entriesUrl' => cp_route('resrv.manual.entries'),
+            'entryUrlTemplate' => cp_route('resrv.manual.entry', 'ITEMID'),
+            'quoteUrl' => cp_route('resrv.manual.quote'),
+            'storeUrl' => cp_route('resrv.manual.store'),
+            'backUrl' => cp_route('resrv.reservations.index'),
+            'currencySymbol' => config('resrv-config.currency_symbol'),
+            'maximumQuantity' => (int) config('resrv-config.maximum_quantity'),
+            // The meta payload inline — saves the page a round trip.
+            'gateways' => $this->gatewayManager->forCp(),
+            'paymentEntryConfigured' => $this->paymentEntryConfigured(),
+            'affiliates' => config('resrv-config.enable_affiliates')
+                ? Affiliate::where('published', true)
+                    ->get()
+                    ->map(fn ($affiliate) => [
+                        'id' => $affiliate->id,
+                        'name' => $affiliate->name,
+                        'code' => $affiliate->code,
+                    ])
+                    ->values()
+                : null,
+            'paymentConfig' => [
+                'type' => config('resrv-config.payment'),
+                'fixed_amount' => config('resrv-config.fixed_amount'),
+                'percent_amount' => config('resrv-config.percent_amount'),
+            ],
+        ]);
+    }
 
     public function entries()
     {
