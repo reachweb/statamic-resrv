@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
+use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
@@ -17,6 +18,7 @@ use Reach\StatamicResrv\Exceptions\ManualReservationException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Customer;
@@ -147,14 +149,41 @@ class ManualReservationCreator
         });
 
         // Mirrors Checkout::handleReservationWithZeroPayment(): nothing to pay, so the
-        // booking is firm immediately and the confirmation email chain fires.
+        // booking is firm immediately and the confirmation email chain fires — never a
+        // payment request.
         if ($quote['pricing']['total']->isZero()) {
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
                 ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
             }
+
+            return $reservation->fresh();
+        }
+
+        if ((bool) ($input['send_payment_request_email'] ?? true)) {
+            $this->sendPaymentRequestEmail($reservation);
         }
 
         return $reservation->fresh();
+    }
+
+    /**
+     * Send the payment request through the standard email system and stamp the send —
+     * only when the dispatcher actually sent it (a site that disabled the event via
+     * config must not get a false stamp).
+     */
+    public function sendPaymentRequestEmail(Reservation $reservation): bool
+    {
+        $sent = app(ReservationEmailDispatcher::class)->send(
+            $reservation,
+            ReservationEmailEvent::CustomerPaymentRequest,
+            new ReservationPaymentRequest($reservation),
+        );
+
+        if ($sent) {
+            $reservation->update(['payment_request_email_sent_at' => now()]);
+        }
+
+        return $sent;
     }
 
     /**

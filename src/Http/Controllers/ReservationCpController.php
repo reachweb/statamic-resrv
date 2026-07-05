@@ -18,6 +18,7 @@ use Reach\StatamicResrv\Jobs\ResendConfirmationEmail;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Resources\ReservationCalendarResource;
 use Reach\StatamicResrv\Resources\ReservationResource;
+use Reach\StatamicResrv\Support\ManualReservationCreator;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Statamic\Facades\Scope;
 use Statamic\Facades\User as StatamicUser;
@@ -338,6 +339,32 @@ class ReservationCpController extends Controller
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+
+        return response()->json($this->serializeFreshReservation($reservation->id));
+    }
+
+    /**
+     * (Re)send the payment request email for an awaiting-payment reservation. Unlike the
+     * confirmation resend this respects the event's enabled switch — a site that turned
+     * the customer_payment_request event off gets a 422 explaining that, not a silent
+     * success. Sends inline so the sent-at stamp and the returned payload are accurate.
+     */
+    public function sendPaymentRequest(int $id)
+    {
+        $reservation = $this->reservation->findOrFail($id);
+
+        if ($reservation->status !== ReservationStatus::AWAITING_PAYMENT->value) {
+            return response()->json(['error' => 'Only awaiting-payment reservations can receive a payment request.'], 422);
+        }
+
+        $customerEmail = trim((string) ($reservation->customer?->email ?? ''));
+        if (blank($customerEmail) || ! filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+            return response()->json(['error' => 'This reservation does not have a valid customer email address to send to.'], 422);
+        }
+
+        if (! app(ManualReservationCreator::class)->sendPaymentRequestEmail($reservation)) {
+            return response()->json(['error' => 'The payment request email is disabled in the email settings, so it was not sent.'], 422);
         }
 
         return response()->json($this->serializeFreshReservation($reservation->id));

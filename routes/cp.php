@@ -59,6 +59,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/reservation/resend-confirmation', 'ReservationCpController@resendConfirmation')->name('reservation.resendConfirmation');
         Route::post('/resrv/reservation/{id}/confirm-payment', 'ReservationCpController@confirmPayment')->name('reservation.confirmPayment');
         Route::post('/resrv/reservation/{id}/cancel-awaiting', 'ReservationCpController@cancelAwaitingPayment')->name('reservation.cancelAwaiting');
+        Route::post('/resrv/reservation/{id}/send-payment-request', 'ReservationCpController@sendPaymentRequest')->name('reservation.sendPaymentRequest');
 
         Route::get('/resrv/manual/entries', 'ManualReservationCpController@entries')->name('manual.entries');
         Route::get('/resrv/manual/entry/{item_id}', 'ManualReservationCpController@entry')->name('manual.entry');

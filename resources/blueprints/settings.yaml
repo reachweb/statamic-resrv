@@ -437,6 +437,9 @@ tabs:
                         key: customer_abandoned
                         value: 'Customer abandoned'
                       -
+                        key: customer_payment_request
+                        value: 'Customer payment request'
+                      -
                         key: admin_cancelled
                         value: 'Admin cancelled (by customer)'
                 -
@@ -525,6 +528,9 @@ tabs:
                       -
                         key: customer_abandoned
                         value: 'Customer abandoned'
+                      -
+                        key: customer_payment_request
+                        value: 'Customer payment request'
                       -
                         key: admin_cancelled
                         value: 'Admin cancelled (by customer)'
