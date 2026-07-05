@@ -5,8 +5,10 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
@@ -262,6 +264,83 @@ class ReservationCpController extends Controller
         ResendConfirmationEmail::dispatchAfterResponse($reservation);
 
         return response()->json($reservation->id);
+    }
+
+    /**
+     * Mark an awaiting-payment (manual) reservation as paid and confirm it — the money
+     * arrived outside a gateway flow (offline gateway, or in person for an online one).
+     * Fires the same ReservationConfirmed chain as a webhook: confirmation emails + log.
+     */
+    public function confirmPayment(int $id)
+    {
+        $reservation = $this->reservation->findOrFail($id);
+
+        if ($reservation->status !== ReservationStatus::AWAITING_PAYMENT->value) {
+            return response()->json(['error' => 'Only awaiting-payment reservations can be confirmed manually.'], 422);
+        }
+
+        try {
+            $changed = $reservation->transitionTo(ReservationStatus::CONFIRMED);
+        } catch (InvalidStateTransition $e) {
+            return response()->json(['error' => 'Cannot confirm a reservation in the '.$e->from->value.' state.'], 422);
+        }
+
+        if ($changed) {
+            ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
+        }
+
+        return response()->json($this->serializeFreshReservation($reservation->id));
+    }
+
+    /**
+     * Cancel an awaiting-payment (manual) reservation: the ReservationCancelled chain
+     * restores stock only when the reservation decremented it (affects_availability),
+     * voids any commission, logs, and emails the customer. Any pending intent is
+     * cancelled after the transition commits — never inside the lock, and tolerantly:
+     * an unreachable gateway leaves an intent that dies of old age.
+     */
+    public function cancelAwaitingPayment(int $id)
+    {
+        $reservation = $this->reservation->findOrFail($id);
+
+        if ($reservation->status !== ReservationStatus::AWAITING_PAYMENT->value) {
+            return response()->json(['error' => 'Only awaiting-payment reservations can be cancelled this way.'], 422);
+        }
+
+        $paymentId = (string) $reservation->payment_id;
+        $paymentGateway = (string) $reservation->payment_gateway;
+
+        try {
+            app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation);
+        } catch (InvalidStateTransition $e) {
+            return response()->json(['error' => 'Cannot cancel a reservation in the '.$e->from->value.' state.'], 422);
+        }
+
+        if ($paymentId !== '' && $paymentGateway !== '') {
+            try {
+                app(PaymentGatewayManager::class)
+                    ->gateway($paymentGateway)
+                    ->cancelPaymentIntent($paymentId, $reservation);
+            } catch (\Throwable $e) {
+                Log::error('Failed to cancel payment intent while cancelling an awaiting-payment reservation.', [
+                    'reservation_id' => $reservation->id,
+                    'payment_id' => $paymentId,
+                    'payment_gateway' => $paymentGateway,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return response()->json($this->serializeFreshReservation($reservation->id));
+    }
+
+    private function serializeFreshReservation(int $id): array
+    {
+        $reservation = $this->reservation
+            ->with(['extras', 'options.values', 'affiliate', 'dynamicPricings', 'childs.rate'])
+            ->findOrFail($id);
+
+        return $this->serializeReservation($reservation, $reservation->entry());
     }
 
     private function getReservations()

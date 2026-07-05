@@ -57,6 +57,8 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/reservation/{id}', 'ReservationCpController@show')->name('reservation.show');
         Route::patch('/resrv/reservation/refund', 'ReservationCpController@refund')->name('reservation.refund');
         Route::post('/resrv/reservation/resend-confirmation', 'ReservationCpController@resendConfirmation')->name('reservation.resendConfirmation');
+        Route::post('/resrv/reservation/{id}/confirm-payment', 'ReservationCpController@confirmPayment')->name('reservation.confirmPayment');
+        Route::post('/resrv/reservation/{id}/cancel-awaiting', 'ReservationCpController@cancelAwaitingPayment')->name('reservation.cancelAwaiting');
 
         Route::get('/resrv/fixedpricing/{statamic_id}', 'FixedPricingCpController@index')->name('fixedpricing.index');
         Route::post('/resrv/fixedpricing', 'FixedPricingCpController@update')->name('fixedpricing.update');
