@@ -84,6 +84,13 @@ class Reservation extends Model
         'payment_request_email_sent_at' => 'datetime',
     ];
 
+    // Mirrors the column's DB default so an in-memory model that was create()d without
+    // the flag (every frontend checkout) reads true — the availability listeners consult
+    // it on the instance that dispatched the event, before any refresh from the DB.
+    protected $attributes = [
+        'affects_availability' => true,
+    ];
+
     protected $appends = ['entry'];
 
     /**

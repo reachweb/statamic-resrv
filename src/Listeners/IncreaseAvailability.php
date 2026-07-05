@@ -14,6 +14,12 @@ class IncreaseAvailability
 
     public function handle($event): void
     {
+        // Mirrors the DecreaseAvailability guard: a reservation that never decremented
+        // stock must never restore it, whichever event (expiry/cancel/refund) fires.
+        if (! $event->reservation->affects_availability) {
+            return;
+        }
+
         $reason = $this->reasonForEvent($event);
 
         if ($event->reservation->type === 'parent') {

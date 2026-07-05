@@ -12,6 +12,13 @@ class DecreaseAvailability
 
     public function handle(ReservationCreated $event): void
     {
+        // The flag lives on the parent row; children ride it. A reservation created with
+        // affects_availability=false must never decrement stock — nor restore it later
+        // (see the mirrored guard in IncreaseAvailability).
+        if (! $event->reservation->affects_availability) {
+            return;
+        }
+
         if ($event->reservation->type === 'parent') {
             $this->decreaseMultiple($event);
         } else {
