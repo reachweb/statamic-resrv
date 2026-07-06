@@ -12,6 +12,7 @@ use Reach\StatamicResrv\Exceptions\CancellationNotAllowed;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationRefundProcessor
@@ -87,18 +88,50 @@ class ReservationRefundProcessor
      *                                   write — throw to abort (e.g. an origin-status
      *                                   re-check by sweeps whose target is reachable
      *                                   from more than one state).
+     * @param  bool  $cancelOpenIntent  Also void any open payment intent (awaiting-payment
+     *                                  bookings) — after the transition commits, never
+     *                                  inside the lock, and tolerantly: an unreachable
+     *                                  gateway leaves an intent that dies of old age.
      *
      * @throws InvalidStateTransition when the current status cannot transition to CANCELLED
      */
-    public function cancelWithoutRefund(Reservation $reservation, ?string $context = null, ?Closure $inTransaction = null): bool
+    public function cancelWithoutRefund(Reservation $reservation, ?string $context = null, ?Closure $inTransaction = null, bool $cancelOpenIntent = false): bool
     {
+        $paymentId = (string) $reservation->payment_id;
+        $paymentGateway = (string) $reservation->payment_gateway;
+
         $changed = $reservation->transitionTo(ReservationStatus::CANCELLED, inTransaction: $inTransaction);
 
         if ($changed) {
             $this->dispatchCommitted(ReservationCancelled::class, $reservation, $context);
+
+            if ($cancelOpenIntent && $paymentId !== '' && $paymentGateway !== '') {
+                $this->cancelPaymentIntentQuietly($reservation, $paymentId, $paymentGateway);
+            }
         }
 
         return $changed;
+    }
+
+    /**
+     * Void an open payment intent after a terminal transition has committed, tolerating
+     * gateway failures: local state is already correct, so the error is only logged for
+     * manual reconciliation (mirrors Reservation::expire()).
+     */
+    protected function cancelPaymentIntentQuietly(Reservation $reservation, string $paymentId, string $paymentGateway): void
+    {
+        try {
+            app(PaymentGatewayManager::class)
+                ->gateway($paymentGateway)
+                ->cancelPaymentIntent($paymentId, $reservation);
+        } catch (\Throwable $e) {
+            Log::error('Failed to cancel the payment intent after cancelling the reservation; manual reconciliation may be required.', [
+                'reservation_id' => $reservation->id,
+                'payment_id' => $paymentId,
+                'payment_gateway' => $paymentGateway,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

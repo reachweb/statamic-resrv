@@ -232,9 +232,10 @@ class PaymentGatewayManager
     /**
      * Every configured gateway with the facts the CP manual-reservation surfaces need:
      * unlike availableForFrontend() nothing is filtered out — the create form disables
-     * unusable gateways with a hint instead of hiding them.
+     * unusable gateways with a hint instead of hiding them. Surcharges and amount limits
+     * stay server-side: the quote endpoint returns the applied per-gateway amounts.
      *
-     * @return array<int, array{key: string, label: ?string, surcharge: ?array, amount_limits: ?array, supports_manual_confirmation: bool}>
+     * @return array<int, array{key: string, label: ?string, supports_manual_confirmation: bool}>
      */
     public function forCp(): array
     {
@@ -242,8 +243,6 @@ class PaymentGatewayManager
             return [
                 'key' => $name,
                 'label' => $this->label($name),
-                'surcharge' => $config['surcharge'] ?? null,
-                'amount_limits' => $config['amount_limits'] ?? null,
                 'supports_manual_confirmation' => $this->resolve($name)->supportsManualConfirmation(),
             ];
         })->values()->all();

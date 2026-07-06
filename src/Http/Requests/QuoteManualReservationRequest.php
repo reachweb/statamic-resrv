@@ -3,6 +3,8 @@
 namespace Reach\StatamicResrv\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Reach\StatamicResrv\Enums\ManualPaymentMode;
 
 class QuoteManualReservationRequest extends FormRequest
 {
@@ -27,8 +29,8 @@ class QuoteManualReservationRequest extends FormRequest
             'options.*.id' => 'required|integer',
             'options.*.value' => 'required|integer',
             'total_override' => 'nullable|numeric|min:0',
-            'payment_mode' => 'required|in:standard,full,custom',
-            'custom_amount' => 'nullable|numeric|required_if:payment_mode,custom',
+            'payment_mode' => ['required', Rule::enum(ManualPaymentMode::class)],
+            'custom_amount' => 'nullable|numeric',
             'payment_gateway' => 'nullable|string',
         ];
     }

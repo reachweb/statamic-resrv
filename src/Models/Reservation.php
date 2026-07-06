@@ -271,6 +271,15 @@ class Reservation extends Model
     }
 
     /**
+     * Admin-created (manual) reservation still waiting for the customer to pay — the only
+     * state the CP confirm/cancel pair and the pay-by-link page operate on.
+     */
+    public function isAwaitingPayment(): bool
+    {
+        return $this->status === ReservationStatus::AWAITING_PAYMENT->value;
+    }
+
+    /**
      * Whether the customer may self-cancel at all — with a refund inside the free
      * cancellation window, or without one after it closes.
      */
@@ -371,6 +380,20 @@ class Reservation extends Model
     }
 
     /**
+     * Whether this reservation's gateway is an offline one (bank transfer etc.) that an
+     * admin confirms manually. An unknown (no-longer-configured) gateway reports false —
+     * treat it as online so nothing offers offline instructions it can't back up.
+     */
+    public function paymentGatewaySupportsManualConfirmation(): bool
+    {
+        try {
+            return $this->resolvePaymentGateway()->supportsManualConfirmation();
+        } catch (UnknownPaymentGateway) {
+            return false;
+        }
+    }
+
+    /**
      * True when no charge exists to refund: empty payment_id AND (partner or zero payment).
      * Other empty-payment_id rows (e.g. PENDING with an orphaned charge) are assumed to hold one.
      */
@@ -458,6 +481,17 @@ class Reservation extends Model
     }
 
     /**
+     * What the customer owes to firm the booking: payment + payment_surcharge — exactly the
+     * sum the payment intent charges and the webhook's amount guard verifies. Built on a
+     * fresh Price because add() mutates in place and Eloquent caches cast instances, so
+     * adding on the model's own instance would compound across accesses.
+     */
+    public function amountDue(): PriceClass
+    {
+        return Price::create($this->payment->format())->add($this->payment_surcharge);
+    }
+
+    /**
      * Commission owed to the given affiliate for this reservation (total × pivot fee %), zero once
      * the commission has been cancelled. Single owner of the formula so the CP serializer and the
      * CSV export can never drift apart.
@@ -533,21 +567,26 @@ class Reservation extends Model
 
     /**
      * Absolute deep link to the manual-reservation payment page, or null when the payment
-     * entry is unconfigured/missing/unpublished/unroutable or the reservation has no
-     * customer email to authenticate with. No feature toggle exists — configuring the
-     * entry IS the opt-in (an unconfigured entry disables online gateways in the CP).
+     * entry is unconfigured/missing/unpublished/unroutable, the reservation has no
+     * customer email to authenticate with, or it is no longer awaiting payment — the link
+     * only exists while there is something to pay. No feature toggle exists — configuring
+     * the entry IS the opt-in (an unconfigured entry disables online gateways in the CP).
      */
     public function customerPaymentUrl(): ?string
     {
+        if (! $this->isAwaitingPayment()) {
+            return null;
+        }
+
         return $this->customerPageUrl(config('resrv-config.manual_reservations_payment_entry'));
     }
 
     /**
-     * Shared builder for customer-facing deep links (status page, payment page): the
-     * configured entry must be published, public and routable, and the reservation must
-     * carry a reference + customer email to authenticate the ?ref=&hash= pair with.
+     * Resolve a customer-page config value (status page, payment page) to its routable
+     * entry, or null. Single owner of what counts as usable — the CP gateway gating and
+     * the emailed links must never disagree.
      */
-    protected function customerPageUrl(mixed $entryId): ?string
+    public static function resolveCustomerPageEntry(mixed $entryId): ?EntryContract
     {
         // The entries fieldtype may surface its single value as a one-element array.
         if (is_array($entryId)) {
@@ -565,17 +604,33 @@ class Reservation extends Model
             return null;
         }
 
+        $entry = Entry::find($entryId);
+
+        // url() ignores publish state, so check it explicitly — a draft or private page
+        // must hide the button rather than email a link that 404s for guests.
+        if (! $entry || ! $entry->published() || $entry->private() || ! $entry->url()) {
+            return null;
+        }
+
+        return $entry;
+    }
+
+    /**
+     * Shared builder for customer-facing deep links (status page, payment page): the
+     * configured entry must resolve (see resolveCustomerPageEntry()) and the reservation
+     * must carry a reference + customer email to authenticate the ?ref=&hash= pair with.
+     */
+    protected function customerPageUrl(mixed $entryId): ?string
+    {
         $hash = $this->customerLookupHash();
 
         if ($hash === null || ! $this->reference) {
             return null;
         }
 
-        $entry = Entry::find($entryId);
+        $entry = static::resolveCustomerPageEntry($entryId);
 
-        // url() ignores publish state, so check it explicitly — a draft or private page
-        // must hide the button rather than email a link that 404s for guests.
-        if (! $entry || ! $entry->published() || $entry->private() || ! $entry->url()) {
+        if (! $entry) {
             return null;
         }
 

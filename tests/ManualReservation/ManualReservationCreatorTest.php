@@ -50,6 +50,17 @@ class ManualReservationCreatorTest extends TestCase
         Config::set('resrv-config.checkout_completed_entry', $checkoutEntry->id());
     }
 
+    private function configurePaymentEntry(): void
+    {
+        $entry = Entry::make()
+            ->collection($this->findOrCreateCollection('pages'))
+            ->slug('pay-here')
+            ->data(['title' => 'Pay here']);
+        $entry->save();
+
+        Config::set('resrv-config.manual_reservations_payment_entry', [$entry->id()]);
+    }
+
     private function creator(): ManualReservationCreator
     {
         return app(ManualReservationCreator::class);
@@ -285,6 +296,7 @@ class ManualReservationCreatorTest extends TestCase
     {
         Config::set('resrv-config.payment', 'fixed');
         Config::set('resrv-config.fixed_amount', 30);
+        $this->configurePaymentEntry();
 
         $rate = Rate::factory()->freeCancellation(14)->create(['collection' => 'pages', 'slug' => 'flexible']);
         $entry = $this->makeStatamicItemWithAvailability(available: 4, rateId: $rate->id);
@@ -453,6 +465,7 @@ class ManualReservationCreatorTest extends TestCase
 
     public function test_gateway_surcharge_is_computed_on_the_requested_amount()
     {
+        $this->configurePaymentEntry();
         Config::set('resrv-config.payment_gateways', [
             'fake' => [
                 'class' => FakePaymentGateway::class,

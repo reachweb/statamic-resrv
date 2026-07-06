@@ -64,7 +64,6 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
 
         Route::get('/resrv/manual/entries', 'ManualReservationCpController@entries')->name('manual.entries');
         Route::get('/resrv/manual/entry/{item_id}', 'ManualReservationCpController@entry')->name('manual.entry');
-        Route::get('/resrv/manual/meta', 'ManualReservationCpController@meta')->name('manual.meta');
         Route::post('/resrv/manual/quote', 'ManualReservationCpController@quote')->name('manual.quote');
         Route::post('/resrv/manual', 'ManualReservationCpController@store')->name('manual.store');
 

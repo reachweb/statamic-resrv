@@ -38,7 +38,6 @@ const props = defineProps({
     gateways: { type: Array, default: () => [] },
     paymentEntryConfigured: { type: Boolean, default: false },
     affiliates: { type: Array, default: null },
-    paymentConfig: { type: Object, default: () => ({}) },
 });
 
 const toast = useToast();
@@ -150,8 +149,27 @@ const selectedGatewayAmount = computed(() => {
     return quote.value.payment.gateways?.[form.payment_gateway] ?? null;
 });
 
+// Validated on the client against the quoted total so the message lands right under the
+// Custom amount field instead of the server round-trip surfacing it up in the booking card.
+const customAmountError = computed(() => {
+    if (form.payment_mode !== 'custom' || ! quote.value) return null;
+    if (form.custom_amount === '' || form.custom_amount === null) return null;
+
+    const amount = Number(form.custom_amount);
+
+    if (Number.isNaN(amount) || amount <= 0) {
+        return __('Enter an amount greater than zero.');
+    }
+
+    if (amount > Number(quote.value.pricing.total)) {
+        return __('This is more than the total. To charge more, raise it with the "Override total" toggle above.');
+    }
+
+    return null;
+});
+
 const canSubmit = computed(
-    () => datesComplete.value && quote.value && ! availabilityBlocks.value && form.payment_gateway && ! submitting.value,
+    () => datesComplete.value && quote.value && ! quoteError.value && ! customAmountError.value && ! availabilityBlocks.value && form.payment_gateway && ! submitting.value,
 );
 
 // --- Data loading ---
@@ -209,7 +227,7 @@ const quotePayload = () => ({
         .map(([id, value]) => ({ id: Number(id), value })),
     total_override: form.override_enabled && form.total_override !== '' ? form.total_override : null,
     payment_mode: form.payment_mode,
-    custom_amount: form.payment_mode === 'custom' && form.custom_amount !== '' ? form.custom_amount : null,
+    custom_amount: form.payment_mode === 'custom' && form.custom_amount !== '' && ! customAmountError.value ? form.custom_amount : null,
     payment_gateway: form.payment_gateway,
 });
 
@@ -223,7 +241,9 @@ const fetchQuote = async () => {
         availableExtras.value = data.available_extras ?? [];
         availableOptions.value = data.available_options ?? [];
     } catch (error) {
-        quote.value = null;
+        // Keep the last good quote on screen so the pricing/payment section never collapses
+        // (which would hide the very inputs needed to fix the problem); surface the reason
+        // inline and block submission instead.
         quoteError.value = error?.response?.data?.error
             ?? Object.values(error?.response?.data?.errors ?? {}).flat().join(' ')
             ?? __('Could not compute a quote');
@@ -581,7 +601,8 @@ const fieldError = (key) => {
                     <Field
                         v-if="form.payment_mode === 'custom'"
                         :label="__('Custom amount')"
-                        :error="fieldError('custom_amount')"
+                        :instructions="__('How much to collect now — a deposit or partial payment. To request more than the total, raise it with the \'Override total\' toggle above.')"
+                        :error="customAmountError ?? fieldError('custom_amount')"
                     >
                         <Input v-model="form.custom_amount" type="number" step="0.01" :min="0" :prepend="currencySymbol" />
                     </Field>
@@ -594,7 +615,7 @@ const fieldError = (key) => {
                 </div>
 
                 <div
-                    v-if="selectedGatewayAmount"
+                    v-if="selectedGatewayAmount && ! customAmountError"
                     class="mt-6 flex items-center justify-between gap-4 rounded-lg bg-gray-100 dark:bg-gray-800 px-4 py-3"
                 >
                     <Description :text="__('The customer will be asked to pay')" />

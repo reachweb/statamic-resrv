@@ -16,10 +16,9 @@ use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Rate;
-use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Reach\StatamicResrv\Support\ManualReservationCreator;
-use Statamic\Facades\Entry;
 use Statamic\Facades\User;
 
 class ManualReservationCpController extends Controller
@@ -41,7 +40,6 @@ class ManualReservationCpController extends Controller
             'maximumQuantity' => (int) config('resrv-config.maximum_quantity'),
             'maximumReservationPeriod' => (int) config('resrv-config.maximum_reservation_period_in_days', 30),
             'minimumDaysBefore' => (int) config('resrv-config.minimum_days_before', 0),
-            // The meta payload inline — saves the page a round trip.
             'gateways' => $this->gatewayManager->forCp(),
             'paymentEntryConfigured' => $this->paymentEntryConfigured(),
             'affiliates' => config('resrv-config.enable_affiliates')
@@ -54,11 +52,6 @@ class ManualReservationCpController extends Controller
                     ])
                     ->values()
                 : null,
-            'paymentConfig' => [
-                'type' => config('resrv-config.payment'),
-                'fixed_amount' => config('resrv-config.fixed_amount'),
-                'percent_amount' => config('resrv-config.percent_amount'),
-            ],
         ]);
     }
 
@@ -89,37 +82,11 @@ class ManualReservationCpController extends Controller
             ->resolveForEntryId($item_id)
             ->fields()
             ->values()
-            ->map(fn ($field) => $field->toArray())
-            ->values();
+            ->map(fn ($field) => $field->toArray());
 
         return response()->json([
             'rates' => $rates,
             'form_fields' => $formFields,
-        ]);
-    }
-
-    public function meta()
-    {
-        return response()->json([
-            'gateways' => $this->gatewayManager->forCp(),
-            'payment_entry_configured' => $this->paymentEntryConfigured(),
-            'affiliates' => config('resrv-config.enable_affiliates')
-                ? Affiliate::where('published', true)
-                    ->get()
-                    ->map(fn ($affiliate) => [
-                        'id' => $affiliate->id,
-                        'name' => $affiliate->name,
-                        'code' => $affiliate->code,
-                        'fee' => (float) $affiliate->fee,
-                    ])
-                    ->values()
-                : null,
-            'currency_symbol' => config('resrv-config.currency_symbol'),
-            'payment_config' => [
-                'type' => config('resrv-config.payment'),
-                'fixed_amount' => config('resrv-config.fixed_amount'),
-                'percent_amount' => config('resrv-config.percent_amount'),
-            ],
         ]);
     }
 
@@ -128,7 +95,7 @@ class ManualReservationCpController extends Controller
         $data = $request->validated();
 
         try {
-            $quote = $this->creator->quote($data);
+            $quote = $this->creator->quote($data, requireCustomAmount: false);
         } catch (AvailabilityException|ManualReservationException|OptionsException|ExtrasException $e) {
             return response()->json(['error' => $e->getMessage()], 422);
         }
@@ -141,13 +108,8 @@ class ManualReservationCpController extends Controller
 
     public function store(StoreManualReservationRequest $request)
     {
-        $data = $request->validated();
-
         try {
-            $quote = $this->creator->quote($data);
-            $this->assertGatewayIsUsable($data['payment_gateway'], $quote['payment']['amount']);
-
-            $reservation = $this->creator->create($data, User::current());
+            $reservation = $this->creator->create($request->validated(), User::current());
         } catch (AvailabilityException|ManualReservationException|OptionsException|ExtrasException $e) {
             return response()->json(['error' => $e->getMessage()], 422);
         }
@@ -159,51 +121,12 @@ class ManualReservationCpController extends Controller
     }
 
     /**
-     * @throws ManualReservationException when the gateway cannot be used for this booking
-     */
-    protected function assertGatewayIsUsable(string $gateway, PriceClass $amount): void
-    {
-        // Without a configured (published, routable) payment page there is no link to pay
-        // an online gateway through — only manually-confirmable (offline) gateways work.
-        if (! $this->paymentEntryConfigured()
-            && ! $this->gatewayManager->gateway($gateway)->supportsManualConfirmation()) {
-            throw new ManualReservationException(
-                __('The payment page entry is not configured, so only payment methods that support manual confirmation can be used.')
-            );
-        }
-
-        if (! $amount->isZero() && ! $this->gatewayManager->isAvailableFor($gateway, $amount)) {
-            throw new ManualReservationException(
-                __('The requested amount is outside the allowed limits for this payment method.')
-            );
-        }
-    }
-
-    /**
-     * Mirrors the entry checks of Reservation::customerStatusUrl() for the
-     * manual-reservations payment entry: configured, published, public and routable.
+     * Whether the manual-reservations payment entry resolves to a usable page — the same
+     * check that gates online gateways in the creator and link building on the model.
      */
     protected function paymentEntryConfigured(): bool
     {
-        $entryId = config('resrv-config.manual_reservations_payment_entry');
-
-        if (is_array($entryId)) {
-            $entryId = $entryId[0] ?? null;
-        }
-
-        if (! is_string($entryId) && ! is_int($entryId)) {
-            return false;
-        }
-
-        $entryId = (string) $entryId;
-
-        if ($entryId === '') {
-            return false;
-        }
-
-        $entry = Entry::find($entryId);
-
-        return $entry && $entry->published() && ! $entry->private() && $entry->url();
+        return Reservation::resolveCustomerPageEntry(config('resrv-config.manual_reservations_payment_entry')) !== null;
     }
 
     protected function serializeQuote(array $quote): array
@@ -267,7 +190,7 @@ class ManualReservationCpController extends Controller
             ->where('published', true)
             ->with('values')
             ->get()
-            ->map(fn ($option) => Option::find($option->id)->valuesPriceForDates($calcData))
+            ->map(fn ($option) => $option->valuesPriceForDates($calcData))
             ->map(fn ($option) => [
                 'id' => $option->id,
                 'name' => $option->name,

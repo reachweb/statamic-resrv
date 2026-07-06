@@ -4,14 +4,10 @@ namespace Reach\StatamicResrv\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
-use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled as ReservationCancelledEvent;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
-use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
-use Reach\StatamicResrv\Mail\ReservationCancelled as ReservationCancelledMail;
 use Reach\StatamicResrv\Models\Reservation;
-use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 
 class CancelLapsedHolds extends Command
@@ -49,21 +45,19 @@ class CancelLapsedHolds extends Command
 
     protected function cancelLapsedHold(Reservation $reservation): bool
     {
-        $paymentId = (string) $reservation->payment_id;
-        $paymentGateway = (string) $reservation->payment_gateway;
-
         try {
             // The CANCELLED chain restores stock only when the reservation decremented it
-            // (affects_availability), voids commission, logs, and emails the customer —
-            // with the hold-lapsed wording carried by the context. The in-transaction
-            // origin re-check is load-bearing: CANCELLED is also reachable from CONFIRMED,
-            // so without it a webhook confirming between the candidate query and the row
-            // lock would let the sweep cancel a PAID booking.
-            $changed = app(ReservationRefundProcessor::class)->cancelWithoutRefund(
+            // (affects_availability), voids commission, logs, and emails both parties —
+            // with the hold-lapsed wording carried by the context. Any open payment intent
+            // is voided after the transition commits. The in-transaction origin re-check is
+            // load-bearing: CANCELLED is also reachable from CONFIRMED, so without it a
+            // webhook confirming between the candidate query and the row lock would let
+            // the sweep cancel a PAID booking.
+            return app(ReservationRefundProcessor::class)->cancelWithoutRefund(
                 $reservation,
                 ReservationCancelledEvent::CONTEXT_HOLD_LAPSED,
                 inTransaction: function (Reservation $fresh) {
-                    if ($fresh->status !== ReservationStatus::AWAITING_PAYMENT->value) {
+                    if (! $fresh->isAwaitingPayment()) {
                         throw new InvalidStateTransition(
                             ReservationStatus::from($fresh->status),
                             ReservationStatus::CANCELLED,
@@ -71,6 +65,7 @@ class CancelLapsedHolds extends Command
                         );
                     }
                 },
+                cancelOpenIntent: true,
             );
         } catch (InvalidStateTransition $e) {
             // A webhook confirmed it between the candidate query and the row lock — the
@@ -82,37 +77,5 @@ class CancelLapsedHolds extends Command
 
             return false;
         }
-
-        if (! $changed) {
-            return false;
-        }
-
-        // After the transition commits — never inside the lock, and tolerantly: an
-        // unreachable gateway leaves an intent that dies of old age (mirrors expire()).
-        if ($paymentId !== '' && $paymentGateway !== '') {
-            try {
-                app(PaymentGatewayManager::class)
-                    ->gateway($paymentGateway)
-                    ->cancelPaymentIntent($paymentId, $reservation);
-            } catch (\Throwable $e) {
-                Log::error('Failed to cancel payment intent for a lapsed hold; manual reconciliation may be required.', [
-                    'reservation_id' => $reservation->id,
-                    'payment_id' => $paymentId,
-                    'payment_gateway' => $paymentGateway,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        // The AdminCancelled event is only wired to customer-initiated cancellations
-        // (ReservationCancelledByCustomer), so the sweep notifies admins explicitly —
-        // both parties must hear about a lapsed hold.
-        app(ReservationEmailDispatcher::class)->send(
-            $reservation,
-            ReservationEmailEvent::AdminCancelled,
-            new ReservationCancelledMail($reservation, ReservationCancelledEvent::CONTEXT_HOLD_LAPSED),
-        );
-
-        return true;
     }
 }

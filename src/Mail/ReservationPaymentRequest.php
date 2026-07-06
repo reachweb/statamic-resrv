@@ -4,8 +4,6 @@ namespace Reach\StatamicResrv\Mail;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
-use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
-use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationPaymentRequest extends Mailable
@@ -27,12 +25,9 @@ class ReservationPaymentRequest extends Mailable
     public function build()
     {
         $this->with([
-            // Fresh Price: add() mutates in place and Eloquent caches cast instances.
-            'amountDue' => Price::create($this->reservation->payment->format())
-                ->add($this->reservation->payment_surcharge)
-                ->format(),
+            'amountDue' => $this->reservation->amountDue()->format(),
             'payUrl' => $this->reservation->customerPaymentUrl(),
-            'isOffline' => $this->gatewayIsOffline(),
+            'isOffline' => $this->reservation->paymentGatewaySupportsManualConfirmation(),
         ]);
 
         $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.payment-request'));
@@ -40,14 +35,5 @@ class ReservationPaymentRequest extends Mailable
         $this->dispatchBuildingEvent($this->reservation);
 
         return $this;
-    }
-
-    protected function gatewayIsOffline(): bool
-    {
-        try {
-            return $this->reservation->resolvePaymentGateway()->supportsManualConfirmation();
-        } catch (UnknownPaymentGateway) {
-            return false;
-        }
     }
 }

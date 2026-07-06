@@ -7,6 +7,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
+use Reach\StatamicResrv\Enums\ManualPaymentMode;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Enums\ReservationTypes;
@@ -46,29 +47,6 @@ class ManualReservationCreator
     public function __construct(protected PaymentGatewayManager $gatewayManager) {}
 
     /**
-     * @param array{
-     *     item_id: string,
-     *     date_start: string,
-     *     date_end: string,
-     *     quantity?: int,
-     *     rate_id?: ?int,
-     *     extras?: array<int, array{id: int, quantity: int}>,
-     *     options?: array<int, array{id: int, value: int}>,
-     *     total_override?: string|int|float|null,
-     *     payment_mode?: string,
-     *     custom_amount?: string|int|float|null,
-     *     payment_gateway?: ?string,
-     * } $input
-     * @return array{availability: array, pricing: array, payment: array}
-     *
-     * @throws AvailabilityException|ManualReservationException|OptionsException
-     */
-    public function quote(array $input): array
-    {
-        return $this->computeQuote($input);
-    }
-
-    /**
      * Creates the reservation from validated input (shape validation lives in the HTTP
      * layer; this method re-computes every money figure and asserts the domain
      * invariants). Returns the fresh reservation — email side effects live elsewhere.
@@ -81,7 +59,13 @@ class ManualReservationCreator
      */
     public function create(array $input, $creator = null): Reservation
     {
-        $quote = $this->computeQuote($input);
+        $quote = $this->quote($input);
+
+        // The CP store request requires a gateway; direct callers may omit one (nothing to
+        // pay through), which leaves nothing to assert.
+        if (($gateway = (string) ($input['payment_gateway'] ?? '')) !== '') {
+            $this->assertGatewayIsUsable($gateway, $quote['payment']['amount']);
+        }
 
         $affectsAvailability = (bool) ($input['affects_availability'] ?? true);
 
@@ -187,6 +171,19 @@ class ManualReservationCreator
     }
 
     /**
+     * @param array{
+     *     item_id: string,
+     *     date_start: string,
+     *     date_end: string,
+     *     quantity?: int,
+     *     rate_id?: ?int,
+     *     extras?: array<int, array{id: int, quantity: int}>,
+     *     options?: array<int, array{id: int, value: int}>,
+     *     total_override?: string|int|float|null,
+     *     payment_mode?: string,
+     *     custom_amount?: string|int|float|null,
+     *     payment_gateway?: ?string,
+     * } $input
      * @return array{
      *     availability: array{status: bool, available: int, overbook: bool},
      *     pricing: array{base_price: PriceClass, original_base_price: ?string, extras_total: PriceClass, options_total: PriceClass, total: PriceClass, total_overridden: bool},
@@ -194,8 +191,10 @@ class ManualReservationCreator
      *     extras: Collection,
      *     options: Collection,
      * }
+     *
+     * @throws AvailabilityException|ManualReservationException|OptionsException
      */
-    protected function computeQuote(array $input): array
+    public function quote(array $input, bool $requireCustomAmount = true): array
     {
         $itemId = $input['item_id'];
         $data = $this->availabilityDataFrom($input);
@@ -241,7 +240,7 @@ class ManualReservationCreator
             $total = Price::create($basePrice->format())->add($extrasTotal, $optionsTotal);
         }
 
-        $amount = $this->requestedAmount($input, $basePrice, $total);
+        $amount = $this->requestedAmount($input, $basePrice, $total, $requireCustomAmount);
 
         $gateway = $input['payment_gateway'] ?? null;
         $surcharge = ($gateway && ! $amount->isZero())
@@ -263,7 +262,7 @@ class ManualReservationCreator
                 'total_overridden' => $totalOverridden,
             ],
             'payment' => [
-                'mode' => $this->paymentMode($input),
+                'mode' => $this->paymentMode($input)->value,
                 'amount' => $amount,
                 'surcharge' => $surcharge,
                 'amount_with_surcharge' => Price::create($amount->format())->add($surcharge),
@@ -280,17 +279,16 @@ class ManualReservationCreator
      * when the payment type is `everything` or no free cancellation is possible (the
      * Checkout step-1 override). `full` charges the total; `custom` a validated amount.
      */
-    protected function requestedAmount(array $input, PriceClass $basePrice, PriceClass $total): PriceClass
+    protected function requestedAmount(array $input, PriceClass $basePrice, PriceClass $total, bool $requireCustomAmount = true): PriceClass
     {
         if ($total->isZero()) {
             return Price::create(0);
         }
 
         return match ($this->paymentMode($input)) {
-            'standard' => $this->standardAmount($input, $basePrice, $total),
-            'full' => Price::create($total->format()),
-            'custom' => $this->customAmount($input, $total),
-            default => throw new ManualReservationException(__('Unknown payment mode.')),
+            ManualPaymentMode::Standard => $this->standardAmount($input, $basePrice, $total),
+            ManualPaymentMode::Full => Price::create($total->format()),
+            ManualPaymentMode::Custom => $this->customAmount($input, $total, $requireCustomAmount),
         };
     }
 
@@ -304,12 +302,21 @@ class ManualReservationCreator
         return $this->calculatePayment(Price::create($basePrice->format()));
     }
 
-    protected function customAmount(array $input, PriceClass $total): PriceClass
+    /**
+     * A validated custom amount. `$requireAmount` is relaxed for the live quote so an
+     * as-yet-unentered amount yields zero instead of throwing (which would blank the
+     * quote and hide the very input the user needs); creation keeps it required.
+     */
+    protected function customAmount(array $input, PriceClass $total, bool $requireAmount = true): PriceClass
     {
         $raw = $input['custom_amount'] ?? null;
 
         if ($raw === null || $raw === '') {
-            throw new ManualReservationException(__('A custom amount is required for the custom payment mode.'));
+            if ($requireAmount) {
+                throw new ManualReservationException(__('A custom amount is required for the custom payment mode.'));
+            }
+
+            return Price::create(0);
         }
 
         $amount = Price::create($raw);
@@ -349,6 +356,27 @@ class ManualReservationCreator
         return $freeCancellationDays > $freeCancellation;
     }
 
+    /**
+     * @throws ManualReservationException when the gateway cannot be used for this booking
+     */
+    protected function assertGatewayIsUsable(string $gateway, PriceClass $amount): void
+    {
+        // Without a configured (published, routable) payment page there is no link to pay
+        // an online gateway through — only manually-confirmable (offline) gateways work.
+        if (Reservation::resolveCustomerPageEntry(config('resrv-config.manual_reservations_payment_entry')) === null
+            && ! $this->gatewayManager->gateway($gateway)->supportsManualConfirmation()) {
+            throw new ManualReservationException(
+                __('The payment page entry is not configured, so only payment methods that support manual confirmation can be used.')
+            );
+        }
+
+        if (! $amount->isZero() && ! $this->gatewayManager->isAvailableFor($gateway, $amount)) {
+            throw new ManualReservationException(
+                __('The requested amount is outside the allowed limits for this payment method.')
+            );
+        }
+    }
+
     /** @return Collection<int, array{quantity: int, price: string, total: PriceClass}> keyed by extra id */
     protected function priceExtras(array $input, array $data): Collection
     {
@@ -374,9 +402,10 @@ class ManualReservationCreator
 
             return [$id => [
                 'quantity' => $quantity,
-                // Fresh instances per call: calculatePrice/priceForDates mutate $extra->price.
-                'price' => Extra::find($id)->priceForDates($calcData),
-                'total' => Extra::find($id)->calculatePrice($calcData, $quantity),
+                // Fresh instances per call: calculatePrice/priceForDates write back into the
+                // model's price attribute, so sharing one instance would compound the price.
+                'price' => (clone $extra)->priceForDates($calcData),
+                'total' => (clone $extra)->calculatePrice($calcData, $quantity),
             ]];
         });
     }
@@ -489,9 +518,10 @@ class ManualReservationCreator
         })->all();
     }
 
-    protected function paymentMode(array $input): string
+    protected function paymentMode(array $input): ManualPaymentMode
     {
-        return $input['payment_mode'] ?? 'standard';
+        return ManualPaymentMode::tryFrom($input['payment_mode'] ?? ManualPaymentMode::Standard->value)
+            ?? throw new ManualReservationException(__('Unknown payment mode.'));
     }
 
     protected function rateIdFrom(array $input): ?int

@@ -3,13 +3,11 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus as ReservationStatusEnum;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
-use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Livewire\Traits\HandlesCustomerLookup;
 use Reach\StatamicResrv\Livewire\Traits\HandlesDirectGatewayPayment;
 use Reach\StatamicResrv\Models\Reservation;
 
@@ -21,12 +19,7 @@ use Reach\StatamicResrv\Models\Reservation;
  */
 class ReservationPayment extends Component
 {
-    use HandlesDirectGatewayPayment;
-
-    #[Locked]
-    public ?int $reservationId = null;
-
-    public bool $linkFailed = false;
+    use HandlesCustomerLookup, HandlesDirectGatewayPayment;
 
     public bool $paymentError = false;
 
@@ -35,60 +28,18 @@ class ReservationPayment extends Component
         $this->loadReservationFromUri();
     }
 
+    protected function lookupRateLimiterPrefix(): string
+    {
+        return 'resrv-payment-lookup';
+    }
+
     /**
-     * Deep-link only: no email-lookup form exists on this page, so a missing or invalid
-     * link renders a single neutral notice. Shares the two-bucket rate-limit pattern with
-     * the status page but under its own keys, so attempts there don't drain budgets here.
+     * Deep-link only: no email-lookup form exists on this page, so a missing link renders
+     * the same single neutral notice an invalid one does.
      */
-    protected function loadReservationFromUri(): void
+    protected function handleMissingLookupParams(): void
     {
-        $reference = request()->query('ref');
-        $hash = request()->query('hash');
-
-        if (! is_string($reference) || $reference === '' || ! is_string($hash) || $hash === '') {
-            $this->linkFailed = true;
-
-            return;
-        }
-
-        if (strlen($hash) !== 64 || $this->tooManyLookupAttempts($reference)) {
-            $this->linkFailed = true;
-
-            return;
-        }
-
-        $reservation = Reservation::findForCustomerLookup($reference, $hash, $this->visibleStatuses());
-
-        if ($reservation === null) {
-            $this->recordFailedLookup($reference);
-            $this->linkFailed = true;
-
-            return;
-        }
-
-        $this->reservationId = $reservation->id;
-    }
-
-    protected function tooManyLookupAttempts(string $reference): bool
-    {
-        return RateLimiter::tooManyAttempts($this->rateLimiterKey($reference), 10)
-            || RateLimiter::tooManyAttempts($this->ipRateLimiterKey(), 30);
-    }
-
-    protected function recordFailedLookup(string $reference): void
-    {
-        RateLimiter::hit($this->rateLimiterKey($reference), 600);
-        RateLimiter::hit($this->ipRateLimiterKey(), 600);
-    }
-
-    protected function rateLimiterKey(string $reference): string
-    {
-        return 'resrv-payment-lookup:'.sha1((string) request()->ip().'|'.strtoupper(trim($reference)));
-    }
-
-    protected function ipRateLimiterKey(): string
-    {
-        return 'resrv-payment-lookup-ip:'.sha1((string) request()->ip());
+        $this->linkFailed = true;
     }
 
     /**
@@ -105,18 +56,6 @@ class ReservationPayment extends Component
             ReservationStatusEnum::CANCELLED->value,
             ReservationStatusEnum::COMPLETED->value,
         ];
-    }
-
-    #[Computed]
-    public function reservation(): ?Reservation
-    {
-        if (! $this->reservationId) {
-            return null;
-        }
-
-        return Reservation::query()
-            ->with(['customer', 'rate', 'extras', 'options.values' => fn ($query) => $query->withTrashed(), 'childs.rate'])
-            ->find($this->reservationId);
     }
 
     /**
@@ -137,7 +76,7 @@ class ReservationPayment extends Component
             return 'paid';
         }
 
-        if ($reservation->status !== ReservationStatusEnum::AWAITING_PAYMENT->value) {
+        if (! $reservation->isAwaitingPayment()) {
             return 'unavailable';
         }
 
@@ -149,7 +88,7 @@ class ReservationPayment extends Component
             return 'processing';
         }
 
-        if ($this->gatewayIsOffline($reservation)) {
+        if ($reservation->paymentGatewaySupportsManualConfirmation()) {
             return 'instructions';
         }
 
@@ -165,15 +104,6 @@ class ReservationPayment extends Component
         return $reservation->hold_expires_at !== null && $reservation->hold_expires_at->isPast();
     }
 
-    protected function gatewayIsOffline(Reservation $reservation): bool
-    {
-        try {
-            return $reservation->resolvePaymentGateway()->supportsManualConfirmation();
-        } catch (UnknownPaymentGateway) {
-            return false;
-        }
-    }
-
     /**
      * Create-or-resume the intent for the STORED amount (payment + payment_surcharge —
      * exactly what the webhook's amount guard compares against) and mount the gateway's
@@ -187,9 +117,9 @@ class ReservationPayment extends Component
         $reservation = $this->reservation;
 
         if (! $reservation
-            || $reservation->status !== ReservationStatusEnum::AWAITING_PAYMENT->value
+            || ! $reservation->isAwaitingPayment()
             || $this->deadlinePassed($reservation)
-            || $this->gatewayIsOffline($reservation)) {
+            || $reservation->paymentGatewaySupportsManualConfirmation()) {
             return;
         }
 
@@ -201,13 +131,8 @@ class ReservationPayment extends Component
             return;
         }
 
-        // Fresh Price: add() mutates in place and Eloquent caches cast instances, so
-        // adding on the model's own instance would compound across accesses.
-        $amount = Price::create($reservation->payment->format())
-            ->add($reservation->payment_surcharge);
-
         try {
-            return $this->mountGatewayPayment($reservation->fresh(), $amount, $returnUrl);
+            return $this->mountGatewayPayment($reservation, $reservation->amountDue(), $returnUrl);
         } catch (UnknownPaymentGateway $e) {
             Log::error('The payment gateway recorded for this reservation is no longer configured.', [
                 'reservation_id' => $reservation->id,
@@ -223,15 +148,7 @@ class ReservationPayment extends Component
     #[Computed]
     public function amountDue(): string
     {
-        $reservation = $this->reservation;
-
-        if (! $reservation) {
-            return '';
-        }
-
-        return Price::create($reservation->payment->format())
-            ->add($reservation->payment_surcharge)
-            ->format();
+        return $this->reservation?->amountDue()->format() ?? '';
     }
 
     public function render()

@@ -5,7 +5,6 @@ namespace Reach\StatamicResrv\Http\Controllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
@@ -292,7 +291,7 @@ class ReservationCpController extends Controller
     {
         $reservation = $this->reservation->findOrFail($id);
 
-        if ($reservation->status !== ReservationStatus::AWAITING_PAYMENT->value) {
+        if (! $reservation->isAwaitingPayment()) {
             return response()->json(['error' => 'Only awaiting-payment reservations can be confirmed manually.'], 422);
         }
 
@@ -320,32 +319,14 @@ class ReservationCpController extends Controller
     {
         $reservation = $this->reservation->findOrFail($id);
 
-        if ($reservation->status !== ReservationStatus::AWAITING_PAYMENT->value) {
+        if (! $reservation->isAwaitingPayment()) {
             return response()->json(['error' => 'Only awaiting-payment reservations can be cancelled this way.'], 422);
         }
 
-        $paymentId = (string) $reservation->payment_id;
-        $paymentGateway = (string) $reservation->payment_gateway;
-
         try {
-            app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation);
+            app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation, cancelOpenIntent: true);
         } catch (InvalidStateTransition $e) {
             return response()->json(['error' => 'Cannot cancel a reservation in the '.$e->from->value.' state.'], 422);
-        }
-
-        if ($paymentId !== '' && $paymentGateway !== '') {
-            try {
-                app(PaymentGatewayManager::class)
-                    ->gateway($paymentGateway)
-                    ->cancelPaymentIntent($paymentId, $reservation);
-            } catch (\Throwable $e) {
-                Log::error('Failed to cancel payment intent while cancelling an awaiting-payment reservation.', [
-                    'reservation_id' => $reservation->id,
-                    'payment_id' => $paymentId,
-                    'payment_gateway' => $paymentGateway,
-                    'error' => $e->getMessage(),
-                ]);
-            }
         }
 
         return response()->json($this->serializeFreshReservation($reservation->id));
@@ -361,7 +342,7 @@ class ReservationCpController extends Controller
     {
         $reservation = $this->reservation->findOrFail($id);
 
-        if ($reservation->status !== ReservationStatus::AWAITING_PAYMENT->value) {
+        if (! $reservation->isAwaitingPayment()) {
             return response()->json(['error' => 'Only awaiting-payment reservations can receive a payment request.'], 422);
         }
 

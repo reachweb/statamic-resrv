@@ -17,6 +17,7 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
                 'string',
                 Rule::in(array_keys(app(PaymentGatewayManager::class)->all())),
             ],
+            'custom_amount' => 'nullable|numeric|required_if:payment_mode,custom',
             'affects_availability' => 'sometimes|boolean',
             'hold_days' => 'nullable|integer|min:1',
             'send_payment_request_email' => 'sometimes|boolean',

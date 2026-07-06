@@ -53,6 +53,7 @@ use Reach\StatamicResrv\Listeners\NormalizeAvailabilityFieldValue;
 use Reach\StatamicResrv\Listeners\PreventEntryDeletionWithActiveReservations;
 use Reach\StatamicResrv\Listeners\SendCancelledReservationEmails;
 use Reach\StatamicResrv\Listeners\SendCustomerCancelledEmail;
+use Reach\StatamicResrv\Listeners\SendHoldLapsedAdminEmail;
 use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
@@ -160,6 +161,7 @@ class ResrvProvider extends AddonServiceProvider
             IncreaseAvailability::class,
             LogReservationCancelled::class,
             SendCustomerCancelledEmail::class,
+            SendHoldLapsedAdminEmail::class,
         ],
         // Availability restore and the customer refund email are handled by ReservationRefunded,
         // which the refund processor dispatches in the same flow — this event only adds the

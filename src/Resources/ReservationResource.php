@@ -7,7 +7,6 @@ use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Blueprints\ReservationBlueprint;
-use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
@@ -64,11 +63,9 @@ class ReservationResource extends ResourceCollection
                         ? app(PaymentGatewayManager::class)->label($reservation->payment_gateway)
                         : null,
                     'affects_availability' => (bool) $reservation->affects_availability,
-                    // Only resolved for awaiting rows: the URL requires an entry lookup per
-                    // row and is only actionable while the payment is outstanding.
-                    'payment_url' => $reservation->status === ReservationStatus::AWAITING_PAYMENT->value
-                        ? $reservation->customerPaymentUrl()
-                        : null,
+                    // Null for non-awaiting rows — the model gates the URL on status, so
+                    // only outstanding payments pay for the per-row entry lookup.
+                    'payment_url' => $reservation->customerPaymentUrl(),
                     'created_at' => $this->dateIndexValue('created_at', $reservation->created_at),
                     'updated_at' => $this->dateIndexValue('updated_at', $reservation->updated_at),
                 ];

@@ -11,6 +11,9 @@ import {
     DropdownItem,
     ConfirmationModal,
 } from '@statamic/cms/ui';
+import CancelAwaitingPaymentModal from '../../components/CancelAwaitingPaymentModal.vue';
+import ConfirmPaymentModal from '../../components/ConfirmPaymentModal.vue';
+import { copyPaymentLink, statusLabel } from '../../composables/useReservationDisplay.js';
 import { useToast } from '../../composables/useToast.js';
 
 const props = defineProps({
@@ -55,8 +58,6 @@ const badgeClass = (status) => {
     };
     return map[status] ?? 'bg-gray-800';
 };
-
-const statusLabel = (status) => status.replace(/_/g, ' ').toUpperCase();
 
 const customerEmail = (customer) => customer?.email ?? '';
 
@@ -113,57 +114,44 @@ const resend = async () => {
 
 // --- Awaiting-payment actions ---
 const confirmPaymentId = ref(null);
-const confirmingPayment = ref(false);
 const cancelAwaitingRow = ref(null);
-const cancellingAwaiting = ref(false);
+const actionBusy = ref(false);
+
+// POST a row action and refresh the list; returns whether it succeeded so the
+// caller can close its modal only on success.
+const runRowAction = async (urlTemplate, id, successMessage) => {
+    actionBusy.value = true;
+    try {
+        await axios.post(urlTemplate.replace('RESRVURL', id));
+        toast.success(successMessage);
+        listing.value?.refresh();
+        return true;
+    } catch (error) {
+        toast.error(error?.response?.data?.error ?? __('Something went wrong'));
+        return false;
+    } finally {
+        actionBusy.value = false;
+    }
+};
 
 const confirmPayment = async () => {
     if (! confirmPaymentId.value) return;
-    confirmingPayment.value = true;
-    try {
-        await axios.post(props.confirmPaymentUrlTemplate.replace('RESRVURL', confirmPaymentId.value));
-        toast.success(__('Reservation confirmed'));
+    if (await runRowAction(props.confirmPaymentUrlTemplate, confirmPaymentId.value, __('Reservation confirmed'))) {
         confirmPaymentId.value = null;
-        listing.value?.refresh();
-    } catch (error) {
-        toast.error(error?.response?.data?.error ?? __('Something went wrong'));
-    } finally {
-        confirmingPayment.value = false;
     }
 };
 
 const cancelAwaiting = async () => {
     if (! cancelAwaitingRow.value) return;
-    cancellingAwaiting.value = true;
-    try {
-        await axios.post(props.cancelAwaitingUrlTemplate.replace('RESRVURL', cancelAwaitingRow.value.id));
-        toast.success(__('Reservation cancelled'));
+    if (await runRowAction(props.cancelAwaitingUrlTemplate, cancelAwaitingRow.value.id, __('Reservation cancelled'))) {
         cancelAwaitingRow.value = null;
-        listing.value?.refresh();
-    } catch (error) {
-        toast.error(error?.response?.data?.error ?? __('Something went wrong'));
-    } finally {
-        cancellingAwaiting.value = false;
     }
 };
 
-const sendPaymentRequest = async (reservation) => {
-    try {
-        await axios.post(props.sendPaymentRequestUrlTemplate.replace('RESRVURL', reservation.id));
-        toast.success(__('Payment request email sent'));
-    } catch (error) {
-        toast.error(error?.response?.data?.error ?? __('Something went wrong'));
-    }
-};
+const sendPaymentRequest = (reservation) =>
+    runRowAction(props.sendPaymentRequestUrlTemplate, reservation.id, __('Payment request email sent'));
 
-const copyPaymentLink = async (reservation) => {
-    try {
-        await navigator.clipboard.writeText(reservation.payment_url);
-        toast.success(__('Payment link copied'));
-    } catch (error) {
-        toast.error(__('Could not copy the payment link'));
-    }
-};
+const copyLink = (reservation) => copyPaymentLink(reservation.payment_url, toast);
 </script>
 
 <template>
@@ -243,7 +231,7 @@ const copyPaymentLink = async (reservation) => {
                         v-if="reservation.payment_url"
                         :text="__('Copy payment link')"
                         icon="link"
-                        @click="copyPaymentLink(reservation)"
+                        @click="copyLink(reservation)"
                     />
                     <DropdownItem
                         :text="__('Cancel')"
@@ -280,34 +268,19 @@ const copyPaymentLink = async (reservation) => {
             <p>{{ __('This will email the confirmation again to the customer for this reservation.') }}</p>
         </ConfirmationModal>
 
-        <ConfirmationModal
+        <ConfirmPaymentModal
             v-if="confirmPaymentId"
-            :open="true"
-            :title="__('Confirm payment')"
-            :button-text="__('Confirm')"
-            :busy="confirmingPayment"
+            :busy="actionBusy"
             @confirm="confirmPayment"
             @cancel="confirmPaymentId = null"
-        >
-            <p>{{ __('Mark this reservation as paid and confirm it? Confirmation emails will be sent.') }}</p>
-        </ConfirmationModal>
+        />
 
-        <ConfirmationModal
+        <CancelAwaitingPaymentModal
             v-if="cancelAwaitingRow"
-            :open="true"
-            :title="__('Cancel reservation')"
-            :danger="true"
-            :button-text="__('Cancel reservation')"
-            :busy="cancellingAwaiting"
+            :busy="actionBusy"
+            :affects-availability="cancelAwaitingRow.affects_availability"
             @confirm="cancelAwaiting"
             @cancel="cancelAwaitingRow = null"
-        >
-            <p v-if="cancelAwaitingRow.affects_availability">
-                {{ __('Cancel this reservation and release its inventory? The customer will be notified by email.') }}
-            </p>
-            <p v-else>
-                {{ __('Cancel this reservation? It never took inventory, so none will be restored. The customer will be notified by email.') }}
-            </p>
-        </ConfirmationModal>
+        />
     </div>
 </template>

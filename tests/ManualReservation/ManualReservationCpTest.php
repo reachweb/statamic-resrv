@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\ManualReservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
+use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Models\Affiliate;
@@ -170,30 +171,62 @@ class ManualReservationCpTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors(['payment_mode']);
     }
 
-    public function test_meta_endpoint_exposes_gateways_and_configuration_state()
+    public function test_quote_endpoint_tolerates_custom_mode_without_an_amount_yet()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability();
+
+        // Selecting "custom" fires a quote before the amount is typed; it must not blank
+        // the quote (which would hide the very input the user needs) — unlike the store,
+        // which still requires the amount at submit.
+        $this->postJson(cp_route('resrv.manual.quote'), [
+            'item_id' => $entry->id(),
+            'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
+            'date_end' => today()->addDays(3)->setTime(12, 0)->toDateTimeString(),
+            'quantity' => 1,
+            'rate_id' => Rate::forEntry($entry->id())->first()?->id,
+            'payment_mode' => 'custom',
+            'custom_amount' => null,
+        ])->assertOk()
+            ->assertJsonPath('payment.mode', 'custom')
+            ->assertJsonPath('payment.amount', '0.00');
+
+        $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, ['payment_mode' => 'custom']))
+            ->assertStatus(422)->assertJsonValidationErrors(['custom_amount']);
+    }
+
+    public function test_create_page_exposes_gateways_and_configuration_state()
     {
         $this->signInAdmin();
         $this->useMultipleGateways();
 
-        $response = $this->getJson(cp_route('resrv.manual.meta'))->assertOk();
-
-        $gateways = collect($response->json('gateways'))->keyBy('key');
-        $this->assertFalse($gateways['fake']['supports_manual_confirmation']);
-        $this->assertTrue($gateways['offline']['supports_manual_confirmation']);
-        $this->assertFalse($response->json('payment_entry_configured'));
-        $this->assertIsArray($response->json('affiliates'));
+        $this->get(cp_route('resrv.reservations.create'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('resrv::Reservations/Create')
+                ->where('paymentEntryConfigured', false)
+                ->where('gateways.0.key', 'fake')
+                ->where('gateways.0.supports_manual_confirmation', false)
+                ->where('gateways.1.key', 'offline')
+                ->where('gateways.1.supports_manual_confirmation', true)
+                ->whereType('affiliates', 'array'));
 
         $this->configurePaymentEntry();
-        $this->assertTrue($this->getJson(cp_route('resrv.manual.meta'))->json('payment_entry_configured'));
+
+        $this->get(cp_route('resrv.reservations.create'))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('paymentEntryConfigured', true));
     }
 
-    public function test_meta_endpoint_hides_affiliates_when_the_feature_is_off()
+    public function test_create_page_hides_affiliates_when_the_feature_is_off()
     {
         $this->signInAdmin();
         Config::set('resrv-config.enable_affiliates', false);
         Affiliate::factory()->create();
 
-        $this->assertNull($this->getJson(cp_route('resrv.manual.meta'))->json('affiliates'));
+        $this->get(cp_route('resrv.reservations.create'))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('affiliates', null));
     }
 
     public function test_store_creates_an_awaiting_payment_reservation()
@@ -311,7 +344,6 @@ class ManualReservationCpTest extends TestCase
 
         $this->getJson(cp_route('resrv.manual.entries'))->assertForbidden();
         $this->getJson(cp_route('resrv.manual.entry', ['item_id' => 'x']))->assertForbidden();
-        $this->getJson(cp_route('resrv.manual.meta'))->assertForbidden();
         $this->postJson(cp_route('resrv.manual.quote'), [])->assertForbidden();
         $this->postJson(cp_route('resrv.manual.store'), [])->assertForbidden();
     }
