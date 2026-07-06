@@ -39,6 +39,8 @@ class ManualReservationCpController extends Controller
             'backUrl' => cp_route('resrv.reservations.index'),
             'currencySymbol' => config('resrv-config.currency_symbol'),
             'maximumQuantity' => (int) config('resrv-config.maximum_quantity'),
+            'maximumReservationPeriod' => (int) config('resrv-config.maximum_reservation_period_in_days', 30),
+            'minimumDaysBefore' => (int) config('resrv-config.minimum_days_before', 0),
             // The meta payload inline — saves the page a round trip.
             'gateways' => $this->gatewayManager->forCp(),
             'paymentEntryConfigured' => $this->paymentEntryConfigured(),

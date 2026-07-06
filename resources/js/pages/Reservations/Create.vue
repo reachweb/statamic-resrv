@@ -4,16 +4,26 @@ import axios from 'axios';
 import { Head } from '@statamic/cms/inertia';
 import {
     Alert,
+    Badge,
     Button,
     Card,
+    Combobox,
+    DatePicker,
+    DateRangePicker,
+    Description,
     Field,
+    Header,
+    Heading,
     Icon,
     Input,
     Select,
+    Separator,
     Switch,
     Textarea,
 } from '@statamic/cms/ui';
+import { today, getLocalTimeZone } from '@internationalized/date';
 import { useToast } from '../../composables/useToast.js';
+import { useDateRangeModel, toCalendarDate, toIsoString } from '../../composables/useDateRangeModel.js';
 
 const props = defineProps({
     entriesUrl: { type: String, required: true },
@@ -23,6 +33,8 @@ const props = defineProps({
     backUrl: { type: String, required: true },
     currencySymbol: { type: String, default: '' },
     maximumQuantity: { type: Number, default: 1 },
+    maximumReservationPeriod: { type: Number, default: 30 },
+    minimumDaysBefore: { type: Number, default: 0 },
     gateways: { type: Array, default: () => [] },
     paymentEntryConfigured: { type: Boolean, default: false },
     affiliates: { type: Array, default: null },
@@ -66,7 +78,7 @@ const quoting = ref(false);
 const submitting = ref(false);
 
 const entryOptions = computed(() =>
-    entries.value.map((entry) => ({ value: entry.item_id, label: `${entry.title} (${entry.collection})` })),
+    entries.value.map((entry) => ({ value: entry.item_id, label: entry.title, collection: entry.collection })),
 );
 const rateOptions = computed(() => rates.value.map((rate) => ({ value: rate.id, label: rate.title })));
 const gatewayOptions = computed(() =>
@@ -99,6 +111,30 @@ const gatewayDisabled = (gateway) => ! props.paymentEntryConfigured && ! gateway
 
 const money = (amount) => `${props.currencySymbol} ${amount}`;
 
+// --- Dates ---
+// A maximum period of one day means one-day bookings: mirror the frontend's single
+// datepicker, which books [date, date + 1 day].
+const singleDate = computed(() => props.maximumReservationPeriod === 1);
+
+const minPickerDate = computed(() => today(getLocalTimeZone()).add({ days: props.minimumDaysBefore }));
+
+const dateRange = useDateRangeModel(
+    () => form.date_start,
+    () => form.date_end,
+    (value) => (form.date_start = value ?? ''),
+    (value) => (form.date_end = value ?? ''),
+);
+
+const singleDateModel = computed({
+    get: () => toCalendarDate(form.date_start),
+    set: (value) => {
+        form.date_start = value ? toIsoString(value) : '';
+        form.date_end = value ? toIsoString(value.add({ days: 1 })) : '';
+    },
+});
+
+const dateError = computed(() => fieldError('date_start') ?? fieldError('date_end'));
+
 const datesComplete = computed(() => form.item_id && form.date_start && form.date_end);
 
 const availabilityBlocks = computed(
@@ -115,7 +151,7 @@ const selectedGatewayAmount = computed(() => {
 });
 
 const canSubmit = computed(
-    () => quote.value && ! availabilityBlocks.value && form.payment_gateway && ! submitting.value,
+    () => datesComplete.value && quote.value && ! availabilityBlocks.value && form.payment_gateway && ! submitting.value,
 );
 
 // --- Data loading ---
@@ -292,7 +328,7 @@ const fieldError = (key) => {
     <div class="max-w-page mx-auto">
         <Head :title="__('Create reservation')" />
 
-        <div class="flex">
+        <div class="flex pt-4">
             <a
                 :href="backUrl"
                 class="flex-initial flex p-2 -m-1 items-center text-xs text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
@@ -302,83 +338,147 @@ const fieldError = (key) => {
             </a>
         </div>
 
-        <header class="mt-1 mb-6">
-            <h1>{{ __('Create reservation') }}</h1>
-        </header>
+        <Header :title="__('Create reservation')" icon="calendar-date">
+            <Button :href="backUrl" :text="__('Cancel')" />
+            <Button
+                variant="primary"
+                :text="submitting ? __('Creating…') : __('Create reservation')"
+                :disabled="! canSubmit"
+                @click="submit"
+            />
+        </Header>
 
-        <!-- 1. Entry -->
-        <Card class="px-6 py-4 mb-6">
-            <Field :label="__('Entry')" :error="fieldError('item_id')">
-                <Select v-model="form.item_id" :options="entryOptions" searchable :placeholder="__('Select an entry')" />
-            </Field>
-        </Card>
+        <Alert v-if="storeError" variant="error" class="mb-6">{{ storeError }}</Alert>
 
-        <!-- 2. Dates, quantity & rate -->
-        <Card v-if="form.item_id" class="px-6 py-4 mb-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-x-4 gap-y-6">
-                <Field :label="__('Start date')" :error="fieldError('date_start')">
-                    <Input v-model="form.date_start" type="date" />
+        <!-- 1. Booking -->
+        <Card class="p-6 mb-6">
+            <div class="flex items-start justify-between gap-4 mb-6">
+                <div class="space-y-1">
+                    <Heading size="lg" :text="__('Booking')" />
+                    <Description :text="__('Pick the entry, dates, and quantity for this reservation.')" />
+                </div>
+                <div v-if="quoting" class="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+                    <Icon name="loading" class="size-4 animate-spin" />
+                    <span>{{ __('Updating') }}</span>
+                </div>
+            </div>
+
+            <div class="grid gap-x-4 gap-y-6 md:grid-cols-2">
+                <Field :label="__('Entry')" :error="fieldError('item_id')">
+                    <Combobox
+                        v-model="form.item_id"
+                        :options="entryOptions"
+                        :placeholder="__('Search for an entry')"
+                    >
+                        <template #option="option">
+                            <div class="flex items-center gap-2">
+                                <span>{{ option.label }}</span>
+                                <Badge size="sm" :text="option.collection" />
+                            </div>
+                        </template>
+                    </Combobox>
                 </Field>
-                <Field :label="__('End date')" :error="fieldError('date_end')">
-                    <Input v-model="form.date_end" type="date" />
+            </div>
+
+            <div v-if="form.item_id" class="grid gap-x-4 gap-y-6 md:grid-cols-12 mt-6">
+                <Field
+                    class="md:col-span-6"
+                    :label="singleDate ? __('Date') : __('Dates')"
+                    :error="dateError"
+                >
+                    <DatePicker
+                        v-if="singleDate"
+                        v-model="singleDateModel"
+                        granularity="day"
+                        :min="minPickerDate"
+                        :clearable="false"
+                    />
+                    <DateRangePicker
+                        v-else
+                        v-model="dateRange"
+                        granularity="day"
+                        :min="minPickerDate"
+                        :clearable="false"
+                    />
                 </Field>
-                <Field v-if="maximumQuantity > 1" :label="__('Quantity')" :error="fieldError('quantity')">
+                <Field
+                    v-if="maximumQuantity > 1"
+                    class="md:col-span-2"
+                    :label="__('Quantity')"
+                    :error="fieldError('quantity')"
+                >
                     <Input v-model.number="form.quantity" type="number" :min="1" :max="maximumQuantity" />
                 </Field>
-                <Field v-if="rates.length" :label="__('Rate')" :error="fieldError('rate_id')">
+                <Field
+                    v-if="rates.length"
+                    :class="maximumQuantity > 1 ? 'md:col-span-4' : 'md:col-span-6'"
+                    :label="__('Rate')"
+                    :error="fieldError('rate_id')"
+                >
                     <Select v-model="form.rate_id" :options="rateOptions" :clearable="false" />
                 </Field>
             </div>
+
+            <template v-if="datesComplete">
+                <Alert v-if="quoteError" variant="error" class="mt-6">{{ quoteError }}</Alert>
+                <template v-else-if="quote">
+                    <Alert v-if="availabilityBlocks" variant="error" class="mt-6">
+                        {{ __('Not enough availability for these dates') }} —
+                        {{ __('available') }}: {{ quote.availability.available }}.
+                        {{ __('Turn off "Decrease availability" to overbook deliberately.') }}
+                    </Alert>
+                    <Alert v-else-if="willOverbook" variant="warning" class="mt-6">
+                        {{ __('This reservation will overbook') }} —
+                        {{ __('available') }}: {{ quote.availability.available }},
+                        {{ __('requested') }}: {{ form.quantity }}.
+                    </Alert>
+                    <Alert v-else variant="success" class="mt-6">
+                        {{ __('Available') }} ({{ quote.availability.available }} {{ __('left') }})
+                    </Alert>
+                </template>
+            </template>
         </Card>
 
         <template v-if="datesComplete">
-            <!-- 3. Availability -->
-            <Alert v-if="quoteError" variant="error" class="mb-6">{{ quoteError }}</Alert>
-            <template v-else-if="quote">
-                <Alert v-if="availabilityBlocks" variant="error" class="mb-6">
-                    {{ __('Not enough availability for these dates') }} —
-                    {{ __('available') }}: {{ quote.availability.available }}.
-                    {{ __('Turn off "Decrease availability" to overbook deliberately.') }}
-                </Alert>
-                <Alert v-else-if="willOverbook" variant="warning" class="mb-6">
-                    {{ __('This reservation will overbook') }} —
-                    {{ __('available') }}: {{ quote.availability.available }},
-                    {{ __('requested') }}: {{ form.quantity }}.
-                </Alert>
-                <Alert v-else variant="success" class="mb-6">
-                    {{ __('Available') }} ({{ quote.availability.available }} {{ __('left') }})
-                </Alert>
-            </template>
-
-            <!-- 4. Extras & options -->
-            <Card v-if="availableExtras.length || availableOptions.length" class="px-6 py-4 mb-6">
-                <h2 class="text-base mb-4">{{ __('Extras & options') }}</h2>
-                <div v-if="availableExtras.length" class="space-y-3 mb-4">
+            <!-- 2. Extras & options -->
+            <Card v-if="availableExtras.length || availableOptions.length" class="p-6 mb-6">
+                <div class="space-y-1 mb-6">
+                    <Heading size="lg" :text="__('Extras & options')" />
+                    <Description :text="__('Add-ons and choices for this stay, priced for the selected dates.')" />
+                </div>
+                <div v-if="availableExtras.length" class="divide-y divide-gray-200 dark:divide-gray-800">
                     <div
                         v-for="extra in availableExtras"
                         :key="`extra-${extra.id}`"
-                        class="flex items-center justify-between gap-4"
+                        class="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
                     >
-                        <div>
-                            <span class="font-medium">{{ extra.name }}</span>
-                            <span class="text-gray-600 dark:text-gray-400 ml-2">{{ money(extra.price) }}</span>
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ extra.name }}</span>
+                            <Badge size="sm" :text="money(extra.price)" />
                         </div>
                         <div class="flex items-center gap-2">
-                            <Button size="xs" text="-" @click="setExtraQuantity(extra, extraQuantity(extra) - 1)" />
-                            <span class="w-8 text-center">{{ extraQuantity(extra) }}</span>
                             <Button
-                                size="xs"
+                                size="sm"
+                                text="−"
+                                :disabled="extraQuantity(extra) === 0"
+                                @click="setExtraQuantity(extra, extraQuantity(extra) - 1)"
+                            />
+                            <span class="w-8 text-center text-sm tabular-nums">{{ extraQuantity(extra) }}</span>
+                            <Button
+                                size="sm"
                                 text="+"
                                 @click="setExtraQuantity(extra, extra.allow_multiple ? extraQuantity(extra) + 1 : 1)"
                             />
                         </div>
                     </div>
                 </div>
-                <div v-if="availableOptions.length" class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+                <Separator v-if="availableExtras.length && availableOptions.length" class="my-6" />
+                <div v-if="availableOptions.length" class="grid gap-x-4 gap-y-6 md:grid-cols-2">
                     <Field
                         v-for="option in availableOptions"
                         :key="`option-${option.id}`"
-                        :label="option.required ? `${option.name} *` : option.name"
+                        :label="option.name"
+                        :required="Boolean(option.required)"
                     >
                         <Select
                             :model-value="form.options[option.id] ?? null"
@@ -389,14 +489,18 @@ const fieldError = (key) => {
                 </div>
             </Card>
 
-            <!-- 5. Customer -->
-            <Card v-if="formFields.length" class="px-6 py-4 mb-6">
-                <h2 class="text-base mb-4">{{ __('Customer') }}</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+            <!-- 3. Customer -->
+            <Card v-if="formFields.length" class="p-6 mb-6">
+                <div class="space-y-1 mb-6">
+                    <Heading size="lg" :text="__('Customer')" />
+                    <Description :text="__('The checkout form for this entry — manual reservations look exactly like frontend ones.')" />
+                </div>
+                <div class="grid gap-x-4 gap-y-6 md:grid-cols-2">
                     <Field
                         v-for="field in formFields"
                         :key="field.handle"
-                        :label="fieldIsRequired(field) ? `${field.display} *` : field.display"
+                        :label="field.display"
+                        :required="fieldIsRequired(field)"
                         :error="fieldError(`customer.${field.handle}`)"
                     >
                         <Textarea v-if="fieldComponentType(field) === 'textarea'" v-model="form.customer[field.handle]" />
@@ -424,41 +528,53 @@ const fieldError = (key) => {
                 </div>
             </Card>
 
-            <!-- 6. Pricing -->
-            <Card v-if="quote" class="px-6 py-4 mb-6">
-                <h2 class="text-base mb-4">{{ __('Pricing') }}</h2>
-                <div class="space-y-1 mb-4">
-                    <div class="flex justify-between">
-                        <span>{{ __('Base price') }}</span>
-                        <span>{{ money(quote.pricing.base_price) }}</span>
+            <!-- 4. Pricing -->
+            <Card v-if="quote" class="p-6 mb-6">
+                <div class="space-y-1 mb-6">
+                    <Heading size="lg" :text="__('Pricing')" />
+                    <Description :text="__('Computed server-side, exactly like a frontend checkout.')" />
+                </div>
+                <div class="space-y-2 mb-6">
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-600 dark:text-gray-400">{{ __('Base price') }}</span>
+                        <span class="tabular-nums">{{ money(quote.pricing.base_price) }}</span>
                     </div>
-                    <div class="flex justify-between">
-                        <span>{{ __('Extras') }}</span>
-                        <span>{{ money(quote.pricing.extras_total) }}</span>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-600 dark:text-gray-400">{{ __('Extras') }}</span>
+                        <span class="tabular-nums">{{ money(quote.pricing.extras_total) }}</span>
                     </div>
-                    <div class="flex justify-between">
-                        <span>{{ __('Options') }}</span>
-                        <span>{{ money(quote.pricing.options_total) }}</span>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-gray-600 dark:text-gray-400">{{ __('Options') }}</span>
+                        <span class="tabular-nums">{{ money(quote.pricing.options_total) }}</span>
                     </div>
-                    <div class="flex justify-between font-bold border-t pt-1">
-                        <span>{{ __('Total') }}</span>
-                        <span>{{ money(quote.pricing.total) }}</span>
+                    <Separator class="my-3" />
+                    <div class="flex items-center justify-between">
+                        <Heading :text="__('Total')" />
+                        <Heading size="lg" class="tabular-nums" :text="money(quote.pricing.total)" />
                     </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+                <div class="grid gap-x-4 gap-y-6 md:grid-cols-2">
                     <Field :label="__('Override total')" :instructions="__('Replaces the computed total; the base price is recalculated from it. Dynamic pricing rules are not recorded for overridden totals.')">
                         <Switch v-model="form.override_enabled" />
                     </Field>
                     <Field v-if="form.override_enabled" :label="__('Total to charge')" :error="fieldError('total_override')">
-                        <Input v-model="form.total_override" type="number" step="0.01" :min="0" />
+                        <Input v-model="form.total_override" type="number" step="0.01" :min="0" :prepend="currencySymbol" />
                     </Field>
                 </div>
             </Card>
 
-            <!-- 7. Payment -->
-            <Card v-if="quote" class="px-6 py-4 mb-6">
-                <h2 class="text-base mb-4">{{ __('Payment') }}</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+            <!-- 5. Payment -->
+            <Card v-if="quote" class="p-6 mb-6">
+                <div class="space-y-1 mb-6">
+                    <Heading size="lg" :text="__('Payment')" />
+                    <Description :text="__('How much to request now, and how the customer will pay.')" />
+                </div>
+
+                <Alert v-if="! paymentEntryConfigured" variant="warning" class="mb-6">
+                    {{ __('No payment page entry is configured in the Resrv settings, so online payment methods are disabled. Offline methods can still be confirmed manually.') }}
+                </Alert>
+
+                <div class="grid gap-x-4 gap-y-6 md:grid-cols-2">
                     <Field :label="__('Amount to request')" :error="fieldError('payment_mode')">
                         <Select v-model="form.payment_mode" :options="paymentModeOptions" :clearable="false" />
                     </Field>
@@ -467,26 +583,33 @@ const fieldError = (key) => {
                         :label="__('Custom amount')"
                         :error="fieldError('custom_amount')"
                     >
-                        <Input v-model="form.custom_amount" type="number" step="0.01" :min="0" />
+                        <Input v-model="form.custom_amount" type="number" step="0.01" :min="0" :prepend="currencySymbol" />
                     </Field>
                     <Field :label="__('Payment method')" :error="fieldError('payment_gateway')">
                         <Select v-model="form.payment_gateway" :options="gatewayOptions" :placeholder="__('Select a payment method')" />
                     </Field>
                     <Field v-if="affiliateOptions.length" :label="__('Affiliate')" :error="fieldError('affiliate_id')">
-                        <Select v-model="form.affiliate_id" :options="affiliateOptions" :placeholder="__('None')" />
+                        <Select v-model="form.affiliate_id" :options="affiliateOptions" clearable :placeholder="__('None')" />
                     </Field>
                 </div>
-                <Alert v-if="! paymentEntryConfigured" variant="warning" class="mt-4">
-                    {{ __('No payment page entry is configured in the Resrv settings, so online payment methods are disabled. Offline methods can still be confirmed manually.') }}
-                </Alert>
-                <div v-if="selectedGatewayAmount" class="mt-4 font-medium">
-                    {{ __('The customer will be asked to pay') }}
-                    {{ money(selectedGatewayAmount.amount_with_surcharge) }}
-                    <span v-if="selectedGatewayAmount.surcharge !== '0.00'" class="text-gray-600 dark:text-gray-400">
-                        ({{ __('includes surcharge') }} {{ money(selectedGatewayAmount.surcharge) }})
-                    </span>
+
+                <div
+                    v-if="selectedGatewayAmount"
+                    class="mt-6 flex items-center justify-between gap-4 rounded-lg bg-gray-100 dark:bg-gray-800 px-4 py-3"
+                >
+                    <Description :text="__('The customer will be asked to pay')" />
+                    <div class="text-right">
+                        <Heading size="lg" class="tabular-nums" :text="money(selectedGatewayAmount.amount_with_surcharge)" />
+                        <Description
+                            v-if="selectedGatewayAmount.surcharge !== '0.00'"
+                            :text="`${__('includes surcharge')} ${money(selectedGatewayAmount.surcharge)}`"
+                        />
+                    </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6 mt-6">
+
+                <Separator class="my-6" />
+
+                <div class="grid gap-x-4 gap-y-6 md:grid-cols-2">
                     <Field :label="__('Send payment request email')">
                         <Switch v-model="form.send_payment_request_email" />
                     </Field>
@@ -502,8 +625,7 @@ const fieldError = (key) => {
                 </div>
             </Card>
 
-            <!-- 8. Submit -->
-            <Alert v-if="storeError" variant="error" class="mb-6">{{ storeError }}</Alert>
+            <!-- 6. Submit -->
             <div class="flex justify-end gap-3 mb-12">
                 <Button :href="backUrl" :text="__('Cancel')" />
                 <Button
