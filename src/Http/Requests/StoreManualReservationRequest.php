@@ -16,8 +16,12 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
         // is optional (or omits validate) must not weaken the requirement — an online
         // awaiting-payment reservation needs an email for its payment URL and request recipient.
         return array_merge(parent::rules(), $this->checkoutFormRules(), [
+            // Nullable, not required: a zero-amount booking (fully comped / zero deposit) collects
+            // nothing and needs no gateway. The "a gateway is required to collect a payment" rule is
+            // enforced in ManualReservationCreator::create(), which knows the server-computed amount
+            // the request cannot cheaply recompute here.
             'payment_gateway' => [
-                'required',
+                'nullable',
                 'string',
                 Rule::in(array_keys(app(PaymentGatewayManager::class)->all())),
             ],

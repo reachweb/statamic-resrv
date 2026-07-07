@@ -109,7 +109,7 @@ class ManualReservationCpController extends Controller
     public function store(StoreManualReservationRequest $request)
     {
         try {
-            $reservation = $this->creator->create($request->validated(), User::current());
+            $reservation = $this->creator->create($request->validated(), User::current(), requireGatewayForPayment: true);
         } catch (AvailabilityException|ManualReservationException|OptionsException|ExtrasException $e) {
             return response()->json(['error' => $e->getMessage()], 422);
         }

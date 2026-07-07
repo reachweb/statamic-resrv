@@ -40,7 +40,17 @@ class ReservationCancelledCustomer extends Mailable
                 : __('Reservation Cancelled'));
         }
 
-        $this->with(['holdLapsed' => $holdLapsed]);
+        // Whether money is actually being withheld. An unpaid hold (awaiting-payment cancel) never
+        // captured anything even if a payment_id lingers from an opened-but-unpaid intent, so the
+        // template must not tell the customer their payment is non-refundable in that case.
+        $paymentCollected = ! $holdLapsed
+            && $this->context !== ReservationCancelled::CONTEXT_UNPAID_HOLD
+            && $this->reservation->hasGatewayPayment();
+
+        $this->with([
+            'holdLapsed' => $holdLapsed,
+            'paymentCollected' => $paymentCollected,
+        ]);
 
         return $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.cancelled-customer'));
     }

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Inertia\Inertia;
 use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
@@ -302,13 +303,13 @@ class ReservationCpController extends Controller
         }
 
         if ($changed) {
-            // The money arrived out of band, but the customer may have already opened the online
-            // pay page and left a live payable intent behind. Void it — mirroring the cancel path's
-            // cancelOpenIntent — so completing it later can't produce a duplicate charge that the
-            // succeeded webhook would silently swallow (it short-circuits on an already-CONFIRMED
-            // reservation before any orphaned-charge handling). Read from the transitioned row and
-            // tolerate gateway errors; an already-succeeded intent is left untouched.
-            app(ReservationRefundProcessor::class)->cancelOpenIntentQuietly($reservation);
+            // The money arrived out of band. Reconcile the gateway on the transitioned row: void any
+            // live intent the customer left on the online pay page and drop the payment_id so a later
+            // refund/cancel treats this as a no-gateway-charge booking (mirroring an offline confirm)
+            // instead of routing to the provider with an empty/voided intent that can only fail. An
+            // intent that already captured real money (a webhook racing this confirm) is left intact
+            // so that charge stays refundable. Tolerates gateway errors.
+            app(ReservationRefundProcessor::class)->settlePaidOutOfBand($reservation);
 
             ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
         }
@@ -332,7 +333,14 @@ class ReservationCpController extends Controller
         }
 
         try {
-            app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation, cancelOpenIntent: true);
+            // Tag the cancellation as an unpaid hold so the customer email says "nothing to refund"
+            // rather than "non-refundable": an awaiting-payment booking never captured money, even
+            // if the customer opened the pay link and left an unpaid (now-voided) intent id behind.
+            app(ReservationRefundProcessor::class)->cancelWithoutRefund(
+                $reservation,
+                ReservationCancelled::CONTEXT_UNPAID_HOLD,
+                cancelOpenIntent: true,
+            );
         } catch (InvalidStateTransition $e) {
             return response()->json(['error' => 'Cannot cancel a reservation in the '.$e->from->value.' state.'], 422);
         }

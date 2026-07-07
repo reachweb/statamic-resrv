@@ -29,6 +29,20 @@ class FakePaymentGateway implements PaymentInterface
      */
     public array $createdIntents = [];
 
+    /**
+     * In-memory log of every reservation this instance was asked to refund. Tests assert on this
+     * to verify a no-gateway-charge refund (e.g. an out-of-band confirmation) skips the provider.
+     *
+     * @var array<int, int|string|null>
+     */
+    public array $refundCalls = [];
+
+    /**
+     * Status that retrievePaymentIntent() reports, so tests can simulate an intent that already
+     * captured (e.g. 'succeeded') and assert the out-of-band settlement keeps its charge reference.
+     */
+    public ?string $retrievedIntentStatus = null;
+
     public function name(): string
     {
         return 'fake';
@@ -66,7 +80,7 @@ class FakePaymentGateway implements PaymentInterface
         $data = new \stdClass;
         $data->id = $paymentId;
         $data->client_secret = 'cs_'.$paymentId;
-        $data->status = 'requires_payment_method';
+        $data->status = $this->retrievedIntentStatus ?? 'requires_payment_method';
 
         return $data;
     }
@@ -81,6 +95,8 @@ class FakePaymentGateway implements PaymentInterface
 
     public function refund($reservation)
     {
+        $this->refundCalls[] = $reservation->id;
+
         if ($this->getPublicKey($reservation)) {
             return true;
         }

@@ -14,6 +14,13 @@ class ReservationCancelled
     /** The cancellation came from the hold-lapse sweep: the customer never paid in time. */
     public const CONTEXT_HOLD_LAPSED = 'hold_lapsed';
 
+    /**
+     * An admin cancelled an awaiting-payment (manual) reservation. No money was ever captured —
+     * the webhook is the only capture path and it transitions AWAITING_PAYMENT to CONFIRMED — even
+     * if the customer opened the pay link and left an (unpaid, now-voided) intent id on the row.
+     */
+    public const CONTEXT_UNPAID_HOLD = 'unpaid_hold';
+
     public $reservation;
 
     /**

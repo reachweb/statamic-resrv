@@ -552,4 +552,64 @@ class ManualReservationCreatorTest extends TestCase
             'extras' => [['id' => $extra->id, 'quantity' => 1]],
         ]));
     }
+
+    public function test_custom_priced_extra_uses_the_customer_field_multiplier()
+    {
+        $this->configurePaymentEntry();
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // price 10, price_type 'custom', driven by the customer form field 'adults'.
+        $extra = Extra::factory()->custom()->create();
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'extras' => [['id' => $extra->id, 'quantity' => 1]],
+            'payment_mode' => 'full',
+            'payment_gateway' => 'fake',
+            'customer' => [
+                'email' => 'customer@example.com',
+                'first_name' => 'Test',
+                'last_name' => 'Customer',
+                'repeat_email' => 'customer@example.com',
+                'adults' => 3,
+            ],
+        ]));
+
+        // The stored pivot price is the per-unit custom price 10 × 3 (the 'adults' value), not 10 × 1.
+        $pivotPrice = DB::table('resrv_reservation_extra')
+            ->where('reservation_id', $reservation->id)
+            ->where('extra_id', $extra->id)
+            ->value('price');
+
+        $this->assertSame('30.00', Price::create($pivotPrice)->format());
+    }
+
+    public function test_a_zero_amount_booking_confirms_without_a_gateway_in_the_cp_flow()
+    {
+        Mail::fake();
+
+        // Deposit computes to zero (fixed 0) while the total stays positive; no gateway is needed.
+        Config::set('resrv-config.payment', 'fixed');
+        Config::set('resrv-config.fixed_amount', 0);
+        Config::set('resrv-config.full_payment_after_free_cancellation', false);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $reservation = $this->creator()->create($this->baseInput($entry), null, requireGatewayForPayment: true);
+
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertTrue($reservation->payment->isZero());
+        $this->assertSame('', $reservation->payment_gateway);
+    }
+
+    public function test_a_nonzero_amount_booking_requires_a_gateway_in_the_cp_flow()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('A payment method is required');
+
+        // A non-zero amount with no gateway is rejected in the CP flow; direct callers may omit it.
+        $this->creator()->create($this->baseInput($entry), null, requireGatewayForPayment: true);
+    }
 }

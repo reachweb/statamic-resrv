@@ -211,6 +211,73 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertCount(0, $gateway->cancelledIntents);
     }
 
+    public function test_confirming_an_online_gateway_out_of_band_makes_the_reservation_refundable()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        $gateway->refundCalls = [];
+
+        // Online gateway ('fake'), customer opened the pay link (an unpaid intent id sits on the
+        // row), admin marks it paid in person. Confirming must void the dead intent AND drop its id
+        // so a later refund is not routed to the gateway with an empty/voided intent — which real
+        // Stripe rejects, stranding the booking as un-refundable.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_unpaid_online',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertSame('', $reservation->payment_id);
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertSame('pi_unpaid_online', $gateway->cancelledIntents[0]['payment_id']);
+
+        // The reservation now refunds through the CP without hitting the gateway (nothing to refund).
+        $changed = app(ReservationRefundProcessor::class)->refund($reservation);
+
+        $this->assertTrue($changed);
+        $this->assertSame('refunded', $reservation->fresh()->status);
+        $this->assertCount(0, $gateway->refundCalls);
+    }
+
+    public function test_confirming_online_out_of_band_keeps_a_captured_charge_reference()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        $gateway->retrievedIntentStatus = 'succeeded';
+
+        // A webhook confirm is racing this manual one: the intent already captured real money. The
+        // charge reference must be kept so it stays refundable through the gateway, never dropped
+        // (which would strand the captured charge the succeeded webhook then swallows).
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_captured',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertSame('pi_captured', $reservation->payment_id);
+        $this->assertCount(0, $gateway->cancelledIntents);
+    }
+
     public function test_cancel_without_refund_voids_the_freshly_written_intent_not_a_stale_snapshot()
     {
         /** @var FakePaymentGateway $gateway */

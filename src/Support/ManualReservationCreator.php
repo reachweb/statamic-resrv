@@ -58,13 +58,21 @@ class ManualReservationCreator
      *
      * @throws AvailabilityException|ManualReservationException|OptionsException|ExtrasException
      */
-    public function create(array $input, $creator = null): Reservation
+    public function create(array $input, $creator = null, bool $requireGatewayForPayment = false): Reservation
     {
         $quote = $this->quote($input);
 
-        // The CP store request requires a gateway; direct callers may omit one (nothing to
-        // pay through), which leaves nothing to assert.
-        if (($gateway = (string) ($input['payment_gateway'] ?? '')) !== '') {
+        $gateway = (string) ($input['payment_gateway'] ?? '');
+
+        // The CP flow ($requireGatewayForPayment) requires a gateway whenever money is collected
+        // now — but a zero-amount booking (fully comped / zero deposit) confirms immediately with
+        // nothing to pay through, so it may omit one. Direct/programmatic callers may always omit
+        // a gateway (there may be nothing to pay through), which leaves nothing to assert.
+        if ($requireGatewayForPayment && $gateway === '' && ! $quote['payment']['amount']->isZero()) {
+            throw new ManualReservationException(__('A payment method is required to collect a payment.'));
+        }
+
+        if ($gateway !== '') {
             $this->assertGatewayIsUsable($gateway, $quote['payment']['amount']);
         }
 
@@ -399,6 +407,15 @@ class ManualReservationCreator
     {
         $calcData = array_merge($data, ['item_id' => $input['item_id']]);
 
+        // Carry the customer payload so a custom-priced extra (Extra::getCustomPrice) reads its
+        // multiplier from the same checkout-form field the frontend does. The CP has no
+        // resrv-search session to fall back on, so without this a custom extra silently prices at
+        // ×1 and the reservation charges less than the equivalent frontend checkout. The live quote
+        // sends no customer (its preview keeps the ×1 fallback); creation carries the full customer.
+        if (! empty($input['customer'])) {
+            $calcData['customer'] = collect($input['customer']);
+        }
+
         return collect($input['extras'] ?? [])->mapWithKeys(function ($item) use ($calcData) {
             $id = (int) ($item['id'] ?? 0);
             $quantity = (int) ($item['quantity'] ?? 0);
@@ -423,12 +440,23 @@ class ManualReservationCreator
                 throw new ManualReservationException(__('The selected quantity exceeds the maximum allowed for this extra.'));
             }
 
-            return [$id => [
-                'quantity' => $quantity,
+            try {
                 // Fresh instances per call: calculatePrice/priceForDates write back into the
                 // model's price attribute, so sharing one instance would compound the price.
-                'price' => (clone $extra)->priceForDates($calcData),
-                'total' => (clone $extra)->calculatePrice($calcData, $quantity),
+                $price = (clone $extra)->priceForDates($calcData);
+                $total = (clone $extra)->calculatePrice($calcData, $quantity);
+            } catch (ManualReservationException $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                // A custom-priced extra throws when its driving customer field is absent or
+                // non-numeric — surface it as a domain error (422) rather than a 500.
+                throw new ManualReservationException(__('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $extra->name]));
+            }
+
+            return [$id => [
+                'quantity' => $quantity,
+                'price' => $price,
+                'total' => $total,
             ]];
         });
     }

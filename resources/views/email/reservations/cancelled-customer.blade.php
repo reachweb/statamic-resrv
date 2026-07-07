@@ -22,7 +22,7 @@
 
 @if ($holdLapsed ?? false)
 {{ __("If you still want these dates, please contact us — subject to availability, we will be happy to set up a new reservation.") }}
-@elseif ($reservation->hasGatewayPayment())
+@elseif ($paymentCollected ?? $reservation->hasGatewayPayment())
 **{{ __("No refund has been issued for this cancellation. The payment for this reservation is non-refundable.") }}**
 @else
 {{ __("No payment was collected for this reservation, so there is nothing to refund.") }}

@@ -168,8 +168,13 @@ const customAmountError = computed(() => {
     return null;
 });
 
+// A zero-amount booking (fully comped / zero deposit) collects nothing and confirms immediately,
+// so it needs no gateway — which matters when online gateways are disabled for want of a payment
+// page. The server enforces "gateway required" whenever the amount is non-zero.
+const paymentAmountIsZero = computed(() => quote.value && Number(quote.value.payment.amount) === 0);
+
 const canSubmit = computed(
-    () => datesComplete.value && quote.value && ! quoteError.value && ! customAmountError.value && ! availabilityBlocks.value && form.payment_gateway && ! submitting.value,
+    () => datesComplete.value && quote.value && ! quoteError.value && ! customAmountError.value && ! availabilityBlocks.value && (paymentAmountIsZero.value || form.payment_gateway) && ! submitting.value,
 );
 
 // --- Data loading ---
@@ -590,7 +595,10 @@ const fieldError = (key) => {
                     <Description :text="__('How much to request now, and how the customer will pay.')" />
                 </div>
 
-                <Alert v-if="! paymentEntryConfigured" variant="warning" class="mb-6">
+                <Alert v-if="paymentAmountIsZero" variant="success" class="mb-6">
+                    {{ __('This booking collects no payment, so it will be confirmed immediately — no payment method is required.') }}
+                </Alert>
+                <Alert v-else-if="! paymentEntryConfigured" variant="warning" class="mb-6">
                     {{ __('No payment page entry is configured in the Resrv settings, so online payment methods are disabled. Offline methods can still be confirmed manually.') }}
                 </Alert>
 

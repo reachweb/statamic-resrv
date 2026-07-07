@@ -447,6 +447,19 @@ class Reservation extends Model
     }
 
     /**
+     * A CONFIRMED reservation carrying no gateway charge reference (empty payment_id). This can
+     * only arise from an out-of-band/manual confirmation — a webhook confirm always leaves the
+     * succeeded intent id on the row — so there is no gateway charge to return, and a refund must
+     * skip the provider (mirroring an offline booking's no-op refund) instead of asking the
+     * gateway to refund a dead or never-existent intent.
+     */
+    public function confirmedWithoutGatewayCharge(): bool
+    {
+        return $this->status === ReservationStatus::CONFIRMED->value
+            && ($this->payment_id === '' || $this->payment_id === null);
+    }
+
+    /**
      * Whether refunding this reservation returns the money automatically through the gateway —
      * true only when a charge actually reached a gateway AND that gateway supports API refunds.
      * False for offline/manual gateways (an admin must return the funds by hand) and for no-charge
