@@ -11,7 +11,11 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return array_merge(parent::rules(), [
+        // checkoutFormRules() is merged BEFORE the explicit rules so the explicit
+        // customer.email => required|email always wins. A custom checkout form whose email field
+        // is optional (or omits validate) must not weaken the requirement — an online
+        // awaiting-payment reservation needs an email for its payment URL and request recipient.
+        return array_merge(parent::rules(), $this->checkoutFormRules(), [
             'payment_gateway' => [
                 'required',
                 'string',
@@ -24,7 +28,7 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
             'affiliate_id' => 'nullable|integer',
             'customer' => 'required|array',
             'customer.email' => 'required|email',
-        ], $this->checkoutFormRules());
+        ]);
     }
 
     /**

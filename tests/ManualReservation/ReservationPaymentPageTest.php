@@ -10,6 +10,8 @@ use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\ReservationPayment;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\Support\FakeRedirectGateway;
+use Reach\StatamicResrv\Tests\Support\LegacyThreeArgGateway;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationPaymentPageTest extends TestCase
@@ -222,6 +224,115 @@ class ReservationPaymentPageTest extends TestCase
         ])
             ->test(ReservationPayment::class)
             ->assertSee(trans('statamic-resrv::frontend.paymentProcessing'));
+    }
+
+    protected function useRedirectGateway(): void
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Fake Redirect'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+    }
+
+    public function test_pay_via_redirect_gateway_bakes_the_pay_page_return_url_into_the_intent()
+    {
+        $this->useRedirectGateway();
+
+        $reservation = $this->makeAwaitingReservation(['payment_gateway' => 'fakeredirect']);
+
+        // A redirect gateway must return the customer to this pay-by-link page, not checkout-complete.
+        $expectedReturn = $reservation->customerPaymentUrl();
+        $this->assertNotNull($expectedReturn);
+
+        $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentView', ''); // redirect gateways never mount an embedded view
+
+        $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
+        $this->assertSame($expectedReturn, $gateway->lastReturnUrl);
+
+        $fresh = $reservation->fresh();
+        $this->assertNotSame('', $fresh->payment_id);
+
+        // Assert the exact outbound URL, including the resrv_gateway tag the return leg needs to
+        // resolve the gateway (a bare assertRedirect() would let that tag be dropped).
+        $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id.'?resrv_gateway=fakeredirect');
+    }
+
+    public function test_return_from_redirect_gateway_shows_processing_while_still_awaiting()
+    {
+        $this->useRedirectGateway();
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_gateway' => 'fakeredirect',
+            'payment_id' => 'redir_existing',
+        ]);
+
+        // Return carries resrv_gateway; handleRedirectBack maps status=success to processing.
+        Livewire::withQueryParams([
+            'ref' => $reservation->reference,
+            'hash' => $reservation->customerLookupHash(),
+            'resrv_gateway' => 'fakeredirect',
+            'status' => 'success',
+        ])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentProcessing'));
+
+        // The redirect-back never confirms — that's the webhook's job.
+        $this->assertSame(ReservationStatus::AWAITING_PAYMENT->value, $reservation->fresh()->status);
+    }
+
+    public function test_failed_return_from_redirect_gateway_falls_back_to_awaiting_for_retry()
+    {
+        $this->useRedirectGateway();
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_gateway' => 'fakeredirect',
+            'payment_id' => 'redir_existing',
+        ]);
+
+        Livewire::withQueryParams([
+            'ref' => $reservation->reference,
+            'hash' => $reservation->customerLookupHash(),
+            'resrv_gateway' => 'fakeredirect',
+            'status' => 'fail',
+        ])
+            ->test(ReservationPayment::class)
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentProcessing'))
+            ->assertSee(trans('statamic-resrv::frontend.pay'));
+    }
+
+    public function test_a_three_parameter_gateway_still_works_through_the_manual_pay_flow()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'legacy3' => ['class' => LegacyThreeArgGateway::class, 'label' => 'Legacy'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $reservation = $this->makeAwaitingReservation(['payment_gateway' => 'legacy3']);
+
+        // Core calls paymentIntent() with a 4th arg; a 3-param gateway ignores it and still works.
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentView', 'statamic-resrv::livewire.checkout-payment');
+
+        $fresh = $reservation->fresh();
+        $this->assertNotSame('', $fresh->payment_id);
+        $this->assertStringStartsWith('legacy_', $fresh->payment_id);
+    }
+
+    public function test_calling_a_three_parameter_gateway_with_four_positional_args_does_not_error()
+    {
+        $reservation = $this->makeAwaitingReservation();
+        $gateway = new LegacyThreeArgGateway;
+
+        // PHP-level proof: a 3-param method invoked with a 4th positional arg silently ignores it.
+        $intent = $gateway->paymentIntent($reservation->amountDue(), $reservation, collect(), 'https://return.test/pay');
+
+        $this->assertTrue($gateway->created);
+        $this->assertIsString($intent->id);
     }
 
     public function test_customer_payment_url_null_matrix()

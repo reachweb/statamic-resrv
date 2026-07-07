@@ -100,7 +100,10 @@ enum ReservationStatus: string
      * Status values for checkouts still in flight — holds that may release asynchronously
      * (expiry restores +quantity), which would corrupt an absolute CP inventory edit.
      * Confirmed/partner bookings keep their hold key for life but only release on an
-     * explicit refund, so they are not in flight.
+     * explicit refund, so they are not in flight. AWAITING_PAYMENT (admin-created holds)
+     * belongs here too: the hold-lapse sweep and CP cancellation release +quantity through
+     * the same ReservationCancelled chain, so an absolute edit made while one is active
+     * would be corrupted when it later restores stock.
      *
      * @return string[]
      */
@@ -109,6 +112,7 @@ enum ReservationStatus: string
         return [
             self::PENDING->value,
             self::WEBHOOK->value,
+            self::AWAITING_PAYMENT->value,
         ];
     }
 }

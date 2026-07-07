@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Locked;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -48,7 +49,7 @@ trait HandlesDirectGatewayPayment
     {
         $gateway = app(PaymentGatewayManager::class)->forReservation($reservation);
 
-        $intent = $this->resolveOrCreateIntent($gateway, $reservation, $amount);
+        $intent = $this->resolveOrCreateIntent($gateway, $reservation, $amount, $returnUrl);
 
         if ($intent === null) {
             $this->paymentProcessing = true;
@@ -56,6 +57,10 @@ trait HandlesDirectGatewayPayment
             return null;
         }
 
+        // Redirect gateways bake their return URL from $returnUrl (threaded into paymentIntent by
+        // resolveOrCreateIntent), routing this customer back to the pay-by-link page. Here we just
+        // forward to the provider's hosted page, tagging resrv_gateway so the return resolves the
+        // gateway; ReservationPayment::state() reads the interim status. See Step 12.
         if ($gateway->redirectsForPayment()) {
             $redirectUrl = $intent->redirectTo;
             $separator = str_contains($redirectUrl, '?') ? '&' : '?';
@@ -79,25 +84,65 @@ trait HandlesDirectGatewayPayment
      * intent gets replaced, and a succeeded/processing one returns null — the money is
      * already moving, so creating another intent would risk a double charge.
      */
-    protected function resolveOrCreateIntent(PaymentInterface $gateway, Reservation $reservation, PriceClass $amount): ?object
+    protected function resolveOrCreateIntent(PaymentInterface $gateway, Reservation $reservation, PriceClass $amount, string $returnUrl): ?object
     {
-        if (is_string($reservation->payment_id) && $reservation->payment_id !== '') {
-            $existing = $gateway->retrievePaymentIntent($reservation->payment_id, $reservation);
+        $resumed = $this->resumeExistingIntent($gateway, $reservation);
 
-            if ($existing !== null && in_array($existing->status ?? '', ['succeeded', 'processing'], true)) {
-                return null;
-            }
-
-            if ($existing !== null && ($existing->status ?? '') !== 'canceled') {
-                return $existing;
-            }
+        // A payable intent to resume, or null meaning "money already moving — do not mint another".
+        if ($resumed !== false) {
+            return $resumed;
         }
 
-        $intent = $gateway->paymentIntent($amount, $reservation, $reservation->customerData ?? collect());
+        // Serialize create-and-store per reservation so two concurrent pay() requests can't each
+        // mint a payable intent — last-write-wins would leave the loser untracked yet chargeable.
+        // The gateway call is a network round-trip, so this uses an app-level lock that holds no
+        // DB connection (unlike a row lock). The waiter re-checks under the lock and resumes the
+        // winner's intent instead of creating a second one.
+        return Cache::lock('resrv-payment-intent-'.$reservation->id, 15)->block(10, function () use ($gateway, $reservation, $amount, $returnUrl) {
+            $reservation->refresh();
 
-        $reservation->update(['payment_id' => $intent->id]);
+            $resumed = $this->resumeExistingIntent($gateway, $reservation);
+            if ($resumed !== false) {
+                return $resumed;
+            }
 
-        return $intent;
+            // $returnUrl passed positionally; 3-param gateways ignore it (see Step 12).
+            $intent = $gateway->paymentIntent($amount, $reservation, $reservation->customerData ?? collect(), $returnUrl);
+
+            $reservation->update(['payment_id' => $intent->id]);
+
+            return $intent;
+        });
+    }
+
+    /**
+     * Inspect the reservation's stored intent: the intent to resume when it is still payable,
+     * null when the money is already moving (succeeded/processing — minting another would risk a
+     * double charge), or false when there is nothing to resume and a fresh intent is needed. A
+     * transient retrieve failure propagates (see StripePaymentGateway::retrievePaymentIntent) so
+     * a still-live intent is never replaced on the strength of a failed read.
+     */
+    protected function resumeExistingIntent(PaymentInterface $gateway, Reservation $reservation): object|false|null
+    {
+        if (! is_string($reservation->payment_id) || $reservation->payment_id === '') {
+            return false;
+        }
+
+        $existing = $gateway->retrievePaymentIntent($reservation->payment_id, $reservation);
+
+        if ($existing === null) {
+            return false;
+        }
+
+        if (in_array($existing->status ?? '', ['succeeded', 'processing'], true)) {
+            return null;
+        }
+
+        if (($existing->status ?? '') !== 'canceled') {
+            return $existing;
+        }
+
+        return false;
     }
 
     /**

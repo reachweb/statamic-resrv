@@ -497,4 +497,59 @@ class ManualReservationCreatorTest extends TestCase
         $this->assertSame('10.00', $quote['payment']['gateways']['fake']['surcharge']->format());
         $this->assertTrue($quote['payment']['gateways']['offline']['surcharge']->isZero());
     }
+
+    public function test_a_zero_requested_amount_on_a_nonzero_total_confirms_immediately()
+    {
+        Mail::fake();
+
+        // Deposit computes to zero while the booking still has a positive total. Checkout keys
+        // off the amount collected now (reservationPaymentIsZero -> payment), so the manual flow
+        // must too: confirm immediately rather than leave it awaiting a 0.00 payment request the
+        // lapse sweep would later cancel. An online gateway with no payment page must also be
+        // accepted here, since a zero amount is collected through no gateway at all.
+        Config::set('resrv-config.payment', 'fixed');
+        Config::set('resrv-config.fixed_amount', 0);
+        Config::set('resrv-config.full_payment_after_free_cancellation', false);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'payment_gateway' => 'fake',
+        ]));
+
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertFalse($reservation->total->isZero());
+        $this->assertTrue($reservation->payment->isZero());
+    }
+
+    public function test_an_extra_from_another_entry_is_rejected()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+        $otherEntry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $extra = Extra::factory()->create();
+        ResrvEntry::whereItemId($otherEntry->id())->extras()->attach($extra->id);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('does not belong to this entry');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'extras' => [['id' => $extra->id, 'quantity' => 1]],
+        ]));
+    }
+
+    public function test_an_unpublished_extra_is_rejected()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $extra = Extra::factory()->create(['published' => false]);
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('does not belong to this entry');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'extras' => [['id' => $extra->id, 'quantity' => 1]],
+        ]));
+    }
 }

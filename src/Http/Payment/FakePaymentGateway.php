@@ -44,8 +44,9 @@ class FakePaymentGateway implements PaymentInterface
         return 'statamic-resrv::livewire.checkout-payment';
     }
 
-    public function paymentIntent($amount, $reservation, $data)
+    public function paymentIntent($amount, $reservation, $data, ?string $returnUrl = null)
     {
+        // Inline gateway ignores $returnUrl (declared only to model the convention; see Step 12).
         $data = new \stdClass;
         $data->id = Str::random(28);
         $data->client_secret = Str::random(56);

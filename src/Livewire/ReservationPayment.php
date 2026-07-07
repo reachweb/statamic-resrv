@@ -7,6 +7,7 @@ use Livewire\Attributes\Computed;
 use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus as ReservationStatusEnum;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Traits\HandlesCustomerLookup;
 use Reach\StatamicResrv\Livewire\Traits\HandlesDirectGatewayPayment;
 use Reach\StatamicResrv\Models\Reservation;
@@ -84,7 +85,9 @@ class ReservationPayment extends Component
             return 'deadline_passed';
         }
 
-        if ($this->paymentProcessing || $this->gatewayReturnStatus() === 'processing' || $this->gatewayReturnStatus() === 'succeeded') {
+        $returnStatus = $this->gatewayReturnStatus() ?? $this->redirectGatewayReturnStatus($reservation);
+
+        if ($this->paymentProcessing || $returnStatus === 'processing' || $returnStatus === 'succeeded') {
             return 'processing';
         }
 
@@ -93,6 +96,40 @@ class ReservationPayment extends Component
         }
 
         return 'awaiting';
+    }
+
+    /**
+     * Interim status for a customer returning from a redirect gateway (e.g. Mollie), guarded on the
+     * resrv_gateway return marker so a plain page load never calls the provider. Reads the gateway's
+     * handleRedirectBack() (never confirms) and maps to 'processing' | 'failed'; the webhook stays
+     * the confirmation truth and a 'failed' return falls through to 'awaiting' for retry.
+     */
+    protected function redirectGatewayReturnStatus(Reservation $reservation): ?string
+    {
+        if (! request()->has('resrv_gateway')) {
+            return null;
+        }
+
+        try {
+            $gateway = app(PaymentGatewayManager::class)->forReservation($reservation);
+
+            if (! $gateway->redirectsForPayment()) {
+                return null;
+            }
+
+            $status = $gateway->handleRedirectBack()['status'] ?? null;
+        } catch (\Throwable $e) {
+            // Report but don't 500 the customer-facing page on a provider hiccup. Mirrors pay().
+            report($e);
+
+            return null;
+        }
+
+        return match ($status) {
+            true, 'pending' => 'processing',
+            false => 'failed',
+            default => null,
+        };
     }
 
     /**

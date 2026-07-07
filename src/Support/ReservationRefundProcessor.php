@@ -97,20 +97,38 @@ class ReservationRefundProcessor
      */
     public function cancelWithoutRefund(Reservation $reservation, ?string $context = null, ?Closure $inTransaction = null, bool $cancelOpenIntent = false): bool
     {
-        $paymentId = (string) $reservation->payment_id;
-        $paymentGateway = (string) $reservation->payment_gateway;
-
         $changed = $reservation->transitionTo(ReservationStatus::CANCELLED, inTransaction: $inTransaction);
 
         if ($changed) {
             $this->dispatchCommitted(ReservationCancelled::class, $reservation, $context);
 
-            if ($cancelOpenIntent && $paymentId !== '' && $paymentGateway !== '') {
-                $this->cancelPaymentIntentQuietly($reservation, $paymentId, $paymentGateway);
+            // Read payment_id/gateway from the just-transitioned row, not from a snapshot taken
+            // before transitionTo() acquired its lock: the pay page may have written payment_id
+            // after this model was hydrated but before the lock, and transitionTo() syncs the
+            // locked, committed row back onto the model. A pre-lock capture would use a stale
+            // (often empty) id and silently skip cancelling the customer's live intent.
+            if ($cancelOpenIntent) {
+                $this->cancelOpenIntentQuietly($reservation);
             }
         }
 
         return $changed;
+    }
+
+    /**
+     * Void any open payment intent recorded on the reservation, tolerating gateway failures.
+     * Read the ids from the current model state, which callers must have synced to the
+     * committed row (via transitionTo()), so a concurrent pay-page write is not missed.
+     * A no-op when no intent was ever created (empty payment_id/gateway).
+     */
+    public function cancelOpenIntentQuietly(Reservation $reservation): void
+    {
+        $paymentId = (string) $reservation->payment_id;
+        $paymentGateway = (string) $reservation->payment_gateway;
+
+        if ($paymentId !== '' && $paymentGateway !== '') {
+            $this->cancelPaymentIntentQuietly($reservation, $paymentId, $paymentGateway);
+        }
     }
 
     /**

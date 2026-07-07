@@ -302,6 +302,14 @@ class ReservationCpController extends Controller
         }
 
         if ($changed) {
+            // The money arrived out of band, but the customer may have already opened the online
+            // pay page and left a live payable intent behind. Void it — mirroring the cancel path's
+            // cancelOpenIntent — so completing it later can't produce a duplicate charge that the
+            // succeeded webhook would silently swallow (it short-circuits on an already-CONFIRMED
+            // reservation before any orphaned-charge handling). Read from the transitioned row and
+            // tolerate gateway errors; an already-succeeded intent is left untouched.
+            app(ReservationRefundProcessor::class)->cancelOpenIntentQuietly($reservation);
+
             ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
         }
 

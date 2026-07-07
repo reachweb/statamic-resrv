@@ -18,6 +18,7 @@ use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Role;
@@ -161,6 +162,79 @@ class AwaitingPaymentTransitionsTest extends TestCase
         ]);
         $this->assertEquals('confirmed', $reservation->fresh()->status);
         Mail::assertSent(ReservationConfirmedMail::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
+    }
+
+    public function test_cp_confirm_payment_voids_an_open_online_intent()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+
+        // The customer opened the online pay page (an intent was created) but paid in person;
+        // the admin marks the reservation paid. The open intent must be voided so completing it
+        // later can't produce a duplicate charge the succeeded webhook would silently swallow.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment_id' => 'pi_open_online',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200)
+            ->assertJson(['status' => 'confirmed']);
+
+        $this->assertSame('confirmed', $reservation->fresh()->status);
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertSame('pi_open_online', $gateway->cancelledIntents[0]['payment_id']);
+    }
+
+    public function test_cp_confirm_payment_skips_the_gateway_when_no_intent_exists()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment_id' => '',
+            'payment_gateway' => 'offline',
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $this->assertSame('confirmed', $reservation->fresh()->status);
+        $this->assertCount(0, $gateway->cancelledIntents);
+    }
+
+    public function test_cancel_without_refund_voids_the_freshly_written_intent_not_a_stale_snapshot()
+    {
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment_id' => '',
+            'payment_gateway' => 'fake',
+        ]);
+
+        // A model hydrated before the pay page recorded an intent.
+        $stale = Reservation::find($reservation->id);
+
+        // The pay page writes a live intent to the row after that model was loaded but before
+        // the cancellation acquires its lock. cancelWithoutRefund must void the intent recorded
+        // on the locked, committed row — not the empty value on the stale in-memory model.
+        Reservation::where('id', $reservation->id)->update(['payment_id' => 'pi_written_after_load']);
+
+        app(ReservationRefundProcessor::class)->cancelWithoutRefund($stale, cancelOpenIntent: true);
+
+        $this->assertSame('cancelled', $stale->fresh()->status);
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertSame('pi_written_after_load', $gateway->cancelledIntents[0]['payment_id']);
     }
 
     public function test_cp_confirm_payment_rejects_non_awaiting_reservations()

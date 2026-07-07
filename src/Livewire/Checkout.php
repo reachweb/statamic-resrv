@@ -413,8 +413,10 @@ class Checkout extends Component
         // Set the payment view
         $this->paymentView = $payment->paymentView();
 
-        // Create a payment intent with the full amount (including surcharge) before touching the DB
-        $paymentIndent = $payment->paymentIntent($totalToCharge, $reservation, $reservation->customerData);
+        // Create a payment intent with the full amount (including surcharge) before touching the DB.
+        // The 4th arg is the return-URL base; the checkout-complete entry keeps normal checkout
+        // unchanged for redirect gateways (see Step 12).
+        $paymentIndent = $payment->paymentIntent($totalToCharge, $reservation, $reservation->customerData, $this->getCheckoutCompleteEntry()->absoluteUrl());
 
         // `payment` stays as the reservation amount (read by CP, API, emails). Only the surcharge
         // and intent id get persisted — the gateway receives the full total via $totalToCharge above.

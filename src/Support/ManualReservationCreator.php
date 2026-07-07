@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Support;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Enums\ManualPaymentMode;
@@ -132,10 +133,12 @@ class ManualReservationCreator
             return $reservation;
         });
 
-        // Mirrors Checkout::handleReservationWithZeroPayment(): nothing to pay, so the
-        // booking is firm immediately and the confirmation email chain fires — never a
-        // payment request.
-        if ($quote['pricing']['total']->isZero()) {
+        // Mirrors Checkout::handleReservationWithZeroPayment(), which keys off the payment amount
+        // (reservationPaymentIsZero) — not the grand total. When nothing is collected now (a
+        // deposit can round/compute to zero while paid extras keep the total positive) the
+        // booking is firm immediately and the confirmation email chain fires — never a payment
+        // request for 0.00, and never an awaiting-payment hold the lapse sweep would later cancel.
+        if ($quote['payment']['amount']->isZero()) {
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
                 ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
             }
@@ -143,8 +146,19 @@ class ManualReservationCreator
             return $reservation->fresh();
         }
 
+        // The reservation, customer and stock decrement have already committed. A failing mail
+        // transport must not turn a successful creation into a 500 the admin would retry —
+        // retrying would create a second reservation and decrement stock again. Log and carry
+        // on; the payment request can be resent from the reservation page.
         if ((bool) ($input['send_payment_request_email'] ?? true)) {
-            $this->sendPaymentRequestEmail($reservation);
+            try {
+                $this->sendPaymentRequestEmail($reservation);
+            } catch (\Throwable $e) {
+                Log::error('Manual reservation created but the payment-request email failed to send.', [
+                    'reservation_id' => $reservation->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return $reservation->fresh();
@@ -362,8 +376,11 @@ class ManualReservationCreator
     protected function assertGatewayIsUsable(string $gateway, PriceClass $amount): void
     {
         // Without a configured (published, routable) payment page there is no link to pay
-        // an online gateway through — only manually-confirmable (offline) gateways work.
-        if (Reservation::resolveCustomerPageEntry(config('resrv-config.manual_reservations_payment_entry')) === null
+        // an online gateway through — only manually-confirmable (offline) gateways work. A
+        // zero requested amount is collected through no gateway at all (the booking confirms
+        // immediately), so it needs no payment page and must not be rejected for lacking one.
+        if (! $amount->isZero()
+            && Reservation::resolveCustomerPageEntry(config('resrv-config.manual_reservations_payment_entry')) === null
             && ! $this->gatewayManager->gateway($gateway)->supportsManualConfirmation()) {
             throw new ManualReservationException(
                 __('The payment page entry is not configured, so only payment methods that support manual confirmation can be used.')
@@ -386,10 +403,16 @@ class ManualReservationCreator
             $id = (int) ($item['id'] ?? 0);
             $quantity = (int) ($item['quantity'] ?? 0);
 
-            $extra = Extra::find($id);
+            // Only extras published and attached to this entry may be priced/attached — mirrors
+            // the frontend's $entry->extras()->where('published', true) scoping and the options
+            // ownership check in priceOptions(). Extra::find() alone would accept an extra from
+            // another entry, letting a stale/crafted payload price and attach a foreign extra.
+            $extra = Extra::whereHas('entries', fn ($query) => $query->where('resrv_entries.item_id', $calcData['item_id']))
+                ->where('published', true)
+                ->find($id);
 
             if (! $extra) {
-                throw new ManualReservationException(__('The selected extra was not found.'));
+                throw new ManualReservationException(__('The selected extra does not belong to this entry.'));
             }
 
             if ($quantity < 1) {

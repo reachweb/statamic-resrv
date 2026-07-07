@@ -12,6 +12,12 @@ interface PaymentInterface
 
     public function paymentView(): string;
 
+    /**
+     * Gateways MAY declare an optional 4th positional param `?string $returnUrl = null` — the
+     * return-URL base for redirect gateways (`$returnUrl ?? getCheckoutCompleteEntry()->absoluteUrl()`).
+     * Kept at 3 params so existing 3-param implementations don't fatal; PHP ignores the extra
+     * positional arg. See UPGRADE-PAYMENT-GATEWAYS.md Step 12.
+     */
     public function paymentIntent($amount, Reservation $reservation, $data);
 
     /**

@@ -159,6 +159,8 @@ public function paymentIntent($amount, Reservation $reservation, $data)
 
 **Important for redirect gateways**: Resrv automatically appends `resrv_gateway=<config_key>` to the `redirectTo` URL before redirecting. You do NOT need to add this yourself. However, your return/success URL should point to the Statamic page that uses the `{{ resrv_checkout_redirect }}` tag. That tag reads `resrv_gateway` from the query string to resolve the correct gateway for `handleRedirectBack()`.
 
+Build that return/success URL from the **optional 4th `$returnUrl` argument** rather than hard-coding the checkout-complete entry: `$base = $returnUrl ?? $this->getReturnUrl($reservation)`. Resrv passes the checkout-complete entry there during normal checkout (so behavior is unchanged) but a different base for other surfaces such as the manual pay-by-link page. This is fully backward compatible — see **Step 12**.
+
 ---
 
 ## Step 3: Implement handleRedirectBack() for Redirect Gateways
@@ -463,11 +465,16 @@ class PayPalPaymentGateway implements PaymentInterface
 
     // --- Payment flow ---
 
-    public function paymentIntent($amount, Reservation $reservation, $data)
+    public function paymentIntent($amount, Reservation $reservation, $data, ?string $returnUrl = null)
     {
         // TODO: Create a checkout session with PayPal's API
         // $amount->raw() gives the amount as a numeric string in minor units (cents)
         // config('resrv-config.currency_isoCode') gives the currency code
+
+        // $returnUrl is the base to return the customer to. Falls back to the checkout-complete
+        // entry when null (older Resrv, or a surface that doesn't set it). Normal checkout passes
+        // the checkout-complete entry here, so the fallback is only exercised for null. See Step 12.
+        $returnBase = $returnUrl ?? $this->getReturnUrl($reservation);
 
         $result = new \stdClass;
         $result->id = 'PAYPAL_SESSION_ID';      // stored as reservation.payment_id
@@ -632,8 +639,10 @@ class SquarePaymentGateway implements PaymentInterface
 
     // --- Payment flow ---
 
-    public function paymentIntent($amount, Reservation $reservation, $data)
+    public function paymentIntent($amount, Reservation $reservation, $data, ?string $returnUrl = null)
     {
+        // Inline gateway: the customer returns through Square's embedded SDK, so $returnUrl is
+        // ignored — the 4th param is declared only to model the convention (see Step 12).
         // TODO: Create a payment with Square's API
         $result = new \stdClass;
         $result->id = 'SQUARE_PAYMENT_ID';         // stored as reservation.payment_id
@@ -800,6 +809,8 @@ Before deploying your custom gateway:
 - [ ] `cancelPaymentIntent()` cancels or voids an intent at the provider (see Step 9)
 - [ ] For inline gateways: custom Blade view works and is publishable
 - [ ] For redirect gateways: return URL points to the Statamic page with `{{ resrv_checkout_redirect }}`
+- [ ] For redirect gateways: `paymentIntent()` accepts the optional 4th `?string $returnUrl = null` and builds the return/success URL from `$returnUrl ?? <checkout-complete entry>` (see Step 12)
+- [ ] Gateways written before Step 12 that keep only three `paymentIntent()` parameters remain compatible — Resrv passes the return-URL base positionally and PHP ignores the extra argument
 
 ---
 
@@ -1106,3 +1117,65 @@ The bundled Stripe gateway uses exactly this key shape. Include the intent id, n
 3. Cancelling calls `ReservationRefundProcessor::cancelByCustomer()`, which runs your `refund()` inside the `REFUNDED` transition's transaction.
 4. A `RefundFailedException` (or any other throw) rolls the transition back; the customer sees a generic "contact us" message and the failure is logged.
 5. On success the customer is told the refunded amount — `payment + payment_surcharge`, i.e. exactly what was charged on the intent. Refunding the **full** intent (as the examples above do) is therefore the correct behavior; partial refunds would contradict the email.
+
+---
+
+## Step 12: Accept the Optional `$returnUrl` in `paymentIntent()` (Redirect Gateways)
+
+**Applies to: redirect gateways (redirectsForPayment() returns true)**
+
+> 📅 Added 2026-07-06 alongside admin-created (manual) reservations. This change is **backward compatible** — a gateway written before this date keeps working unchanged. Adopt it only if you want redirect gateways to support the pay-by-link page (and any other non-checkout payment surface); inline gateways need no change.
+
+### Why
+
+A redirect gateway bakes its own return URL into the provider payment inside `paymentIntent()` — historically always the shared checkout-complete entry (the page with `{{ resrv_checkout_redirect }}`). That is correct for the normal checkout, but Resrv now collects payment from other surfaces too: the **manual-reservation pay-by-link page** sends the customer to an authenticated per-reservation URL, not the checkout-complete entry. Resrv therefore needs to tell the gateway *which* base URL to return the customer to for a given payment.
+
+The obvious fix — adding a parameter to `PaymentInterface::paymentIntent()` — is impossible without breaking every existing gateway: PHP fatals with *"Declaration must be compatible"* the moment an interface method grows a parameter (even an optional one) that an implementation doesn't declare. So the interface **stays at three parameters**, and Resrv passes the return-URL base as an **optional 4th positional argument**. A gateway that declares only three parameters silently ignores it (standard PHP behavior); a gateway that opts in reads it.
+
+### The signature
+
+Add `?string $returnUrl = null` as the 4th parameter:
+
+```php
+public function paymentIntent($amount, Reservation $reservation, $data, ?string $returnUrl = null)
+```
+
+`$returnUrl` is the **base URL** you should append your own return parameters (`id`, `resrv_gateway`) to when building the provider's success/return URL. When it is `null` (older Resrv, or a surface that doesn't set it), fall back to the checkout-complete entry exactly as before — so normal checkout stays byte-identical.
+
+### Before / after
+
+Wherever your `paymentIntent()` builds the provider's success/return URL, prefer `$returnUrl` over the checkout-complete entry:
+
+```php
+// Before — always returns to the checkout-complete entry
+protected function buildReturnUrl(Reservation $reservation): string
+{
+    $base = $this->getCheckoutCompleteEntry()->absoluteUrl();
+
+    return $base.'?'.http_build_query([
+        'id' => $reservation->payment_id,
+        'resrv_gateway' => $reservation->payment_gateway,
+    ]);
+}
+
+// After — honours the caller's base, falls back to checkout-complete when absent
+protected function buildReturnUrl(Reservation $reservation, ?string $returnUrl = null): string
+{
+    $base = $returnUrl ?? $this->getCheckoutCompleteEntry()->absoluteUrl();
+
+    return $base.'?'.http_build_query([
+        'id' => $reservation->payment_id,
+        'resrv_gateway' => $reservation->payment_gateway,
+    ]);
+}
+```
+
+`getCheckoutCompleteEntry()->absoluteUrl()` above stands for however your gateway already resolves the checkout-complete entry today (e.g. `\Statamic\Facades\Entry::find(config('resrv-config.checkout_completed_entry'))->absoluteUrl()`). Only the `$returnUrl ??` prefix is new. In normal checkout Resrv passes that same checkout-complete base as `$returnUrl`, so the resolved URL is identical either way — the fallback is what keeps three-parameter gateways behaving exactly as they did.
+
+### What you get for free
+
+Your existing `handleRedirectBack()` needs no change. The manual pay-by-link page (`ReservationPayment`) calls it on return — resolving your gateway from the reservation's stored `payment_gateway` (via `PaymentGatewayManager::forReservation()`), triggered by the presence of the `resrv_gateway` return marker — and maps its `status` to an interim *processing* / *retry* message. As always, the **webhook remains the source of truth**: the redirect-back only drives interim messaging and never confirms the reservation.
+
+### Inline gateways
+
+Inline gateways (`redirectsForPayment()` returns `false`) return the customer through the embedded SDK, whose redirect target Resrv sets separately, so they can ignore `$returnUrl` entirely. The bundled `StripePaymentGateway`, `FakePaymentGateway`, and `OfflinePaymentGateway` all declare the 4th parameter but do nothing with it, purely to model the convention.

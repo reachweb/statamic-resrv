@@ -1,40 +1,49 @@
 <?php
 
-namespace Reach\StatamicResrv\Http\Payment;
+namespace Reach\StatamicResrv\Tests\Support;
 
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Models\Reservation;
 
-class OfflinePaymentGateway implements PaymentInterface
+/**
+ * A gateway whose paymentIntent() declares STRICTLY three parameters — models an addon predating
+ * the optional 4th $returnUrl arg. Guards the backward-compat contract: the interface stays at 3
+ * params (a 4th would fatal this class at boot), and a 4th positional arg from core is ignored.
+ */
+class LegacyThreeArgGateway implements PaymentInterface
 {
+    /** Set true when paymentIntent() runs. */
+    public bool $created = false;
+
     public function name(): string
     {
-        return 'offline';
+        return 'legacy3';
     }
 
     public function label(): string
     {
-        return 'Pay Later / Bank Transfer';
+        return 'Legacy Three Arg';
     }
 
     public function paymentView(): string
     {
-        return 'statamic-resrv::livewire.checkout-payment-offline';
+        return 'statamic-resrv::livewire.checkout-payment';
     }
 
-    public function paymentIntent($amount, Reservation $reservation, $data, ?string $returnUrl = null)
+    public function paymentIntent($amount, Reservation $reservation, $data)
     {
-        // Offline gateway ignores $returnUrl (declared only to model the convention; see Step 12).
+        $this->created = true;
+
         $intent = new \stdClass;
-        $intent->id = 'offline_'.Str::random(24);
-        $intent->client_secret = 'offline_'.Str::random(48);
+        $intent->id = 'legacy_'.Str::random(24);
+        $intent->client_secret = 'legacy_cs_'.Str::random(24);
 
         return $intent;
     }
 
     public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
     {
-        // Offline payments have no remote intent to resume.
         return null;
     }
 
@@ -65,19 +74,17 @@ class OfflinePaymentGateway implements PaymentInterface
 
     public function supportsWebhooks(): bool
     {
-        return false;
+        return true;
     }
 
     public function supportsManualConfirmation(): bool
     {
-        return true;
+        return false;
     }
 
     public function supportsAutomaticRefunds(): bool
     {
-        // Money arrives by bank transfer; refund() is a bookkeeping no-op for the CP flow
-        // where an admin returns the funds manually before marking the booking refunded.
-        return false;
+        return true;
     }
 
     public function redirectsForPayment(): bool
@@ -87,25 +94,12 @@ class OfflinePaymentGateway implements PaymentInterface
 
     public function handleRedirectBack(): array
     {
-        if ($pending = $this->handlePaymentPending()) {
-            return $pending;
-        }
-
         return ['status' => false];
     }
 
     public function handlePaymentPending(): bool|array
     {
-        if (! request()->has('payment_pending')) {
-            return false;
-        }
-
-        $reservation = Reservation::find(request()->input('payment_pending'));
-
-        return [
-            'status' => 'pending',
-            'reservation' => $reservation ? $reservation->toArray() : [],
-        ];
+        return false;
     }
 
     public function verifyPayment($request)

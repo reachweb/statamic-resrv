@@ -14,8 +14,10 @@ use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
+use Statamic\Contracts\Forms\Form as FormContract;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Role;
@@ -284,6 +286,37 @@ class ManualReservationCpTest extends TestCase
         unset($payload['customer']['first_name']);
         $this->postJson(cp_route('resrv.manual.store'), $payload)
             ->assertStatus(422)->assertJsonValidationErrors(['customer.first_name']);
+    }
+
+    public function test_customer_email_stays_required_when_the_checkout_form_marks_it_optional()
+    {
+        $this->signInAdmin();
+        $this->useMultipleGateways();
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        // A custom checkout form whose email field is merely optional must not weaken the manual
+        // reservation's explicit required|email — an online awaiting reservation needs an email
+        // for its payment URL and request recipient. The checkout-form rules are merged before
+        // the explicit ones so the explicit rule wins.
+        $field = \Mockery::mock();
+        $field->shouldReceive('handle')->andReturn('email');
+        $field->shouldReceive('config')->andReturn(['validate' => ['email']]);
+
+        $fields = \Mockery::mock();
+        $fields->shouldReceive('values')->andReturn(collect([$field]));
+
+        $form = \Mockery::mock(FormContract::class);
+        $form->shouldReceive('fields')->andReturn($fields);
+
+        $resolver = \Mockery::mock(CheckoutFormResolver::class);
+        $resolver->shouldReceive('resolveForEntryId')->andReturn($form);
+        $this->app->instance(CheckoutFormResolver::class, $resolver);
+
+        $payload = $this->storePayload($entry);
+        unset($payload['customer']['email']);
+
+        $this->postJson(cp_route('resrv.manual.store'), $payload)
+            ->assertStatus(422)->assertJsonValidationErrors(['customer.email']);
     }
 
     public function test_store_rejects_online_gateways_when_the_payment_entry_is_unconfigured()
