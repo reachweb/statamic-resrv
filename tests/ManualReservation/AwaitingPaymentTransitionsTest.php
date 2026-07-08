@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\ManualReservation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Enums\ReservationStatus;
@@ -508,6 +509,40 @@ class AwaitingPaymentTransitionsTest extends TestCase
 
         $this->assertEquals('confirmed', $reservation->fresh()->status);
         Mail::assertNothingSent();
+    }
+
+    public function test_cp_cancel_awaiting_rechecks_the_origin_status_under_the_row_lock()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment_id' => 'pi_race_paid',
+            'payment_gateway' => 'fake',
+        ]);
+
+        // Simulate a webhook (or a second admin's Confirm) winning the race: the row flips to
+        // CONFIRMED right after the controller hydrates it, before transitionTo()'s row lock.
+        // Without the in-transaction origin re-check the cancel would still commit — CONFIRMED
+        // → CANCELLED is a legal transition — cancelling a PAID booking with unpaid-hold wording.
+        Reservation::retrieved(function (Reservation $model) use ($reservation) {
+            if ((int) $model->id === $reservation->id && $model->status === ReservationStatus::AWAITING_PAYMENT->value) {
+                DB::table('resrv_reservations')
+                    ->where('id', $reservation->id)
+                    ->update(['status' => ReservationStatus::CONFIRMED->value]);
+            }
+        });
+
+        $this->postJson(cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]))
+            ->assertStatus(422);
+
+        $this->assertEquals('confirmed', $reservation->fresh()->status);
+        Mail::assertNotSent(ReservationCancelledCustomer::class);
+        $this->assertCount(0, $gateway->cancelledIntents);
     }
 
     public function test_both_endpoints_are_forbidden_without_the_use_resrv_permission()

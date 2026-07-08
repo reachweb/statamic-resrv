@@ -336,9 +336,22 @@ class ReservationCpController extends Controller
             // Tag the cancellation as an unpaid hold so the customer email says "nothing to refund"
             // rather than "non-refundable": an awaiting-payment booking never captured money, even
             // if the customer opened the pay link and left an unpaid (now-voided) intent id behind.
+            // The in-transaction origin re-check is load-bearing (same as CancelLapsedHolds):
+            // CANCELLED is also reachable from CONFIRMED, so without it a webhook or concurrent
+            // CP confirm landing between the pre-check above and the row lock would let this
+            // cancel a PAID booking with the unpaid-hold wording.
             app(ReservationRefundProcessor::class)->cancelWithoutRefund(
                 $reservation,
                 ReservationCancelled::CONTEXT_UNPAID_HOLD,
+                inTransaction: function (Reservation $fresh) {
+                    if (! $fresh->isAwaitingPayment()) {
+                        throw new InvalidStateTransition(
+                            ReservationStatus::from($fresh->status),
+                            ReservationStatus::CANCELLED,
+                            $fresh->id,
+                        );
+                    }
+                },
                 cancelOpenIntent: true,
             );
         } catch (InvalidStateTransition $e) {
