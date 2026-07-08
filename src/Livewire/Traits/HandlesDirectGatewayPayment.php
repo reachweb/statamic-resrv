@@ -71,9 +71,19 @@ trait HandlesDirectGatewayPayment
         // Redirect gateways bake their return URL from $returnUrl (threaded into paymentIntent by
         // resolveOrCreateIntent), routing this customer back to the pay-by-link page. Here we just
         // forward to the provider's hosted page, tagging resrv_gateway so the return resolves the
-        // gateway; ReservationPayment::state() reads the interim status. See Step 12.
+        // gateway; ReservationPayment::state() reads the interim status. See Step 12. Resumed
+        // intents without a provider URL never reach this point (resolveOrCreateIntent re-mints
+        // them), so an empty redirectTo here means the gateway's paymentIntent() broke its
+        // contract — fail loudly rather than redirect the customer to a dead URL.
         if ($gateway->redirectsForPayment()) {
-            $redirectUrl = $intent->redirectTo;
+            $redirectUrl = (string) ($intent->redirectTo ?? '');
+
+            if ($redirectUrl === '') {
+                throw new \RuntimeException(
+                    "The redirect gateway [{$reservation->payment_gateway}] returned a payment intent without a redirectTo URL."
+                );
+            }
+
             $separator = str_contains($redirectUrl, '?') ? '&' : '?';
 
             return redirect()->away($redirectUrl.$separator.http_build_query([
@@ -106,7 +116,9 @@ trait HandlesDirectGatewayPayment
         $resumed = $this->resumeExistingIntent($gateway, $reservation);
 
         // A payable intent to resume, or null meaning "money already moving — do not mint another".
-        if ($resumed !== false) {
+        // An unmountable resume (redirect gateway, no provider URL) falls through to the locked
+        // section, which replaces it.
+        if ($resumed !== false && $this->resumedIntentIsMountable($gateway, $resumed)) {
             return $resumed;
         }
 
@@ -126,7 +138,13 @@ trait HandlesDirectGatewayPayment
 
             $resumed = $this->resumeExistingIntent($gateway, $reservation);
             if ($resumed !== false) {
-                return $resumed;
+                if ($this->resumedIntentIsMountable($gateway, $resumed)) {
+                    return $resumed;
+                }
+
+                // Resumable but unmountable: void it before minting the replacement, so the
+                // superseded intent doesn't linger chargeable at the provider.
+                $this->voidIntentQuietly($gateway, $reservation, (string) $reservation->payment_id);
             }
 
             // $returnUrl passed positionally; 3-param gateways ignore it (see Step 12).
@@ -161,6 +179,25 @@ trait HandlesDirectGatewayPayment
 
             return $intent;
         });
+    }
+
+    /**
+     * Whether a resumed intent can actually be mounted for its gateway. Redirect gateways forward
+     * the customer to $intent->redirectTo, but retrievePaymentIntent()'s contract only requires
+     * ->status (UPGRADE-PAYMENT-GATEWAYS.md Step 13) — a spec-compliant gateway may resume an
+     * intent carrying no provider URL. Such an intent is voided and replaced with a fresh mint
+     * (whose paymentIntent() contract does include ->redirectTo) instead of redirecting the
+     * customer nowhere. Null (money already moving) never mounts, so it always passes.
+     */
+    protected function resumedIntentIsMountable(PaymentInterface $gateway, ?object $intent): bool
+    {
+        if ($intent === null || ! $gateway->redirectsForPayment()) {
+            return true;
+        }
+
+        $redirectTo = $intent->redirectTo ?? null;
+
+        return is_string($redirectTo) && $redirectTo !== '';
     }
 
     /**

@@ -808,9 +808,10 @@ Before deploying your custom gateway:
 - [ ] Webhook URL configured in provider's dashboard with the correct config key segment
 - [ ] `cancelPaymentIntent()` cancels or voids an intent at the provider (see Step 9)
 - [ ] `retrievePaymentIntent()` returns the provider's intent as an object exposing `->status`, returns `null` **only** when the intent is definitively gone, and **throws** on transient failures rather than returning `null` (see Step 13)
+- [ ] For redirect gateways: `retrievePaymentIntent()` also exposes `->redirectTo` on still-payable intents so an interrupted payment can resume (see Step 13)
 - [ ] For inline gateways: custom Blade view works and is publishable
 - [ ] For redirect gateways: return URL points to the Statamic page with `{{ resrv_checkout_redirect }}`
-- [ ] For redirect gateways: `paymentIntent()` accepts the optional 4th `?string $returnUrl = null` and builds the return/success URL from `$returnUrl ?? <checkout-complete entry>` (see Step 12)
+- [ ] For redirect gateways: `paymentIntent()` accepts the optional 4th `?string $returnUrl = null` and builds the return/success URL from `$returnUrl ?? <checkout-complete entry>` with a **separator-aware** query append — `$returnUrl` may already carry `?ref=…&hash=…` (see Step 12)
 - [ ] Gateways written before Step 12 that keep only three `paymentIntent()` parameters remain compatible — Resrv passes the return-URL base positionally and PHP ignores the extra argument
 
 ---
@@ -1164,14 +1165,18 @@ protected function buildReturnUrl(Reservation $reservation, ?string $returnUrl =
 {
     $base = $returnUrl ?? $this->getCheckoutCompleteEntry()->absoluteUrl();
 
-    return $base.'?'.http_build_query([
+    $separator = str_contains($base, '?') ? '&' : '?';
+
+    return $base.$separator.http_build_query([
         'id' => $reservation->payment_id,
         'resrv_gateway' => $reservation->payment_gateway,
     ]);
 }
 ```
 
-`getCheckoutCompleteEntry()->absoluteUrl()` above stands for however your gateway already resolves the checkout-complete entry today (e.g. `\Statamic\Facades\Entry::find(config('resrv-config.checkout_completed_entry'))->absoluteUrl()`). Only the `$returnUrl ??` prefix is new. In normal checkout Resrv passes that same checkout-complete base as `$returnUrl`, so the resolved URL is identical either way — the fallback is what keeps three-parameter gateways behaving exactly as they did.
+`getCheckoutCompleteEntry()->absoluteUrl()` above stands for however your gateway already resolves the checkout-complete entry today (e.g. `\Statamic\Facades\Entry::find(config('resrv-config.checkout_completed_entry'))->absoluteUrl()`). In normal checkout Resrv passes that same checkout-complete base as `$returnUrl`, so the resolved URL is identical either way — the fallback is what keeps three-parameter gateways behaving exactly as they did.
+
+> ⚠️ **`$returnUrl` may already carry a query string.** The pay-by-link page's return URL ends in its `?ref=…&hash=…` authentication pair — those parameters are how the return page identifies the customer. Appending a bare `'?'` (as the historical checkout-only pattern did) produces a malformed double-`?` URL and breaks the customer's return leg. Always use the separator-aware append shown above, exactly as Resrv's own surfaces do.
 
 ### What you get for free
 
@@ -1217,6 +1222,10 @@ Resrv reads `->status` against the canonical Stripe-style vocabulary:
 - any other value (e.g. `requires_payment_method`, `requires_confirmation`, `requires_action`) → still payable and resumable.
 
 If your provider uses different status names, map them to these strings on the object you return (or expose a `->status` property that already uses them) so Resrv's resume/reconcile logic reads them correctly.
+
+### Redirect gateways: include `->redirectTo` on still-payable intents
+
+When Resrv resumes a still-payable intent on a **redirect** gateway (`redirectsForPayment()` returns `true`), it forwards the customer to the resumed intent's `->redirectTo` URL — so include the provider's hosted-payment URL on the object you return whenever the intent is still payable. If `->redirectTo` is absent, Resrv treats the resumed intent as unmountable: it voids the intent and mints a replacement through `paymentIntent()`. That degrades safely (the customer still reaches the provider), but it burns an intent on every resume; returning `->redirectTo` gives an interrupted customer a seamless retry. Inline gateways need only `->status`.
 
 ### Reference: StripePaymentGateway (inline)
 

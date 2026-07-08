@@ -294,6 +294,56 @@ class ReservationPaymentPageTest extends TestCase
         $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id.'?resrv_gateway=fakeredirect');
     }
 
+    public function test_pay_resumes_a_redirect_intent_that_carries_a_provider_url()
+    {
+        $this->useRedirectGateway();
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_gateway' => 'fakeredirect',
+            'payment_id' => 'redir_stale',
+        ]);
+
+        $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay');
+
+        $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
+
+        $this->assertCount(0, $gateway->createdIntents, 'A resumable redirect intent must be reused, not replaced.');
+        $this->assertSame('redir_stale', $reservation->fresh()->payment_id);
+        $component->assertRedirect('https://provider.test/checkout/redir_stale?resrv_gateway=fakeredirect');
+    }
+
+    public function test_pay_remints_when_a_resumed_redirect_intent_lacks_a_provider_url()
+    {
+        $this->useRedirectGateway();
+
+        // A Step-13-minimum gateway: retrievePaymentIntent() exposes only ->status, so the
+        // resumed intent has no provider URL to forward the customer to. The pay flow must
+        // void it and mint a fresh intent (which does carry ->redirectTo) — never redirect
+        // the customer to a dead URL.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
+        $gateway->retrieveIncludesRedirectTo = false;
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_gateway' => 'fakeredirect',
+            'payment_id' => 'redir_stale',
+        ]);
+
+        $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay');
+
+        $this->assertContains('redir_stale', array_column($gateway->cancelledIntents, 'payment_id'), 'The unmountable intent must be voided before it is replaced.');
+        $this->assertCount(1, $gateway->createdIntents);
+        $this->assertSame($reservation->customerPaymentUrl(), $gateway->lastReturnUrl);
+
+        $fresh = $reservation->fresh();
+        $this->assertNotSame('redir_stale', $fresh->payment_id);
+        $this->assertNotSame('', $fresh->payment_id);
+        $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id.'?resrv_gateway=fakeredirect');
+    }
+
     public function test_return_from_redirect_gateway_shows_processing_while_still_awaiting()
     {
         $this->useRedirectGateway();

@@ -173,6 +173,32 @@ class ManualReservationCpTest extends TestCase
         ])->assertStatus(422)->assertJsonValidationErrors(['payment_mode']);
     }
 
+    public function test_quote_endpoint_rejects_unparseable_numeric_amounts_with_422()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability();
+
+        $base = [
+            'item_id' => $entry->id(),
+            'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
+            'date_end' => today()->addDays(3)->setTime(12, 0)->toDateTimeString(),
+            'quantity' => 1,
+            'rate_id' => Rate::forEntry($entry->id())->first()?->id,
+        ];
+
+        // Scientific notation passes Laravel's `numeric` rule but not moneyphp's decimal
+        // parser — it must surface as a domain 422, never a 500.
+        $this->postJson(cp_route('resrv.manual.quote'), array_merge($base, [
+            'payment_mode' => 'full',
+            'total_override' => '1e3',
+        ]))->assertStatus(422)->assertJson(['error' => __('The overridden total is not a valid amount.')]);
+
+        $this->postJson(cp_route('resrv.manual.quote'), array_merge($base, [
+            'payment_mode' => 'custom',
+            'custom_amount' => '1e3',
+        ]))->assertStatus(422)->assertJson(['error' => __('The custom amount is not a valid amount.')]);
+    }
+
     public function test_quote_endpoint_tolerates_custom_mode_without_an_amount_yet()
     {
         $this->signInAdmin();

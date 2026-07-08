@@ -14,16 +14,16 @@ class CancelAffiliateCommission
      * commission is owed only while the business retains revenue for the booking.
      *
      * - ReservationRefunded: the gateway returned the whole charge — always void.
-     * - ReservationCancelled: void only when no payment ever reached a gateway (partner /
-     *   zero-charge voids). A no-refund cancellation of a paid booking keeps the payment,
-     *   so the commission stands.
+     * - ReservationCancelled: void only when the business holds no revenue for the booking
+     *   (partner / zero-charge voids, unpaid manual holds). A no-refund cancellation of a
+     *   paid booking keeps the payment, so the commission stands.
      *
      * Stamps only rows whose cancelled_at is still null, so re-dispatching the event leaves the
      * original cancellation timestamp untouched and never errors.
      */
     public function handle(ReservationRefunded|ReservationCancelled $event): void
     {
-        if ($event instanceof ReservationCancelled && $event->reservation->hasGatewayPayment()) {
+        if ($event instanceof ReservationCancelled && $this->businessRetainsRevenue($event)) {
             return;
         }
 
@@ -31,5 +31,24 @@ class CancelAffiliateCommission
             ->where('reservation_id', $event->reservation->id)
             ->whereNull('cancelled_at')
             ->update(['cancelled_at' => now()]);
+    }
+
+    /**
+     * An unpaid-hold cancellation (admin cancel or the hold-lapse sweep) never captured
+     * money — the webhook is the only capture path and it transitions AWAITING_PAYMENT to
+     * CONFIRMED — even when the customer opened the pay link and left an (unpaid, now-voided)
+     * intent id in payment_id. hasGatewayPayment() alone would misread that intent id as
+     * revenue and keep a commission on a booking that collected nothing.
+     */
+    protected function businessRetainsRevenue(ReservationCancelled $event): bool
+    {
+        if (in_array($event->context, [
+            ReservationCancelled::CONTEXT_UNPAID_HOLD,
+            ReservationCancelled::CONTEXT_HOLD_LAPSED,
+        ], true)) {
+            return false;
+        }
+
+        return $event->reservation->hasGatewayPayment();
     }
 }

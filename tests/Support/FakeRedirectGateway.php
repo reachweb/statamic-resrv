@@ -16,6 +16,13 @@ class FakeRedirectGateway extends FakePaymentGateway
     /** The return-URL base handed to the most recent paymentIntent() call. */
     public ?string $lastReturnUrl = null;
 
+    /**
+     * When false, retrievePaymentIntent() returns the Step-13 minimum contract — an object
+     * exposing only ->status — modelling a spec-compliant third-party redirect gateway whose
+     * resumed intents carry no provider URL.
+     */
+    public bool $retrieveIncludesRedirectTo = true;
+
     public function name(): string
     {
         return 'fakeredirect';
@@ -51,10 +58,13 @@ class FakeRedirectGateway extends FakePaymentGateway
     public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
     {
         $intent = new \stdClass;
-        $intent->id = $paymentId;
-        $intent->client_secret = 'redir_cs_'.$paymentId;
         $intent->status = 'requires_payment_method';
-        $intent->redirectTo = 'https://provider.test/checkout/'.$paymentId;
+
+        if ($this->retrieveIncludesRedirectTo) {
+            $intent->id = $paymentId;
+            $intent->client_secret = 'redir_cs_'.$paymentId;
+            $intent->redirectTo = 'https://provider.test/checkout/'.$paymentId;
+        }
 
         return $intent;
     }

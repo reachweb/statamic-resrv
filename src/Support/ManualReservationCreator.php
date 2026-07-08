@@ -252,7 +252,7 @@ class ManualReservationCreator
         $totalOverridden = array_key_exists('total_override', $input) && $input['total_override'] !== null && $input['total_override'] !== '';
 
         if ($totalOverridden) {
-            $total = Price::create($input['total_override']);
+            $total = $this->parseAmount($input['total_override'], __('The overridden total is not a valid amount.'));
             $basePrice = Price::create($total->format())->subtract($extrasTotal, $optionsTotal);
 
             if (Price::create(0)->greaterThan($basePrice)) {
@@ -341,7 +341,7 @@ class ManualReservationCreator
             return Price::create(0);
         }
 
-        $amount = Price::create($raw);
+        $amount = $this->parseAmount($raw, __('The custom amount is not a valid amount.'));
 
         if ($amount->isZero() || Price::create(0)->greaterThan($amount)) {
             throw new ManualReservationException(__('The custom amount must be greater than zero.'));
@@ -352,6 +352,21 @@ class ManualReservationCreator
         }
 
         return $amount;
+    }
+
+    /**
+     * Parse an admin-supplied money figure into a Price. The HTTP layer's `numeric` rule
+     * accepts values moneyphp's decimal parser does not (scientific notation like "1e3",
+     * or more decimals than the currency's subunit), so a parse failure must surface as a
+     * domain error (422), not a 500 — same posture as priceExtras().
+     */
+    protected function parseAmount(string|int|float $raw, string $message): PriceClass
+    {
+        try {
+            return Price::create($raw);
+        } catch (\Throwable) {
+            throw new ManualReservationException($message);
+        }
     }
 
     /**
