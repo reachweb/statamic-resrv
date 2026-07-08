@@ -43,6 +43,32 @@ class FakePaymentGateway implements PaymentInterface
      */
     public ?string $retrievedIntentStatus = null;
 
+    /**
+     * Intent ids a successful cancel has moved to 'canceled' — a subsequent retrieve reports that,
+     * modelling a real gateway (Stripe leaves a cancelled intent in the 'canceled' state). Lets a
+     * caller that re-reads after cancelling verify the intent is genuinely dead.
+     *
+     * @var array<int, string>
+     */
+    public array $canceledIds = [];
+
+    /**
+     * When false, cancelPaymentIntent() records the call but does NOT move the intent to 'canceled' —
+     * modelling a transient provider failure that StripePaymentGateway swallows and never surfaces,
+     * leaving the intent live. Lets tests exercise the keep-the-reference-on-failed-cancel path.
+     */
+    public bool $cancelSucceeds = true;
+
+    /**
+     * Optional callback fired INSIDE paymentIntent() (after the intent is built), receiving the
+     * reservation — lets a test simulate a concurrent state change (a CP cancel/confirm or the
+     * hold-lapse sweep) landing during the gateway round-trip, to exercise the locked payability
+     * re-check in HandlesDirectGatewayPayment::resolveOrCreateIntent().
+     *
+     * @var null|callable(Reservation): void
+     */
+    public $onPaymentIntent = null;
+
     public function name(): string
     {
         return 'fake';
@@ -72,6 +98,11 @@ class FakePaymentGateway implements PaymentInterface
             'reservation_id' => $reservation->id ?? null,
         ];
 
+        // Simulate a concurrent transition committing during the (real: network) round-trip.
+        if ($this->onPaymentIntent !== null) {
+            ($this->onPaymentIntent)($reservation);
+        }
+
         return $data;
     }
 
@@ -80,7 +111,9 @@ class FakePaymentGateway implements PaymentInterface
         $data = new \stdClass;
         $data->id = $paymentId;
         $data->client_secret = 'cs_'.$paymentId;
-        $data->status = $this->retrievedIntentStatus ?? 'requires_payment_method';
+        $data->status = in_array($paymentId, $this->canceledIds, true)
+            ? 'canceled'
+            : ($this->retrievedIntentStatus ?? 'requires_payment_method');
 
         return $data;
     }
@@ -91,6 +124,12 @@ class FakePaymentGateway implements PaymentInterface
             'payment_id' => $paymentId,
             'reservation_id' => $reservation->id,
         ];
+
+        // A successful cancel leaves the intent 'canceled' at the provider; a swallowed failure
+        // (cancelSucceeds=false) leaves it live, exactly as a real gateway would.
+        if ($this->cancelSucceeds) {
+            $this->canceledIds[] = $paymentId;
+        }
     }
 
     public function refund($reservation)

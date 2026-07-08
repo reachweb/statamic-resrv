@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationRefundProcessor
@@ -173,10 +174,45 @@ class ReservationRefundProcessor
             return;
         }
 
-        // A dead or never-charged intent: void any cancelable one, then drop the reference so refunds
-        // treat the booking as an out-of-band settlement (no gateway charge to return).
+        // A dead or never-charged intent: void any cancelable one. Only drop the reference once we have
+        // VERIFIED the intent is actually gone — cancelOpenIntentQuietly (and StripePaymentGateway::
+        // cancelPaymentIntent beneath it) swallow transient provider failures, so a silent network error
+        // would otherwise discard the only reference to an intent still live at the gateway, stranding a
+        // charge the customer could complete after this out-of-band confirm. When the cancellation cannot
+        // be confirmed, keep the reference: a later refund then routes through the gateway with the real
+        // id (surfacing any failure to an admin) rather than treating captured money as already returned.
+        // Mirrors the conservative retrieve-failure branch above.
         $this->cancelOpenIntentQuietly($reservation);
-        $reservation->update(['payment_id' => '']);
+
+        if ($this->intentIsVerifiablyGone($gateway, $reservation, $paymentId)) {
+            $reservation->update(['payment_id' => '']);
+
+            return;
+        }
+
+        Log::warning('Could not verify the payment intent was cancelled while confirming an out-of-band payment; keeping the gateway charge reference for reconciliation.', [
+            'reservation_id' => $reservation->id,
+            'payment_id' => $paymentId,
+        ]);
+    }
+
+    /**
+     * Whether the reservation's intent is confirmed no longer completable — cancelled at the gateway,
+     * or definitively gone (never existed / deleted). A re-read after the cancel attempt is the only
+     * safe signal: cancelPaymentIntent tolerates transient failures without surfacing them, so a
+     * cleared reference is justified only when the gateway itself reports the intent can no longer take
+     * money. Any still-live status, or a retrieve that throws (transient), returns false so the caller
+     * keeps the reference and a later refund can still reach the charge.
+     */
+    protected function intentIsVerifiablyGone(PaymentInterface $gateway, Reservation $reservation, string $paymentId): bool
+    {
+        try {
+            $intent = $gateway->retrievePaymentIntent($paymentId, $reservation);
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        return $intent === null || ($intent->status ?? '') === 'canceled';
     }
 
     /**

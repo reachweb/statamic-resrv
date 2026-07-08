@@ -160,6 +160,40 @@ class ReservationPaymentPageTest extends TestCase
         $this->assertSame($paymentId, $reservation->fresh()->payment_id);
     }
 
+    public function test_pay_aborts_and_voids_the_intent_when_the_reservation_is_cancelled_mid_flight()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation();
+
+        // The hold-lapse sweep / a CP cancel commits DURING the gateway round-trip — after pay()'s
+        // outer guard already passed. The freshly-minted intent must be voided and payment_id must NOT
+        // be written, so a terminal booking can never carry a chargeable intent the customer could
+        // still complete. (Cache::lock only serialises concurrent pay() calls; the transition rides a
+        // separate DB row lock, so the write must re-verify payability under that same lock.)
+        $gateway->onPaymentIntent = function (Reservation $r) {
+            $r->transitionTo(ReservationStatus::CANCELLED);
+        };
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentView', '')
+            ->assertSet('clientSecret', '')
+            ->assertSet('paymentError', false);
+
+        $fresh = $reservation->fresh();
+        $this->assertSame(ReservationStatus::CANCELLED->value, $fresh->status);
+
+        // The intent was minted but never committed to the row...
+        $this->assertSame('', $fresh->payment_id);
+        $this->assertCount(1, $gateway->createdIntents);
+
+        // ...and it was voided so it can't be completed against a cancelled booking.
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertSame($gateway->createdIntents[0]['payment_id'], $gateway->cancelledIntents[0]['payment_id']);
+    }
+
     public function test_full_round_trip_pay_webhook_confirm_shows_paid()
     {
         $this->fakeGateway();

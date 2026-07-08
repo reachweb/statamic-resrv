@@ -450,6 +450,10 @@ class AvailabilityRepository
 
         $overlapping = Reservation::whereIn('rate_id', $rateIds)
             ->whereNotIn('status', ReservationStatus::terminal())
+            // View-only manual reservations (affects_availability=false) never decrement inventory, so
+            // they must not consume shared-rate capacity either. Children never carry the flag (only the
+            // frontend checkout creates them), so the ChildReservation branch below stays unfiltered.
+            ->where('affects_availability', true)
             ->when($rangeEnd, fn ($q) => $q->where('date_start', '<', $rangeEnd))
             ->when($rangeStart, fn ($q) => $q->where('date_end', '>', $rangeStart))
             ->get(['rate_id', 'quantity', 'date_start', 'date_end']);
@@ -508,6 +512,9 @@ class AvailabilityRepository
         $overlapping = Reservation::where('rate_id', $rate->id)
             ->when($excludeParentId, fn ($q) => $q->where('id', '!=', $excludeParentId))
             ->whereNotIn('status', ReservationStatus::terminal())
+            // View-only manual holds (affects_availability=false) never took inventory; exclude them
+            // from the shared-rate cap too. Children never carry the flag, so leave their branch alone.
+            ->where('affects_availability', true)
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)
             ->when($useLocks, fn ($q) => $q->lockForUpdate())

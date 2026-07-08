@@ -278,6 +278,83 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertCount(0, $gateway->cancelledIntents);
     }
 
+    public function test_confirming_online_out_of_band_keeps_the_reference_when_the_cancel_fails()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        $gateway->refundCalls = [];
+        // The provider cancel fails transiently and (like Stripe) swallows the error: the intent stays
+        // live at the gateway. The reference must be KEPT so a later refund can still reach the charge,
+        // rather than cleared — which would strand a charge the customer could still complete.
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_unpaid_online',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        // Cancel was attempted but could not be verified, so the reference survives.
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertSame('pi_unpaid_online', $reservation->payment_id);
+
+        // A later refund therefore routes through the gateway with the real id (surfacing any failure
+        // to an admin) instead of silently treating the booking as an out-of-band, no-charge settlement.
+        app(ReservationRefundProcessor::class)->refund($reservation);
+
+        $this->assertSame('refunded', $reservation->fresh()->status);
+        $this->assertCount(1, $gateway->refundCalls);
+    }
+
+    public function test_customer_cannot_self_refund_an_online_out_of_band_confirmation()
+    {
+        Mail::fake();
+        Config::set('resrv-config.enable_customer_cancellations', true);
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+
+        // An online-gateway manual booking the admin confirmed in person BEFORE the customer ever
+        // created an intent (payment_id stays empty), inside a wide-open free-cancellation window.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => '',
+            'payment_gateway' => 'fake',
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 5,
+            'date_start' => now()->addDays(20)->startOfDay(),
+            'date_end' => now()->addDays(22)->startOfDay(),
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertSame('', $reservation->payment_id);
+
+        // The money was collected out of band, so there is nothing to return through the gateway — a
+        // self-service refund would land REFUNDED without money moving. It must NOT be self-refundable;
+        // an admin settles it manually via the CP refund action instead.
+        $this->assertTrue($reservation->confirmedWithoutGatewayCharge());
+        $this->assertFalse($reservation->supportsAutomaticRefund());
+        $this->assertFalse($reservation->canCancelWithRefund());
+        $this->assertFalse($reservation->canCancelWithoutRefund());
+        $this->assertFalse($reservation->canBeCancelledByCustomer());
+    }
+
     public function test_cancel_without_refund_voids_the_freshly_written_intent_not_a_stale_snapshot()
     {
         /** @var FakePaymentGateway $gateway */

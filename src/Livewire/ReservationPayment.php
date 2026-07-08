@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus as ReservationStatusEnum;
+use Reach\StatamicResrv\Exceptions\ReservationNoLongerPayable;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Traits\HandlesCustomerLookup;
@@ -169,7 +170,17 @@ class ReservationPayment extends Component
         }
 
         try {
-            return $this->mountGatewayPayment($reservation, $reservation->amountDue(), $returnUrl);
+            return $this->mountGatewayPayment(
+                $reservation,
+                $reservation->amountDue(),
+                $returnUrl,
+                fn (Reservation $fresh) => $fresh->isAwaitingPayment() && ! $this->deadlinePassed($fresh),
+            );
+        } catch (ReservationNoLongerPayable $e) {
+            // The hold lapsed, or an admin cancelled/confirmed the reservation between the outer guard
+            // and the locked intent write; the freshly-minted intent has already been voided. Re-render
+            // so the page shows the reservation's new state instead of a payment form — no error notice.
+            return;
         } catch (UnknownPaymentGateway $e) {
             Log::error('The payment gateway recorded for this reservation is no longer configured.', [
                 'reservation_id' => $reservation->id,

@@ -298,6 +298,9 @@ trait HandlesAvailabilityQueries
 
         $overlapping = Reservation::where('rate_id', $rateId)
             ->whereNotIn('status', ReservationStatus::terminal())
+            // View-only manual holds (affects_availability=false) never took inventory; exclude them
+            // from the shared-rate cap too. Children never carry the flag, so leave their branch alone.
+            ->where('affects_availability', true)
             ->where('date_start', '<', $maxDate)
             ->where('date_end', '>', $minDate)
             ->get(['quantity', 'date_start', 'date_end']);

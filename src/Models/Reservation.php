@@ -372,6 +372,17 @@ class Reservation extends Model
             return true;
         }
 
+        // An out-of-band/manual confirmation (CONFIRMED on an online gateway with no charge reference)
+        // collected the money outside any gateway, so there is nothing to return through an API. A
+        // self-service refund would short-circuit the gateway (refundThroughGateway) and land REFUNDED
+        // without money moving and without an admin touching it — restoring stock and reporting the
+        // out-of-band payment as returned when it never was. Route it to manual handling ("contact us")
+        // instead; an admin can still deliberately settle it via the CP refund action, which does not
+        // go through this method.
+        if ($this->confirmedWithoutGatewayCharge()) {
+            return false;
+        }
+
         try {
             return $this->resolvePaymentGateway()->supportsAutomaticRefunds();
         } catch (UnknownPaymentGateway) {
