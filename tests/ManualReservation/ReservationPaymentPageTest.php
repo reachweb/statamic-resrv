@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\ManualReservation;
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
@@ -192,6 +193,64 @@ class ReservationPaymentPageTest extends TestCase
         // ...and it was voided so it can't be completed against a cancelled booking.
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame($gateway->createdIntents[0]['payment_id'], $gateway->cancelledIntents[0]['payment_id']);
+    }
+
+    public function test_pay_refuses_to_resume_an_intent_after_a_cancel_lands_behind_the_guard()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_live_race']);
+
+        $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class);
+
+        // A CP cancel commits right after pay()'s outer guard hydrates the row, while its
+        // intent void hasn't landed (or failed tolerantly) so the stored intent is still live
+        // at the provider. Resuming must go through the locked payability re-check — without
+        // it the customer gets a chargeable secret for a cancelled booking.
+        Reservation::retrieved(function (Reservation $model) use ($reservation) {
+            if ((int) $model->id === $reservation->id && $model->status === ReservationStatus::AWAITING_PAYMENT->value) {
+                DB::table('resrv_reservations')
+                    ->where('id', $reservation->id)
+                    ->update(['status' => ReservationStatus::CANCELLED->value]);
+            }
+        });
+
+        $component->call('pay')
+            ->assertSet('paymentView', '')
+            ->assertSet('clientSecret', '')
+            ->assertSet('paymentError', false);
+
+        $this->assertCount(0, $gateway->createdIntents);
+        // Disposal of the stored intent belongs to the cancelling transition, not the pay path.
+        $this->assertCount(0, $gateway->cancelledIntents);
+    }
+
+    public function test_pay_refuses_a_resumed_intent_when_a_cancel_lands_during_the_retrieve()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_live_retrieve_race']);
+
+        // The cancel commits DURING the resume's gateway round-trip — after the under-lock
+        // payability check already passed. The fresh-row re-check before handing out the
+        // secret must refuse the still-live intent.
+        $gateway->onRetrievePaymentIntent = function (Reservation $r) {
+            $r->transitionTo(ReservationStatus::CANCELLED);
+        };
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentView', '')
+            ->assertSet('clientSecret', '')
+            ->assertSet('paymentError', false);
+
+        $this->assertSame(ReservationStatus::CANCELLED->value, $reservation->fresh()->status);
+        $this->assertCount(0, $gateway->createdIntents);
+        // The pay path must NOT void the stored intent: the cancelling transition owns its
+        // disposal, and settlePaidOutOfBand deliberately keeps a capturing intent's reference.
+        $this->assertCount(0, $gateway->cancelledIntents);
     }
 
     public function test_full_round_trip_pay_webhook_confirm_shows_paid()

@@ -69,6 +69,15 @@ class FakePaymentGateway implements PaymentInterface
      */
     public $onPaymentIntent = null;
 
+    /**
+     * Same as $onPaymentIntent but fired INSIDE retrievePaymentIntent() — lets a test land a
+     * concurrent transition during the resume round-trip, to exercise the fresh-row payability
+     * re-check before a resumed intent is handed out.
+     *
+     * @var null|callable(Reservation): void
+     */
+    public $onRetrievePaymentIntent = null;
+
     public function name(): string
     {
         return 'fake';
@@ -114,6 +123,11 @@ class FakePaymentGateway implements PaymentInterface
         $data->status = in_array($paymentId, $this->canceledIds, true)
             ? 'canceled'
             : ($this->retrievedIntentStatus ?? 'requires_payment_method');
+
+        // Simulate a concurrent transition committing during the (real: network) round-trip.
+        if ($this->onRetrievePaymentIntent !== null) {
+            ($this->onRetrievePaymentIntent)($reservation);
+        }
 
         return $data;
     }

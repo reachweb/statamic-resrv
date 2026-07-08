@@ -103,35 +103,29 @@ trait HandlesDirectGatewayPayment
     /**
      * Resume the reservation's stored intent when it is still payable, otherwise mint a fresh one; a
      * dead (cancelled) intent gets replaced, and a succeeded/processing one returns null — the money is
-     * already moving, so creating another intent would risk a double charge. When $stillPayable is
-     * given, the reservation's payability is re-verified inside the intent-creation lock (and under the
-     * row lock at write time) so a status change racing the gateway round-trip cannot leave a
-     * chargeable intent on a terminal/confirmed booking; if it fires, the minted intent is voided and
-     * ReservationNoLongerPayable is thrown.
+     * already moving, so creating another intent would risk a double charge. Both resume and mint run
+     * inside the per-reservation intent lock. When $stillPayable is given, the reservation's payability
+     * is re-verified under that lock, again on a fresh row right before a resumed intent is handed out
+     * (the retrieve is a network round-trip a transition can commit during), and under the row lock at
+     * write time for a mint — so a status change racing a gateway round-trip cannot leave a chargeable
+     * intent on a terminal/confirmed booking; if it fires, ReservationNoLongerPayable is thrown (and a
+     * just-minted intent is voided first).
      *
      * @throws ReservationNoLongerPayable
      */
     protected function resolveOrCreateIntent(PaymentInterface $gateway, Reservation $reservation, PriceClass $amount, string $returnUrl, ?Closure $stillPayable = null): ?object
     {
-        $resumed = $this->resumeExistingIntent($gateway, $reservation);
-
-        // A payable intent to resume, or null meaning "money already moving — do not mint another".
-        // An unmountable resume (redirect gateway, no provider URL) falls through to the locked
-        // section, which replaces it.
-        if ($resumed !== false && $this->resumedIntentIsMountable($gateway, $resumed)) {
-            return $resumed;
-        }
-
         // Serialize create-and-store per reservation so two concurrent pay() requests can't each
         // mint a payable intent — last-write-wins would leave the loser untracked yet chargeable.
         // The gateway call is a network round-trip, so this uses an app-level lock that holds no
         // DB connection (unlike a row lock). The waiter re-checks under the lock and resumes the
-        // winner's intent instead of creating a second one.
+        // winner's intent instead of creating a second one. Resume rides the same lock — a stored
+        // intent must never be handed out without the payability re-check below (the outer pay()
+        // guard ran before this lock, so a CP cancel/confirm or the hold-lapse sweep may have
+        // transitioned the row since).
         return Cache::lock('resrv-payment-intent-'.$reservation->id, 15)->block(10, function () use ($gateway, $reservation, $amount, $returnUrl, $stillPayable) {
             $reservation->refresh();
 
-            // Re-check payability before resuming a stored intent: the outer guard ran before this
-            // lock, so the hold-lapse sweep or a CP cancel/confirm may have transitioned the row since.
             if ($stillPayable !== null && ! $stillPayable($reservation)) {
                 throw new ReservationNoLongerPayable($reservation->id);
             }
@@ -139,6 +133,27 @@ trait HandlesDirectGatewayPayment
             $resumed = $this->resumeExistingIntent($gateway, $reservation);
             if ($resumed !== false) {
                 if ($this->resumedIntentIsMountable($gateway, $resumed)) {
+                    // Null means the money is already moving — nothing chargeable is handed out,
+                    // so no re-check is needed.
+                    if ($resumed === null) {
+                        return null;
+                    }
+
+                    // The retrieve above was a network round-trip, so a transition may have
+                    // committed since the check under the lock: re-verify on a fresh row before
+                    // handing out the chargeable secret — the resume-path analogue of the mint
+                    // path's row-locked re-check. No void on failure: the transition that made
+                    // the row unpayable owns the stored intent's disposal (cancelOpenIntentQuietly
+                    // voids it; settlePaidOutOfBand deliberately KEEPS a capturing intent's
+                    // reference so the charge stays refundable — voiding here would strand it).
+                    if ($stillPayable !== null) {
+                        $fresh = Reservation::query()->find($reservation->id);
+
+                        if ($fresh === null || ! $stillPayable($fresh)) {
+                            throw new ReservationNoLongerPayable($reservation->id);
+                        }
+                    }
+
                     return $resumed;
                 }
 
