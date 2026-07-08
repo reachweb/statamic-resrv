@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
+use Reach\StatamicResrv\Exceptions\ManualReservationException;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -380,8 +381,12 @@ class ReservationCpController extends Controller
             return response()->json(['error' => 'This reservation does not have a valid customer email address to send to.'], 422);
         }
 
-        if (! app(ManualReservationCreator::class)->sendPaymentRequestEmail($reservation)) {
-            return response()->json(['error' => 'The payment request email is disabled in the email settings, so it was not sent.'], 422);
+        try {
+            if (! app(ManualReservationCreator::class)->sendPaymentRequestEmail($reservation)) {
+                return response()->json(['error' => 'The payment request email is disabled in the email settings, so it was not sent.'], 422);
+            }
+        } catch (ManualReservationException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
         }
 
         return response()->json($this->serializeFreshReservation($reservation->id));

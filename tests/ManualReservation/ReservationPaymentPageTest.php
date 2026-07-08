@@ -161,6 +161,48 @@ class ReservationPaymentPageTest extends TestCase
         $this->assertSame($paymentId, $reservation->fresh()->payment_id);
     }
 
+    public function test_pay_treats_a_held_requires_capture_intent_as_processing()
+    {
+        $gateway = $this->fakeGateway();
+        $gateway->retrievedIntentStatus = 'requires_capture';
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_authorized']);
+
+        // The customer already authorized: the money is held awaiting merchant capture, so the
+        // page must show the processing state — never remount a form on the held authorization,
+        // and never void-and-replace it (that would release secured money and re-ask for it).
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentProcessing', true)
+            ->assertSet('clientSecret', '')
+            ->assertSee(trans('statamic-resrv::frontend.paymentProcessing'));
+
+        $this->assertCount(0, $gateway->createdIntents);
+        $this->assertCount(0, $gateway->cancelledIntents);
+        $this->assertSame('pi_authorized', $reservation->fresh()->payment_id);
+    }
+
+    public function test_pay_remints_when_a_resumed_inline_intent_lacks_a_client_secret()
+    {
+        $gateway = $this->fakeGateway();
+        $gateway->retrieveOmitsClientSecret = true;
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_bare']);
+
+        // A Step-13 spec-minimum retrieve (status only) cannot mount an inline payment form:
+        // the stale intent must be voided and replaced, never rendered with an empty secret.
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentView', 'statamic-resrv::livewire.checkout-payment')
+            ->assertNotSet('clientSecret', '');
+
+        $this->assertContains('pi_bare', array_column($gateway->cancelledIntents, 'payment_id'), 'The unmountable intent must be voided before it is replaced.');
+        $this->assertCount(1, $gateway->createdIntents);
+        $this->assertSame($gateway->createdIntents[0]['payment_id'], $reservation->fresh()->payment_id);
+    }
+
     public function test_pay_aborts_and_voids_the_intent_when_the_reservation_is_cancelled_mid_flight()
     {
         $gateway = $this->fakeGateway();

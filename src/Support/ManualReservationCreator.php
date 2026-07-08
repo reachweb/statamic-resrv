@@ -176,9 +176,22 @@ class ManualReservationCreator
      * Send the payment request through the standard email system and stamp the send —
      * only when the dispatcher actually sent it (a site that disabled the event via
      * config must not get a false stamp).
+     *
+     * @throws ManualReservationException when an online (non-manually-confirmable) gateway has
+     *                                    no pay link to offer — the payment page entry was
+     *                                    unconfigured/unpublished after creation. The email
+     *                                    would otherwise fall back to its offline "send us your
+     *                                    payment" wording with no way to actually pay.
      */
     public function sendPaymentRequestEmail(Reservation $reservation): bool
     {
+        if (! $reservation->paymentGatewaySupportsManualConfirmation()
+            && $reservation->customerPaymentUrl() === null) {
+            throw new ManualReservationException(
+                __('The payment page entry is not configured or published, so an online payment request cannot be sent.')
+            );
+        }
+
         $sent = app(ReservationEmailDispatcher::class)->send(
             $reservation,
             ReservationEmailEvent::CustomerPaymentRequest,

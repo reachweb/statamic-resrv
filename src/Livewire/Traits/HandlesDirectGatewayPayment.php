@@ -123,7 +123,14 @@ trait HandlesDirectGatewayPayment
         // intent must never be handed out without the payability re-check below (the outer pay()
         // guard ran before this lock, so a CP cancel/confirm or the hold-lapse sweep may have
         // transitioned the row since).
-        return Cache::lock('resrv-payment-intent-'.$reservation->id, 15)->block(10, function () use ($gateway, $reservation, $amount, $returnUrl, $stillPayable) {
+        //
+        // The TTL must outlive the WHOLE critical section — up to three provider round-trips
+        // (retrieve, void, mint) at Stripe's default 80s client timeout — or it expires while a
+        // slow gateway call is still in flight and a waiter can acquire the lock, see no stored
+        // intent, and mint a duplicate chargeable one the first request's write then untracks.
+        // Waiters give up after 10s (a retryable payment error), so the long TTL only costs
+        // recovery time when a holder dies without releasing.
+        return Cache::lock('resrv-payment-intent-'.$reservation->id, 300)->block(10, function () use ($gateway, $reservation, $amount, $returnUrl, $stillPayable) {
             $reservation->refresh();
 
             if ($stillPayable !== null && ! $stillPayable($reservation)) {
@@ -197,22 +204,30 @@ trait HandlesDirectGatewayPayment
     }
 
     /**
-     * Whether a resumed intent can actually be mounted for its gateway. Redirect gateways forward
-     * the customer to $intent->redirectTo, but retrievePaymentIntent()'s contract only requires
-     * ->status (UPGRADE-PAYMENT-GATEWAYS.md Step 13) — a spec-compliant gateway may resume an
-     * intent carrying no provider URL. Such an intent is voided and replaced with a fresh mint
-     * (whose paymentIntent() contract does include ->redirectTo) instead of redirecting the
-     * customer nowhere. Null (money already moving) never mounts, so it always passes.
+     * Whether a resumed intent can actually be mounted for its gateway. retrievePaymentIntent()'s
+     * contract only requires ->status (UPGRADE-PAYMENT-GATEWAYS.md Step 13), but mounting needs
+     * more: redirect gateways forward the customer to $intent->redirectTo, and inline gateways
+     * render their payment view around $intent->client_secret. A spec-minimal resumed intent
+     * missing its mount credential is voided and replaced with a fresh mint (whose
+     * paymentIntent() contract does include it) instead of redirecting the customer nowhere or
+     * rendering a payment form with an empty secret. Null (money already moving) never mounts,
+     * so it always passes.
      */
     protected function resumedIntentIsMountable(PaymentInterface $gateway, ?object $intent): bool
     {
-        if ($intent === null || ! $gateway->redirectsForPayment()) {
+        if ($intent === null) {
             return true;
         }
 
-        $redirectTo = $intent->redirectTo ?? null;
+        if ($gateway->redirectsForPayment()) {
+            $redirectTo = $intent->redirectTo ?? null;
 
-        return is_string($redirectTo) && $redirectTo !== '';
+            return is_string($redirectTo) && $redirectTo !== '';
+        }
+
+        $clientSecret = $intent->client_secret ?? null;
+
+        return is_string($clientSecret) && $clientSecret !== '';
     }
 
     /**
@@ -238,10 +253,13 @@ trait HandlesDirectGatewayPayment
 
     /**
      * Inspect the reservation's stored intent: the intent to resume when it is still payable,
-     * null when the money is already moving (succeeded/processing — minting another would risk a
-     * double charge), or false when there is nothing to resume and a fresh intent is needed. A
-     * transient retrieve failure propagates (see StripePaymentGateway::retrievePaymentIntent) so
-     * a still-live intent is never replaced on the strength of a failed read.
+     * null when the money is already moving (succeeded/processing/requires_capture — captured,
+     * settling, or held; minting another would risk a double charge, and remounting a held
+     * authorization would ask the customer to pay money that is already secured — the Step 13
+     * status contract promises all three keep the reference), or false when there is nothing to
+     * resume and a fresh intent is needed. A transient retrieve failure propagates (see
+     * StripePaymentGateway::retrievePaymentIntent) so a still-live intent is never replaced on
+     * the strength of a failed read.
      */
     protected function resumeExistingIntent(PaymentInterface $gateway, Reservation $reservation): object|false|null
     {
@@ -255,7 +273,7 @@ trait HandlesDirectGatewayPayment
             return false;
         }
 
-        if (in_array($existing->status ?? '', ['succeeded', 'processing'], true)) {
+        if (in_array($existing->status ?? '', ['succeeded', 'processing', 'requires_capture'], true)) {
             return null;
         }
 

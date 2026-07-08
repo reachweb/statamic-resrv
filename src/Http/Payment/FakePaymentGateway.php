@@ -60,6 +60,13 @@ class FakePaymentGateway implements PaymentInterface
     public bool $cancelSucceeds = true;
 
     /**
+     * When true, retrievePaymentIntent() returns the Step-13 spec-minimum object (id + status,
+     * no client_secret) — modelling an inline gateway that implements only the documented
+     * minimum, to exercise the void-and-remint path for unmountable resumed intents.
+     */
+    public bool $retrieveOmitsClientSecret = false;
+
+    /**
      * Optional callback fired INSIDE paymentIntent() (after the intent is built), receiving the
      * reservation — lets a test simulate a concurrent state change (a CP cancel/confirm or the
      * hold-lapse sweep) landing during the gateway round-trip, to exercise the locked payability
@@ -119,7 +126,9 @@ class FakePaymentGateway implements PaymentInterface
     {
         $data = new \stdClass;
         $data->id = $paymentId;
-        $data->client_secret = 'cs_'.$paymentId;
+        if (! $this->retrieveOmitsClientSecret) {
+            $data->client_secret = 'cs_'.$paymentId;
+        }
         $data->status = in_array($paymentId, $this->canceledIds, true)
             ? 'canceled'
             : ($this->retrievedIntentStatus ?? 'requires_payment_method');

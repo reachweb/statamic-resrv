@@ -209,6 +209,69 @@ class PaymentRequestEmailTest extends TestCase
         $this->assertNull($awaiting->fresh()->payment_request_email_sent_at);
     }
 
+    public function test_resend_endpoint_rejects_an_online_request_when_the_payment_page_is_gone()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'send_payment_request_email' => false,
+        ]));
+
+        // The payment page was unconfigured/unpublished after creation: an online payment
+        // request now has no link to pay through, so the resend must refuse instead of sending
+        // offline-payment wording — and it must not stamp a send that never happened.
+        Config::set('resrv-config.manual_reservations_payment_entry', null);
+
+        $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'The payment page entry is not configured or published, so an online payment request cannot be sent.');
+
+        Mail::assertNotSent(ReservationPaymentRequest::class);
+        $this->assertNull($reservation->fresh()->payment_request_email_sent_at);
+    }
+
+    public function test_offline_resend_still_works_without_a_payment_page()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'payment_gateway' => 'offline',
+            'send_payment_request_email' => false,
+        ]));
+
+        Config::set('resrv-config.manual_reservations_payment_entry', null);
+
+        $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
+            ->assertOk();
+
+        Mail::assertSent(ReservationPaymentRequest::class, fn ($mail) => $mail->hasTo('customer@example.com'));
+        $this->assertNotNull($reservation->fresh()->payment_request_email_sent_at);
+    }
+
+    public function test_online_request_without_a_pay_link_renders_contact_copy_not_transfer_wording()
+    {
+        Mail::fake();
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'send_payment_request_email' => false,
+        ]));
+
+        Config::set('resrv-config.manual_reservations_payment_entry', null);
+
+        // Defense-in-depth for senders that bypass the guard: the template itself must not
+        // imply a bank-transfer flow for an online reservation that simply lost its pay link.
+        $html = (new ReservationPaymentRequest($reservation))->render();
+        $this->assertStringNotContainsString('Pay now', $html);
+        $this->assertStringNotContainsString('as soon as your payment arrives', $html);
+        $this->assertStringContainsString('Please contact us to arrange the payment', $html);
+    }
+
     public function test_building_reservation_email_hook_fires_for_the_payment_request()
     {
         Event::fake([BuildingReservationEmail::class]);

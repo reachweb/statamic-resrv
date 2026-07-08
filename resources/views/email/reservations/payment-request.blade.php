@@ -39,8 +39,10 @@
 @endcomponent
 
 {{ __("If the button does not work, copy this link into your browser:") }} {{ $payUrl }}
-@else
+@elseif ($isOffline)
 {{ __("We will confirm your reservation as soon as your payment arrives. Please use the booking reference above when sending your payment.") }}
+@else
+{{ __("Please contact us to arrange the payment for this reservation.") }}
 @endif
 
 {{ __("Thank you") }},<br>

@@ -1225,7 +1225,9 @@ If your provider uses different status names, map them to these strings on the o
 
 ### Redirect gateways: include `->redirectTo` on still-payable intents
 
-When Resrv resumes a still-payable intent on a **redirect** gateway (`redirectsForPayment()` returns `true`), it forwards the customer to the resumed intent's `->redirectTo` URL — so include the provider's hosted-payment URL on the object you return whenever the intent is still payable. If `->redirectTo` is absent, Resrv treats the resumed intent as unmountable: it voids the intent and mints a replacement through `paymentIntent()`. That degrades safely (the customer still reaches the provider), but it burns an intent on every resume; returning `->redirectTo` gives an interrupted customer a seamless retry. Inline gateways need only `->status`.
+When Resrv resumes a still-payable intent on a **redirect** gateway (`redirectsForPayment()` returns `true`), it forwards the customer to the resumed intent's `->redirectTo` URL — so include the provider's hosted-payment URL on the object you return whenever the intent is still payable. If `->redirectTo` is absent, Resrv treats the resumed intent as unmountable: it voids the intent and mints a replacement through `paymentIntent()`. That degrades safely (the customer still reaches the provider), but it burns an intent on every resume; returning `->redirectTo` gives an interrupted customer a seamless retry.
+
+**Inline** gateways follow the same rule for `->client_secret`: Resrv re-mounts a resumed inline intent's payment view around `$intent->client_secret`, so include it whenever the intent is still payable. If it is absent, Resrv voids the intent and mints a replacement the same way — never rendering a payment form with an empty secret.
 
 ### Reference: StripePaymentGateway (inline)
 
