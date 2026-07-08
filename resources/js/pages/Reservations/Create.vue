@@ -249,9 +249,9 @@ const fetchQuote = async () => {
         // Keep the last good quote on screen so the pricing/payment section never collapses
         // (which would hide the very inputs needed to fix the problem); surface the reason
         // inline and block submission instead.
+        const validationMessage = Object.values(error?.response?.data?.errors ?? {}).flat().join(' ');
         quoteError.value = error?.response?.data?.error
-            ?? Object.values(error?.response?.data?.errors ?? {}).flat().join(' ')
-            ?? __('Could not compute a quote');
+            ?? (validationMessage || __('Could not compute a quote'));
     } finally {
         quoting.value = false;
     }

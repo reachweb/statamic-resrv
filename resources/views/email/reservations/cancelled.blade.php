@@ -50,7 +50,8 @@
 @endif
 
 @php($paymentRetained = $reservation->status === \Reach\StatamicResrv\Enums\ReservationStatus::CANCELLED->value)
-@if ($paymentRetained && $reservation->hasGatewayPayment())
+@php($paymentCollected = $paymentCollected ?? $reservation->hasGatewayPayment())
+@if ($paymentRetained && $paymentCollected)
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|
@@ -64,7 +65,7 @@
 | :----------------------------- |:----------------|
 | {{ __("Refunded to the customer") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
 @endcomponent
-@elseif (! $paymentRetained && $reservation->hasGatewayPayment())
+@elseif (! $paymentRetained && $paymentCollected)
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|

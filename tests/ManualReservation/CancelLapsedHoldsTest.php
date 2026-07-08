@@ -106,6 +106,11 @@ class CancelLapsedHoldsTest extends TestCase
         $this->assertStringContainsString('payment hold lapsed', $customerHtml);
         $adminHtml = (new ReservationCancelledMail($reservation->fresh(), ReservationCancelledEvent::CONTEXT_HOLD_LAPSED))->render();
         $this->assertStringContainsString('payment hold lapsed', $adminHtml);
+
+        // The lingering opened-but-unpaid intent id in payment_id must not make the admin
+        // email claim a payment was retained — nothing was ever collected.
+        $this->assertStringNotContainsString('payment retained', $adminHtml);
+        $this->assertStringNotContainsString('No action is required', $adminHtml);
     }
 
     public function test_stock_is_not_restored_when_the_flag_is_off()

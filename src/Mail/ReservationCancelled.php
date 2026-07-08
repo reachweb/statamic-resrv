@@ -36,7 +36,17 @@ class ReservationCancelled extends Mailable
             $this->subject(__('Reservation cancelled — payment hold lapsed'));
         }
 
-        $this->with(['holdLapsed' => $holdLapsed]);
+        // Whether money is actually being retained. A lapsed or unpaid hold never captured
+        // anything even if a payment_id lingers from an opened-but-unpaid intent, so the
+        // template must not report a retained payment that was never collected.
+        $paymentCollected = ! $holdLapsed
+            && $this->context !== ReservationCancelledEvent::CONTEXT_UNPAID_HOLD
+            && $this->reservation->hasGatewayPayment();
+
+        $this->with([
+            'holdLapsed' => $holdLapsed,
+            'paymentCollected' => $paymentCollected,
+        ]);
 
         return $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.cancelled'));
     }
