@@ -18,6 +18,7 @@ use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\ManualReservationException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
+use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
@@ -182,14 +183,30 @@ class ManualReservationCreator
      * only when the dispatcher actually sent it (a site that disabled the event via
      * config must not get a false stamp).
      *
-     * @throws ManualReservationException when an online (non-manually-confirmable) gateway has
-     *                                    no pay link to offer — the payment page entry was
+     * @throws ManualReservationException when the request would be unusable: the recorded
+     *                                    gateway was removed from the configuration (the pay
+     *                                    link could never mount a payment), or an online
+     *                                    (non-manually-confirmable) gateway has no pay link to
+     *                                    offer because the payment page entry was
      *                                    unconfigured/unpublished after creation. The email
      *                                    would otherwise fall back to its offline "send us your
      *                                    payment" wording with no way to actually pay.
      */
     public function sendPaymentRequestEmail(Reservation $reservation): bool
     {
+        // paymentGatewaySupportsManualConfirmation() maps an UNKNOWN gateway to false, which
+        // would satisfy the pay-link branch below and email a "Pay now" link that can only
+        // error when the page fails to resolve the gateway — so validate resolvability first.
+        // A blank recorded gateway falls back to the default (resolvePaymentGateway's legacy
+        // rule) and passes.
+        try {
+            $reservation->resolvePaymentGateway();
+        } catch (UnknownPaymentGateway $e) {
+            throw new ManualReservationException(
+                __('The payment method recorded on this reservation is no longer configured, so a payment request cannot be sent.')
+            );
+        }
+
         if (! $reservation->paymentGatewaySupportsManualConfirmation()
             && $reservation->customerPaymentUrl() === null) {
             throw new ManualReservationException(

@@ -136,6 +136,14 @@ class ReservationPayment extends Component
     /**
      * The lazy guard: the hold-lapse command may not have run yet, so a past-deadline
      * link must refuse payment on its own.
+     *
+     * This deliberately guards only NEW payment attempts. An intent mounted before the
+     * deadline stays completable until the sweep voids it: while the row is still
+     * AWAITING_PAYMENT its stock is still decremented, so a payment landing in the
+     * deadline-to-sweep window confirms a booking whose inventory is still held —
+     * strictly better than taking the money and orphaning the charge (a webhook after
+     * the sweep already stays CANCELLED and notifies the orphan). Sites wanting a
+     * tighter window schedule resrv:cancel-lapsed-holds more frequently.
      */
     protected function deadlinePassed(Reservation $reservation): bool
     {

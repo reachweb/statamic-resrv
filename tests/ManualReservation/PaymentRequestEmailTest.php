@@ -233,6 +233,34 @@ class PaymentRequestEmailTest extends TestCase
         $this->assertNull($reservation->fresh()->payment_request_email_sent_at);
     }
 
+    public function test_resend_endpoint_rejects_when_the_recorded_gateway_is_gone()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'send_payment_request_email' => false,
+        ]));
+
+        // The recorded gateway is removed from the configuration after creation. The payment
+        // page still exists, so the pay link would render — but it could only error when the
+        // page fails to resolve the gateway. The resend must refuse instead of emailing a
+        // dead-end "Pay now" link and stamping a send.
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'The payment method recorded on this reservation is no longer configured, so a payment request cannot be sent.');
+
+        Mail::assertNotSent(ReservationPaymentRequest::class);
+        $this->assertNull($reservation->fresh()->payment_request_email_sent_at);
+    }
+
     public function test_offline_resend_still_works_without_a_payment_page()
     {
         Mail::fake();
