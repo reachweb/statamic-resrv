@@ -24,6 +24,7 @@ use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Customer;
+use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Option;
@@ -78,8 +79,12 @@ class ManualReservationCreator
 
         $affectsAvailability = (bool) ($input['affects_availability'] ?? true);
 
-        if ($affectsAvailability && ! $quote['availability']['status']) {
-            throw new AvailabilityException(__('There is not enough availability for the selected dates.'));
+        if (! $quote['availability']['status']) {
+            if ($affectsAvailability) {
+                throw new AvailabilityException(__('There is not enough availability for the selected dates.'));
+            }
+
+            $this->assertOverbookOnlyBypassesStock($input);
         }
 
         $this->assertRequiredExtrasAndOptions($input);
@@ -407,6 +412,46 @@ class ManualReservationCreator
     }
 
     /**
+     * The overbook toggle (affects_availability=false) may bypass ONLY stock. The quote's
+     * availability status also reads false for structural reasons — a disabled entry, an
+     * unpublished or inapplicable rate, or the rate's date-window/stay/lead-time restrictions —
+     * and the pricing lookup underneath is validity-blind (it reads price rows regardless), so
+     * without this re-check a stale or crafted payload could book an entry or rate the create
+     * form never offers. Shared-rate capacity is deliberately NOT re-checked: like the stock
+     * count, it is exactly what the toggle exists to bypass.
+     *
+     * @throws AvailabilityException|ManualReservationException
+     */
+    protected function assertOverbookOnlyBypassesStock(array $input): void
+    {
+        $entry = Entry::query()->itemId((string) $input['item_id'])->first();
+
+        if ($entry === null || $entry->isDisabled()) {
+            throw new AvailabilityException(__('This entry is not enabled for reservations.'));
+        }
+
+        $rateId = $this->rateIdFrom($input);
+
+        if ($rateId === null) {
+            return;
+        }
+
+        $rate = Rate::published()->find($rateId);
+
+        if (! $rate || ! $rate->appliesToEntry((string) $input['item_id'])) {
+            throw new ManualReservationException(__('The selected rate is not available for this entry.'));
+        }
+
+        $this->initiateAvailabilityUnsafe($this->availabilityDataFrom($input));
+
+        if (! $rate->isAvailableForDates($this->date_start, $this->date_end)
+            || ! $rate->meetsStayRestrictions($this->duration)
+            || ! $rate->meetsBookingLeadTime($this->date_start)) {
+            throw new ManualReservationException(__('The selected rate does not allow these dates.'));
+        }
+    }
+
+    /**
      * @throws ManualReservationException when the gateway cannot be used for this booking
      */
     protected function assertGatewayIsUsable(string $gateway, PriceClass $amount): void
@@ -498,9 +543,12 @@ class ManualReservationCreator
             $id = (int) ($item['id'] ?? 0);
             $value = (int) ($item['value'] ?? 0);
 
-            $option = Option::find($id);
+            // Only published options belonging to this entry may be priced/attached — mirrors
+            // the create form's optionsForEntry() scoping and the extras check above. A plain
+            // Option::find() would accept an option unpublished after the form loaded.
+            $option = Option::entry($input['item_id'])->where('published', true)->find($id);
 
-            if (! $option || (string) $option->item_id !== (string) $input['item_id']) {
+            if (! $option) {
                 throw new ManualReservationException(__('The selected option does not belong to this entry.'));
             }
 
@@ -572,7 +620,14 @@ class ManualReservationCreator
             return null;
         }
 
-        $affiliate = Affiliate::find($affiliateId);
+        // Mirror the create page's visibility rules (feature flag + published scope): the form
+        // never offers a disabled feature or an unpublished affiliate, so a stale or crafted
+        // payload must not attach a commission row for one either.
+        if (! config('resrv-config.enable_affiliates')) {
+            throw new ManualReservationException(__('Affiliates are disabled.'));
+        }
+
+        $affiliate = Affiliate::published()->find($affiliateId);
 
         if (! $affiliate) {
             throw new ManualReservationException(__('The selected affiliate was not found.'));

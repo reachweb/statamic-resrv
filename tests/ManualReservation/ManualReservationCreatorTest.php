@@ -390,6 +390,37 @@ class ManualReservationCreatorTest extends TestCase
         ]);
     }
 
+    public function test_an_unpublished_affiliate_is_rejected()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // The create page only lists published affiliates; a stale or crafted payload must not
+        // attach a commission row for one the UI intentionally hides.
+        $affiliate = Affiliate::factory()->create(['published' => false]);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('affiliate was not found');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'affiliate_id' => $affiliate->id,
+        ]));
+    }
+
+    public function test_an_affiliate_is_rejected_when_the_feature_is_disabled()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+        $affiliate = Affiliate::factory()->create();
+
+        Config::set('resrv-config.enable_affiliates', false);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('Affiliates are disabled');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'affiliate_id' => $affiliate->id,
+        ]));
+    }
+
     public function test_stock_is_decremented_only_when_the_flag_is_on()
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 2);
@@ -418,6 +449,42 @@ class ManualReservationCreatorTest extends TestCase
             $this->creator()->create($this->baseInput($entryBlocked));
             $this->fail('Creating with affects_availability=true and no stock should throw.');
         } catch (AvailabilityException $e) {
+            $this->assertEquals($before, Reservation::count());
+        }
+    }
+
+    public function test_overbooking_cannot_bypass_an_unpublished_rate()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 0);
+        Rate::forEntry($entry->id())->first()->update(['published' => false]);
+
+        $before = Reservation::count();
+
+        // The overbook toggle exists to bypass STOCK; an unavailable quote caused by an
+        // unpublished rate (which the create form never offers) must still be rejected.
+        try {
+            $this->creator()->create($this->baseInput($entry, ['affects_availability' => false]));
+            $this->fail('An unpublished rate must not be bookable through the overbook toggle.');
+        } catch (ManualReservationException $e) {
+            $this->assertStringContainsString('not available for this entry', $e->getMessage());
+            $this->assertEquals($before, Reservation::count());
+        }
+    }
+
+    public function test_overbooking_cannot_bypass_rate_stay_and_lead_time_restrictions()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+        Rate::forEntry($entry->id())->first()->update(['min_stay' => 5]);
+
+        $before = Reservation::count();
+
+        // baseInput books 2 nights: the rate's minimum stay blocks it whether or not the
+        // admin skips stock movement — the toggle is not a rate-rule override.
+        try {
+            $this->creator()->create($this->baseInput($entry, ['affects_availability' => false]));
+            $this->fail('A stay-restriction violation must not be bookable through the overbook toggle.');
+        } catch (ManualReservationException $e) {
+            $this->assertStringContainsString('does not allow these dates', $e->getMessage());
             $this->assertEquals($before, Reservation::count());
         }
     }
@@ -550,6 +617,24 @@ class ManualReservationCreatorTest extends TestCase
 
         $this->creator()->create($this->baseInput($entry, [
             'extras' => [['id' => $extra->id, 'quantity' => 1]],
+        ]));
+    }
+
+    public function test_an_unpublished_option_is_rejected()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // The create form only exposes published options (optionsForEntry filters them), so
+        // a stale or crafted payload carrying an unpublished one must be rejected, not priced.
+        $option = Option::factory()
+            ->has(OptionValue::factory()->fixed(), 'values')
+            ->create(['item_id' => $entry->id(), 'required' => false, 'published' => false]);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('does not belong to this entry');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'options' => [['id' => $option->id, 'value' => $option->values->first()->id]],
         ]));
     }
 
