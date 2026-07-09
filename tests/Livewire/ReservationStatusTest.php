@@ -27,6 +27,7 @@ use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Entry;
 
@@ -343,6 +344,37 @@ class ReservationStatusTest extends TestCase
             ->call('lookup')
             ->assertHasErrors(['lookup'])
             ->assertSee(trans('statamic-resrv::frontend.tooManyLookupAttempts'));
+    }
+
+    public function test_a_cancelled_unpaid_hold_never_reads_as_a_retained_payment()
+    {
+        Mail::fake();
+
+        // A manual reservation whose customer opened the pay link but never paid, cancelled by
+        // the lapse sweep. The voided intent's reference is cleared on cancellation, so the
+        // status page must show the plain cancelled label — never "no refund issued", which
+        // claims a payment was retained.
+        $reservation = $this->makeReservation([
+            'status' => 'awaiting_payment',
+            'payment_id' => 'pi_unpaid_hold',
+            'payment_gateway' => 'fake',
+        ]);
+
+        app(ReservationRefundProcessor::class)->cancelWithoutRefund(
+            $reservation,
+            ReservationCancelledEvent::CONTEXT_HOLD_LAPSED,
+            cancelOpenIntent: true,
+        );
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertHasNoErrors()
+            ->assertSee(trans('statamic-resrv::frontend.statusCancelledNoRefund'))
+            ->assertDontSee(trans('statamic-resrv::frontend.statusCancelledNoRefundIssued'));
+
+        $this->assertTrue($reservation->fresh()->amountPaidOnline()->isZero());
     }
 
     public function test_shows_cancel_button_within_the_free_cancellation_window()

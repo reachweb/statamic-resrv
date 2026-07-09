@@ -356,6 +356,60 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertFalse($reservation->canBeCancelledByCustomer());
     }
 
+    public function test_cancelling_an_unpaid_hold_clears_the_voided_intent_reference()
+    {
+        Mail::fake();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+
+        // The customer opened the pay link (an unpaid intent id sits on the row) but never paid.
+        // Once the void is verified at the gateway the local reference must be dropped, or every
+        // payment_id reader (the status page's "no refund issued" label and "amount paid" row)
+        // reports money that was never collected.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_unpaid_hold',
+            'payment_gateway' => 'fake',
+        ]);
+
+        app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation, cancelOpenIntent: true);
+
+        $reservation->refresh();
+        $this->assertSame('cancelled', $reservation->status);
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertSame('', $reservation->payment_id);
+        $this->assertFalse($reservation->hasGatewayPayment());
+        $this->assertTrue($reservation->amountPaidOnline()->isZero());
+    }
+
+    public function test_cancelling_an_unpaid_hold_keeps_the_reference_when_the_void_cannot_be_verified()
+    {
+        Mail::fake();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        // The provider cancel fails transiently and (like Stripe) swallows the error: the intent
+        // stays live at the gateway, so the reference must survive as the only handle on it —
+        // mirrors settlePaidOutOfBand()'s conservative keep.
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_unpaid_hold',
+            'payment_gateway' => 'fake',
+        ]);
+
+        app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation, cancelOpenIntent: true);
+
+        $reservation->refresh();
+        $this->assertSame('cancelled', $reservation->status);
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertSame('pi_unpaid_hold', $reservation->payment_id);
+    }
+
     public function test_cancel_without_refund_voids_the_freshly_written_intent_not_a_stale_snapshot()
     {
         /** @var FakePaymentGateway $gateway */

@@ -92,6 +92,10 @@ class CancelLapsedHoldsTest extends TestCase
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertEquals('pi_lapsed_hold', $gateway->cancelledIntents[0]['payment_id']);
 
+        // The verified-void intent's reference is dropped, so payment_id readers (the customer
+        // status page, the cancellation emails) can't report money that was never collected.
+        $this->assertSame('', $reservation->fresh()->payment_id);
+
         Mail::assertSent(ReservationCancelledCustomer::class, function ($mail) use ($reservation) {
             return $mail->hasTo($reservation->customer->email)
                 && $mail->context === ReservationCancelledEvent::CONTEXT_HOLD_LAPSED;

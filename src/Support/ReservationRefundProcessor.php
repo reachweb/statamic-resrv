@@ -92,7 +92,10 @@ class ReservationRefundProcessor
      * @param  bool  $cancelOpenIntent  Also void any open payment intent (awaiting-payment
      *                                  bookings) — after the transition commits, never
      *                                  inside the lock, and tolerantly: an unreachable
-     *                                  gateway leaves an intent that dies of old age.
+     *                                  gateway leaves an intent that dies of old age. The
+     *                                  local reference is dropped once the gateway confirms
+     *                                  the void, so the never-paid row stops reading as one
+     *                                  that collected money.
      *
      * @throws InvalidStateTransition when the current status cannot transition to CANCELLED
      */
@@ -109,11 +112,51 @@ class ReservationRefundProcessor
             // locked, committed row back onto the model. A pre-lock capture would use a stale
             // (often empty) id and silently skip cancelling the customer's live intent.
             if ($cancelOpenIntent) {
-                $this->cancelOpenIntentQuietly($reservation);
+                $this->cancelOpenIntentAndClearVerifiedReference($reservation);
             }
         }
 
         return $changed;
+    }
+
+    /**
+     * Void any open payment intent, then drop the local reference once the gateway confirms the
+     * intent can no longer take money — the cancel-path mirror of settlePaidOutOfBand()'s
+     * verify-before-clear. Without the clear, a cancelled unpaid hold keeps its opened-but-unpaid
+     * intent id forever, and every payment_id reader (the status page's "no refund issued" label
+     * and "amount paid" row via hasGatewayPayment()/amountPaidOnline()) reports money that was
+     * never collected. When the void cannot be verified — a provider brownout, or a racing
+     * webhook actually captured the money — the reference is KEPT for reconciliation: a stale
+     * display is the acceptable cost of never discarding the only handle on a charge that may
+     * still be live.
+     */
+    protected function cancelOpenIntentAndClearVerifiedReference(Reservation $reservation): void
+    {
+        $paymentId = (string) $reservation->payment_id;
+        $paymentGateway = (string) $reservation->payment_gateway;
+
+        if ($paymentId === '' || $paymentGateway === '') {
+            return;
+        }
+
+        $this->cancelPaymentIntentQuietly($reservation, $paymentId, $paymentGateway);
+
+        try {
+            $gateway = $reservation->resolvePaymentGateway();
+        } catch (UnknownPaymentGateway $e) {
+            return;
+        }
+
+        if ($this->intentIsVerifiablyGone($gateway, $reservation, $paymentId)) {
+            $reservation->update(['payment_id' => '']);
+
+            return;
+        }
+
+        Log::warning('Could not verify the cancelled reservation\'s payment intent was voided; keeping the gateway charge reference for reconciliation.', [
+            'reservation_id' => $reservation->id,
+            'payment_id' => $paymentId,
+        ]);
     }
 
     /**
