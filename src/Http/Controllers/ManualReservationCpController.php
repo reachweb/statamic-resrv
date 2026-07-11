@@ -197,24 +197,45 @@ class ManualReservationCpController extends Controller
     /** The published extras of the entry with prices for the requested stay — what the frontend extras step shows. */
     protected function extrasForEntry(array $data): array
     {
-        return Extra::getPriceForDates([
+        $priceData = [
             'item_id' => $data['item_id'],
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
             'quantity' => $data['quantity'],
             'rate_id' => $data['rate_id'] ?? null,
-        ])->map(fn ($extra) => [
-            'id' => $extra->id,
-            'name' => $extra->name,
-            'price' => $extra->price->format(),
-            'price_type' => $extra->price_type,
-            // The checkout-form field handle driving a custom-priced extra — the create form
-            // re-quotes when that field changes so the preview matches what creation charges.
-            'custom' => $extra->custom,
-            'allow_multiple' => (bool) $extra->allow_multiple,
-            'maximum' => $extra->maximum,
-            'description' => $extra->description,
-        ])->values()->all();
+        ];
+
+        $customer = collect($data['customer'] ?? []);
+
+        return Extra::getPriceForDates($priceData)->map(function ($extra) use ($priceData, $customer) {
+            // Re-price a custom-priced extra with the admin-entered customer payload so the listed
+            // per-unit price carries the same multiplier the quoted total uses (without it,
+            // Extra::getCustomPrice falls back to ×1 — the CP has no resrv-search session). Per
+            // extra, and only while its driving field holds a usable number: getCustomPrice THROWS
+            // for a present-but-unusable payload, which would 500 the whole listing over a field
+            // the admin simply has not filled yet. An unfilled extra keeps the ×1 fallback like
+            // the frontend list, and a SELECTED one still fails the quote loudly in the creator.
+            if ($extra->price_type === 'custom' && $extra->custom && is_numeric($customer->get($extra->custom))) {
+                // Fresh instance: priceForDates mutates the model's price attribute, so re-pricing
+                // the instance getPriceForDates already transformed would compound the price.
+                $extra->price = Extra::find($extra->id)->priceForDates(
+                    array_merge($priceData, ['customer' => $customer])
+                );
+            }
+
+            return [
+                'id' => $extra->id,
+                'name' => $extra->name,
+                'price' => $extra->price->format(),
+                'price_type' => $extra->price_type,
+                // The checkout-form field handle driving a custom-priced extra — the create form
+                // re-quotes when that field changes so the preview matches what creation charges.
+                'custom' => $extra->custom,
+                'allow_multiple' => (bool) $extra->allow_multiple,
+                'maximum' => $extra->maximum,
+                'description' => $extra->description,
+            ];
+        })->values()->all();
     }
 
     /** The published options of the entry (published values only) with per-value prices for the requested stay. */

@@ -253,11 +253,14 @@ class ManualReservationCpTest extends TestCase
 
         // The quote must preview the same multiplier creation will charge (10 × 3 adults) —
         // never the ×1 fallback, which would show the admin a total creation does not store.
+        // The listed per-unit price must carry that same multiplier: a ×1 badge next to a
+        // ×3 total reads as a bug and hides what the extra actually costs.
         $this->postJson(cp_route('resrv.manual.quote'), array_merge($payload, [
             'customer' => ['email' => 'jane@example.com', 'adults' => 3],
         ]))->assertOk()
             ->assertJsonPath('pricing.extras_total', '30.00')
-            ->assertJsonPath('pricing.total', '130.00');
+            ->assertJsonPath('pricing.total', '130.00')
+            ->assertJsonPath('available_extras.0.price', '30.00');
 
         // A selected custom extra whose driving field is still empty must fail the quote
         // (creation would fail identically) instead of previewing a ×1 amount.
@@ -265,6 +268,31 @@ class ManualReservationCpTest extends TestCase
             'customer' => ['email' => '', 'adults' => ''],
         ]))->assertStatus(422)
             ->assertJson(['error' => __('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $extra->name])]);
+    }
+
+    public function test_quote_endpoint_lists_custom_extras_gracefully_while_the_driving_field_is_empty()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        $extra = Extra::factory()->custom()->create();
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        // The extra is NOT selected and its driving field ('adults') is still empty: the listing
+        // must fall back to the ×1 base price — like the frontend extras list — instead of
+        // throwing. Extra::getCustomPrice throws for a present-but-unusable customer payload,
+        // which would 500 the whole quote over a field the admin simply has not filled yet.
+        $this->postJson(cp_route('resrv.manual.quote'), [
+            'item_id' => $entry->id(),
+            'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
+            'date_end' => today()->addDays(3)->setTime(12, 0)->toDateTimeString(),
+            'quantity' => 1,
+            'rate_id' => Rate::forEntry($entry->id())->first()?->id,
+            'payment_mode' => 'full',
+            'customer' => ['email' => 'jane@example.com', 'adults' => ''],
+        ])->assertOk()
+            ->assertJsonPath('available_extras.0.price', '10.00')
+            ->assertJsonPath('pricing.total', '100.00');
     }
 
     public function test_entry_endpoint_resolves_dictionary_field_items()

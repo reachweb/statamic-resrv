@@ -292,13 +292,14 @@ watch(
     { deep: true },
 );
 
-// Re-quote when a customer field that drives a selected custom-priced extra changes —
-// but not on every keystroke in unrelated fields like the name. Serialized to a string so
-// the quote's own availableExtras refresh (same content, new array) cannot re-trigger it.
+// Re-quote when a customer field that drives a custom-priced extra changes — selected or not,
+// since the listed per-unit price is also computed from it — but not on every keystroke in
+// unrelated fields like the name. Serialized to a string so the quote's own availableExtras
+// refresh (same content, new array) cannot re-trigger it.
 const customPriceFieldState = computed(() =>
     JSON.stringify(
         availableExtras.value
-            .filter((extra) => extra.price_type === 'custom' && extra.custom && (form.extras[extra.id] ?? 0) > 0)
+            .filter((extra) => extra.price_type === 'custom' && extra.custom)
             .map((extra) => [extra.custom, form.customer[extra.custom] ?? null]),
     ),
 );

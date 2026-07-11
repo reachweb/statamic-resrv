@@ -321,6 +321,48 @@ class AwaitingPaymentTransitionsTest extends TestCase
         }
     }
 
+    public function test_confirming_online_out_of_band_notifies_when_the_intent_captures_during_the_void()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        // The customer completes payment INSIDE the void window: the pre-void read still sees a
+        // cancellable intent, the provider then rejects the void (already succeeded — swallowed,
+        // like Stripe), and the verification re-read reports 'succeeded'.
+        $gateway->cancelSucceeds = false;
+        $gateway->onRetrievePaymentIntent = function () use ($gateway) {
+            $gateway->retrievedIntentStatus = 'succeeded';
+        };
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_raced_capture',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        // The charge reference survives so the captured money stays refundable through the gateway.
+        $this->assertSame('pi_raced_capture', $reservation->payment_id);
+        $this->assertCount(1, $gateway->cancelledIntents);
+
+        // The succeeded webhook that follows sees CONFIRMED and no-ops, so this notification is
+        // the only signal that the booking holds an out-of-band payment AND a captured gateway
+        // charge — it must not degrade to the generic could-not-verify log warning.
+        Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
+            return $mail->hasTo('admin@example.com')
+                && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_DUPLICATE
+                && $mail->paymentIntentId === 'pi_raced_capture';
+        });
+    }
+
     public function test_confirming_online_out_of_band_keeps_the_reference_when_the_cancel_fails()
     {
         Mail::fake();
