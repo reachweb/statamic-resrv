@@ -179,7 +179,6 @@ trait HandlesDirectGatewayPayment
                 }
             }
 
-            // $returnUrl passed positionally; 3-param gateways ignore it (see Step 12).
             $intent = $gateway->paymentIntent($amount, $reservation, $reservation->customerData ?? collect(), $returnUrl);
 
             // Bind the payment_id write to a row lock and re-verify payability in the SAME critical

@@ -13,7 +13,6 @@ use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\ReservationPayment;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\Support\FakeRedirectGateway;
-use Reach\StatamicResrv\Tests\Support\LegacyThreeArgGateway;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationPaymentPageTest extends TestCase
@@ -623,38 +622,6 @@ class ReservationPaymentPageTest extends TestCase
             ->test(ReservationPayment::class)
             ->assertDontSee(trans('statamic-resrv::frontend.paymentProcessing'))
             ->assertSee(trans('statamic-resrv::frontend.pay'));
-    }
-
-    public function test_a_three_parameter_gateway_still_works_through_the_manual_pay_flow()
-    {
-        Config::set('resrv-config.payment_gateways', [
-            'legacy3' => ['class' => LegacyThreeArgGateway::class, 'label' => 'Legacy'],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
-
-        $reservation = $this->makeAwaitingReservation(['payment_gateway' => 'legacy3']);
-
-        // Core calls paymentIntent() with a 4th arg; a 3-param gateway ignores it and still works.
-        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
-            ->test(ReservationPayment::class)
-            ->call('pay')
-            ->assertSet('paymentView', 'statamic-resrv::livewire.checkout-payment');
-
-        $fresh = $reservation->fresh();
-        $this->assertNotSame('', $fresh->payment_id);
-        $this->assertStringStartsWith('legacy_', $fresh->payment_id);
-    }
-
-    public function test_calling_a_three_parameter_gateway_with_four_positional_args_does_not_error()
-    {
-        $reservation = $this->makeAwaitingReservation();
-        $gateway = new LegacyThreeArgGateway;
-
-        // PHP-level proof: a 3-param method invoked with a 4th positional arg silently ignores it.
-        $intent = $gateway->paymentIntent($reservation->amountDue(), $reservation, collect(), 'https://return.test/pay');
-
-        $this->assertTrue($gateway->created);
-        $this->assertIsString($intent->id);
     }
 
     public function test_customer_payment_url_null_matrix()

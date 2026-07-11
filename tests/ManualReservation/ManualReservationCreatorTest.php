@@ -292,6 +292,48 @@ class ManualReservationCreatorTest extends TestCase
         $this->assertSame('35.00', $reservation->payment->format());
     }
 
+    public function test_custom_amount_is_validated_even_when_the_total_is_overridden_to_zero()
+    {
+        Mail::fake();
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // Regression: the zero-total shortcut in requestedAmount() skipped customAmount()
+        // entirely, so a positive custom amount alongside total_override=0 silently stored a
+        // zero payment and immediately confirmed a free booking instead of rejecting the
+        // contradictory request (the amount always exceeds a zero total). Both the creation
+        // path and the CP live quote (relaxed required-amount) must reject it.
+        $input = $this->baseInput($entry, [
+            'payment_mode' => 'custom',
+            'custom_amount' => '35.00',
+            'total_override' => '0',
+        ]);
+
+        try {
+            $this->creator()->create($input);
+            $this->fail('A positive custom amount on a zero total should have been rejected.');
+        } catch (ManualReservationException $e) {
+            $this->addToAssertionCount(1);
+        }
+
+        try {
+            $this->creator()->quote($input, requireCustomAmount: false);
+            $this->fail('The live quote should also reject a positive custom amount on a zero total.');
+        } catch (ManualReservationException $e) {
+            $this->addToAssertionCount(1);
+        }
+
+        $this->assertSame(0, Reservation::count());
+
+        // An omitted custom amount stays a legitimate fully-comped booking that confirms free.
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'payment_mode' => 'custom',
+            'total_override' => '0',
+        ]));
+
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertTrue($reservation->payment->isZero());
+    }
+
     public function test_creation_persists_every_snapshot_column()
     {
         Config::set('resrv-config.payment', 'fixed');

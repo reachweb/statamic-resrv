@@ -54,7 +54,7 @@ class StripePaymentGateway implements PaymentInterface
 
     public function paymentIntent($payment, Reservation $reservation, $data, ?string $returnUrl = null)
     {
-        // Inline gateway ignores $returnUrl (declared only to model the convention; see Step 12).
+        // Inline gateway: the customer returns through the embedded SDK, so $returnUrl is unused.
         $stripe = $this->getClient($reservation);
         $paymentIntent = $stripe->paymentIntents->create([
             'amount' => $payment->raw(),

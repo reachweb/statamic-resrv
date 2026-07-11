@@ -356,7 +356,16 @@ class ManualReservationCreator
      */
     protected function requestedAmount(array $input, PriceClass $basePrice, PriceClass $total, bool $requireCustomAmount = true): PriceClass
     {
+        // The zero-total shortcut must not skip custom-mode validation: a supplied custom
+        // amount alongside a zero total is contradictory (it always exceeds the total) and
+        // has to be rejected — silently storing a zero payment would confirm a free booking
+        // the request explicitly asked to collect money for. An omitted amount stays a
+        // legitimate fully-comped booking, so the required check is relaxed exactly here.
         if ($total->isZero()) {
+            if ($this->paymentMode($input) === ManualPaymentMode::Custom) {
+                $this->customAmount($input, $total, requireAmount: false);
+            }
+
             return Price::create(0);
         }
 

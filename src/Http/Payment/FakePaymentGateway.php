@@ -102,7 +102,7 @@ class FakePaymentGateway implements PaymentInterface
 
     public function paymentIntent($amount, $reservation, $data, ?string $returnUrl = null)
     {
-        // Inline gateway ignores $returnUrl (declared only to model the convention; see Step 12).
+        // Inline gateway: the customer returns through the embedded SDK, so $returnUrl is unused.
         $data = new \stdClass;
         $data->id = Str::random(28);
         $data->client_secret = Str::random(56);

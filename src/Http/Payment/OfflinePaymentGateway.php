@@ -24,7 +24,7 @@ class OfflinePaymentGateway implements PaymentInterface
 
     public function paymentIntent($amount, Reservation $reservation, $data, ?string $returnUrl = null)
     {
-        // Offline gateway ignores $returnUrl (declared only to model the convention; see Step 12).
+        // Offline gateway: nothing is collected online, so $returnUrl is unused.
         $intent = new \stdClass;
         $intent->id = 'offline_'.Str::random(24);
         $intent->client_secret = 'offline_'.Str::random(48);

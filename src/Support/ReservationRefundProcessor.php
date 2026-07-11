@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationRefundProcessor
@@ -168,7 +169,9 @@ class ReservationRefundProcessor
      * no-gateway-charge settlement (refunds skip the provider) instead of trying to refund a dead or
      * never-existent intent — UNLESS the intent already captured or is capturing real money (a
      * webhook confirm racing this manual one), in which case the reference is kept so that charge
-     * stays refundable through the gateway rather than being stranded.
+     * stays refundable through the gateway rather than being stranded, and admins are notified of
+     * the possible duplicate payment (the booking now holds an out-of-band payment AND a gateway
+     * charge, and the follow-up webhook no-ops on the CONFIRMED row without telling anyone).
      *
      * Callers must have synced the reservation to the committed row (via transitionTo()) first, so
      * a concurrent pay-page write is not missed.
@@ -198,7 +201,10 @@ class ReservationRefundProcessor
 
         // If the intent already holds or is authorising real money — a webhook confirm is racing
         // this manual one — leave the reference intact so the charge stays refundable through the
-        // gateway. Clearing it would strand captured money the succeeded webhook then swallows.
+        // gateway, and tell the admins: the booking was just marked paid out of band AND the
+        // gateway captured (or is capturing) the customer's online payment, so the business may
+        // hold both. This is the only point where both facts are known — the succeeded webhook
+        // that follows sees CONFIRMED and no-ops, so silence here would hide the double payment.
         try {
             $intent = $gateway->retrievePaymentIntent($paymentId, $reservation);
         } catch (\Throwable $e) {
@@ -214,6 +220,18 @@ class ReservationRefundProcessor
         }
 
         if ($intent !== null && in_array($intent->status ?? '', ['succeeded', 'processing', 'requires_capture'], true)) {
+            Log::warning('Payment intent had already captured (or was capturing) money while confirming an out-of-band payment — possible duplicate payment.', [
+                'reservation_id' => $reservation->id,
+                'payment_id' => $paymentId,
+                'intent_status' => $intent->status,
+            ]);
+
+            OrphanedPaymentNotification::dispatchFor(
+                $reservation,
+                $paymentId,
+                context: OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_DUPLICATE,
+            );
+
             return;
         }
 

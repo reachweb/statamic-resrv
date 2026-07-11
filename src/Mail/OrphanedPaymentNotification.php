@@ -12,19 +12,29 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
 
 /**
- * Sent when a successful payment webhook arrives for a reservation that is already in a
- * terminal state (EXPIRED, REFUNDED, or PARTNER). The charge exists on the gateway but
- * there is no live reservation to attach it to — surface to admins so they can issue a
- * manual refund in the gateway dashboard.
+ * Sent when a gateway charge needs manual reconciliation against its reservation. Two cases,
+ * distinguished by $context:
+ *
+ * - default (orphan): a successful payment webhook arrived for a reservation that is already
+ *   in a terminal state (EXPIRED, REFUNDED, CANCELLED, or PARTNER). The charge exists on the
+ *   gateway but there is no live reservation to attach it to — admins should refund it in the
+ *   gateway dashboard.
+ * - CONTEXT_OUT_OF_BAND_DUPLICATE: an admin confirmed an awaiting-payment reservation as paid
+ *   out of band while the customer's payment intent had already captured (or was capturing)
+ *   money at the gateway. The booking is live and paid TWICE — the webhook that follows sees
+ *   CONFIRMED and no-ops, so this notification is the only reconciliation signal.
  */
 class OrphanedPaymentNotification extends Mailable
 {
     use Queueable, SerializesModels;
 
+    public const CONTEXT_OUT_OF_BAND_DUPLICATE = 'out_of_band_duplicate';
+
     public function __construct(
         public Reservation $reservation,
         public string $paymentIntentId,
         public ?string $stripeEventId = null,
+        public ?string $context = null,
     ) {
         $this->subject($this->generateSubject($reservation));
     }
@@ -67,7 +77,7 @@ class OrphanedPaymentNotification extends Mailable
      * Build and dispatch an orphan-payment notification via the package's email dispatcher.
      * Shared entry-point so gateway implementations don't each reimplement the try/catch.
      */
-    public static function dispatchFor(Reservation $reservation, string $paymentIntentId, ?string $stripeEventId = null): void
+    public static function dispatchFor(Reservation $reservation, string $paymentIntentId, ?string $stripeEventId = null, ?string $context = null): void
     {
         // Stripe redelivers webhooks for up to ~3 days, so an orphan charge would otherwise re-email
         // admins on every retry. Notify only once per (reservation, payment intent).
@@ -81,7 +91,7 @@ class OrphanedPaymentNotification extends Mailable
             $sent = app(ReservationEmailDispatcher::class)->send(
                 $reservation,
                 ReservationEmailEvent::AdminOrphanedPayment,
-                new self($reservation, $paymentIntentId, $stripeEventId),
+                new self($reservation, $paymentIntentId, $stripeEventId, $context),
             );
 
             // Only mark as notified once a message actually went out, so a disabled/no-recipient run
@@ -99,6 +109,10 @@ class OrphanedPaymentNotification extends Mailable
 
     private function generateSubject(Reservation $reservation): string
     {
+        if ($this->context === self::CONTEXT_OUT_OF_BAND_DUPLICATE) {
+            return 'Possible duplicate payment — Reservation #'.$reservation->id.' ['.$reservation->status.']';
+        }
+
         return 'Orphaned payment detected — Reservation #'.$reservation->id.' ['.$reservation->status.']';
     }
 }
