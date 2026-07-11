@@ -21,6 +21,7 @@ use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
@@ -267,7 +268,13 @@ class ManualReservationCreator
         $itemId = $input['item_id'];
         $data = $this->availabilityDataFrom($input);
 
-        $result = (new Availability)->getAvailabilityForEntry($data, $itemId);
+        // Prune stale pending holds so they don't skew the stock read — but never this
+        // session's own hold, which getAvailabilityForEntry's frontend default would abandon:
+        // quoting a manual reservation must not expire the admin's unrelated in-progress
+        // checkout in another tab (same CP-safe pattern as AvailabilityCpController).
+        ExpireReservations::dispatchSync(expireSessionHold: false);
+
+        $result = (new Availability)->getAvailabilityForEntry($data, $itemId, expireReservations: false);
         $status = (bool) ($result['message']['status'] ?? false);
 
         $this->initiateAvailabilityUnsafe($data);
@@ -580,6 +587,13 @@ class ManualReservationCreator
 
             if (! $option) {
                 throw new ManualReservationException(__('The selected option does not belong to this entry.'));
+            }
+
+            // calculatePrice() resolves values withTrashed() so existing reservations keep
+            // pricing historical values — a NEW reservation must only accept values still on
+            // offer (the create form lists an option's non-trashed values).
+            if (! $option->values()->whereKey($value)->exists()) {
+                throw new ManualReservationException(__('The selected option value is no longer available.'));
             }
 
             return [$id => [

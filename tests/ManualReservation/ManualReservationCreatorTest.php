@@ -638,6 +638,50 @@ class ManualReservationCreatorTest extends TestCase
         ]));
     }
 
+    public function test_a_soft_deleted_option_value_is_rejected()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // Option::calculatePrice() resolves values withTrashed() for historical repricing, so
+        // without the active check a value deleted after the create form loaded (or one
+        // submitted directly) would be priced and stored on a brand-new reservation.
+        $option = Option::factory()
+            ->notRequired()
+            ->has(OptionValue::factory()->fixed(), 'values')
+            ->create(['item_id' => $entry->id()]);
+        $optionValue = $option->values->first();
+        $optionValue->delete();
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('no longer available');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'options' => [['id' => $option->id, 'value' => $optionValue->id]],
+        ]));
+    }
+
+    public function test_quoting_prunes_stale_holds_but_keeps_the_sessions_own_checkout_hold()
+    {
+        Config::set('resrv-config.minutes_to_hold', 10);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // An admin quoting a manual reservation may have their own frontend checkout
+        // in flight in another tab — the quote must not abandon that session hold,
+        // while still pruning stale holds from other sessions.
+        $sessionHold = Reservation::factory()->create(['item_id' => $entry->id()]);
+        $staleHold = Reservation::factory()->create([
+            'item_id' => $entry->id(),
+            'created_at' => now()->subMinutes(30),
+        ]);
+        session(['resrv_reservation' => $sessionHold->id]);
+
+        $this->creator()->quote($this->baseInput($entry), requireCustomAmount: false);
+
+        $this->assertSame('pending', $sessionHold->fresh()->status);
+        $this->assertSame('expired', $staleHold->fresh()->status);
+    }
+
     public function test_custom_priced_extra_uses_the_customer_field_multiplier()
     {
         $this->configurePaymentEntry();

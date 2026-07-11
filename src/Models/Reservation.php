@@ -1068,7 +1068,7 @@ class Reservation extends Model
         $optionsCost = Price::create(0);
         if (array_key_exists('options', $data) > 0) {
             $data['options']->each(function ($option) use ($data, $optionsCost) {
-                $optionsCost->add(Option::find($option['id'])->calculatePrice($data, $option['value']));
+                $optionsCost->add($this->activeOptionFor($option)->calculatePrice($data, $option['value']));
             });
         }
 
@@ -1096,7 +1096,7 @@ class Reservation extends Model
 
             if (array_key_exists('options', $data) && $data['options']->count() > 0) {
                 $data['options']->each(function ($option) use ($childData, $totalCharges) {
-                    $totalCharges->add(Option::find($option['id'])->calculatePrice($childData, $option['value']));
+                    $totalCharges->add($this->activeOptionFor($option)->calculatePrice($childData, $option['value']));
                 });
             }
 
@@ -1108,6 +1108,28 @@ class Reservation extends Model
         }
 
         return $totalCharges;
+    }
+
+    /**
+     * Resolve a checkout-submitted option selection to an option whose value is still on
+     * offer. Option::calculatePrice() resolves values withTrashed() so existing reservations
+     * keep pricing historical values — checkout input must not book a trashed value (deleted
+     * after the options step loaded, or submitted directly). Also rejects a missing/trashed
+     * option id, which the bare Option::find() call used to fatal on.
+     *
+     * @param  array{id: int, value: int}  $option
+     *
+     * @throws OptionsException
+     */
+    protected function activeOptionFor(array $option): Option
+    {
+        $optionModel = Option::find($option['id']);
+
+        if (! $optionModel || ! $optionModel->values()->whereKey($option['value'])->exists()) {
+            throw new OptionsException(__('The selected option value is no longer available.'));
+        }
+
+        return $optionModel;
     }
 
     protected function checkForRequiredExtras($statamic_id, $data)
