@@ -127,6 +127,11 @@ class ManualReservationCpTest extends TestCase
             ->notRequired()
             ->has(OptionValue::factory()->fixed(), 'values')
             ->create(['item_id' => $entry->id()]);
+        $publishedValue = $option->values->first();
+        $unpublishedValue = OptionValue::factory()->fixed()->create([
+            'option_id' => $option->id,
+            'published' => false,
+        ]);
 
         $response = $this->postJson(cp_route('resrv.manual.quote'), [
             'item_id' => $entry->id(),
@@ -147,7 +152,11 @@ class ManualReservationCpTest extends TestCase
         $this->assertEquals($extra->id, $response->json('available_extras.0.id'));
         $this->assertEquals('9.30', $response->json('available_extras.0.price'));
         $this->assertEquals($option->id, $response->json('available_options.0.id'));
-        $this->assertNotEmpty($response->json('available_options.0.values'));
+
+        // Only published values are offered — a draft value must not appear in the picker.
+        $valueIds = collect($response->json('available_options.0.values'))->pluck('id');
+        $this->assertTrue($valueIds->contains($publishedValue->id));
+        $this->assertFalse($valueIds->contains($unpublishedValue->id));
         $this->assertArrayHasKey('fake', $response->json('payment.gateways'));
     }
 

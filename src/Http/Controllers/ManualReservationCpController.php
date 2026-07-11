@@ -217,7 +217,7 @@ class ManualReservationCpController extends Controller
         ])->values()->all();
     }
 
-    /** The published options of the entry with per-value prices for the requested stay. */
+    /** The published options of the entry (published values only) with per-value prices for the requested stay. */
     protected function optionsForEntry(array $data): array
     {
         $calcData = [
@@ -230,7 +230,7 @@ class ManualReservationCpController extends Controller
 
         return Option::entry($data['item_id'])
             ->where('published', true)
-            ->with('values')
+            ->with(['values' => fn ($query) => $query->where('published', true)])
             ->get()
             ->map(fn ($option) => $option->valuesPriceForDates($calcData))
             ->map(fn ($option) => [

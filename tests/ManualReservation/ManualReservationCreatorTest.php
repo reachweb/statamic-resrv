@@ -660,6 +660,28 @@ class ManualReservationCreatorTest extends TestCase
         ]));
     }
 
+    public function test_an_unpublished_option_value_is_rejected()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // The create form only lists an option's published values (optionsForEntry constrains
+        // the eager load), so a draft value unpublished after the form loaded — or one
+        // submitted directly — must be rejected, not priced and stored.
+        $option = Option::factory()
+            ->notRequired()
+            ->has(OptionValue::factory()->fixed(), 'values')
+            ->create(['item_id' => $entry->id()]);
+        $optionValue = $option->values->first();
+        $optionValue->update(['published' => false]);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('no longer available');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'options' => [['id' => $option->id, 'value' => $optionValue->id]],
+        ]));
+    }
+
     public function test_quoting_prunes_stale_holds_but_keeps_the_sessions_own_checkout_hold()
     {
         Config::set('resrv-config.minutes_to_hold', 10);

@@ -591,8 +591,8 @@ class ManualReservationCreator
 
             // calculatePrice() resolves values withTrashed() so existing reservations keep
             // pricing historical values — a NEW reservation must only accept values still on
-            // offer (the create form lists an option's non-trashed values).
-            if (! $option->values()->whereKey($value)->exists()) {
+            // offer (the create form lists an option's published, non-trashed values).
+            if (! $option->values()->where('published', true)->whereKey($value)->exists()) {
                 throw new ManualReservationException(__('The selected option value is no longer available.'));
             }
 
