@@ -184,6 +184,12 @@ class PaymentGatewayManager
         return isset($this->gateways[$name]);
     }
 
+    /** The config key gateway() falls back to when no name is given. */
+    public function defaultName(): ?string
+    {
+        return $this->defaultName;
+    }
+
     public function hasMultiple(): bool
     {
         return count($this->gateways) > 1;

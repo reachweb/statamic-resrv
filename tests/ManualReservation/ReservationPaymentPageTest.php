@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\ManualReservation;
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
@@ -201,6 +202,142 @@ class ReservationPaymentPageTest extends TestCase
         $this->assertContains('pi_bare', array_column($gateway->cancelledIntents, 'payment_id'), 'The unmountable intent must be voided before it is replaced.');
         $this->assertCount(1, $gateway->createdIntents);
         $this->assertSame($gateway->createdIntents[0]['payment_id'], $reservation->fresh()->payment_id);
+    }
+
+    public function test_pay_refuses_to_remint_when_the_superseded_intent_cannot_be_voided()
+    {
+        $gateway = $this->fakeGateway();
+        $gateway->retrieveOmitsClientSecret = true;
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_bare']);
+
+        // The unmountable intent's credentials were already handed to the customer, and the
+        // provider swallows the void (StripePaymentGateway logs API errors and returns), so the
+        // verification read still reports it live. Minting a replacement anyway would leave TWO
+        // chargeable intents — the attempt must fail with a retryable error and keep the old
+        // intent on file so the next attempt re-tries the void.
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentError', true)
+            ->assertSet('paymentView', '')
+            ->assertSet('clientSecret', '');
+
+        $this->assertContains('pi_bare', array_column($gateway->cancelledIntents, 'payment_id'));
+        $this->assertCount(0, $gateway->createdIntents, 'No replacement may be minted next to a possibly-live intent.');
+        $this->assertSame('pi_bare', $reservation->fresh()->payment_id);
+    }
+
+    public function test_pay_shows_processing_when_the_superseded_intent_succeeds_during_the_void()
+    {
+        $gateway = $this->fakeGateway();
+        $gateway->retrieveOmitsClientSecret = true;
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_bare']);
+
+        // The customer completes the payment on an earlier tab between the resume read and the
+        // void: the cancel fails (no longer cancellable) and the verification read reports the
+        // money moving. The page must surface the processing state and keep the reference —
+        // never mint a second intent for a payment that is already settling.
+        $gateway->onRetrievePaymentIntent = function () use ($gateway) {
+            $gateway->retrievedIntentStatus = 'succeeded';
+        };
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentProcessing', true)
+            ->assertSet('paymentError', false)
+            ->assertSet('clientSecret', '');
+
+        $this->assertCount(0, $gateway->createdIntents);
+        $this->assertSame('pi_bare', $reservation->fresh()->payment_id);
+    }
+
+    public function test_pay_falls_back_to_the_default_gateway_when_none_is_recorded()
+    {
+        $gateway = $this->fakeGateway();
+
+        // Programmatic manual reservations may record no gateway (ManualReservationCreator only
+        // requires one for the CP flow) and legacy rows carry a blank one. The pay page must fall
+        // back to the default exactly like resolvePaymentGateway() does on every other payment
+        // surface — not error on the very link sendPaymentRequestEmail() was happy to send.
+        $reservation = $this->makeAwaitingReservation(['payment_gateway' => '']);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentError', false)
+            ->assertSet('paymentView', 'statamic-resrv::livewire.checkout-payment')
+            ->assertSet('amount', 55.0);
+
+        $this->assertCount(1, $gateway->createdIntents);
+
+        $fresh = $reservation->fresh();
+        $this->assertSame($gateway->createdIntents[0]['payment_id'], $fresh->payment_id);
+
+        // The gateway key the intent was minted through must be stamped alongside its id:
+        // the cancel/lapse void and the out-of-band reconcile no-op on a blank gateway, so
+        // without the stamp they would strand this live intent — and if the configured
+        // default later changed, they would route the void to the wrong provider.
+        $this->assertSame('fake', $fresh->payment_gateway);
+    }
+
+    public function test_cancelling_after_a_default_gateway_payment_attempt_voids_the_minted_intent()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation(['payment_gateway' => '']);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay');
+
+        $mintedId = $reservation->fresh()->payment_id;
+        $this->assertNotSame('', $mintedId);
+
+        // Regression: before the gateway stamp, the cancel path's void guard no-opped on the
+        // blank column and the customer's live intent survived the cancellation, still
+        // completable at the provider against a CANCELLED booking.
+        $this->postJson(cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]))
+            ->assertOk();
+
+        $fresh = $reservation->fresh();
+        $this->assertSame(ReservationStatus::CANCELLED->value, $fresh->status);
+        $this->assertContains($mintedId, array_column($gateway->cancelledIntents, 'payment_id'));
+        $this->assertSame('', $fresh->payment_id);
+    }
+
+    public function test_out_of_band_confirm_after_a_default_gateway_payment_attempt_voids_the_minted_intent()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation(['payment_gateway' => '']);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay');
+
+        $mintedId = $reservation->fresh()->payment_id;
+        $this->assertNotSame('', $mintedId);
+
+        // The customer paid in person after opening the pay link. settlePaidOutOfBand must
+        // reach the gateway the intent was minted through (the stamped default), void it, and
+        // clear the reference — otherwise the abandoned intent stays completable and a later
+        // online payment would be silently swallowed by the already-confirmed webhook no-op.
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertOk();
+
+        $fresh = $reservation->fresh();
+        $this->assertSame(ReservationStatus::CONFIRMED->value, $fresh->status);
+        $this->assertContains($mintedId, array_column($gateway->cancelledIntents, 'payment_id'));
+        $this->assertSame('', $fresh->payment_id);
     }
 
     public function test_pay_aborts_and_voids_the_intent_when_the_reservation_is_cancelled_mid_flight()

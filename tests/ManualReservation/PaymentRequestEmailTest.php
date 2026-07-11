@@ -261,6 +261,31 @@ class PaymentRequestEmailTest extends TestCase
         $this->assertNull($reservation->fresh()->payment_request_email_sent_at);
     }
 
+    public function test_resend_endpoint_rejects_when_the_payment_deadline_has_passed()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'send_payment_request_email' => false,
+            'hold_days' => 1,
+        ]));
+
+        // The deadline lapsed but the sweep has not cancelled the hold yet. The pay page already
+        // refuses this link as expired, so resending would email an unusable "Pay now" with a
+        // past deadline — the resend must refuse and leave no stamp.
+        $reservation->update(['hold_expires_at' => now()->subHour()]);
+
+        $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('error', 'The payment deadline for this reservation has passed, so a payment request cannot be sent.');
+
+        Mail::assertNotSent(ReservationPaymentRequest::class);
+        $this->assertNull($reservation->fresh()->payment_request_email_sent_at);
+    }
+
     public function test_offline_resend_still_works_without_a_payment_page()
     {
         Mail::fake();

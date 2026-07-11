@@ -1229,6 +1229,8 @@ When Resrv resumes a still-payable intent on a **redirect** gateway (`redirectsF
 
 **Inline** gateways follow the same rule for `->client_secret`: Resrv re-mounts a resumed inline intent's payment view around `$intent->client_secret`, so include it whenever the intent is still payable. If it is absent, Resrv voids the intent and mints a replacement the same way — never rendering a payment form with an empty secret.
 
+In both void-and-remint cases the superseded intent's credentials were already handed to the customer (an earlier tab or the provider's hosted page can still complete it), so Resrv **verifies the void** before minting: it calls `cancelPaymentIntent()`, then re-reads the intent through `retrievePaymentIntent()` and only mints when the provider reports it dead (`canceled`, or `null`). A read that still shows the intent payable aborts the attempt with a retryable error, and one that shows the money already moving surfaces the processing state — never two chargeable intents for one reservation. For this to work, your `retrievePaymentIntent()` must report `canceled` for an intent your `cancelPaymentIntent()` just voided.
+
 ### Reference: StripePaymentGateway (inline)
 
 ```php

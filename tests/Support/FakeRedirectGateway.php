@@ -57,8 +57,12 @@ class FakeRedirectGateway extends FakePaymentGateway
 
     public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
     {
+        // Mirror the parent's status model (a cancelled intent reports 'canceled') so callers
+        // that verify an intent is dead after voiding it see what a real provider would report.
         $intent = new \stdClass;
-        $intent->status = 'requires_payment_method';
+        $intent->status = in_array($paymentId, $this->canceledIds, true)
+            ? 'canceled'
+            : ($this->retrievedIntentStatus ?? 'requires_payment_method');
 
         if ($this->retrieveIncludesRedirectTo) {
             $intent->id = $paymentId;

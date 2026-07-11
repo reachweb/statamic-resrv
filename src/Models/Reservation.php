@@ -280,6 +280,16 @@ class Reservation extends Model
     }
 
     /**
+     * Whether an awaiting-payment hold's deadline has lapsed. The lapse sweep may not have
+     * cancelled the row yet, so payment surfaces (the pay page, the payment-request email)
+     * must refuse on this check rather than trust the status alone.
+     */
+    public function holdDeadlinePassed(): bool
+    {
+        return $this->hold_expires_at !== null && $this->hold_expires_at->isPast();
+    }
+
+    /**
      * Whether the customer may self-cancel at all — with a refund inside the free
      * cancellation window, or without one after it closes.
      */

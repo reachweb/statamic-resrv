@@ -183,9 +183,11 @@ class ManualReservationCreator
      * only when the dispatcher actually sent it (a site that disabled the event via
      * config must not get a false stamp).
      *
-     * @throws ManualReservationException when the request would be unusable: the recorded
-     *                                    gateway was removed from the configuration (the pay
-     *                                    link could never mount a payment), or an online
+     * @throws ManualReservationException when the request would be unusable: the hold's
+     *                                    payment deadline has already passed (the pay page
+     *                                    refuses expired links), the recorded gateway was
+     *                                    removed from the configuration (the pay link could
+     *                                    never mount a payment), or an online
      *                                    (non-manually-confirmable) gateway has no pay link to
      *                                    offer because the payment page entry was
      *                                    unconfigured/unpublished after creation. The email
@@ -194,6 +196,15 @@ class ManualReservationCreator
      */
     public function sendPaymentRequestEmail(Reservation $reservation): bool
     {
+        // The lapse sweep may not have cancelled an expired hold yet, but the pay page already
+        // refuses a past-deadline link (ReservationPayment's deadline_passed state) — a "Pay now"
+        // email carrying a deadline in the past could only ever dead-end the customer.
+        if ($reservation->holdDeadlinePassed()) {
+            throw new ManualReservationException(
+                __('The payment deadline for this reservation has passed, so a payment request cannot be sent.')
+            );
+        }
+
         // paymentGatewaySupportsManualConfirmation() maps an UNKNOWN gateway to false, which
         // would satisfy the pay-link branch below and email a "Pay now" link that can only
         // error when the page fails to resolve the gateway — so validate resolvability first.

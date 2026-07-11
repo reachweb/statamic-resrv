@@ -8,7 +8,6 @@ use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus as ReservationStatusEnum;
 use Reach\StatamicResrv\Exceptions\ReservationNoLongerPayable;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
-use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Traits\HandlesCustomerLookup;
 use Reach\StatamicResrv\Livewire\Traits\HandlesDirectGatewayPayment;
 use Reach\StatamicResrv\Models\Reservation;
@@ -112,7 +111,7 @@ class ReservationPayment extends Component
         }
 
         try {
-            $gateway = app(PaymentGatewayManager::class)->forReservation($reservation);
+            $gateway = $reservation->resolvePaymentGateway();
 
             if (! $gateway->redirectsForPayment()) {
                 return null;
@@ -147,7 +146,7 @@ class ReservationPayment extends Component
      */
     protected function deadlinePassed(Reservation $reservation): bool
     {
-        return $reservation->hold_expires_at !== null && $reservation->hold_expires_at->isPast();
+        return $reservation->holdDeadlinePassed();
     }
 
     /**

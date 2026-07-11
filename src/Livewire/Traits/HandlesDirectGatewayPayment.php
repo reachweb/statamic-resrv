@@ -58,7 +58,11 @@ trait HandlesDirectGatewayPayment
      */
     protected function mountGatewayPayment(Reservation $reservation, PriceClass $amount, string $returnUrl, ?Closure $stillPayable = null)
     {
-        $gateway = app(PaymentGatewayManager::class)->forReservation($reservation);
+        // resolvePaymentGateway(), not the manager's forReservation(): a blank recorded gateway
+        // (legacy rows, programmatic manual reservations) falls back to the default here exactly
+        // as the payment-request email path does — forReservation() throws on gateway('') and
+        // would turn every pay link that email offered into a guaranteed error.
+        $gateway = $reservation->resolvePaymentGateway();
 
         $intent = $this->resolveOrCreateIntent($gateway, $reservation, $amount, $returnUrl, $stillPayable);
 
@@ -164,9 +168,15 @@ trait HandlesDirectGatewayPayment
                     return $resumed;
                 }
 
-                // Resumable but unmountable: void it before minting the replacement, so the
-                // superseded intent doesn't linger chargeable at the provider.
-                $this->voidIntentQuietly($gateway, $reservation, (string) $reservation->payment_id);
+                // Resumable but unmountable: the stored intent must be replaced — but its
+                // credentials were already handed to the customer (an earlier tab or the
+                // provider's hosted page can still complete it), so unlike the uncommitted
+                // mint below a failed void cannot be tolerated: minting anyway would leave
+                // TWO chargeable intents for one reservation. False means the money started
+                // moving during the void round-trip — surface the processing state instead.
+                if (! $this->voidSupersededIntent($gateway, $reservation, (string) $reservation->payment_id)) {
+                    return null;
+                }
             }
 
             // $returnUrl passed positionally; 3-param gateways ignore it (see Step 12).
@@ -187,7 +197,18 @@ trait HandlesDirectGatewayPayment
                     return false;
                 }
 
-                $fresh->update(['payment_id' => $intent->id]);
+                $attributes = ['payment_id' => $intent->id];
+
+                // A blank recorded gateway resolved to the default at mount time; stamp the key
+                // the intent was actually minted through, in the same locked write as its id.
+                // Every later reader — the cancel/lapse void (which no-ops on a blank gateway,
+                // stranding the live intent), the out-of-band reconcile, a refund — must reach
+                // THIS provider even if the configured default changes before it runs.
+                if (blank($fresh->payment_gateway)) {
+                    $attributes['payment_gateway'] = app(PaymentGatewayManager::class)->defaultName();
+                }
+
+                $fresh->update($attributes);
                 $reservation->setRawAttributes($fresh->getAttributes(), true);
 
                 return true;
@@ -228,6 +249,44 @@ trait HandlesDirectGatewayPayment
         $clientSecret = $intent->client_secret ?? null;
 
         return is_string($clientSecret) && $clientSecret !== '';
+    }
+
+    /**
+     * Void a superseded intent whose credentials were already handed out, and PROVE it is dead
+     * before the caller mints a replacement. voidIntentQuietly()'s tolerate-and-log posture is
+     * safe only for intents the customer never received; here a swallowed cancel failure
+     * (StripePaymentGateway logs API errors and returns) or a cancel that skipped an intent no
+     * longer in a cancellable state (it succeeded during the round-trip) would leave the old
+     * intent completable NEXT TO the replacement — a double charge. So the intent is re-read
+     * after the cancel and the provider's answer gates the mint: gone (absent/canceled) lets it
+     * proceed; money already moving (succeeded/processing/requires_capture) returns false so the
+     * caller shows the processing state and keeps the stored reference; anything still live
+     * throws — the customer sees a retryable payment error and no replacement is created. A
+     * transient failure of the verification read propagates for the same reason.
+     */
+    protected function voidSupersededIntent(PaymentInterface $gateway, Reservation $reservation, string $paymentId): bool
+    {
+        $cancelException = null;
+
+        try {
+            $gateway->cancelPaymentIntent($paymentId, $reservation);
+        } catch (\Throwable $e) {
+            $cancelException = $e;
+        }
+
+        $existing = $gateway->retrievePaymentIntent($paymentId, $reservation);
+
+        if ($existing === null || ($existing->status ?? '') === 'canceled') {
+            return true;
+        }
+
+        if (in_array($existing->status ?? '', ['succeeded', 'processing', 'requires_capture'], true)) {
+            return false;
+        }
+
+        throw $cancelException ?? new \RuntimeException(
+            "Could not void the superseded payment intent [{$paymentId}] for reservation [{$reservation->id}]; refusing to mint a replacement next to a live intent."
+        );
     }
 
     /**
