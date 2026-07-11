@@ -32,6 +32,10 @@ class QuoteManualReservationRequest extends FormRequest
             'payment_mode' => ['required', Rule::enum(ManualPaymentMode::class)],
             'custom_amount' => 'nullable|numeric',
             'payment_gateway' => 'nullable|string',
+            // Shape-only here: the quote carries the customer payload so custom-priced extras
+            // (Extra::getCustomPrice) preview with the same multiplier creation will use. The
+            // store request layers the checkout form's real rules on top.
+            'customer' => 'nullable|array',
         ];
     }
 }

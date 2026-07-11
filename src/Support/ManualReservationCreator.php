@@ -500,8 +500,10 @@ class ManualReservationCreator
         // Carry the customer payload so a custom-priced extra (Extra::getCustomPrice) reads its
         // multiplier from the same checkout-form field the frontend does. The CP has no
         // resrv-search session to fall back on, so without this a custom extra silently prices at
-        // ×1 and the reservation charges less than the equivalent frontend checkout. The live quote
-        // sends no customer (its preview keeps the ×1 fallback); creation carries the full customer.
+        // ×1 and the reservation charges less than the equivalent frontend checkout. Both the live
+        // quote and creation carry it — the admin must review the same total that will be stored,
+        // so a selected custom extra whose driving field is still empty fails the quote (below)
+        // rather than previewing an amount creation would not charge.
         if (! empty($input['customer'])) {
             $calcData['customer'] = collect($input['customer']);
         }

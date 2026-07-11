@@ -202,7 +202,7 @@ watch(() => form.item_id, async (itemId) => {
         formFields.value = data.form_fields;
         form.rate_id = data.rates[0]?.id ?? null;
         form.customer = Object.fromEntries(
-            data.form_fields.map((field) => [field.handle, field.type === 'checkboxes' ? [] : '']),
+            data.form_fields.map((field) => [field.handle, emptyFieldValue(field)]),
         );
         requestQuote();
     } catch (error) {
@@ -212,6 +212,7 @@ watch(() => form.item_id, async (itemId) => {
 
 // --- Quoting (server-side money math; debounced on input changes) ---
 let quoteTimer = null;
+let quoteSequence = 0;
 
 const requestQuote = () => {
     clearTimeout(quoteTimer);
@@ -234,18 +235,26 @@ const quotePayload = () => ({
     payment_mode: form.payment_mode,
     custom_amount: form.payment_mode === 'custom' && form.custom_amount !== '' && ! customAmountError.value ? form.custom_amount : null,
     payment_gateway: form.payment_gateway,
+    // Custom-priced extras multiply by a checkout-form field (e.g. adults), so the quote
+    // must price with the same customer data creation will use — never a ×1 preview.
+    customer: form.customer,
 });
 
 const fetchQuote = async () => {
     if (! datesComplete.value) return;
+    // Requests can resolve out of order (a slow older request finishing after a newer one),
+    // so only the latest request may write quote state — stale responses are discarded.
+    const sequence = ++quoteSequence;
     quoting.value = true;
     quoteError.value = null;
     try {
         const { data } = await axios.post(props.quoteUrl, quotePayload());
+        if (sequence !== quoteSequence) return;
         quote.value = data;
         availableExtras.value = data.available_extras ?? [];
         availableOptions.value = data.available_options ?? [];
     } catch (error) {
+        if (sequence !== quoteSequence) return;
         // Keep the last good quote on screen so the pricing/payment section never collapses
         // (which would hide the very inputs needed to fix the problem); surface the reason
         // inline and block submission instead.
@@ -253,7 +262,7 @@ const fetchQuote = async () => {
         quoteError.value = error?.response?.data?.error
             ?? (validationMessage || __('Could not compute a quote'));
     } finally {
-        quoting.value = false;
+        if (sequence === quoteSequence) quoting.value = false;
     }
 };
 
@@ -275,8 +284,23 @@ watch(
     { deep: true },
 );
 
+// Re-quote when a customer field that drives a selected custom-priced extra changes —
+// but not on every keystroke in unrelated fields like the name. Serialized to a string so
+// the quote's own availableExtras refresh (same content, new array) cannot re-trigger it.
+const customPriceFieldState = computed(() =>
+    JSON.stringify(
+        availableExtras.value
+            .filter((extra) => extra.price_type === 'custom' && extra.custom && (form.extras[extra.id] ?? 0) > 0)
+            .map((extra) => [extra.custom, form.customer[extra.custom] ?? null]),
+    ),
+);
+
+watch(customPriceFieldState, requestQuote);
+
 // --- Customer field renderer helpers ---
-const knownFieldTypes = ['text', 'textarea', 'select', 'checkboxes'];
+// The same set the frontend checkout renders (resources/views/livewire/components/fields/) —
+// a checkout form that works there must be fillable here with the same value shapes.
+const knownFieldTypes = ['text', 'textarea', 'select', 'checkboxes', 'radio', 'toggle', 'integer', 'dictionary'];
 
 const fieldComponentType = (field) => {
     if (knownFieldTypes.includes(field.type)) return field.type;
@@ -284,10 +308,29 @@ const fieldComponentType = (field) => {
     return 'text';
 };
 
+const emptyFieldValue = (field) => {
+    if (field.type === 'checkboxes') return [];
+    if (field.type === 'toggle') return false;
+    return '';
+};
+
 const fieldIsRequired = (field) => (field.validate ?? []).some((rule) => String(rule).startsWith('required'));
 
-const fieldSelectOptions = (field) =>
-    Object.entries(field.options ?? {}).map(([value, label]) => ({ value, label: label ?? value }));
+// Statamic stores select/radio/checkboxes options as an assoc map, a list of {key, value}
+// rows, or a plain list of values — normalize all three (cf. HasSelectOptions::getOptions()).
+const fieldSelectOptions = (field) => {
+    const options = field.options ?? {};
+
+    if (Array.isArray(options)) {
+        return options.map((option) =>
+            option !== null && typeof option === 'object'
+                ? { value: option.key, label: option.value ?? String(option.key) }
+                : { value: option, label: String(option) },
+        );
+    }
+
+    return Object.entries(options).map(([value, label]) => ({ value, label: label ?? value }));
+};
 
 const toggleCheckboxValue = (handle, value) => {
     const current = new Set(form.customer[handle] ?? []);
@@ -548,6 +591,42 @@ const fieldError = (key) => {
                                 <span>{{ opt.label }}</span>
                             </label>
                         </div>
+                        <div v-else-if="fieldComponentType(field) === 'radio'" class="space-y-1">
+                            <label
+                                v-for="opt in fieldSelectOptions(field)"
+                                :key="opt.value"
+                                class="flex items-center gap-2"
+                            >
+                                <input
+                                    type="radio"
+                                    :name="`customer-${field.handle}`"
+                                    :value="opt.value"
+                                    :checked="form.customer[field.handle] === opt.value"
+                                    @change="form.customer[field.handle] = opt.value"
+                                />
+                                <span>{{ opt.label }}</span>
+                            </label>
+                        </div>
+                        <Switch
+                            v-else-if="fieldComponentType(field) === 'toggle'"
+                            v-model="form.customer[field.handle]"
+                        />
+                        <Input
+                            v-else-if="fieldComponentType(field) === 'integer'"
+                            v-model="form.customer[field.handle]"
+                            type="number"
+                        />
+                        <Input
+                            v-else-if="fieldComponentType(field) === 'dictionary' && field.phone_dictionary"
+                            v-model="form.customer[field.handle]"
+                            type="tel"
+                        />
+                        <Combobox
+                            v-else-if="fieldComponentType(field) === 'dictionary'"
+                            v-model="form.customer[field.handle]"
+                            :options="field.dictionary_items ?? []"
+                            :placeholder="__('Please select')"
+                        />
                         <Input v-else v-model="form.customer[field.handle]" type="text" />
                     </Field>
                 </div>

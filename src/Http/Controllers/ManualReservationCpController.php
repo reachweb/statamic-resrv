@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Http\Controllers;
 
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Arr;
 use Inertia\Inertia;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
@@ -19,7 +20,9 @@ use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Reach\StatamicResrv\Support\ManualReservationCreator;
+use Statamic\Facades\Dictionary;
 use Statamic\Facades\User;
+use Statamic\Fields\Field;
 
 class ManualReservationCpController extends Controller
 {
@@ -82,12 +85,48 @@ class ManualReservationCpController extends Controller
             ->resolveForEntryId($item_id)
             ->fields()
             ->values()
-            ->map(fn ($field) => $field->toArray());
+            ->map(fn ($field) => $this->serializeFormField($field));
 
         return response()->json([
             'rates' => $rates,
             'form_fields' => $formFields,
         ]);
+    }
+
+    /**
+     * A checkout form field as the create page renders it. Dictionary fields carry their
+     * resolved items (the config only names the dictionary) plus the phone flag, mirroring
+     * Livewire\CheckoutForm::getDictionaryItems()/isPhoneDictionary() so the CP form offers
+     * the same choices and value shapes as the frontend checkout.
+     */
+    protected function serializeFormField(Field $field): array
+    {
+        $data = $field->toArray();
+
+        if ($field->type() !== 'dictionary') {
+            return $data;
+        }
+
+        $dictionary = $field->config()['dictionary'] ?? null;
+        $data['phone_dictionary'] = $dictionary === 'country_phone_codes';
+        $data['dictionary_items'] = [];
+
+        // The phone variant is a free-typed tel input on the CP (the items only feed the
+        // frontend's code-prefix combobox), so its item list is dead weight — skip it.
+        if ($data['phone_dictionary']) {
+            return $data;
+        }
+
+        $handle = is_array($dictionary) ? ($dictionary['type'] ?? null) : $dictionary;
+
+        if ($handle && ($found = Dictionary::find($handle))) {
+            $data['dictionary_items'] = collect($found->optionItems())
+                ->map(fn ($item) => Arr::only($item->toArray(), ['value', 'label']))
+                ->values()
+                ->all();
+        }
+
+        return $data;
     }
 
     public function quote(QuoteManualReservationRequest $request)
@@ -169,6 +208,9 @@ class ManualReservationCpController extends Controller
             'name' => $extra->name,
             'price' => $extra->price->format(),
             'price_type' => $extra->price_type,
+            // The checkout-form field handle driving a custom-priced extra — the create form
+            // re-quotes when that field changes so the preview matches what creation charges.
+            'custom' => $extra->custom,
             'allow_multiple' => (bool) $extra->allow_multiple,
             'maximum' => $extra->maximum,
             'description' => $extra->description,

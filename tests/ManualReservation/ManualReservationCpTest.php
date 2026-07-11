@@ -223,6 +223,96 @@ class ManualReservationCpTest extends TestCase
             ->assertStatus(422)->assertJsonValidationErrors(['custom_amount']);
     }
 
+    public function test_quote_endpoint_prices_custom_extras_with_the_customer_data()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        // price 10, price_type 'custom', driven by the customer form field 'adults'.
+        $extra = Extra::factory()->custom()->create();
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        $payload = [
+            'item_id' => $entry->id(),
+            'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
+            'date_end' => today()->addDays(3)->setTime(12, 0)->toDateTimeString(),
+            'quantity' => 1,
+            'rate_id' => Rate::forEntry($entry->id())->first()?->id,
+            'payment_mode' => 'full',
+            'extras' => [['id' => $extra->id, 'quantity' => 1]],
+        ];
+
+        // The quote must preview the same multiplier creation will charge (10 × 3 adults) —
+        // never the ×1 fallback, which would show the admin a total creation does not store.
+        $this->postJson(cp_route('resrv.manual.quote'), array_merge($payload, [
+            'customer' => ['email' => 'jane@example.com', 'adults' => 3],
+        ]))->assertOk()
+            ->assertJsonPath('pricing.extras_total', '30.00')
+            ->assertJsonPath('pricing.total', '130.00');
+
+        // A selected custom extra whose driving field is still empty must fail the quote
+        // (creation would fail identically) instead of previewing a ×1 amount.
+        $this->postJson(cp_route('resrv.manual.quote'), array_merge($payload, [
+            'customer' => ['email' => '', 'adults' => ''],
+        ]))->assertStatus(422)
+            ->assertJson(['error' => __('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $extra->name])]);
+    }
+
+    public function test_entry_endpoint_resolves_dictionary_field_items()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability();
+
+        // A checkout form carrying dictionary fields, read from a scratch blueprint
+        // directory so the addon's shipped blueprint stays untouched.
+        $directory = sys_get_temp_dir().'/resrv-blueprints-'.uniqid();
+        mkdir($directory.'/forms', 0755, true);
+        file_put_contents($directory.'/forms/checkout.yaml', <<<'YAML'
+        tabs:
+          main:
+            sections:
+              -
+                fields:
+                  -
+                    handle: email
+                    field:
+                      type: text
+                      display: Email
+                  -
+                    handle: country
+                    field:
+                      type: dictionary
+                      display: Country
+                      dictionary: countries
+                  -
+                    handle: dialing_code
+                    field:
+                      type: dictionary
+                      display: 'Dialing code'
+                      dictionary: country_phone_codes
+        YAML);
+        Blueprint::setDirectory($directory);
+
+        $fields = collect(
+            $this->getJson(cp_route('resrv.manual.entry', ['item_id' => $entry->id()]))
+                ->assertOk()
+                ->json('form_fields')
+        )->keyBy('handle');
+
+        // A plain dictionary carries its resolved items so the CP form can offer the same
+        // choices (and store the same values) as the frontend checkout's combobox.
+        $country = $fields->get('country');
+        $this->assertFalse($country['phone_dictionary']);
+        $this->assertNotEmpty($country['dictionary_items']);
+        $this->assertArrayHasKey('value', $country['dictionary_items'][0]);
+        $this->assertArrayHasKey('label', $country['dictionary_items'][0]);
+
+        // The phone variant renders as a free-typed tel input on the CP — flagged, no items.
+        $dialingCode = $fields->get('dialing_code');
+        $this->assertTrue($dialingCode['phone_dictionary']);
+        $this->assertSame([], $dialingCode['dictionary_items']);
+    }
+
     public function test_create_page_exposes_gateways_and_configuration_state()
     {
         $this->signInAdmin();
