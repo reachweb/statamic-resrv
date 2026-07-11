@@ -187,7 +187,13 @@ onMounted(async () => {
     }
 });
 
+// Entry-detail requests can resolve out of order like quotes can (select entry A, then B
+// before A's response lands), so only the latest selection may write rates/fields/customer
+// state — a stale response would leave the form quoting B with A's rate and checkout fields.
+let entrySequence = 0;
+
 watch(() => form.item_id, async (itemId) => {
+    const sequence = ++entrySequence;
     rates.value = [];
     formFields.value = [];
     form.rate_id = null;
@@ -198,6 +204,7 @@ watch(() => form.item_id, async (itemId) => {
 
     try {
         const { data } = await axios.get(props.entryUrlTemplate.replace('ITEMID', itemId));
+        if (sequence !== entrySequence) return;
         rates.value = data.rates;
         formFields.value = data.form_fields;
         form.rate_id = data.rates[0]?.id ?? null;
@@ -206,6 +213,7 @@ watch(() => form.item_id, async (itemId) => {
         );
         requestQuote();
     } catch (error) {
+        if (sequence !== entrySequence) return;
         toast.error(__('Could not load the entry data'));
     }
 });

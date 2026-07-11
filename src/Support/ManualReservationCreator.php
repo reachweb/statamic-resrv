@@ -184,19 +184,37 @@ class ManualReservationCreator
      * only when the dispatcher actually sent it (a site that disabled the event via
      * config must not get a false stamp).
      *
-     * @throws ManualReservationException when the request would be unusable: the hold's
-     *                                    payment deadline has already passed (the pay page
-     *                                    refuses expired links), the recorded gateway was
-     *                                    removed from the configuration (the pay link could
-     *                                    never mount a payment), or an online
-     *                                    (non-manually-confirmable) gateway has no pay link to
-     *                                    offer because the payment page entry was
+     * @throws ManualReservationException when the request would be unusable: the reservation
+     *                                    is no longer awaiting payment (a webhook or another
+     *                                    admin confirmed/cancelled it after the caller's
+     *                                    pre-check), the hold's payment deadline has already
+     *                                    passed (the pay page refuses expired links), the
+     *                                    recorded gateway was removed from the configuration
+     *                                    (the pay link could never mount a payment), or an
+     *                                    online (non-manually-confirmable) gateway has no pay
+     *                                    link to offer because the payment page entry was
      *                                    unconfigured/unpublished after creation. The email
      *                                    would otherwise fall back to its offline "send us your
      *                                    payment" wording with no way to actually pay.
      */
     public function sendPaymentRequestEmail(Reservation $reservation): bool
     {
+        // Callers pre-check isAwaitingPayment() on a plain read, but a webhook confirm, a CP
+        // confirm/cancel or the lapse sweep can transition the row before the send — and a
+        // "Pay now" email for a booking that is already paid or cancelled can only mislead the
+        // customer. Re-read under the row lock (serializing with any in-flight transitionTo())
+        // and judge the settled row; the lock is released before the mail transport runs, so
+        // only a transition starting entirely after this read can still race the send.
+        $fresh = DB::transaction(fn () => Reservation::query()->lockForUpdate()->findOrFail($reservation->id));
+
+        if (! $fresh->isAwaitingPayment()) {
+            throw new ManualReservationException(
+                __('This reservation is no longer awaiting payment, so a payment request cannot be sent.')
+            );
+        }
+
+        $reservation->setRawAttributes($fresh->getAttributes(), true);
+
         // The lapse sweep may not have cancelled an expired hold yet, but the pay page already
         // refuses a past-deadline link (ReservationPayment's deadline_passed state) — a "Pay now"
         // email carrying a deadline in the past could only ever dead-end the customer.

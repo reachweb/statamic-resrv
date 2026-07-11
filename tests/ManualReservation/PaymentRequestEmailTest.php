@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Events\BuildingReservationEmail;
+use Reach\StatamicResrv\Exceptions\ManualReservationException;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -281,6 +282,36 @@ class PaymentRequestEmailTest extends TestCase
         $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
             ->assertStatus(422)
             ->assertJsonPath('error', 'The payment deadline for this reservation has passed, so a payment request cannot be sent.');
+
+        Mail::assertNotSent(ReservationPaymentRequest::class);
+        $this->assertNull($reservation->fresh()->payment_request_email_sent_at);
+    }
+
+    public function test_send_refuses_when_the_reservation_left_awaiting_payment_after_the_pre_check()
+    {
+        Mail::fake();
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'send_payment_request_email' => false,
+        ]));
+
+        // Simulate a webhook confirm landing after a caller's isAwaitingPayment() pre-check:
+        // the row is CONFIRMED while the in-memory model still reads awaiting_payment. The
+        // send must re-read the row and refuse — a "Pay now" email for a paid booking can
+        // only mislead the customer.
+        Reservation::whereKey($reservation->id)->update(['status' => 'confirmed']);
+        $this->assertTrue($reservation->isAwaitingPayment());
+
+        try {
+            $this->creator()->sendPaymentRequestEmail($reservation);
+            $this->fail('The stale-status send should have been refused.');
+        } catch (ManualReservationException $e) {
+            $this->assertSame(
+                'This reservation is no longer awaiting payment, so a payment request cannot be sent.',
+                $e->getMessage()
+            );
+        }
 
         Mail::assertNotSent(ReservationPaymentRequest::class);
         $this->assertNull($reservation->fresh()->payment_request_email_sent_at);
