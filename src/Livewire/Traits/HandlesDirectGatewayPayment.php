@@ -64,6 +64,18 @@ trait HandlesDirectGatewayPayment
         // would turn every pay link that email offered into a guaranteed error.
         $gateway = $reservation->resolvePaymentGateway();
 
+        // A redirect gateway bakes $returnUrl into the provider payment as the URL the customer
+        // lands back on, appending its own Step-12 params (id, resrv_gateway). The resrv_gateway
+        // marker is load-bearing on that return leg — redirectGatewayReturnStatus() only consults
+        // the provider when it is present — but nothing enforces the gateway's append (normal
+        // checkout silently falls back to the default gateway without it), so bake the marker into
+        // the base rather than trust it. A compliant gateway's double-append is harmless: the pay
+        // page only checks presence, and duplicate keys resolve to the same value.
+        if ($gateway->redirectsForPayment() && ! str_contains($returnUrl, 'resrv_gateway=')) {
+            $separator = str_contains($returnUrl, '?') ? '&' : '?';
+            $returnUrl .= $separator.http_build_query(['resrv_gateway' => $reservation->payment_gateway]);
+        }
+
         $intent = $this->resolveOrCreateIntent($gateway, $reservation, $amount, $returnUrl, $stillPayable);
 
         if ($intent === null) {
@@ -73,12 +85,12 @@ trait HandlesDirectGatewayPayment
         }
 
         // Redirect gateways bake their return URL from $returnUrl (threaded into paymentIntent by
-        // resolveOrCreateIntent), routing this customer back to the pay-by-link page. Here we just
-        // forward to the provider's hosted page, tagging resrv_gateway so the return resolves the
-        // gateway; ReservationPayment::state() reads the interim status. See Step 12. Resumed
-        // intents without a provider URL never reach this point (resolveOrCreateIntent re-mints
-        // them), so an empty redirectTo here means the gateway's paymentIntent() broke its
-        // contract — fail loudly rather than redirect the customer to a dead URL.
+        // resolveOrCreateIntent; the return marker is what ReservationPayment::state() keys the
+        // interim status off — see Step 12 and the append above). Here we just forward to the
+        // provider's hosted page, tagging resrv_gateway the same way the checkout flow does.
+        // Resumed intents without a provider URL never reach this point (resolveOrCreateIntent
+        // re-mints them), so an empty redirectTo here means the gateway's paymentIntent() broke
+        // its contract — fail loudly rather than redirect the customer to a dead URL.
         if ($gateway->redirectsForPayment()) {
             $redirectUrl = (string) ($intent->redirectTo ?? '');
 

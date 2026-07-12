@@ -63,6 +63,10 @@ class ManualReservationCreator
      */
     public function create(array $input, $creator = null, bool $requireGatewayForPayment = false): Reservation
     {
+        // Normalize once so the quote, the overbook assert, the stored rate_id and the
+        // cancellation snapshot all see the SAME validated rate (see resolveRateId()).
+        $input['rate_id'] = $this->resolveRateId($input);
+
         $quote = $this->quote($input);
 
         $gateway = (string) ($input['payment_gateway'] ?? '');
@@ -273,6 +277,7 @@ class ManualReservationCreator
      * } $input
      * @return array{
      *     availability: array{status: bool, available: int, overbook: bool},
+     *     rate_id: int,
      *     pricing: array{base_price: PriceClass, original_base_price: ?string, extras_total: PriceClass, options_total: PriceClass, total: PriceClass, total_overridden: bool},
      *     payment: array{mode: string, amount: PriceClass, surcharge: PriceClass, amount_with_surcharge: PriceClass, gateways: array},
      *     extras: Collection,
@@ -283,6 +288,8 @@ class ManualReservationCreator
      */
     public function quote(array $input, bool $requireCustomAmount = true): array
     {
+        $input['rate_id'] = $this->resolveRateId($input);
+
         $itemId = $input['item_id'];
         $data = $this->availabilityDataFrom($input);
 
@@ -346,6 +353,7 @@ class ManualReservationCreator
                 'available' => $available,
                 'overbook' => ! $status,
             ],
+            'rate_id' => $data['rate_id'],
             'pricing' => [
                 'base_price' => $basePrice,
                 'original_base_price' => $pricing['original_price'],
@@ -474,6 +482,43 @@ class ManualReservationCreator
     }
 
     /**
+     * The concrete rate every quote and creation is priced, validated and stored against.
+     *
+     * An explicit rate_id must be published and applicable to the entry — the create form
+     * only offers those, so anything else is a stale or crafted payload (the availability
+     * engine reads status=false for it, but the pricing lookup underneath is validity-blind).
+     * An omitted rate_id adopts the entry's first published applicable rate by order — the
+     * same defaulting the create form applies (rates[0]). It must never stay null: with a
+     * null rateId, itemPricesBetween() applies no rate filter at all (it sums price rows
+     * across EVERY rate, unpublished and soft-deleted included) and the resulting
+     * reservation's rate-scoped stock movements would match no availability rows.
+     *
+     * @throws ManualReservationException
+     */
+    protected function resolveRateId(array $input): int
+    {
+        $itemId = (string) $input['item_id'];
+
+        if (($rateId = $this->rateIdFrom($input)) !== null) {
+            $rate = Rate::published()->find($rateId);
+
+            if (! $rate || ! $rate->appliesToEntry($itemId)) {
+                throw new ManualReservationException(__('The selected rate is not available for this entry.'));
+            }
+
+            return $rateId;
+        }
+
+        $rate = Rate::forEntry($itemId)->published()->orderBy('order')->first();
+
+        if (! $rate) {
+            throw new ManualReservationException(__('There is no published rate available for this entry.'));
+        }
+
+        return $rate->id;
+    }
+
+    /**
      * The overbook toggle (affects_availability=false) may bypass ONLY stock. The quote's
      * availability status also reads false for structural reasons — a disabled entry, an
      * unpublished or inapplicable rate, or the rate's date-window/stay/lead-time restrictions —
@@ -493,12 +538,7 @@ class ManualReservationCreator
         }
 
         $rateId = $this->rateIdFrom($input);
-
-        if ($rateId === null) {
-            return;
-        }
-
-        $rate = Rate::published()->find($rateId);
+        $rate = $rateId !== null ? Rate::published()->find($rateId) : null;
 
         if (! $rate || ! $rate->appliesToEntry((string) $input['item_id'])) {
             throw new ManualReservationException(__('The selected rate is not available for this entry.'));

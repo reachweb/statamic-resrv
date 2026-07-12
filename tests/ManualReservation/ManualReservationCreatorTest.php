@@ -513,6 +513,74 @@ class ManualReservationCreatorTest extends TestCase
         }
     }
 
+    public function test_a_missing_rate_id_resolves_to_the_entrys_published_rate()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $rate = Rate::forEntry($entry->id())->first();
+
+        $quote = $this->creator()->quote($this->baseInput($entry, ['rate_id' => null]));
+        $this->assertEquals($rate->id, $quote['rate_id']);
+
+        $reservation = $this->creator()->create($this->baseInput($entry, ['rate_id' => null]));
+
+        // The resolved rate is stored, so the stock decrement is rate-scoped to real rows —
+        // a null rate_id would have matched no availability rows and decremented nothing.
+        $this->assertEquals($rate->id, $reservation->rate_id);
+        $this->assertEquals(1, $this->availableOn($entry->id(), today()->addDay()));
+    }
+
+    public function test_a_missing_rate_id_prices_against_the_resolved_rate_only()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 2, price: 50);
+
+        // A second, unpublished rate with its own (much pricier) rows for the same dates: a
+        // rate-blind pricing read (null rate_id applies no rate filter and sums the rows of
+        // every rate, unpublished included) would fold these into the base price.
+        $unpublished = Rate::factory()->create([
+            'slug' => 'unpublished-rate',
+            'title' => 'Unpublished',
+            'published' => false,
+            'order' => 2,
+        ]);
+        Availability::factory()
+            ->count(4)
+            ->sequence(
+                ['date' => today()],
+                ['date' => today()->addDay()],
+                ['date' => today()->addDays(2)],
+                ['date' => today()->addDays(3)],
+            )
+            ->create([
+                'statamic_id' => $entry->id(),
+                'rate_id' => $unpublished->id,
+                'available' => 5,
+                'price' => '999',
+            ]);
+
+        $quote = $this->creator()->quote($this->baseInput($entry, ['rate_id' => null]));
+
+        $this->assertSame('100.00', $quote['pricing']['base_price']->format());
+    }
+
+    public function test_a_missing_rate_id_cannot_bypass_an_unpublished_rate()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 0);
+        Rate::forEntry($entry->id())->first()->update(['published' => false]);
+
+        $before = Reservation::count();
+
+        // The create form omits rate_id when an entry has no published rates; the omission
+        // must resolve-and-validate a published rate rather than skip rate validation — an
+        // entry with no published rate is not bookable, overbook toggle or not.
+        try {
+            $this->creator()->create($this->baseInput($entry, ['rate_id' => null, 'affects_availability' => false]));
+            $this->fail('Omitting the rate id must not bypass rate validation for the overbook toggle.');
+        } catch (ManualReservationException $e) {
+            $this->assertStringContainsString('no published rate', $e->getMessage());
+            $this->assertEquals($before, Reservation::count());
+        }
+    }
+
     public function test_overbooking_cannot_bypass_rate_stay_and_lead_time_restrictions()
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 4);

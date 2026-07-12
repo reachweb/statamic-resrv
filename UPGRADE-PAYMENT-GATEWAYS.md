@@ -1176,6 +1176,8 @@ protected function buildReturnUrl(Reservation $reservation, ?string $returnUrl =
 
 > ⚠️ **`$returnUrl` may already carry a query string.** The pay-by-link page's return URL ends in its `?ref=…&hash=…` authentication pair — those parameters are how the return page identifies the customer. Appending a bare `'?'` (as the historical checkout-only pattern did) produces a malformed double-`?` URL and breaks the customer's return leg. Always use the separator-aware append shown above, exactly as Resrv's own surfaces do.
 
+> ℹ️ **You may find `resrv_gateway` already on the base.** For redirect gateways the pay-by-link surface bakes the `resrv_gateway` marker into `$returnUrl` before calling `paymentIntent()` (its return page keys off the marker's presence and cannot depend on every gateway appending it). Keep appending your own parameters as shown above regardless — a duplicated `resrv_gateway` key is harmless, and normal checkout still relies on your append.
+
 ### What you get for free
 
 Your existing `handleRedirectBack()` needs no change. The manual pay-by-link page (`ReservationPayment`) calls it on return — resolving your gateway from the reservation's stored `payment_gateway` (via `PaymentGatewayManager::forReservation()`), triggered by the presence of the `resrv_gateway` return marker — and maps its `status` to an interim *processing* / *retry* message. As always, the **webhook remains the source of truth**: the redirect-back only drives interim messaging and never confirms the reservation.

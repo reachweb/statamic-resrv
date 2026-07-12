@@ -21,8 +21,7 @@ class CancelLapsedHolds extends Command
     {
         $candidates = Reservation::where('status', ReservationStatus::AWAITING_PAYMENT->value)
             ->whereNotNull('hold_expires_at')
-            ->where('hold_expires_at', '<', now())
-            ->get();
+            ->where('hold_expires_at', '<', now());
 
         if ($this->option('dry-run')) {
             $this->info("Dry run: {$candidates->count()} lapsed hold(s) would be cancelled.");
@@ -32,7 +31,10 @@ class CancelLapsedHolds extends Command
 
         $cancelled = 0;
 
-        foreach ($candidates as $reservation) {
+        // lazyById keeps a backlog of any size processable in constant memory, and stays
+        // correct while rows leave the filtered set mid-run (cancelling flips the status):
+        // it pages by primary key, not offset, so nothing shifts under the cursor.
+        foreach ($candidates->lazyById(100) as $reservation) {
             if ($this->cancelLapsedHold($reservation)) {
                 $cancelled++;
             }

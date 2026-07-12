@@ -511,9 +511,12 @@ class ReservationPaymentPageTest extends TestCase
 
         $reservation = $this->makeAwaitingReservation(['payment_gateway' => 'fakeredirect']);
 
-        // A redirect gateway must return the customer to this pay-by-link page, not checkout-complete.
+        // A redirect gateway must return the customer to this pay-by-link page, not
+        // checkout-complete — with the resrv_gateway marker already baked into the base, so
+        // the return leg carries it even when a gateway appends only its own parameters.
         $expectedReturn = $reservation->customerPaymentUrl();
         $this->assertNotNull($expectedReturn);
+        $expectedReturn .= (str_contains($expectedReturn, '?') ? '&' : '?').'resrv_gateway=fakeredirect';
 
         $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class)
@@ -573,7 +576,9 @@ class ReservationPaymentPageTest extends TestCase
 
         $this->assertContains('redir_stale', array_column($gateway->cancelledIntents, 'payment_id'), 'The unmountable intent must be voided before it is replaced.');
         $this->assertCount(1, $gateway->createdIntents);
-        $this->assertSame($reservation->customerPaymentUrl(), $gateway->lastReturnUrl);
+        $expectedReturn = $reservation->customerPaymentUrl();
+        $expectedReturn .= (str_contains($expectedReturn, '?') ? '&' : '?').'resrv_gateway=fakeredirect';
+        $this->assertSame($expectedReturn, $gateway->lastReturnUrl);
 
         $fresh = $reservation->fresh();
         $this->assertNotSame('redir_stale', $fresh->payment_id);

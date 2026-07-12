@@ -74,6 +74,11 @@ const quoteError = ref(null);
 const storeError = ref(null);
 const errors = ref({});
 const quoting = ref(false);
+// True from the moment a pricing input changes until the response for that exact input state
+// lands. The displayed quote is stale for that whole window (the 400 ms debounce plus the
+// request), so submission must stay blocked — otherwise a click right after a change would
+// create the reservation at a newly computed amount while the admin approved the old total.
+const quoteDirty = ref(false);
 const submitting = ref(false);
 
 const entryOptions = computed(() =>
@@ -174,7 +179,7 @@ const customAmountError = computed(() => {
 const paymentAmountIsZero = computed(() => quote.value && Number(quote.value.payment.amount) === 0);
 
 const canSubmit = computed(
-    () => datesComplete.value && quote.value && ! quoteError.value && ! customAmountError.value && ! availabilityBlocks.value && (paymentAmountIsZero.value || form.payment_gateway) && ! submitting.value,
+    () => datesComplete.value && quote.value && ! quoteDirty.value && ! quoteError.value && ! customAmountError.value && ! availabilityBlocks.value && (paymentAmountIsZero.value || form.payment_gateway) && ! submitting.value,
 );
 
 // --- Data loading ---
@@ -222,9 +227,14 @@ watch(() => form.item_id, async (itemId) => {
 let quoteTimer = null;
 let quoteSequence = 0;
 
+// The sequence is claimed HERE, synchronously with the input change — not when the debounce
+// fires — so a response already in flight for older inputs can never pass the latest-sequence
+// check and clear quoteDirty for a quote that no longer matches the form.
 const requestQuote = () => {
+    const sequence = ++quoteSequence;
+    quoteDirty.value = true;
     clearTimeout(quoteTimer);
-    quoteTimer = setTimeout(fetchQuote, 400);
+    quoteTimer = setTimeout(() => fetchQuote(sequence), 400);
 };
 
 const quotePayload = () => ({
@@ -248,11 +258,10 @@ const quotePayload = () => ({
     customer: form.customer,
 });
 
-const fetchQuote = async () => {
-    if (! datesComplete.value) return;
+const fetchQuote = async (sequence) => {
     // Requests can resolve out of order (a slow older request finishing after a newer one),
     // so only the latest request may write quote state — stale responses are discarded.
-    const sequence = ++quoteSequence;
+    if (sequence !== quoteSequence || ! datesComplete.value) return;
     quoting.value = true;
     quoteError.value = null;
     try {
@@ -270,7 +279,10 @@ const fetchQuote = async () => {
         quoteError.value = error?.response?.data?.error
             ?? (validationMessage || __('Could not compute a quote'));
     } finally {
-        if (sequence === quoteSequence) quoting.value = false;
+        if (sequence === quoteSequence) {
+            quoting.value = false;
+            quoteDirty.value = false;
+        }
     }
 };
 
