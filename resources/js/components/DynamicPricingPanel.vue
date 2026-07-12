@@ -259,7 +259,7 @@ function onClosed() {
 }
 
 function getEntries() {
-    axios.get('/cp/resrv/utility/entries')
+    axios.get(cp_url('resrv/utility/entries'))
         .then((response) => {
             entries.value = response.data;
             entriesLoaded.value = true;
@@ -270,7 +270,7 @@ function getEntries() {
 }
 
 function getExtras() {
-    axios.get('/cp/resrv/extra')
+    axios.get(cp_url('resrv/extra'))
         .then((response) => {
             extras.value = response.data;
             extrasLoaded.value = true;
@@ -305,8 +305,8 @@ function removeDate(value) {
 
 function save() {
     const url = isEditing.value
-        ? '/cp/resrv/dynamicpricing/' + props.data.id
-        : '/cp/resrv/dynamicpricing';
+        ? cp_url('resrv/dynamicpricing/' + props.data.id)
+        : cp_url('resrv/dynamicpricing');
     const method = isEditing.value ? 'patch' : 'post';
 
     form[method](url, {

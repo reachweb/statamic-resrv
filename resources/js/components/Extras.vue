@@ -224,7 +224,7 @@ function getAllExtras() {
 }
 
 function enableExtra(extraId) {
-    axios.post('/cp/resrv/extra/add/' + props.parent, { id: extraId })
+    axios.post(cp_url('resrv/extra/add/' + props.parent), { id: extraId })
         .then(() => {
             toast.success(__('Extra added to this entry'));
             toggleEntryExtraEditing();
@@ -236,7 +236,7 @@ function enableExtra(extraId) {
 }
 
 function disableExtra(extraId) {
-    axios.post('/cp/resrv/extra/remove/' + props.parent, { id: extraId })
+    axios.post(cp_url('resrv/extra/remove/' + props.parent), { id: extraId })
         .then(() => {
             toast.success(__('Extra removed from this entry'));
             toggleEntryExtraEditing();
@@ -252,7 +252,7 @@ function confirmDelete(item) {
 }
 
 function deleteExtra() {
-    axios.delete('/cp/resrv/extra', { data: { id: deleteId.value } })
+    axios.delete(cp_url('resrv/extra'), { data: { id: deleteId.value } })
         .then(() => {
             toast.success(__('Extra deleted'));
             deleteId.value = null;
@@ -267,7 +267,7 @@ function handleChange(event) {
     if (event.added) {
         disableDrag.value = true;
         const item = event.added.element;
-        axios.patch(`/cp/resrv/extra/move/${item.id}`, {
+        axios.patch(cp_url(`resrv/extra/move/${item.id}`), {
             category_id: props.categoryId,
             order: event.added.newIndex + 1,
         })
@@ -285,7 +285,7 @@ function handleChange(event) {
         disableDrag.value = true;
         const item = event.moved.element;
         const newOrder = event.moved.newIndex + 1;
-        axios.patch(`/cp/resrv/extra/order/${item.id}`, { order: newOrder })
+        axios.patch(cp_url(`resrv/extra/order/${item.id}`), { order: newOrder })
             .then(() => {
                 toast.success(__('Extras order changed'));
             })

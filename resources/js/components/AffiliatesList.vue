@@ -122,7 +122,7 @@ function confirmDelete(item) {
 }
 
 function deleteAffiliate() {
-    axios.delete(`/cp/resrv/affiliate/${deleteId.value}`)
+    axios.delete(cp_url(`resrv/affiliate/${deleteId.value}`))
         .then(() => {
             toast.success(__('Affiliate deleted'));
             deleteId.value = null;

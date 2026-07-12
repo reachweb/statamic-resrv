@@ -107,7 +107,7 @@ function fixedPricingSaved() {
 }
 
 function getFixedPricing() {
-    axios.get('/cp/resrv/fixedpricing/' + props.parent)
+    axios.get(cp_url('resrv/fixedpricing/' + props.parent))
         .then((response) => {
             fixedPricings.value = response.data;
             fixedPricingLoaded.value = true;
@@ -122,7 +122,7 @@ function confirmDelete(item) {
 }
 
 function deleteFixedPricing() {
-    axios.delete('/cp/resrv/fixedpricing', { data: { id: deleteId.value } })
+    axios.delete(cp_url('resrv/fixedpricing'), { data: { id: deleteId.value } })
         .then(() => {
             toast.success(__('Fixed pricing deleted'));
             deleteId.value = null;

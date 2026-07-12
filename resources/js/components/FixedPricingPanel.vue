@@ -40,7 +40,7 @@ const submit = reactive({});
 
 const { disableSave, errors, save } = useFormHandler({
     submit,
-    postUrl: '/cp/resrv/fixedpricing',
+    postUrl: cp_url('resrv/fixedpricing'),
     method: 'post',
     successMessage: 'Fixed pricing successfully saved',
     emit,

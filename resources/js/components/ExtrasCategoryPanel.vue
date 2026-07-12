@@ -38,7 +38,7 @@ import { useSlugify } from '../composables/useSlugify.js';
 
 const props = defineProps({
     data: { type: Object, required: true },
-    url: { type: String, default: '/cp/resrv/extra-category' },
+    url: { type: String, default: () => cp_url('resrv/extra-category') },
 });
 
 const emit = defineEmits(['closed', 'saved']);
