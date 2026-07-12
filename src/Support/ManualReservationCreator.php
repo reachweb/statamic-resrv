@@ -573,6 +573,14 @@ class ManualReservationCreator
                 throw new ManualReservationException(__('The extra quantity must be at least 1.'));
             }
 
+            // Non-multiple extras carry no maximum (the CP extras form only asks for one when
+            // allow_multiple is on), so the cap below alone would accept any quantity from a
+            // stale or crafted payload — mirror the create form, which never increments them
+            // past a single unit.
+            if (! $extra->allow_multiple && $quantity > 1) {
+                throw new ManualReservationException(__('The extra ":name" cannot be added more than once.', ['name' => $extra->name]));
+            }
+
             if ($extra->maximum > 0 && $quantity > $extra->maximum) {
                 throw new ManualReservationException(__('The selected quantity exceeds the maximum allowed for this extra.'));
             }

@@ -12,7 +12,7 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
 
 /**
- * Sent when a gateway charge needs manual reconciliation against its reservation. Two cases,
+ * Sent when a gateway charge needs manual reconciliation against its reservation. Three cases,
  * distinguished by $context:
  *
  * - default (orphan): a successful payment webhook arrived for a reservation that is already
@@ -23,12 +23,19 @@ use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
  *   out of band while the customer's payment intent had already captured (or was capturing)
  *   money at the gateway. The booking is live and paid TWICE — the webhook that follows sees
  *   CONFIRMED and no-ops, so this notification is the only reconciliation signal.
+ * - CONTEXT_OUT_OF_BAND_STILL_PAYABLE: the same out-of-band confirmation, but the customer's
+ *   intent has NOT captured money — it could not be voided and remains completable with the
+ *   client secret the customer already holds. If they finish paying, the succeeded webhook
+ *   sees CONFIRMED and no-ops, so admins must cancel the intent in the gateway dashboard now;
+ *   this notification is the last signal before that silent duplicate.
  */
 class OrphanedPaymentNotification extends Mailable
 {
     use Queueable, SerializesModels;
 
     public const CONTEXT_OUT_OF_BAND_DUPLICATE = 'out_of_band_duplicate';
+
+    public const CONTEXT_OUT_OF_BAND_STILL_PAYABLE = 'out_of_band_still_payable';
 
     public function __construct(
         public Reservation $reservation,
@@ -111,6 +118,10 @@ class OrphanedPaymentNotification extends Mailable
     {
         if ($this->context === self::CONTEXT_OUT_OF_BAND_DUPLICATE) {
             return 'Possible duplicate payment — Reservation #'.$reservation->id.' ['.$reservation->status.']';
+        }
+
+        if ($this->context === self::CONTEXT_OUT_OF_BAND_STILL_PAYABLE) {
+            return 'Open payment intent could not be cancelled — Reservation #'.$reservation->id.' ['.$reservation->status.']';
         }
 
         return 'Orphaned payment detected — Reservation #'.$reservation->id.' ['.$reservation->status.']';

@@ -662,6 +662,25 @@ class ManualReservationCreatorTest extends TestCase
         ]));
     }
 
+    public function test_an_extra_that_does_not_allow_multiple_rejects_a_quantity_above_one()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // Non-multiple extras carry no maximum (the CP extras form only shows that field when
+        // allow_multiple is on), so the maximum cap alone would accept any quantity from a stale
+        // or crafted payload — the reservation would store and charge several units of an extra
+        // configured as single.
+        $extra = Extra::factory()->create(['allow_multiple' => false, 'maximum' => null]);
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('cannot be added more than once');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'extras' => [['id' => $extra->id, 'quantity' => 3]],
+        ]));
+    }
+
     public function test_an_unpublished_option_is_rejected()
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 4);

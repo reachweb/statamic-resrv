@@ -304,6 +304,15 @@ class ReservationCpController extends Controller
         }
 
         if ($changed) {
+            // The transition is already committed and this endpoint rejects retries (the row is no
+            // longer awaiting payment), so the confirmation chain (activity log, emails) must fire
+            // before the gateway round trips below — a provider hang or hard timeout inside the
+            // reconciliation must not strand a CONFIRMED booking without its ReservationConfirmed
+            // side effects. The email job defers until after the response, so it still renders the
+            // post-settlement row. Mirrors the webhook path, which dispatches right after its
+            // transition commits.
+            ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
+
             // The money arrived out of band. Reconcile the gateway on the transitioned row: void any
             // live intent the customer left on the online pay page and drop the payment_id so a later
             // refund/cancel treats this as a no-gateway-charge booking (mirroring an offline confirm)
@@ -311,8 +320,6 @@ class ReservationCpController extends Controller
             // intent that already captured real money (a webhook racing this confirm) is left intact
             // so that charge stays refundable. Tolerates gateway errors.
             app(ReservationRefundProcessor::class)->settlePaidOutOfBand($reservation);
-
-            ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
         }
 
         return response()->json($this->serializeFreshReservation($reservation->id));

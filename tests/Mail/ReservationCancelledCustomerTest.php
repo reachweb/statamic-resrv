@@ -3,7 +3,9 @@
 namespace Reach\StatamicResrv\Tests\Mail;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Jobs\SendCustomerCancelledEmail;
 use Reach\StatamicResrv\Mail\ReservationCancelledCustomer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -72,5 +74,29 @@ class ReservationCancelledCustomerTest extends TestCase
 
         $this->assertStringContainsString('nothing to refund', $html);
         $this->assertStringNotContainsString('No refund has been issued', $html);
+    }
+
+    public function test_the_queued_job_handles_payloads_serialized_before_the_context_property_existed()
+    {
+        Mail::fake();
+
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'cancelled',
+        ])->withCustomer()->create();
+
+        // A job queued by a pre-$context release carries no `context` key in its serialized
+        // payload: SerializesModels::__unserialize restores only the keys present and never runs
+        // the constructor. Reproduced here by instantiating without the constructor and setting
+        // only the properties a legacy payload held — handle() must send, not throw on an
+        // uninitialized typed property and drop the cancellation email.
+        $job = (new \ReflectionClass(SendCustomerCancelledEmail::class))->newInstanceWithoutConstructor();
+        (new \ReflectionProperty(SendCustomerCancelledEmail::class, 'reservation'))->setValue($job, $reservation);
+
+        $job->handle();
+
+        Mail::assertSent(ReservationCancelledCustomer::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
     }
 }
