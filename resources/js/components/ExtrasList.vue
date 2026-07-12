@@ -144,9 +144,9 @@ function categoryEnabled(item) {
 }
 
 function getAllCategories() {
-    let url = '/cp/resrv/extra-category';
+    let url = cp_url('resrv/extra-category');
     if (props.insideEntry) {
-        url = `/cp/resrv/extra-category/${props.parent}`;
+        url = cp_url(`resrv/extra-category/${props.parent}`);
     }
     axios.get(url)
         .then((response) => {
@@ -163,7 +163,7 @@ function confirmDelete(item) {
 }
 
 function deleteCategory() {
-    axios.delete(`/cp/resrv/extra-category/${deleteId.value}`)
+    axios.delete(cp_url(`resrv/extra-category/${deleteId.value}`))
         .then(() => {
             toast.success(__('Category deleted'));
             deleteId.value = null;
@@ -183,7 +183,7 @@ function orderCategories(event) {
     disableDrag.value = true;
     const item = event.moved.element;
     const newOrder = event.moved.newIndex + 1;
-    axios.patch('/cp/resrv/extra-category/order', { id: item.id, order: newOrder })
+    axios.patch(cp_url('resrv/extra-category/order'), { id: item.id, order: newOrder })
         .then(() => {
             toast.success(__('Categories order changed'));
         })

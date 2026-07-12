@@ -216,7 +216,7 @@ const { disableSave, errors, handleSuccess, handleErrors, clearErrors } = useFor
     // submit is unused: save() builds and posts its own request(s) via buildRequests() (see below)
     // rather than submitting this payload, so the handler is reused only for its error/toast/disable state.
     submit: computed(() => ({})),
-    postUrl: '/cp/resrv/availability',
+    postUrl: cp_url('resrv/availability'),
     method: 'post',
     successMessage: 'Availability successfully saved',
     emit,
@@ -239,7 +239,7 @@ async function save() {
         // transaction, so the whole bulk edit is atomic. (The no-rate fallback is also a single
         // request.) The loop simply posts whatever buildRequests() returned.
         for (const data of requests.value) {
-            await axios.post('/cp/resrv/availability', data);
+            await axios.post(cp_url('resrv/availability'), data);
         }
         handleSuccess();
     } catch (error) {

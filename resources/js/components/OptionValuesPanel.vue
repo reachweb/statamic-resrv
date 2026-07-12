@@ -61,7 +61,7 @@ const priceTypeOptions = [
 
 const isEditing = computed(() => 'id' in props.data);
 const method = computed(() => (isEditing.value ? 'patch' : 'post'));
-const postUrl = computed(() => '/cp/resrv/option/' + props.parent);
+const postUrl = computed(() => cp_url('resrv/option/' + props.parent));
 
 const { disableSave, errors, save } = useFormHandler({
     submit,

@@ -277,7 +277,7 @@ function availabilitySaved() {
 }
 
 function getRates() {
-    axios.get('/cp/resrv/rates/for-entry/' + props.meta.parent)
+    axios.get(cp_url('resrv/rates/for-entry/' + props.meta.parent))
         .then((response) => {
             rates.value = response.data;
             ratesLoaded.value = true;
@@ -296,7 +296,7 @@ function getRates() {
 }
 
 function getAvailability() {
-    let url = '/cp/resrv/availability/' + props.meta.parent;
+    let url = cp_url('resrv/availability/' + props.meta.parent);
     if (rateId.value) {
         url += '/' + rateId.value;
     }

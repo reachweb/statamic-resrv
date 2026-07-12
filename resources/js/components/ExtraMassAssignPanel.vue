@@ -56,7 +56,7 @@ const selectedEntries = ref([]);
 const entriesLoaded = ref(false);
 const selectedEntriesLoaded = ref(false);
 
-const postUrl = computed(() => '/cp/resrv/extra/massadd/' + props.data.id);
+const postUrl = computed(() => cp_url('resrv/extra/massadd/' + props.data.id));
 
 const { disableSave, errors, save } = useFormHandler({
     submit,
@@ -94,7 +94,7 @@ function removeAll() {
 }
 
 function getSelectedEntries() {
-    axios.get('/cp/resrv/extra/entries/' + props.data.id)
+    axios.get(cp_url('resrv/extra/entries/' + props.data.id))
         .then((response) => {
             selectedEntries.value = response.data;
             // Seed the picker selection here (not via a watcher) so it runs exactly
@@ -108,7 +108,7 @@ function getSelectedEntries() {
 }
 
 function getEntries() {
-    axios.get('/cp/resrv/utility/entries')
+    axios.get(cp_url('resrv/utility/entries'))
         .then((response) => {
             entries.value = response.data;
             entriesLoaded.value = true;

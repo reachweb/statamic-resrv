@@ -56,7 +56,7 @@ import { useSlugify } from '../composables/useSlugify.js';
 
 const props = defineProps({
     data: { type: Object, required: true },
-    url: { type: String, default: '/cp/resrv/extra' },
+    url: { type: String, default: () => cp_url('resrv/extra') },
 });
 
 const emit = defineEmits(['closed', 'saved']);
@@ -76,7 +76,7 @@ const method = computed(() => (isEditing.value ? 'patch' : 'post'));
 
 const { disableSave, errors, save } = useFormHandler({
     submit,
-    postUrl: '/cp/resrv/extra',
+    postUrl: cp_url('resrv/extra'),
     method,
     successMessage: 'Extra successfully saved',
     emit,

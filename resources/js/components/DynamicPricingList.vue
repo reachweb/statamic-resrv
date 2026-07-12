@@ -315,7 +315,7 @@ function confirmDelete(item) {
 }
 
 function deleteDynamic() {
-    axios.delete('/cp/resrv/dynamicpricing', { data: { id: deleteId.value } })
+    axios.delete(cp_url('resrv/dynamicpricing'), { data: { id: deleteId.value } })
         .then(() => {
             toast.success(__('Dynamic pricing deleted'));
             deleteId.value = null;
@@ -343,7 +343,7 @@ function onDragChange(event) {
 }
 
 function patchOrder(id, order) {
-    axios.patch('/cp/resrv/dynamicpricing/order', { id, order })
+    axios.patch(cp_url('resrv/dynamicpricing/order'), { id, order })
         .then(() => {
             toast.success(__('Dynamic pricing order changed'));
             applyFilters();
