@@ -373,6 +373,34 @@ class ReservationPaymentPageTest extends TestCase
         $this->assertSame($gateway->createdIntents[0]['payment_id'], $gateway->cancelledIntents[0]['payment_id']);
     }
 
+    public function test_a_cancel_landing_during_the_mint_renders_the_cancelled_state_not_the_pay_form()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation();
+
+        // The cancel commits in ANOTHER process during the paymentIntent() round trip, so the
+        // component's cached $this->reservation computed never sees it (transitionTo on the
+        // shared instance would refresh it in place and mask this). The catch path must bust
+        // the computed cache: this same render has to show the post-cancel state, not the Pay
+        // button for a booking whose freshly-minted intent was just voided.
+        $gateway->onPaymentIntent = function (Reservation $r) {
+            DB::table('resrv_reservations')
+                ->where('id', $r->id)
+                ->update(['status' => ReservationStatus::CANCELLED->value]);
+        };
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentView', '')
+            ->assertSee(trans('statamic-resrv::frontend.paymentUnavailable'))
+            ->assertDontSee(trans('statamic-resrv::frontend.amountToPay'));
+
+        $this->assertSame(ReservationStatus::CANCELLED->value, $reservation->fresh()->status);
+        $this->assertCount(1, $gateway->cancelledIntents);
+    }
+
     public function test_pay_refuses_to_resume_an_intent_after_a_cancel_lands_behind_the_guard()
     {
         $gateway = $this->fakeGateway();

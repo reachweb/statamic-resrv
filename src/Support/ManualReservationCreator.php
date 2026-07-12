@@ -183,7 +183,19 @@ class ManualReservationCreator
         // request for 0.00, and never an awaiting-payment hold the lapse sweep would later cancel.
         if ($quote['payment']['amount']->isZero()) {
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
-                ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
+                // The reservation, its stock decrement and the CONFIRMED transition have all
+                // committed. A throwing synchronous listener (the activity log, a sibling
+                // addon's hook) must not turn the successful creation into a 500 the admin
+                // would retry — same posture as the email guard below. The confirmation
+                // email can be resent from the reservation page.
+                try {
+                    ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
+                } catch (\Throwable $e) {
+                    Log::error('Manual reservation confirmed but a ReservationConfirmed listener failed.', [
+                        'reservation_id' => $reservation->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             return $reservation->fresh();
@@ -326,8 +338,12 @@ class ManualReservationCreator
      * caller's session) would silently discount a manual reservation that has no coupon
      * input at all. Stash the key for the duration and restore it, so the admin's own
      * in-progress checkout in another tab keeps its coupon.
+     *
+     * Public because the CP quote endpoint serializes its supplemental extras/options
+     * listings through the same coupon-gated pricing paths and must run them in this
+     * scope too — nesting is a no-op, so quote()/create() stay safe to call inside.
      */
-    protected function withoutCheckoutCouponSession(callable $callback): mixed
+    public function withoutCheckoutCouponSession(callable $callback): mixed
     {
         $coupon = session('resrv_coupon');
 

@@ -310,8 +310,15 @@ class ReservationCpController extends Controller
             // reconciliation must not strand a CONFIRMED booking without its ReservationConfirmed
             // side effects. The email job defers until after the response, so it still renders the
             // post-settlement row. Mirrors the webhook path, which dispatches right after its
-            // transition commits.
-            ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
+            // transition commits. For the same committed-and-unretryable reason a throwing
+            // synchronous listener is contained here: it must neither 500 the request nor skip
+            // the reconciliation below — that would leave a live intent chargeable on a
+            // CONFIRMED booking.
+            try {
+                ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
+            } catch (\Throwable $e) {
+                report($e);
+            }
 
             // The money arrived out of band. Reconcile the gateway on the transitioned row: void any
             // live intent the customer left on the online pay page and drop the payment_id so a later

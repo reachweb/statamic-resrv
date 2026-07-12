@@ -185,8 +185,12 @@ class ReservationPayment extends Component
             );
         } catch (ReservationNoLongerPayable $e) {
             // The hold lapsed, or an admin cancelled/confirmed the reservation between the outer guard
-            // and the locked intent write; the freshly-minted intent has already been voided. Re-render
-            // so the page shows the reservation's new state instead of a payment form — no error notice.
+            // and the locked intent write; the freshly-minted intent has already been voided. Bust the
+            // cached computed — when the transition landed in another process during a gateway round
+            // trip it still holds the pre-transition row — so this render shows the reservation's new
+            // state instead of a payment form. No error notice.
+            unset($this->reservation);
+
             return;
         } catch (UnknownPaymentGateway $e) {
             Log::error('The payment gateway recorded for this reservation is no longer configured.', [

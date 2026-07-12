@@ -6,8 +6,10 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ManualReservationException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
@@ -891,6 +893,30 @@ class ManualReservationCreatorTest extends TestCase
         $this->assertSame('confirmed', $reservation->status);
         $this->assertTrue($reservation->payment->isZero());
         $this->assertSame('', $reservation->payment_gateway);
+    }
+
+    public function test_a_throwing_confirmation_listener_does_not_fail_a_zero_amount_creation()
+    {
+        Mail::fake();
+
+        Config::set('resrv-config.payment', 'fixed');
+        Config::set('resrv-config.fixed_amount', 0);
+        Config::set('resrv-config.full_payment_after_free_cancellation', false);
+
+        // A synchronous ReservationConfirmed listener (a sibling addon's hook) blows up AFTER
+        // the reservation, its stock decrement and the CONFIRMED transition have committed.
+        // The exception must not escape create(): the CP would 500 and a retry would book a
+        // second reservation and decrement stock again.
+        Event::listen(ReservationConfirmedEvent::class, function (): void {
+            throw new \RuntimeException('listener boom');
+        });
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $reservation = $this->creator()->create($this->baseInput($entry), null, requireGatewayForPayment: true);
+
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertDatabaseCount('resrv_reservations', 1);
     }
 
     public function test_a_nonzero_amount_booking_requires_a_gateway_in_the_cp_flow()

@@ -3,11 +3,14 @@
 namespace Reach\StatamicResrv\Tests\ManualReservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
@@ -158,6 +161,53 @@ class ManualReservationCpTest extends TestCase
         $this->assertTrue($valueIds->contains($publishedValue->id));
         $this->assertFalse($valueIds->contains($unpublishedValue->id));
         $this->assertArrayHasKey('fake', $response->json('payment.gateways'));
+    }
+
+    public function test_quote_endpoint_lists_extras_coupon_free_when_the_admin_session_carries_a_coupon()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        $extra = Extra::factory()->create();
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        // Coupon-gated 20% decrease assigned to the EXTRA — engages only while
+        // session('resrv_coupon') matches, exactly what a frontend checkout leaves
+        // behind in the admin's shared browser session.
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $extra->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Extra',
+        ]);
+        Cache::forget('dynamic_pricing_table');
+        Cache::forget('dynamic_pricing_assignments_table');
+
+        $priceData = [
+            'item_id' => $entry->id(),
+            'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
+            'date_end' => today()->addDays(3)->setTime(12, 0)->toDateTimeString(),
+            'quantity' => 1,
+        ];
+
+        // Sanity: with the coupon in the session the raw extras listing DOES discount — the
+        // endpoint's coupon-free scope must be what blocks it, not a coupon that never engages.
+        session(['resrv_coupon' => '20OFF']);
+        $this->assertSame('7.44', Extra::getPriceForDates($priceData)->first()->price->format());
+
+        $response = $this->withSession(['resrv_coupon' => '20OFF'])
+            ->postJson(cp_route('resrv.manual.quote'), array_merge($priceData, [
+                'rate_id' => Rate::forEntry($entry->id())->first()?->id,
+                'payment_mode' => 'full',
+                'extras' => [['id' => $extra->id, 'quantity' => 1]],
+            ]))->assertOk();
+
+        // The listed per-unit price and the quoted totals must agree — all coupon-free.
+        $response->assertJsonPath('pricing.extras_total', '9.30')
+            ->assertJsonPath('available_extras.0.price', '9.30');
+
+        // The admin's own in-progress frontend checkout keeps its coupon.
+        $response->assertSessionHas('resrv_coupon', '20OFF');
     }
 
     public function test_quote_endpoint_validates_shape()

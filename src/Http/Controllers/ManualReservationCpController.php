@@ -134,15 +134,24 @@ class ManualReservationCpController extends Controller
         $data = $request->validated();
 
         try {
-            $quote = $this->creator->quote($data, requireCustomAmount: false);
+            // The supplemental listings price through the same coupon-gated dynamic pricing
+            // as the quote (Extra::getPriceForDates → DynamicPricing::searchForExtra reads
+            // the frontend checkout's session coupon), so they must be serialized inside the
+            // same coupon-free scope — otherwise a coupon left in the admin's session would
+            // list discounted per-unit prices next to the undiscounted totals creation
+            // actually charges.
+            $payload = $this->creator->withoutCheckoutCouponSession(fn (): array => array_merge(
+                $this->serializeQuote($this->creator->quote($data, requireCustomAmount: false)),
+                [
+                    'available_extras' => $this->extrasForEntry($data),
+                    'available_options' => $this->optionsForEntry($data),
+                ]
+            ));
         } catch (AvailabilityException|ManualReservationException|OptionsException|ExtrasException $e) {
             return response()->json(['error' => $e->getMessage()], 422);
         }
 
-        return response()->json(array_merge($this->serializeQuote($quote), [
-            'available_extras' => $this->extrasForEntry($data),
-            'available_options' => $this->optionsForEntry($data),
-        ]));
+        return response()->json($payload);
     }
 
     public function store(StoreManualReservationRequest $request)

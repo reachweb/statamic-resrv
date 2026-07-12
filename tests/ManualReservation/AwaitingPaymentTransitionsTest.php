@@ -224,6 +224,37 @@ class AwaitingPaymentTransitionsTest extends TestCase
         Event::assertDispatched(ReservationConfirmedEvent::class, fn ($event) => $event->via === ReservationConfirmedEvent::VIA_CP);
     }
 
+    public function test_cp_confirm_payment_reconciles_the_gateway_even_when_a_confirmation_listener_throws()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+
+        // A throwing synchronous ReservationConfirmed listener must not escape the endpoint:
+        // the transition is already committed and retries are rejected, so a 500 leaves the
+        // admin with nothing to re-fire — and skipping settlePaidOutOfBand() would leave the
+        // open intent chargeable on a CONFIRMED booking.
+        Event::listen(ReservationConfirmedEvent::class, function (): void {
+            throw new \RuntimeException('listener boom');
+        });
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment_id' => 'pi_listener_boom',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200)
+            ->assertJson(['status' => 'confirmed']);
+
+        $this->assertSame('confirmed', $reservation->fresh()->status);
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertSame('pi_listener_boom', $gateway->cancelledIntents[0]['payment_id']);
+    }
+
     public function test_cp_confirm_payment_skips_the_gateway_when_no_intent_exists()
     {
         Mail::fake();
