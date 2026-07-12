@@ -63,6 +63,13 @@ class ManualReservationCreator
      */
     public function create(array $input, $creator = null, bool $requireGatewayForPayment = false): Reservation
     {
+        return $this->withoutCheckoutCouponSession(
+            fn (): Reservation => $this->createReservation($input, $creator, $requireGatewayForPayment)
+        );
+    }
+
+    protected function createReservation(array $input, $creator, bool $requireGatewayForPayment): Reservation
+    {
         // Normalize once so the quote, the overbook assert, the stored rate_id and the
         // cancellation snapshot all see the SAME validated rate (see resolveRateId()).
         $input['rate_id'] = $this->resolveRateId($input);
@@ -73,10 +80,27 @@ class ManualReservationCreator
 
         // The CP flow ($requireGatewayForPayment) requires a gateway whenever money is collected
         // now — but a zero-amount booking (fully comped / zero deposit) confirms immediately with
-        // nothing to pay through, so it may omit one. Direct/programmatic callers may always omit
-        // a gateway (there may be nothing to pay through), which leaves nothing to assert.
+        // nothing to pay through, so it may omit one.
         if ($requireGatewayForPayment && $gateway === '' && ! $quote['payment']['amount']->isZero()) {
             throw new ManualReservationException(__('A payment method is required to collect a payment.'));
+        }
+
+        // A blank gateway on a booking that collects money is not "no gateway": the payment-request
+        // email and the pay page resolve blank to the DEFAULT gateway (resolvePaymentGateway's
+        // legacy-row rule), so a direct/programmatic creation that omits one would collect through
+        // the default while bypassing its amount limits, its payment-page gate and its surcharge.
+        // Pin the default here so the stored row is validated and priced against the gateway that
+        // will actually collect — callers handling payment out of band should name a
+        // manually-confirmable gateway instead of omitting one.
+        if ($gateway === '' && ! $quote['payment']['amount']->isZero()) {
+            $gateway = (string) $this->gatewayManager->defaultName();
+
+            if ($gateway === '') {
+                throw new ManualReservationException(__('No payment gateway is configured to collect a payment.'));
+            }
+
+            $quote['payment']['surcharge'] = $this->gatewayManager->calculateSurcharge($gateway, $quote['payment']['amount']);
+            $quote['payment']['amount_with_surcharge'] = Price::create($quote['payment']['amount']->format())->add($quote['payment']['surcharge']);
         }
 
         if ($gateway !== '') {
@@ -99,7 +123,7 @@ class ManualReservationCreator
         $cancellation = Rate::effectiveCancellationPolicyFor($this->rateIdFrom($input));
         $holdDays = (int) ($input['hold_days'] ?? 0);
 
-        $reservation = DB::transaction(function () use ($input, $quote, $cancellation, $affectsAvailability, $affiliate, $holdDays, $creator) {
+        $reservation = DB::transaction(function () use ($input, $quote, $gateway, $cancellation, $affectsAvailability, $affiliate, $holdDays, $creator) {
             $customer = $this->createCustomer($input);
 
             $reservation = Reservation::create([
@@ -117,7 +141,7 @@ class ManualReservationCreator
                 'total' => $quote['pricing']['total']->format(),
                 'payment' => $quote['payment']['amount']->format(),
                 'payment_surcharge' => $quote['payment']['surcharge']->format(),
-                'payment_gateway' => (string) ($input['payment_gateway'] ?? ''),
+                'payment_gateway' => $gateway,
                 'payment_id' => '',
                 'customer_id' => $customer?->id,
                 'affects_availability' => $affectsAvailability,
@@ -287,6 +311,40 @@ class ManualReservationCreator
      * @throws AvailabilityException|ManualReservationException|OptionsException
      */
     public function quote(array $input, bool $requireCustomAmount = true): array
+    {
+        return $this->withoutCheckoutCouponSession(
+            fn (): array => $this->buildQuote($input, $requireCustomAmount)
+        );
+    }
+
+    /**
+     * Every pricing path underneath the quote and the creation — the base price
+     * (Availability::getPricing), extras (DynamicPricing::searchForExtra) and the
+     * AddDynamicPricingsToReservation listener — gates coupon-only dynamic pricing on the
+     * frontend checkout's session key. The CP shares the browser session with the frontend,
+     * so a coupon the admin applied in their own checkout (or one left in a programmatic
+     * caller's session) would silently discount a manual reservation that has no coupon
+     * input at all. Stash the key for the duration and restore it, so the admin's own
+     * in-progress checkout in another tab keeps its coupon.
+     */
+    protected function withoutCheckoutCouponSession(callable $callback): mixed
+    {
+        $coupon = session('resrv_coupon');
+
+        if ($coupon === null) {
+            return $callback();
+        }
+
+        session()->forget('resrv_coupon');
+
+        try {
+            return $callback();
+        } finally {
+            session(['resrv_coupon' => $coupon]);
+        }
+    }
+
+    protected function buildQuote(array $input, bool $requireCustomAmount): array
     {
         $input['rate_id'] = $this->resolveRateId($input);
 
@@ -558,13 +616,29 @@ class ManualReservationCreator
      */
     protected function assertGatewayIsUsable(string $gateway, PriceClass $amount): void
     {
+        $instance = $this->gatewayManager->gateway($gateway);
+
+        // A provider-verified (non-manually-confirmable) gateway confirms reservations only
+        // through its webhook — handleRedirectBack() and the pay page's return leg are
+        // display-only by contract (UPGRADE-PAYMENT-GATEWAYS.md Steps 3-4), and the pay-by-link
+        // hold can span days. A gateway with neither capability could collect the customer's
+        // money while nothing can ever confirm the booking, which the hold-lapse sweep would
+        // then cancel out from under the payment.
+        if (! $amount->isZero()
+            && ! $instance->supportsManualConfirmation()
+            && ! $instance->supportsWebhooks()) {
+            throw new ManualReservationException(
+                __('This payment method cannot confirm online payments, so it cannot be used to collect a payment.')
+            );
+        }
+
         // Without a configured (published, routable) payment page there is no link to pay
         // an online gateway through — only manually-confirmable (offline) gateways work. A
         // zero requested amount is collected through no gateway at all (the booking confirms
         // immediately), so it needs no payment page and must not be rejected for lacking one.
         if (! $amount->isZero()
             && Reservation::resolveCustomerPageEntry(config('resrv-config.manual_reservations_payment_entry')) === null
-            && ! $this->gatewayManager->gateway($gateway)->supportsManualConfirmation()) {
+            && ! $instance->supportsManualConfirmation()) {
             throw new ManualReservationException(
                 __('The payment page entry is not configured, so only payment methods that support manual confirmation can be used.')
             );

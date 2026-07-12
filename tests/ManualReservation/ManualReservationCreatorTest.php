@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Models\Affiliate;
@@ -27,6 +28,7 @@ use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ManualReservationCreator;
 use Reach\StatamicResrv\Tests\CreatesEntries;
+use Reach\StatamicResrv\Tests\Support\WebhooklessOnlineGateway;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint;
@@ -48,10 +50,19 @@ class ManualReservationCreatorTest extends TestCase
         $checkoutEntry->save();
         Config::set('resrv-config.checkout_entry', $checkoutEntry->id());
         Config::set('resrv-config.checkout_completed_entry', $checkoutEntry->id());
+
+        // A nonzero creation is validated against the gateway that will collect it (explicit
+        // or the pinned default) — with the online fake gateway as the default, that means
+        // the payment page must resolve, as it would on a real deployment.
+        $this->configurePaymentEntry();
     }
 
     private function configurePaymentEntry(): void
     {
+        if (config('resrv-config.manual_reservations_payment_entry')) {
+            return;
+        }
+
         $entry = Entry::make()
             ->collection($this->findOrCreateCollection('pages'))
             ->slug('pay-here')
@@ -891,5 +902,122 @@ class ManualReservationCreatorTest extends TestCase
 
         // A non-zero amount with no gateway is rejected in the CP flow; direct callers may omit it.
         $this->creator()->create($this->baseInput($entry), null, requireGatewayForPayment: true);
+    }
+
+    public function test_a_frontend_session_coupon_never_discounts_a_manual_reservation()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // Coupon-gated 20% decrease assigned to the entry — engages only while
+        // session('resrv_coupon') matches, exactly what a frontend checkout leaves behind.
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $entry->id(),
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        Cache::forget('dynamic_pricing_table');
+        Cache::forget('dynamic_pricing_assignments_table');
+
+        session(['resrv_coupon' => '20OFF']);
+
+        // Sanity: with the coupon in the session the raw pricing path DOES discount — the
+        // creator must be what blocks it, not a coupon that never engages in the first place.
+        $rawPricing = (new Availability)->getPricing(array_merge($this->dates(), [
+            'quantity' => 1,
+            'rate_id' => Rate::forEntry($entry->id())->first()?->id,
+        ]), $entry->id());
+        $this->assertSame('80.00', $rawPricing['price']);
+
+        $quote = $this->creator()->quote($this->baseInput($entry));
+        $this->assertSame('100.00', $quote['pricing']['total']->format());
+
+        $reservation = $this->creator()->create($this->baseInput($entry));
+
+        $this->assertSame('100.00', $reservation->total->format());
+        $this->assertDatabaseMissing('resrv_reservation_dynamic_pricing', ['reservation_id' => $reservation->id]);
+
+        // The admin's own in-progress frontend checkout keeps its coupon.
+        $this->assertSame('20OFF', session('resrv_coupon'));
+    }
+
+    public function test_an_online_gateway_without_webhook_support_cannot_collect_a_payment()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'webhookless' => ['class' => WebhooklessOnlineGateway::class, 'label' => 'Webhookless'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // The payment page exists, but nothing could ever confirm the booking: the gateway
+        // is not manually confirmable and has no webhook — the customer would be charged
+        // while the reservation stays awaiting payment until the lapse sweep cancels it.
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('cannot confirm online payments');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'payment_mode' => 'full',
+            'payment_gateway' => 'webhookless',
+        ]));
+    }
+
+    public function test_a_blank_gateway_on_a_nonzero_creation_is_pinned_to_the_default_gateway()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake',
+                'surcharge' => ['type' => 'percent', 'amount' => 10],
+            ],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Offline'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // Direct/programmatic creation with no gateway: the row must carry the default
+        // gateway (what the payment email and pay page would resolve blank to anyway)
+        // and its surcharge — not a blank gateway with a zero surcharge.
+        $reservation = $this->creator()->create($this->baseInput($entry, ['payment_mode' => 'full']));
+
+        $this->assertSame('fake', $reservation->payment_gateway);
+        $this->assertSame('100.00', $reservation->payment->format());
+        $this->assertSame('10.00', $reservation->payment_surcharge->format());
+    }
+
+    public function test_a_blank_gateway_creation_enforces_the_default_gateways_amount_limits()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake',
+                'amount_limits' => ['max' => 50],
+            ],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('outside the allowed limits');
+
+        $this->creator()->create($this->baseInput($entry, ['payment_mode' => 'full']));
+    }
+
+    public function test_a_blank_gateway_creation_requires_the_payment_page_for_an_online_default()
+    {
+        Config::set('resrv-config.manual_reservations_payment_entry', null);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // The default (fake) gateway is online: without a payment page the booking could
+        // never be paid, so the creation fails the same way an explicit choice would.
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('payment page entry is not configured');
+
+        $this->creator()->create($this->baseInput($entry, ['payment_mode' => 'full']));
     }
 }
