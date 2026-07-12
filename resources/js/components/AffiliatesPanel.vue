@@ -116,7 +116,7 @@ function onClosed() {
 }
 
 function getCoupons() {
-    axios.get('/cp/resrv/dynamicpricing/index', { params: { coupons_only: 'true' } })
+    axios.get(cp_url('resrv/dynamicpricing/index'), { params: { coupons_only: 'true' } })
         .then((response) => {
             coupons.value = response.data;
             couponsLoaded.value = true;
@@ -132,8 +132,8 @@ function clearAllCoupons() {
 
 function save() {
     const url = isEditing.value
-        ? '/cp/resrv/affiliate/' + props.data.id
-        : '/cp/resrv/affiliate';
+        ? cp_url('resrv/affiliate/' + props.data.id)
+        : cp_url('resrv/affiliate');
     const method = isEditing.value ? 'patch' : 'post';
 
     form[method](url, {

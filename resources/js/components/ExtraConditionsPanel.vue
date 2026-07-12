@@ -41,7 +41,7 @@ const toast = useToast();
 const submit = ref({ conditions: [] });
 const extras = ref([]);
 
-const postUrl = computed(() => '/cp/resrv/extra/conditions/' + props.data.id);
+const postUrl = computed(() => cp_url('resrv/extra/conditions/' + props.data.id));
 
 const { disableSave, errors, save } = useFormHandler({
     submit,
@@ -82,7 +82,7 @@ function conditionsSafe() {
 }
 
 function getAllExtras() {
-    axios.get('/cp/resrv/extra')
+    axios.get(cp_url('resrv/extra'))
         .then((response) => {
             extras.value = response.data;
         })

@@ -54,7 +54,7 @@ const method = computed(() => (isEditing.value ? 'patch' : 'post'));
 
 const { disableSave, errors, save } = useFormHandler({
     submit,
-    postUrl: '/cp/resrv/option',
+    postUrl: cp_url('resrv/option'),
     method,
     successMessage: 'Option successfully saved',
     emit,

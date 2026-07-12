@@ -132,7 +132,7 @@ function confirmDelete(item) {
 }
 
 function deleteValue() {
-    axios.delete('/cp/resrv/option/value', { data: { id: deleteId.value } })
+    axios.delete(cp_url('resrv/option/value'), { data: { id: deleteId.value } })
         .then(() => {
             toast.success(__('Option deleted'));
             deleteId.value = null;
@@ -150,7 +150,7 @@ function order(event) {
     disableDrag.value = true;
     const item = event.moved.element;
     const newOrder = event.moved.newIndex + 1;
-    axios.patch('/cp/resrv/option/value/order', { id: item.id, order: newOrder })
+    axios.patch(cp_url('resrv/option/value/order'), { id: item.id, order: newOrder })
         .then(() => {
             toast.success(__('Options order changed'));
         })

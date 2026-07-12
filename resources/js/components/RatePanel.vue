@@ -350,7 +350,7 @@ function slugify() {
 }
 
 function getCollectionEntries(collection) {
-    axios.get('/cp/resrv/rates/entries/' + collection)
+    axios.get(cp_url('resrv/rates/entries/' + collection))
         .then((response) => {
             collectionEntries.value = response.data;
             entriesLoaded.value = true;
@@ -370,8 +370,8 @@ function removeAllEntries() {
 
 function save() {
     const url = isEditing.value
-        ? '/cp/resrv/rate/' + props.data.id
-        : '/cp/resrv/rate';
+        ? cp_url('resrv/rate/' + props.data.id)
+        : cp_url('resrv/rate');
     const method = isEditing.value ? 'patch' : 'post';
 
     form[method](url, {

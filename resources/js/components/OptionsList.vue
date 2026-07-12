@@ -107,7 +107,7 @@ function valueSaved() {
 }
 
 function getOptions() {
-    axios.get('/cp/resrv/option/' + props.parent)
+    axios.get(cp_url('resrv/option/' + props.parent))
         .then((response) => {
             options.value = response.data;
             dataLoaded.value = true;
@@ -122,7 +122,7 @@ function confirmDelete(item) {
 }
 
 function deleteOption() {
-    axios.delete('/cp/resrv/option', { data: { id: deleteId.value } })
+    axios.delete(cp_url('resrv/option'), { data: { id: deleteId.value } })
         .then(() => {
             toast.success(__('Option deleted'));
             deleteId.value = null;
@@ -140,7 +140,7 @@ function order(event) {
     disableDrag.value = true;
     const item = event.moved.element;
     const newOrder = event.moved.newIndex + 1;
-    axios.patch('/cp/resrv/option/order', { id: item.id, order: newOrder })
+    axios.patch(cp_url('resrv/option/order'), { id: item.id, order: newOrder })
         .then(() => {
             toast.success(__('Options order changed'));
         })

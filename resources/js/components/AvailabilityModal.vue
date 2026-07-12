@@ -144,7 +144,7 @@ const submit = computed(() => {
 
 const { disableSave, errors, save } = useFormHandler({
     submit,
-    postUrl: '/cp/resrv/availability',
+    postUrl: cp_url('resrv/availability'),
     method: 'post',
     successMessage: 'Availability successfully saved',
     emit,
@@ -167,7 +167,7 @@ function deleteAvailability() {
     if (props.rate) {
         deleteData.rate_ids = [props.rate.code];
     }
-    axios.delete('/cp/resrv/availability', { data: deleteData })
+    axios.delete(cp_url('resrv/availability'), { data: deleteData })
         .then(() => {
             toast.success(__('Availability deleted'));
             deleteId.value = null;
@@ -196,7 +196,7 @@ async function clearStuckHolds(force) {
         // allSettled (not all) so one failed date doesn't discard the holds other dates cleared —
         // this is the recovery path, partial progress must be kept and reported.
         const results = await Promise.allSettled(
-            datesWithStuck.value.map((date) => axios.post('/cp/resrv/availability/clear-stuck-pending', {
+            datesWithStuck.value.map((date) => axios.post(cp_url('resrv/availability/clear-stuck-pending'), {
                 statamic_id: props.parentId,
                 date,
                 rate_id: props.rate.code,
