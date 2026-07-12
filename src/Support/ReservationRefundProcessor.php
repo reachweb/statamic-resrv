@@ -181,7 +181,10 @@ class ReservationRefundProcessor
      * the possible duplicate payment (the booking now holds an out-of-band payment AND a gateway
      * charge, and the follow-up webhook no-ops on the CONFIRMED row without telling anyone).
      * The capture can show up on the pre-void read or on the verification re-read after the void
-     * attempt (the customer's payment landing inside the void window) — both must notify.
+     * attempt (the customer's payment landing inside the void window) — both must notify. When
+     * either read THROWS (a transient gateway failure) the intent's state is unknown — it may be
+     * captured or still payable — and the same webhook silence applies, so those paths notify too
+     * (CONTEXT_OUT_OF_BAND_UNVERIFIED) instead of degrading to a log line nobody reads.
      *
      * Callers must have synced the reservation to the committed row (via transitionTo()) first, so
      * a concurrent pay-page write is not missed.
@@ -219,12 +222,18 @@ class ReservationRefundProcessor
             $intent = $gateway->retrievePaymentIntent($paymentId, $reservation);
         } catch (\Throwable $e) {
             // Cannot verify the intent: conservatively keep the reference rather than risk dropping
-            // a real charge. Logged for reconciliation.
-            Log::warning('Could not verify the payment intent while confirming an out-of-band payment; keeping the gateway charge reference.', [
-                'reservation_id' => $reservation->id,
-                'payment_id' => $paymentId,
-                'error' => $e->getMessage(),
-            ]);
+            // a real charge. Its state is unknown — it may have captured money, or may still be
+            // completable with the client secret the customer holds — and either way the follow-up
+            // webhook sees CONFIRMED and no-ops, so a log line alone would bury the only warning of
+            // a silent duplicate. Admins must be told to check the intent at the gateway.
+            $this->notifyPossibleDuplicatePayment(
+                $reservation,
+                $paymentId,
+                'unknown',
+                'Could not verify the payment intent while confirming an out-of-band payment; keeping the gateway charge reference — check the intent at the gateway.',
+                OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_UNVERIFIED,
+                ['error' => $e->getMessage()],
+            );
 
             return;
         }
@@ -253,11 +262,17 @@ class ReservationRefundProcessor
         try {
             $intent = $gateway->retrievePaymentIntent($paymentId, $reservation);
         } catch (\Throwable $e) {
-            Log::warning('Could not verify the payment intent was cancelled while confirming an out-of-band payment; keeping the gateway charge reference for reconciliation.', [
-                'reservation_id' => $reservation->id,
-                'payment_id' => $paymentId,
-                'error' => $e->getMessage(),
-            ]);
+            // The void was attempted but its outcome is unknown: the intent may still be payable, or
+            // the customer's payment may have landed inside the void window — the same silent-duplicate
+            // exposure as the verified still-payable branch below, so it must notify, not just log.
+            $this->notifyPossibleDuplicatePayment(
+                $reservation,
+                $paymentId,
+                'unknown',
+                'Could not verify the payment intent was cancelled while confirming an out-of-band payment; keeping the gateway charge reference — check the intent at the gateway.',
+                OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_UNVERIFIED,
+                ['error' => $e->getMessage()],
+            );
 
             return;
         }
@@ -301,9 +316,10 @@ class ReservationRefundProcessor
 
     /**
      * Tell the admins the booking holds an out-of-band payment AND a gateway charge that either
-     * captured (or is capturing) real money, or could not be voided and can still collect it —
-     * an actual or impending duplicate payment. The charge reference is kept by every caller so
-     * the charge stays reachable through the gateway; the succeeded webhook that follows sees
+     * captured (or is capturing) real money, could not be voided and can still collect it, or
+     * whose state could not be verified at all (a transient gateway failure on either verification
+     * read) — an actual or possible duplicate payment. The charge reference is kept by every caller
+     * so the charge stays reachable through the gateway; the succeeded webhook that follows sees
      * CONFIRMED and no-ops, so this notification is the only reconciliation signal.
      */
     protected function notifyPossibleDuplicatePayment(
@@ -312,11 +328,13 @@ class ReservationRefundProcessor
         string $intentStatus,
         string $logMessage,
         string $context = OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_DUPLICATE,
+        array $extraLogContext = [],
     ): void {
         Log::warning($logMessage, [
             'reservation_id' => $reservation->id,
             'payment_id' => $paymentId,
             'intent_status' => $intentStatus,
+            ...$extraLogContext,
         ]);
 
         OrphanedPaymentNotification::dispatchFor(

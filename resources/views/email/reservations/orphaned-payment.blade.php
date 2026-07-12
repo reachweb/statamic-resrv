@@ -4,6 +4,8 @@
 {{ __("A reservation was confirmed as paid out of band (in person / by bank transfer) while its online payment intent had already captured — or was still capturing — money at the gateway. The customer may have paid twice: once out of band and once online.") }}
 @elseif ($context === 'out_of_band_still_payable')
 {{ __("A reservation was confirmed as paid out of band (in person / by bank transfer), but its open online payment intent could not be cancelled at the gateway and can still collect payment. If the customer completes that payment, the booking will be paid twice — and no further alert will be sent.") }}
+@elseif ($context === 'out_of_band_unverified')
+{{ __("A reservation was confirmed as paid out of band (in person / by bank transfer), but its online payment intent could not be verified at the gateway. It may have already collected a payment, or may still be able to collect one — if it does, the booking will be paid twice and no further alert will be sent.") }}
 @else
 {{ __("An orphaned payment has been detected. A successful payment webhook arrived for a reservation that is no longer live — the charge exists on the gateway but there is no active reservation to attach it to. A manual refund is likely required.") }}
 @endif
@@ -25,6 +27,8 @@
 {{ __("Recommended action: check this payment intent in your payment provider's dashboard and, if the out-of-band payment was also received, refund one of the two payments.") }}
 @elseif ($context === 'out_of_band_still_payable')
 {{ __("Recommended action: cancel this payment intent in your payment provider's dashboard so it can no longer be completed. If it has already collected a payment, refund one of the two payments.") }}
+@elseif ($context === 'out_of_band_unverified')
+{{ __("Recommended action: check this payment intent in your payment provider's dashboard. Cancel it if it is still open; if it has already collected a payment, refund one of the two payments.") }}
 @else
 {{ __("Recommended action: locate this payment intent in your payment provider's dashboard and issue a refund.") }}
 @endif

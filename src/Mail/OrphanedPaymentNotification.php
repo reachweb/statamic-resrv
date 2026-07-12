@@ -28,6 +28,10 @@ use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
  *   client secret the customer already holds. If they finish paying, the succeeded webhook
  *   sees CONFIRMED and no-ops, so admins must cancel the intent in the gateway dashboard now;
  *   this notification is the last signal before that silent duplicate.
+ * - CONTEXT_OUT_OF_BAND_UNVERIFIED: the same out-of-band confirmation, but the gateway could not
+ *   be reached to verify the intent's state (before or after the void attempt). The intent may
+ *   have captured money or may still be completable — either way the succeeded webhook sees
+ *   CONFIRMED and no-ops, so admins must check the intent in the gateway dashboard.
  */
 class OrphanedPaymentNotification extends Mailable
 {
@@ -36,6 +40,8 @@ class OrphanedPaymentNotification extends Mailable
     public const CONTEXT_OUT_OF_BAND_DUPLICATE = 'out_of_band_duplicate';
 
     public const CONTEXT_OUT_OF_BAND_STILL_PAYABLE = 'out_of_band_still_payable';
+
+    public const CONTEXT_OUT_OF_BAND_UNVERIFIED = 'out_of_band_unverified';
 
     public function __construct(
         public Reservation $reservation,
@@ -122,6 +128,10 @@ class OrphanedPaymentNotification extends Mailable
 
         if ($this->context === self::CONTEXT_OUT_OF_BAND_STILL_PAYABLE) {
             return 'Open payment intent could not be cancelled — Reservation #'.$reservation->id.' ['.$reservation->status.']';
+        }
+
+        if ($this->context === self::CONTEXT_OUT_OF_BAND_UNVERIFIED) {
+            return 'Payment intent could not be verified — Reservation #'.$reservation->id.' ['.$reservation->status.']';
         }
 
         return 'Orphaned payment detected — Reservation #'.$reservation->id.' ['.$reservation->status.']';

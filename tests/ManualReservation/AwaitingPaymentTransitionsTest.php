@@ -475,6 +475,90 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertCount(1, $gateway->refundCalls);
     }
 
+    public function test_confirming_online_out_of_band_notifies_when_the_intent_cannot_be_verified()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        // The pre-void verification read fails transiently: the intent's state is unknown — it may
+        // have captured money or may still be completable with the client secret the customer holds.
+        $gateway->onRetrievePaymentIntent = function (): void {
+            throw new \RuntimeException('gateway unreachable');
+        };
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_unverifiable',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        // Nothing is voided or cleared on an unverifiable intent: the reference is the only handle
+        // on a charge that may be live.
+        $this->assertSame('pi_unverifiable', $reservation->payment_id);
+        $this->assertCount(0, $gateway->cancelledIntents);
+
+        // If the intent is still payable and the customer completes it, the succeeded webhook sees
+        // CONFIRMED and no-ops — a log line alone would bury the only warning of the silent
+        // duplicate, so admins must be notified now.
+        Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
+            return $mail->hasTo('admin@example.com')
+                && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_UNVERIFIED
+                && $mail->paymentIntentId === 'pi_unverifiable';
+        });
+    }
+
+    public function test_confirming_online_out_of_band_notifies_when_the_void_verification_fails()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        // The pre-void read succeeds (unpaid intent) and the void is attempted, but the
+        // verification re-read fails transiently — the void's outcome is unknown, so the
+        // intent may still be payable (or a payment landed inside the void window).
+        $retrieveCalls = 0;
+        $gateway->onRetrievePaymentIntent = function () use (&$retrieveCalls): void {
+            if (++$retrieveCalls === 2) {
+                throw new \RuntimeException('gateway unreachable');
+            }
+        };
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_void_unverified',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        // The void was attempted but never verified, so the reference survives for reconciliation.
+        $this->assertCount(1, $gateway->cancelledIntents);
+        $this->assertSame('pi_void_unverified', $reservation->payment_id);
+
+        // Same silent-duplicate exposure as the verified still-payable branch: the webhook no-ops
+        // on CONFIRMED, so this is the last point the possible duplicate is visible.
+        Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
+            return $mail->hasTo('admin@example.com')
+                && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_UNVERIFIED
+                && $mail->paymentIntentId === 'pi_void_unverified';
+        });
+    }
+
     public function test_customer_cannot_self_refund_an_online_out_of_band_confirmation()
     {
         Mail::fake();
