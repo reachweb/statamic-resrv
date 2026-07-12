@@ -1066,14 +1066,14 @@ class Reservation extends Model
         $extraCharges = Price::create(0);
 
         $optionsCost = Price::create(0);
-        if (array_key_exists('options', $data) > 0) {
+        if (array_key_exists('options', $data) && $data['options']->count() > 0) {
             $data['options']->each(function ($option) use ($data, $optionsCost) {
                 $optionsCost->add($this->activeOptionFor($option)->calculatePrice($data, $option['value']));
             });
         }
 
         $extrasCost = Price::create(0);
-        if (array_key_exists('extras', $data) > 0) {
+        if (array_key_exists('extras', $data) && $data['extras']->count() > 0) {
             // The extra class needs the entry id to calculate the price
             $data['item_id'] = $statamic_id;
             $data['extras']->each(function ($extra) use ($data, $extrasCost) {
