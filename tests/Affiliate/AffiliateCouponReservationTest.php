@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Affiliate;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Models\Affiliate;
@@ -45,6 +46,32 @@ class AffiliateCouponReservationTest extends TestCase
             'affiliate_id' => $affiliate->id,
             'fee' => 10,
             'source' => AffiliateAttributionSource::Coupon->value,
+        ]);
+    }
+
+    // With the affiliate system disabled the coupon still discounts, but no commission
+    // attribution is created — same contract as an unpublished affiliate.
+    public function test_affiliate_is_not_associated_when_affiliates_are_disabled()
+    {
+        Config::set('resrv-config.enable_affiliates', false);
+
+        $item = $this->makeStatamicItem();
+
+        $coupon = DynamicPricing::factory()->create(['coupon' => 'AFFILIATE10']);
+        $coupon->entries()->sync([$item->id()]);
+
+        $affiliate = Affiliate::factory()->create(['fee' => 10]);
+        $affiliate->coupons()->sync([$coupon->id]);
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+        ]);
+
+        CouponUpdated::dispatch($reservation, 'AFFILIATE10');
+
+        $this->assertDatabaseMissing('resrv_reservation_affiliate', [
+            'reservation_id' => $reservation->id,
+            'affiliate_id' => $affiliate->id,
         ]);
     }
 

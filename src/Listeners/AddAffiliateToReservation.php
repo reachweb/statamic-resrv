@@ -4,11 +4,16 @@ namespace Reach\StatamicResrv\Listeners;
 
 use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Models\Affiliate;
 
 class AddAffiliateToReservation
 {
     public function handle(ReservationCreated $event)
     {
+        if (! Affiliate::enabled()) {
+            return;
+        }
+
         if ($event->data->hasAffiliate()) {
             // Snapshot the name/code so the report keeps history even after the affiliate is deleted.
             $event->reservation->affiliate()->attach($event->data->affiliate, [

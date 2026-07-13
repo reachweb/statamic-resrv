@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Resources;
 
 use Illuminate\Http\Resources\Json\ResourceCollection;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Report;
 
 class ReportResource extends ResourceCollection
@@ -24,7 +25,7 @@ class ReportResource extends ResourceCollection
         ];
 
         // Gate the affiliate section on the feature flag so the Vue panel hides when it's off.
-        if (config('resrv-config.enable_affiliates', true)) {
+        if (Affiliate::enabled()) {
             $data['affiliate_sales'] = $this->report->affiliateSales();
         }
 

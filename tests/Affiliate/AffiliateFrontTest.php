@@ -3,7 +3,9 @@
 namespace Reach\StatamicResrv\Tests\Extra;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
+use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Events\ReservationCreated as ReservationCreatedEvent;
 use Reach\StatamicResrv\Listeners\AddAffiliateToReservation;
 use Reach\StatamicResrv\Livewire\Traits\HandlesAffiliates;
@@ -85,6 +87,50 @@ class AffiliateFrontTest extends TestCase
         };
 
         $this->assertEquals($affiliate->id, $component->getAffiliateIfCookieExists()?->id);
+    }
+
+    // With the affiliate system disabled, the ?afid= parameter must be ignored entirely.
+    public function test_it_does_not_set_cookie_when_affiliates_are_disabled()
+    {
+        Config::set('resrv-config.enable_affiliates', false);
+
+        $affiliate = Affiliate::factory()->create();
+
+        $response = $this->get('/'.$this->item->slug.'?afid='.$affiliate->code);
+        $response->assertStatus(200)->assertCookieMissing('resrv_afid');
+    }
+
+    // A cookie set before the toggle was flipped off must be ignored at the read too,
+    // so no attribution can happen from pre-existing cookies.
+    public function test_get_affiliate_if_cookie_exists_returns_null_when_affiliates_are_disabled()
+    {
+        Config::set('resrv-config.enable_affiliates', false);
+
+        Affiliate::factory()->create(['code' => 'ENABLED', 'published' => true]);
+        request()->cookies->set('resrv_afid', 'ENABLED');
+
+        $component = new class
+        {
+            use HandlesAffiliates;
+        };
+
+        $this->assertNull($component->getAffiliateIfCookieExists());
+    }
+
+    public function test_listener_does_not_attribute_affiliate_when_affiliates_are_disabled()
+    {
+        Config::set('resrv-config.enable_affiliates', false);
+
+        $affiliate = Affiliate::factory()->create();
+        $reservation = Reservation::factory()->create();
+
+        (new AddAffiliateToReservation)->handle(new ReservationCreatedEvent($reservation, new ReservationData(
+            affiliate: $affiliate,
+        )));
+
+        $this->assertDatabaseMissing('resrv_reservation_affiliate', [
+            'reservation_id' => $reservation->id,
+        ]);
     }
 
     public function test_listener_listens_to_reservation_created_event()

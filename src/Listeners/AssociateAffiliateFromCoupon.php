@@ -4,12 +4,17 @@ namespace Reach\StatamicResrv\Listeners;
 
 use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Events\CouponUpdated;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 
 class AssociateAffiliateFromCoupon
 {
     public function handle(CouponUpdated $event): void
     {
+        if (! Affiliate::enabled()) {
+            return;
+        }
+
         $coupon = DynamicPricing::searchForCoupon($event->coupon, $event->reservation->id);
 
         if (! $coupon) {

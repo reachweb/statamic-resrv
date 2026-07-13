@@ -56,6 +56,7 @@ use Reach\StatamicResrv\Listeners\SendNewReservationEmails;
 use Reach\StatamicResrv\Listeners\SendRefundReservationEmails;
 use Reach\StatamicResrv\Listeners\SoftDeleteResrvEntryFromDatabase;
 use Reach\StatamicResrv\Listeners\UpdateCouponAppliedToReservation;
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
 use Reach\StatamicResrv\Support\ActivityLog;
@@ -317,7 +318,7 @@ class ResrvProvider extends AddonServiceProvider
                     ->icon('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" height="24" width="24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"><circle cx="12" cy="12" r="9.25"/><path d="M12 7v5l3.5 2"/></g></svg>');
             }
 
-            if (config('resrv-config.enable_affiliates', true)) {
+            if (Affiliate::enabled()) {
                 $nav->create(ucfirst(__('Affiliates')))
                     ->section('Resrv')
                     ->can('use resrv')
