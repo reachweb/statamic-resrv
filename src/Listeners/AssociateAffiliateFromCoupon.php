@@ -34,6 +34,13 @@ class AssociateAffiliateFromCoupon
             return;
         }
 
+        // Unpublished affiliates are disabled: their coupon still discounts the reservation,
+        // but must not earn a commission attribution. This sits after the remove branch so
+        // removing the coupon still cleans up an attribution created while published.
+        if (! $affiliate->published) {
+            return;
+        }
+
         // Check if this affiliate is already associated with the reservation. This also keeps a
         // cookie-sourced attribution from being downgraded to coupon-sourced when the customer
         // enters the same affiliate's coupon.

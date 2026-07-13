@@ -141,6 +141,62 @@ class AffiliateCouponReservationTest extends TestCase
         ]);
     }
 
+    public function test_unpublished_affiliate_does_not_get_attributed_from_coupon()
+    {
+        $item = $this->makeStatamicItem();
+
+        // Create a coupon owned by an unpublished (disabled) affiliate
+        $coupon = DynamicPricing::factory()->create(['coupon' => 'AFFILIATE10']);
+        $coupon->entries()->sync([$item->id()]);
+
+        $affiliate = Affiliate::factory()->create(['fee' => 10, 'published' => false]);
+        $affiliate->coupons()->sync([$coupon->id]);
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+        ]);
+
+        CouponUpdated::dispatch($reservation, 'AFFILIATE10');
+
+        // The coupon itself keeps working, but no commission attribution is created
+        $this->assertDatabaseMissing('resrv_reservation_affiliate', [
+            'reservation_id' => $reservation->id,
+            'affiliate_id' => $affiliate->id,
+        ]);
+    }
+
+    public function test_removing_coupon_detaches_attribution_of_a_later_unpublished_affiliate()
+    {
+        $item = $this->makeStatamicItem();
+
+        $coupon = DynamicPricing::factory()->create(['coupon' => 'AFFILIATE10']);
+        $coupon->entries()->sync([$item->id()]);
+
+        $affiliate = Affiliate::factory()->create(['fee' => 10]);
+        $affiliate->coupons()->sync([$coupon->id]);
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+        ]);
+
+        // Attribution created while the affiliate was published
+        CouponUpdated::dispatch($reservation, 'AFFILIATE10');
+        $this->assertDatabaseHas('resrv_reservation_affiliate', [
+            'reservation_id' => $reservation->id,
+            'affiliate_id' => $affiliate->id,
+        ]);
+
+        // The affiliate gets disabled, then the customer removes the coupon
+        $affiliate->update(['published' => false]);
+        CouponUpdated::dispatch($reservation, 'AFFILIATE10', true);
+
+        // The stale coupon attribution must still be cleaned up
+        $this->assertDatabaseMissing('resrv_reservation_affiliate', [
+            'reservation_id' => $reservation->id,
+            'affiliate_id' => $affiliate->id,
+        ]);
+    }
+
     public function test_removing_coupon_keeps_cookie_sourced_attribution()
     {
         $item = $this->makeStatamicItem();

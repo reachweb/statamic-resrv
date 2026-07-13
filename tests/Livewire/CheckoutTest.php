@@ -381,6 +381,38 @@ class CheckoutTest extends TestCase
         $this->assertEquals(ReservationStatus::PENDING->value, $this->reservation->fresh()->status);
     }
 
+    public function test_an_unpublished_affiliates_coupon_still_discounts_but_earns_no_attribution()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        $affiliate = Affiliate::factory()->create(['published' => false]);
+        $affiliate->coupons()->sync([$dynamic->id]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', '20OFF')
+            ->assertHasNoErrors('coupon')
+            ->assertSessionHas('resrv_coupon', '20OFF')
+            ->dispatch('coupon-applied', '20OFF');
+
+        // The discount applied even though the affiliate is disabled
+        $this->assertEquals('80.00', $this->reservation->fresh()->price->format());
+
+        // But the disabled affiliate earned no commission attribution
+        $this->assertDatabaseMissing('resrv_reservation_affiliate', [
+            'reservation_id' => $this->reservation->id,
+            'affiliate_id' => $affiliate->id,
+        ]);
+    }
+
     public function test_it_shows_an_arror_if_the_reservation_is_expired()
     {
         $reservation = Reservation::factory()->expired()->create([
