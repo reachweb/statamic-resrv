@@ -192,6 +192,41 @@ class AffiliateCouponReservationTest extends TestCase
         ]);
     }
 
+    // Cleanup must survive the feature being turned off: an attribution created while the
+    // system was on must still be detached when its coupon is removed afterwards, or the
+    // reservation keeps an active commission for a coupon it no longer uses.
+    public function test_removing_coupon_detaches_attribution_after_affiliates_are_disabled()
+    {
+        $item = $this->makeStatamicItem();
+
+        $coupon = DynamicPricing::factory()->create(['coupon' => 'AFFILIATE10']);
+        $coupon->entries()->sync([$item->id()]);
+
+        $affiliate = Affiliate::factory()->create(['fee' => 10]);
+        $affiliate->coupons()->sync([$coupon->id]);
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $item->id(),
+        ]);
+
+        // Attribution created while the affiliate system was on
+        CouponUpdated::dispatch($reservation, 'AFFILIATE10');
+        $this->assertDatabaseHas('resrv_reservation_affiliate', [
+            'reservation_id' => $reservation->id,
+            'affiliate_id' => $affiliate->id,
+        ]);
+
+        // The system gets disabled, then the customer removes the coupon
+        Config::set('resrv-config.enable_affiliates', false);
+        CouponUpdated::dispatch($reservation, 'AFFILIATE10', true);
+
+        // The stale coupon attribution must still be cleaned up
+        $this->assertDatabaseMissing('resrv_reservation_affiliate', [
+            'reservation_id' => $reservation->id,
+            'affiliate_id' => $affiliate->id,
+        ]);
+    }
+
     public function test_removing_coupon_detaches_attribution_of_a_later_unpublished_affiliate()
     {
         $item = $this->makeStatamicItem();

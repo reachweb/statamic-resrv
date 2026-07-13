@@ -11,10 +11,6 @@ class AssociateAffiliateFromCoupon
 {
     public function handle(CouponUpdated $event): void
     {
-        if (! Affiliate::enabled()) {
-            return;
-        }
-
         $coupon = DynamicPricing::searchForCoupon($event->coupon, $event->reservation->id);
 
         if (! $coupon) {
@@ -39,9 +35,16 @@ class AssociateAffiliateFromCoupon
             return;
         }
 
+        // The affiliate system being off blocks new attributions, like an unpublished affiliate
+        // does below. Both gates sit after the remove branch so removing the coupon still cleans
+        // up an attribution created while the feature was on and the affiliate published — the
+        // reservation must not keep an active commission for a coupon it no longer uses.
+        if (! Affiliate::enabled()) {
+            return;
+        }
+
         // Unpublished affiliates are disabled: their coupon still discounts the reservation,
-        // but must not earn a commission attribution. This sits after the remove branch so
-        // removing the coupon still cleans up an attribution created while published.
+        // but must not earn a commission attribution.
         if (! $affiliate->published) {
             return;
         }
