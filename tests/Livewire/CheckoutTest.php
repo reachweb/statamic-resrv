@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
@@ -314,6 +315,70 @@ class CheckoutTest extends TestCase
 
         $this->assertEquals('expired', $reservation->fresh()->status);
         $this->assertFalse($confirmedDispatched, 'ReservationConfirmed must not fire when the PARTNER transition lost the race.');
+    }
+
+    public function test_affiliate_attributed_by_cookie_can_complete_checkout_without_payment()
+    {
+        Event::fake();
+
+        $affiliate = Affiliate::factory()->create(['allow_skipping_payment' => true]);
+        $this->reservation->affiliate()->attach($affiliate->id, [
+            'fee' => $affiliate->fee,
+            'source' => AffiliateAttributionSource::Cookie->value,
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2)
+            ->assertSee(trans('statamic-resrv::frontend.completeWithoutPayment'));
+
+        $component->dispatch('checkout-form-submitted-without-payment')
+            ->assertRedirect(Entry::find(Config::get('resrv-config.checkout_completed_entry'))->absoluteUrl().'?payment_pending='.$this->reservation->id);
+
+        $this->assertEquals(ReservationStatus::PARTNER->value, $this->reservation->fresh()->status);
+    }
+
+    public function test_entering_an_affiliate_coupon_does_not_unlock_skip_payment()
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        $affiliate = Affiliate::factory()->create(['allow_skipping_payment' => true]);
+        $affiliate->coupons()->sync([$dynamic->id]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class);
+
+        $component->call('addCoupon', '20OFF')
+            ->assertSessionHas('resrv_coupon', '20OFF')
+            ->dispatch('coupon-applied', '20OFF');
+
+        // The coupon attributed the affiliate for commission, marked as coupon-sourced
+        $this->assertDatabaseHas('resrv_reservation_affiliate', [
+            'reservation_id' => $this->reservation->id,
+            'affiliate_id' => $affiliate->id,
+            'source' => AffiliateAttributionSource::Coupon->value,
+        ]);
+
+        // The skip-payment button must not render on the checkout form
+        $component->call('handleFirstStep')
+            ->assertSet('step', 2)
+            ->assertDontSee(trans('statamic-resrv::frontend.completeWithoutPayment'));
+
+        // A forged Livewire dispatch must be rejected server-side, not just hidden in the UI
+        $component->dispatch('checkout-form-submitted-without-payment')
+            ->assertNoRedirect()
+            ->assertHasErrors('reservation');
+
+        $this->assertEquals(ReservationStatus::PENDING->value, $this->reservation->fresh()->status);
     }
 
     public function test_it_shows_an_arror_if_the_reservation_is_expired()

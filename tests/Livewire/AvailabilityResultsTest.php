@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
@@ -1374,6 +1375,7 @@ class AvailabilityResultsTest extends TestCase
                 'reservation_id' => 1,
                 'affiliate_id' => $affiliate->id,
                 'fee' => $affiliate->fee,
+                'source' => AffiliateAttributionSource::Cookie->value,
             ]
         );
     }

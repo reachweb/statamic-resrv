@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Models\Affiliate;
 
 trait HandlesAffiliates
@@ -13,10 +14,12 @@ trait HandlesAffiliates
 
     public function affiliateCanSkipPayment(): bool
     {
-        if ($affiliate = $this->reservation->affiliate->first()) {
-            return $affiliate->allow_skipping_payment ?? false;
-        }
+        // Only a cookie attribution (the customer arrived through the affiliate link) can skip
+        // payment. Coupon-sourced attributions earn commission but pay like everyone else.
+        $affiliate = $this->reservation->affiliate()
+            ->wherePivot('source', AffiliateAttributionSource::Cookie->value)
+            ->first();
 
-        return false;
+        return $affiliate?->allow_skipping_payment ?? false;
     }
 }
