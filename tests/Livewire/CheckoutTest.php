@@ -340,6 +340,33 @@ class CheckoutTest extends TestCase
         $this->assertEquals(ReservationStatus::PARTNER->value, $this->reservation->fresh()->status);
     }
 
+    public function test_affiliate_cannot_skip_payment_when_affiliates_are_disabled()
+    {
+        // The attribution predates the toggle flip: history is kept, but skip-payment is off.
+        Config::set('resrv-config.enable_affiliates', false);
+
+        $affiliate = Affiliate::factory()->create(['allow_skipping_payment' => true]);
+        $this->reservation->affiliate()->attach($affiliate->id, [
+            'fee' => $affiliate->fee,
+            'source' => AffiliateAttributionSource::Cookie->value,
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // The skip-payment button must not render on the checkout form
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2)
+            ->assertDontSee(trans('statamic-resrv::frontend.completeWithoutPayment'));
+
+        // A forged Livewire dispatch must be rejected server-side, not just hidden in the UI
+        $component->dispatch('checkout-form-submitted-without-payment')
+            ->assertNoRedirect()
+            ->assertHasErrors('reservation');
+
+        $this->assertEquals(ReservationStatus::PENDING->value, $this->reservation->fresh()->status);
+    }
+
     public function test_entering_an_affiliate_coupon_does_not_unlock_skip_payment()
     {
         $dynamic = DynamicPricing::factory()->withCoupon()->create();

@@ -99,7 +99,7 @@ tabs:
               default: true
               validate:
                 - required
-              instructions: 'Enable the [affiliate system](https://resrv.dev/affiliates).'
+              instructions: 'Enable the [affiliate system](https://resrv.dev/affiliates). When disabled, the whole system is off: affiliate cookies are not set, reservations get no affiliate attribution or commission (from links or coupons), affiliates cannot skip payment and no affiliate emails are sent. Existing attributions are kept for reporting and refunds.'
           -
             handle: enable_cutoff_rules
             field:

@@ -9,11 +9,21 @@ trait HandlesAffiliates
 {
     public function getAffiliateIfCookieExists(): ?Affiliate
     {
+        // Gating the read (not just the cookie write) also neutralizes cookies set before
+        // the affiliate system was disabled.
+        if (! Affiliate::enabled()) {
+            return null;
+        }
+
         return request()->cookie('resrv_afid') ? Affiliate::published()->where('code', request()->cookie('resrv_afid'))->first() : null;
     }
 
     public function affiliateCanSkipPayment(): bool
     {
+        if (! Affiliate::enabled()) {
+            return false;
+        }
+
         // Only a cookie attribution (the customer arrived through the affiliate link) can skip
         // payment. Coupon-sourced attributions earn commission but pay like everyone else.
         $affiliate = $this->reservation->affiliate()

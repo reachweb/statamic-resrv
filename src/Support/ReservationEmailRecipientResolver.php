@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Support;
 
+use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationEmailRecipientResolver
@@ -54,7 +55,7 @@ class ReservationEmailRecipientResolver
 
     protected function affiliateEmails(Reservation $reservation): array
     {
-        if (! config('resrv-config.enable_affiliates')) {
+        if (! Affiliate::enabled()) {
             return [];
         }
 

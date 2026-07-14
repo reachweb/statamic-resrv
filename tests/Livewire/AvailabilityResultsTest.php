@@ -1380,6 +1380,38 @@ class AvailabilityResultsTest extends TestCase
         );
     }
 
+    // A cookie set while the affiliate system was on must not attribute once it is off.
+    public function test_creates_reservation_without_affiliate_when_affiliates_are_disabled()
+    {
+        Config::set('resrv-config.enable_affiliates', false);
+
+        $this->createCheckoutEntry();
+
+        $rateId = $this->getFirstAdvancedEntryRateId();
+
+        $affiliate = Affiliate::factory()->create();
+
+        $component = Livewire::withCookies(['resrv_afid' => $affiliate->code])
+            ->test(AvailabilityResults::class, ['entry' => $this->advancedEntries->first()->id()])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $this->date->toISOString(),
+                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => (string) $rateId,
+                ]
+            );
+
+        $component->call('checkout');
+
+        $this->assertDatabaseHas('resrv_reservations', ['id' => 1]);
+        $this->assertDatabaseMissing('resrv_reservation_affiliate', [
+            'reservation_id' => 1,
+        ]);
+    }
+
     public function test_cutoff_ignores_when_disabled_per_entry()
     {
         // Enable cutoff rules globally
