@@ -246,7 +246,12 @@ const statusLabel = computed(() => props.reservation.status?.toUpperCase() ?? ''
                 <div class="mb-2 border-b border-gray flex justify-between w-full p-2">
                     <div>{{ __('Payment') }}</div>
                     <div class="font-bold">
-                        {{ currencySymbol }} {{ reservation.payment_formatted }}
+                        <template v-if="reservation.payment_formatted !== null">
+                            {{ currencySymbol }} {{ reservation.payment_formatted }}
+                        </template>
+                        <template v-else>
+                            {{ __('No payment collected (partner reservation)') }}
+                        </template>
                     </div>
                 </div>
                 <template v-if="!reservation.payment_surcharge_is_zero">

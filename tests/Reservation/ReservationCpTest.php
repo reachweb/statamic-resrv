@@ -342,6 +342,35 @@ class ReservationCpTest extends TestCase
         $response->assertStatus(200)->assertSee($reservation->id)->assertSee($item->title)->assertSee($reservation->customer->email);
     }
 
+    public function test_show_omits_payment_amount_for_partner_reservations()
+    {
+        $item = $this->makeStatamicItem();
+
+        $partner = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'partner',
+            'payment_id' => '',
+        ])->withCustomer()->create();
+
+        $confirmed = Reservation::factory([
+            'item_id' => $item->id(),
+        ])->withCustomer()->create();
+
+        $this->get(cp_route('resrv.reservation.show', $partner->id))
+            ->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('resrv::Reservations/Show')
+                ->where('reservation.payment_formatted', null)
+            );
+
+        $this->get(cp_route('resrv.reservation.show', $confirmed->id))
+            ->assertStatus(200)
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('resrv::Reservations/Show')
+                ->where('reservation.payment_formatted', $confirmed->payment->format())
+            );
+    }
+
     public function test_can_show_child_reservations()
     {
         $item = $this->makeStatamicItem();
