@@ -71,6 +71,7 @@ const columns = {
     items: [
         { field: 'title', label: 'Title' },
         { field: 'reservations', label: 'Reservations' },
+        { field: 'quantity_sold', label: 'Quantity sold' },
         { field: 'total_revenue', label: 'Revenue' },
         { field: 'percentage', label: 'Percentage' },
     ],

@@ -108,9 +108,9 @@ class ReportsCpTest extends TestCase
         $itemA = $this->makeStatamicItem();
         $itemB = $this->makeStatamicItem();
 
-        Reservation::factory(['item_id' => $itemA->id(), 'status' => 'confirmed'])->count(3)->create();
-        Reservation::factory(['item_id' => $itemA->id(), 'status' => 'partner'])->count(1)->create();
-        Reservation::factory(['item_id' => $itemB->id(), 'status' => 'confirmed'])->count(2)->create();
+        Reservation::factory(['item_id' => $itemA->id(), 'status' => 'confirmed', 'quantity' => 2])->count(3)->create();
+        Reservation::factory(['item_id' => $itemA->id(), 'status' => 'partner', 'quantity' => 3])->count(1)->create();
+        Reservation::factory(['item_id' => $itemB->id(), 'status' => 'confirmed', 'quantity' => 4])->count(2)->create();
 
         $top = (new Report(now()->toDateString(), now()->addWeek()->toDateString()))->topSellerItems();
 
@@ -119,11 +119,13 @@ class ReportsCpTest extends TestCase
         $this->assertEquals($itemA->id(), $top[0]['id']);
         $this->assertEquals($itemB->id(), $top[1]['id']);
         $this->assertEquals(4, $top[0]['reservations']);
+        $this->assertSame(9, $top[0]['quantity_sold']);
         $this->assertSame(800.0, $top[0]['total_revenue']);
         $this->assertSame(200.0, $top[0]['avg_revenue']);
         $this->assertEquals(0.67, $top[0]['percentage']);
 
         $this->assertEquals(2, $top[1]['reservations']);
+        $this->assertSame(8, $top[1]['quantity_sold']);
         $this->assertSame(400.0, $top[1]['total_revenue']);
         $this->assertSame(200.0, $top[1]['avg_revenue']);
         $this->assertEquals(0.33, $top[1]['percentage']);
