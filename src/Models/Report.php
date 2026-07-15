@@ -98,6 +98,7 @@ class Report
                 'title' => $entry['title'],
                 'api_url' => $entry['url'],
                 'reservations' => $reservations->count(),
+                'quantity_sold' => (int) $reservations->sum('quantity'),
                 'total_revenue' => (float) $totalRevenue->format(),
                 'avg_revenue' => (float) (clone $totalRevenue)->divide((string) $reservations->count())->format(),
                 'percentage' => round($reservations->count() / $this->countReservations(), 2),
