@@ -23,3 +23,10 @@ PLAN.md
 /tests/Browser/screenshots
 /tests/Browser/console
 /tests/Browser/source
+CLAUDE.md
+maintain-prompt.md
+loop-prompt.md
+replace-resetonboot.md
+browser-testing.md
+REPORT.md
+TASKS.md
