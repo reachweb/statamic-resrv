@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Validator;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Reservation;
+use Statamic\Exceptions\NotFoundHttpException;
 use Statamic\Tags\Tags;
 
 class Resrv extends Tags
@@ -30,20 +31,49 @@ class Resrv extends Tags
         ]);
 
         if ($validator->fails()) {
-            abort(400, 'Invalid reservation parameters.');
+            throw new NotFoundHttpException;
         }
 
         $reservation = Reservation::findForCustomerLookup(
             request()->get('ref'),
             request()->get('hash'),
-            [ReservationStatus::CONFIRMED->value],
+            $this->lookupStatuses(),
         );
 
         if (! $reservation) {
-            abort(404);
+            throw new NotFoundHttpException;
         }
 
         return $reservation;
+    }
+
+    /**
+     * Statuses a customer deep link may resolve to: live bookings (confirmed + partner) by
+     * default, or an explicit pipe-separated `statuses` parameter for pages that need more.
+     *
+     * @return string[]
+     */
+    protected function lookupStatuses(): array
+    {
+        $statuses = $this->params->get('statuses');
+
+        if (! $statuses) {
+            return ReservationStatus::live();
+        }
+
+        return collect(explode('|', $statuses))
+            ->map(fn (string $status) => trim($status))
+            ->map(function (string $status) {
+                $case = ReservationStatus::tryFrom($status);
+
+                if ($case === null) {
+                    throw new \Exception('Resrv Tag error: Invalid reservation status: '.$status);
+                }
+
+                return $case->value;
+            })
+            ->values()
+            ->all();
     }
 
     public function cutoff()
