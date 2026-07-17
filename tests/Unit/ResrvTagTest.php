@@ -11,8 +11,8 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tags\Resrv;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
+use Statamic\Exceptions\NotFoundHttpException;
 use Statamic\Facades\Antlers;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 class ResrvTagTest extends TestCase
 {
@@ -36,6 +36,7 @@ class ResrvTagTest extends TestCase
         $this->tag = (new Resrv)
             ->setParser(Antlers::parser())
             ->setContext([]);
+        $this->tag->setParameters([]);
     }
 
     public function test_search_json_html_escapes_session_values()
@@ -114,6 +115,144 @@ class ResrvTagTest extends TestCase
 
         $reservation = $this->tag->reservationFromUri();
         $this->assertEquals($longRef, $reservation->reference);
+    }
+
+    public function test_reservation_from_uri_resolves_partner_reservation_by_default()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'partner@example.com',
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::PARTNER,
+            'reference' => 'PARTNER01',
+            'customer_id' => $customer->id,
+        ]);
+
+        request()->merge([
+            'ref' => 'PARTNER01',
+            'hash' => $reservation->customerLookupHash(),
+        ]);
+
+        $reservation = $this->tag->reservationFromUri();
+        $this->assertEquals('PARTNER01', $reservation->reference);
+        $this->assertEquals(ReservationStatus::PARTNER->value, $reservation->status);
+    }
+
+    public function test_reservation_from_uri_statuses_parameter_overrides_default()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'cancelled@example.com',
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CANCELLED,
+            'reference' => 'CANCEL01',
+            'customer_id' => $customer->id,
+        ]);
+
+        request()->merge([
+            'ref' => 'CANCEL01',
+            'hash' => $reservation->customerLookupHash(),
+        ]);
+
+        // Cancelled is not in the default lookup statuses.
+        try {
+            $this->tag->reservationFromUri();
+            $this->fail('Expected NotFoundHttpException for a cancelled reservation without a statuses override.');
+        } catch (NotFoundHttpException $e) {
+            // expected
+        }
+
+        // Explicitly requesting cancelled resolves it.
+        $this->tag->setParameters(['statuses' => 'confirmed|cancelled']);
+
+        $found = $this->tag->reservationFromUri();
+        $this->assertEquals('CANCEL01', $found->reference);
+    }
+
+    public function test_reservation_from_uri_statuses_parameter_excludes_default_statuses()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'partneronly@example.com',
+        ]);
+
+        $reservation = Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CONFIRMED,
+            'reference' => 'CONF01',
+            'customer_id' => $customer->id,
+        ]);
+
+        request()->merge([
+            'ref' => 'CONF01',
+            'hash' => $reservation->customerLookupHash(),
+        ]);
+
+        $this->tag->setParameters(['statuses' => 'partner']);
+
+        $this->expectException(NotFoundHttpException::class);
+        $this->tag->reservationFromUri();
+    }
+
+    public function test_reservation_from_uri_throws_on_invalid_status_in_parameter()
+    {
+        request()->merge([
+            'ref' => 'TEST03',
+            'hash' => str_repeat('a', 64),
+        ]);
+
+        $this->tag->setParameters(['statuses' => 'confirmed|not-a-status']);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Resrv Tag error: Invalid reservation status: not-a-status');
+
+        $this->tag->reservationFromUri();
+    }
+
+    public function test_reservation_from_uri_throws_on_empty_status_segment_in_parameter()
+    {
+        request()->merge([
+            'ref' => 'TEST05',
+            'hash' => str_repeat('a', 64),
+        ]);
+
+        $this->tag->setParameters(['statuses' => 'confirmed|']);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Resrv Tag error: Empty status segment in statuses parameter: confirmed|');
+
+        $this->tag->reservationFromUri();
+    }
+
+    public function test_reservation_from_uri_returns_404_for_wrong_hash()
+    {
+        $customer = Customer::factory()->create([
+            'email' => 'wronghash@example.com',
+        ]);
+
+        Reservation::factory()->create([
+            'item_id' => $this->entry->id(),
+            'status' => ReservationStatus::CONFIRMED,
+            'reference' => 'TEST04',
+            'customer_id' => $customer->id,
+        ]);
+
+        request()->merge([
+            'ref' => 'TEST04',
+            'hash' => str_repeat('b', 64),
+        ]);
+
+        $this->expectException(NotFoundHttpException::class);
+        $this->tag->reservationFromUri();
+    }
+
+    public function test_reservation_from_uri_returns_404_for_missing_parameters()
+    {
+        $this->expectException(NotFoundHttpException::class);
+        $this->tag->reservationFromUri();
     }
 
     public function test_cutoff_throws_exception_when_no_entry_id()
