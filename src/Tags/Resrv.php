@@ -63,7 +63,11 @@ class Resrv extends Tags
 
         return collect(explode('|', $statuses))
             ->map(fn (string $status) => trim($status))
-            ->map(function (string $status) {
+            ->map(function (string $status) use ($statuses) {
+                if ($status === '') {
+                    throw new \Exception('Resrv Tag error: Empty status segment in statuses parameter: '.$statuses);
+                }
+
                 $case = ReservationStatus::tryFrom($status);
 
                 if ($case === null) {

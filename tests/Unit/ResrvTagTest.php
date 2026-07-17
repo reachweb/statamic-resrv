@@ -212,6 +212,21 @@ class ResrvTagTest extends TestCase
         $this->tag->reservationFromUri();
     }
 
+    public function test_reservation_from_uri_throws_on_empty_status_segment_in_parameter()
+    {
+        request()->merge([
+            'ref' => 'TEST05',
+            'hash' => str_repeat('a', 64),
+        ]);
+
+        $this->tag->setParameters(['statuses' => 'confirmed|']);
+
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('Resrv Tag error: Empty status segment in statuses parameter: confirmed|');
+
+        $this->tag->reservationFromUri();
+    }
+
     public function test_reservation_from_uri_returns_404_for_wrong_hash()
     {
         $customer = Customer::factory()->create([
