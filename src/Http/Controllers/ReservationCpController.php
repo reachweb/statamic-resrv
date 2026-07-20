@@ -201,7 +201,11 @@ class ReservationCpController extends Controller
             'payment_gateway_label' => $reservation->payment_gateway
                 ? app(PaymentGatewayManager::class)->label($reservation->payment_gateway)
                 : null,
-            'payment_formatted' => $reservation->payment->format(),
+            // Partner (skip-payment) rows keep the would-be deposit in the payment column
+            // even though nothing was charged — null makes the page say so instead.
+            'payment_formatted' => $reservation->status === ReservationStatus::PARTNER->value
+                ? null
+                : $reservation->payment->format(),
             'payment_surcharge_is_zero' => $reservation->payment_surcharge->isZero(),
             'payment_surcharge_formatted' => $reservation->payment_surcharge->format(),
             'total_to_charge_formatted' => $reservation->totalToCharge(),

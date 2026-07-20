@@ -38,6 +38,17 @@ class Affiliate extends Model
         return AffiliateFactory::new();
     }
 
+    /**
+     * The canonical read of the enable_affiliates setting. When false the whole affiliate
+     * system is off: no cookies, no attribution (cookie or coupon), no skip-payment, no
+     * affiliate emails, no CP nav or report section. Existing attributions are untouched
+     * so history, reports and refund flows keep working.
+     */
+    public static function enabled(): bool
+    {
+        return (bool) config('resrv-config.enable_affiliates', true);
+    }
+
     // Unpublished affiliates are disabled: they must not be cookied or attributed to reservations.
     public function scopePublished($query)
     {
@@ -46,7 +57,7 @@ class Affiliate extends Model
 
     public function reservations(): BelongsToMany
     {
-        return $this->belongsToMany(Reservation::class, 'resrv_reservation_affiliate')->withPivot('fee', 'cancelled_at');
+        return $this->belongsToMany(Reservation::class, 'resrv_reservation_affiliate')->withPivot('fee', 'source', 'cancelled_at');
     }
 
     public function coupons(): BelongsToMany

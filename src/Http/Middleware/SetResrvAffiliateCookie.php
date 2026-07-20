@@ -18,7 +18,7 @@ class SetResrvAffiliateCookie
      */
     public function handle(Request $request, Closure $next)
     {
-        if ($request->missing('afid') || ! $request->isMethod('get')) {
+        if (! Affiliate::enabled() || $request->missing('afid') || ! $request->isMethod('get')) {
             return $next($request);
         }
 

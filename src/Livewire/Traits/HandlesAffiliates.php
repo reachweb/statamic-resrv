@@ -2,21 +2,34 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Models\Affiliate;
 
 trait HandlesAffiliates
 {
     public function getAffiliateIfCookieExists(): ?Affiliate
     {
+        // Gating the read (not just the cookie write) also neutralizes cookies set before
+        // the affiliate system was disabled.
+        if (! Affiliate::enabled()) {
+            return null;
+        }
+
         return request()->cookie('resrv_afid') ? Affiliate::published()->where('code', request()->cookie('resrv_afid'))->first() : null;
     }
 
     public function affiliateCanSkipPayment(): bool
     {
-        if ($affiliate = $this->reservation->affiliate->first()) {
-            return $affiliate->allow_skipping_payment ?? false;
+        if (! Affiliate::enabled()) {
+            return false;
         }
 
-        return false;
+        // Only a cookie attribution (the customer arrived through the affiliate link) can skip
+        // payment. Coupon-sourced attributions earn commission but pay like everyone else.
+        $affiliate = $this->reservation->affiliate()
+            ->wherePivot('source', AffiliateAttributionSource::Cookie->value)
+            ->first();
+
+        return $affiliate?->allow_skipping_payment ?? false;
     }
 }
