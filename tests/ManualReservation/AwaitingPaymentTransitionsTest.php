@@ -841,6 +841,52 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertCount(0, $gateway->cancelledIntents);
     }
 
+    public function test_cp_confirm_payment_that_loses_the_race_to_a_webhook_still_detects_the_duplicate()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        $gateway->retrievedIntentStatus = 'succeeded';
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_webhook_won',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        // Simulate the webhook winning the race: the row flips to CONFIRMED (the customer's online
+        // payment captured) right after the controller hydrates it, before transitionTo()'s row
+        // lock, so the transition is a same-state no-op. The admin's click still claims money
+        // arrived out of band — the reconciliation must run on the committed row and report the
+        // duplicate (cash AND the captured charge), because the webhook path never does: it
+        // no-ops its orphan detection on rows it confirmed itself.
+        Reservation::retrieved(function (Reservation $model) use ($reservation) {
+            if ((int) $model->id === $reservation->id && $model->status === ReservationStatus::AWAITING_PAYMENT->value) {
+                DB::table('resrv_reservations')
+                    ->where('id', $reservation->id)
+                    ->update(['status' => ReservationStatus::CONFIRMED->value]);
+            }
+        });
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+
+        // The captured charge reference is kept refundable, never voided, and the admins are told.
+        $this->assertSame('pi_webhook_won', $reservation->payment_id);
+        $this->assertCount(0, $gateway->cancelledIntents);
+        Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
+            return $mail->paymentIntentId === 'pi_webhook_won'
+                && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_DUPLICATE;
+        });
+    }
+
     public function test_both_endpoints_are_forbidden_without_the_use_resrv_permission()
     {
         $this->withExceptionHandling();

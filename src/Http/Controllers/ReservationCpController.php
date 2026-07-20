@@ -331,6 +331,17 @@ class ReservationCpController extends Controller
             // intent that already captured real money (a webhook racing this confirm) is left intact
             // so that charge stays refundable. Tolerates gateway errors.
             app(ReservationRefundProcessor::class)->settlePaidOutOfBand($reservation);
+        } else {
+            // The pre-check saw AWAITING_PAYMENT, and a mismatched state throws above, so a no-op
+            // transition can only mean the row went CONFIRMED between the check and the row lock —
+            // a webhook confirm (or a second admin's click) won the race. The winning webhook path
+            // no-ops its orphan detection on CONFIRMED, and this admin's click still claims money
+            // arrived out of band, so skipping the reconciliation here would hide a duplicate
+            // payment (cash AND a captured gateway charge) with a 200 that looks like this confirm
+            // succeeded. Reconcile on the committed row (transitionTo() only syncs attributes on
+            // success, so the in-memory model is a stale awaiting-payment snapshot); a concurrent
+            // CP confirm that already reconciled left an empty payment_id, making this a no-op.
+            app(ReservationRefundProcessor::class)->settlePaidOutOfBand($this->reservation->findOrFail($id));
         }
 
         return response()->json($this->serializeFreshReservation($reservation->id));
