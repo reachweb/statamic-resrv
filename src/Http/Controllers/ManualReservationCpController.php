@@ -140,7 +140,7 @@ class ManualReservationCpController extends Controller
             // same coupon-free scope — otherwise a coupon left in the admin's session would
             // list discounted per-unit prices next to the undiscounted totals creation
             // actually charges.
-            $payload = $this->creator->withoutCheckoutCouponSession(fn (): array => array_merge(
+            $payload = $this->creator->withoutCheckoutSession(fn (): array => array_merge(
                 $this->serializeQuote($this->creator->quote($data, requireCustomAmount: false)),
                 [
                     'available_extras' => $this->extrasForEntry($data),
@@ -218,12 +218,12 @@ class ManualReservationCpController extends Controller
 
         return Extra::getPriceForDates($priceData)->map(function ($extra) use ($priceData, $customer) {
             // Re-price a custom-priced extra with the admin-entered customer payload so the listed
-            // per-unit price carries the same multiplier the quoted total uses (without it,
-            // Extra::getCustomPrice falls back to ×1 — the CP has no resrv-search session). Per
-            // extra, and only while its driving field holds a usable number: getCustomPrice THROWS
-            // for a present-but-unusable payload, which would 500 the whole listing over a field
-            // the admin simply has not filled yet. An unfilled extra keeps the ×1 fallback like
-            // the frontend list, and a SELECTED one still fails the quote loudly in the creator.
+            // per-unit price carries the same multiplier the quoted total uses (the resrv-search
+            // session fallback is stashed by withoutCheckoutSession, so without it the price is
+            // ×1). Per extra, and only while its driving field holds a usable number:
+            // getCustomPrice THROWS for a present-but-unusable payload, which would 500 the whole
+            // listing over a field the admin simply has not filled yet. An unfilled extra keeps
+            // the ×1 fallback, and a SELECTED one still fails the quote loudly in the creator.
             if ($extra->price_type === 'custom' && $extra->custom && is_numeric($customer->get($extra->custom))) {
                 // Fresh instance: priceForDates mutates the model's price attribute, so re-pricing
                 // the instance getPriceForDates already transformed would compound the price.

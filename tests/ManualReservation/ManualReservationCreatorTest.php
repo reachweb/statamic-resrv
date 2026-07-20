@@ -969,6 +969,34 @@ class ManualReservationCreatorTest extends TestCase
         $this->assertSame('20OFF', session('resrv_coupon'));
     }
 
+    public function test_a_frontend_search_session_never_skews_a_manual_quote()
+    {
+        $this->configurePaymentEntry();
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // price 10, price_type 'custom', driven by the customer form field 'adults'.
+        $extra = Extra::factory()->custom()->create();
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        // The admin's own frontend search left a customer payload in the shared session —
+        // Extra::getCustomPrice's fallback when no customer payload is passed. A CP quote
+        // issued before the customer form is filled must price the extra at the ×1 fallback,
+        // not at the leftover ×4.
+        session(['resrv-search' => (object) ['customer' => ['adults' => 4]]]);
+
+        // The customer form is not filled in yet — exactly the state where the session
+        // fallback used to engage.
+        $quote = $this->creator()->quote($this->baseInput($entry, [
+            'extras' => [['id' => $extra->id, 'quantity' => 1]],
+            'customer' => [],
+        ]));
+
+        $this->assertSame('110.00', $quote['pricing']['total']->format());
+
+        // The admin's in-progress frontend search survives the quote.
+        $this->assertSame(['adults' => 4], session('resrv-search')->customer);
+    }
+
     public function test_an_online_gateway_without_webhook_support_cannot_collect_a_payment()
     {
         Config::set('resrv-config.payment_gateways', [

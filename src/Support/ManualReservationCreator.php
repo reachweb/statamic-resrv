@@ -63,7 +63,7 @@ class ManualReservationCreator
      */
     public function create(array $input, $creator = null, bool $requireGatewayForPayment = false): Reservation
     {
-        return $this->withoutCheckoutCouponSession(
+        return $this->withoutCheckoutSession(
             fn (): Reservation => $this->createReservation($input, $creator, $requireGatewayForPayment)
         );
     }
@@ -324,39 +324,36 @@ class ManualReservationCreator
      */
     public function quote(array $input, bool $requireCustomAmount = true): array
     {
-        return $this->withoutCheckoutCouponSession(
+        return $this->withoutCheckoutSession(
             fn (): array => $this->buildQuote($input, $requireCustomAmount)
         );
     }
 
     /**
-     * Every pricing path underneath the quote and the creation — the base price
-     * (Availability::getPricing), extras (DynamicPricing::searchForExtra) and the
-     * AddDynamicPricingsToReservation listener — gates coupon-only dynamic pricing on the
-     * frontend checkout's session key. The CP shares the browser session with the frontend,
-     * so a coupon the admin applied in their own checkout (or one left in a programmatic
-     * caller's session) would silently discount a manual reservation that has no coupon
-     * input at all. Stash the key for the duration and restore it, so the admin's own
-     * in-progress checkout in another tab keeps its coupon.
+     * The CP shares the browser session with the frontend, so the admin's own in-progress
+     * checkout would otherwise bleed into manual pricing: a session coupon (resrv_coupon)
+     * gates coupon-only dynamic pricing, and a frontend search (resrv-search) is the
+     * fallback customer payload for custom-priced extras. Stash both keys for the duration
+     * and restore them so the admin's checkout in another tab is unaffected.
      *
-     * Public because the CP quote endpoint serializes its supplemental extras/options
-     * listings through the same coupon-gated pricing paths and must run them in this
-     * scope too — nesting is a no-op, so quote()/create() stay safe to call inside.
+     * Public because the CP quote endpoint's supplemental listings price through the same
+     * session-gated paths. Nesting is a no-op, so quote()/create() stay safe to call inside.
      */
-    public function withoutCheckoutCouponSession(callable $callback): mixed
+    public function withoutCheckoutSession(callable $callback): mixed
     {
-        $coupon = session('resrv_coupon');
+        $stashed = [];
 
-        if ($coupon === null) {
-            return $callback();
+        foreach (['resrv_coupon', 'resrv-search'] as $key) {
+            if (session()->has($key)) {
+                $stashed[$key] = session($key);
+                session()->forget($key);
+            }
         }
-
-        session()->forget('resrv_coupon');
 
         try {
             return $callback();
         } finally {
-            session(['resrv_coupon' => $coupon]);
+            session($stashed);
         }
     }
 
@@ -673,12 +670,10 @@ class ManualReservationCreator
         $calcData = array_merge($data, ['item_id' => $input['item_id']]);
 
         // Carry the customer payload so a custom-priced extra (Extra::getCustomPrice) reads its
-        // multiplier from the same checkout-form field the frontend does. The CP has no
-        // resrv-search session to fall back on, so without this a custom extra silently prices at
-        // ×1 and the reservation charges less than the equivalent frontend checkout. Both the live
-        // quote and creation carry it — the admin must review the same total that will be stored,
-        // so a selected custom extra whose driving field is still empty fails the quote (below)
-        // rather than previewing an amount creation would not charge.
+        // multiplier from the same checkout-form field the frontend does. Its resrv-search
+        // session fallback is stashed away by withoutCheckoutSession(), so this payload is the
+        // only source: a selected custom extra whose driving field is still empty fails the
+        // quote (below) rather than previewing an amount creation would not charge.
         if (! empty($input['customer'])) {
             $calcData['customer'] = collect($input['customer']);
         }
