@@ -1,6 +1,6 @@
-# Statamic Resrv v6.1.0
+# Statamic Resrv v6.4.0
 
-Resrv v6.1 introduces **manual reservations**: create bookings for your customers straight from the Control Panel, send them a secure pay-by-link email, and optionally give the booking a payment deadline that cancels itself when it lapses.
+Resrv v6.4 introduces **manual reservations**: create bookings for your customers straight from the Control Panel, send them a secure pay-by-link email, and optionally give the booking a payment deadline that cancels itself when it lapses.
 
 > Run `php please migrate` after updating — this release adds columns to the reservations table.
 
