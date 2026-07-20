@@ -115,6 +115,7 @@ const resend = async () => {
 // --- Awaiting-payment actions ---
 const confirmPaymentId = ref(null);
 const cancelAwaitingRow = ref(null);
+const paymentRequestId = ref(null);
 const actionBusy = ref(false);
 
 // POST a row action and refresh the list; returns whether it succeeded so the
@@ -148,8 +149,12 @@ const cancelAwaiting = async () => {
     }
 };
 
-const sendPaymentRequest = (reservation) =>
-    runRowAction(props.sendPaymentRequestUrlTemplate, reservation.id, __('Payment request email sent'));
+const sendPaymentRequest = async () => {
+    if (! paymentRequestId.value) return;
+    if (await runRowAction(props.sendPaymentRequestUrlTemplate, paymentRequestId.value, __('Payment request email sent'))) {
+        paymentRequestId.value = null;
+    }
+};
 
 const copyLink = (reservation) => copyPaymentLink(reservation.payment_url, toast);
 </script>
@@ -225,7 +230,7 @@ const copyLink = (reservation) => copyPaymentLink(reservation.payment_url, toast
                     <DropdownItem
                         :text="__('Resend payment request')"
                         icon="mail"
-                        @click="sendPaymentRequest(reservation)"
+                        @click="paymentRequestId = reservation.id"
                     />
                     <DropdownItem
                         v-if="reservation.payment_url"
@@ -266,6 +271,18 @@ const copyLink = (reservation) => copyPaymentLink(reservation.payment_url, toast
             @cancel="cancelResend"
         >
             <p>{{ __('This will email the confirmation again to the customer for this reservation.') }}</p>
+        </ConfirmationModal>
+
+        <ConfirmationModal
+            v-if="paymentRequestId"
+            :open="true"
+            :title="__('Resend payment request')"
+            :button-text="__('Send')"
+            :busy="actionBusy"
+            @confirm="sendPaymentRequest"
+            @cancel="paymentRequestId = null"
+        >
+            <p>{{ __('This will email the payment request again to the customer for this reservation.') }}</p>
         </ConfirmationModal>
 
         <ConfirmPaymentModal

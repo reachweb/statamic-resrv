@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import axios from 'axios';
 import { Head } from '@statamic/cms/inertia';
-import { Button, Card, Icon } from '@statamic/cms/ui';
+import { Button, Card, ConfirmationModal, Icon } from '@statamic/cms/ui';
 import CancelAwaitingPaymentModal from '../../components/CancelAwaitingPaymentModal.vue';
 import ConfirmPaymentModal from '../../components/ConfirmPaymentModal.vue';
 import { copyPaymentLink as copyLink, statusLabel as formatStatus } from '../../composables/useReservationDisplay.js';
@@ -35,6 +35,7 @@ const statusLabel = computed(() => formatStatus(reservation.value.status));
 
 const showConfirmModal = ref(false);
 const showCancelModal = ref(false);
+const showPaymentRequestModal = ref(false);
 const busy = ref(false);
 
 const runAction = async (url, successMessage) => {
@@ -45,6 +46,7 @@ const runAction = async (url, successMessage) => {
         toast.success(successMessage);
         showConfirmModal.value = false;
         showCancelModal.value = false;
+        showPaymentRequestModal.value = false;
     } catch (error) {
         toast.error(error?.response?.data?.error ?? __('Something went wrong'));
     } finally {
@@ -177,12 +179,24 @@ const copyPaymentLink = () => copyLink(reservation.value.payment_url, toast);
                 </div>
                 <div class="flex flex-wrap gap-3 pt-4">
                     <Button variant="primary" :text="__('Confirm payment')" :disabled="busy" @click="showConfirmModal = true" />
-                    <Button :text="__('Resend payment request')" :disabled="busy" @click="sendPaymentRequest" />
+                    <Button :text="__('Resend payment request')" :disabled="busy" @click="showPaymentRequestModal = true" />
                     <Button v-if="reservation.payment_url" :text="__('Copy payment link')" :disabled="busy" @click="copyPaymentLink" />
                     <Button variant="danger" :text="__('Cancel reservation')" :disabled="busy" @click="showCancelModal = true" />
                 </div>
             </Card>
         </section>
+
+        <ConfirmationModal
+            v-if="showPaymentRequestModal"
+            :open="true"
+            :title="__('Resend payment request')"
+            :button-text="__('Send')"
+            :busy="busy"
+            @confirm="sendPaymentRequest"
+            @cancel="showPaymentRequestModal = false"
+        >
+            <p>{{ __('This will email the payment request again to the customer for this reservation.') }}</p>
+        </ConfirmationModal>
 
         <ConfirmPaymentModal
             v-if="showConfirmModal"

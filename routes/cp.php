@@ -58,9 +58,9 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::get('/resrv/reservation/{id}', 'ReservationCpController@show')->name('reservation.show');
         Route::patch('/resrv/reservation/refund', 'ReservationCpController@refund')->name('reservation.refund');
         Route::post('/resrv/reservation/resend-confirmation', 'ReservationCpController@resendConfirmation')->name('reservation.resendConfirmation');
-        Route::post('/resrv/reservation/{id}/confirm-payment', 'ReservationCpController@confirmPayment')->name('reservation.confirmPayment');
-        Route::post('/resrv/reservation/{id}/cancel-awaiting', 'ReservationCpController@cancelAwaitingPayment')->name('reservation.cancelAwaiting');
-        Route::post('/resrv/reservation/{id}/send-payment-request', 'ReservationCpController@sendPaymentRequest')->name('reservation.sendPaymentRequest');
+        Route::post('/resrv/reservation/{id}/confirm-payment', 'ReservationCpController@confirmPayment')->whereNumber('id')->name('reservation.confirmPayment');
+        Route::post('/resrv/reservation/{id}/cancel-awaiting', 'ReservationCpController@cancelAwaitingPayment')->whereNumber('id')->name('reservation.cancelAwaiting');
+        Route::post('/resrv/reservation/{id}/send-payment-request', 'ReservationCpController@sendPaymentRequest')->whereNumber('id')->name('reservation.sendPaymentRequest');
 
         Route::get('/resrv/manual/entries', 'ManualReservationCpController@entries')->name('manual.entries');
         Route::get('/resrv/manual/entry/{item_id}', 'ManualReservationCpController@entry')->name('manual.entry');
