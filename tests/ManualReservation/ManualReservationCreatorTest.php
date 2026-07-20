@@ -53,9 +53,7 @@ class ManualReservationCreatorTest extends TestCase
         Config::set('resrv-config.checkout_entry', $checkoutEntry->id());
         Config::set('resrv-config.checkout_completed_entry', $checkoutEntry->id());
 
-        // A nonzero creation is validated against the gateway that will collect it (explicit
-        // or the pinned default) — with the online fake gateway as the default, that means
-        // the payment page must resolve, as it would on a real deployment.
+        // Nonzero creations validate against the collecting gateway, so the payment page must resolve.
         $this->configurePaymentEntry();
     }
 
@@ -113,11 +111,8 @@ class ManualReservationCreatorTest extends TestCase
     }
 
     /**
-     * Runs the real frontend flow for the same booking: a reservation written the way
-     * AvailabilityResults writes it (price/payment from the availability payload +
-     * cancellation snapshot), pushed through the Livewire Checkout first step (which
-     * applies the `everything` / no-free-cancellation full-total override). Returns the
-     * amount checkout would charge.
+     * Runs the real frontend checkout flow for the same booking (AvailabilityResults-style
+     * reservation + Livewire first step) and returns the amount checkout would charge.
      */
     private function frontendCheckoutPayment($entry, array $extrasPayload = []): string
     {
@@ -310,11 +305,7 @@ class ManualReservationCreatorTest extends TestCase
         Mail::fake();
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // Regression: the zero-total shortcut in requestedAmount() skipped customAmount()
-        // entirely, so a positive custom amount alongside total_override=0 silently stored a
-        // zero payment and immediately confirmed a free booking instead of rejecting the
-        // contradictory request (the amount always exceeds a zero total). Both the creation
-        // path and the CP live quote (relaxed required-amount) must reject it.
+        // Regression: the zero-total shortcut in requestedAmount() skipped customAmount(), confirming a free booking instead of rejecting the contradiction.
         $input = $this->baseInput($entry, [
             'payment_mode' => 'custom',
             'custom_amount' => '35.00',
@@ -449,8 +440,7 @@ class ManualReservationCreatorTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // The create page only lists published affiliates; a stale or crafted payload must not
-        // attach a commission row for one the UI intentionally hides.
+        // A stale or crafted payload must not attach an affiliate the UI hides.
         $affiliate = Affiliate::factory()->create(['published' => false]);
 
         $this->expectException(ManualReservationException::class);
@@ -515,8 +505,7 @@ class ManualReservationCreatorTest extends TestCase
 
         $before = Reservation::count();
 
-        // The overbook toggle exists to bypass STOCK; an unavailable quote caused by an
-        // unpublished rate (which the create form never offers) must still be rejected.
+        // The overbook toggle bypasses stock only — an unpublished rate must still be rejected.
         try {
             $this->creator()->create($this->baseInput($entry, ['affects_availability' => false]));
             $this->fail('An unpublished rate must not be bookable through the overbook toggle.');
@@ -536,8 +525,7 @@ class ManualReservationCreatorTest extends TestCase
 
         $reservation = $this->creator()->create($this->baseInput($entry, ['rate_id' => null]));
 
-        // The resolved rate is stored, so the stock decrement is rate-scoped to real rows —
-        // a null rate_id would have matched no availability rows and decremented nothing.
+        // The resolved rate is stored so the stock decrement matches real rows (a null rate_id matches none).
         $this->assertEquals($rate->id, $reservation->rate_id);
         $this->assertEquals(1, $this->availableOn($entry->id(), today()->addDay()));
     }
@@ -546,9 +534,7 @@ class ManualReservationCreatorTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 2, price: 50);
 
-        // A second, unpublished rate with its own (much pricier) rows for the same dates: a
-        // rate-blind pricing read (null rate_id applies no rate filter and sums the rows of
-        // every rate, unpublished included) would fold these into the base price.
+        // A rate-blind pricing read (null rate_id applies no rate filter) would fold this pricier unpublished rate's rows into the base price.
         $unpublished = Rate::factory()->create([
             'slug' => 'unpublished-rate',
             'title' => 'Unpublished',
@@ -582,9 +568,7 @@ class ManualReservationCreatorTest extends TestCase
 
         $before = Reservation::count();
 
-        // The create form omits rate_id when an entry has no published rates; the omission
-        // must resolve-and-validate a published rate rather than skip rate validation — an
-        // entry with no published rate is not bookable, overbook toggle or not.
+        // An omitted rate_id must resolve-and-validate a published rate, not skip rate validation.
         try {
             $this->creator()->create($this->baseInput($entry, ['rate_id' => null, 'affects_availability' => false]));
             $this->fail('Omitting the rate id must not bypass rate validation for the overbook toggle.');
@@ -601,8 +585,7 @@ class ManualReservationCreatorTest extends TestCase
 
         $before = Reservation::count();
 
-        // baseInput books 2 nights: the rate's minimum stay blocks it whether or not the
-        // admin skips stock movement — the toggle is not a rate-rule override.
+        // baseInput books 2 nights: the min-stay rule blocks it — the overbook toggle is not a rate-rule override.
         try {
             $this->creator()->create($this->baseInput($entry, ['affects_availability' => false]));
             $this->fail('A stay-restriction violation must not be bookable through the overbook toggle.');
@@ -647,8 +630,7 @@ class ManualReservationCreatorTest extends TestCase
         $this->assertTrue($reservation->total->isZero());
         $this->assertTrue($reservation->payment->isZero());
 
-        // The confirmation email job is dispatched afterResponse; outside an HTTP
-        // request it runs on app termination.
+        // The confirmation email job is dispatched afterResponse; outside HTTP it runs on app termination.
         $this->app->terminate();
         Mail::assertSent(ReservationConfirmedMail::class, fn ($mail) => $mail->hasTo('customer@example.com'));
     }
@@ -692,11 +674,7 @@ class ManualReservationCreatorTest extends TestCase
     {
         Mail::fake();
 
-        // Deposit computes to zero while the booking still has a positive total. Checkout keys
-        // off the amount collected now (reservationPaymentIsZero -> payment), so the manual flow
-        // must too: confirm immediately rather than leave it awaiting a 0.00 payment request the
-        // lapse sweep would later cancel. An online gateway with no payment page must also be
-        // accepted here, since a zero amount is collected through no gateway at all.
+        // A zero deposit on a positive total must confirm immediately (checkout keys off the amount collected now), gateway or not.
         Config::set('resrv-config.payment', 'fixed');
         Config::set('resrv-config.fixed_amount', 0);
         Config::set('resrv-config.full_payment_after_free_cancellation', false);
@@ -747,10 +725,7 @@ class ManualReservationCreatorTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // Non-multiple extras carry no maximum (the CP extras form only shows that field when
-        // allow_multiple is on), so the maximum cap alone would accept any quantity from a stale
-        // or crafted payload — the reservation would store and charge several units of an extra
-        // configured as single.
+        // Non-multiple extras carry no maximum, so the cap alone would accept any quantity from a crafted payload.
         $extra = Extra::factory()->create(['allow_multiple' => false, 'maximum' => null]);
         ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
 
@@ -766,8 +741,7 @@ class ManualReservationCreatorTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // The create form only exposes published options (optionsForEntry filters them), so
-        // a stale or crafted payload carrying an unpublished one must be rejected, not priced.
+        // The create form only exposes published options; a stale or crafted payload must be rejected, not priced.
         $option = Option::factory()
             ->has(OptionValue::factory()->fixed(), 'values')
             ->create(['item_id' => $entry->id(), 'required' => false, 'published' => false]);
@@ -784,9 +758,7 @@ class ManualReservationCreatorTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // Option::calculatePrice() resolves values withTrashed() for historical repricing, so
-        // without the active check a value deleted after the create form loaded (or one
-        // submitted directly) would be priced and stored on a brand-new reservation.
+        // Option::calculatePrice() resolves values withTrashed() for historical repricing, so a deleted value must be rejected explicitly.
         $option = Option::factory()
             ->notRequired()
             ->has(OptionValue::factory()->fixed(), 'values')
@@ -806,9 +778,7 @@ class ManualReservationCreatorTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // The create form only lists an option's published values (optionsForEntry constrains
-        // the eager load), so a draft value unpublished after the form loaded — or one
-        // submitted directly — must be rejected, not priced and stored.
+        // Only published values are listed on the create form; an unpublished one must be rejected, not priced.
         $option = Option::factory()
             ->notRequired()
             ->has(OptionValue::factory()->fixed(), 'values')
@@ -830,9 +800,7 @@ class ManualReservationCreatorTest extends TestCase
 
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // An admin quoting a manual reservation may have their own frontend checkout
-        // in flight in another tab — the quote must not abandon that session hold,
-        // while still pruning stale holds from other sessions.
+        // The quote must prune stale holds from other sessions without abandoning the admin's own in-flight checkout hold.
         $sessionHold = Reservation::factory()->create(['item_id' => $entry->id()]);
         $staleHold = Reservation::factory()->create([
             'item_id' => $entry->id(),
@@ -903,10 +871,7 @@ class ManualReservationCreatorTest extends TestCase
         Config::set('resrv-config.fixed_amount', 0);
         Config::set('resrv-config.full_payment_after_free_cancellation', false);
 
-        // A synchronous ReservationConfirmed listener (a sibling addon's hook) blows up AFTER
-        // the reservation, its stock decrement and the CONFIRMED transition have committed.
-        // The exception must not escape create(): the CP would 500 and a retry would book a
-        // second reservation and decrement stock again.
+        // A synchronous confirmation listener throwing after commit must not escape create(): a CP 500 plus retry would double-book.
         Event::listen(ReservationConfirmedEvent::class, function (): void {
             throw new \RuntimeException('listener boom');
         });
@@ -934,8 +899,7 @@ class ManualReservationCreatorTest extends TestCase
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // Coupon-gated 20% decrease assigned to the entry — engages only while
-        // session('resrv_coupon') matches, exactly what a frontend checkout leaves behind.
+        // Coupon-gated 20% decrease that engages only while session('resrv_coupon') matches.
         $dynamic = DynamicPricing::factory()->withCoupon()->create();
 
         DB::table('resrv_dynamic_pricing_assignments')->insert([
@@ -949,8 +913,7 @@ class ManualReservationCreatorTest extends TestCase
 
         session(['resrv_coupon' => '20OFF']);
 
-        // Sanity: with the coupon in the session the raw pricing path DOES discount — the
-        // creator must be what blocks it, not a coupon that never engages in the first place.
+        // Sanity: the raw pricing path DOES discount, so the creator must be what blocks it.
         $rawPricing = (new Availability)->getPricing(array_merge($this->dates(), [
             'quantity' => 1,
             'rate_id' => Rate::forEntry($entry->id())->first()?->id,
@@ -978,14 +941,10 @@ class ManualReservationCreatorTest extends TestCase
         $extra = Extra::factory()->custom()->create();
         ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
 
-        // The admin's own frontend search left a customer payload in the shared session —
-        // Extra::getCustomPrice's fallback when no customer payload is passed. A CP quote
-        // issued before the customer form is filled must price the extra at the ×1 fallback,
-        // not at the leftover ×4.
+        // A leftover frontend-search customer payload must not drive Extra::getCustomPrice's session fallback (×4 instead of ×1).
         session(['resrv-search' => (object) ['customer' => ['adults' => 4]]]);
 
-        // The customer form is not filled in yet — exactly the state where the session
-        // fallback used to engage.
+        // Empty customer = the state where the session fallback used to engage.
         $quote = $this->creator()->quote($this->baseInput($entry, [
             'extras' => [['id' => $extra->id, 'quantity' => 1]],
             'customer' => [],
@@ -1006,9 +965,7 @@ class ManualReservationCreatorTest extends TestCase
 
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // The payment page exists, but nothing could ever confirm the booking: the gateway
-        // is not manually confirmable and has no webhook — the customer would be charged
-        // while the reservation stays awaiting payment until the lapse sweep cancels it.
+        // Not manually confirmable and no webhook: nothing could ever confirm the booking, so the charge must be refused.
         $this->expectException(ManualReservationException::class);
         $this->expectExceptionMessage('cannot confirm online payments');
 
@@ -1032,9 +989,7 @@ class ManualReservationCreatorTest extends TestCase
 
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // Direct/programmatic creation with no gateway: the row must carry the default
-        // gateway (what the payment email and pay page would resolve blank to anyway)
-        // and its surcharge — not a blank gateway with a zero surcharge.
+        // A blank gateway on a nonzero creation must be pinned to the default gateway and carry its surcharge.
         $reservation = $this->creator()->create($this->baseInput($entry, ['payment_mode' => 'full']));
 
         $this->assertSame('fake', $reservation->payment_gateway);
@@ -1067,8 +1022,7 @@ class ManualReservationCreatorTest extends TestCase
 
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
 
-        // The default (fake) gateway is online: without a payment page the booking could
-        // never be paid, so the creation fails the same way an explicit choice would.
+        // The default gateway is online: without a payment page the booking could never be paid.
         $this->expectException(ManualReservationException::class);
         $this->expectExceptionMessage('payment page entry is not configured');
 

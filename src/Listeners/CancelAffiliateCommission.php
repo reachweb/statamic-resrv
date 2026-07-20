@@ -34,11 +34,8 @@ class CancelAffiliateCommission
     }
 
     /**
-     * An unpaid-hold cancellation (admin cancel or the hold-lapse sweep) never captured
-     * money — the webhook is the only capture path and it transitions AWAITING_PAYMENT to
-     * CONFIRMED — even when the customer opened the pay link and left an (unpaid, now-voided)
-     * intent id in payment_id. hasGatewayPayment() alone would misread that intent id as
-     * revenue and keep a commission on a booking that collected nothing.
+     * An unpaid-hold cancellation never captured money even when an unpaid intent id lingers
+     * in payment_id — hasGatewayPayment() alone would misread that id as revenue.
      */
     protected function businessRetainsRevenue(ReservationCancelled $event): bool
     {

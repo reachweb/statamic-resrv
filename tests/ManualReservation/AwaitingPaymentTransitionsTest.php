@@ -129,8 +129,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
 
     public function test_stripe_canceled_webhook_never_expires_an_awaiting_payment_reservation()
     {
-        // Coordination point 1 with plan 008: the canceled handler only expires PENDING rows.
-        // An admin-created hold must survive its intent being cancelled (e.g. by Stripe's TTL).
+        // The canceled webhook only expires PENDING rows: an admin-created hold must survive its intent being cancelled.
         Mail::fake();
 
         $reservation = $this->awaitingPaymentReservation([
@@ -174,9 +173,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
 
-        // The customer opened the online pay page (an intent was created) but paid in person;
-        // the admin marks the reservation paid. The open intent must be voided so completing it
-        // later can't produce a duplicate charge the succeeded webhook would silently swallow.
+        // Customer opened the pay page but paid in person: confirming must void the open intent to prevent a duplicate charge.
         $reservation = $this->awaitingPaymentReservation([
             'payment_id' => 'pi_open_online',
             'payment_gateway' => 'fake',
@@ -200,12 +197,8 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
 
-        // settlePaidOutOfBand() makes up to three provider round trips AFTER the transition has
-        // committed, and this endpoint rejects retries once the row is CONFIRMED. A provider hang
-        // or hard timeout inside those round trips must not be able to strand the booking without
-        // its confirmation chain, so the event must already have fired when the first gateway
-        // call happens. Recorded (not asserted) inside the hook: settle swallows Throwables, so a
-        // failing assertion in there would vanish into its catch blocks.
+        // The confirmation event must have fired before the first gateway call so a provider hang in settlePaidOutOfBand() cannot strand the booking.
+        // Recorded, not asserted, inside the hook: settle swallows Throwables.
         $confirmationFiredBeforeSettle = null;
         $gateway->onRetrievePaymentIntent = function () use (&$confirmationFiredBeforeSettle) {
             $confirmationFiredBeforeSettle ??= Event::dispatched(ReservationConfirmedEvent::class)->isNotEmpty();
@@ -233,10 +226,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
 
-        // A throwing synchronous ReservationConfirmed listener must not escape the endpoint:
-        // the transition is already committed and retries are rejected, so a 500 leaves the
-        // admin with nothing to re-fire — and skipping settlePaidOutOfBand() would leave the
-        // open intent chargeable on a CONFIRMED booking.
+        // A throwing synchronous ReservationConfirmed listener must not 500 the endpoint or skip gateway reconciliation.
         Event::listen(ReservationConfirmedEvent::class, function (): void {
             throw new \RuntimeException('listener boom');
         });
@@ -286,10 +276,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $gateway->cancelledIntents = [];
         $gateway->refundCalls = [];
 
-        // Online gateway ('fake'), customer opened the pay link (an unpaid intent id sits on the
-        // row), admin marks it paid in person. Confirming must void the dead intent AND drop its id
-        // so a later refund is not routed to the gateway with an empty/voided intent — which real
-        // Stripe rejects, stranding the booking as un-refundable.
+        // Unpaid intent + out-of-band confirm: the dead intent must be voided AND its id dropped so a later refund skips the gateway.
         $reservation = $this->awaitingPaymentReservation([
             'payment' => '50.00',
             'payment_id' => 'pi_unpaid_online',
@@ -327,9 +314,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $gateway->cancelledIntents = [];
         $gateway->retrievedIntentStatus = 'succeeded';
 
-        // A webhook confirm is racing this manual one: the intent already captured real money. The
-        // charge reference must be kept so it stays refundable through the gateway, never dropped
-        // (which would strand the captured charge the succeeded webhook then swallows).
+        // The intent already captured real money: the charge reference must be kept refundable, never dropped.
         $reservation = $this->awaitingPaymentReservation([
             'payment' => '50.00',
             'payment_id' => 'pi_captured',
@@ -345,9 +330,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('pi_captured', $reservation->payment_id);
         $this->assertCount(0, $gateway->cancelledIntents);
 
-        // The business now holds the out-of-band payment AND the captured gateway charge. The
-        // succeeded webhook that follows sees CONFIRMED and no-ops, so this is the only signal
-        // that a duplicate payment may exist — admins must be told, not just the log.
+        // The succeeded webhook no-ops on CONFIRMED, so this notification is the only duplicate-payment signal.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
             return $mail->hasTo('admin@example.com')
                 && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_DUPLICATE
@@ -363,9 +346,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         /** @var FakePaymentGateway $gateway */
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
 
-        // 'processing' (settling) and 'requires_capture' (authorised and held) also mean the
-        // customer's money is moving — the possible-duplicate notification must not be limited
-        // to fully-captured intents.
+        // 'processing' and 'requires_capture' also mean money is moving — the duplicate notification must cover them.
         foreach (['processing', 'requires_capture'] as $status) {
             $gateway->retrievedIntentStatus = $status;
 
@@ -393,9 +374,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         /** @var FakePaymentGateway $gateway */
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
-        // The customer completes payment INSIDE the void window: the pre-void read still sees a
-        // cancellable intent, the provider then rejects the void (already succeeded — swallowed,
-        // like Stripe), and the verification re-read reports 'succeeded'.
+        // The customer pays inside the void window: the void is rejected (swallowed, like Stripe) and the re-read reports 'succeeded'.
         $gateway->cancelSucceeds = false;
         $gateway->onRetrievePaymentIntent = function () use ($gateway) {
             $gateway->retrievedIntentStatus = 'succeeded';
@@ -417,9 +396,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('pi_raced_capture', $reservation->payment_id);
         $this->assertCount(1, $gateway->cancelledIntents);
 
-        // The succeeded webhook that follows sees CONFIRMED and no-ops, so this notification is
-        // the only signal that the booking holds an out-of-band payment AND a captured gateway
-        // charge — it must not degrade to the generic could-not-verify log warning.
+        // Must be the duplicate notification, not the generic could-not-verify log warning.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
             return $mail->hasTo('admin@example.com')
                 && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_DUPLICATE
@@ -436,9 +413,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
         $gateway->refundCalls = [];
-        // The provider cancel fails transiently and (like Stripe) swallows the error: the intent stays
-        // live at the gateway. The reference must be KEPT so a later refund can still reach the charge,
-        // rather than cleared — which would strand a charge the customer could still complete.
+        // The provider cancel fails transiently (swallowed, like Stripe): the intent stays live, so the reference must be kept.
         $gateway->cancelSucceeds = false;
 
         $reservation = $this->awaitingPaymentReservation([
@@ -457,18 +432,14 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_unpaid_online', $reservation->payment_id);
 
-        // The retained intent is still payable with the client secret the customer already holds,
-        // and a payment completing later hits the webhook's CONFIRMED short-circuit — silent. This
-        // is the last point the impending duplicate is visible, so admins must be notified, not
-        // just the log.
+        // The retained intent is still payable and the webhook no-ops on CONFIRMED, so admins must be notified now.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
             return $mail->hasTo('admin@example.com')
                 && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_STILL_PAYABLE
                 && $mail->paymentIntentId === 'pi_unpaid_online';
         });
 
-        // A later refund therefore routes through the gateway with the real id (surfacing any failure
-        // to an admin) instead of silently treating the booking as an out-of-band, no-charge settlement.
+        // A later refund routes through the gateway with the real id instead of being treated as a no-charge settlement.
         app(ReservationRefundProcessor::class)->refund($reservation);
 
         $this->assertSame('refunded', $reservation->fresh()->status);
@@ -483,8 +454,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         /** @var FakePaymentGateway $gateway */
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
-        // The pre-void verification read fails transiently: the intent's state is unknown — it may
-        // have captured money or may still be completable with the client secret the customer holds.
+        // The pre-void verification read fails transiently: the intent's state is unknown.
         $gateway->onRetrievePaymentIntent = function (): void {
             throw new \RuntimeException('gateway unreachable');
         };
@@ -501,14 +471,11 @@ class AwaitingPaymentTransitionsTest extends TestCase
 
         $reservation->refresh();
         $this->assertSame('confirmed', $reservation->status);
-        // Nothing is voided or cleared on an unverifiable intent: the reference is the only handle
-        // on a charge that may be live.
+        // Nothing is voided or cleared on an unverifiable intent — the reference is the only handle on a possibly-live charge.
         $this->assertSame('pi_unverifiable', $reservation->payment_id);
         $this->assertCount(0, $gateway->cancelledIntents);
 
-        // If the intent is still payable and the customer completes it, the succeeded webhook sees
-        // CONFIRMED and no-ops — a log line alone would bury the only warning of the silent
-        // duplicate, so admins must be notified now.
+        // The webhook no-ops on CONFIRMED, so admins must be notified of the possible silent duplicate.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
             return $mail->hasTo('admin@example.com')
                 && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_UNVERIFIED
@@ -524,9 +491,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         /** @var FakePaymentGateway $gateway */
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
-        // The pre-void read succeeds (unpaid intent) and the void is attempted, but the
-        // verification re-read fails transiently — the void's outcome is unknown, so the
-        // intent may still be payable (or a payment landed inside the void window).
+        // The void is attempted but the verification re-read fails — the void's outcome is unknown.
         $retrieveCalls = 0;
         $gateway->onRetrievePaymentIntent = function () use (&$retrieveCalls): void {
             if (++$retrieveCalls === 2) {
@@ -550,8 +515,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_void_unverified', $reservation->payment_id);
 
-        // Same silent-duplicate exposure as the verified still-payable branch: the webhook no-ops
-        // on CONFIRMED, so this is the last point the possible duplicate is visible.
+        // Same silent-duplicate exposure as the still-payable branch: admins must be notified.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
             return $mail->hasTo('admin@example.com')
                 && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_UNVERIFIED
@@ -569,8 +533,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
 
-        // An online-gateway manual booking the admin confirmed in person BEFORE the customer ever
-        // created an intent (payment_id stays empty), inside a wide-open free-cancellation window.
+        // Confirmed in person before any intent existed (payment_id stays empty), inside a free-cancellation window.
         $reservation = $this->awaitingPaymentReservation([
             'payment' => '50.00',
             'payment_id' => '',
@@ -588,9 +551,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('', $reservation->payment_id);
 
-        // The money was collected out of band, so there is nothing to return through the gateway — a
-        // self-service refund would land REFUNDED without money moving. It must NOT be self-refundable;
-        // an admin settles it manually via the CP refund action instead.
+        // Money was collected out of band: a self-service refund would land REFUNDED without money moving, so it must not be self-refundable.
         $this->assertTrue($reservation->confirmedWithoutGatewayCharge());
         $this->assertFalse($reservation->supportsAutomaticRefund());
         $this->assertFalse($reservation->canCancelWithRefund());
@@ -606,10 +567,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
 
-        // The customer opened the pay link (an unpaid intent id sits on the row) but never paid.
-        // Once the void is verified at the gateway the local reference must be dropped, or every
-        // payment_id reader (the status page's "no refund issued" label and "amount paid" row)
-        // reports money that was never collected.
+        // Unpaid intent, never paid: once the void is verified the reference must be dropped or payment_id readers report money never collected.
         $reservation = $this->awaitingPaymentReservation([
             'payment' => '50.00',
             'payment_id' => 'pi_unpaid_hold',
@@ -633,9 +591,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         /** @var FakePaymentGateway $gateway */
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
         $gateway->cancelledIntents = [];
-        // The provider cancel fails transiently and (like Stripe) swallows the error: the intent
-        // stays live at the gateway, so the reference must survive as the only handle on it —
-        // mirrors settlePaidOutOfBand()'s conservative keep.
+        // The provider cancel fails transiently (swallowed, like Stripe): the reference survives as the only handle on the live intent.
         $gateway->cancelSucceeds = false;
 
         $reservation = $this->awaitingPaymentReservation([
@@ -666,9 +622,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         // A model hydrated before the pay page recorded an intent.
         $stale = Reservation::find($reservation->id);
 
-        // The pay page writes a live intent to the row after that model was loaded but before
-        // the cancellation acquires its lock. cancelWithoutRefund must void the intent recorded
-        // on the locked, committed row — not the empty value on the stale in-memory model.
+        // The pay page writes an intent after that model loaded; the void must use the locked row's value, not the stale model's.
         Reservation::where('id', $reservation->id)->update(['payment_id' => 'pi_written_after_load']);
 
         app(ReservationRefundProcessor::class)->cancelWithoutRefund($stale, cancelOpenIntent: true);
@@ -704,8 +658,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
             ->assertStatus(200);
 
-        // A second submit finds the reservation CONFIRMED — deliberately a 422, not a no-op,
-        // so the UI surfaces that the state moved under the admin.
+        // A second submit is deliberately a 422, not a no-op, so the UI surfaces the state change.
         $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
             ->assertStatus(422);
 
@@ -821,10 +774,8 @@ class AwaitingPaymentTransitionsTest extends TestCase
             'payment_gateway' => 'fake',
         ]);
 
-        // Simulate a webhook (or a second admin's Confirm) winning the race: the row flips to
-        // CONFIRMED right after the controller hydrates it, before transitionTo()'s row lock.
-        // Without the in-transaction origin re-check the cancel would still commit — CONFIRMED
-        // → CANCELLED is a legal transition — cancelling a PAID booking with unpaid-hold wording.
+        // Regression: a webhook confirm between hydrate and transitionTo()'s row lock must trip the in-transaction origin re-check.
+        // The retrieved hook flips the row to CONFIRMED at DB level to simulate the cross-process race.
         Reservation::retrieved(function (Reservation $model) use ($reservation) {
             if ((int) $model->id === $reservation->id && $model->status === ReservationStatus::AWAITING_PAYMENT->value) {
                 DB::table('resrv_reservations')
@@ -858,12 +809,8 @@ class AwaitingPaymentTransitionsTest extends TestCase
             'affects_availability' => false,
         ]);
 
-        // Simulate the webhook winning the race: the row flips to CONFIRMED (the customer's online
-        // payment captured) right after the controller hydrates it, before transitionTo()'s row
-        // lock, so the transition is a same-state no-op. The admin's click still claims money
-        // arrived out of band — the reconciliation must run on the committed row and report the
-        // duplicate (cash AND the captured charge), because the webhook path never does: it
-        // no-ops its orphan detection on rows it confirmed itself.
+        // The webhook wins the race (same-state no-op transition), but the out-of-band claim must still trigger duplicate reconciliation.
+        // The retrieved hook flips the row to CONFIRMED at DB level to simulate the cross-process race.
         Reservation::retrieved(function (Reservation $model) use ($reservation) {
             if ((int) $model->id === $reservation->id && $model->status === ReservationStatus::AWAITING_PAYMENT->value) {
                 DB::table('resrv_reservations')

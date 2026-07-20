@@ -19,10 +19,8 @@ class SendCustomerCancelledEmail implements ShouldQueue
     protected $reservation;
 
     /**
-     * Initialized outside the constructor because payloads queued before this property existed
-     * carry no `context` key — SerializesModels::__unserialize skips missing keys and constructors
-     * never run on unserialization, so a promoted (uninitialized) typed property would make
-     * handle() throw and drop the cancellation email.
+     * Not constructor-promoted: payloads queued before this property existed carry no `context`
+     * key, and an uninitialized typed property would make handle() throw on unserialization.
      */
     protected ?string $context = null;
 

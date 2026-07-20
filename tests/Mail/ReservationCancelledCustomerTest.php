@@ -58,10 +58,7 @@ class ReservationCancelledCustomerTest extends TestCase
     {
         $item = $this->makeStatamicItem();
 
-        // An awaiting-payment reservation whose customer opened the pay link leaves a payment_id
-        // behind for an unpaid, later-voided intent. Cancelling it must NOT tell the customer their
-        // payment is non-refundable — nothing was ever captured (the webhook is the only capture
-        // path, and it confirms rather than leaving the booking awaiting).
+        // An opened-but-unpaid intent leaves a payment_id behind; the email must not claim the payment is non-refundable.
         $reservation = Reservation::factory([
             'item_id' => $item->id(),
             'status' => 'cancelled',
@@ -87,11 +84,8 @@ class ReservationCancelledCustomerTest extends TestCase
             'status' => 'cancelled',
         ])->withCustomer()->create();
 
-        // A job queued by a pre-$context release carries no `context` key in its serialized
-        // payload: SerializesModels::__unserialize restores only the keys present and never runs
-        // the constructor. Reproduced here by instantiating without the constructor and setting
-        // only the properties a legacy payload held — handle() must send, not throw on an
-        // uninitialized typed property and drop the cancellation email.
+        // A job serialized by a pre-$context release has no `context` key: handle() must send, not throw on the uninitialized typed property.
+        // newInstanceWithoutConstructor mirrors SerializesModels::__unserialize, which never runs the constructor.
         $job = (new \ReflectionClass(SendCustomerCancelledEmail::class))->newInstanceWithoutConstructor();
         (new \ReflectionProperty(SendCustomerCancelledEmail::class, 'reservation'))->setValue($job, $reservation);
 

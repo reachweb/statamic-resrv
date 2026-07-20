@@ -74,10 +74,8 @@ const quoteError = ref(null);
 const storeError = ref(null);
 const errors = ref({});
 const quoting = ref(false);
-// True from the moment a pricing input changes until the response for that exact input state
-// lands. The displayed quote is stale for that whole window (the 400 ms debounce plus the
-// request), so submission must stay blocked — otherwise a click right after a change would
-// create the reservation at a newly computed amount while the admin approved the old total.
+// True from a pricing-input change until the response for that exact input state lands;
+// submission stays blocked so the admin cannot approve a stale total.
 const quoteDirty = ref(false);
 const submitting = ref(false);
 
@@ -109,15 +107,13 @@ const standardModeLabel = computed(() => {
     return base;
 });
 
-// Online gateways are unusable without a configured payment page (there is no link to
-// email); offline (manually-confirmable) ones always work.
+// Online gateways are unusable without a configured payment page; manually-confirmable ones always work.
 const gatewayDisabled = (gateway) => ! props.paymentEntryConfigured && ! gateway.supports_manual_confirmation;
 
 const money = (amount) => `${props.currencySymbol} ${amount}`;
 
 // --- Dates ---
-// A maximum period of one day means one-day bookings: mirror the frontend's single
-// datepicker, which books [date, date + 1 day].
+// A maximum period of one day mirrors the frontend's single datepicker: books [date, date + 1 day].
 const singleDate = computed(() => props.maximumReservationPeriod === 1);
 
 const minPickerDate = computed(() => today(getLocalTimeZone()).add({ days: props.minimumDaysBefore }));
@@ -154,8 +150,7 @@ const selectedGatewayAmount = computed(() => {
     return quote.value.payment.gateways?.[form.payment_gateway] ?? null;
 });
 
-// Validated on the client against the quoted total so the message lands right under the
-// Custom amount field instead of the server round-trip surfacing it up in the booking card.
+// Client-side check so the message lands under the Custom amount field instead of in the booking card.
 const customAmountError = computed(() => {
     if (form.payment_mode !== 'custom' || ! quote.value) return null;
     if (form.custom_amount === '' || form.custom_amount === null) return null;
@@ -173,9 +168,7 @@ const customAmountError = computed(() => {
     return null;
 });
 
-// A zero-amount booking (fully comped / zero deposit) collects nothing and confirms immediately,
-// so it needs no gateway — which matters when online gateways are disabled for want of a payment
-// page. The server enforces "gateway required" whenever the amount is non-zero.
+// A zero-amount booking collects nothing and needs no gateway; the server enforces the requirement for nonzero amounts.
 const paymentAmountIsZero = computed(() => quote.value && Number(quote.value.payment.amount) === 0);
 
 const canSubmit = computed(
@@ -192,9 +185,7 @@ onMounted(async () => {
     }
 });
 
-// Entry-detail requests can resolve out of order like quotes can (select entry A, then B
-// before A's response lands), so only the latest selection may write rates/fields/customer
-// state — a stale response would leave the form quoting B with A's rate and checkout fields.
+// Entry-detail requests can resolve out of order like quotes: only the latest selection may write rates/fields/customer state.
 let entrySequence = 0;
 
 watch(() => form.item_id, async (itemId) => {
@@ -227,9 +218,8 @@ watch(() => form.item_id, async (itemId) => {
 let quoteTimer = null;
 let quoteSequence = 0;
 
-// The sequence is claimed HERE, synchronously with the input change — not when the debounce
-// fires — so a response already in flight for older inputs can never pass the latest-sequence
-// check and clear quoteDirty for a quote that no longer matches the form.
+// The sequence is claimed synchronously with the input change (not when the debounce fires)
+// so an in-flight response for older inputs can never clear quoteDirty.
 const requestQuote = () => {
     const sequence = ++quoteSequence;
     quoteDirty.value = true;
@@ -253,14 +243,12 @@ const quotePayload = () => ({
     payment_mode: form.payment_mode,
     custom_amount: form.payment_mode === 'custom' && form.custom_amount !== '' && ! customAmountError.value ? form.custom_amount : null,
     payment_gateway: form.payment_gateway,
-    // Custom-priced extras multiply by a checkout-form field (e.g. adults), so the quote
-    // must price with the same customer data creation will use — never a ×1 preview.
+    // Custom-priced extras multiply by a checkout-form field, so the quote must price with the same customer data creation will use.
     customer: form.customer,
 });
 
 const fetchQuote = async (sequence) => {
-    // Requests can resolve out of order (a slow older request finishing after a newer one),
-    // so only the latest request may write quote state — stale responses are discarded.
+    // Only the latest request may write quote state — stale responses are discarded.
     if (sequence !== quoteSequence || ! datesComplete.value) return;
     quoting.value = true;
     quoteError.value = null;
@@ -272,9 +260,7 @@ const fetchQuote = async (sequence) => {
         availableOptions.value = data.available_options ?? [];
     } catch (error) {
         if (sequence !== quoteSequence) return;
-        // Keep the last good quote on screen so the pricing/payment section never collapses
-        // (which would hide the very inputs needed to fix the problem); surface the reason
-        // inline and block submission instead.
+        // Keep the last good quote on screen; surface the reason inline and block submission.
         const validationMessage = Object.values(error?.response?.data?.errors ?? {}).flat().join(' ');
         quoteError.value = error?.response?.data?.error
             ?? (validationMessage || __('Could not compute a quote'));
@@ -304,10 +290,8 @@ watch(
     { deep: true },
 );
 
-// Re-quote when a customer field that drives a custom-priced extra changes — selected or not,
-// since the listed per-unit price is also computed from it — but not on every keystroke in
-// unrelated fields like the name. Serialized to a string so the quote's own availableExtras
-// refresh (same content, new array) cannot re-trigger it.
+// Re-quote when a customer field driving a custom-priced extra changes, not on unrelated keystrokes.
+// Serialized to a string so the quote's own availableExtras refresh cannot re-trigger it.
 const customPriceFieldState = computed(() =>
     JSON.stringify(
         availableExtras.value
@@ -319,8 +303,7 @@ const customPriceFieldState = computed(() =>
 watch(customPriceFieldState, requestQuote);
 
 // --- Customer field renderer helpers ---
-// The same set the frontend checkout renders (resources/views/livewire/components/fields/) —
-// a checkout form that works there must be fillable here with the same value shapes.
+// The same field types the frontend checkout renders — the same value shapes must work here.
 const knownFieldTypes = ['text', 'textarea', 'select', 'checkboxes', 'radio', 'toggle', 'integer', 'dictionary'];
 
 const fieldComponentType = (field) => {
@@ -337,8 +320,7 @@ const emptyFieldValue = (field) => {
 
 const fieldIsRequired = (field) => (field.validate ?? []).some((rule) => String(rule).startsWith('required'));
 
-// Statamic stores select/radio/checkboxes options as an assoc map, a list of {key, value}
-// rows, or a plain list of values — normalize all three (cf. HasSelectOptions::getOptions()).
+// Statamic stores options as an assoc map, {key, value} rows, or a plain list — normalize all three.
 const fieldSelectOptions = (field) => {
     const options = field.options ?? {};
 

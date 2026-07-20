@@ -110,10 +110,7 @@ class AffiliateCommissionCancellationTest extends TestCase
     {
         Mail::fake();
 
-        // Both unpaid-hold cancellation paths: the CP cancel action (CONTEXT_UNPAID_HOLD) and
-        // the hold-lapse sweep (CONTEXT_HOLD_LAPSED). The customer opened the pay link, so an
-        // unpaid intent id sits in payment_id — but no money was ever captured (the webhook is
-        // the only capture path), so the commission must not survive the cancellation.
+        // Both unpaid-hold cancellation contexts: an opened-but-unpaid intent id must not keep the commission alive.
         $affiliate = Affiliate::factory()->create(['fee' => 20]);
 
         foreach ([ReservationCancelled::CONTEXT_UNPAID_HOLD, ReservationCancelled::CONTEXT_HOLD_LAPSED] as $context) {

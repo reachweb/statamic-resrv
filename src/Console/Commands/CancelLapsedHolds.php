@@ -31,9 +31,8 @@ class CancelLapsedHolds extends Command
 
         $cancelled = 0;
 
-        // lazyById keeps a backlog of any size processable in constant memory, and stays
-        // correct while rows leave the filtered set mid-run (cancelling flips the status):
-        // it pages by primary key, not offset, so nothing shifts under the cursor.
+        // lazyById pages by primary key, not offset, so rows leaving the filtered set mid-run
+        // (cancelling flips the status) don't shift the cursor; constant memory for any backlog.
         foreach ($candidates->lazyById(100) as $reservation) {
             if ($this->cancelLapsedHold($reservation)) {
                 $cancelled++;
@@ -48,13 +47,10 @@ class CancelLapsedHolds extends Command
     protected function cancelLapsedHold(Reservation $reservation): bool
     {
         try {
-            // The CANCELLED chain restores stock only when the reservation decremented it
-            // (affects_availability), voids commission, logs, and emails both parties —
-            // with the hold-lapsed wording carried by the context. Any open payment intent
-            // is voided after the transition commits. The in-transaction origin re-check is
-            // load-bearing: CANCELLED is also reachable from CONFIRMED, so without it a
-            // webhook confirming between the candidate query and the row lock would let
-            // the sweep cancel a PAID booking.
+            // The CANCELLED chain restores stock (when affects_availability), voids commission,
+            // and emails with hold-lapsed wording. The in-transaction re-check is load-bearing:
+            // CANCELLED is also reachable from CONFIRMED, so a webhook confirming between the
+            // candidate query and the row lock must abort the sweep, not cancel a PAID booking.
             return app(ReservationRefundProcessor::class)->cancelWithoutRefund(
                 $reservation,
                 ReservationCancelledEvent::CONTEXT_HOLD_LAPSED,
@@ -70,8 +66,7 @@ class CancelLapsedHolds extends Command
                 cancelOpenIntent: true,
             );
         } catch (InvalidStateTransition $e) {
-            // A webhook confirmed it between the candidate query and the row lock — the
-            // customer paid at the buzzer. Correct outcome; leave it CONFIRMED.
+            // The customer paid at the buzzer — correct outcome; leave it CONFIRMED.
             Log::info('Skipped lapsed-hold cancellation: the reservation changed state first.', [
                 'reservation_id' => $reservation->id,
                 'status' => $e->from->value,

@@ -222,10 +222,7 @@ class CheckoutOptionsTest extends TestCase
         ]);
     }
 
-    // A value that belonged to the option but was soft-deleted after the options step loaded
-    // must be rejected at step 1 — Option::calculatePrice() resolves values withTrashed() (for
-    // repricing existing reservations), so without the active-value guard the checkout would
-    // price and sync a value that is no longer offered.
+    // Option::calculatePrice() resolves values withTrashed(), so a value soft-deleted after the options step loaded must be rejected at step 1.
     public function test_it_rejects_a_soft_deleted_option_value()
     {
         session(['resrv_reservation' => $this->reservation->id]);

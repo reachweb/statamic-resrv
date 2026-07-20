@@ -137,9 +137,7 @@ class StripePaymentGatewayTest extends TestCase
             ApiConnectionException::factory('Could not connect to Stripe.'),
         ];
 
-        // A transient read failure must NOT resolve to null (which resolveOrCreateIntent treats
-        // as permission to mint a replacement intent) — it must surface so the still-payable
-        // original is never orphaned behind a second chargeable intent.
+        // A transient read failure must surface, not resolve to null — null is resolveOrCreateIntent's permission to mint a replacement intent.
         $this->expectException(ApiConnectionException::class);
 
         $this->gatewayUsingPaymentIntents($intents)

@@ -8,13 +8,10 @@ use Livewire\Attributes\Locked;
 use Reach\StatamicResrv\Models\Reservation;
 
 /**
- * Customer deep-link resolution (?ref=&hash= — the HMAC from Reservation::customerLookupHash())
- * shared by the reservation-status and pay-by-link pages, including the rate limiting that
- * guards every lookup path. Two buckets: the tight per-(IP, reference) bucket caps guesses per
- * reference without letting one user exhaust a shared egress IP; on its own it is bypassable
- * by varying the reference (every guess gets a fresh bucket), so a looser IP-wide bucket caps
- * total failed lookups from one address across all references. Each component keys its own
- * buckets (lookupRateLimiterPrefix), so attempts on one page don't drain budgets on another.
+ * Customer deep-link resolution (?ref=&hash=, HMAC from Reservation::customerLookupHash())
+ * shared by the status and pay-by-link pages. Two rate-limit buckets: a tight per-(IP, reference)
+ * bucket caps guesses per reference; a looser IP-wide bucket stops bypassing it by varying the
+ * reference. Each component keys its own buckets via lookupRateLimiterPrefix().
  */
 trait HandlesCustomerLookup
 {
@@ -22,9 +19,8 @@ trait HandlesCustomerLookup
     public ?int $reservationId = null;
 
     /**
-     * Set when an attempted deep link failed to resolve for any reason, so the blade can
-     * show a neutral notice. Never reveals which failure occurred (preserves the rate-limit
-     * and reference-enumeration posture).
+     * A deep link failed to resolve; the blade shows a neutral notice that never reveals
+     * the cause (preserves the rate-limit and enumeration posture).
      */
     public bool $linkFailed = false;
 
@@ -34,10 +30,7 @@ trait HandlesCustomerLookup
     /** The reservation statuses this page's lookups resolve for. */
     abstract protected function visibleStatuses(): array;
 
-    /**
-     * What to do when the request carries no deep-link parameters at all — pages with a
-     * manual lookup form fall through to it; deep-link-only pages override to fail.
-     */
+    /** No deep-link params: form pages fall through to the form; deep-link-only pages override to fail. */
     protected function handleMissingLookupParams(): void {}
 
     protected function loadReservationFromUri(): void
@@ -51,10 +44,8 @@ trait HandlesCustomerLookup
             return;
         }
 
-        // A link was attempted: on any failure surface a single neutral notice (never the cause,
-        // to preserve the rate-limit/enumeration posture) so the customer knows the link — not the
-        // page — is at fault. Shares the page's per-(IP, reference) budget so mount can't
-        // brute-force the hash.
+        // Any failure surfaces one neutral notice (never the cause) and shares the page's
+        // per-(IP, reference) budget so mount can't brute-force the hash.
         if (strlen($hash) !== 64 || $this->tooManyLookupAttempts($reference)) {
             $this->linkFailed = true;
 
@@ -85,9 +76,7 @@ trait HandlesCustomerLookup
         RateLimiter::hit($this->ipRateLimiterKey(), 600);
     }
 
-    /**
-     * Reference is normalized to match the lookup path.
-     */
+    /** Reference is normalized to match the lookup path. */
     protected function rateLimiterKey(string $reference): string
     {
         return $this->lookupRateLimiterPrefix().':'.sha1((string) request()->ip().'|'.strtoupper(trim($reference)));

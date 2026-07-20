@@ -140,9 +140,7 @@ class RateSharedAvailabilityTest extends TestCase
     {
         $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
 
-        // A view-only manual hold (affects_availability=false) on the shared rate never took
-        // inventory, so it must not consume the shared-rate cap either — otherwise it silently blocks
-        // real customers against the admin's explicit "do not decrease availability" intent.
+        // A view-only hold (affects_availability=false) never took inventory, so it must not consume the shared-rate cap.
         Reservation::factory()->create([
             'item_id' => $setup['entry']->id(),
             'rate_id' => $setup['sharedRate']->id,
@@ -160,8 +158,7 @@ class RateSharedAvailabilityTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // With the view-only hold excluded, the cap (1) still has room for this real booking, so the
-        // decrement (which runs validateMaxAvailableForDateRange) must NOT throw.
+        // With the view-only hold excluded the cap (1) still has room, so the decrement must not throw.
         AvailabilityRepository::decrement(
             date_start: $setup['startDate']->toDateString(),
             date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),

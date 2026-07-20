@@ -84,9 +84,8 @@ class Reservation extends Model
         'payment_request_email_sent_at' => 'datetime',
     ];
 
-    // Mirrors the column's DB default so an in-memory model that was create()d without
-    // the flag (every frontend checkout) reads true — the availability listeners consult
-    // it on the instance that dispatched the event, before any refresh from the DB.
+    // Mirrors the DB default so a model create()d without the flag (frontend checkout) reads
+    // true — availability listeners consult the dispatching instance before any DB refresh.
     protected $attributes = [
         'affects_availability' => true,
     ];
@@ -270,19 +269,15 @@ class Reservation extends Model
         return in_array($this->status, ReservationStatus::live(), true);
     }
 
-    /**
-     * Admin-created (manual) reservation still waiting for the customer to pay — the only
-     * state the CP confirm/cancel pair and the pay-by-link page operate on.
-     */
+    /** Admin-created (manual) reservation still waiting for the customer to pay. */
     public function isAwaitingPayment(): bool
     {
         return $this->status === ReservationStatus::AWAITING_PAYMENT->value;
     }
 
     /**
-     * Whether an awaiting-payment hold's deadline has lapsed. The lapse sweep may not have
-     * cancelled the row yet, so payment surfaces (the pay page, the payment-request email)
-     * must refuse on this check rather than trust the status alone.
+     * The lapse sweep may not have cancelled the row yet, so payment surfaces must
+     * refuse on this check rather than trust the status alone.
      */
     public function holdDeadlinePassed(): bool
     {
@@ -382,13 +377,9 @@ class Reservation extends Model
             return true;
         }
 
-        // An out-of-band/manual confirmation (CONFIRMED on an online gateway with no charge reference)
-        // collected the money outside any gateway, so there is nothing to return through an API. A
-        // self-service refund would short-circuit the gateway (refundThroughGateway) and land REFUNDED
-        // without money moving and without an admin touching it — restoring stock and reporting the
-        // out-of-band payment as returned when it never was. Route it to manual handling ("contact us")
-        // instead; an admin can still deliberately settle it via the CP refund action, which does not
-        // go through this method.
+        // An out-of-band confirmation (CONFIRMED, no charge reference) collected money outside any
+        // gateway — a self-service refund would land REFUNDED without money moving. Route to manual
+        // handling; the CP refund action doesn't go through this method.
         if ($this->confirmedWithoutGatewayCharge()) {
             return false;
         }
@@ -401,9 +392,8 @@ class Reservation extends Model
     }
 
     /**
-     * Whether this reservation's gateway is an offline one (bank transfer etc.) that an
-     * admin confirms manually. An unknown (no-longer-configured) gateway reports false —
-     * treat it as online so nothing offers offline instructions it can't back up.
+     * Whether the gateway is an offline one an admin confirms manually. An unknown gateway
+     * reports false so nothing offers offline instructions it can't back up.
      */
     public function paymentGatewaySupportsManualConfirmation(): bool
     {
@@ -468,11 +458,8 @@ class Reservation extends Model
     }
 
     /**
-     * A CONFIRMED reservation carrying no gateway charge reference (empty payment_id). This can
-     * only arise from an out-of-band/manual confirmation — a webhook confirm always leaves the
-     * succeeded intent id on the row — so there is no gateway charge to return, and a refund must
-     * skip the provider (mirroring an offline booking's no-op refund) instead of asking the
-     * gateway to refund a dead or never-existent intent.
+     * CONFIRMED with no charge reference — only possible via an out-of-band/manual confirmation
+     * (a webhook confirm always stores the intent id), so a refund must skip the provider.
      */
     public function confirmedWithoutGatewayCharge(): bool
     {
@@ -515,10 +502,8 @@ class Reservation extends Model
     }
 
     /**
-     * What the customer owes to firm the booking: payment + payment_surcharge — exactly the
-     * sum the payment intent charges and the webhook's amount guard verifies. Built on a
-     * fresh Price because add() mutates in place and Eloquent caches cast instances, so
-     * adding on the model's own instance would compound across accesses.
+     * What the customer owes: payment + payment_surcharge — the sum the intent charges and the
+     * webhook's amount guard verifies. Fresh Price because add() mutates the cached cast instance.
      */
     public function amountDue(): PriceClass
     {
@@ -600,11 +585,9 @@ class Reservation extends Model
     }
 
     /**
-     * Absolute deep link to the manual-reservation payment page, or null when the payment
-     * entry is unconfigured/missing/unpublished/unroutable, the reservation has no
-     * customer email to authenticate with, or it is no longer awaiting payment — the link
-     * only exists while there is something to pay. No feature toggle exists — configuring
-     * the entry IS the opt-in (an unconfigured entry disables online gateways in the CP).
+     * Absolute deep link to the pay page, or null when the entry doesn't resolve, there is no
+     * customer email, or the reservation is no longer awaiting payment. No feature toggle —
+     * configuring the entry IS the opt-in (unconfigured disables online gateways in the CP).
      */
     public function customerPaymentUrl(): ?string
     {
@@ -616,9 +599,8 @@ class Reservation extends Model
     }
 
     /**
-     * Resolve a customer-page config value (status page, payment page) to its routable
-     * entry, or null. Single owner of what counts as usable — the CP gateway gating and
-     * the emailed links must never disagree.
+     * Resolve a customer-page config value to its routable entry, or null. Single owner of
+     * "usable" — the CP gateway gating and the emailed links must never disagree.
      */
     public static function resolveCustomerPageEntry(mixed $entryId): ?EntryContract
     {
@@ -650,9 +632,8 @@ class Reservation extends Model
     }
 
     /**
-     * Shared builder for customer-facing deep links (status page, payment page): the
-     * configured entry must resolve (see resolveCustomerPageEntry()) and the reservation
-     * must carry a reference + customer email to authenticate the ?ref=&hash= pair with.
+     * Shared builder for customer deep links: the entry must resolve (resolveCustomerPageEntry())
+     * and the reservation must carry a reference + customer email for the ?ref=&hash= pair.
      */
     protected function customerPageUrl(mixed $entryId): ?string
     {
@@ -1111,11 +1092,9 @@ class Reservation extends Model
     }
 
     /**
-     * Resolve a checkout-submitted option selection to an option whose value is still on
-     * offer. Option::calculatePrice() resolves values withTrashed() so existing reservations
-     * keep pricing historical values — checkout input must not book a trashed value (deleted
-     * after the options step loaded, or submitted directly). Also rejects a missing/trashed
-     * option id, which the bare Option::find() call used to fatal on.
+     * Resolve a checkout-submitted option to one whose value is still on offer — calculatePrice()
+     * resolves withTrashed() for history, so checkout input must not book a trashed value. Also
+     * rejects a missing/trashed option id (the bare Option::find() used to fatal).
      *
      * @param  array{id: int, value: int}  $option
      *

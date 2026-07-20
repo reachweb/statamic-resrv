@@ -752,11 +752,8 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_payment_intent_interface_declares_the_return_url_parameter()
     {
-        // The 4th $returnUrl parameter is load-bearing for pay-by-link (manual reservation)
-        // payments: a redirect gateway that couldn't receive it would strand paying customers
-        // on the checkout-complete page instead of the authenticated pay page. It lives on the
-        // interface so an unupgraded gateway fails at boot rather than silently breaking the
-        // return leg (UPGRADE-PAYMENT-GATEWAYS.md Step 12).
+        // The 4th $returnUrl parameter is load-bearing for pay-by-link payments; it lives on the
+        // interface so an unupgraded gateway fails at boot (UPGRADE-PAYMENT-GATEWAYS.md Step 12).
         $parameters = (new \ReflectionMethod(PaymentInterface::class, 'paymentIntent'))->getParameters();
 
         $this->assertCount(4, $parameters);

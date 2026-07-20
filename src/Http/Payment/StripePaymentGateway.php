@@ -73,10 +73,8 @@ class StripePaymentGateway implements PaymentInterface
         try {
             return $this->getClient($reservation)->paymentIntents->retrieve($paymentId);
         } catch (InvalidRequestException $e) {
-            // Only a definitely-gone intent (deleted / never existed) may be replaced with a
-            // fresh one — null tells resolveOrCreateIntent it is safe to mint a replacement.
-            // Every transient failure (timeout, 429, 5xx, auth) must propagate instead, so a
-            // brownout on this read can't orphan a still-payable intent behind a second one.
+            // Null only when definitively gone (safe to mint a replacement); transient failures
+            // must propagate so a brownout can't orphan a still-payable intent behind a new one.
             if ($e->getError()?->code === 'resource_missing' || $e->getHttpStatus() === 404) {
                 return null;
             }

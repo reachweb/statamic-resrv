@@ -13,10 +13,9 @@ use Reach\StatamicResrv\Livewire\Traits\HandlesDirectGatewayPayment;
 use Reach\StatamicResrv\Models\Reservation;
 
 /**
- * The pay-by-link page for admin-created (manual) reservations. URI-only authentication
- * (?ref=&hash= — the HMAC from Reservation::customerLookupHash()), mirroring the
- * reservation-status page's posture: rate-limited, neutral failure messaging, and the
- * webhook stays the confirmation truth — this page only collects the payment.
+ * Pay-by-link page for admin-created (manual) reservations. URI-only auth (?ref=&hash=,
+ * HMAC from customerLookupHash()), same posture as the status page: rate-limited, neutral
+ * failures. The webhook stays the confirmation truth — this page only collects the payment.
  */
 class ReservationPayment extends Component
 {
@@ -34,19 +33,15 @@ class ReservationPayment extends Component
         return 'resrv-payment-lookup';
     }
 
-    /**
-     * Deep-link only: no email-lookup form exists on this page, so a missing link renders
-     * the same single neutral notice an invalid one does.
-     */
+    /** Deep-link only: no lookup form, so a missing link renders the same neutral notice as an invalid one. */
     protected function handleMissingLookupParams(): void
     {
         $this->linkFailed = true;
     }
 
     /**
-     * Statuses the link resolves for: awaiting payment (the page's purpose) plus every
-     * post-decision state, so a paid or cancelled reservation's link explains itself
-     * instead of claiming the reservation doesn't exist.
+     * Awaiting payment plus every post-decision state, so a paid or cancelled reservation's
+     * link explains itself instead of claiming the reservation doesn't exist.
      */
     protected function visibleStatuses(): array
     {
@@ -60,9 +55,8 @@ class ReservationPayment extends Component
     }
 
     /**
-     * The single state the blade renders, derived server-side on every request:
-     * awaiting | instructions (offline gateway) | deadline_passed | processing |
-     * paid | unavailable.
+     * The single state the blade renders, derived server-side per request: awaiting |
+     * instructions (offline gateway) | deadline_passed | processing | paid | unavailable.
      */
     #[Computed]
     public function state(): string
@@ -99,10 +93,9 @@ class ReservationPayment extends Component
     }
 
     /**
-     * Interim status for a customer returning from a redirect gateway (e.g. Mollie), guarded on the
-     * resrv_gateway return marker so a plain page load never calls the provider. Reads the gateway's
-     * handleRedirectBack() (never confirms) and maps to 'processing' | 'failed'; the webhook stays
-     * the confirmation truth and a 'failed' return falls through to 'awaiting' for retry.
+     * Interim status for a redirect-gateway return, guarded on the resrv_gateway marker so a plain
+     * page load never calls the provider. Reads handleRedirectBack() (never confirms); the webhook
+     * stays the truth and a 'failed' return falls through to 'awaiting' for retry.
      */
     protected function redirectGatewayReturnStatus(Reservation $reservation): ?string
     {
@@ -133,16 +126,10 @@ class ReservationPayment extends Component
     }
 
     /**
-     * The lazy guard: the hold-lapse command may not have run yet, so a past-deadline
-     * link must refuse payment on its own.
-     *
-     * This deliberately guards only NEW payment attempts. An intent mounted before the
-     * deadline stays completable until the sweep voids it: while the row is still
-     * AWAITING_PAYMENT its stock is still decremented, so a payment landing in the
-     * deadline-to-sweep window confirms a booking whose inventory is still held —
-     * strictly better than taking the money and orphaning the charge (a webhook after
-     * the sweep already stays CANCELLED and notifies the orphan). Sites wanting a
-     * tighter window schedule resrv:cancel-lapsed-holds more frequently.
+     * Lazy guard: the lapse sweep may not have run yet, so a past-deadline link refuses NEW
+     * payment attempts itself. An already-mounted intent deliberately stays completable until
+     * the sweep voids it — the AWAITING_PAYMENT row still holds stock, so a buzzer-beating
+     * payment confirms a held booking rather than orphaning the charge.
      */
     protected function deadlinePassed(Reservation $reservation): bool
     {
@@ -150,10 +137,9 @@ class ReservationPayment extends Component
     }
 
     /**
-     * Create-or-resume the intent for the STORED amount (payment + payment_surcharge —
-     * exactly what the webhook's amount guard compares against) and mount the gateway's
-     * payment view. Every precondition re-validates on each call: the button being
-     * hidden does not protect the action.
+     * Create-or-resume the intent for the STORED amount (payment + payment_surcharge — what the
+     * webhook's amount guard checks) and mount the gateway view. Every precondition re-validates
+     * per call: a hidden button does not protect the action.
      */
     public function pay()
     {
@@ -184,10 +170,8 @@ class ReservationPayment extends Component
                 fn (Reservation $fresh) => $fresh->isAwaitingPayment() && ! $this->deadlinePassed($fresh),
             );
         } catch (ReservationNoLongerPayable $e) {
-            // The hold lapsed, or an admin cancelled/confirmed the reservation between the outer guard
-            // and the locked intent write; the freshly-minted intent has already been voided. Bust the
-            // cached computed — when the transition landed in another process during a gateway round
-            // trip it still holds the pre-transition row — so this render shows the reservation's new
+            // The row was transitioned mid-flight; the minted intent is already voided. Bust the
+            // cached computed (it may hold the pre-transition row) so this render shows the new
             // state instead of a payment form. No error notice.
             unset($this->reservation);
 

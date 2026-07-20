@@ -168,9 +168,7 @@ class ReservationPaymentPageTest extends TestCase
 
         $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_authorized']);
 
-        // The customer already authorized: the money is held awaiting merchant capture, so the
-        // page must show the processing state — never remount a form on the held authorization,
-        // and never void-and-replace it (that would release secured money and re-ask for it).
+        // A held authorization must show the processing state — never remount a form or void-and-replace secured money.
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class)
             ->call('pay')
@@ -190,8 +188,7 @@ class ReservationPaymentPageTest extends TestCase
 
         $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_bare']);
 
-        // A Step-13 spec-minimum retrieve (status only) cannot mount an inline payment form:
-        // the stale intent must be voided and replaced, never rendered with an empty secret.
+        // A spec-minimum retrieve (status only) cannot mount an inline form: the stale intent must be voided and replaced.
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class)
             ->call('pay')
@@ -211,11 +208,7 @@ class ReservationPaymentPageTest extends TestCase
 
         $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_bare']);
 
-        // The unmountable intent's credentials were already handed to the customer, and the
-        // provider swallows the void (StripePaymentGateway logs API errors and returns), so the
-        // verification read still reports it live. Minting a replacement anyway would leave TWO
-        // chargeable intents — the attempt must fail with a retryable error and keep the old
-        // intent on file so the next attempt re-tries the void.
+        // The provider swallows the void and the intent stays live; minting a replacement would leave TWO chargeable intents, so the attempt must fail retryably.
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class)
             ->call('pay')
@@ -236,10 +229,7 @@ class ReservationPaymentPageTest extends TestCase
 
         $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_bare']);
 
-        // The customer completes the payment on an earlier tab between the resume read and the
-        // void: the cancel fails (no longer cancellable) and the verification read reports the
-        // money moving. The page must surface the processing state and keep the reference —
-        // never mint a second intent for a payment that is already settling.
+        // The payment succeeds between the resume read and the void: show processing and keep the reference — never mint a second intent.
         $gateway->onRetrievePaymentIntent = function () use ($gateway) {
             $gateway->retrievedIntentStatus = 'succeeded';
         };
@@ -259,10 +249,7 @@ class ReservationPaymentPageTest extends TestCase
     {
         $gateway = $this->fakeGateway();
 
-        // Programmatic manual reservations may record no gateway (ManualReservationCreator only
-        // requires one for the CP flow) and legacy rows carry a blank one. The pay page must fall
-        // back to the default exactly like resolvePaymentGateway() does on every other payment
-        // surface — not error on the very link sendPaymentRequestEmail() was happy to send.
+        // A blank/legacy gateway column must fall back to the default, like resolvePaymentGateway() everywhere else.
         $reservation = $this->makeAwaitingReservation(['payment_gateway' => '']);
 
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
@@ -277,10 +264,7 @@ class ReservationPaymentPageTest extends TestCase
         $fresh = $reservation->fresh();
         $this->assertSame($gateway->createdIntents[0]['payment_id'], $fresh->payment_id);
 
-        // The gateway key the intent was minted through must be stamped alongside its id:
-        // the cancel/lapse void and the out-of-band reconcile no-op on a blank gateway, so
-        // without the stamp they would strand this live intent — and if the configured
-        // default later changed, they would route the void to the wrong provider.
+        // The gateway key must be stamped alongside the intent id, or the void/reconcile guards no-op on the blank column.
         $this->assertSame('fake', $fresh->payment_gateway);
     }
 
@@ -299,9 +283,7 @@ class ReservationPaymentPageTest extends TestCase
         $mintedId = $reservation->fresh()->payment_id;
         $this->assertNotSame('', $mintedId);
 
-        // Regression: before the gateway stamp, the cancel path's void guard no-opped on the
-        // blank column and the customer's live intent survived the cancellation, still
-        // completable at the provider against a CANCELLED booking.
+        // Regression: the cancel path's void guard no-opped on the blank gateway column, leaving the live intent completable.
         $this->postJson(cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]))
             ->assertOk();
 
@@ -326,10 +308,7 @@ class ReservationPaymentPageTest extends TestCase
         $mintedId = $reservation->fresh()->payment_id;
         $this->assertNotSame('', $mintedId);
 
-        // The customer paid in person after opening the pay link. settlePaidOutOfBand must
-        // reach the gateway the intent was minted through (the stamped default), void it, and
-        // clear the reference — otherwise the abandoned intent stays completable and a later
-        // online payment would be silently swallowed by the already-confirmed webhook no-op.
+        // settlePaidOutOfBand must void the minted intent through the stamped default gateway and clear the reference.
         $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
             ->assertOk();
 
@@ -345,11 +324,8 @@ class ReservationPaymentPageTest extends TestCase
 
         $reservation = $this->makeAwaitingReservation();
 
-        // The hold-lapse sweep / a CP cancel commits DURING the gateway round-trip — after pay()'s
-        // outer guard already passed. The freshly-minted intent must be voided and payment_id must NOT
-        // be written, so a terminal booking can never carry a chargeable intent the customer could
-        // still complete. (Cache::lock only serialises concurrent pay() calls; the transition rides a
-        // separate DB row lock, so the write must re-verify payability under that same lock.)
+        // A cancel commits during the gateway round-trip, after pay()'s outer guard: the minted intent must be voided and never written.
+        // Cache::lock only serialises pay() calls — the write must re-verify payability under the transition's DB row lock.
         $gateway->onPaymentIntent = function (Reservation $r) {
             $r->transitionTo(ReservationStatus::CANCELLED);
         };
@@ -379,11 +355,8 @@ class ReservationPaymentPageTest extends TestCase
 
         $reservation = $this->makeAwaitingReservation();
 
-        // The cancel commits in ANOTHER process during the paymentIntent() round trip, so the
-        // component's cached $this->reservation computed never sees it (transitionTo on the
-        // shared instance would refresh it in place and mask this). The catch path must bust
-        // the computed cache: this same render has to show the post-cancel state, not the Pay
-        // button for a booking whose freshly-minted intent was just voided.
+        // The catch path must bust the cached reservation computed so this same render shows the cancelled state.
+        // DB-level update simulates the cross-process cancel; transitionTo on the shared instance would mask the staleness.
         $gateway->onPaymentIntent = function (Reservation $r) {
             DB::table('resrv_reservations')
                 ->where('id', $r->id)
@@ -410,10 +383,7 @@ class ReservationPaymentPageTest extends TestCase
         $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class);
 
-        // A CP cancel commits right after pay()'s outer guard hydrates the row, while its
-        // intent void hasn't landed (or failed tolerantly) so the stored intent is still live
-        // at the provider. Resuming must go through the locked payability re-check — without
-        // it the customer gets a chargeable secret for a cancelled booking.
+        // A cancel lands right after pay()'s outer guard: resuming must hit the locked payability re-check or the customer gets a chargeable secret for a cancelled booking.
         Reservation::retrieved(function (Reservation $model) use ($reservation) {
             if ((int) $model->id === $reservation->id && $model->status === ReservationStatus::AWAITING_PAYMENT->value) {
                 DB::table('resrv_reservations')
@@ -438,9 +408,7 @@ class ReservationPaymentPageTest extends TestCase
 
         $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_live_retrieve_race']);
 
-        // The cancel commits DURING the resume's gateway round-trip — after the under-lock
-        // payability check already passed. The fresh-row re-check before handing out the
-        // secret must refuse the still-live intent.
+        // The cancel commits during the resume's gateway round-trip: the fresh-row re-check must refuse to hand out the secret.
         $gateway->onRetrievePaymentIntent = function (Reservation $r) {
             $r->transitionTo(ReservationStatus::CANCELLED);
         };
@@ -454,8 +422,7 @@ class ReservationPaymentPageTest extends TestCase
 
         $this->assertSame(ReservationStatus::CANCELLED->value, $reservation->fresh()->status);
         $this->assertCount(0, $gateway->createdIntents);
-        // The pay path must NOT void the stored intent: the cancelling transition owns its
-        // disposal, and settlePaidOutOfBand deliberately keeps a capturing intent's reference.
+        // The pay path must not void the stored intent — the cancelling transition owns its disposal.
         $this->assertCount(0, $gateway->cancelledIntents);
     }
 
@@ -539,9 +506,7 @@ class ReservationPaymentPageTest extends TestCase
 
         $reservation = $this->makeAwaitingReservation(['payment_gateway' => 'fakeredirect']);
 
-        // A redirect gateway must return the customer to this pay-by-link page, not
-        // checkout-complete — with the resrv_gateway marker already baked into the base, so
-        // the return leg carries it even when a gateway appends only its own parameters.
+        // A redirect gateway must return to this pay page with the resrv_gateway marker baked into the base URL.
         $expectedReturn = $reservation->customerPaymentUrl();
         $this->assertNotNull($expectedReturn);
         $expectedReturn .= (str_contains($expectedReturn, '?') ? '&' : '?').'resrv_gateway=fakeredirect';
@@ -557,8 +522,7 @@ class ReservationPaymentPageTest extends TestCase
         $fresh = $reservation->fresh();
         $this->assertNotSame('', $fresh->payment_id);
 
-        // Assert the exact outbound URL, including the resrv_gateway tag the return leg needs to
-        // resolve the gateway (a bare assertRedirect() would let that tag be dropped).
+        // Assert the exact outbound URL so the resrv_gateway tag cannot be dropped.
         $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id.'?resrv_gateway=fakeredirect');
     }
 
@@ -586,10 +550,7 @@ class ReservationPaymentPageTest extends TestCase
     {
         $this->useRedirectGateway();
 
-        // A Step-13-minimum gateway: retrievePaymentIntent() exposes only ->status, so the
-        // resumed intent has no provider URL to forward the customer to. The pay flow must
-        // void it and mint a fresh intent (which does carry ->redirectTo) — never redirect
-        // the customer to a dead URL.
+        // A spec-minimum retrieve has no provider URL: the intent must be voided and re-minted, never redirected to a dead URL.
         $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
         $gateway->retrieveIncludesRedirectTo = false;
 

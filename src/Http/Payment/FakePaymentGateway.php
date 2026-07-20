@@ -21,65 +21,53 @@ class FakePaymentGateway implements PaymentInterface
     public array $cancelledIntents = [];
 
     /**
-     * In-memory log of every intent this instance created. Tests assert on this to
-     * verify resume-payment flows reuse an existing intent instead of creating (and
-     * potentially double-charging) a second one.
+     * Every intent created, so tests can assert resume flows reuse instead of double-minting.
      *
      * @var array<int, array{payment_id: string, reservation_id: int|string|null}>
      */
     public array $createdIntents = [];
 
     /**
-     * In-memory log of every reservation this instance was asked to refund. Tests assert on this
-     * to verify a no-gateway-charge refund (e.g. an out-of-band confirmation) skips the provider.
+     * Every reservation refunded, so tests can assert a no-gateway-charge refund skips the provider.
      *
      * @var array<int, int|string|null>
      */
     public array $refundCalls = [];
 
-    /**
-     * Status that retrievePaymentIntent() reports, so tests can simulate an intent that already
-     * captured (e.g. 'succeeded') and assert the out-of-band settlement keeps its charge reference.
-     */
+    /** Status retrievePaymentIntent() reports, e.g. 'succeeded' to simulate an already-captured intent. */
     public ?string $retrievedIntentStatus = null;
 
     /**
-     * Intent ids a successful cancel has moved to 'canceled' — a subsequent retrieve reports that,
-     * modelling a real gateway (Stripe leaves a cancelled intent in the 'canceled' state). Lets a
-     * caller that re-reads after cancelling verify the intent is genuinely dead.
+     * Intent ids a successful cancel moved to 'canceled' (as Stripe does), so a re-read after
+     * cancelling can verify the intent is genuinely dead.
      *
      * @var array<int, string>
      */
     public array $canceledIds = [];
 
     /**
-     * When false, cancelPaymentIntent() records the call but does NOT move the intent to 'canceled' —
-     * modelling a transient provider failure that StripePaymentGateway swallows and never surfaces,
-     * leaving the intent live. Lets tests exercise the keep-the-reference-on-failed-cancel path.
+     * When false, cancelPaymentIntent() records the call but leaves the intent live — modelling
+     * a swallowed provider failure (see StripePaymentGateway) for keep-the-reference paths.
      */
     public bool $cancelSucceeds = true;
 
     /**
-     * When true, retrievePaymentIntent() returns the Step-13 spec-minimum object (id + status,
-     * no client_secret) — modelling an inline gateway that implements only the documented
-     * minimum, to exercise the void-and-remint path for unmountable resumed intents.
+     * When true, retrievePaymentIntent() returns the Step-13 spec minimum (id + status, no
+     * client_secret) to exercise the void-and-remint path for unmountable resumed intents.
      */
     public bool $retrieveOmitsClientSecret = false;
 
     /**
-     * Optional callback fired INSIDE paymentIntent() (after the intent is built), receiving the
-     * reservation — lets a test simulate a concurrent state change (a CP cancel/confirm or the
-     * hold-lapse sweep) landing during the gateway round-trip, to exercise the locked payability
-     * re-check in HandlesDirectGatewayPayment::resolveOrCreateIntent().
+     * Fired INSIDE paymentIntent() with the reservation — simulates a concurrent transition
+     * landing during the gateway round-trip (exercises resolveOrCreateIntent's locked re-check).
      *
      * @var null|callable(Reservation): void
      */
     public $onPaymentIntent = null;
 
     /**
-     * Same as $onPaymentIntent but fired INSIDE retrievePaymentIntent() — lets a test land a
-     * concurrent transition during the resume round-trip, to exercise the fresh-row payability
-     * re-check before a resumed intent is handed out.
+     * Same as $onPaymentIntent but fired INSIDE retrievePaymentIntent() — exercises the
+     * fresh-row re-check before a resumed intent is handed out.
      *
      * @var null|callable(Reservation): void
      */
@@ -133,7 +121,6 @@ class FakePaymentGateway implements PaymentInterface
             ? 'canceled'
             : ($this->retrievedIntentStatus ?? 'requires_payment_method');
 
-        // Simulate a concurrent transition committing during the (real: network) round-trip.
         if ($this->onRetrievePaymentIntent !== null) {
             ($this->onRetrievePaymentIntent)($reservation);
         }
@@ -148,8 +135,7 @@ class FakePaymentGateway implements PaymentInterface
             'reservation_id' => $reservation->id,
         ];
 
-        // A successful cancel leaves the intent 'canceled' at the provider; a swallowed failure
-        // (cancelSucceeds=false) leaves it live, exactly as a real gateway would.
+        // A swallowed failure (cancelSucceeds=false) leaves the intent live, as a real gateway would.
         if ($this->cancelSucceeds) {
             $this->canceledIds[] = $paymentId;
         }

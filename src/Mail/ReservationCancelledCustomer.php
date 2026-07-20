@@ -13,11 +13,7 @@ class ReservationCancelledCustomer extends Mailable
 
     public $reservation;
 
-    /**
-     * @param  ?string  $context  ReservationCancelled::CONTEXT_* — a lapsed payment hold
-     *                            switches the subject and body copy (no money ever moved,
-     *                            so the no-refund wording would be wrong).
-     */
+    /** @param  ?string  $context  ReservationCancelled::CONTEXT_* — a lapsed hold switches the subject and body copy. */
     public function __construct(Reservation $reservation, public ?string $context = null)
     {
         $this->reservation = $reservation;
@@ -40,9 +36,8 @@ class ReservationCancelledCustomer extends Mailable
                 : __('Reservation Cancelled'));
         }
 
-        // Whether money is actually being withheld. An unpaid hold (awaiting-payment cancel) never
-        // captured anything even if a payment_id lingers from an opened-but-unpaid intent, so the
-        // template must not tell the customer their payment is non-refundable in that case.
+        // A lapsed/unpaid hold never captured money even if an unpaid intent id lingers,
+        // so the template must not call the payment non-refundable.
         $paymentCollected = ! $holdLapsed
             && $this->context !== ReservationCancelled::CONTEXT_UNPAID_HOLD
             && $this->reservation->hasGatewayPayment();

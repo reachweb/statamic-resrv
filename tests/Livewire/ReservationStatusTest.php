@@ -350,10 +350,7 @@ class ReservationStatusTest extends TestCase
     {
         Mail::fake();
 
-        // A manual reservation whose customer opened the pay link but never paid, cancelled by
-        // the lapse sweep. The voided intent's reference is cleared on cancellation, so the
-        // status page must show the plain cancelled label — never "no refund issued", which
-        // claims a payment was retained.
+        // A cancelled unpaid hold has its voided intent cleared: the status page must show the plain cancelled label, not "no refund issued".
         $reservation = $this->makeReservation([
             'status' => 'awaiting_payment',
             'payment_id' => 'pi_unpaid_hold',

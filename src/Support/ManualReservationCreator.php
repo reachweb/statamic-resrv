@@ -39,10 +39,8 @@ use Reach\StatamicResrv\Traits\HandlesPricing;
 
 /**
  * Owns the quote + creation of admin-created (manual) reservations. All money figures are
- * computed server-side through the same code paths the frontend checkout uses — never
- * trusted from the client: base price via Availability::getPricing() (dynamic pricing
- * baked in), extras/options via the same calculatePrice() calls validateExtraCharges()
- * relies on, the requested amount via calculatePayment() (checkout parity).
+ * computed server-side through the same code paths the frontend checkout uses
+ * (getPricing, calculatePrice, calculatePayment) — never trusted from the client.
  */
 class ManualReservationCreator
 {
@@ -52,8 +50,7 @@ class ManualReservationCreator
 
     /**
      * Creates the reservation from validated input (shape validation lives in the HTTP
-     * layer; this method re-computes every money figure and asserts the domain
-     * invariants). Returns the fresh reservation — email side effects live elsewhere.
+     * layer; money figures and domain invariants are re-asserted here).
      *
      * @param  array  $input  quote() input plus: customer (form data incl. email),
      *                        affects_availability?, affiliate_id?, hold_days?
@@ -70,28 +67,24 @@ class ManualReservationCreator
 
     protected function createReservation(array $input, $creator, bool $requireGatewayForPayment): Reservation
     {
-        // Normalize once so the quote, the overbook assert, the stored rate_id and the
-        // cancellation snapshot all see the SAME validated rate (see resolveRateId()).
+        // Normalize once so the quote, overbook assert, stored rate_id and cancellation
+        // snapshot all see the SAME validated rate (see resolveRateId()).
         $input['rate_id'] = $this->resolveRateId($input);
 
         $quote = $this->quote($input);
 
         $gateway = (string) ($input['payment_gateway'] ?? '');
 
-        // The CP flow ($requireGatewayForPayment) requires a gateway whenever money is collected
-        // now — but a zero-amount booking (fully comped / zero deposit) confirms immediately with
-        // nothing to pay through, so it may omit one.
+        // The CP flow requires a gateway when money is collected now; a zero-amount booking
+        // confirms immediately with nothing to pay through, so it may omit one.
         if ($requireGatewayForPayment && $gateway === '' && ! $quote['payment']['amount']->isZero()) {
             throw new ManualReservationException(__('A payment method is required to collect a payment.'));
         }
 
-        // A blank gateway on a booking that collects money is not "no gateway": the payment-request
-        // email and the pay page resolve blank to the DEFAULT gateway (resolvePaymentGateway's
-        // legacy-row rule), so a direct/programmatic creation that omits one would collect through
-        // the default while bypassing its amount limits, its payment-page gate and its surcharge.
-        // Pin the default here so the stored row is validated and priced against the gateway that
-        // will actually collect — callers handling payment out of band should name a
-        // manually-confirmable gateway instead of omitting one.
+        // A blank gateway on a paid booking would resolve to the DEFAULT at pay time
+        // (resolvePaymentGateway's legacy-row rule) while bypassing its limits, page gate and
+        // surcharge — pin the default now so the row is validated and priced against the
+        // gateway that will actually collect.
         if ($gateway === '' && ! $quote['payment']['amount']->isZero()) {
             $gateway = (string) $this->gatewayManager->defaultName();
 
@@ -165,8 +158,8 @@ class ManualReservationCreator
                 );
             }
 
-            // Inside the transaction, same as checkout: a DecreaseAvailability throw (stock
-            // ran out in the TOCTOU window) rolls back the reservation row.
+            // Inside the transaction, as in checkout: a DecreaseAvailability throw (TOCTOU
+            // stock loss) rolls back the reservation row.
             ReservationCreated::dispatch($reservation, new ReservationData(
                 affiliate: $affiliate,
                 viaCp: true,
@@ -176,18 +169,14 @@ class ManualReservationCreator
             return $reservation;
         });
 
-        // Mirrors Checkout::handleReservationWithZeroPayment(), which keys off the payment amount
-        // (reservationPaymentIsZero) — not the grand total. When nothing is collected now (a
-        // deposit can round/compute to zero while paid extras keep the total positive) the
-        // booking is firm immediately and the confirmation email chain fires — never a payment
-        // request for 0.00, and never an awaiting-payment hold the lapse sweep would later cancel.
+        // Mirrors Checkout::handleReservationWithZeroPayment(): keyed off the payment amount,
+        // not the grand total. Nothing collected now → confirm immediately; never a payment
+        // request for 0.00 or an awaiting-payment hold the lapse sweep would later cancel.
         if ($quote['payment']['amount']->isZero()) {
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
-                // The reservation, its stock decrement and the CONFIRMED transition have all
-                // committed. A throwing synchronous listener (the activity log, a sibling
-                // addon's hook) must not turn the successful creation into a 500 the admin
-                // would retry — same posture as the email guard below. The confirmation
-                // email can be resent from the reservation page.
+                // Everything is committed; a throwing synchronous listener must not turn the
+                // creation into a 500 the admin would retry. The confirmation email can be
+                // resent from the reservation page.
                 try {
                     ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
                 } catch (\Throwable $e) {
@@ -201,10 +190,8 @@ class ManualReservationCreator
             return $reservation->fresh();
         }
 
-        // The reservation, customer and stock decrement have already committed. A failing mail
-        // transport must not turn a successful creation into a 500 the admin would retry —
-        // retrying would create a second reservation and decrement stock again. Log and carry
-        // on; the payment request can be resent from the reservation page.
+        // Already committed: a failing mail transport must not cause a retry that would create
+        // a second reservation. The payment request can be resent from the reservation page.
         if ((bool) ($input['send_payment_request_email'] ?? true)) {
             try {
                 $this->sendPaymentRequestEmail($reservation);
@@ -220,31 +207,19 @@ class ManualReservationCreator
     }
 
     /**
-     * Send the payment request through the standard email system and stamp the send —
-     * only when the dispatcher actually sent it (a site that disabled the event via
-     * config must not get a false stamp).
+     * Send the payment request through the standard email system, stamping the send only
+     * when the dispatcher actually sent it (a config-disabled event must not stamp).
      *
-     * @throws ManualReservationException when the request would be unusable: the reservation
-     *                                    is no longer awaiting payment (a webhook or another
-     *                                    admin confirmed/cancelled it after the caller's
-     *                                    pre-check), the hold's payment deadline has already
-     *                                    passed (the pay page refuses expired links), the
-     *                                    recorded gateway was removed from the configuration
-     *                                    (the pay link could never mount a payment), or an
-     *                                    online (non-manually-confirmable) gateway has no pay
-     *                                    link to offer because the payment page entry was
-     *                                    unconfigured/unpublished after creation. The email
-     *                                    would otherwise fall back to its offline "send us your
-     *                                    payment" wording with no way to actually pay.
+     * @throws ManualReservationException when the request would be unusable: no longer
+     *                                    awaiting payment, hold deadline passed, recorded
+     *                                    gateway removed, or an online gateway with no pay
+     *                                    link (payment page unconfigured/unpublished).
      */
     public function sendPaymentRequestEmail(Reservation $reservation): bool
     {
-        // Callers pre-check isAwaitingPayment() on a plain read, but a webhook confirm, a CP
-        // confirm/cancel or the lapse sweep can transition the row before the send — and a
-        // "Pay now" email for a booking that is already paid or cancelled can only mislead the
-        // customer. Re-read under the row lock (serializing with any in-flight transitionTo())
-        // and judge the settled row; the lock is released before the mail transport runs, so
-        // only a transition starting entirely after this read can still race the send.
+        // Callers pre-check isAwaitingPayment() on a plain read, but a webhook/CP/sweep
+        // transition can race the send. Re-read under the row lock (serializes with any
+        // in-flight transitionTo()); the lock is released before the mail transport runs.
         $fresh = DB::transaction(fn () => Reservation::query()->lockForUpdate()->findOrFail($reservation->id));
 
         if (! $fresh->isAwaitingPayment()) {
@@ -255,9 +230,8 @@ class ManualReservationCreator
 
         $reservation->setRawAttributes($fresh->getAttributes(), true);
 
-        // The lapse sweep may not have cancelled an expired hold yet, but the pay page already
-        // refuses a past-deadline link (ReservationPayment's deadline_passed state) — a "Pay now"
-        // email carrying a deadline in the past could only ever dead-end the customer.
+        // Even before the lapse sweep cancels the hold, the pay page already refuses a
+        // past-deadline link — this email could only dead-end the customer.
         if ($reservation->holdDeadlinePassed()) {
             throw new ManualReservationException(
                 __('The payment deadline for this reservation has passed, so a payment request cannot be sent.')
@@ -265,10 +239,8 @@ class ManualReservationCreator
         }
 
         // paymentGatewaySupportsManualConfirmation() maps an UNKNOWN gateway to false, which
-        // would satisfy the pay-link branch below and email a "Pay now" link that can only
-        // error when the page fails to resolve the gateway — so validate resolvability first.
-        // A blank recorded gateway falls back to the default (resolvePaymentGateway's legacy
-        // rule) and passes.
+        // would satisfy the pay-link branch below — validate resolvability first. A blank
+        // recorded gateway falls back to the default and passes.
         try {
             $reservation->resolvePaymentGateway();
         } catch (UnknownPaymentGateway $e) {
@@ -330,14 +302,11 @@ class ManualReservationCreator
     }
 
     /**
-     * The CP shares the browser session with the frontend, so the admin's own in-progress
-     * checkout would otherwise bleed into manual pricing: a session coupon (resrv_coupon)
-     * gates coupon-only dynamic pricing, and a frontend search (resrv-search) is the
-     * fallback customer payload for custom-priced extras. Stash both keys for the duration
-     * and restore them so the admin's checkout in another tab is unaffected.
-     *
-     * Public because the CP quote endpoint's supplemental listings price through the same
-     * session-gated paths. Nesting is a no-op, so quote()/create() stay safe to call inside.
+     * The CP shares the session with the frontend: a session coupon (resrv_coupon) gates
+     * coupon-only dynamic pricing, and resrv-search is the fallback customer payload for
+     * custom-priced extras. Stash both keys and restore them so the admin's own checkout
+     * in another tab is unaffected. Public for the CP quote endpoint's supplemental
+     * listings; nesting is a no-op.
      */
     public function withoutCheckoutSession(callable $callback): mixed
     {
@@ -364,10 +333,8 @@ class ManualReservationCreator
         $itemId = $input['item_id'];
         $data = $this->availabilityDataFrom($input);
 
-        // Prune stale pending holds so they don't skew the stock read — but never this
-        // session's own hold, which getAvailabilityForEntry's frontend default would abandon:
-        // quoting a manual reservation must not expire the admin's unrelated in-progress
-        // checkout in another tab (same CP-safe pattern as AvailabilityCpController).
+        // Prune stale pending holds but never this session's own: quoting must not expire the
+        // admin's in-progress checkout (same CP-safe pattern as AvailabilityCpController).
         ExpireReservations::dispatchSync(expireSessionHold: false);
 
         $result = (new Availability)->getAvailabilityForEntry($data, $itemId, expireReservations: false);
@@ -446,18 +413,14 @@ class ManualReservationCreator
     }
 
     /**
-     * The amount the customer will be asked to pay. `standard` mirrors what the frontend
-     * checkout charges: calculatePayment() on the base price, forced to the full total
-     * when the payment type is `everything` or no free cancellation is possible (the
-     * Checkout step-1 override). `full` charges the total; `custom` a validated amount.
+     * The amount the customer will be asked to pay. `standard` mirrors the frontend checkout
+     * (calculatePayment() on the base price, forced to the full total for `everything` or no
+     * free cancellation); `full` charges the total; `custom` a validated amount.
      */
     protected function requestedAmount(array $input, PriceClass $basePrice, PriceClass $total, bool $requireCustomAmount = true): PriceClass
     {
-        // The zero-total shortcut must not skip custom-mode validation: a supplied custom
-        // amount alongside a zero total is contradictory (it always exceeds the total) and
-        // has to be rejected — silently storing a zero payment would confirm a free booking
-        // the request explicitly asked to collect money for. An omitted amount stays a
-        // legitimate fully-comped booking, so the required check is relaxed exactly here.
+        // A supplied custom amount always exceeds a zero total and must be rejected, while an
+        // omitted amount stays a legitimate comped booking — so only the required check is relaxed.
         if ($total->isZero()) {
             if ($this->paymentMode($input) === ManualPaymentMode::Custom) {
                 $this->customAmount($input, $total, requireAmount: false);
@@ -485,8 +448,7 @@ class ManualReservationCreator
 
     /**
      * A validated custom amount. `$requireAmount` is relaxed for the live quote so an
-     * as-yet-unentered amount yields zero instead of throwing (which would blank the
-     * quote and hide the very input the user needs); creation keeps it required.
+     * as-yet-unentered amount yields zero instead of blanking the quote; creation keeps it required.
      */
     protected function customAmount(array $input, PriceClass $total, bool $requireAmount = true): PriceClass
     {
@@ -514,10 +476,8 @@ class ManualReservationCreator
     }
 
     /**
-     * Parse an admin-supplied money figure into a Price. The HTTP layer's `numeric` rule
-     * accepts values moneyphp's decimal parser does not (scientific notation like "1e3",
-     * or more decimals than the currency's subunit), so a parse failure must surface as a
-     * domain error (422), not a 500 — same posture as priceExtras().
+     * The HTTP layer's `numeric` rule accepts values moneyphp's parser does not (scientific
+     * notation, excess decimals) — surface parse failures as a 422 domain error, not a 500.
      */
     protected function parseAmount(string|int|float $raw, string $message): PriceClass
     {
@@ -530,8 +490,7 @@ class ManualReservationCreator
 
     /**
      * Replicates Livewire\Traits\HandlesPricing::freeCancellationPossible() for a
-     * pre-creation context (no reservation snapshot yet): rate policy (or global
-     * default) + the free-cancellation window measured against the check-in date.
+     * pre-creation context (no reservation snapshot yet).
      */
     protected function freeCancellationPossible(?int $rateId, Carbon $dateStart): bool
     {
@@ -554,15 +513,11 @@ class ManualReservationCreator
 
     /**
      * The concrete rate every quote and creation is priced, validated and stored against.
-     *
-     * An explicit rate_id must be published and applicable to the entry — the create form
-     * only offers those, so anything else is a stale or crafted payload (the availability
-     * engine reads status=false for it, but the pricing lookup underneath is validity-blind).
-     * An omitted rate_id adopts the entry's first published applicable rate by order — the
-     * same defaulting the create form applies (rates[0]). It must never stay null: with a
-     * null rateId, itemPricesBetween() applies no rate filter at all (it sums price rows
-     * across EVERY rate, unpublished and soft-deleted included) and the resulting
-     * reservation's rate-scoped stock movements would match no availability rows.
+     * An explicit rate_id must be published and applicable (the pricing lookup underneath is
+     * validity-blind); an omitted one adopts the entry's first published applicable rate,
+     * matching the create form's default. Never null: itemPricesBetween() with a null rateId
+     * sums price rows across EVERY rate, and the reservation's rate-scoped stock movements
+     * would match no availability rows.
      *
      * @throws ManualReservationException
      */
@@ -590,13 +545,11 @@ class ManualReservationCreator
     }
 
     /**
-     * The overbook toggle (affects_availability=false) may bypass ONLY stock. The quote's
-     * availability status also reads false for structural reasons — a disabled entry, an
-     * unpublished or inapplicable rate, or the rate's date-window/stay/lead-time restrictions —
-     * and the pricing lookup underneath is validity-blind (it reads price rows regardless), so
-     * without this re-check a stale or crafted payload could book an entry or rate the create
-     * form never offers. Shared-rate capacity is deliberately NOT re-checked: like the stock
-     * count, it is exactly what the toggle exists to bypass.
+     * The overbook toggle (affects_availability=false) may bypass ONLY stock. Availability
+     * status also reads false for structural reasons (disabled entry, unpublished/inapplicable
+     * rate, date-window/stay/lead-time limits) and the pricing lookup is validity-blind, so
+     * re-check those here. Shared-rate capacity is deliberately NOT re-checked — like stock,
+     * it is exactly what the toggle exists to bypass.
      *
      * @throws AvailabilityException|ManualReservationException
      */
@@ -631,12 +584,10 @@ class ManualReservationCreator
     {
         $instance = $this->gatewayManager->gateway($gateway);
 
-        // A provider-verified (non-manually-confirmable) gateway confirms reservations only
-        // through its webhook — handleRedirectBack() and the pay page's return leg are
-        // display-only by contract (UPGRADE-PAYMENT-GATEWAYS.md Steps 3-4), and the pay-by-link
-        // hold can span days. A gateway with neither capability could collect the customer's
-        // money while nothing can ever confirm the booking, which the hold-lapse sweep would
-        // then cancel out from under the payment.
+        // A non-manually-confirmable gateway confirms only via webhook (return legs are
+        // display-only by contract — UPGRADE-PAYMENT-GATEWAYS.md Steps 3-4). With neither
+        // capability it could collect money nothing can ever confirm, and the hold-lapse
+        // sweep would cancel the booking out from under the payment.
         if (! $amount->isZero()
             && ! $instance->supportsManualConfirmation()
             && ! $instance->supportsWebhooks()) {
@@ -645,10 +596,9 @@ class ManualReservationCreator
             );
         }
 
-        // Without a configured (published, routable) payment page there is no link to pay
-        // an online gateway through — only manually-confirmable (offline) gateways work. A
-        // zero requested amount is collected through no gateway at all (the booking confirms
-        // immediately), so it needs no payment page and must not be rejected for lacking one.
+        // Without a configured payment page an online gateway has no link to pay through —
+        // only manually-confirmable gateways work. A zero amount collects through no gateway
+        // at all and must not be rejected for lacking one.
         if (! $amount->isZero()
             && Reservation::resolveCustomerPageEntry(config('resrv-config.manual_reservations_payment_entry')) === null
             && ! $instance->supportsManualConfirmation()) {
@@ -669,11 +619,9 @@ class ManualReservationCreator
     {
         $calcData = array_merge($data, ['item_id' => $input['item_id']]);
 
-        // Carry the customer payload so a custom-priced extra (Extra::getCustomPrice) reads its
-        // multiplier from the same checkout-form field the frontend does. Its resrv-search
-        // session fallback is stashed away by withoutCheckoutSession(), so this payload is the
-        // only source: a selected custom extra whose driving field is still empty fails the
-        // quote (below) rather than previewing an amount creation would not charge.
+        // Carry the customer payload so a custom-priced extra (Extra::getCustomPrice) reads
+        // its multiplier from the same checkout-form field the frontend does; the resrv-search
+        // session fallback is stashed by withoutCheckoutSession(), so this is the only source.
         if (! empty($input['customer'])) {
             $calcData['customer'] = collect($input['customer']);
         }
@@ -682,10 +630,8 @@ class ManualReservationCreator
             $id = (int) ($item['id'] ?? 0);
             $quantity = (int) ($item['quantity'] ?? 0);
 
-            // Only extras published and attached to this entry may be priced/attached — mirrors
-            // the frontend's $entry->extras()->where('published', true) scoping and the options
-            // ownership check in priceOptions(). Extra::find() alone would accept an extra from
-            // another entry, letting a stale/crafted payload price and attach a foreign extra.
+            // Only extras published and attached to this entry — mirrors the frontend scoping;
+            // Extra::find() alone would let a stale/crafted payload attach a foreign extra.
             $extra = Extra::whereHas('entries', fn ($query) => $query->where('resrv_entries.item_id', $calcData['item_id']))
                 ->where('published', true)
                 ->find($id);
@@ -698,10 +644,8 @@ class ManualReservationCreator
                 throw new ManualReservationException(__('The extra quantity must be at least 1.'));
             }
 
-            // Non-multiple extras carry no maximum (the CP extras form only asks for one when
-            // allow_multiple is on), so the cap below alone would accept any quantity from a
-            // stale or crafted payload — mirror the create form, which never increments them
-            // past a single unit.
+            // Non-multiple extras carry no maximum, so the cap below alone would accept any
+            // quantity — cap them at one unit like the create form does.
             if (! $extra->allow_multiple && $quantity > 1) {
                 throw new ManualReservationException(__('The extra ":name" cannot be added more than once.', ['name' => $extra->name]));
             }
@@ -711,15 +655,15 @@ class ManualReservationCreator
             }
 
             try {
-                // Fresh instances per call: calculatePrice/priceForDates write back into the
-                // model's price attribute, so sharing one instance would compound the price.
+                // Fresh clones: calculatePrice/priceForDates write back into the model's
+                // price attribute, so a shared instance would compound the price.
                 $price = (clone $extra)->priceForDates($calcData);
                 $total = (clone $extra)->calculatePrice($calcData, $quantity);
             } catch (ManualReservationException $e) {
                 throw $e;
             } catch (\Throwable $e) {
                 // A custom-priced extra throws when its driving customer field is absent or
-                // non-numeric — surface it as a domain error (422) rather than a 500.
+                // non-numeric — surface as a 422 domain error, not a 500.
                 throw new ManualReservationException(__('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $extra->name]));
             }
 
@@ -740,18 +684,16 @@ class ManualReservationCreator
             $id = (int) ($item['id'] ?? 0);
             $value = (int) ($item['value'] ?? 0);
 
-            // Only published options belonging to this entry may be priced/attached — mirrors
-            // the create form's optionsForEntry() scoping and the extras check above. A plain
-            // Option::find() would accept an option unpublished after the form loaded.
+            // Only published options belonging to this entry — a plain Option::find() would
+            // accept an option unpublished after the form loaded.
             $option = Option::entry($input['item_id'])->where('published', true)->find($id);
 
             if (! $option) {
                 throw new ManualReservationException(__('The selected option does not belong to this entry.'));
             }
 
-            // calculatePrice() resolves values withTrashed() so existing reservations keep
-            // pricing historical values — a NEW reservation must only accept values still on
-            // offer (the create form lists an option's published, non-trashed values).
+            // calculatePrice() resolves values withTrashed() for historical reservations —
+            // a NEW reservation must only accept published, non-trashed values still on offer.
             if (! $option->values()->where('published', true)->whereKey($value)->exists()) {
                 throw new ManualReservationException(__('The selected option value is no longer available.'));
             }
@@ -764,8 +706,7 @@ class ManualReservationCreator
     }
 
     /**
-     * Required extras/options enforcement — the same semantics the checkout applies via
-     * Reservation::validateReservation(), through the directly-callable underlying checks
+     * Same required-extras/options semantics the checkout applies, via the underlying checks
      * (validateReservation() would also re-validate the total, which an overridden total
      * legitimately fails).
      */
@@ -804,8 +745,7 @@ class ManualReservationCreator
             return null;
         }
 
-        // Only persist known form handles — mirrors CheckoutForm::saveCustomer()'s
-        // allow-list so manual reservations are indistinguishable from frontend ones.
+        // Persist only known form handles — mirrors CheckoutForm::saveCustomer()'s allow-list.
         $allowed = app(CheckoutFormResolver::class)
             ->resolveForEntryId($input['item_id'])
             ->fields()
@@ -824,9 +764,8 @@ class ManualReservationCreator
             return null;
         }
 
-        // Mirror the create page's visibility rules (feature flag + published scope): the form
-        // never offers a disabled feature or an unpublished affiliate, so a stale or crafted
-        // payload must not attach a commission row for one either.
+        // Mirror the create page's visibility rules (feature flag + published): a stale or
+        // crafted payload must not attach a commission for what the form never offers.
         if (! config('resrv-config.enable_affiliates')) {
             throw new ManualReservationException(__('Affiliates are disabled.'));
         }

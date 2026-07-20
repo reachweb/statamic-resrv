@@ -23,11 +23,10 @@ final class ActiveReservationsGuard
      * Whether in-flight checkouts (pending/webhook/awaiting-payment) overlap the range. These
      * are the only holds that may release +quantity asynchronously (on expiry or hold lapse),
      * which would corrupt an absolute CP `available` edit. Restricted to affects_availability
-     * holds — since IncreaseAvailability only restores stock for those, a view-only hold cannot
-     * corrupt an edit and must not block it (relevant for admin-created awaiting-payment holds,
-     * which can persist for days). Confirmed/partner bookings keep their hold key for life but
-     * only release on an explicit refund — that restores stock on top of whatever the admin set,
-     * so they must not block inventory edits.
+     * holds — view-only holds never restore stock, so they must not block edits.
+     * Confirmed/partner bookings keep their hold key for life but only release on an
+     * explicit refund — that restores stock on top of whatever the admin set, so they
+     * must not block inventory edits.
      */
     public static function hasInFlightReservationsForRange(
         string $statamicId,

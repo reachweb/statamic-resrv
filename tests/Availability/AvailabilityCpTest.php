@@ -710,8 +710,7 @@ class AvailabilityCpTest extends TestCase
             'available' => 8,
         ]);
 
-        // An admin-created hold that decremented stock releases +quantity asynchronously (hold
-        // lapse / CP cancel), so an absolute edit made while it is active would be corrupted.
+        // An active hold releases stock asynchronously, so an absolute edit made now would be corrupted.
         Reservation::factory()->create([
             'id' => 42,
             'item_id' => $item->id(),
@@ -748,8 +747,7 @@ class AvailabilityCpTest extends TestCase
             'available' => 8,
         ]);
 
-        // affects_availability=false never restores +quantity, so it cannot corrupt an absolute
-        // edit and must not block it (manual holds can persist for days).
+        // affects_availability=false never restores stock, so it must not block the edit.
         Reservation::factory()->create([
             'id' => 43,
             'item_id' => $item->id(),

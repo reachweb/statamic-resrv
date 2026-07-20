@@ -7,20 +7,15 @@ use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Models\Reservation;
 
 /**
- * Redirect-style gateway double (redirectsForPayment() === true). paymentIntent() records the 4th
- * $returnUrl it was handed so tests can assert the return-URL base; handleRedirectBack() reads a
- * `status` query param to drive the return-page interim state.
+ * Redirect-style gateway double: records the $returnUrl handed to paymentIntent(),
+ * and handleRedirectBack() reads a `status` query param.
  */
 class FakeRedirectGateway extends FakePaymentGateway
 {
     /** The return-URL base handed to the most recent paymentIntent() call. */
     public ?string $lastReturnUrl = null;
 
-    /**
-     * When false, retrievePaymentIntent() returns the Step-13 minimum contract — an object
-     * exposing only ->status — modelling a spec-compliant third-party redirect gateway whose
-     * resumed intents carry no provider URL.
-     */
+    /** When false, retrievePaymentIntent() returns the spec-minimum contract (only ->status, no provider URL). */
     public bool $retrieveIncludesRedirectTo = true;
 
     public function name(): string
@@ -57,8 +52,7 @@ class FakeRedirectGateway extends FakePaymentGateway
 
     public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
     {
-        // Mirror the parent's status model (a cancelled intent reports 'canceled') so callers
-        // that verify an intent is dead after voiding it see what a real provider would report.
+        // Mirror the parent's status model: a cancelled intent reports 'canceled'.
         $intent = new \stdClass;
         $intent->status = in_array($paymentId, $this->canceledIds, true)
             ? 'canceled'

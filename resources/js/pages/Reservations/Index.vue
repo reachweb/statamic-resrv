@@ -41,8 +41,8 @@ const showUrl = (reservation) => props.showUrlTemplate.replace('RESRVURL', reser
 const canResend = (reservation) => ['confirmed', 'partner'].includes(reservation.status);
 
 // Mirrors the state machine: only these states may transition to REFUNDED/CANCELLED,
-// so terminal rows don't offer an action the server will reject anyway. Awaiting-payment
-// rows get their own confirm/cancel pair instead of the Refund action.
+// so terminal rows don't offer an action the server will reject anyway.
+// Awaiting-payment rows get their own confirm/cancel pair instead of Refund.
 const canRefund = (reservation) => ['pending', 'confirmed', 'partner'].includes(reservation.status);
 
 const isAwaitingPayment = (reservation) => reservation.status === 'awaiting_payment';
@@ -118,8 +118,7 @@ const cancelAwaitingRow = ref(null);
 const paymentRequestId = ref(null);
 const actionBusy = ref(false);
 
-// POST a row action and refresh the list; returns whether it succeeded so the
-// caller can close its modal only on success.
+// POST a row action and refresh the list; returns success so the caller closes its modal only then.
 const runRowAction = async (urlTemplate, id, successMessage) => {
     actionBusy.value = true;
     try {

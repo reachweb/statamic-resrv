@@ -45,8 +45,7 @@ class PaymentRequestEmailTest extends TestCase
         ]);
         app()->forgetInstance(PaymentGatewayManager::class);
 
-        // findOrCreateCollection (not makeStatamicItem) so the pages collection gets the
-        // resrv blueprint — entries created later must land in resrv_entries.
+        // findOrCreateCollection so the pages collection gets the resrv blueprint — later entries must land in resrv_entries.
         $page = Entry::make()
             ->collection($this->findOrCreateCollection('pages'))
             ->slug('pay-here')
@@ -221,9 +220,7 @@ class PaymentRequestEmailTest extends TestCase
             'send_payment_request_email' => false,
         ]));
 
-        // The payment page was unconfigured/unpublished after creation: an online payment
-        // request now has no link to pay through, so the resend must refuse instead of sending
-        // offline-payment wording — and it must not stamp a send that never happened.
+        // The payment page went away after creation: the resend must refuse, not send offline wording or stamp a phantom send.
         Config::set('resrv-config.manual_reservations_payment_entry', null);
 
         $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
@@ -245,10 +242,7 @@ class PaymentRequestEmailTest extends TestCase
             'send_payment_request_email' => false,
         ]));
 
-        // The recorded gateway is removed from the configuration after creation. The payment
-        // page still exists, so the pay link would render — but it could only error when the
-        // page fails to resolve the gateway. The resend must refuse instead of emailing a
-        // dead-end "Pay now" link and stamping a send.
+        // The recorded gateway was removed after creation: the resend must refuse rather than email a dead-end "Pay now" link.
         Config::set('resrv-config.payment_gateways', [
             'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
@@ -274,9 +268,7 @@ class PaymentRequestEmailTest extends TestCase
             'hold_days' => 1,
         ]));
 
-        // The deadline lapsed but the sweep has not cancelled the hold yet. The pay page already
-        // refuses this link as expired, so resending would email an unusable "Pay now" with a
-        // past deadline — the resend must refuse and leave no stamp.
+        // Deadline lapsed but not yet swept: the pay page refuses the link, so the resend must refuse too.
         $reservation->update(['hold_expires_at' => now()->subHour()]);
 
         $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
@@ -296,10 +288,7 @@ class PaymentRequestEmailTest extends TestCase
             'send_payment_request_email' => false,
         ]));
 
-        // Simulate a webhook confirm landing after a caller's isAwaitingPayment() pre-check:
-        // the row is CONFIRMED while the in-memory model still reads awaiting_payment. The
-        // send must re-read the row and refuse — a "Pay now" email for a paid booking can
-        // only mislead the customer.
+        // Regression: a webhook confirm after the isAwaitingPayment() pre-check leaves the model stale — the send must re-read the row and refuse.
         Reservation::whereKey($reservation->id)->update(['status' => 'confirmed']);
         $this->assertTrue($reservation->isAwaitingPayment());
 
@@ -348,8 +337,7 @@ class PaymentRequestEmailTest extends TestCase
 
         Config::set('resrv-config.manual_reservations_payment_entry', null);
 
-        // Defense-in-depth for senders that bypass the guard: the template itself must not
-        // imply a bank-transfer flow for an online reservation that simply lost its pay link.
+        // The template itself must not imply a bank-transfer flow for an online reservation that lost its pay link.
         $html = (new ReservationPaymentRequest($reservation))->render();
         $this->assertStringNotContainsString('Pay now', $html);
         $this->assertStringNotContainsString('as soon as your payment arrives', $html);

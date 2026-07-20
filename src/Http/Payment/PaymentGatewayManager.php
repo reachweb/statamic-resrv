@@ -236,10 +236,9 @@ class PaymentGatewayManager
     }
 
     /**
-     * Every configured gateway with the facts the CP manual-reservation surfaces need:
-     * unlike availableForFrontend() nothing is filtered out — the create form disables
-     * unusable gateways with a hint instead of hiding them. Surcharges and amount limits
-     * stay server-side: the quote endpoint returns the applied per-gateway amounts.
+     * Every configured gateway for the CP manual-reservation surfaces — unlike
+     * availableForFrontend() nothing is filtered: the create form disables unusable gateways
+     * instead of hiding them. Surcharges/amount limits stay server-side (quote endpoint).
      *
      * @return array<int, array{key: string, label: ?string, supports_manual_confirmation: bool}>
      */

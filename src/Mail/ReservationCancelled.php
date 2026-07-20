@@ -13,11 +13,7 @@ class ReservationCancelled extends Mailable
 
     public $reservation;
 
-    /**
-     * @param  ?string  $context  ReservationCancelledEvent::CONTEXT_* — a lapsed payment
-     *                            hold switches the intro from "cancelled by the customer"
-     *                            to "payment hold lapsed" wording.
-     */
+    /** @param  ?string  $context  ReservationCancelledEvent::CONTEXT_* — a lapsed hold switches the wording. */
     public function __construct(Reservation $reservation, public ?string $context = null)
     {
         $this->reservation = $reservation;
@@ -36,9 +32,8 @@ class ReservationCancelled extends Mailable
             $this->subject(__('Reservation cancelled — payment hold lapsed'));
         }
 
-        // Whether money is actually being retained. A lapsed or unpaid hold never captured
-        // anything even if a payment_id lingers from an opened-but-unpaid intent, so the
-        // template must not report a retained payment that was never collected.
+        // A lapsed/unpaid hold never captured money even if an unpaid intent id lingers,
+        // so the template must not report a retained payment.
         $paymentCollected = ! $holdLapsed
             && $this->context !== ReservationCancelledEvent::CONTEXT_UNPAID_HOLD
             && $this->reservation->hasGatewayPayment();

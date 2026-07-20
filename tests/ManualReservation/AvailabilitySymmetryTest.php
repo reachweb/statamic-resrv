@@ -61,8 +61,7 @@ class AvailabilitySymmetryTest extends TestCase
         $this->assertEquals(2, $this->availableOn($entry, today()));
         $this->assertEquals(2, $this->availableOn($entry, today()->addDay()));
 
-        // The double-restore hazard this flag exists to prevent: a reservation that never
-        // decremented must not increment on cancellation either.
+        // A reservation that never decremented must not increment on cancellation.
         $reservation->transitionTo(ReservationStatus::CANCELLED);
         Event::dispatch(new ReservationCancelled($reservation->fresh()));
 
@@ -146,8 +145,7 @@ class AvailabilitySymmetryTest extends TestCase
             'reservation_id' => $skipped->id,
         ]);
 
-        // Control: the same rule attaches when the flag is off, pinning that the default
-        // frontend path is untouched.
+        // Control: the same rule attaches when the flag is off.
         $applied = $this->reservationFor($entry);
 
         Event::dispatch(new ReservationCreated($applied, new ReservationData));

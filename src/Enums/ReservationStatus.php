@@ -29,10 +29,9 @@ enum ReservationStatus: string
     case COMPLETED = 'completed';
 
     /**
-     * Created directly by the CP manual-reservation flow — never transitioned into.
-     * An unpaid admin-created hold: exempt from minutes_to_hold expiry, abandoned
-     * emails and housekeeping (all keyed off PENDING/EXPIRED). Leaves only via a
-     * payment/CP confirmation (CONFIRMED) or a CP/hold-lapse cancellation (CANCELLED).
+     * Unpaid admin-created hold, created directly by the CP manual flow — never transitioned
+     * into. Exempt from minutes_to_hold expiry, abandoned emails and housekeeping (all keyed
+     * off PENDING/EXPIRED); leaves only to CONFIRMED or CANCELLED.
      */
     case AWAITING_PAYMENT = 'awaiting_payment';
 
@@ -100,10 +99,8 @@ enum ReservationStatus: string
      * Status values for checkouts still in flight — holds that may release asynchronously
      * (expiry restores +quantity), which would corrupt an absolute CP inventory edit.
      * Confirmed/partner bookings keep their hold key for life but only release on an
-     * explicit refund, so they are not in flight. AWAITING_PAYMENT (admin-created holds)
-     * belongs here too: the hold-lapse sweep and CP cancellation release +quantity through
-     * the same ReservationCancelled chain, so an absolute edit made while one is active
-     * would be corrupted when it later restores stock.
+     * explicit refund, so they are not in flight. AWAITING_PAYMENT belongs here too:
+     * hold-lapse/CP cancellation releases +quantity through the same chain.
      *
      * @return string[]
      */

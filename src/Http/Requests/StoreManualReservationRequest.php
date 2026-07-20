@@ -11,15 +11,11 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        // checkoutFormRules() is merged BEFORE the explicit rules so the explicit
-        // customer.email => required|email always wins. A custom checkout form whose email field
-        // is optional (or omits validate) must not weaken the requirement — an online
-        // awaiting-payment reservation needs an email for its payment URL and request recipient.
+        // checkoutFormRules() merges BEFORE the explicit rules so customer.email =>
+        // required|email always wins — a custom form must not weaken it.
         return array_merge(parent::rules(), $this->checkoutFormRules(), [
-            // Nullable, not required: a zero-amount booking (fully comped / zero deposit) collects
-            // nothing and needs no gateway. The "a gateway is required to collect a payment" rule is
-            // enforced in ManualReservationCreator::create(), which knows the server-computed amount
-            // the request cannot cheaply recompute here.
+            // Nullable: zero-amount bookings need no gateway. "Gateway required to collect a
+            // payment" is enforced in ManualReservationCreator::create(), which knows the amount.
             'payment_gateway' => [
                 'nullable',
                 'string',
@@ -36,9 +32,8 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
     }
 
     /**
-     * The resolved checkout form's own validate rules applied to the customer payload —
-     * derived the way CheckoutForm::rules() derives them, so a manual reservation's
-     * customer passes exactly the validation a frontend one would.
+     * The checkout form's validate rules applied to the customer payload, derived as
+     * CheckoutForm::rules() derives them.
      *
      * @return array<string, string>
      */

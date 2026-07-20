@@ -92,8 +92,7 @@ class CancelLapsedHoldsTest extends TestCase
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertEquals('pi_lapsed_hold', $gateway->cancelledIntents[0]['payment_id']);
 
-        // The verified-void intent's reference is dropped, so payment_id readers (the customer
-        // status page, the cancellation emails) can't report money that was never collected.
+        // The verified-void intent's reference is dropped so payment_id readers can't report money never collected.
         $this->assertSame('', $reservation->fresh()->payment_id);
 
         Mail::assertSent(ReservationCancelledCustomer::class, function ($mail) use ($reservation) {
@@ -111,8 +110,7 @@ class CancelLapsedHoldsTest extends TestCase
         $adminHtml = (new ReservationCancelledMail($reservation->fresh(), ReservationCancelledEvent::CONTEXT_HOLD_LAPSED))->render();
         $this->assertStringContainsString('payment hold lapsed', $adminHtml);
 
-        // The lingering opened-but-unpaid intent id in payment_id must not make the admin
-        // email claim a payment was retained — nothing was ever collected.
+        // An opened-but-unpaid intent must not make the admin email claim a payment was retained.
         $this->assertStringNotContainsString('payment retained', $adminHtml);
         $this->assertStringNotContainsString('No action is required', $adminHtml);
     }
@@ -166,9 +164,8 @@ class CancelLapsedHoldsTest extends TestCase
 
         $reservation = $this->overdueReservation();
 
-        // Simulate the webhook winning the race: the row flips to CONFIRMED right after
-        // the candidate query hydrates it. Without the in-transaction origin re-check the
-        // sweep would cancel a PAID booking (CONFIRMED → CANCELLED is a legal transition).
+        // Regression: a webhook confirm between the candidate query and the lock must trip the in-transaction origin re-check.
+        // The retrieved hook flips the row to CONFIRMED at DB level to simulate the cross-process race.
         Reservation::retrieved(function (Reservation $model) use ($reservation) {
             if ((int) $model->id === $reservation->id && $model->status === ReservationStatus::AWAITING_PAYMENT->value) {
                 DB::table('resrv_reservations')
@@ -197,8 +194,7 @@ class CancelLapsedHoldsTest extends TestCase
         $this->artisan('resrv:cancel-lapsed-holds')->assertSuccessful();
         $this->assertEquals('cancelled', $reservation->fresh()->status);
 
-        // The customer's payment lands after the sweep cancelled the hold: the status
-        // must stay CANCELLED and admins must hear about the orphaned charge.
+        // A payment landing after the sweep must keep CANCELLED and notify admins of the orphaned charge.
         $this->post(route('resrv.webhook.store', ['reservation_id' => $reservation->id, 'status' => 'success']))
             ->assertStatus(200);
 

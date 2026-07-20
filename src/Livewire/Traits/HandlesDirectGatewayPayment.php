@@ -15,11 +15,9 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 
 /**
- * Mounts a gateway payment for a reservation OUTSIDE the checkout session — used by the
- * manual-reservation pay page (and intended for the status-page balance section from plan
- * 008): resolve the reservation's locked gateway, create or resume a payment intent, and
- * expose the properties the gateway's paymentView() blade reads ($wire.clientSecret,
- * $wire.publicKey, $wire.checkoutCompletedUrl — the return URL — and $amount).
+ * Mounts a gateway payment outside the checkout session (manual pay page; plan-008 balance
+ * section later): resolve the gateway, create/resume an intent, and expose the properties
+ * the gateway's paymentView() blade reads.
  */
 trait HandlesDirectGatewayPayment
 {
@@ -47,30 +45,21 @@ trait HandlesDirectGatewayPayment
      * Create-or-resume an intent for $amount and mount the gateway's payment view.
      * Returns a redirect response for redirect gateways, null otherwise.
      *
-     * @param  ?Closure  $stillPayable  Given the freshly-locked reservation, returns whether it may
-     *                                  still be charged. Re-evaluated inside the intent-creation lock
-     *                                  so a status change racing the gateway round-trip cannot leave a
-     *                                  chargeable intent on a terminal/confirmed booking. Null skips
-     *                                  the re-check (the caller vouches the row cannot change).
+     * @param  ?Closure  $stillPayable  Whether the (fresh) reservation may still be charged; re-checked
+     *                                  under the intent lock. Null skips the re-check.
      *
      * @throws UnknownPaymentGateway
      * @throws ReservationNoLongerPayable
      */
     protected function mountGatewayPayment(Reservation $reservation, PriceClass $amount, string $returnUrl, ?Closure $stillPayable = null)
     {
-        // resolvePaymentGateway(), not the manager's forReservation(): a blank recorded gateway
-        // (legacy rows, programmatic manual reservations) falls back to the default here exactly
-        // as the payment-request email path does — forReservation() throws on gateway('') and
-        // would turn every pay link that email offered into a guaranteed error.
+        // resolvePaymentGateway(), not forReservation(): a blank recorded gateway must fall back
+        // to the default (matching the payment-request email path) — forReservation() throws on ''.
         $gateway = $reservation->resolvePaymentGateway();
 
-        // A redirect gateway bakes $returnUrl into the provider payment as the URL the customer
-        // lands back on, appending its own Step-12 params (id, resrv_gateway). The resrv_gateway
-        // marker is load-bearing on that return leg — redirectGatewayReturnStatus() only consults
-        // the provider when it is present — but nothing enforces the gateway's append (normal
-        // checkout silently falls back to the default gateway without it), so bake the marker into
-        // the base rather than trust it. A compliant gateway's double-append is harmless: the pay
-        // page only checks presence, and duplicate keys resolve to the same value.
+        // redirectGatewayReturnStatus() only consults the provider when the resrv_gateway marker is
+        // on the return URL, and nothing enforces the gateway's Step-12 append — so bake the marker
+        // into the base. A compliant gateway's double-append is harmless (presence check, same value).
         if ($gateway->redirectsForPayment() && ! str_contains($returnUrl, 'resrv_gateway=')) {
             $separator = str_contains($returnUrl, '?') ? '&' : '?';
             $returnUrl .= $separator.http_build_query(['resrv_gateway' => $reservation->payment_gateway]);
@@ -84,13 +73,9 @@ trait HandlesDirectGatewayPayment
             return null;
         }
 
-        // Redirect gateways bake their return URL from $returnUrl (threaded into paymentIntent by
-        // resolveOrCreateIntent; the return marker is what ReservationPayment::state() keys the
-        // interim status off — see Step 12 and the append above). Here we just forward to the
-        // provider's hosted page, tagging resrv_gateway the same way the checkout flow does.
-        // Resumed intents without a provider URL never reach this point (resolveOrCreateIntent
-        // re-mints them), so an empty redirectTo here means the gateway's paymentIntent() broke
-        // its contract — fail loudly rather than redirect the customer to a dead URL.
+        // Resumed intents without a provider URL were re-minted in resolveOrCreateIntent, so an
+        // empty redirectTo means the gateway broke its paymentIntent() contract — fail loudly
+        // rather than redirect the customer to a dead URL.
         if ($gateway->redirectsForPayment()) {
             $redirectUrl = (string) ($intent->redirectTo ?? '');
 
@@ -117,35 +102,22 @@ trait HandlesDirectGatewayPayment
     }
 
     /**
-     * Resume the reservation's stored intent when it is still payable, otherwise mint a fresh one; a
-     * dead (cancelled) intent gets replaced, and a succeeded/processing one returns null — the money is
-     * already moving, so creating another intent would risk a double charge. Both resume and mint run
-     * inside the per-reservation intent lock. When $stillPayable is given, the reservation's payability
-     * is re-verified under that lock, again on a fresh row right before a resumed intent is handed out
-     * (the retrieve is a network round-trip a transition can commit during), and under the row lock at
-     * write time for a mint — so a status change racing a gateway round-trip cannot leave a chargeable
-     * intent on a terminal/confirmed booking; if it fires, ReservationNoLongerPayable is thrown (and a
-     * just-minted intent is voided first).
+     * Resume the stored intent when still payable, otherwise mint a fresh one; succeeded/processing
+     * returns null (money already moving — another intent risks a double charge). Everything runs
+     * under the per-reservation intent lock, and $stillPayable is re-verified there: on a fresh row
+     * before a resume is handed out, and under the row lock at mint-write time (a just-minted
+     * intent is voided before throwing).
      *
      * @throws ReservationNoLongerPayable
      */
     protected function resolveOrCreateIntent(PaymentInterface $gateway, Reservation $reservation, PriceClass $amount, string $returnUrl, ?Closure $stillPayable = null): ?object
     {
-        // Serialize create-and-store per reservation so two concurrent pay() requests can't each
-        // mint a payable intent — last-write-wins would leave the loser untracked yet chargeable.
-        // The gateway call is a network round-trip, so this uses an app-level lock that holds no
-        // DB connection (unlike a row lock). The waiter re-checks under the lock and resumes the
-        // winner's intent instead of creating a second one. Resume rides the same lock — a stored
-        // intent must never be handed out without the payability re-check below (the outer pay()
-        // guard ran before this lock, so a CP cancel/confirm or the hold-lapse sweep may have
-        // transitioned the row since).
-        //
-        // The TTL must outlive the WHOLE critical section — up to three provider round-trips
-        // (retrieve, void, mint) at Stripe's default 80s client timeout — or it expires while a
-        // slow gateway call is still in flight and a waiter can acquire the lock, see no stored
-        // intent, and mint a duplicate chargeable one the first request's write then untracks.
-        // Waiters give up after 10s (a retryable payment error), so the long TTL only costs
-        // recovery time when a holder dies without releasing.
+        // App-level lock (holds no DB connection through the network round-trips) serializes
+        // concurrent pay() calls so two requests can't each mint a chargeable intent; a waiter
+        // resumes the winner's. Resume rides the same lock so a stored intent is never handed out
+        // without the payability re-check. The TTL must outlive the whole critical section — up to
+        // three provider round-trips at Stripe's 80s client timeout — or a waiter could mint a
+        // duplicate mid-flight; waiters give up after 10s (a retryable payment error).
         return Cache::lock('resrv-payment-intent-'.$reservation->id, 300)->block(10, function () use ($gateway, $reservation, $amount, $returnUrl, $stillPayable) {
             $reservation->refresh();
 
@@ -156,19 +128,15 @@ trait HandlesDirectGatewayPayment
             $resumed = $this->resumeExistingIntent($gateway, $reservation);
             if ($resumed !== false) {
                 if ($this->resumedIntentIsMountable($gateway, $resumed)) {
-                    // Null means the money is already moving — nothing chargeable is handed out,
-                    // so no re-check is needed.
+                    // Null = money already moving; nothing chargeable is handed out.
                     if ($resumed === null) {
                         return null;
                     }
 
-                    // The retrieve above was a network round-trip, so a transition may have
-                    // committed since the check under the lock: re-verify on a fresh row before
-                    // handing out the chargeable secret — the resume-path analogue of the mint
-                    // path's row-locked re-check. No void on failure: the transition that made
-                    // the row unpayable owns the stored intent's disposal (cancelOpenIntentQuietly
-                    // voids it; settlePaidOutOfBand deliberately KEEPS a capturing intent's
-                    // reference so the charge stays refundable — voiding here would strand it).
+                    // The retrieve was a network round-trip a transition can commit during:
+                    // re-verify on a fresh row before handing out the chargeable secret. No void
+                    // on failure — the transition owns the stored intent's disposal
+                    // (settlePaidOutOfBand keeps a capturing intent's reference refundable).
                     if ($stillPayable !== null) {
                         $fresh = Reservation::query()->find($reservation->id);
 
@@ -180,12 +148,9 @@ trait HandlesDirectGatewayPayment
                     return $resumed;
                 }
 
-                // Resumable but unmountable: the stored intent must be replaced — but its
-                // credentials were already handed to the customer (an earlier tab or the
-                // provider's hosted page can still complete it), so unlike the uncommitted
-                // mint below a failed void cannot be tolerated: minting anyway would leave
-                // TWO chargeable intents for one reservation. False means the money started
-                // moving during the void round-trip — surface the processing state instead.
+                // Resumable but unmountable: the stored intent's credentials were already handed
+                // out, so a failed void can't be tolerated — minting anyway would leave TWO
+                // chargeable intents. False = money started moving; surface the processing state.
                 if (! $this->voidSupersededIntent($gateway, $reservation, (string) $reservation->payment_id)) {
                     return null;
                 }
@@ -193,14 +158,10 @@ trait HandlesDirectGatewayPayment
 
             $intent = $gateway->paymentIntent($amount, $reservation, $reservation->customerData ?? collect(), $returnUrl);
 
-            // Bind the payment_id write to a row lock and re-verify payability in the SAME critical
-            // section. The app lock above only serializes concurrent pay() calls; a CP cancel/confirm
-            // or the hold-lapse sweep transitions the row through transitionTo()'s DB row lock — a
-            // different mutex — and can commit a terminal/confirmed status DURING the paymentIntent()
-            // network round-trip, after the check above passed. Whoever writes payment_id must observe
-            // the final status under the row lock: if the row is no longer payable we void the just-
-            // minted intent rather than leave a chargeable orphan the customer could still complete on
-            // a cancelled or already-confirmed booking.
+            // The app lock only serializes pay() calls; transitions go through transitionTo()'s DB
+            // row lock (a different mutex) and can commit during the paymentIntent() round-trip.
+            // So re-verify payability under the row lock in the same write as payment_id; if the
+            // row is no longer payable the just-minted intent is voided below.
             $committed = DB::transaction(function () use ($reservation, $intent, $stillPayable) {
                 $fresh = Reservation::query()->lockForUpdate()->find($reservation->id);
 
@@ -210,11 +171,9 @@ trait HandlesDirectGatewayPayment
 
                 $attributes = ['payment_id' => $intent->id];
 
-                // A blank recorded gateway resolved to the default at mount time; stamp the key
-                // the intent was actually minted through, in the same locked write as its id.
-                // Every later reader — the cancel/lapse void (which no-ops on a blank gateway,
-                // stranding the live intent), the out-of-band reconcile, a refund — must reach
-                // THIS provider even if the configured default changes before it runs.
+                // Stamp the gateway the intent was actually minted through, atomically with its id:
+                // later readers (cancel/lapse void, out-of-band reconcile, refund) must reach THIS
+                // provider even if the configured default changes — a blank gateway strands them.
                 if (blank($fresh->payment_gateway)) {
                     $attributes['payment_gateway'] = app(PaymentGatewayManager::class)->defaultName();
                 }
@@ -236,14 +195,9 @@ trait HandlesDirectGatewayPayment
     }
 
     /**
-     * Whether a resumed intent can actually be mounted for its gateway. retrievePaymentIntent()'s
-     * contract only requires ->status (UPGRADE-PAYMENT-GATEWAYS.md Step 13), but mounting needs
-     * more: redirect gateways forward the customer to $intent->redirectTo, and inline gateways
-     * render their payment view around $intent->client_secret. A spec-minimal resumed intent
-     * missing its mount credential is voided and replaced with a fresh mint (whose
-     * paymentIntent() contract does include it) instead of redirecting the customer nowhere or
-     * rendering a payment form with an empty secret. Null (money already moving) never mounts,
-     * so it always passes.
+     * retrievePaymentIntent()'s contract only requires ->status (Step 13), but mounting needs
+     * redirectTo (redirect gateways) or client_secret (inline). A spec-minimal resumed intent is
+     * voided and re-minted instead of mounting without its credential. Null never mounts, so it passes.
      */
     protected function resumedIntentIsMountable(PaymentInterface $gateway, ?object $intent): bool
     {
@@ -263,17 +217,10 @@ trait HandlesDirectGatewayPayment
     }
 
     /**
-     * Void a superseded intent whose credentials were already handed out, and PROVE it is dead
-     * before the caller mints a replacement. voidIntentQuietly()'s tolerate-and-log posture is
-     * safe only for intents the customer never received; here a swallowed cancel failure
-     * (StripePaymentGateway logs API errors and returns) or a cancel that skipped an intent no
-     * longer in a cancellable state (it succeeded during the round-trip) would leave the old
-     * intent completable NEXT TO the replacement — a double charge. So the intent is re-read
-     * after the cancel and the provider's answer gates the mint: gone (absent/canceled) lets it
-     * proceed; money already moving (succeeded/processing/requires_capture) returns false so the
-     * caller shows the processing state and keeps the stored reference; anything still live
-     * throws — the customer sees a retryable payment error and no replacement is created. A
-     * transient failure of the verification read propagates for the same reason.
+     * Void a superseded intent whose credentials were already handed out and PROVE it dead before
+     * the caller mints a replacement (Stripe's cancel swallows API errors). Re-read after the
+     * cancel gates the mint: gone/canceled → true; money already moving → false (caller shows
+     * processing, keeps the reference); anything still live throws so no replacement is created.
      */
     protected function voidSupersededIntent(PaymentInterface $gateway, Reservation $reservation, string $paymentId): bool
     {
@@ -301,9 +248,8 @@ trait HandlesDirectGatewayPayment
     }
 
     /**
-     * Best-effort void of an intent that was minted but never committed to the reservation (the row
-     * became unpayable under the lock). Tolerates gateway failure the same way the terminal flows do:
-     * the reference was never stored, so an unreachable gateway leaves an intent that dies of old age.
+     * Best-effort void of an intent never committed to the reservation: the reference was never
+     * stored, so a failed cancel just leaves an intent that dies of old age.
      */
     protected function voidIntentQuietly(PaymentInterface $gateway, Reservation $reservation, string $paymentId): void
     {
@@ -322,14 +268,10 @@ trait HandlesDirectGatewayPayment
     }
 
     /**
-     * Inspect the reservation's stored intent: the intent to resume when it is still payable,
-     * null when the money is already moving (succeeded/processing/requires_capture — captured,
-     * settling, or held; minting another would risk a double charge, and remounting a held
-     * authorization would ask the customer to pay money that is already secured — the Step 13
-     * status contract promises all three keep the reference), or false when there is nothing to
-     * resume and a fresh intent is needed. A transient retrieve failure propagates (see
-     * StripePaymentGateway::retrievePaymentIntent) so a still-live intent is never replaced on
-     * the strength of a failed read.
+     * The stored intent to resume when still payable, null when the money is already moving
+     * (succeeded/processing/requires_capture — Step 13 promises all three keep the reference), or
+     * false when there is nothing to resume. A transient retrieve failure propagates (see
+     * StripePaymentGateway::retrievePaymentIntent) so a live intent is never replaced on a failed read.
      */
     protected function resumeExistingIntent(PaymentInterface $gateway, Reservation $reservation): object|false|null
     {
@@ -355,9 +297,8 @@ trait HandlesDirectGatewayPayment
     }
 
     /**
-     * What the gateway's return redirect says about the payment, from the current request
-     * query: 'succeeded' | 'processing' | 'failed' | null (no return parameters present).
-     * The webhook remains the source of truth — this only drives interim messaging.
+     * Gateway return-redirect status from the request query: 'succeeded' | 'processing' | 'failed'
+     * | null. Interim messaging only — the webhook remains the source of truth.
      */
     protected function gatewayReturnStatus(): ?string
     {

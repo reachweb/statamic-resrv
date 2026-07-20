@@ -289,9 +289,8 @@ class ReservationCpController extends Controller
     }
 
     /**
-     * Mark an awaiting-payment (manual) reservation as paid and confirm it — the money
-     * arrived outside a gateway flow (offline gateway, or in person for an online one).
-     * Fires the same ReservationConfirmed chain as a webhook: confirmation emails + log.
+     * Mark an awaiting-payment (manual) reservation as paid out of band and confirm it,
+     * firing the same ReservationConfirmed chain as a webhook.
      */
     public function confirmPayment(int $id)
     {
@@ -308,39 +307,26 @@ class ReservationCpController extends Controller
         }
 
         if ($changed) {
-            // The transition is already committed and this endpoint rejects retries (the row is no
-            // longer awaiting payment), so the confirmation chain (activity log, emails) must fire
-            // before the gateway round trips below — a provider hang or hard timeout inside the
-            // reconciliation must not strand a CONFIRMED booking without its ReservationConfirmed
-            // side effects. The email job defers until after the response, so it still renders the
-            // post-settlement row. Mirrors the webhook path, which dispatches right after its
-            // transition commits. For the same committed-and-unretryable reason a throwing
-            // synchronous listener is contained here: it must neither 500 the request nor skip
-            // the reconciliation below — that would leave a live intent chargeable on a
-            // CONFIRMED booking.
+            // The transition is committed and unretryable, so dispatch before the gateway round
+            // trips below (a provider hang must not strand a CONFIRMED booking without its side
+            // effects), and contain throwing listeners — they must neither 500 nor skip the
+            // reconciliation below.
             try {
                 ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
             } catch (\Throwable $e) {
                 report($e);
             }
 
-            // The money arrived out of band. Reconcile the gateway on the transitioned row: void any
-            // live intent the customer left on the online pay page and drop the payment_id so a later
-            // refund/cancel treats this as a no-gateway-charge booking (mirroring an offline confirm)
-            // instead of routing to the provider with an empty/voided intent that can only fail. An
-            // intent that already captured real money (a webhook racing this confirm) is left intact
-            // so that charge stays refundable. Tolerates gateway errors.
+            // Reconcile the gateway: void any live intent and drop payment_id so later
+            // refund/cancel treats this as a no-gateway-charge booking. An intent that already
+            // captured money is left intact so the charge stays refundable. Tolerates gateway errors.
             app(ReservationRefundProcessor::class)->settlePaidOutOfBand($reservation);
         } else {
-            // The pre-check saw AWAITING_PAYMENT, and a mismatched state throws above, so a no-op
-            // transition can only mean the row went CONFIRMED between the check and the row lock —
-            // a webhook confirm (or a second admin's click) won the race. The winning webhook path
-            // no-ops its orphan detection on CONFIRMED, and this admin's click still claims money
-            // arrived out of band, so skipping the reconciliation here would hide a duplicate
-            // payment (cash AND a captured gateway charge) with a 200 that looks like this confirm
-            // succeeded. Reconcile on the committed row (transitionTo() only syncs attributes on
-            // success, so the in-memory model is a stale awaiting-payment snapshot); a concurrent
-            // CP confirm that already reconciled left an empty payment_id, making this a no-op.
+            // A no-op transition means a webhook confirm (or second admin) won the race to
+            // CONFIRMED. Still reconcile — skipping would hide a duplicate payment (cash AND a
+            // captured charge) — and re-fetch the row: on a failed transition the in-memory model
+            // is a stale awaiting-payment snapshot. A prior reconcile left payment_id empty,
+            // making this a no-op.
             app(ReservationRefundProcessor::class)->settlePaidOutOfBand($this->reservation->findOrFail($id));
         }
 
@@ -348,11 +334,9 @@ class ReservationCpController extends Controller
     }
 
     /**
-     * Cancel an awaiting-payment (manual) reservation: the ReservationCancelled chain
-     * restores stock only when the reservation decremented it (affects_availability),
-     * voids any commission, logs, and emails the customer. Any pending intent is
-     * cancelled after the transition commits — never inside the lock, and tolerantly:
-     * an unreachable gateway leaves an intent that dies of old age.
+     * Cancel an awaiting-payment (manual) reservation via the ReservationCancelled chain.
+     * Any pending intent is cancelled after the transition commits — never inside the
+     * lock, and tolerantly (an unreachable gateway leaves an intent that dies of old age).
      */
     public function cancelAwaitingPayment(int $id)
     {
@@ -363,13 +347,10 @@ class ReservationCpController extends Controller
         }
 
         try {
-            // Tag the cancellation as an unpaid hold so the customer email says "nothing to refund"
-            // rather than "non-refundable": an awaiting-payment booking never captured money, even
-            // if the customer opened the pay link and left an unpaid (now-voided) intent id behind.
-            // The in-transaction origin re-check is load-bearing (same as CancelLapsedHolds):
-            // CANCELLED is also reachable from CONFIRMED, so without it a webhook or concurrent
-            // CP confirm landing between the pre-check above and the row lock would let this
-            // cancel a PAID booking with the unpaid-hold wording.
+            // Tag as an unpaid hold so the customer email says "nothing to refund". The
+            // in-transaction origin re-check is load-bearing (same as CancelLapsedHolds):
+            // CANCELLED is also reachable from CONFIRMED, so a confirm landing between the
+            // pre-check and the row lock must not let this cancel a PAID booking.
             app(ReservationRefundProcessor::class)->cancelWithoutRefund(
                 $reservation,
                 ReservationCancelled::CONTEXT_UNPAID_HOLD,
@@ -392,10 +373,9 @@ class ReservationCpController extends Controller
     }
 
     /**
-     * (Re)send the payment request email for an awaiting-payment reservation. Unlike the
-     * confirmation resend this respects the event's enabled switch — a site that turned
-     * the customer_payment_request event off gets a 422 explaining that, not a silent
-     * success. Sends inline so the sent-at stamp and the returned payload are accurate.
+     * (Re)send the payment request email. Unlike the confirmation resend this respects the
+     * event's enabled switch (422, not silent success). Sends inline so the sent-at stamp
+     * and returned payload are accurate.
      */
     public function sendPaymentRequest(int $id)
     {

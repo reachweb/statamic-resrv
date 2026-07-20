@@ -8,8 +8,7 @@ class AddReservationIdToSession
 {
     public function handle(ReservationCreated $event)
     {
-        // A CP-created reservation must not land in the admin's session — their next
-        // frontend checkout visit would mount it from session('resrv_reservation').
+        // A CP-created reservation must not land in the admin's frontend checkout session.
         if ($event->data->viaCp) {
             return;
         }

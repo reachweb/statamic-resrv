@@ -38,8 +38,7 @@ class ManualReservationCpTest extends TestCase
         $this->travelTo(today()->setHour(12));
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
 
-        // Validation/authorization tests assert HTTP status codes, so exceptions must
-        // render instead of bubbling out of the test kernel.
+        // Assertions target HTTP status codes, so exceptions must render.
         $this->withExceptionHandling();
     }
 
@@ -171,9 +170,7 @@ class ManualReservationCpTest extends TestCase
         $extra = Extra::factory()->create();
         ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
 
-        // Coupon-gated 20% decrease assigned to the EXTRA — engages only while
-        // session('resrv_coupon') matches, exactly what a frontend checkout leaves
-        // behind in the admin's shared browser session.
+        // Coupon-gated 20% decrease on the EXTRA that engages only while session('resrv_coupon') matches.
         $dynamic = DynamicPricing::factory()->withCoupon()->create();
         DB::table('resrv_dynamic_pricing_assignments')->insert([
             'dynamic_pricing_id' => $dynamic->id,
@@ -190,8 +187,7 @@ class ManualReservationCpTest extends TestCase
             'quantity' => 1,
         ];
 
-        // Sanity: with the coupon in the session the raw extras listing DOES discount — the
-        // endpoint's coupon-free scope must be what blocks it, not a coupon that never engages.
+        // Sanity: the raw extras listing DOES discount, so the endpoint's coupon-free scope must be what blocks it.
         session(['resrv_coupon' => '20OFF']);
         $this->assertSame('7.44', Extra::getPriceForDates($priceData)->first()->price->format());
 
@@ -245,8 +241,7 @@ class ManualReservationCpTest extends TestCase
             'rate_id' => Rate::forEntry($entry->id())->first()?->id,
         ];
 
-        // Scientific notation passes Laravel's `numeric` rule but not moneyphp's decimal
-        // parser — it must surface as a domain 422, never a 500.
+        // Scientific notation passes Laravel's `numeric` rule but not moneyphp's parser — must 422, never 500.
         $this->postJson(cp_route('resrv.manual.quote'), array_merge($base, [
             'payment_mode' => 'full',
             'total_override' => '1e3',
@@ -263,9 +258,7 @@ class ManualReservationCpTest extends TestCase
         $this->signInAdmin();
         $entry = $this->makeStatamicItemWithAvailability();
 
-        // Selecting "custom" fires a quote before the amount is typed; it must not blank
-        // the quote (which would hide the very input the user needs) — unlike the store,
-        // which still requires the amount at submit.
+        // Selecting "custom" fires a quote before the amount is typed; it must not blank the quote (the store still requires it).
         $this->postJson(cp_route('resrv.manual.quote'), [
             'item_id' => $entry->id(),
             'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
@@ -301,10 +294,7 @@ class ManualReservationCpTest extends TestCase
             'extras' => [['id' => $extra->id, 'quantity' => 1]],
         ];
 
-        // The quote must preview the same multiplier creation will charge (10 × 3 adults) —
-        // never the ×1 fallback, which would show the admin a total creation does not store.
-        // The listed per-unit price must carry that same multiplier: a ×1 badge next to a
-        // ×3 total reads as a bug and hides what the extra actually costs.
+        // The quote and the listed per-unit price must carry the same multiplier creation will charge (10 × 3 adults), not the ×1 fallback.
         $this->postJson(cp_route('resrv.manual.quote'), array_merge($payload, [
             'customer' => ['email' => 'jane@example.com', 'adults' => 3],
         ]))->assertOk()
@@ -312,8 +302,7 @@ class ManualReservationCpTest extends TestCase
             ->assertJsonPath('pricing.total', '130.00')
             ->assertJsonPath('available_extras.0.price', '30.00');
 
-        // A selected custom extra whose driving field is still empty must fail the quote
-        // (creation would fail identically) instead of previewing a ×1 amount.
+        // A selected custom extra with an empty driving field must fail the quote, as creation would.
         $this->postJson(cp_route('resrv.manual.quote'), array_merge($payload, [
             'customer' => ['email' => '', 'adults' => ''],
         ]))->assertStatus(422)
@@ -328,10 +317,8 @@ class ManualReservationCpTest extends TestCase
         $extra = Extra::factory()->custom()->create();
         ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
 
-        // The extra is NOT selected and its driving field ('adults') is still empty: the listing
-        // must fall back to the ×1 base price — like the frontend extras list — instead of
-        // throwing. Extra::getCustomPrice throws for a present-but-unusable customer payload,
-        // which would 500 the whole quote over a field the admin simply has not filled yet.
+        // An unselected custom extra with an empty driving field lists at the ×1 base price instead of throwing
+        // (Extra::getCustomPrice throws on a present-but-unusable customer payload).
         $this->postJson(cp_route('resrv.manual.quote'), [
             'item_id' => $entry->id(),
             'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
@@ -350,8 +337,7 @@ class ManualReservationCpTest extends TestCase
         $this->signInAdmin();
         $entry = $this->makeStatamicItemWithAvailability();
 
-        // A checkout form carrying dictionary fields, read from a scratch blueprint
-        // directory so the addon's shipped blueprint stays untouched.
+        // A scratch blueprint directory keeps the addon's shipped checkout blueprint untouched.
         $directory = sys_get_temp_dir().'/resrv-blueprints-'.uniqid();
         mkdir($directory.'/forms', 0755, true);
         file_put_contents($directory.'/forms/checkout.yaml', <<<'YAML'
@@ -386,8 +372,7 @@ class ManualReservationCpTest extends TestCase
                 ->json('form_fields')
         )->keyBy('handle');
 
-        // A plain dictionary carries its resolved items so the CP form can offer the same
-        // choices (and store the same values) as the frontend checkout's combobox.
+        // A plain dictionary carries resolved items so the CP form offers the same choices as checkout.
         $country = $fields->get('country');
         $this->assertFalse($country['phone_dictionary']);
         $this->assertNotEmpty($country['dictionary_items']);
@@ -497,10 +482,7 @@ class ManualReservationCpTest extends TestCase
         $this->useMultipleGateways();
         $entry = $this->makeStatamicItemWithAvailability(available: 2);
 
-        // A custom checkout form whose email field is merely optional must not weaken the manual
-        // reservation's explicit required|email — an online awaiting reservation needs an email
-        // for its payment URL and request recipient. The checkout-form rules are merged before
-        // the explicit ones so the explicit rule wins.
+        // An optional checkout-form email must not weaken the explicit required|email — the payment link needs an address.
         $field = \Mockery::mock();
         $field->shouldReceive('handle')->andReturn('email');
         $field->shouldReceive('config')->andReturn(['validate' => ['email']]);

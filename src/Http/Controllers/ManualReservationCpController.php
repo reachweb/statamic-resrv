@@ -95,9 +95,7 @@ class ManualReservationCpController extends Controller
 
     /**
      * A checkout form field as the create page renders it. Dictionary fields carry their
-     * resolved items (the config only names the dictionary) plus the phone flag, mirroring
-     * Livewire\CheckoutForm::getDictionaryItems()/isPhoneDictionary() so the CP form offers
-     * the same choices and value shapes as the frontend checkout.
+     * resolved items and phone flag, mirroring Livewire\CheckoutForm.
      */
     protected function serializeFormField(Field $field): array
     {
@@ -111,8 +109,7 @@ class ManualReservationCpController extends Controller
         $data['phone_dictionary'] = $dictionary === 'country_phone_codes';
         $data['dictionary_items'] = [];
 
-        // The phone variant is a free-typed tel input on the CP (the items only feed the
-        // frontend's code-prefix combobox), so its item list is dead weight — skip it.
+        // The CP renders phone as a free-typed tel input, so its item list is unused.
         if ($data['phone_dictionary']) {
             return $data;
         }
@@ -134,12 +131,9 @@ class ManualReservationCpController extends Controller
         $data = $request->validated();
 
         try {
-            // The supplemental listings price through the same coupon-gated dynamic pricing
-            // as the quote (Extra::getPriceForDates → DynamicPricing::searchForExtra reads
-            // the frontend checkout's session coupon), so they must be serialized inside the
-            // same coupon-free scope — otherwise a coupon left in the admin's session would
-            // list discounted per-unit prices next to the undiscounted totals creation
-            // actually charges.
+            // The extras/options listings read the same session coupon as the quote, so they
+            // must be serialized inside the same coupon-free scope or their per-unit prices
+            // would not match the totals creation charges.
             $payload = $this->creator->withoutCheckoutSession(fn (): array => array_merge(
                 $this->serializeQuote($this->creator->quote($data, requireCustomAmount: false)),
                 [
@@ -168,10 +162,7 @@ class ManualReservationCpController extends Controller
         ], 201);
     }
 
-    /**
-     * Whether the manual-reservations payment entry resolves to a usable page — the same
-     * check that gates online gateways in the creator and link building on the model.
-     */
+    /** Same payment-entry check that gates online gateways in the creator and link building on the model. */
     protected function paymentEntryConfigured(): bool
     {
         return Reservation::resolveCustomerPageEntry(config('resrv-config.manual_reservations_payment_entry')) !== null;
@@ -217,16 +208,11 @@ class ManualReservationCpController extends Controller
         $customer = collect($data['customer'] ?? []);
 
         return Extra::getPriceForDates($priceData)->map(function ($extra) use ($priceData, $customer) {
-            // Re-price a custom-priced extra with the admin-entered customer payload so the listed
-            // per-unit price carries the same multiplier the quoted total uses (the resrv-search
-            // session fallback is stashed by withoutCheckoutSession, so without it the price is
-            // ×1). Per extra, and only while its driving field holds a usable number:
-            // getCustomPrice THROWS for a present-but-unusable payload, which would 500 the whole
-            // listing over a field the admin simply has not filled yet. An unfilled extra keeps
-            // the ×1 fallback, and a SELECTED one still fails the quote loudly in the creator.
+            // Re-price custom-priced extras with the customer payload so the listed price matches
+            // the quoted total — but only while the driving field holds a usable number:
+            // getCustomPrice THROWS on unusable payloads, and an unfilled extra keeps the ×1 fallback.
             if ($extra->price_type === 'custom' && $extra->custom && is_numeric($customer->get($extra->custom))) {
-                // Fresh instance: priceForDates mutates the model's price attribute, so re-pricing
-                // the instance getPriceForDates already transformed would compound the price.
+                // Fresh instance: priceForDates mutates price, so re-pricing the transformed one would compound it.
                 $extra->price = Extra::find($extra->id)->priceForDates(
                     array_merge($priceData, ['customer' => $customer])
                 );
@@ -237,8 +223,7 @@ class ManualReservationCpController extends Controller
                 'name' => $extra->name,
                 'price' => $extra->price->format(),
                 'price_type' => $extra->price_type,
-                // The checkout-form field handle driving a custom-priced extra — the create form
-                // re-quotes when that field changes so the preview matches what creation charges.
+                // Driving field handle for custom pricing — the create form re-quotes when it changes.
                 'custom' => $extra->custom,
                 'allow_multiple' => (bool) $extra->allow_multiple,
                 'maximum' => $extra->maximum,

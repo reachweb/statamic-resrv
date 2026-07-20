@@ -22,8 +22,7 @@ const props = defineProps({
 
 const toast = useToast();
 
-// Local copy so the awaiting-payment actions can refresh the page state from the
-// serialized reservation the endpoints return, without a full Inertia reload.
+// Local copy so the awaiting-payment actions can refresh page state without a full Inertia reload.
 const reservation = ref(props.reservation);
 
 const isParent = computed(() => reservation.value.type === 'parent');
