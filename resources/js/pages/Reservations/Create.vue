@@ -184,9 +184,14 @@ const customAmountError = computed(() => {
     return null;
 });
 
-// The relaxed quote returns zero for an as-yet-unentered custom amount, but creation requires one.
+// The relaxed quote returns zero for an as-yet-unentered custom amount, but creation requires
+// one — unless the total itself is zero, where an omitted amount is a comped booking (the
+// server relaxes the same check).
 const customAmountMissing = computed(
-    () => form.payment_mode === 'custom' && (form.custom_amount === '' || form.custom_amount === null),
+    () =>
+        form.payment_mode === 'custom' &&
+        (form.custom_amount === '' || form.custom_amount === null) &&
+        ! (quote.value && Number(quote.value.pricing.total) === 0),
 );
 
 // A zero-amount booking collects nothing and needs no gateway; the server enforces the requirement for nonzero amounts.

@@ -21,7 +21,10 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
                 'string',
                 Rule::in(array_keys(app(PaymentGatewayManager::class)->all())),
             ],
-            'custom_amount' => 'nullable|numeric|required_if:payment_mode,custom',
+            // Nullable even in custom mode: a zero total makes an omitted amount a comped
+            // booking. "Amount required for a nonzero total" is enforced in
+            // ManualReservationCreator::requestedAmount(), which knows the total.
+            'custom_amount' => 'nullable|numeric',
             'affects_availability' => 'sometimes|boolean',
             'hold_days' => 'nullable|integer|min:1',
             'send_payment_request_email' => 'sometimes|boolean',

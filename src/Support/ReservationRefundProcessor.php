@@ -19,10 +19,18 @@ use Reach\StatamicResrv\Models\Reservation;
 class ReservationRefundProcessor
 {
     /**
-     * Intent statuses where money is captured or being captured — the intent can only be
-     * refunded, not voided.
+     * Intent statuses where money is captured, settling, or held. After a void attempt, any
+     * of these means the charge landed or can still land — keep the reference.
      */
     private const MONEY_MOVING_INTENT_STATUSES = ['succeeded', 'processing', 'requires_capture'];
+
+    /**
+     * The subset a void cannot touch — captured or settling money can only be refunded.
+     * 'requires_capture' is deliberately absent: an uncaptured hold is still cancellable
+     * (Stripe's cancel covers it), so reconciliation voids it instead of leaving an open
+     * authorization that could capture later.
+     */
+    private const REFUND_ONLY_INTENT_STATUSES = ['succeeded', 'processing'];
 
     /**
      * Refund a reservation: return the charge through the payment gateway, transition to
@@ -214,9 +222,11 @@ class ReservationRefundProcessor
      * Reconcile the gateway after an awaiting-payment reservation is confirmed out of band.
      * Manually-confirmable gateways never minted a real charge. For online gateways, void any
      * leftover intent and drop payment_id so downstream refund/cancel reads a no-gateway-charge
-     * settlement — UNLESS the intent captured or is capturing money (a webhook confirm racing
+     * settlement — UNLESS the intent captured or is settling money (a webhook confirm racing
      * this one): then keep the reference so the charge stays refundable, and notify admins of
      * the possible duplicate (the follow-up webhook no-ops on the CONFIRMED row silently).
+     * An uncaptured 'requires_capture' hold is voided like any open intent — releasing the
+     * authorization prevents the duplicate rather than warning about it.
      * A capture can surface on either read; a read that THROWS leaves the state unknown, so
      * those paths notify too (CONTEXT_OUT_OF_BAND_UNVERIFIED).
      *
@@ -258,9 +268,12 @@ class ReservationRefundProcessor
             return;
         }
 
-        // A money-moving intent means a webhook confirm is racing this manual one: keep the
-        // reference so the charge stays refundable, and notify — the succeeded webhook that
-        // follows sees CONFIRMED and no-ops, so silence here would hide the double payment.
+        // A captured or settling intent means a webhook confirm is racing this manual one:
+        // keep the reference so the charge stays refundable, and notify — the succeeded
+        // webhook that follows sees CONFIRMED and no-ops, so silence here would hide the
+        // double payment. An uncaptured 'requires_capture' hold falls through to the void
+        // below instead — cancelling it releases the customer's authorization and PREVENTS
+        // the duplicate; a capture racing the void is caught by the post-void verify.
         try {
             $intent = $gateway->retrievePaymentIntent($paymentId, $reservation);
         } catch (\Throwable $e) {
@@ -279,7 +292,7 @@ class ReservationRefundProcessor
             return;
         }
 
-        if ($intent !== null && in_array($intent->status ?? '', self::MONEY_MOVING_INTENT_STATUSES, true)) {
+        if ($intent !== null && in_array($intent->status ?? '', self::REFUND_ONLY_INTENT_STATUSES, true)) {
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
                 $paymentId,

@@ -300,8 +300,27 @@ class ManualReservationCpTest extends TestCase
             ->assertJsonPath('payment.mode', 'custom')
             ->assertJsonPath('payment.amount', '0.00');
 
-        $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, ['payment_mode' => 'custom']))
-            ->assertStatus(422)->assertJsonValidationErrors(['custom_amount']);
+        $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, ['payment_mode' => 'custom', 'payment_gateway' => 'fake']))
+            ->assertStatus(422)->assertJson(['error' => __('A custom amount is required for the custom payment mode.')]);
+    }
+
+    public function test_store_allows_omitted_custom_amount_when_the_total_is_overridden_to_zero()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        // A zero override comps the booking: custom mode must accept the omitted amount the
+        // creator treats as a legitimate comped booking instead of rejecting it up front.
+        $response = $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, [
+            'payment_mode' => 'custom',
+            'payment_gateway' => null,
+            'total_override' => '0',
+        ]))->assertStatus(201);
+
+        $reservation = Reservation::find($response->json('id'));
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertSame('0.00', $reservation->payment->format());
+        $this->assertSame('0.00', $reservation->total->format());
     }
 
     public function test_quote_endpoint_prices_custom_extras_with_the_customer_data()
@@ -486,9 +505,10 @@ class ManualReservationCpTest extends TestCase
         $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, ['payment_gateway' => 'paypal']))
             ->assertStatus(422)->assertJsonValidationErrors(['payment_gateway']);
 
-        // Custom mode without an amount.
+        // Custom mode without an amount on a nonzero total (the creator enforces this — the
+        // request rule stays nullable so zero-total comped bookings can omit it).
         $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, ['payment_mode' => 'custom']))
-            ->assertStatus(422)->assertJsonValidationErrors(['custom_amount']);
+            ->assertStatus(422)->assertJson(['error' => __('A custom amount is required for the custom payment mode.')]);
 
         // Hold days below 1.
         $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, ['hold_days' => 0]))

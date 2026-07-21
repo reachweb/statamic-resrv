@@ -1217,7 +1217,7 @@ public function retrievePaymentIntent(string $paymentId, Reservation $reservatio
 
 Resrv reads `->status` against the canonical Stripe-style vocabulary:
 
-- `succeeded`, `processing`, `requires_capture` → money is captured, settling, or held. Resrv will **not** mint another intent and will **keep** the reference.
+- `succeeded`, `processing`, `requires_capture` → money is captured, settling, or held. Resrv will **not** mint another intent and will **keep** the reference. One exception: when an admin confirms a manual reservation as paid out of band, a `requires_capture` hold is still only an authorization, so Resrv **voids** it through `cancelPaymentIntent()` (verifying afterwards) instead of leaving it open to capture a duplicate payment.
 - `canceled` → dead. Resrv treats it as replaceable / safe to clear.
 - any other value (e.g. `requires_payment_method`, `requires_confirmation`, `requires_action`) → still payable and resumable.
 

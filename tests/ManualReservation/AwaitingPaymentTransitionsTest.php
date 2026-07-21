@@ -347,32 +347,89 @@ class AwaitingPaymentTransitionsTest extends TestCase
         });
     }
 
-    public function test_confirming_online_out_of_band_notifies_for_every_capturing_intent_status()
+    public function test_confirming_online_out_of_band_notifies_for_a_settling_intent()
     {
         Mail::fake();
         $this->signInAdmin();
 
         /** @var FakePaymentGateway $gateway */
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
 
-        // 'processing' and 'requires_capture' also mean money is moving — the duplicate notification must cover them.
-        foreach (['processing', 'requires_capture'] as $status) {
-            $gateway->retrievedIntentStatus = $status;
+        // 'processing' also means money is moving — the duplicate notification must cover it.
+        $gateway->retrievedIntentStatus = 'processing';
 
-            $reservation = $this->awaitingPaymentReservation([
-                'payment' => '50.00',
-                'payment_id' => 'pi_'.$status,
-                'payment_gateway' => 'fake',
-                'affects_availability' => false,
-            ]);
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_processing',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
 
-            $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
-                ->assertStatus(200);
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
 
-            $this->assertSame('pi_'.$status, $reservation->fresh()->payment_id);
-            Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_'.$status
-                && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_DUPLICATE);
-        }
+        $this->assertSame('pi_processing', $reservation->fresh()->payment_id);
+        $this->assertCount(0, $gateway->cancelledIntents);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_processing'
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_DUPLICATE);
+    }
+
+    public function test_confirming_online_out_of_band_voids_an_uncaptured_authorization()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        $gateway->retrievedIntentStatus = 'requires_capture';
+
+        // Nothing captured yet: the hold is still cancellable, so it must be voided — not left
+        // as an open authorization that could still capture after the out-of-band payment.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_authorized',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertSame('', $reservation->payment_id);
+        $this->assertSame('pi_authorized', $gateway->cancelledIntents[0]['payment_id']);
+        Mail::assertNotSent(OrphanedPaymentNotification::class);
+    }
+
+    public function test_confirming_online_out_of_band_notifies_when_the_authorization_survives_the_void()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        // The provider swallows the cancel (like Stripe): the hold stays live, so the post-void
+        // verify must keep the reference and raise the duplicate warning instead.
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentStatus = 'requires_capture';
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_authorized',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $this->assertSame('pi_authorized', $reservation->fresh()->payment_id);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_authorized'
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_DUPLICATE);
     }
 
     public function test_confirming_online_out_of_band_notifies_when_the_intent_captures_during_the_void()
