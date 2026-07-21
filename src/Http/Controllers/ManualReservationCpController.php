@@ -189,6 +189,7 @@ class ManualReservationCpController extends Controller
                     'label' => $gateway['label'],
                     'surcharge' => $gateway['surcharge']->format(),
                     'amount_with_surcharge' => $gateway['amount_with_surcharge']->format(),
+                    'available' => $gateway['available'],
                 ])->all(),
             ],
         ];

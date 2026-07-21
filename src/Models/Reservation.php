@@ -56,6 +56,7 @@ class Reservation extends Model
         'payment_surcharge',
         'payment_id',
         'payment_gateway',
+        'payment_unresolved',
         'total',
         'customer_id',
         'abandoned_email_sent_at',
@@ -80,6 +81,7 @@ class Reservation extends Model
         'abandoned_email_sent_at' => 'datetime',
         'free_cancellation_period' => 'integer',
         'affects_availability' => 'boolean',
+        'payment_unresolved' => 'boolean',
         'hold_expires_at' => 'datetime',
         'payment_request_email_sent_at' => 'datetime',
     ];

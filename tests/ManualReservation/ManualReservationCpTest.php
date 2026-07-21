@@ -162,6 +162,35 @@ class ManualReservationCpTest extends TestCase
         $this->assertArrayHasKey('fake', $response->json('payment.gateways'));
     }
 
+    public function test_quote_endpoint_flags_gateways_that_cannot_accept_the_amount()
+    {
+        $this->signInAdmin();
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake Online',
+                'amount_limits' => ['min' => 500],
+            ],
+            'offline' => [
+                'class' => OfflinePaymentGateway::class,
+                'label' => 'Bank Transfer',
+            ],
+        ]);
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        // Total is 100.00 — below fake's 500 minimum, so the form must disable it.
+        $this->postJson(cp_route('resrv.manual.quote'), [
+            'item_id' => $entry->id(),
+            'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
+            'date_end' => today()->addDays(3)->setTime(12, 0)->toDateTimeString(),
+            'quantity' => 1,
+            'rate_id' => Rate::forEntry($entry->id())->first()?->id,
+            'payment_mode' => 'full',
+        ])->assertOk()
+            ->assertJsonPath('payment.gateways.fake.available', false)
+            ->assertJsonPath('payment.gateways.offline.available', true);
+    }
+
     public function test_quote_endpoint_lists_extras_coupon_free_when_the_admin_session_carries_a_coupon()
     {
         $this->signInAdmin();
@@ -397,8 +426,10 @@ class ManualReservationCpTest extends TestCase
                 ->where('paymentEntryConfigured', false)
                 ->where('gateways.0.key', 'fake')
                 ->where('gateways.0.supports_manual_confirmation', false)
+                ->where('gateways.0.supports_webhooks', true)
                 ->where('gateways.1.key', 'offline')
                 ->where('gateways.1.supports_manual_confirmation', true)
+                ->where('gateways.1.supports_webhooks', false)
                 ->whereType('affiliates', 'array'));
 
         $this->configurePaymentEntry();

@@ -123,7 +123,9 @@ class ReservationRefundProcessor
      * Void any open intent, then drop the local reference only once the gateway confirms it
      * can no longer take money — the cancel-path mirror of settlePaidOutOfBand()'s
      * verify-before-clear. An unverified void KEEPS the reference for reconciliation: a stale
-     * payment_id display beats discarding the only handle on a possibly-live charge. No admin
+     * payment_id display beats discarding the only handle on a possibly-live charge. The kept
+     * reference is stamped payment_unresolved so reporting doesn't count an uncollected intent
+     * as retained revenue (Report treats CANCELLED + payment_id as money kept). No admin
      * notification here: the row is CANCELLED, so a later payment still reaches the webhook's
      * orphan detection (only CONFIRMED rows short-circuit it).
      */
@@ -141,6 +143,8 @@ class ReservationRefundProcessor
         try {
             $gateway = $reservation->resolvePaymentGateway();
         } catch (UnknownPaymentGateway $e) {
+            $reservation->update(['payment_unresolved' => true]);
+
             return;
         }
 
@@ -149,6 +153,8 @@ class ReservationRefundProcessor
 
             return;
         }
+
+        $reservation->update(['payment_unresolved' => true]);
 
         Log::warning('Could not verify the cancelled reservation\'s payment intent was voided; keeping the gateway charge reference for reconciliation.', [
             'reservation_id' => $reservation->id,
@@ -174,7 +180,20 @@ class ReservationRefundProcessor
         try {
             $gateway = $reservation->resolvePaymentGateway();
         } catch (UnknownPaymentGateway $e) {
-            // The recorded gateway is no longer configured — nothing we can safely void or verify.
+            // The recorded gateway is no longer configured — nothing can be voided or verified,
+            // and its webhook route is gone, so any leftover intent must be flagged, not dropped.
+            $paymentId = (string) $reservation->payment_id;
+
+            if ($paymentId !== '') {
+                $this->notifyPossibleDuplicatePayment(
+                    $reservation,
+                    $paymentId,
+                    'unknown',
+                    'The recorded payment gateway is no longer configured while confirming an out-of-band payment; keeping the gateway charge reference — check the intent at the gateway.',
+                    OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_UNVERIFIED,
+                );
+            }
+
             return;
         }
 

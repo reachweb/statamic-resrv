@@ -84,11 +84,14 @@ const entryOptions = computed(() =>
 );
 const rateOptions = computed(() => rates.value.map((rate) => ({ value: rate.id, label: rate.title })));
 const gatewayOptions = computed(() =>
-    props.gateways.map((gateway) => ({
-        value: gateway.key,
-        label: gatewayDisabled(gateway) ? `${gateway.label} — ${__('payment page not configured')}` : gateway.label,
-        disabled: gatewayDisabled(gateway),
-    })),
+    props.gateways.map((gateway) => {
+        const reason = gatewayDisabledReason(gateway);
+        return {
+            value: gateway.key,
+            label: reason ? `${gateway.label} — ${reason}` : gateway.label,
+            disabled: reason !== null,
+        };
+    }),
 );
 const affiliateOptions = computed(() =>
     (props.affiliates ?? []).map((affiliate) => ({ value: affiliate.id, label: `${affiliate.name} (${affiliate.code})` })),
@@ -107,8 +110,21 @@ const standardModeLabel = computed(() => {
     return base;
 });
 
-// Online gateways are unusable without a configured payment page; manually-confirmable ones always work.
-const gatewayDisabled = (gateway) => ! props.paymentEntryConfigured && ! gateway.supports_manual_confirmation;
+// Mirrors assertGatewayIsUsable(): a selectable-but-unusable gateway would only bounce off the
+// store request with a 422. Zero-amount bookings collect nothing, so no gateway is disabled.
+const gatewayDisabledReason = (gateway) => {
+    if (paymentAmountIsZero.value) return null;
+    if (! gateway.supports_manual_confirmation && ! gateway.supports_webhooks) {
+        return __('cannot confirm online payments');
+    }
+    if (! props.paymentEntryConfigured && ! gateway.supports_manual_confirmation) {
+        return __('payment page not configured');
+    }
+    if (quote.value?.payment.gateways?.[gateway.key]?.available === false) {
+        return __('amount outside the allowed limits');
+    }
+    return null;
+};
 
 const money = (amount) => `${props.currencySymbol} ${amount}`;
 
@@ -170,6 +186,13 @@ const customAmountError = computed(() => {
 
 // A zero-amount booking collects nothing and needs no gateway; the server enforces the requirement for nonzero amounts.
 const paymentAmountIsZero = computed(() => quote.value && Number(quote.value.payment.amount) === 0);
+
+// A new quote can disable the selected gateway (e.g. the amount moved outside its limits).
+watch(gatewayOptions, (options) => {
+    if (options.find((option) => option.value === form.payment_gateway)?.disabled) {
+        form.payment_gateway = null;
+    }
+});
 
 const canSubmit = computed(
     () => datesComplete.value && quote.value && ! quoteDirty.value && ! quoteError.value && ! customAmountError.value && ! availabilityBlocks.value && (paymentAmountIsZero.value || form.payment_gateway) && ! submitting.value,

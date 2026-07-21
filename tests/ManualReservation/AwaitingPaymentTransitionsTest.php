@@ -149,6 +149,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
     {
         Mail::fake();
         $this->signInAdmin();
+        Config::set('resrv-config.payment', 'fixed');
 
         $reservation = $this->awaitingPaymentReservation([
             'payment_gateway' => 'offline',
@@ -161,7 +162,14 @@ class AwaitingPaymentTransitionsTest extends TestCase
             'status' => 'confirmed',
         ]);
         $this->assertEquals('confirmed', $reservation->fresh()->status);
-        Mail::assertSent(ReservationConfirmedMail::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
+        // Out-of-band money is not a card charge — the confirmation must not claim "credit card".
+        Mail::assertSent(ReservationConfirmedMail::class, function ($mail) use ($reservation) {
+            $html = $mail->render();
+
+            return $mail->hasTo($reservation->customer->email)
+                && str_contains($html, 'Amount already paid')
+                && ! str_contains($html, 'credit card');
+        });
     }
 
     public function test_cp_confirm_payment_voids_an_open_online_intent()
@@ -523,6 +531,34 @@ class AwaitingPaymentTransitionsTest extends TestCase
         });
     }
 
+    public function test_confirming_out_of_band_with_a_removed_gateway_keeps_the_reference_and_notifies()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        // The gateway was removed from config after the intent was minted: nothing can be
+        // voided or verified, and its webhook route is gone — admins must be told.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_removed_gateway',
+            'payment_gateway' => 'gone',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertSame('pi_removed_gateway', $reservation->payment_id);
+
+        Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
+            return $mail->hasTo('admin@example.com')
+                && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_UNVERIFIED
+                && $mail->paymentIntentId === 'pi_removed_gateway';
+        });
+    }
+
     public function test_customer_cannot_self_refund_an_online_out_of_band_confirmation()
     {
         Mail::fake();
@@ -582,6 +618,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('', $reservation->payment_id);
         $this->assertFalse($reservation->hasGatewayPayment());
         $this->assertTrue($reservation->amountPaidOnline()->isZero());
+        $this->assertFalse($reservation->payment_unresolved);
     }
 
     public function test_cancelling_an_unpaid_hold_keeps_the_reference_when_the_void_cannot_be_verified()
@@ -606,6 +643,26 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('cancelled', $reservation->status);
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_unpaid_hold', $reservation->payment_id);
+        // The kept reference is a reconciliation handle, not collected money — reporting must skip it.
+        $this->assertTrue($reservation->payment_unresolved);
+    }
+
+    public function test_cancelling_an_unpaid_hold_with_a_removed_gateway_marks_the_reference_unresolved()
+    {
+        Mail::fake();
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_gone',
+            'payment_gateway' => 'gone',
+        ]);
+
+        app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation, cancelOpenIntent: true);
+
+        $reservation->refresh();
+        $this->assertSame('cancelled', $reservation->status);
+        $this->assertSame('pi_gone', $reservation->payment_id);
+        $this->assertTrue($reservation->payment_unresolved);
     }
 
     public function test_cancel_without_refund_voids_the_freshly_written_intent_not_a_stale_snapshot()

@@ -791,6 +791,9 @@ class ManualReservationCreator
                 'label' => $this->gatewayManager->label($name),
                 'surcharge' => $surcharge,
                 'amount_with_surcharge' => Price::create($amount->format())->add($surcharge),
+                // Mirrors assertGatewayIsUsable()'s amount-limit check so the form can disable
+                // gateways the store request would reject.
+                'available' => $amount->isZero() || $this->gatewayManager->isAvailableFor($name, $amount),
             ]];
         })->all();
     }

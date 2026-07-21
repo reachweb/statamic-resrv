@@ -249,6 +249,7 @@ class PaymentGatewayManager
                 'key' => $name,
                 'label' => $this->label($name),
                 'supports_manual_confirmation' => $this->resolve($name)->supportsManualConfirmation(),
+                'supports_webhooks' => $this->resolve($name)->supportsWebhooks(),
             ];
         })->values()->all();
     }
