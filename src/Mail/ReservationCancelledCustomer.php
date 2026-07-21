@@ -29,6 +29,7 @@ class ReservationCancelledCustomer extends Mailable
     public function build()
     {
         $holdLapsed = $this->context === ReservationCancelled::CONTEXT_HOLD_LAPSED;
+        $paymentInFlight = $this->context === ReservationCancelled::CONTEXT_PAYMENT_IN_FLIGHT;
 
         if (! $this->subject) {
             $this->subject($holdLapsed
@@ -37,13 +38,16 @@ class ReservationCancelledCustomer extends Mailable
         }
 
         // A lapsed/unpaid hold never captured money even if an unpaid intent id lingers,
-        // so the template must not call the payment non-refundable.
+        // so the template must not call the payment non-refundable. An in-flight capture
+        // gets its own wording: the charge will be refunded, not retained.
         $paymentCollected = ! $holdLapsed
+            && ! $paymentInFlight
             && $this->context !== ReservationCancelled::CONTEXT_UNPAID_HOLD
             && $this->reservation->hasGatewayPayment();
 
         $this->with([
             'holdLapsed' => $holdLapsed,
+            'paymentInFlight' => $paymentInFlight,
             'paymentCollected' => $paymentCollected,
         ]);
 

@@ -20,6 +20,13 @@ class ReservationCancelled
      */
     public const CONTEXT_UNPAID_HOLD = 'unpaid_hold';
 
+    /**
+     * The hold's intent had already captured (or was capturing) money when the cancellation
+     * reconciled it — a payment was in flight. The charge will be refunded at the gateway,
+     * so emails must claim neither "payment not received" nor "payment retained".
+     */
+    public const CONTEXT_PAYMENT_IN_FLIGHT = 'payment_in_flight';
+
     public $reservation;
 
     /** @param  ?string  $context  Why the booking was cancelled (CONTEXT_*) for email wording; null for the existing flows. */

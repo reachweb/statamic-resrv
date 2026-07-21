@@ -20,7 +20,9 @@
 {{ __("Email") }}: **{{ $reservation->customer?->email }}**
 @endcomponent
 
-@if ($holdLapsed ?? false)
+@if ($paymentInFlight ?? false)
+{{ __("If you had just completed the payment for this reservation, don't worry — we have been notified and the charge will be refunded.") }}
+@elseif ($holdLapsed ?? false)
 {{ __("If you still want these dates, please contact us — subject to availability, we will be happy to set up a new reservation.") }}
 @elseif ($paymentCollected ?? $reservation->hasGatewayPayment())
 **{{ __("No refund has been issued for this cancellation. The payment for this reservation is non-refundable.") }}**

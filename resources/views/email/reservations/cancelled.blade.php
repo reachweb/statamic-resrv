@@ -1,6 +1,8 @@
 @component('mail::message')
 
-@if ($holdLapsed ?? false)
+@if ($paymentInFlight ?? false)
+{{ __("A reservation was cancelled while its payment intent had already captured — or was still capturing — money at the gateway. A separate reconciliation alert has been sent; refund the charge in your payment provider's dashboard.") }}
+@elseif ($holdLapsed ?? false)
 {{ __("A reservation has been cancelled because its payment hold lapsed — the customer did not pay in time.") }}
 @else
 {{ __("A reservation has been cancelled by the customer.") }}

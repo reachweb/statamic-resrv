@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Events\ReservationCancelled as ReservationCancelledEvent;
 use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -663,6 +664,45 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('cancelled', $reservation->status);
         $this->assertSame('pi_gone', $reservation->payment_id);
         $this->assertTrue($reservation->payment_unresolved);
+
+        // The removed gateway's webhook route 404s, so orphan detection can never fire for
+        // this intent — an immediate reconciliation alert is the only signal.
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_gone'
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_CANCELLED_UNVERIFIED);
+    }
+
+    public function test_cancelling_a_hold_whose_intent_captured_notifies_and_reroutes_the_email_wording()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        // A captured intent cannot be voided and the post-void read reports it money-moving.
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentStatus = 'succeeded';
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_captured_in_flight',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('cancelled', $reservation->status);
+        $this->assertSame('pi_captured_in_flight', $reservation->payment_id);
+        $this->assertTrue($reservation->payment_unresolved);
+
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_captured_in_flight'
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_CANCELLED_CAPTURED);
+
+        // The customer email must not claim the payment was never received.
+        Mail::assertSent(ReservationCancelledCustomer::class, fn ($mail) => $mail->hasTo($reservation->customer->email)
+            && $mail->context === ReservationCancelledEvent::CONTEXT_PAYMENT_IN_FLIGHT);
     }
 
     public function test_cancel_without_refund_voids_the_freshly_written_intent_not_a_stale_snapshot()

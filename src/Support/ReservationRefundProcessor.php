@@ -13,7 +13,6 @@ use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
-use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 
@@ -106,14 +105,17 @@ class ReservationRefundProcessor
         $changed = $reservation->transitionTo(ReservationStatus::CANCELLED, inTransaction: $inTransaction);
 
         if ($changed) {
-            $this->dispatchCommitted(ReservationCancelled::class, $reservation, $context);
-
-            // Read payment_id/gateway from the just-transitioned row (transitionTo() syncs the
-            // locked committed row): a pre-lock snapshot could miss a pay-page write and
-            // silently skip cancelling the customer's live intent.
-            if ($cancelOpenIntent) {
-                $this->cancelOpenIntentAndClearVerifiedReference($reservation);
+            // Reconcile the intent BEFORE dispatching so the emails can't declare an in-flight
+            // payment "not received": a charge that captured just before the cancellation swaps
+            // the unpaid-hold context for CONTEXT_PAYMENT_IN_FLIGHT. Reads payment_id/gateway
+            // from the just-transitioned row (transitionTo() syncs the locked committed row):
+            // a pre-lock snapshot could miss a pay-page write and silently skip cancelling the
+            // customer's live intent.
+            if ($cancelOpenIntent && $this->cancelOpenIntentAndClearVerifiedReference($reservation)) {
+                $context = ReservationCancelled::CONTEXT_PAYMENT_IN_FLIGHT;
             }
+
+            $this->dispatchCommitted(ReservationCancelled::class, $reservation, $context);
         }
 
         return $changed;
@@ -124,18 +126,23 @@ class ReservationRefundProcessor
      * can no longer take money — the cancel-path mirror of settlePaidOutOfBand()'s
      * verify-before-clear. An unverified void KEEPS the reference for reconciliation: a stale
      * payment_id display beats discarding the only handle on a possibly-live charge. The kept
-     * reference is stamped payment_unresolved so reporting doesn't count an uncollected intent
-     * as retained revenue (Report treats CANCELLED + payment_id as money kept). No admin
-     * notification here: the row is CANCELLED, so a later payment still reaches the webhook's
-     * orphan detection (only CONFIRMED rows short-circuit it).
+     * reference is stamped payment_unresolved so reporting and displays don't count an
+     * uncollected intent as retained revenue. A merely-unverified intent only logs — the row
+     * is CANCELLED, so a later payment still reaches the webhook's orphan detection — but two
+     * cases notify admins immediately: a money-moving intent (the capture is already known,
+     * not hypothetical) and a removed gateway (its webhook route 404s, so orphan detection
+     * can never fire).
+     *
+     * Returns true when the intent was observed in a money-moving state, so the caller can
+     * keep the cancellation emails from claiming the hold was unpaid.
      */
-    protected function cancelOpenIntentAndClearVerifiedReference(Reservation $reservation): void
+    protected function cancelOpenIntentAndClearVerifiedReference(Reservation $reservation): bool
     {
         $paymentId = (string) $reservation->payment_id;
         $paymentGateway = (string) $reservation->payment_gateway;
 
         if ($paymentId === '' || $paymentGateway === '') {
-            return;
+            return false;
         }
 
         $this->cancelPaymentIntentQuietly($reservation, $paymentId, $paymentGateway);
@@ -145,13 +152,52 @@ class ReservationRefundProcessor
         } catch (UnknownPaymentGateway $e) {
             $reservation->update(['payment_unresolved' => true]);
 
-            return;
+            $this->notifyPossibleDuplicatePayment(
+                $reservation,
+                $paymentId,
+                'unknown',
+                'The recorded payment gateway is no longer configured while cancelling the reservation; its payment intent cannot be voided or verified — check it at the gateway.',
+                OrphanedPaymentNotification::CONTEXT_CANCELLED_UNVERIFIED,
+            );
+
+            return false;
         }
 
-        if ($this->intentIsVerifiablyGone($gateway, $reservation, $paymentId)) {
+        try {
+            $intent = $gateway->retrievePaymentIntent($paymentId, $reservation);
+        } catch (\Throwable $e) {
+            $reservation->update(['payment_unresolved' => true]);
+
+            Log::warning('Could not verify the cancelled reservation\'s payment intent was voided; keeping the gateway charge reference for reconciliation.', [
+                'reservation_id' => $reservation->id,
+                'payment_id' => $paymentId,
+            ]);
+
+            return false;
+        }
+
+        // The intent captured (or is capturing) money — a payment was in flight when the
+        // cancellation won. The webhook's orphan detection would surface it eventually
+        // (deduped against this alert), but the capture is known NOW and the cancellation
+        // emails are about to go out, so notify and reroute the wording immediately.
+        if ($intent !== null && in_array($intent->status ?? '', self::MONEY_MOVING_INTENT_STATUSES, true)) {
+            $reservation->update(['payment_unresolved' => true]);
+
+            $this->notifyPossibleDuplicatePayment(
+                $reservation,
+                $paymentId,
+                (string) $intent->status,
+                'Payment intent had already captured (or was capturing) money when the reservation was cancelled — refund it at the gateway.',
+                OrphanedPaymentNotification::CONTEXT_CANCELLED_CAPTURED,
+            );
+
+            return true;
+        }
+
+        if ($intent === null || ($intent->status ?? '') === 'canceled') {
             $reservation->update(['payment_id' => '']);
 
-            return;
+            return false;
         }
 
         $reservation->update(['payment_unresolved' => true]);
@@ -160,6 +206,8 @@ class ReservationRefundProcessor
             'reservation_id' => $reservation->id,
             'payment_id' => $paymentId,
         ]);
+
+        return false;
     }
 
     /**
@@ -323,23 +371,6 @@ class ReservationRefundProcessor
             $paymentId,
             context: $context,
         );
-    }
-
-    /**
-     * True only when the gateway itself reports the intent can no longer take money —
-     * cancelPaymentIntent tolerates transient failures silently, so this re-read is the only
-     * safe signal. A still-live status or a throwing retrieve returns false so the caller
-     * keeps the reference.
-     */
-    protected function intentIsVerifiablyGone(PaymentInterface $gateway, Reservation $reservation, string $paymentId): bool
-    {
-        try {
-            $intent = $gateway->retrievePaymentIntent($paymentId, $reservation);
-        } catch (\Throwable $e) {
-            return false;
-        }
-
-        return $intent === null || ($intent->status ?? '') === 'canceled';
     }
 
     /**

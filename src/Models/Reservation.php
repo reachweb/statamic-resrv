@@ -535,7 +535,8 @@ class Reservation extends Model
      */
     public function amountPaidOnline(): PriceClass
     {
-        if (! $this->hasGatewayPayment()) {
+        // An unresolved reference is a reconciliation handle, not verified collected money.
+        if (! $this->hasGatewayPayment() || $this->payment_unresolved) {
             return Price::create(0);
         }
 

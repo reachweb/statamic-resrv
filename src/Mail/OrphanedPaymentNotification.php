@@ -24,6 +24,11 @@ use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
  *   with the customer's client secret — admins must cancel it in the gateway dashboard.
  * - CONTEXT_OUT_OF_BAND_UNVERIFIED: the gateway was unreachable, so the intent's state is
  *   unknown — admins must check it in the gateway dashboard.
+ * - CONTEXT_CANCELLED_CAPTURED: a cancellation found its intent had already captured (or was
+ *   capturing) money — admins should refund the charge.
+ * - CONTEXT_CANCELLED_UNVERIFIED: a cancellation could not void or inspect its intent because
+ *   the recorded gateway is no longer configured; its webhook route 404s, so orphan detection
+ *   can never fire — this email is the only signal.
  */
 class OrphanedPaymentNotification extends Mailable
 {
@@ -34,6 +39,10 @@ class OrphanedPaymentNotification extends Mailable
     public const CONTEXT_OUT_OF_BAND_STILL_PAYABLE = 'out_of_band_still_payable';
 
     public const CONTEXT_OUT_OF_BAND_UNVERIFIED = 'out_of_band_unverified';
+
+    public const CONTEXT_CANCELLED_CAPTURED = 'cancelled_captured';
+
+    public const CONTEXT_CANCELLED_UNVERIFIED = 'cancelled_unverified';
 
     public function __construct(
         public Reservation $reservation,
@@ -121,8 +130,12 @@ class OrphanedPaymentNotification extends Mailable
             return 'Open payment intent could not be cancelled — Reservation #'.$reservation->id.' ['.$reservation->status.']';
         }
 
-        if ($this->context === self::CONTEXT_OUT_OF_BAND_UNVERIFIED) {
+        if ($this->context === self::CONTEXT_OUT_OF_BAND_UNVERIFIED || $this->context === self::CONTEXT_CANCELLED_UNVERIFIED) {
             return 'Payment intent could not be verified — Reservation #'.$reservation->id.' ['.$reservation->status.']';
+        }
+
+        if ($this->context === self::CONTEXT_CANCELLED_CAPTURED) {
+            return 'Captured payment on a cancelled reservation — Reservation #'.$reservation->id.' ['.$reservation->status.']';
         }
 
         return 'Orphaned payment detected — Reservation #'.$reservation->id.' ['.$reservation->status.']';

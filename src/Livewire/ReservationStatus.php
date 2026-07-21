@@ -155,8 +155,9 @@ class ReservationStatus extends Component
         }
 
         if ($reservation->status === ReservationStatusEnum::CANCELLED->value) {
-            // A retained payment must read as such — never as a refund.
-            return $reservation->hasGatewayPayment()
+            // A retained payment must read as such — never as a refund. An unresolved
+            // reference is not verified collected money, so it must not read as retained.
+            return $reservation->hasGatewayPayment() && ! $reservation->payment_unresolved
                 ? trans('statamic-resrv::frontend.statusCancelledNoRefundIssued')
                 : trans('statamic-resrv::frontend.statusCancelledNoRefund');
         }

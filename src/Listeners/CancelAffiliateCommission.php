@@ -35,13 +35,15 @@ class CancelAffiliateCommission
 
     /**
      * An unpaid-hold cancellation never captured money even when an unpaid intent id lingers
-     * in payment_id — hasGatewayPayment() alone would misread that id as revenue.
+     * in payment_id — hasGatewayPayment() alone would misread that id as revenue. An in-flight
+     * capture will be refunded at the gateway, so no revenue is retained there either.
      */
     protected function businessRetainsRevenue(ReservationCancelled $event): bool
     {
         if (in_array($event->context, [
             ReservationCancelled::CONTEXT_UNPAID_HOLD,
             ReservationCancelled::CONTEXT_HOLD_LAPSED,
+            ReservationCancelled::CONTEXT_PAYMENT_IN_FLIGHT,
         ], true)) {
             return false;
         }
