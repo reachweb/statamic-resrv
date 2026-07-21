@@ -184,8 +184,15 @@ const customAmountError = computed(() => {
     return null;
 });
 
+// The relaxed quote returns zero for an as-yet-unentered custom amount, but creation requires one.
+const customAmountMissing = computed(
+    () => form.payment_mode === 'custom' && (form.custom_amount === '' || form.custom_amount === null),
+);
+
 // A zero-amount booking collects nothing and needs no gateway; the server enforces the requirement for nonzero amounts.
-const paymentAmountIsZero = computed(() => quote.value && Number(quote.value.payment.amount) === 0);
+const paymentAmountIsZero = computed(
+    () => quote.value && Number(quote.value.payment.amount) === 0 && ! customAmountMissing.value,
+);
 
 // A new quote can disable the selected gateway (e.g. the amount moved outside its limits).
 watch(gatewayOptions, (options) => {
@@ -195,7 +202,7 @@ watch(gatewayOptions, (options) => {
 });
 
 const canSubmit = computed(
-    () => datesComplete.value && quote.value && ! quoteDirty.value && ! quoteError.value && ! customAmountError.value && ! availabilityBlocks.value && (paymentAmountIsZero.value || form.payment_gateway) && ! submitting.value,
+    () => datesComplete.value && quote.value && ! quoteDirty.value && ! quoteError.value && ! customAmountMissing.value && ! customAmountError.value && ! availabilityBlocks.value && (paymentAmountIsZero.value || form.payment_gateway) && ! submitting.value,
 );
 
 // --- Data loading ---

@@ -522,8 +522,8 @@ class ReservationPaymentPageTest extends TestCase
         $fresh = $reservation->fresh();
         $this->assertNotSame('', $fresh->payment_id);
 
-        // Assert the exact outbound URL so the resrv_gateway tag cannot be dropped.
-        $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id.'?resrv_gateway=fakeredirect');
+        // The provider URL is used verbatim — appending params could invalidate a signed URL.
+        $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id);
     }
 
     public function test_pay_resumes_a_redirect_intent_that_carries_a_provider_url()
@@ -543,7 +543,7 @@ class ReservationPaymentPageTest extends TestCase
 
         $this->assertCount(0, $gateway->createdIntents, 'A resumable redirect intent must be reused, not replaced.');
         $this->assertSame('redir_stale', $reservation->fresh()->payment_id);
-        $component->assertRedirect('https://provider.test/checkout/redir_stale?resrv_gateway=fakeredirect');
+        $component->assertRedirect('https://provider.test/checkout/redir_stale');
     }
 
     public function test_pay_remints_when_a_resumed_redirect_intent_lacks_a_provider_url()
@@ -572,7 +572,7 @@ class ReservationPaymentPageTest extends TestCase
         $fresh = $reservation->fresh();
         $this->assertNotSame('redir_stale', $fresh->payment_id);
         $this->assertNotSame('', $fresh->payment_id);
-        $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id.'?resrv_gateway=fakeredirect');
+        $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id);
     }
 
     public function test_return_from_redirect_gateway_shows_processing_while_still_awaiting()

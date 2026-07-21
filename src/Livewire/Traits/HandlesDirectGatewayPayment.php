@@ -85,11 +85,10 @@ trait HandlesDirectGatewayPayment
                 );
             }
 
-            $separator = str_contains($redirectUrl, '?') ? '&' : '?';
-
-            return redirect()->away($redirectUrl.$separator.http_build_query([
-                'resrv_gateway' => $reservation->payment_gateway,
-            ]));
+            // The provider URL is used verbatim: the resrv_gateway marker already rides the
+            // return URL (baked in above), and appending to a signed/opaque provider URL
+            // could invalidate it.
+            return redirect()->away($redirectUrl);
         }
 
         $this->publicKey = (string) $gateway->getPublicKey($reservation);
