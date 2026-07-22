@@ -48,7 +48,8 @@ final class ActiveReservationsGuard
      * Whether any non-terminal reservation (including confirmed/partner bookings) overlaps
      * the range. Destructive operations must block on these too: deleting availability rows
      * would orphan the hold keys of real bookings, so a later refund's removeFromPending
-     * would find nothing to restore.
+     * would find nothing to restore. View-only holds (affects_availability=false) never
+     * wrote a hold key, so there is nothing to orphan — they must not block deletion.
      */
     public static function hasActiveReservationsForRange(
         string $statamicId,
@@ -61,7 +62,8 @@ final class ActiveReservationsGuard
             $dateStart,
             $dateEnd,
             $rateIds,
-            fn ($query) => $query->whereNotIn('status', ReservationStatus::terminal()),
+            fn ($query) => $query->whereNotIn('status', ReservationStatus::terminal())
+                ->where('affects_availability', true),
         );
     }
 

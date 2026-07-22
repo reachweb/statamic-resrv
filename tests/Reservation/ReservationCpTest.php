@@ -411,8 +411,33 @@ class ReservationCpTest extends TestCase
 
         $response = $this->patch(cp_route('resrv.reservation.refund', $payload));
 
-        $response->assertStatus(200)->assertJson(['id' => $reservation->id, 'status' => 'refunded']);
+        $response->assertStatus(200)->assertJson(['id' => $reservation->id, 'status' => 'refunded', 'refund_is_automatic' => true]);
         Mail::assertSent(ReservationRefunded::class);
+    }
+
+    public function test_refunding_an_out_of_band_confirmation_reports_a_manual_refund()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        // CONFIRMED with no charge reference = paid out of band (bank transfer / cash):
+        // the row lands REFUNDED without a gateway call, so the response must flag that
+        // the admin has to return the money by hand.
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment_id' => '',
+        ])->withCustomer()->create();
+
+        $manager = Mockery::mock(PaymentGatewayManager::class);
+        $manager->shouldNotReceive('forReservation');
+        $manager->shouldNotReceive('gateway');
+        app()->instance(PaymentGatewayManager::class, $manager);
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(200)
+            ->assertJson(['id' => $reservation->id, 'status' => 'refunded', 'refund_is_automatic' => false]);
     }
 
     public function test_voiding_a_partner_reservation_lands_in_cancelled_not_refunded()

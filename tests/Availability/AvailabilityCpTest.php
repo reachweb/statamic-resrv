@@ -1034,6 +1034,44 @@ class AvailabilityCpTest extends TestCase
         ]);
     }
 
+    public function test_delete_allows_when_only_view_only_reservations_overlap()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        // A view-only hold never wrote a hold key, so deleting the rows orphans nothing —
+        // it must not block the deletion.
+        Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'confirmed',
+            'affects_availability' => false,
+        ]);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 4,
+        ]);
+
+        $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(200);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+    }
+
     public function test_refund_after_edit_restores_stock_on_top_of_edited_value()
     {
         $item = $this->makeStatamicItem();

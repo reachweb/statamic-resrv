@@ -229,6 +229,12 @@ class ReservationCpController extends Controller
         ]);
         $reservation = $this->reservation->findOrFail($data['id']);
 
+        // A refund that succeeds with a gateway payment moved the money through the
+        // gateway; without one (out-of-band / offline payment) nothing moved and the
+        // admin must return the funds by hand. Captured before the call so the flag
+        // can't drift from what the processor actually saw.
+        $refundIsAutomatic = $reservation->hasGatewayPayment();
+
         try {
             $changed = app(ReservationRefundProcessor::class)->refund($reservation);
         } catch (RefundFailedException $exception) {
@@ -251,9 +257,12 @@ class ReservationCpController extends Controller
 
         // The processor lands no-charge bookings in CANCELLED instead of REFUNDED; return the
         // terminal status so the UI can say "cancelled" instead of claiming money moved.
+        // refund_is_automatic is false when no gateway returned the money (out-of-band or
+        // offline payment) — the admin must be told to return those funds by hand.
         return response()->json([
             'id' => $reservation->id,
             'status' => $reservation->status,
+            'refund_is_automatic' => $refundIsAutomatic,
         ]);
     }
 

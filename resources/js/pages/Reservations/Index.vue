@@ -74,12 +74,16 @@ const refund = async () => {
     refunding.value = true;
     try {
         // No-charge bookings (partner / zero payment) end as a cancellation, not a refund —
-        // report what the server actually did so admins aren't told money moved.
+        // report what the server actually did so admins aren't told money moved. A REFUNDED
+        // row whose payment never touched a gateway (out-of-band / offline) needs the admin
+        // to return the money by hand, so that toast must not read like an automatic refund.
         const { data } = await axios.patch(props.refundUrl, { id: refundId.value });
         toast.success(
-            data?.status === 'cancelled'
+            data?.status !== 'refunded'
                 ? __('Reservation cancelled — no charges to refund')
-                : __('Reservation refunded'),
+                : data?.refund_is_automatic === false
+                    ? __('Refund recorded — return the payment to the customer manually')
+                    : __('Reservation refunded'),
         );
         refundId.value = null;
         listing.value?.refresh();
