@@ -62,6 +62,9 @@ class ReservationResource extends ResourceCollection
                     'payment_gateway' => $reservation->payment_gateway
                         ? app(PaymentGatewayManager::class)->label($reservation->payment_gateway)
                         : null,
+                    'affects_availability' => (bool) $reservation->affects_availability,
+                    // Null for non-awaiting rows — the model gates the URL on status.
+                    'payment_url' => $reservation->customerPaymentUrl(),
                     'created_at' => $this->dateIndexValue('created_at', $reservation->created_at),
                     'updated_at' => $this->dateIndexValue('updated_at', $reservation->updated_at),
                 ];

@@ -7,7 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Inertia\Inertia;
 use Reach\StatamicResrv\Enums\ReservationStatus;
+use Reach\StatamicResrv\Events\ReservationCancelled;
+use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
+use Reach\StatamicResrv\Exceptions\ManualReservationException;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -16,8 +19,10 @@ use Reach\StatamicResrv\Jobs\ResendConfirmationEmail;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Resources\ReservationCalendarResource;
 use Reach\StatamicResrv\Resources\ReservationResource;
+use Reach\StatamicResrv\Support\ManualReservationCreator;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Statamic\Facades\Scope;
+use Statamic\Facades\User as StatamicUser;
 use Statamic\Http\Requests\FilteredRequest;
 use Statamic\Query\Scopes\Filters\Concerns\QueriesFilters;
 
@@ -44,6 +49,10 @@ class ReservationCpController extends Controller
             'refundUrl' => cp_route('resrv.reservation.refund'),
             'resendUrl' => cp_route('resrv.reservation.resendConfirmation'),
             'calendarUrl' => cp_route('resrv.reservations.calendar'),
+            'createUrl' => cp_route('resrv.reservations.create'),
+            'confirmPaymentUrlTemplate' => cp_route('resrv.reservation.confirmPayment', 'RESRVURL'),
+            'cancelAwaitingUrlTemplate' => cp_route('resrv.reservation.cancelAwaiting', 'RESRVURL'),
+            'sendPaymentRequestUrlTemplate' => cp_route('resrv.reservation.sendPaymentRequest', 'RESRVURL'),
         ]);
     }
 
@@ -111,6 +120,9 @@ class ReservationCpController extends Controller
             'maximumQuantity' => (int) config('resrv-config.maximum_quantity'),
             'backUrl' => cp_route('resrv.reservations.index'),
             'refundUrl' => cp_route('resrv.reservation.refund'),
+            'confirmPaymentUrl' => cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]),
+            'cancelAwaitingUrl' => cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]),
+            'sendPaymentRequestUrl' => cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]),
         ]);
     }
 
@@ -199,6 +211,14 @@ class ReservationCpController extends Controller
             'total_to_charge_formatted' => $reservation->totalToCharge(),
             'price_formatted' => $reservation->price->format(),
             'total_formatted' => $reservation->total->format(),
+            'affects_availability' => (bool) $reservation->affects_availability,
+            'created_by' => $reservation->created_by,
+            'created_by_name' => $reservation->created_by
+                ? (StatamicUser::find($reservation->created_by)?->name() ?? $reservation->created_by)
+                : null,
+            'hold_expires_at' => $reservation->hold_expires_at?->format('d-m-Y H:i'),
+            'payment_request_email_sent_at' => $reservation->payment_request_email_sent_at?->format('d-m-Y H:i'),
+            'payment_url' => $reservation->customerPaymentUrl(),
         ];
     }
 
@@ -208,6 +228,12 @@ class ReservationCpController extends Controller
             'id' => 'required|integer',
         ]);
         $reservation = $this->reservation->findOrFail($data['id']);
+
+        // A refund that succeeds with a gateway payment moved the money through the
+        // gateway; without one (out-of-band / offline payment) nothing moved and the
+        // admin must return the funds by hand. Captured before the call so the flag
+        // can't drift from what the processor actually saw.
+        $refundIsAutomatic = $reservation->hasGatewayPayment();
 
         try {
             $changed = app(ReservationRefundProcessor::class)->refund($reservation);
@@ -231,9 +257,12 @@ class ReservationCpController extends Controller
 
         // The processor lands no-charge bookings in CANCELLED instead of REFUNDED; return the
         // terminal status so the UI can say "cancelled" instead of claiming money moved.
+        // refund_is_automatic is false when no gateway returned the money (out-of-band or
+        // offline payment) — the admin must be told to return those funds by hand.
         return response()->json([
             'id' => $reservation->id,
             'status' => $reservation->status,
+            'refund_is_automatic' => $refundIsAutomatic,
         ]);
     }
 
@@ -266,6 +295,128 @@ class ReservationCpController extends Controller
         ResendConfirmationEmail::dispatchAfterResponse($reservation);
 
         return response()->json($reservation->id);
+    }
+
+    /**
+     * Mark an awaiting-payment (manual) reservation as paid out of band and confirm it,
+     * firing the same ReservationConfirmed chain as a webhook.
+     */
+    public function confirmPayment(int $id)
+    {
+        $reservation = $this->reservation->findOrFail($id);
+
+        if (! $reservation->isAwaitingPayment()) {
+            return response()->json(['error' => 'Only awaiting-payment reservations can be confirmed manually.'], 422);
+        }
+
+        try {
+            $changed = $reservation->transitionTo(ReservationStatus::CONFIRMED);
+        } catch (InvalidStateTransition $e) {
+            return response()->json(['error' => 'Cannot confirm a reservation in the '.$e->from->value.' state.'], 422);
+        }
+
+        if ($changed) {
+            // The transition is committed and unretryable, so dispatch before the gateway round
+            // trips below (a provider hang must not strand a CONFIRMED booking without its side
+            // effects), and contain throwing listeners — they must neither 500 nor skip the
+            // reconciliation below.
+            try {
+                ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+
+            // Reconcile the gateway: void any live intent and drop payment_id so later
+            // refund/cancel treats this as a no-gateway-charge booking. An intent that already
+            // captured money is left intact so the charge stays refundable. Tolerates gateway errors.
+            app(ReservationRefundProcessor::class)->settlePaidOutOfBand($reservation);
+        } else {
+            // A no-op transition means a webhook confirm (or second admin) won the race to
+            // CONFIRMED. Still reconcile — skipping would hide a duplicate payment (cash AND a
+            // captured charge) — and re-fetch the row: on a failed transition the in-memory model
+            // is a stale awaiting-payment snapshot. A prior reconcile left payment_id empty,
+            // making this a no-op.
+            app(ReservationRefundProcessor::class)->settlePaidOutOfBand($this->reservation->findOrFail($id));
+        }
+
+        return response()->json($this->serializeFreshReservation($reservation->id));
+    }
+
+    /**
+     * Cancel an awaiting-payment (manual) reservation via the ReservationCancelled chain.
+     * Any pending intent is cancelled after the transition commits — never inside the
+     * lock, and tolerantly (an unreachable gateway leaves an intent that dies of old age).
+     */
+    public function cancelAwaitingPayment(int $id)
+    {
+        $reservation = $this->reservation->findOrFail($id);
+
+        if (! $reservation->isAwaitingPayment()) {
+            return response()->json(['error' => 'Only awaiting-payment reservations can be cancelled this way.'], 422);
+        }
+
+        try {
+            // Tag as an unpaid hold so the customer email says "nothing to refund". The
+            // in-transaction origin re-check is load-bearing (same as CancelLapsedHolds):
+            // CANCELLED is also reachable from CONFIRMED, so a confirm landing between the
+            // pre-check and the row lock must not let this cancel a PAID booking.
+            app(ReservationRefundProcessor::class)->cancelWithoutRefund(
+                $reservation,
+                ReservationCancelled::CONTEXT_UNPAID_HOLD,
+                inTransaction: function (Reservation $fresh) {
+                    if (! $fresh->isAwaitingPayment()) {
+                        throw new InvalidStateTransition(
+                            ReservationStatus::from($fresh->status),
+                            ReservationStatus::CANCELLED,
+                            $fresh->id,
+                        );
+                    }
+                },
+                cancelOpenIntent: true,
+            );
+        } catch (InvalidStateTransition $e) {
+            return response()->json(['error' => 'Cannot cancel a reservation in the '.$e->from->value.' state.'], 422);
+        }
+
+        return response()->json($this->serializeFreshReservation($reservation->id));
+    }
+
+    /**
+     * (Re)send the payment request email. Unlike the confirmation resend this respects the
+     * event's enabled switch (422, not silent success). Sends inline so the sent-at stamp
+     * and returned payload are accurate.
+     */
+    public function sendPaymentRequest(int $id)
+    {
+        $reservation = $this->reservation->findOrFail($id);
+
+        if (! $reservation->isAwaitingPayment()) {
+            return response()->json(['error' => 'Only awaiting-payment reservations can receive a payment request.'], 422);
+        }
+
+        $customerEmail = trim((string) ($reservation->customer?->email ?? ''));
+        if (blank($customerEmail) || ! filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
+            return response()->json(['error' => 'This reservation does not have a valid customer email address to send to.'], 422);
+        }
+
+        try {
+            if (! app(ManualReservationCreator::class)->sendPaymentRequestEmail($reservation)) {
+                return response()->json(['error' => 'The payment request email is disabled in the email settings, so it was not sent.'], 422);
+            }
+        } catch (ManualReservationException $e) {
+            return response()->json(['error' => $e->getMessage()], 422);
+        }
+
+        return response()->json($this->serializeFreshReservation($reservation->id));
+    }
+
+    private function serializeFreshReservation(int $id): array
+    {
+        $reservation = $this->reservation
+            ->with(['extras', 'options.values', 'affiliate', 'dynamicPricings', 'childs.rate'])
+            ->findOrFail($id);
+
+        return $this->serializeReservation($reservation, $reservation->entry());
     }
 
     private function getReservations()

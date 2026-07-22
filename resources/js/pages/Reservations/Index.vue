@@ -11,6 +11,9 @@ import {
     DropdownItem,
     ConfirmationModal,
 } from '@statamic/cms/ui';
+import CancelAwaitingPaymentModal from '../../components/CancelAwaitingPaymentModal.vue';
+import ConfirmPaymentModal from '../../components/ConfirmPaymentModal.vue';
+import { copyPaymentLink, statusLabel } from '../../composables/useReservationDisplay.js';
 import { useToast } from '../../composables/useToast.js';
 
 const props = defineProps({
@@ -20,6 +23,10 @@ const props = defineProps({
     refundUrl: { type: String, required: true },
     resendUrl: { type: String, required: true },
     calendarUrl: { type: String, required: true },
+    createUrl: { type: String, default: null },
+    confirmPaymentUrlTemplate: { type: String, default: null },
+    cancelAwaitingUrlTemplate: { type: String, default: null },
+    sendPaymentRequestUrlTemplate: { type: String, default: null },
 });
 
 const toast = useToast();
@@ -35,12 +42,16 @@ const canResend = (reservation) => ['confirmed', 'partner'].includes(reservation
 
 // Mirrors the state machine: only these states may transition to REFUNDED/CANCELLED,
 // so terminal rows don't offer an action the server will reject anyway.
+// Awaiting-payment rows get their own confirm/cancel pair instead of Refund.
 const canRefund = (reservation) => ['pending', 'confirmed', 'partner'].includes(reservation.status);
+
+const isAwaitingPayment = (reservation) => reservation.status === 'awaiting_payment';
 
 const badgeClass = (status) => {
     const map = {
         confirmed: 'bg-green-800',
         partner: 'bg-green-600',
+        awaiting_payment: 'bg-blue-800',
         refunded: 'bg-yellow-800',
         cancelled: 'bg-orange-800',
         expired: 'bg-red-800',
@@ -63,12 +74,16 @@ const refund = async () => {
     refunding.value = true;
     try {
         // No-charge bookings (partner / zero payment) end as a cancellation, not a refund —
-        // report what the server actually did so admins aren't told money moved.
+        // report what the server actually did so admins aren't told money moved. A REFUNDED
+        // row whose payment never touched a gateway (out-of-band / offline) needs the admin
+        // to return the money by hand, so that toast must not read like an automatic refund.
         const { data } = await axios.patch(props.refundUrl, { id: refundId.value });
         toast.success(
-            data?.status === 'cancelled'
+            data?.status !== 'refunded'
                 ? __('Reservation cancelled — no charges to refund')
-                : __('Reservation refunded'),
+                : data?.refund_is_automatic === false
+                    ? __('Refund recorded — return the payment to the customer manually')
+                    : __('Reservation refunded'),
         );
         refundId.value = null;
         listing.value?.refresh();
@@ -100,6 +115,51 @@ const resend = async () => {
         resending.value = false;
     }
 };
+
+// --- Awaiting-payment actions ---
+const confirmPaymentId = ref(null);
+const cancelAwaitingRow = ref(null);
+const paymentRequestId = ref(null);
+const actionBusy = ref(false);
+
+// POST a row action and refresh the list; returns success so the caller closes its modal only then.
+const runRowAction = async (urlTemplate, id, successMessage) => {
+    actionBusy.value = true;
+    try {
+        await axios.post(urlTemplate.replace('RESRVURL', id));
+        toast.success(successMessage);
+        listing.value?.refresh();
+        return true;
+    } catch (error) {
+        toast.error(error?.response?.data?.error ?? __('Something went wrong'));
+        return false;
+    } finally {
+        actionBusy.value = false;
+    }
+};
+
+const confirmPayment = async () => {
+    if (! confirmPaymentId.value) return;
+    if (await runRowAction(props.confirmPaymentUrlTemplate, confirmPaymentId.value, __('Reservation confirmed'))) {
+        confirmPaymentId.value = null;
+    }
+};
+
+const cancelAwaiting = async () => {
+    if (! cancelAwaitingRow.value) return;
+    if (await runRowAction(props.cancelAwaitingUrlTemplate, cancelAwaitingRow.value.id, __('Reservation cancelled'))) {
+        cancelAwaitingRow.value = null;
+    }
+};
+
+const sendPaymentRequest = async () => {
+    if (! paymentRequestId.value) return;
+    if (await runRowAction(props.sendPaymentRequestUrlTemplate, paymentRequestId.value, __('Payment request email sent'))) {
+        paymentRequestId.value = null;
+    }
+};
+
+const copyLink = (reservation) => copyPaymentLink(reservation.payment_url, toast);
 </script>
 
 <template>
@@ -108,6 +168,7 @@ const resend = async () => {
 
         <Header :title="__('Reservations')" icon="add-item">
             <Button :href="calendarUrl" :text="__('Calendar view')" />
+            <Button v-if="createUrl" :href="createUrl" variant="primary" :text="__('Create reservation')" />
         </Header>
 
         <Listing
@@ -125,7 +186,7 @@ const resend = async () => {
                     :class="badgeClass(reservation.status)"
                     class="inline-block min-w-[100px] text-center p-1 text-white text-xs"
                 >
-                    {{ reservation.status.toUpperCase() }}
+                    {{ statusLabel(reservation.status) }}
                 </a>
             </template>
 
@@ -163,6 +224,29 @@ const resend = async () => {
                     icon="return-square"
                     @click="confirmRefund(reservation)"
                 />
+                <template v-if="isAwaitingPayment(reservation)">
+                    <DropdownItem
+                        :text="__('Confirm payment')"
+                        icon="check"
+                        @click="confirmPaymentId = reservation.id"
+                    />
+                    <DropdownItem
+                        :text="__('Resend payment request')"
+                        icon="mail"
+                        @click="paymentRequestId = reservation.id"
+                    />
+                    <DropdownItem
+                        v-if="reservation.payment_url"
+                        :text="__('Copy payment link')"
+                        icon="link"
+                        @click="copyLink(reservation)"
+                    />
+                    <DropdownItem
+                        :text="__('Cancel')"
+                        icon="trash"
+                        @click="cancelAwaitingRow = reservation"
+                    />
+                </template>
             </template>
         </Listing>
 
@@ -191,5 +275,32 @@ const resend = async () => {
         >
             <p>{{ __('This will email the confirmation again to the customer for this reservation.') }}</p>
         </ConfirmationModal>
+
+        <ConfirmationModal
+            v-if="paymentRequestId"
+            :open="true"
+            :title="__('Resend payment request')"
+            :button-text="__('Send')"
+            :busy="actionBusy"
+            @confirm="sendPaymentRequest"
+            @cancel="paymentRequestId = null"
+        >
+            <p>{{ __('This will email the payment request again to the customer for this reservation.') }}</p>
+        </ConfirmationModal>
+
+        <ConfirmPaymentModal
+            v-if="confirmPaymentId"
+            :busy="actionBusy"
+            @confirm="confirmPayment"
+            @cancel="confirmPaymentId = null"
+        />
+
+        <CancelAwaitingPaymentModal
+            v-if="cancelAwaitingRow"
+            :busy="actionBusy"
+            :affects-availability="cancelAwaitingRow.affects_availability"
+            @confirm="cancelAwaiting"
+            @cancel="cancelAwaitingRow = null"
+        />
     </div>
 </template>

@@ -28,6 +28,13 @@ enum ReservationStatus: string
     /** Reserved for future use. No writer currently produces this status. */
     case COMPLETED = 'completed';
 
+    /**
+     * Unpaid admin-created hold, created directly by the CP manual flow — never transitioned
+     * into. Exempt from minutes_to_hold expiry, abandoned emails and housekeeping (all keyed
+     * off PENDING/EXPIRED); leaves only to CONFIRMED or CANCELLED.
+     */
+    case AWAITING_PAYMENT = 'awaiting_payment';
+
     case EXPIRED = 'expired';
 
     case PARTNER = 'partner';
@@ -42,6 +49,7 @@ enum ReservationStatus: string
             self::PENDING => [self::CONFIRMED, self::EXPIRED, self::REFUNDED, self::PARTNER],
             self::CONFIRMED => [self::REFUNDED, self::CANCELLED],
             self::PARTNER => [self::REFUNDED, self::CANCELLED],
+            self::AWAITING_PAYMENT => [self::CONFIRMED, self::CANCELLED],
             self::EXPIRED, self::REFUNDED, self::CANCELLED => [],
             self::WEBHOOK, self::COMPLETED => [],
         }, true);
@@ -91,7 +99,8 @@ enum ReservationStatus: string
      * Status values for checkouts still in flight — holds that may release asynchronously
      * (expiry restores +quantity), which would corrupt an absolute CP inventory edit.
      * Confirmed/partner bookings keep their hold key for life but only release on an
-     * explicit refund, so they are not in flight.
+     * explicit refund, so they are not in flight. AWAITING_PAYMENT belongs here too:
+     * hold-lapse/CP cancellation releases +quantity through the same chain.
      *
      * @return string[]
      */
@@ -100,6 +109,7 @@ enum ReservationStatus: string
         return [
             self::PENDING->value,
             self::WEBHOOK->value,
+            self::AWAITING_PAYMENT->value,
         ];
     }
 }

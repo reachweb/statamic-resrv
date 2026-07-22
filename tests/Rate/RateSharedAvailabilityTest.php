@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
@@ -133,6 +134,66 @@ class RateSharedAvailabilityTest extends TestCase
             rateId: $setup['sharedRate']->id,
             reservationId: $thirdReservation->id,
         );
+    }
+
+    public function test_view_only_manual_reservation_does_not_consume_shared_rate_capacity()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        // A view-only hold (affects_availability=false) never took inventory, so it must not consume the shared-rate cap.
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => ReservationStatus::AWAITING_PAYMENT->value,
+            'affects_availability' => false,
+        ]);
+
+        $newReservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'pending',
+        ]);
+
+        // With the view-only hold excluded the cap (1) still has room, so the decrement must not throw.
+        AvailabilityRepository::decrement(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $newReservation->id,
+        );
+
+        // The real booking went through and decremented the base pool.
+        foreach ($this->getBaseRateAvailabilities($setup) as $availability) {
+            $this->assertEquals(9, $availability->available);
+        }
+    }
+
+    public function test_view_only_manual_reservation_is_excluded_from_exhausted_dates_for_shared_rates()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => ReservationStatus::AWAITING_PAYMENT->value,
+            'affects_availability' => false,
+        ]);
+
+        $exhausted = AvailabilityRepository::getExhaustedDatesForRates(
+            collect([$setup['sharedRate']]),
+            quantity: 1,
+        );
+
+        // The view-only hold doesn't count against the cap, so no date is greyed out for the shared rate.
+        $this->assertTrue($exhausted->get($setup['sharedRate']->id)->isEmpty());
     }
 
     public function test_max_available_is_enforced_per_day_for_partially_overlapping_reservations()

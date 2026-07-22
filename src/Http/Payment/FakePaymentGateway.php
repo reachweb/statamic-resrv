@@ -20,6 +20,59 @@ class FakePaymentGateway implements PaymentInterface
      */
     public array $cancelledIntents = [];
 
+    /**
+     * Every intent created, so tests can assert resume flows reuse instead of double-minting.
+     *
+     * @var array<int, array{payment_id: string, reservation_id: int|string|null}>
+     */
+    public array $createdIntents = [];
+
+    /**
+     * Every reservation refunded, so tests can assert a no-gateway-charge refund skips the provider.
+     *
+     * @var array<int, int|string|null>
+     */
+    public array $refundCalls = [];
+
+    /** Status retrievePaymentIntent() reports, e.g. 'succeeded' to simulate an already-captured intent. */
+    public ?string $retrievedIntentStatus = null;
+
+    /**
+     * Intent ids a successful cancel moved to 'canceled' (as Stripe does), so a re-read after
+     * cancelling can verify the intent is genuinely dead.
+     *
+     * @var array<int, string>
+     */
+    public array $canceledIds = [];
+
+    /**
+     * When false, cancelPaymentIntent() records the call but leaves the intent live — modelling
+     * a swallowed provider failure (see StripePaymentGateway) for keep-the-reference paths.
+     */
+    public bool $cancelSucceeds = true;
+
+    /**
+     * When true, retrievePaymentIntent() returns the Step-13 spec minimum (id + status, no
+     * client_secret) to exercise the void-and-remint path for unmountable resumed intents.
+     */
+    public bool $retrieveOmitsClientSecret = false;
+
+    /**
+     * Fired INSIDE paymentIntent() with the reservation — simulates a concurrent transition
+     * landing during the gateway round-trip (exercises resolveOrCreateIntent's locked re-check).
+     *
+     * @var null|callable(Reservation): void
+     */
+    public $onPaymentIntent = null;
+
+    /**
+     * Same as $onPaymentIntent but fired INSIDE retrievePaymentIntent() — exercises the
+     * fresh-row re-check before a resumed intent is handed out.
+     *
+     * @var null|callable(Reservation): void
+     */
+    public $onRetrievePaymentIntent = null;
+
     public function name(): string
     {
         return 'fake';
@@ -35,13 +88,42 @@ class FakePaymentGateway implements PaymentInterface
         return 'statamic-resrv::livewire.checkout-payment';
     }
 
-    public function paymentIntent($amount, $reservation, $data)
+    public function paymentIntent($amount, $reservation, $data, ?string $returnUrl = null)
     {
+        // Inline gateway: the customer returns through the embedded SDK, so $returnUrl is unused.
         $data = new \stdClass;
         $data->id = Str::random(28);
         $data->client_secret = Str::random(56);
         $data->reservation = '';
         $data->key = $this->getPublicKey($reservation);
+
+        $this->createdIntents[] = [
+            'payment_id' => $data->id,
+            'reservation_id' => $reservation->id ?? null,
+        ];
+
+        // Simulate a concurrent transition committing during the (real: network) round-trip.
+        if ($this->onPaymentIntent !== null) {
+            ($this->onPaymentIntent)($reservation);
+        }
+
+        return $data;
+    }
+
+    public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+    {
+        $data = new \stdClass;
+        $data->id = $paymentId;
+        if (! $this->retrieveOmitsClientSecret) {
+            $data->client_secret = 'cs_'.$paymentId;
+        }
+        $data->status = in_array($paymentId, $this->canceledIds, true)
+            ? 'canceled'
+            : ($this->retrievedIntentStatus ?? 'requires_payment_method');
+
+        if ($this->onRetrievePaymentIntent !== null) {
+            ($this->onRetrievePaymentIntent)($reservation);
+        }
 
         return $data;
     }
@@ -52,10 +134,17 @@ class FakePaymentGateway implements PaymentInterface
             'payment_id' => $paymentId,
             'reservation_id' => $reservation->id,
         ];
+
+        // A swallowed failure (cancelSucceeds=false) leaves the intent live, as a real gateway would.
+        if ($this->cancelSucceeds) {
+            $this->canceledIds[] = $paymentId;
+        }
     }
 
     public function refund($reservation)
     {
+        $this->refundCalls[] = $reservation->id;
+
         if ($this->getPublicKey($reservation)) {
             return true;
         }

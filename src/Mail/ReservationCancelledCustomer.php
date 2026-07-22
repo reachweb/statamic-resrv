@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Mail;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
+use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationCancelledCustomer extends Mailable
@@ -12,7 +13,8 @@ class ReservationCancelledCustomer extends Mailable
 
     public $reservation;
 
-    public function __construct(Reservation $reservation)
+    /** @param  ?string  $context  ReservationCancelled::CONTEXT_* — a lapsed hold switches the subject and body copy. */
+    public function __construct(Reservation $reservation, public ?string $context = null)
     {
         $this->reservation = $reservation;
     }
@@ -26,9 +28,28 @@ class ReservationCancelledCustomer extends Mailable
      */
     public function build()
     {
+        $holdLapsed = $this->context === ReservationCancelled::CONTEXT_HOLD_LAPSED;
+        $paymentInFlight = $this->context === ReservationCancelled::CONTEXT_PAYMENT_IN_FLIGHT;
+
         if (! $this->subject) {
-            $this->subject(__('Reservation Cancelled'));
+            $this->subject($holdLapsed
+                ? __('Reservation cancelled — payment not received')
+                : __('Reservation Cancelled'));
         }
+
+        // A lapsed/unpaid hold never captured money even if an unpaid intent id lingers,
+        // so the template must not call the payment non-refundable. An in-flight capture
+        // gets its own wording: the charge will be refunded, not retained.
+        $paymentCollected = ! $holdLapsed
+            && ! $paymentInFlight
+            && $this->context !== ReservationCancelled::CONTEXT_UNPAID_HOLD
+            && $this->reservation->hasGatewayPayment();
+
+        $this->with([
+            'holdLapsed' => $holdLapsed,
+            'paymentInFlight' => $paymentInFlight,
+            'paymentCollected' => $paymentCollected,
+        ]);
 
         return $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.cancelled-customer'));
     }

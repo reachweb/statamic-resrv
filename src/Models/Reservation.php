@@ -56,9 +56,14 @@ class Reservation extends Model
         'payment_surcharge',
         'payment_id',
         'payment_gateway',
+        'payment_unresolved',
         'total',
         'customer_id',
         'abandoned_email_sent_at',
+        'affects_availability',
+        'created_by',
+        'hold_expires_at',
+        'payment_request_email_sent_at',
         'created_at',
         'updated_at',
     ];
@@ -75,6 +80,16 @@ class Reservation extends Model
         'total' => PriceClass::class,
         'abandoned_email_sent_at' => 'datetime',
         'free_cancellation_period' => 'integer',
+        'affects_availability' => 'boolean',
+        'payment_unresolved' => 'boolean',
+        'hold_expires_at' => 'datetime',
+        'payment_request_email_sent_at' => 'datetime',
+    ];
+
+    // Mirrors the DB default so a model create()d without the flag (frontend checkout) reads
+    // true — availability listeners consult the dispatching instance before any DB refresh.
+    protected $attributes = [
+        'affects_availability' => true,
     ];
 
     protected $appends = ['entry'];
@@ -256,6 +271,21 @@ class Reservation extends Model
         return in_array($this->status, ReservationStatus::live(), true);
     }
 
+    /** Admin-created (manual) reservation still waiting for the customer to pay. */
+    public function isAwaitingPayment(): bool
+    {
+        return $this->status === ReservationStatus::AWAITING_PAYMENT->value;
+    }
+
+    /**
+     * The lapse sweep may not have cancelled the row yet, so payment surfaces must
+     * refuse on this check rather than trust the status alone.
+     */
+    public function holdDeadlinePassed(): bool
+    {
+        return $this->hold_expires_at !== null && $this->hold_expires_at->isPast();
+    }
+
     /**
      * Whether the customer may self-cancel at all — with a refund inside the free
      * cancellation window, or without one after it closes.
@@ -349,8 +379,28 @@ class Reservation extends Model
             return true;
         }
 
+        // An out-of-band confirmation (CONFIRMED, no charge reference) collected money outside any
+        // gateway — a self-service refund would land REFUNDED without money moving. Route to manual
+        // handling; the CP refund action doesn't go through this method.
+        if ($this->confirmedWithoutGatewayCharge()) {
+            return false;
+        }
+
         try {
             return $this->resolvePaymentGateway()->supportsAutomaticRefunds();
+        } catch (UnknownPaymentGateway) {
+            return false;
+        }
+    }
+
+    /**
+     * Whether the gateway is an offline one an admin confirms manually. An unknown gateway
+     * reports false so nothing offers offline instructions it can't back up.
+     */
+    public function paymentGatewaySupportsManualConfirmation(): bool
+    {
+        try {
+            return $this->resolvePaymentGateway()->supportsManualConfirmation();
         } catch (UnknownPaymentGateway) {
             return false;
         }
@@ -410,6 +460,16 @@ class Reservation extends Model
     }
 
     /**
+     * CONFIRMED with no charge reference — only possible via an out-of-band/manual confirmation
+     * (a webhook confirm always stores the intent id), so a refund must skip the provider.
+     */
+    public function confirmedWithoutGatewayCharge(): bool
+    {
+        return $this->status === ReservationStatus::CONFIRMED->value
+            && ($this->payment_id === '' || $this->payment_id === null);
+    }
+
+    /**
      * Whether refunding this reservation returns the money automatically through the gateway —
      * true only when a charge actually reached a gateway AND that gateway supports API refunds.
      * False for offline/manual gateways (an admin must return the funds by hand) and for no-charge
@@ -444,6 +504,15 @@ class Reservation extends Model
     }
 
     /**
+     * What the customer owes: payment + payment_surcharge — the sum the intent charges and the
+     * webhook's amount guard verifies. Fresh Price because add() mutates the cached cast instance.
+     */
+    public function amountDue(): PriceClass
+    {
+        return Price::create($this->payment->format())->add($this->payment_surcharge);
+    }
+
+    /**
      * Commission owed to the given affiliate for this reservation (total × pivot fee %), zero once
      * the commission has been cancelled. Single owner of the formula so the CP serializer and the
      * CSV export can never drift apart.
@@ -466,7 +535,8 @@ class Reservation extends Model
      */
     public function amountPaidOnline(): PriceClass
     {
-        if (! $this->hasGatewayPayment()) {
+        // An unresolved reference is a reconciliation handle, not verified collected money.
+        if (! $this->hasGatewayPayment() || $this->payment_unresolved) {
             return Price::create(0);
         }
 
@@ -514,8 +584,29 @@ class Reservation extends Model
             return null;
         }
 
-        $entryId = config('resrv-config.reservation_status_entry');
+        return $this->customerPageUrl(config('resrv-config.reservation_status_entry'));
+    }
 
+    /**
+     * Absolute deep link to the pay page, or null when the entry doesn't resolve, there is no
+     * customer email, or the reservation is no longer awaiting payment. No feature toggle —
+     * configuring the entry IS the opt-in (unconfigured disables online gateways in the CP).
+     */
+    public function customerPaymentUrl(): ?string
+    {
+        if (! $this->isAwaitingPayment()) {
+            return null;
+        }
+
+        return $this->customerPageUrl(config('resrv-config.manual_reservations_payment_entry'));
+    }
+
+    /**
+     * Resolve a customer-page config value to its routable entry, or null. Single owner of
+     * "usable" — the CP gateway gating and the emailed links must never disagree.
+     */
+    public static function resolveCustomerPageEntry(mixed $entryId): ?EntryContract
+    {
         // The entries fieldtype may surface its single value as a one-element array.
         if (is_array($entryId)) {
             $entryId = $entryId[0] ?? null;
@@ -532,17 +623,32 @@ class Reservation extends Model
             return null;
         }
 
+        $entry = Entry::find($entryId);
+
+        // url() ignores publish state, so check it explicitly — a draft or private page
+        // must hide the button rather than email a link that 404s for guests.
+        if (! $entry || ! $entry->published() || $entry->private() || ! $entry->url()) {
+            return null;
+        }
+
+        return $entry;
+    }
+
+    /**
+     * Shared builder for customer deep links: the entry must resolve (resolveCustomerPageEntry())
+     * and the reservation must carry a reference + customer email for the ?ref=&hash= pair.
+     */
+    protected function customerPageUrl(mixed $entryId): ?string
+    {
         $hash = $this->customerLookupHash();
 
         if ($hash === null || ! $this->reference) {
             return null;
         }
 
-        $entry = Entry::find($entryId);
+        $entry = static::resolveCustomerPageEntry($entryId);
 
-        // url() ignores publish state, so check it explicitly — a draft or private status page
-        // must hide the button rather than email a link that 404s for guests.
-        if (! $entry || ! $entry->published() || $entry->private() || ! $entry->url()) {
+        if (! $entry) {
             return null;
         }
 
@@ -944,14 +1050,14 @@ class Reservation extends Model
         $extraCharges = Price::create(0);
 
         $optionsCost = Price::create(0);
-        if (array_key_exists('options', $data) > 0) {
+        if (array_key_exists('options', $data) && $data['options']->count() > 0) {
             $data['options']->each(function ($option) use ($data, $optionsCost) {
-                $optionsCost->add(Option::find($option['id'])->calculatePrice($data, $option['value']));
+                $optionsCost->add($this->activeOptionFor($option)->calculatePrice($data, $option['value']));
             });
         }
 
         $extrasCost = Price::create(0);
-        if (array_key_exists('extras', $data) > 0) {
+        if (array_key_exists('extras', $data) && $data['extras']->count() > 0) {
             // The extra class needs the entry id to calculate the price
             $data['item_id'] = $statamic_id;
             $data['extras']->each(function ($extra) use ($data, $extrasCost) {
@@ -974,7 +1080,7 @@ class Reservation extends Model
 
             if (array_key_exists('options', $data) && $data['options']->count() > 0) {
                 $data['options']->each(function ($option) use ($childData, $totalCharges) {
-                    $totalCharges->add(Option::find($option['id'])->calculatePrice($childData, $option['value']));
+                    $totalCharges->add($this->activeOptionFor($option)->calculatePrice($childData, $option['value']));
                 });
             }
 
@@ -986,6 +1092,26 @@ class Reservation extends Model
         }
 
         return $totalCharges;
+    }
+
+    /**
+     * Resolve a checkout-submitted option to one whose value is still on offer — calculatePrice()
+     * resolves withTrashed() for history, so checkout input must not book a trashed value. Also
+     * rejects a missing/trashed option id (the bare Option::find() used to fatal).
+     *
+     * @param  array{id: int, value: int}  $option
+     *
+     * @throws OptionsException
+     */
+    protected function activeOptionFor(array $option): Option
+    {
+        $optionModel = Option::find($option['id']);
+
+        if (! $optionModel || ! $optionModel->values()->whereKey($option['value'])->exists()) {
+            throw new OptionsException(__('The selected option value is no longer available.'));
+        }
+
+        return $optionModel;
     }
 
     protected function checkForRequiredExtras($statamic_id, $data)

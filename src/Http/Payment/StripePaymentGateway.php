@@ -11,6 +11,7 @@ use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 use Stripe\ApiRequestor;
 use Stripe\Exception\ApiErrorException;
+use Stripe\Exception\InvalidRequestException;
 use Stripe\Exception\SignatureVerificationException;
 use Stripe\Exception\UnexpectedValueException;
 use Stripe\HttpClient\CurlClient;
@@ -51,8 +52,9 @@ class StripePaymentGateway implements PaymentInterface
         return new StripeClient($this->getSecretKey($reservation));
     }
 
-    public function paymentIntent($payment, Reservation $reservation, $data)
+    public function paymentIntent($payment, Reservation $reservation, $data, ?string $returnUrl = null)
     {
+        // Inline gateway: the customer returns through the embedded SDK, so $returnUrl is unused.
         $stripe = $this->getClient($reservation);
         $paymentIntent = $stripe->paymentIntents->create([
             'amount' => $payment->raw(),
@@ -64,6 +66,21 @@ class StripePaymentGateway implements PaymentInterface
         ]);
 
         return $paymentIntent;
+    }
+
+    public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+    {
+        try {
+            return $this->getClient($reservation)->paymentIntents->retrieve($paymentId);
+        } catch (InvalidRequestException $e) {
+            // Null only when definitively gone (safe to mint a replacement); transient failures
+            // must propagate so a brownout can't orphan a still-payable intent behind a new one.
+            if ($e->getError()?->code === 'resource_missing' || $e->getHttpStatus() === 404) {
+                return null;
+            }
+
+            throw $e;
+        }
     }
 
     public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void

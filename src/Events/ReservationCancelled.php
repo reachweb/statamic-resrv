@@ -11,9 +11,26 @@ class ReservationCancelled
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    /** The cancellation came from the hold-lapse sweep: the customer never paid in time. */
+    public const CONTEXT_HOLD_LAPSED = 'hold_lapsed';
+
+    /**
+     * An admin cancelled an awaiting-payment (manual) reservation. No money was ever
+     * captured, even if an unpaid (now-voided) intent id lingers on the row.
+     */
+    public const CONTEXT_UNPAID_HOLD = 'unpaid_hold';
+
+    /**
+     * The hold's intent had already captured (or was capturing) money when the cancellation
+     * reconciled it — a payment was in flight. The charge will be refunded at the gateway,
+     * so emails must claim neither "payment not received" nor "payment retained".
+     */
+    public const CONTEXT_PAYMENT_IN_FLIGHT = 'payment_in_flight';
+
     public $reservation;
 
-    public function __construct(Reservation $reservation)
+    /** @param  ?string  $context  Why the booking was cancelled (CONTEXT_*) for email wording; null for the existing flows. */
+    public function __construct(Reservation $reservation, public ?string $context = null)
     {
         $this->reservation = $reservation;
     }

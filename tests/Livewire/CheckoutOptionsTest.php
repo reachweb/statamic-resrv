@@ -222,6 +222,35 @@ class CheckoutOptionsTest extends TestCase
         ]);
     }
 
+    // Option::calculatePrice() resolves values withTrashed(), so a value soft-deleted after the options step loaded must be rejected at step 1.
+    public function test_it_rejects_a_soft_deleted_option_value()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $option = $this->options->first();
+        $value = $option->values->first();
+        $payload = [$option->id => [
+            'id' => $option->id,
+            'value' => $value->id,
+            'price' => $value->price->format(),
+            'optionName' => $option->name,
+            'valueName' => $value->name,
+        ]];
+
+        $value->delete();
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', $payload)
+            ->call('handleFirstStep')
+            ->assertHasErrors('options')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $option->id,
+        ]);
+    }
+
     public function test_parent_option_prices_sum_per_child_dates()
     {
         // Default OptionValue factory: perday at 22.75/day

@@ -21,9 +21,11 @@ class LogReservationConfirmed
             reservation: $event->reservation,
             from: $event->reservation->lastTransitionFrom ?? ReservationStatus::PENDING,
             to: $status instanceof ReservationStatus ? $status : ReservationStatus::from($status),
-            reason: $event->via === ReservationConfirmed::VIA_WEBHOOK
-                ? ReservationLogReason::WebhookConfirmed
-                : ReservationLogReason::CheckoutConfirmed,
+            reason: match ($event->via) {
+                ReservationConfirmed::VIA_WEBHOOK => ReservationLogReason::WebhookConfirmed,
+                ReservationConfirmed::VIA_CP => ReservationLogReason::CpConfirmed,
+                default => ReservationLogReason::CheckoutConfirmed,
+            },
             context: $event->payment,
         );
     }

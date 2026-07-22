@@ -9,6 +9,6 @@ class SendCustomerCancelledEmail
 {
     public function handle(ReservationCancelled $event): void
     {
-        SendEmail::dispatchAfterResponse($event->reservation);
+        SendEmail::dispatchAfterResponse($event->reservation, $event->context);
     }
 }

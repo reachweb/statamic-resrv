@@ -20,11 +20,13 @@ final class ActiveReservationsGuard
     }
 
     /**
-     * Whether in-flight checkouts (pending/webhook) overlap the range. These are the only
-     * holds that may release +quantity asynchronously (on expiry), which would corrupt an
-     * absolute CP `available` edit. Confirmed/partner bookings keep their hold key for
-     * life but only release on an explicit refund — that restores stock on top of whatever
-     * the admin set, so they must not block inventory edits.
+     * Whether in-flight checkouts (pending/webhook/awaiting-payment) overlap the range. These
+     * are the only holds that may release +quantity asynchronously (on expiry or hold lapse),
+     * which would corrupt an absolute CP `available` edit. Restricted to affects_availability
+     * holds — view-only holds never restore stock, so they must not block edits.
+     * Confirmed/partner bookings keep their hold key for life but only release on an
+     * explicit refund — that restores stock on top of whatever the admin set, so they
+     * must not block inventory edits.
      */
     public static function hasInFlightReservationsForRange(
         string $statamicId,
@@ -37,7 +39,8 @@ final class ActiveReservationsGuard
             $dateStart,
             $dateEnd,
             $rateIds,
-            fn ($query) => $query->whereIn('status', ReservationStatus::inFlight()),
+            fn ($query) => $query->whereIn('status', ReservationStatus::inFlight())
+                ->where('affects_availability', true),
         );
     }
 
@@ -45,7 +48,8 @@ final class ActiveReservationsGuard
      * Whether any non-terminal reservation (including confirmed/partner bookings) overlaps
      * the range. Destructive operations must block on these too: deleting availability rows
      * would orphan the hold keys of real bookings, so a later refund's removeFromPending
-     * would find nothing to restore.
+     * would find nothing to restore. View-only holds (affects_availability=false) never
+     * wrote a hold key, so there is nothing to orphan — they must not block deletion.
      */
     public static function hasActiveReservationsForRange(
         string $statamicId,
@@ -58,7 +62,8 @@ final class ActiveReservationsGuard
             $dateStart,
             $dateEnd,
             $rateIds,
-            fn ($query) => $query->whereNotIn('status', ReservationStatus::terminal()),
+            fn ($query) => $query->whereNotIn('status', ReservationStatus::terminal())
+                ->where('affects_availability', true),
         );
     }
 

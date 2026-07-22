@@ -18,9 +18,16 @@ class SendCustomerCancelledEmail implements ShouldQueue
 
     protected $reservation;
 
-    public function __construct(Reservation $reservation)
+    /**
+     * Not constructor-promoted: payloads queued before this property existed carry no `context`
+     * key, and an uninitialized typed property would make handle() throw on unserialization.
+     */
+    protected ?string $context = null;
+
+    public function __construct(Reservation $reservation, ?string $context = null)
     {
         $this->reservation = $reservation;
+        $this->context = $context;
     }
 
     public function handle(): void
@@ -31,7 +38,7 @@ class SendCustomerCancelledEmail implements ShouldQueue
         $dispatcher->send(
             $this->reservation,
             ReservationEmailEvent::CustomerCancelled,
-            new ReservationCancelledCustomer($this->reservation),
+            new ReservationCancelledCustomer($this->reservation, $this->context),
         );
     }
 }

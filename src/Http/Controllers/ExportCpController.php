@@ -17,7 +17,7 @@ use Statamic\Facades\Form as StatamicForm;
 
 class ExportCpController extends Controller
 {
-    public const STATUSES = ['pending', 'confirmed', 'partner', 'cancelled', 'expired', 'refunded'];
+    public const STATUSES = ['pending', 'awaiting_payment', 'confirmed', 'partner', 'cancelled', 'expired', 'refunded'];
 
     public const CUSTOMER_KEYS_CACHE_KEY = 'resrv.export.customer_data_keys';
 
