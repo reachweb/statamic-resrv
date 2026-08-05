@@ -555,6 +555,45 @@ class ManualReservationCpTest extends TestCase
             ->assertStatus(422)->assertJsonValidationErrors(['customer.email']);
     }
 
+    public function test_dependent_checkout_rules_follow_the_fields_into_the_customer_namespace()
+    {
+        $this->signInAdmin();
+        $this->useMultipleGateways();
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        // On the checkout, sibling fields are referenced as form.<handle>; the rule must be
+        // re-pointed to customer.* here or it matches nothing and silently passes.
+        $country = \Mockery::mock();
+        $country->shouldReceive('handle')->andReturn('country');
+        $country->shouldReceive('config')->andReturn(['validate' => ['required']]);
+
+        $state = \Mockery::mock();
+        $state->shouldReceive('handle')->andReturn('state');
+        $state->shouldReceive('config')->andReturn(['validate' => ['required_if:form.country,US']]);
+
+        $fields = \Mockery::mock();
+        $fields->shouldReceive('values')->andReturn(collect([$country, $state]));
+
+        $form = \Mockery::mock(FormContract::class);
+        $form->shouldReceive('fields')->andReturn($fields);
+
+        $resolver = \Mockery::mock(CheckoutFormResolver::class);
+        $resolver->shouldReceive('resolveForEntryId')->andReturn($form);
+        $resolver->shouldReceive('resolveForReservation')->andReturn($form);
+        $this->app->instance(CheckoutFormResolver::class, $resolver);
+
+        $payload = $this->storePayload($entry, ['send_payment_request_email' => false]);
+        $payload['customer'] = ['email' => 'jane@example.com', 'country' => 'US'];
+
+        $this->postJson(cp_route('resrv.manual.store'), $payload)
+            ->assertStatus(422)->assertJsonValidationErrors(['customer.state']);
+
+        $payload['customer'] = ['email' => 'jane@example.com', 'country' => 'GR'];
+
+        $this->postJson(cp_route('resrv.manual.store'), $payload)
+            ->assertStatus(201);
+    }
+
     public function test_store_rejects_online_gateways_when_the_payment_entry_is_unconfigured()
     {
         $this->signInAdmin();

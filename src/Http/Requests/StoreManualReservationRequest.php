@@ -55,8 +55,29 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
             ->mapWithKeys(function ($field) {
                 $validate = $field->config()['validate'] ?? null;
 
-                return ['customer.'.$field->handle() => $validate ? implode('|', $validate) : 'nullable'];
+                return ['customer.'.$field->handle() => $validate ? $this->namespacedRules($validate) : 'nullable'];
             })
             ->all();
+    }
+
+    /**
+     * Checkout rules reference sibling fields as form.<handle> (Livewire\CheckoutForm nests
+     * them under `form`). Here the fields live under `customer`, so dependent-rule parameters
+     * (required_if:form.country,US etc.) must be re-pointed or they resolve to nothing and
+     * silently pass.
+     *
+     * @param  array<int, mixed>  $validate
+     */
+    protected function namespacedRules(array $validate): string
+    {
+        return collect($validate)
+            ->map(function ($rule) {
+                if (! is_string($rule) || str_starts_with($rule, 'regex:') || str_starts_with($rule, 'not_regex:')) {
+                    return $rule;
+                }
+
+                return preg_replace('/(?<=[:,])form\./', 'customer.', $rule);
+            })
+            ->implode('|');
     }
 }
