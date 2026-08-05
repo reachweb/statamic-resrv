@@ -1043,6 +1043,81 @@ class RateSharedAvailabilityTest extends TestCase
         $this->assertEquals('75.00', (string) $calendar[$dateKey]['price']);
     }
 
+    public function test_calendar_price_serializes_as_plain_decimal_string_for_relative_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRelativeRate = Rate::factory()->relative()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'date' => $startDate,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $sharedRelativeRate->id);
+
+        $dateKey = $startDate->format('Y-m-d');
+
+        // The transform rewrites ->price on a fetched model; that write must land as the
+        // formatted string, not a Price object, or the JSON payload the frontend datepicker
+        // consumes becomes {"money":{...}} and Math.round(info.price) renders NaN.
+        $this->assertIsString($calendar[$dateKey]['price']);
+        $this->assertStringContainsString('"price":"90.00"', json_encode($calendar));
+    }
+
+    public function test_browse_calendar_price_serializes_as_plain_decimal_string_when_relative_rate_is_cheapest()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        Rate::factory()->relative()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 25,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'date' => $startDate,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // No rate selected: the calendar expands published rates from the base rows and the
+        // relative rate's 75.00 wins as the cheapest row for the date.
+        $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), null);
+
+        $dateKey = $startDate->format('Y-m-d');
+
+        $this->assertIsString($calendar[$dateKey]['price']);
+        $this->assertStringContainsString('"price":"75.00"', json_encode($calendar));
+    }
+
     public function test_calendar_rewrites_rate_id_for_shared_non_relative_rate()
     {
         $entry = $this->makeStatamicItemWithResrvAvailabilityField();
