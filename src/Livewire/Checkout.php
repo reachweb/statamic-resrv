@@ -22,6 +22,8 @@ use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
+use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
@@ -149,10 +151,88 @@ class Checkout extends Component
             } else {
                 $this->enabledOptions->options = collect();
             }
+
+            if (! $this->reservationError) {
+                $this->repriceEnabledAddons();
+            }
         } else {
             $this->enabledExtras->extras = collect();
             $this->enabledOptions->options = collect();
         }
+    }
+
+    /**
+     * Re-price the session-carried extras/options against the actual reservation before
+     * anything consumes them. Several components persist the shared 'resrv-extras' /
+     * 'resrv-options' session keys on every Livewire dehydrate, so the stored prices can
+     * be a stale snapshot (e.g. extras priced at a previous search quantity after a
+     * multi-cart selection changed it) — trusting them makes validateTotal() throw
+     * ReservationDriftException on mount with no way for the customer to recover.
+     * Prices are recomputed the same way Reservation::validateExtraCharges() does
+     * (per child for parent reservations) so the two totals always agree.
+     */
+    protected function repriceEnabledAddons(): void
+    {
+        if ($this->enabledExtras->extras->isEmpty() && $this->enabledOptions->options->isEmpty()) {
+            return;
+        }
+
+        $reservation = $this->reservation;
+
+        $datasets = $reservation->isParent()
+            ? $reservation->childs->map(fn ($child) => [
+                'date_start' => $child->date_start,
+                'date_end' => $child->date_end,
+                'quantity' => $child->quantity,
+                'rate_id' => $child->rate_id,
+                'item_id' => $reservation->item_id,
+                'customer' => $reservation->customerData ?? collect(),
+            ])->all()
+            : [array_merge($this->getAvailabilityDataFromReservation(), [
+                'item_id' => $reservation->item_id,
+                'customer' => $reservation->customerData ?? collect(),
+            ])];
+
+        $this->enabledExtras->extras = $this->enabledExtras->extras
+            ->map(function ($extra) use ($datasets) {
+                $totalPrice = Price::create(0);
+
+                foreach ($datasets as $data) {
+                    // Fresh instance per dataset: priceForDates() mutates $this->price via dynamic pricing
+                    $extraModel = Extra::find($extra['id']);
+
+                    if (! $extraModel) {
+                        return null;
+                    }
+
+                    $totalPrice->add(Price::create($extraModel->priceForDates($data)));
+                }
+
+                $extra['price'] = $totalPrice->format();
+
+                return $extra;
+            })
+            ->filter();
+
+        $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($datasets) {
+            $value = OptionValue::find($option['value']);
+
+            // Leave unresolvable values untouched — activeOptionFor() raises the designed
+            // OptionsException for them during validation.
+            if (! $value) {
+                return $option;
+            }
+
+            $totalPrice = Price::create(0);
+
+            foreach ($datasets as $data) {
+                $totalPrice->add(Price::create($value->priceForDates($data)));
+            }
+
+            $option['price'] = $totalPrice->format();
+
+            return $option;
+        });
     }
 
     public function handleFirstStep()

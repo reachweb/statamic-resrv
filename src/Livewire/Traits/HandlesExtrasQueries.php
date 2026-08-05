@@ -140,7 +140,14 @@ trait HandlesExtrasQueries
     public function updateEnabledExtraPrices(): void
     {
         $this->enabledExtras->extras->transform(function ($extra) {
-            $extra['price'] = $this->extras->where('id', $extra['id'])->first()->price->format();
+            // Leave rows this component cannot resolve untouched: with a `filter` set it
+            // only sees a subset of the available extras, and dereferencing a missing one
+            // would fatal. Checkout re-prices authoritatively before consuming them.
+            $available = $this->extras->firstWhere('id', $extra['id']);
+
+            if ($available) {
+                $extra['price'] = $available->price->format();
+            }
 
             return $extra;
         });

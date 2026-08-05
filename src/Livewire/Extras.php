@@ -59,17 +59,23 @@ class Extras extends Component
             throw new \Exception('Entry ID is required when reservation is not provided');
         }
 
+        $this->extraConditions = collect([
+            'hide' => collect(),
+            'required' => collect(),
+        ]);
+
         if (session()->has('resrv-extras')) {
             $this->enabledExtras->fill(session('resrv-extras'));
+            // Several components persist this shared session key on every Livewire
+            // dehydrate, so the stored prices can be a stale snapshot (e.g. computed
+            // for a previous search or cart state). Keep the selection but re-derive
+            // the prices for the current context before broadcasting them.
+            $this->updateEnabledExtraPrices();
             $this->dispatchExtrasUpdated();
         } else {
             $this->enabledExtras->extras = collect();
         }
 
-        $this->extraConditions = collect([
-            'hide' => collect(),
-            'required' => collect(),
-        ]);
         $this->updateExtraConditions();
     }
 
@@ -252,6 +258,7 @@ class Extras extends Component
         $this->updateExtraConditions();
 
         if ($this->enabledExtras->extras->count() !== 0) {
+            $this->updateEnabledExtraPrices();
             $this->dispatchExtrasUpdated();
         }
     }
