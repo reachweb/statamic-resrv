@@ -10,6 +10,7 @@ use Inertia\Testing\AssertableInertia;
 use Mockery;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Mail\ReservationCancelledCustomer;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
@@ -440,6 +441,31 @@ class ReservationCpTest extends TestCase
             ->assertJson(['id' => $reservation->id, 'status' => 'refunded', 'refund_is_automatic' => false]);
     }
 
+    public function test_refunding_an_offline_gateway_payment_reports_a_manual_refund()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        // An offline payment carries a payment_id, but the gateway's refund() is a
+        // bookkeeping no-op — the response must not claim the money was returned.
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'offline_abcdef',
+            'payment_gateway' => 'offline',
+        ])->withCustomer()->create();
+
+        $response = $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]));
+
+        $response->assertStatus(200)
+            ->assertJson(['id' => $reservation->id, 'status' => 'refunded', 'refund_is_automatic' => false]);
+    }
+
     public function test_voiding_a_partner_reservation_lands_in_cancelled_not_refunded()
     {
         Mail::fake();
@@ -529,9 +555,10 @@ class ReservationCpTest extends TestCase
         $reservation->affiliate()->attach($affiliate->id, ['fee' => $affiliate->fee]);
 
         // A payment intent exists, so the charge must still be refunded through the gateway.
+        // Resolved twice: once for the refund_is_automatic capability check, once for the refund.
         $manager = Mockery::mock(PaymentGatewayManager::class);
         $manager->shouldReceive('forReservation')
-            ->once()
+            ->twice()
             ->with(Mockery::on(fn ($r) => $r->id === $reservation->id))
             ->andReturn(new FakePaymentGateway);
         app()->instance(PaymentGatewayManager::class, $manager);

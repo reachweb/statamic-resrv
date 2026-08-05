@@ -229,11 +229,11 @@ class ReservationCpController extends Controller
         ]);
         $reservation = $this->reservation->findOrFail($data['id']);
 
-        // A refund that succeeds with a gateway payment moved the money through the
-        // gateway; without one (out-of-band / offline payment) nothing moved and the
-        // admin must return the funds by hand. Captured before the call so the flag
+        // A refund only moves money when a charge reached a gateway that can refund via
+        // API — an offline gateway's refund() is a bookkeeping no-op, so its payment_id
+        // alone must not read as "money returned". Captured before the call so the flag
         // can't drift from what the processor actually saw.
-        $refundIsAutomatic = $reservation->hasGatewayPayment();
+        $refundIsAutomatic = $reservation->refundIsAutomatic();
 
         try {
             $changed = app(ReservationRefundProcessor::class)->refund($reservation);
