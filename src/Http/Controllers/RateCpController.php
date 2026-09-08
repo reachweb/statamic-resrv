@@ -283,6 +283,7 @@ class RateCpController extends Controller
             ],
             'require_price_override' => ['nullable', 'boolean'],
             'max_available' => ['nullable', 'integer', 'min:1'],
+            'units_per_addon' => ['nullable', 'integer', 'min:1'],
             'date_start' => ['nullable', 'date'],
             'date_end' => ['nullable', 'date'],
             'min_days_before' => ['nullable', 'integer', 'min:0'],

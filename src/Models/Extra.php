@@ -158,11 +158,14 @@ class Extra extends Model
 
     private function applyQuantityIfNeeded($price)
     {
-        if ($this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false)) {
-            $price = $price->multiply($this->quantity);
+        if (config('resrv-config.ignore_quantity_for_prices', false)) {
+            return $price;
         }
 
-        return $price;
+        // The rate may divide the booked quantity (units_per_addon) — see HandlesAvailabilityDates::quantityForAddons().
+        $quantity = $this->quantityForAddons();
+
+        return $quantity > 1 ? $price->multiply($quantity) : $price;
     }
 
     public function priceForReservation($reservation)

@@ -26,6 +26,19 @@ class Rate extends Model
     private static array $entryCollectionCache = [];
 
     /**
+     * Request-scoped memo for unitsPerAddonFor(): rate id => divisor (null when the rate has
+     * none). Every extra and option value priced under a rate asks for it, so a batch of add-ons
+     * would otherwise issue one identical query per item. Keyed to the current request object so
+     * long-running runtimes (Octane) start each request cold; flushed by the model events below
+     * so an in-process edit is visible to the next lookup.
+     *
+     * @var array<int, int|null>
+     */
+    private static array $unitsPerAddonCache = [];
+
+    private static ?object $unitsPerAddonCacheRequest = null;
+
+    /**
      * The data type of the primary key ID.
      * Set to string for PostgreSQL compatibility with dynamic_pricing_assignments table.
      *
@@ -47,6 +60,7 @@ class Rate extends Model
         'availability_type',
         'require_price_override',
         'max_available',
+        'units_per_addon',
         'date_start',
         'date_end',
         'min_days_before',
@@ -69,6 +83,7 @@ class Rate extends Model
         'date_end' => 'date',
         'modifier_amount' => 'decimal:2',
         'base_rate_id' => 'string',
+        'units_per_addon' => 'integer',
         'free_cancellation_period' => 'integer',
     ];
 
@@ -80,6 +95,11 @@ class Rate extends Model
     protected static function booted(): void
     {
         static::addGlobalScope(new OrderScope);
+
+        $flush = fn () => static::resetUnitsPerAddonCache();
+        static::saved($flush);
+        static::deleted($flush);
+        static::restored($flush);
     }
 
     public static function renameTrashedSlugs(string $collection, string $slug): void
@@ -314,6 +334,42 @@ class Rate extends Model
 
         return static::withTrashed()->find($rateId)?->effectiveCancellationPolicy()
             ?? CancellationPolicy::globalDefault();
+    }
+
+    /**
+     * Resolve how many booked units count as one add-on unit for a rate id (the divisor
+     * applied to the reservation quantity when pricing extras and option values), or null
+     * when the rate has none. withTrashed so historical reservations keep pricing add-ons
+     * under the rate they were booked with, even after that rate is deleted.
+     */
+    public static function unitsPerAddonFor(?int $rateId): ?int
+    {
+        if (! $rateId) {
+            return null;
+        }
+
+        $request = app()->bound('request') ? app('request') : null;
+        if (static::$unitsPerAddonCacheRequest !== $request) {
+            static::$unitsPerAddonCacheRequest = $request;
+            static::$unitsPerAddonCache = [];
+        }
+
+        if (array_key_exists($rateId, static::$unitsPerAddonCache)) {
+            return static::$unitsPerAddonCache[$rateId];
+        }
+
+        $value = static::withTrashed()->whereKey($rateId)->value('units_per_addon');
+
+        return static::$unitsPerAddonCache[$rateId] = $value ? (int) $value : null;
+    }
+
+    /**
+     * Drop the memoised divisors. Model events call this for Eloquent writes; call it yourself
+     * after writing resrv_rates through the query builder.
+     */
+    public static function resetUnitsPerAddonCache(): void
+    {
+        static::$unitsPerAddonCache = [];
     }
 
     public function calculatePrice(PriceClass $basePrice): PriceClass
