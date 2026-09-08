@@ -11,6 +11,7 @@
                     :data="$this->data"
                     :filter="$this->showOptions"
                     :entryId="$this->entry->id"
+                    :effectiveRateId="$this->effectiveRateId()"
                 />
             </div>
             @endif
@@ -20,6 +21,7 @@
                     :data="$this->data"
                     :filter="$this->showExtras"
                     :entryId="$this->entry->id"
+                    :effectiveRateId="$this->effectiveRateId()"
                 />
             </div>
             @endif

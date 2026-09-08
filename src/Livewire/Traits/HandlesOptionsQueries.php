@@ -126,6 +126,26 @@ trait HandlesOptionsQueries
         return ! empty($selections) ? $selections : null;
     }
 
+    /**
+     * Re-derive the price stored on each selected option from the (freshly priced) available
+     * list. A selection whose option or value is no longer listed keeps its stored price: the
+     * checkout re-validates every selection against the reservation anyway.
+     */
+    public function updateEnabledOptionPrices(): void
+    {
+        $this->enabledOptions->options->transform(function ($option) {
+            $value = $this->options->firstWhere('id', $option['id'])
+                ?->values
+                ?->firstWhere('id', $option['value']);
+
+            if ($value) {
+                $option['price'] = $value->price->format();
+            }
+
+            return $option;
+        });
+    }
+
     protected function getOptionsForId($id): Collection
     {
         return Option::entry($id)

@@ -946,7 +946,7 @@ class Reservation extends Model
         $optionsCost = Price::create(0);
         if (array_key_exists('options', $data) > 0) {
             $data['options']->each(function ($option) use ($data, $optionsCost) {
-                $optionsCost->add(Option::find($option['id'])->calculatePrice($data, $option['value']));
+                $optionsCost->add($this->optionForValidation($option)->calculatePrice($data, $option['value']));
             });
         }
 
@@ -955,11 +955,28 @@ class Reservation extends Model
             // The extra class needs the entry id to calculate the price
             $data['item_id'] = $statamic_id;
             $data['extras']->each(function ($extra) use ($data, $extrasCost) {
-                $extrasCost->add(Extra::find($extra['id'])->calculatePrice($data, $extra['quantity']));
+                $extrasCost->add($this->extraForValidation($extra)->calculatePrice($data, $extra['quantity']));
             });
         }
 
         return $extraCharges->add($optionsCost, $extrasCost);
+    }
+
+    /**
+     * A checkout selection (session-backed, so possibly picked before the extra was deleted or
+     * unpublished) must resolve to a live extra, or the checkout gets an explicit error instead
+     * of a null dereference. Historical pricing (extraCharges()) is the withTrashed() path.
+     */
+    protected function extraForValidation(array $extra): Extra
+    {
+        return Extra::find($extra['id'])
+            ?? throw new ExtrasException(__('The selected extra is not available anymore.'));
+    }
+
+    protected function optionForValidation(array $option): Option
+    {
+        return Option::find($option['id'])
+            ?? throw new OptionsException(__('The selected option is not valid.'));
     }
 
     protected function validateParentExtraCharges($data, $statamic_id)
@@ -974,13 +991,13 @@ class Reservation extends Model
 
             if (array_key_exists('options', $data) && $data['options']->count() > 0) {
                 $data['options']->each(function ($option) use ($childData, $totalCharges) {
-                    $totalCharges->add(Option::find($option['id'])->calculatePrice($childData, $option['value']));
+                    $totalCharges->add($this->optionForValidation($option)->calculatePrice($childData, $option['value']));
                 });
             }
 
             if (array_key_exists('extras', $data) && $data['extras']->count() > 0) {
                 $data['extras']->each(function ($extra) use ($childData, $totalCharges) {
-                    $totalCharges->add(Extra::find($extra['id'])->calculatePrice($childData, $extra['quantity']));
+                    $totalCharges->add($this->extraForValidation($extra)->calculatePrice($childData, $extra['quantity']));
                 });
             }
         }

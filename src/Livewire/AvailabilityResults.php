@@ -13,6 +13,8 @@ use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
+use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry;
 use Statamic\Support\Traits\Hookable;
@@ -119,7 +121,29 @@ class AvailabilityResults extends Component
 
         $this->runHooks('availability-results-updated', $this->availability);
 
-        $this->dispatch('availability-results-updated');
+        // Tell the Extras/Options children which rate this search will book (see
+        // effectiveRateId()); with rates disabled the search itself carries none.
+        $this->dispatch('availability-results-updated', rateId: $this->effectiveRateId());
+    }
+
+    /**
+     * The rate the availability engine resolved for the current search, i.e. the rate a
+     * reservation created from these results gets. With rates disabled (the default) the search
+     * rate is null while the engine still books a concrete rate, and add-on pricing depends on
+     * it (units_per_addon, relative extras), so the Extras/Options children price against this
+     * instead of the search rate. Null while results are empty or an all-rates listing is shown.
+     */
+    public function effectiveRateId(): ?int
+    {
+        $result = $this->extraDays > 0 ? $this->availability->get(0) : $this->availability;
+
+        if (data_get($result, 'message.status') !== true) {
+            return null;
+        }
+
+        $rateId = data_get($result, 'data.rate_id');
+
+        return is_numeric($rateId) ? (int) $rateId : null;
     }
 
     public function loadAvailability(): void
@@ -174,7 +198,11 @@ class AvailabilityResults extends Component
                 $this->data->rate = (string) $rateFromResults;
             }
         }
+
         try {
+            // Pricing the add-ons validates the search too (quantity bounds), so it belongs
+            // with the other AvailabilityException sources.
+            $this->repriceEnabledAddons();
             $this->validateAvailabilityAndPrice();
             $this->createReservation();
 
@@ -184,11 +212,56 @@ class AvailabilityResults extends Component
         }
     }
 
+    /**
+     * Book one rate straight from the all-rates listing. The Extras/Options children are not
+     * rendered there, so the selection they priced earlier (under another rate, or none) is
+     * carried over as is; checkout() re-prices it under the rate being booked.
+     */
     public function checkoutRate(string $rateId): void
     {
         $this->data->rate = $rateId;
         $this->availability = collect($this->availability->get($rateId));
         $this->checkout();
+    }
+
+    /**
+     * Re-derive the selected add-ons' prices for the booking that is about to be made: the
+     * search's dates and quantity, and the rate it settled on. The children price the selection
+     * as it is made and on every search change, but they may have priced it under another rate
+     * (a rate card on the all-rates listing, see checkoutRate()) or without the resolved one (a
+     * customised view that omits effectiveRateId, before the next search corrects it). The
+     * session-backed selection is what a checkout without an extras step trusts, so it has to
+     * carry the amounts the reservation will be validated against. A selection whose extra or
+     * value no longer exists keeps its stored price; Reservation::validateExtraCharges() rejects
+     * it at the checkout with an explicit extras/options error.
+     */
+    protected function repriceEnabledAddons(): void
+    {
+        $data = array_merge($this->data->toResrvArray(), ['item_id' => $this->entryId]);
+
+        if ($this->enabledExtras->extras->isNotEmpty()) {
+            $extras = Extra::findMany($this->enabledExtras->extras->pluck('id'))->keyBy('id');
+
+            $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($extras, $data) {
+                if ($model = $extras->get($extra['id'])) {
+                    $extra['price'] = $model->priceForDates($data);
+                }
+
+                return $extra;
+            });
+        }
+
+        if ($this->enabledOptions->options->isNotEmpty()) {
+            $values = OptionValue::findMany($this->enabledOptions->options->pluck('value'))->keyBy('id');
+
+            $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($values, $data) {
+                if ($value = $values->get($option['value'])) {
+                    $option['price'] = $value->priceForDates($data);
+                }
+
+                return $option;
+            });
+        }
     }
 
     #[On('extras-updated')]
