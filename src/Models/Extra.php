@@ -218,14 +218,44 @@ class Extra extends Model
         return Price::create($this->pivot->price)->multiply($this->pivot->quantity)->format();
     }
 
+    /**
+     * The extras a customer can see and select: published, not trashed (global scope) and not in
+     * an unpublished category. Apply it on an entry's extras() relation for the attachment half.
+     * An extra without a category (or whose category was deleted — category_id is nulled) is
+     * listed under "Uncategorized" (HandlesExtrasQueries::createExtraCategoryObject()), so only
+     * a live, unpublished category hides it. The selectable list (scopeGetPriceForDates()) and
+     * checkout validation (Reservation::extraForValidation()) both apply this scope; the
+     * required-extras gate (scopeEntriesWithConditions()) is a raw query that re-applies
+     * published + not trashed by hand and shares only the category subquery — keep the three in
+     * step.
+     */
+    public function scopeSelectable($query)
+    {
+        return $query->where('resrv_extras.published', true)
+            ->whereNotExists(self::unpublishedCategoryQuery());
+    }
+
+    /**
+     * EXISTS-subquery for "this extra's category is unpublished". A closure rather than a scope so
+     * the raw query in scopeEntriesWithConditions(), which bypasses Eloquent, can share it.
+     */
+    public static function unpublishedCategoryQuery(): \Closure
+    {
+        return fn ($query) => $query->select(DB::raw(1))
+            ->from('resrv_extra_categories')
+            ->whereColumn('resrv_extra_categories.id', 'resrv_extras.category_id')
+            ->where('resrv_extra_categories.published', false);
+    }
+
     public function scopeEntriesWithConditions($query, $entry)
     {
         $statamicEntry = $this->getDefaultSiteEntry($entry);
         $entry = Entry::whereItemId($statamicEntry->id());
 
-        // This raw query bypasses the published filter and the SoftDeletes global scope, so apply
-        // both here — the required-extras gate must only enforce extras the customer can actually
-        // see and select, otherwise an unpublished/trashed required extra permanently blocks checkout.
+        // This raw query bypasses scopeSelectable() and the SoftDeletes global scope, so apply the
+        // same predicate by hand — the required-extras gate must only enforce extras the customer
+        // can actually see and select, otherwise an unpublished/trashed required extra (or one in
+        // an unpublished category) permanently blocks checkout.
         return DB::table('resrv_extras')
             ->join('resrv_entry_extra', function ($join) use ($entry) {
                 $join->on('resrv_extras.id', '=', 'resrv_entry_extra.extra_id')
@@ -236,6 +266,7 @@ class Extra extends Model
             })
             ->where('resrv_extras.published', true)
             ->whereNull('resrv_extras.deleted_at')
+            ->whereNotExists(self::unpublishedCategoryQuery())
             ->select('resrv_extras.*', 'resrv_extra_conditions.*');
     }
 
@@ -244,7 +275,7 @@ class Extra extends Model
         $entry = Entry::whereItemId($data['item_id']);
 
         $extras = $entry->extras()
-            ->where('published', true)
+            ->selectable()
             ->with('category')
             ->without('conditions')
             ->orderBy('order')

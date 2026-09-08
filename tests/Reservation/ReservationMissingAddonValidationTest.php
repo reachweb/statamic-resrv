@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
+use Reach\StatamicResrv\Models\ExtraCategory;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
@@ -18,9 +19,13 @@ use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 /**
- * Checkout validation of a selection whose extra or option no longer exists. The selection is
- * session-backed, so it can outlive a CP deletion; Reservation::validateTotal() must reject it
- * with the explicit extras/options error the checkout renders, not fail on a missing model.
+ * Checkout validation of a selection whose extra or option no longer exists or is no longer
+ * published. The selection is session-backed, so it can outlive a CP deletion or unpublish;
+ * Reservation::validateTotal() must reject it with the explicit extras/options error the checkout
+ * renders, not fail on a missing model — and it must apply the selectable lists' own predicate
+ * (attached to the entry, published, not trashed, not in an unpublished category; for options
+ * also a live value of that option), so nothing the customer could no longer pick can be bought
+ * via a stale session.
  *
  * Fixture: an entry with one 'double' rate at 100/night, a fixed 350 extra and a fixed option;
  * a normal reservation of 1 unit for 2 nights (200) and a parent with two 1-unit children.
@@ -166,6 +171,57 @@ class ReservationMissingAddonValidationTest extends TestCase
         $reservation->validateTotal($data, $this->entry->id());
     }
 
+    public function test_an_unpublished_extra_is_rejected_with_an_extras_error()
+    {
+        $reservation = $this->createNormalReservation();
+
+        $data = $this->checkoutData($reservation, '550.00', [
+            'extras' => $this->extraPayload($this->portTaxes->id, '350.00'),
+        ]);
+
+        $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
+
+        $this->portTaxes->update(['published' => false]);
+
+        $this->expectException(ExtrasException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_a_detached_extra_is_rejected_with_an_extras_error()
+    {
+        $reservation = $this->createNormalReservation();
+
+        $data = $this->checkoutData($reservation, '550.00', [
+            'extras' => $this->extraPayload($this->portTaxes->id, '350.00'),
+        ]);
+
+        $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
+
+        ResrvEntry::whereItemId($this->entry->id())->extras()->detach($this->portTaxes->id);
+
+        $this->expectException(ExtrasException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_an_extra_in_an_unpublished_category_is_rejected_with_an_extras_error()
+    {
+        $reservation = $this->createNormalReservation();
+        $category = ExtraCategory::factory()->create();
+        $this->portTaxes->update(['category_id' => $category->id]);
+
+        $data = $this->checkoutData($reservation, '550.00', [
+            'extras' => $this->extraPayload($this->portTaxes->id, '350.00'),
+        ]);
+
+        // Baseline: a published category keeps the extra selectable.
+        $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
+
+        $category->update(['published' => false]);
+
+        $this->expectException(ExtrasException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
     public function test_an_unknown_extra_is_rejected_with_an_extras_error()
     {
         $reservation = $this->createNormalReservation();
@@ -190,6 +246,71 @@ class ReservationMissingAddonValidationTest extends TestCase
         $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
 
         $option->delete();
+
+        $this->expectException(OptionsException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_an_unpublished_option_is_rejected_with_an_options_error()
+    {
+        $reservation = $this->createNormalReservation();
+        [$option, $value] = $this->createFixedOption();
+
+        $data = $this->checkoutData($reservation, '230.00', [
+            'options' => $this->optionPayload($option, $value, '30.00'),
+        ]);
+
+        $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
+
+        $option->update(['published' => false]);
+
+        $this->expectException(OptionsException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_a_deleted_option_value_is_rejected_with_an_options_error()
+    {
+        $reservation = $this->createNormalReservation();
+        [$option, $value] = $this->createFixedOption();
+
+        $data = $this->checkoutData($reservation, '230.00', [
+            'options' => $this->optionPayload($option, $value, '30.00'),
+        ]);
+
+        $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
+
+        // Option::calculatePrice() prices trashed values for historical reservations; a checkout
+        // selection must not get that leniency.
+        $value->delete();
+
+        $this->expectException(OptionsException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_a_value_of_another_option_is_rejected_with_an_options_error()
+    {
+        $reservation = $this->createNormalReservation();
+        [$option] = $this->createFixedOption();
+        $other = Option::factory()->create(['item_id' => $this->entry->id(), 'name' => 'Other', 'slug' => 'other']);
+        $otherValue = OptionValue::factory()->fixed()->create(['option_id' => $other->id]);
+
+        $data = $this->checkoutData($reservation, '230.00', [
+            'options' => $this->optionPayload($option, $otherValue, '30.00'),
+        ]);
+
+        $this->expectException(OptionsException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_an_option_of_another_entry_is_rejected_with_an_options_error()
+    {
+        $reservation = $this->createNormalReservation();
+        $option = Option::factory()->create(['item_id' => 'another-entry', 'name' => 'Foreign', 'slug' => 'foreign']);
+        $value = OptionValue::factory()->fixed()->create(['option_id' => $option->id]);
+
+        $data = $this->checkoutData($reservation, '230.00', [
+            'options' => $this->optionPayload($option, $value, '30.00'),
+        ]);
 
         $this->expectException(OptionsException::class);
         $reservation->validateTotal($data, $this->entry->id());
@@ -223,6 +344,72 @@ class ReservationMissingAddonValidationTest extends TestCase
         $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
 
         $option->delete();
+
+        $this->expectException(OptionsException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_an_unpublished_extra_is_rejected_on_a_parent_reservation()
+    {
+        $reservation = $this->createParentReservation();
+
+        $data = $this->checkoutData($reservation, '1100.00', [
+            'extras' => $this->extraPayload($this->portTaxes->id, '700.00'),
+        ]);
+
+        $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
+
+        $this->portTaxes->update(['published' => false]);
+
+        $this->expectException(ExtrasException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_an_unpublished_option_is_rejected_on_a_parent_reservation()
+    {
+        $reservation = $this->createParentReservation();
+        [$option, $value] = $this->createFixedOption();
+
+        $data = $this->checkoutData($reservation, '460.00', [
+            'options' => $this->optionPayload($option, $value, '60.00'),
+        ]);
+
+        $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
+
+        $option->update(['published' => false]);
+
+        $this->expectException(OptionsException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_a_detached_extra_is_rejected_on_a_parent_reservation()
+    {
+        $reservation = $this->createParentReservation();
+
+        $data = $this->checkoutData($reservation, '1100.00', [
+            'extras' => $this->extraPayload($this->portTaxes->id, '700.00'),
+        ]);
+
+        $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
+
+        ResrvEntry::whereItemId($this->entry->id())->extras()->detach($this->portTaxes->id);
+
+        $this->expectException(ExtrasException::class);
+        $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    public function test_a_deleted_option_value_is_rejected_on_a_parent_reservation()
+    {
+        $reservation = $this->createParentReservation();
+        [$option, $value] = $this->createFixedOption();
+
+        $data = $this->checkoutData($reservation, '460.00', [
+            'options' => $this->optionPayload($option, $value, '60.00'),
+        ]);
+
+        $this->assertTrue($reservation->validateTotal($data, $this->entry->id()));
+
+        $value->delete();
 
         $this->expectException(OptionsException::class);
         $reservation->validateTotal($data, $this->entry->id());
