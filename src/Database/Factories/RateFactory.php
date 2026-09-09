@@ -24,6 +24,7 @@ class RateFactory extends Factory
             'modifier_amount' => null,
             'availability_type' => 'independent',
             'max_available' => null,
+            'units_per_addon' => null,
             'date_start' => null,
             'date_end' => null,
             'min_days_before' => null,
@@ -76,6 +77,17 @@ class RateFactory extends Factory
             'slug' => 'flexible-rate',
             'cancellation_policy' => 'free_cancellation',
             'free_cancellation_period' => $days,
+        ]);
+    }
+
+    /**
+     * Price extras and option values per ceil(quantity / $units) booked units, e.g. 2 for a
+     * single-occupancy cabin sold as 2 berths for 1 guest.
+     */
+    public function unitsPerAddon(int $units): static
+    {
+        return $this->state(fn () => [
+            'units_per_addon' => $units,
         ]);
     }
 

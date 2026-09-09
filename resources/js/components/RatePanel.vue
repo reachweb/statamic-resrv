@@ -85,6 +85,9 @@
                             <Field v-if="form.availability_type === 'shared'" :label="__('Max available')" :instructions="__('Maximum number of units available for this rate.')" :error="form.errors.max_available">
                                 <Input v-model="form.max_available" type="number" />
                             </Field>
+                            <Field :label="__('Booked units per add-on')" :instructions="__('How many booked units count as one unit when pricing extras and options for this rate, e.g. 2 for a single-occupancy cabin sold as 2 berths for 1 guest. Leave empty to price add-ons per booked unit.')" :error="form.errors.units_per_addon">
+                                <Input v-model="form.units_per_addon" type="number" />
+                            </Field>
                         </div>
                         <Field v-if="form.availability_type === 'shared' && form.pricing_type === 'independent'" :label="__('Require price override')" :instructions="__('When enabled, dates without an explicit price for this rate are unavailable. When disabled, the base rate\'s price is used as a fallback.')">
                             <Switch v-model="form.require_price_override" />
@@ -199,6 +202,7 @@ const form = useForm({
     availability_type: 'independent',
     require_price_override: false,
     max_available: null,
+    units_per_addon: null,
     date_start: null,
     date_end: null,
     min_days_before: null,
@@ -317,6 +321,7 @@ function hydrateForm() {
     form.availability_type = d.availability_type ?? 'independent';
     form.require_price_override = d.require_price_override ?? false;
     form.max_available = d.max_available ?? null;
+    form.units_per_addon = d.units_per_addon ?? null;
     form.date_start = d.date_start ?? null;
     form.date_end = d.date_end ?? null;
     form.min_days_before = d.min_days_before ?? null;

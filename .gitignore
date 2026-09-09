@@ -35,3 +35,7 @@ browser-testing.md
 REPORT.md
 TASKS.md
 claude-loop.sh
+
+# Collection blueprints written by tests that point Blueprint::setDirectory() at resources/blueprints
+# (CreatesEntries::findOrCreateCollection saves one); the addon ships none.
+resources/blueprints/collections/

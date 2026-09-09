@@ -25,6 +25,7 @@ use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Statamic\Contracts\Entries\Entry as EntryContract;
@@ -1051,8 +1052,8 @@ class Reservation extends Model
 
         $optionsCost = Price::create(0);
         if (array_key_exists('options', $data) && $data['options']->count() > 0) {
-            $data['options']->each(function ($option) use ($data, $optionsCost) {
-                $optionsCost->add($this->activeOptionFor($option)->calculatePrice($data, $option['value']));
+            $data['options']->each(function ($option) use ($data, $optionsCost, $statamic_id) {
+                $optionsCost->add($this->optionForValidation($option, $statamic_id)->calculatePrice($data, $option['value']));
             });
         }
 
@@ -1060,12 +1061,46 @@ class Reservation extends Model
         if (array_key_exists('extras', $data) && $data['extras']->count() > 0) {
             // The extra class needs the entry id to calculate the price
             $data['item_id'] = $statamic_id;
-            $data['extras']->each(function ($extra) use ($data, $extrasCost) {
-                $extrasCost->add(Extra::find($extra['id'])->calculatePrice($data, $extra['quantity']));
+            $data['extras']->each(function ($extra) use ($data, $extrasCost, $statamic_id) {
+                $extrasCost->add($this->extraForValidation($extra, $statamic_id)->calculatePrice($data, $extra['quantity']));
             });
         }
 
         return $extraCharges->add($optionsCost, $extrasCost);
+    }
+
+    /**
+     * A checkout selection is session-backed, so it can outlive the moment the extra was deleted,
+     * unpublished, detached from the entry or moved into an unpublished category (and the
+     * 'resrv-extras' key is never cleared, so it can even come from another entry's page). It must
+     * resolve through the exact query the Extras component lists — the entry's extras() under
+     * Extra::scopeSelectable() — or the checkout gets an explicit error instead of a null
+     * dereference or a silent sale. Historical pricing (extraCharges()) is the withTrashed() path.
+     */
+    protected function extraForValidation(array $extra, $statamic_id): Extra
+    {
+        return ResrvEntry::query()->itemId($statamic_id)->first()
+            ?->extras()->selectable()->find($extra['id'])
+            ?? throw new ExtrasException(__('The selected extra is not available anymore.'));
+    }
+
+    /**
+     * Same for options: the option must be the entry's and published, exactly what
+     * HandlesOptionsQueries::getOptionsForId() lists, and the chosen value must be a live value of
+     * that option — the list renders $option->values under the soft-delete scope, while
+     * Option::calculatePrice() resolves values withTrashed() for historical pricing, so a deleted
+     * (or tampered) value has to be rejected here, before pricing.
+     */
+    protected function optionForValidation(array $option, $statamic_id): Option
+    {
+        $model = Option::entry($statamic_id)->where('published', true)->find($option['id'])
+            ?? throw new OptionsException(__('The selected option is not valid.'));
+
+        if (! $model->values()->whereKey($option['value'] ?? null)->exists()) {
+            throw new OptionsException(__('The selected option value is not valid.'));
+        }
+
+        return $model;
     }
 
     protected function validateParentExtraCharges($data, $statamic_id)
@@ -1079,39 +1114,19 @@ class Reservation extends Model
             }
 
             if (array_key_exists('options', $data) && $data['options']->count() > 0) {
-                $data['options']->each(function ($option) use ($childData, $totalCharges) {
-                    $totalCharges->add($this->activeOptionFor($option)->calculatePrice($childData, $option['value']));
+                $data['options']->each(function ($option) use ($childData, $totalCharges, $statamic_id) {
+                    $totalCharges->add($this->optionForValidation($option, $statamic_id)->calculatePrice($childData, $option['value']));
                 });
             }
 
             if (array_key_exists('extras', $data) && $data['extras']->count() > 0) {
-                $data['extras']->each(function ($extra) use ($childData, $totalCharges) {
-                    $totalCharges->add(Extra::find($extra['id'])->calculatePrice($childData, $extra['quantity']));
+                $data['extras']->each(function ($extra) use ($childData, $totalCharges, $statamic_id) {
+                    $totalCharges->add($this->extraForValidation($extra, $statamic_id)->calculatePrice($childData, $extra['quantity']));
                 });
             }
         }
 
         return $totalCharges;
-    }
-
-    /**
-     * Resolve a checkout-submitted option to one whose value is still on offer — calculatePrice()
-     * resolves withTrashed() for history, so checkout input must not book a trashed value. Also
-     * rejects a missing/trashed option id (the bare Option::find() used to fatal).
-     *
-     * @param  array{id: int, value: int}  $option
-     *
-     * @throws OptionsException
-     */
-    protected function activeOptionFor(array $option): Option
-    {
-        $optionModel = Option::find($option['id']);
-
-        if (! $optionModel || ! $optionModel->values()->whereKey($option['value'])->exists()) {
-            throw new OptionsException(__('The selected option value is no longer available.'));
-        }
-
-        return $optionModel;
     }
 
     protected function checkForRequiredExtras($statamic_id, $data)

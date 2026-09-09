@@ -217,7 +217,7 @@ class Checkout extends Component
         $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($datasets) {
             $value = OptionValue::find($option['value']);
 
-            // Leave unresolvable values untouched — activeOptionFor() raises the designed
+            // Leave unresolvable values untouched — optionForValidation() raises the designed
             // OptionsException for them during validation.
             if (! $value) {
                 return $option;
