@@ -55,13 +55,15 @@ class OptionValue extends Model
             return $this->price;
         }
         $this->initiateAvailabilityUnsafe($data);
-        $applyQuantity = $this->quantity > 1 && ! config('resrv-config.ignore_quantity_for_prices', false);
+        // The rate may divide the booked quantity (units_per_addon) — see HandlesAvailabilityDates::quantityForAddons().
+        $quantity = config('resrv-config.ignore_quantity_for_prices', false) ? 1 : $this->quantityForAddons();
+        $applyQuantity = $quantity > 1;
 
         if ($this->price_type == 'fixed') {
-            return $applyQuantity ? $this->price->multiply($this->quantity) : $this->price;
+            return $applyQuantity ? $this->price->multiply($quantity) : $this->price;
         }
         if ($this->price_type == 'perday') {
-            return $applyQuantity ? $this->price->multiply($this->duration)->multiply($this->quantity) : $this->price->multiply($this->duration);
+            return $applyQuantity ? $this->price->multiply($this->duration)->multiply($quantity) : $this->price->multiply($this->duration);
         }
 
         // Unknown price type (e.g. legacy data): fall back to the base price instead of

@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Traits;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
+use Reach\StatamicResrv\Models\Rate;
 
 trait HandlesAvailabilityDates
 {
@@ -73,6 +74,25 @@ trait HandlesAvailabilityDates
 
         $this->showAllRates = ($rateId === 'any');
         $this->rateId = ($rateId && $rateId !== 'any') ? (int) $rateId : null;
+    }
+
+    /**
+     * Quantity used when pricing extras and option values. A rate may declare
+     * units_per_addon (e.g. a single-occupancy cabin sold as 2 berths for 1 guest sets 2):
+     * the booked quantity is divided by it, rounding up so a partial unit is never free.
+     * Lazy on purpose: only Extra and OptionValue call this, after initiateAvailabilityUnsafe(),
+     * so the availability engine never pays for the rate lookup.
+     */
+    protected function quantityForAddons(): int
+    {
+        $quantity = (int) ($this->quantity ?? 1);
+        $divisor = Rate::unitsPerAddonFor($this->rateId);
+
+        if (! $divisor || $divisor <= 1) {
+            return $quantity;
+        }
+
+        return max(1, (int) ceil($quantity / $divisor));
     }
 
     private function setDates($date_start, $date_end)

@@ -222,6 +222,110 @@ class CheckoutOptionsTest extends TestCase
         ]);
     }
 
+    // An option selected BEFORE it was unpublished is a stale session selection. Checkout must
+    // reject it exactly like a deleted one — validation checks the flags the selectable list
+    // filters on (published AND not trashed), not just "not trashed".
+    public function test_it_rejects_a_selected_option_that_was_unpublished_after_selection()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $option = Option::find($this->options->first()->id)->valuesPriceForDates($this->reservation);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [$option->id => [
+                'id' => $option->id,
+                'value' => $option->values->first()->id,
+                'price' => $option->values->first()->price->format(),
+                'optionName' => $option->name,
+                'valueName' => $option->values->first()->name,
+            ]]);
+
+        Option::whereKey($option->id)->update(['published' => false]);
+
+        $component->call('handleFirstStep')
+            ->assertHasErrors('options')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $option->id,
+        ]);
+    }
+
+    // A value deleted after selection is no longer rendered (soft-delete scope on $option->values),
+    // but Option::calculatePrice() resolves values withTrashed() for historical pricing — the
+    // checkout must reject the stale selection before pricing, not sync a trashed value id.
+    public function test_it_rejects_a_selected_option_whose_value_was_deleted_after_selection()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $option = Option::find($this->options->first()->id)->valuesPriceForDates($this->reservation);
+        $value = $option->values->first();
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [$option->id => [
+                'id' => $option->id,
+                'value' => $value->id,
+                'price' => $value->price->format(),
+                'optionName' => $option->name,
+                'valueName' => $value->name,
+            ]]);
+
+        OptionValue::destroy($value->id);
+
+        $component->call('handleFirstStep')
+            ->assertHasErrors('options')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $option->id,
+        ]);
+    }
+
+    // The 'resrv-options' session key is never cleared, so a selection made on another entry's page
+    // can reach this checkout; an option that is not this entry's is never listed here and must be
+    // rejected (checkForRequiredOptions() already scopes by entry — validation must agree).
+    public function test_it_rejects_a_selected_option_that_belongs_to_another_entry()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $own = Option::find($this->options->first()->id)->valuesPriceForDates($this->reservation);
+        $ownValue = $own->values->first();
+
+        $foreign = Option::factory()
+            ->has(OptionValue::factory(), 'values')
+            ->create(['item_id' => 'another-entry', 'name' => 'Foreign option', 'slug' => 'foreign-option']);
+        $foreignValue = $foreign->values->first();
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [
+                $own->id => [
+                    'id' => $own->id,
+                    'value' => $ownValue->id,
+                    'price' => $ownValue->price->format(),
+                    'optionName' => $own->name,
+                    'valueName' => $ownValue->name,
+                ],
+                $foreign->id => [
+                    'id' => $foreign->id,
+                    'value' => $foreignValue->id,
+                    'price' => $foreignValue->price->format(),
+                    'optionName' => $foreign->name,
+                    'valueName' => $foreignValue->name,
+                ],
+            ]);
+
+        $component->call('handleFirstStep')
+            ->assertHasErrors('options')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+            'option_id' => $foreign->id,
+        ]);
+    }
+
     public function test_parent_option_prices_sum_per_child_dates()
     {
         // Default OptionValue factory: perday at 22.75/day

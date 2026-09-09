@@ -206,6 +206,7 @@ function add() {
         availability_type: 'independent',
         require_price_override: false,
         max_available: null,
+        units_per_addon: null,
         date_start: null,
         date_end: null,
         min_days_before: null,

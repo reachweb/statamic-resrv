@@ -50,6 +50,17 @@ class Options extends Component
     #[Reactive]
     public ?array $errors = null;
 
+    /**
+     * The rate the parent results component resolved for the current search (see
+     * AvailabilityResults::effectiveRateId()). A rates-disabled search carries no rate, but the
+     * booking will, and option value prices depend on it (units_per_addon). Set at mount by the
+     * results view and refreshed by the 'availability-results-updated' event, so a customised
+     * view that omits it still converges. Ignored when pricing a reservation or a multi-results
+     * cart, which carry their own rate ids.
+     */
+    #[Locked]
+    public ?int $effectiveRateId = null;
+
     public function mount()
     {
         if (! isset($this->reservation) && ! $this->entryId) {
@@ -58,6 +69,13 @@ class Options extends Component
 
         if (session()->has('resrv-options')) {
             $this->enabledOptions->fill(session('resrv-options'));
+            // Several components persist this shared session key on every Livewire
+            // dehydrate, so the stored prices can be a stale snapshot (e.g. computed
+            // for a previous search or cart state). Keep the selection but re-derive
+            // the prices for the current context before broadcasting them.
+            if ($this->canPriceSelection()) {
+                $this->updateEnabledOptionPrices();
+            }
             $this->dispatchOptionsUpdated();
         } else {
             $this->enabledOptions->options = collect();
@@ -74,7 +92,7 @@ class Options extends Component
         } else {
             $options = isset($this->reservation)
                 ? $this->getOptionsForReservation()
-                : $this->getOptionsForSearch($this->data->toResrvArray(), $this->entryId);
+                : $this->getOptionsForSearch($this->searchDataForPricing(), $this->entryId);
         }
 
         if (is_string($this->filter)) {
@@ -138,6 +156,80 @@ class Options extends Component
         $this->data = session('resrv-search');
         // Clear the cache
         unset($this->options);
+
+        // Keep the last derived prices when the new search cannot be priced (see
+        // canPriceSelection()); the next real search re-prices them.
+        if (! $this->canPriceSelection()) {
+            return;
+        }
+
+        // The selection stores a price; re-derive it for the new search (dates, quantity, rate)
+        // and broadcast it, or the parent's totals and the checkout keep the stale amount.
+        $this->repriceSelection();
+    }
+
+    /**
+     * Whether the current context can price the selection. A reservation and a cart carry their
+     * own dates; a search needs some: pricing a dateless one (the calendar's clear button, a
+     * page rendered before any search) would store per-day values at 0.00 (duration 0) in the
+     * shared session, and the checkout would trust that amount.
+     */
+    protected function canPriceSelection(): bool
+    {
+        return isset($this->reservation)
+            || $this->getMultiSelectionsFromSessionForOptions() !== null
+            || $this->data->hasDates();
+    }
+
+    /**
+     * The results component resolved the rate the current search will book. Re-price the list
+     * and the selection when it differs from the one in use; a search change already re-priced
+     * under the previous rate, so an unchanged rate is a no-op. Payload-less dispatches (failed
+     * searches, other results components) are ignored.
+     */
+    #[On('availability-results-updated')]
+    public function updateEffectiveRate($rateId = null): void
+    {
+        if (isset($this->reservation) || $this->getMultiSelectionsFromSessionForOptions() !== null) {
+            return;
+        }
+
+        $rateId = is_numeric($rateId) ? (int) $rateId : null;
+
+        if ($rateId === null || $rateId === $this->effectiveRateId) {
+            return;
+        }
+
+        $this->effectiveRateId = $rateId;
+
+        unset($this->options);
+
+        $this->repriceSelection();
+    }
+
+    protected function repriceSelection(): void
+    {
+        if ($this->enabledOptions->options->count() === 0) {
+            return;
+        }
+
+        $this->updateEnabledOptionPrices();
+        $this->dispatchOptionsUpdated();
+    }
+
+    /**
+     * The search payload option values are priced with: the search data, with the resolved rate
+     * standing in when the search carries none ('any' or null).
+     */
+    protected function searchDataForPricing(): array
+    {
+        $data = $this->data->toResrvArray();
+
+        if (! is_numeric($data['rate_id'] ?? null) && $this->effectiveRateId) {
+            $data['rate_id'] = $this->effectiveRateId;
+        }
+
+        return $data;
     }
 
     #[On('multi-selections-updated')]

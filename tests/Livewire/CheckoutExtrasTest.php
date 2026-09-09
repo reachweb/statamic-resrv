@@ -305,6 +305,159 @@ class CheckoutExtrasTest extends TestCase
             ->assertSet('step', 2);
     }
 
+    // The mirror case: an extra selected BEFORE it was unpublished is a stale session selection.
+    // Checkout must reject it exactly like a deleted one — validation checks the flags the
+    // selectable list filters on (published AND not trashed), not just "not trashed".
+    public function test_it_rejects_a_selected_extra_that_was_unpublished_after_selection()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 1,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]]);
+
+        ResrvExtra::whereKey($extra->id)->update(['published' => false]);
+
+        $component->call('handleFirstStep')
+            ->assertHasErrors('extras')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+    }
+
+    // An extra detached from the entry after selection (CP "disassociate", or a selection carried
+    // over from another entry's page — the 'resrv-extras' session key is never cleared) is not in
+    // this entry's list any more and must be rejected at checkout.
+    public function test_it_rejects_a_selected_extra_that_was_detached_after_selection()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 1,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]]);
+
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->detach($extra->id);
+
+        $component->call('handleFirstStep')
+            ->assertHasErrors('extras')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+    }
+
+    // An extra whose category was unpublished after selection disappears from the list and must be
+    // rejected at checkout exactly like an unpublished extra.
+    public function test_it_rejects_a_selected_extra_whose_category_was_unpublished_after_selection()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $category = ExtraCategory::factory()->create();
+        $extra = $this->extras->first();
+        ResrvExtra::whereKey($extra->id)->update(['category_id' => $category->id]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 1,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]]);
+
+        $category->update(['published' => false]);
+
+        $component->call('handleFirstStep')
+            ->assertHasErrors('extras')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+    }
+
+    // The unpublished-category filter used to live only in frontendExtras() (render), while
+    // toggleExtra() — a client-callable action — checked the unfiltered list, so a hidden extra
+    // could still be selected server-side. Extra::scopeSelectable() now hides it from both.
+    public function test_it_does_not_list_or_select_an_extra_in_an_unpublished_category()
+    {
+        $category = ExtraCategory::factory()->create(['published' => false]);
+        $extra = $this->extras->first();
+        ResrvExtra::whereKey($extra->id)->update(['category_id' => $category->id]);
+
+        $component = Livewire::test(Extras::class, ['reservation' => $this->reservation]);
+
+        $this->assertNull($component->extras->firstWhere('id', $extra->id));
+        $this->assertCount(0, $component->frontendExtras);
+
+        $component->call('toggleExtra', $extra->id)
+            ->assertHasNoErrors()
+            ->assertNotDispatched('extras-updated');
+    }
+
+    // An extra in a published category stays listed and selectable (the NOT EXISTS predicate must
+    // only bite on a live, unpublished category).
+    public function test_it_lists_and_selects_an_extra_in_a_published_category()
+    {
+        $category = ExtraCategory::factory()->create();
+        $extra = $this->extras->first();
+        ResrvExtra::whereKey($extra->id)->update(['category_id' => $category->id]);
+
+        $component = Livewire::test(Extras::class, ['reservation' => $this->reservation]);
+
+        $this->assertNotNull($component->extras->firstWhere('id', $extra->id));
+        $this->assertCount(1, $component->frontendExtras);
+
+        $component->call('toggleExtra', $extra->id)
+            ->assertDispatched('extras-updated');
+    }
+
+    // A required extra in an unpublished category can't be selected either, so the required-extras
+    // gate (Extra::scopeEntriesWithConditions) must skip it instead of blocking checkout forever.
+    public function test_it_does_not_require_an_extra_in_an_unpublished_category()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $category = ExtraCategory::factory()->create(['published' => false]);
+        $extra = $this->extras->first();
+
+        ExtraCondition::factory()->requiredAlways()->create([
+            'extra_id' => $extra->id,
+        ]);
+
+        ResrvExtra::whereKey($extra->id)->update(['category_id' => $category->id]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertHasNoErrors(['extras'])
+            ->assertSet('step', 2);
+    }
+
     // A soft-deleted extra likewise can't be selected; the gate must skip it instead of blocking.
     public function test_it_does_not_require_a_soft_deleted_extra()
     {
@@ -1548,8 +1701,10 @@ class CheckoutExtrasTest extends TestCase
         Livewire::test(Extras::class, ['reservation' => $reservation]);
 
         // Three children, but the published-extras-per-category lookup must run once, not per child.
+        // Match its own where clause: the selectable-list query also references category_id (the
+        // unpublished-category NOT EXISTS subquery) and must not count here.
         $categoryQueries = collect(DB::getQueryLog())
-            ->filter(fn ($query) => str_contains($query['query'], 'category_id'));
+            ->filter(fn ($query) => str_contains($query['query'], 'where "category_id" = ?'));
 
         $this->assertCount(1, $categoryQueries);
     }

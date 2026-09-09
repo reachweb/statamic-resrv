@@ -53,9 +53,11 @@ class Option extends Model
     public function calculatePrice($data, $value)
     {
         // withTrashed() so historical reservations referencing a soft-deleted value still price
-        // (mirrors the Extra path in Reservation::extraCharges). A value that is still unresolved
-        // is invalid input (e.g. a tampered checkout payload) and must fail validation, not be
-        // priced as free — otherwise a required/paid option could be synced at no charge.
+        // (mirrors the Extra path in Reservation::extraCharges). Checkout selections are vetted
+        // first by Reservation::optionForValidation() (a live value of this option), so a value
+        // that is still unresolved here is a broken pivot (e.g. a hard-deleted value) and must
+        // throw rather than price as free — otherwise a required/paid option could be synced at
+        // no charge.
         $value = $this->values()->withTrashed()->find($value);
 
         if (! $value) {

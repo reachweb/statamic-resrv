@@ -137,10 +137,19 @@ trait HandlesExtrasQueries
         });
     }
 
+    /**
+     * Re-derive the price stored on each selected extra from the (freshly priced) available
+     * list. A selection that is no longer listed (filtered view, unpublished meanwhile) keeps
+     * its stored price: the checkout re-validates every selection against the reservation.
+     */
     public function updateEnabledExtraPrices(): void
     {
         $this->enabledExtras->extras->transform(function ($extra) {
-            $extra['price'] = $this->extras->where('id', $extra['id'])->first()->price->format();
+            $available = $this->extras->firstWhere('id', $extra['id']);
+
+            if ($available) {
+                $extra['price'] = $available->price->format();
+            }
 
             return $extra;
         });
