@@ -193,26 +193,27 @@ class Checkout extends Component
                 'customer' => $reservation->customerData ?? collect(),
             ])];
 
-        $this->enabledExtras->extras = $this->enabledExtras->extras
-            ->map(function ($extra) use ($datasets) {
-                $totalPrice = Price::create(0);
+        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($datasets) {
+            $extraModel = Extra::find($extra['id']);
 
-                foreach ($datasets as $data) {
-                    // Fresh instance per dataset: priceForDates() mutates $this->price via dynamic pricing
-                    $extraModel = Extra::find($extra['id']);
-
-                    if (! $extraModel) {
-                        return null;
-                    }
-
-                    $totalPrice->add(Price::create($extraModel->priceForDates($data)));
-                }
-
-                $extra['price'] = $totalPrice->format();
-
+            // Leave unresolvable extras untouched — extraForValidation() raises the designed
+            // ExtrasException for them during validation, so the stale selection must reach
+            // it rather than be dropped here and silently un-book itself.
+            if (! $extraModel) {
                 return $extra;
-            })
-            ->filter();
+            }
+
+            $totalPrice = Price::create(0);
+
+            foreach ($datasets as $data) {
+                // Fresh instance per dataset: priceForDates() mutates $this->price via dynamic pricing
+                $totalPrice->add(Price::create((clone $extraModel)->priceForDates($data)));
+            }
+
+            $extra['price'] = $totalPrice->format();
+
+            return $extra;
+        });
 
         $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($datasets) {
             $value = OptionValue::find($option['value']);
