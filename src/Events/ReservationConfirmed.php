@@ -15,6 +15,8 @@ class ReservationConfirmed
 
     public const VIA_WEBHOOK = 'webhook';
 
+    public const VIA_CP = 'cp';
+
     public $reservation;
 
     public $via;
@@ -22,7 +24,7 @@ class ReservationConfirmed
     public $payment;
 
     /**
-     * @param  string  $via  Which flow confirmed the reservation (VIA_CHECKOUT or VIA_WEBHOOK).
+     * @param  string  $via  Which flow confirmed the reservation (VIA_CHECKOUT, VIA_WEBHOOK or VIA_CP).
      * @param  array  $payment  Gateway payment facts (gateway, payment_id) when a webhook confirmed.
      */
     public function __construct(Reservation $reservation, string $via = self::VIA_CHECKOUT, array $payment = [])

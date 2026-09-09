@@ -153,6 +153,27 @@ class ReportsCpTest extends TestCase
         $this->assertEquals(1.0, $top[0]['percentage']);
     }
 
+    // A cancelled unpaid hold can keep its payment_id only as a reconciliation handle on an
+    // unverifiable intent (payment_unresolved) — no money was collected, so it must not report.
+    public function test_report_excludes_cancelled_reservations_with_an_unresolved_payment_reference()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed'])->create();
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'cancelled', 'payment_id' => 'pi_kept'])->create();
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'cancelled',
+            'payment_id' => 'pi_unresolved',
+            'payment_unresolved' => true,
+        ])->create();
+
+        $report = new Report(now()->toDateString(), now()->addWeek()->toDateString());
+
+        $this->assertSame(2, $report->countReservations());
+        $this->assertSame('400.00', $report->sumRevenue()->format());
+    }
+
     // The retained commission of a paid no-refund cancellation must report; a voided pivot on a
     // loaded reservation must not. The second half can't occur through current flows (voiding and
     // the status whitelist track together), so it's manufactured — the explicit cancelled_at

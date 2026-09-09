@@ -28,7 +28,9 @@ class Report
         // Follow the money: the report covers reservations whose revenue the business holds —
         // confirmed/partner bookings plus no-refund cancellations that kept their gateway payment.
         // A returned charge always ends REFUNDED, and no-charge voids (partner / zero-payment)
-        // carry an empty payment_id, so "cancelled with a payment_id" is exactly the retained set.
+        // carry an empty payment_id, so "cancelled with a payment_id" is the retained set — minus
+        // payment_unresolved rows, whose payment_id is only a reconciliation handle on an
+        // unverifiable intent that never collected money (cancelled unpaid holds).
         $this->reservations = Reservation::whereDate($this->dateField, '>=', $this->date_start)
             ->whereDate($this->dateField, '<=', $this->date_end)
             ->where(function ($query) {
@@ -36,7 +38,8 @@ class Report
                     ->orWhere(function ($query) {
                         $query->where('status', 'cancelled')
                             ->whereNotNull('payment_id')
-                            ->where('payment_id', '!=', '');
+                            ->where('payment_id', '!=', '')
+                            ->where('payment_unresolved', false);
                     });
             })
             ->get();

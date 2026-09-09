@@ -9,6 +9,11 @@ class AddDynamicPricingsToReservation
 {
     public function handle(ReservationCreated $event)
     {
+        // An overridden total was not produced by the rules; recording them would misreport reports.
+        if ($event->data->skipDynamicPricings) {
+            return;
+        }
+
         if ($event->data->hasCoupon()) {
             session(['resrv_coupon' => $event->data->coupon]);
         }

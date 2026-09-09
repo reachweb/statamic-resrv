@@ -450,6 +450,9 @@ class AvailabilityRepository
 
         $overlapping = Reservation::whereIn('rate_id', $rateIds)
             ->whereNotIn('status', ReservationStatus::terminal())
+            // View-only holds (affects_availability=false) never took inventory, so they don't consume
+            // shared-rate capacity. Children never carry the flag; their branch stays unfiltered.
+            ->where('affects_availability', true)
             ->when($rangeEnd, fn ($q) => $q->where('date_start', '<', $rangeEnd))
             ->when($rangeStart, fn ($q) => $q->where('date_end', '>', $rangeStart))
             ->get(['rate_id', 'quantity', 'date_start', 'date_end']);
@@ -508,6 +511,8 @@ class AvailabilityRepository
         $overlapping = Reservation::where('rate_id', $rate->id)
             ->when($excludeParentId, fn ($q) => $q->where('id', '!=', $excludeParentId))
             ->whereNotIn('status', ReservationStatus::terminal())
+            // Same view-only exclusion as getExhaustedDatesForRates; children stay unfiltered.
+            ->where('affects_availability', true)
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)
             ->when($useLocks, fn ($q) => $q->lockForUpdate())

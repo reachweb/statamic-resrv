@@ -12,6 +12,11 @@ class DecreaseAvailability
 
     public function handle(ReservationCreated $event): void
     {
+        // The flag lives on the parent row; children ride it. Mirrored guard in IncreaseAvailability.
+        if (! $event->reservation->affects_availability) {
+            return;
+        }
+
         if ($event->reservation->type === 'parent') {
             $this->decreaseMultiple($event);
         } else {

@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
+use Reach\StatamicResrv\Tests\Support\FakeRedirectGateway;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
 
@@ -43,6 +44,28 @@ class MultiplePaymentCheckoutTest extends TestCase
 
         Config::set('resrv-config.checkout_entry', $entry->id());
         Config::set('resrv-config.checkout_completed_entry', $entry->id());
+    }
+
+    public function test_redirect_gateway_in_normal_checkout_returns_to_the_checkout_complete_entry()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Fake Redirect'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->assertRedirect();
+
+        // Normal checkout is unchanged: the gateway's return-URL base is the checkout-complete entry.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
+
+        $this->assertSame(
+            Entry::find(Config::get('resrv-config.checkout_completed_entry'))->absoluteUrl(),
+            $gateway->lastReturnUrl,
+        );
     }
 
     public function test_single_gateway_skips_picker_and_sets_step_3()

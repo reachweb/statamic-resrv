@@ -7,6 +7,7 @@ use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 use Stripe\Collection;
+use Stripe\Exception\ApiConnectionException;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\InvalidRequestException;
 use Stripe\Exception\UnknownApiErrorException;
@@ -109,6 +110,40 @@ class StripePaymentGatewayTest extends TestCase
         $this->gatewayUsing($refunds)->refund($this->reservationWithPayment());
     }
 
+    public function test_retrieve_payment_intent_returns_null_only_for_a_missing_intent()
+    {
+        $intents = $this->fakePaymentIntentsService();
+        $intents->retrieveOutcomes = [
+            InvalidRequestException::factory(
+                'No such payment_intent: pi_123',
+                404,
+                null,
+                ['error' => ['code' => 'resource_missing', 'message' => 'No such payment_intent']],
+                null,
+                'resource_missing'
+            ),
+        ];
+
+        $result = $this->gatewayUsingPaymentIntents($intents)
+            ->retrievePaymentIntent('pi_123', $this->reservationWithPayment());
+
+        $this->assertNull($result);
+    }
+
+    public function test_retrieve_payment_intent_propagates_a_transient_failure_instead_of_replacing_the_intent()
+    {
+        $intents = $this->fakePaymentIntentsService();
+        $intents->retrieveOutcomes = [
+            ApiConnectionException::factory('Could not connect to Stripe.'),
+        ];
+
+        // A transient read failure must surface, not resolve to null — null is resolveOrCreateIntent's permission to mint a replacement intent.
+        $this->expectException(ApiConnectionException::class);
+
+        $this->gatewayUsingPaymentIntents($intents)
+            ->retrievePaymentIntent('pi_123', $this->reservationWithPayment());
+    }
+
     private function reservationWithPayment(): Reservation
     {
         $reservation = new Reservation;
@@ -116,6 +151,51 @@ class StripePaymentGatewayTest extends TestCase
         $reservation->payment_id = 'pi_123';
 
         return $reservation;
+    }
+
+    private function fakePaymentIntentsService(): object
+    {
+        return new class
+        {
+            public array $retrieveOutcomes = [];
+
+            public function retrieve($id, $params = null, $opts = null)
+            {
+                $outcome = array_shift($this->retrieveOutcomes);
+
+                if ($outcome instanceof \Throwable) {
+                    throw $outcome;
+                }
+
+                return $outcome;
+            }
+        };
+    }
+
+    private function gatewayUsingPaymentIntents(object $paymentIntentsService): StripePaymentGateway
+    {
+        $client = new class('sk_test_resrv', $paymentIntentsService) extends StripeClient
+        {
+            public function __construct(string $key, private object $paymentIntentsService)
+            {
+                parent::__construct($key);
+            }
+
+            public function getService($name)
+            {
+                return $name === 'paymentIntents' ? $this->paymentIntentsService : parent::getService($name);
+            }
+        };
+
+        return new class($client) extends StripePaymentGateway
+        {
+            public function __construct(private StripeClient $client) {}
+
+            protected function getClient($reservation): StripeClient
+            {
+                return $this->client;
+            }
+        };
     }
 
     private function refundList(string $refundId): Collection

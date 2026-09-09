@@ -52,11 +52,20 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
 
         Route::get('/resrv/reservation', 'ReservationCpController@index')->name('reservation.index');
         Route::get('/resrv/reservations', 'ReservationCpController@indexCp')->name('reservations.index');
+        Route::get('/resrv/reservations/create', 'ManualReservationCpController@createCp')->name('reservations.create');
         Route::get('/resrv/reservations/calendar/list', 'ReservationCpController@calendar')->name('reservations.calendar.list');
         Route::get('/resrv/reservations/calendar', 'ReservationCpController@calendarCp')->name('reservations.calendar');
         Route::get('/resrv/reservation/{id}', 'ReservationCpController@show')->name('reservation.show');
         Route::patch('/resrv/reservation/refund', 'ReservationCpController@refund')->name('reservation.refund');
         Route::post('/resrv/reservation/resend-confirmation', 'ReservationCpController@resendConfirmation')->name('reservation.resendConfirmation');
+        Route::post('/resrv/reservation/{id}/confirm-payment', 'ReservationCpController@confirmPayment')->whereNumber('id')->name('reservation.confirmPayment');
+        Route::post('/resrv/reservation/{id}/cancel-awaiting', 'ReservationCpController@cancelAwaitingPayment')->whereNumber('id')->name('reservation.cancelAwaiting');
+        Route::post('/resrv/reservation/{id}/send-payment-request', 'ReservationCpController@sendPaymentRequest')->whereNumber('id')->name('reservation.sendPaymentRequest');
+
+        Route::get('/resrv/manual/entries', 'ManualReservationCpController@entries')->name('manual.entries');
+        Route::get('/resrv/manual/entry/{item_id}', 'ManualReservationCpController@entry')->name('manual.entry');
+        Route::post('/resrv/manual/quote', 'ManualReservationCpController@quote')->name('manual.quote');
+        Route::post('/resrv/manual', 'ManualReservationCpController@store')->name('manual.store');
 
         Route::get('/resrv/fixedpricing/{statamic_id}', 'FixedPricingCpController@index')->name('fixedpricing.index');
         Route::post('/resrv/fixedpricing', 'FixedPricingCpController@update')->name('fixedpricing.update');

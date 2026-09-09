@@ -1,6 +1,12 @@
 @component('mail::message')
 
+@if ($paymentInFlight ?? false)
+{{ __("A reservation was cancelled while its payment intent had already captured — or was still capturing — money at the gateway. A separate reconciliation alert has been sent; refund the charge in your payment provider's dashboard.") }}
+@elseif ($holdLapsed ?? false)
+{{ __("A reservation has been cancelled because its payment hold lapsed — the customer did not pay in time.") }}
+@else
 {{ __("A reservation has been cancelled by the customer.") }}
+@endif
 
 @component('mail::panel')
 {{ __("Reservation code") }} **{{ $reservation->id }}**<br>
@@ -46,7 +52,8 @@
 @endif
 
 @php($paymentRetained = $reservation->status === \Reach\StatamicResrv\Enums\ReservationStatus::CANCELLED->value)
-@if ($paymentRetained && $reservation->hasGatewayPayment())
+@php($paymentCollected = $paymentCollected ?? $reservation->hasGatewayPayment())
+@if ($paymentRetained && $paymentCollected)
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|
@@ -60,7 +67,7 @@
 | :----------------------------- |:----------------|
 | {{ __("Refunded to the customer") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->refundedAmount()->format() }} |
 @endcomponent
-@elseif (! $paymentRetained && $reservation->hasGatewayPayment())
+@elseif (! $paymentRetained && $paymentCollected)
 @component('mail::table')
 |{{ __("Refund information") }}||
 | :----------------------------- |:----------------|

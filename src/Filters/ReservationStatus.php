@@ -21,6 +21,7 @@ class ReservationStatus extends Filter
                 'options' => [
                     'confirmed' => 'Confirmed',
                     'partner' => 'Partner',
+                    'awaiting_payment' => 'Awaiting payment',
                     'refunded' => 'Refunded',
                     'cancelled' => 'Cancelled',
                     'pending' => 'Pending',

@@ -251,6 +251,7 @@ class ReservationLogTest extends TestCase
         ]);
 
         $gateway = \Mockery::mock(PaymentInterface::class);
+        $gateway->shouldReceive('supportsAutomaticRefunds')->andReturn(true);
         $gateway->shouldReceive('refund')->andReturnUsing(function ($refunding) {
             Reservation::whereKey($refunding->id)->update(['status' => 'confirmed']);
 

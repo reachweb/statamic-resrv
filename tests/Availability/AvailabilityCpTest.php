@@ -698,6 +698,80 @@ class AvailabilityCpTest extends TestCase
         $this->assertDatabaseHas('resrv_availabilities', ['available' => 8]);
     }
 
+    public function test_update_rejects_when_an_awaiting_payment_reservation_overlaps()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'available' => 8,
+        ]);
+
+        // An active hold releases stock asynchronously, so an absolute edit made now would be corrupted.
+        Reservation::factory()->create([
+            'id' => 42,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'awaiting_payment',
+            'affects_availability' => true,
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 10,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertDatabaseHas('resrv_availabilities', ['available' => 8]);
+    }
+
+    public function test_update_allows_the_edit_when_a_view_only_awaiting_payment_reservation_overlaps()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'available' => 8,
+        ]);
+
+        // affects_availability=false never restores stock, so it must not block the edit.
+        Reservation::factory()->create([
+            'id' => 43,
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'awaiting_payment',
+            'affects_availability' => false,
+        ]);
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 10,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('resrv_availabilities', ['available' => 10]);
+    }
+
     public function test_delete_rejects_when_pending_reservation_overlaps()
     {
         $item = $this->makeStatamicItem();
@@ -955,6 +1029,44 @@ class AvailabilityCpTest extends TestCase
             ->assertJson(['message' => 'Cannot delete availability while active reservations exist for this date range.']);
 
         $this->assertDatabaseHas('resrv_availabilities', [
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+        ]);
+    }
+
+    public function test_delete_allows_when_only_view_only_reservations_overlap()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+        $date = today()->addDay()->isoFormat('YYYY-MM-DD');
+
+        // A view-only hold never wrote a hold key, so deleting the rows orphans nothing —
+        // it must not block the deletion.
+        Reservation::factory()->create([
+            'item_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date_start' => $date,
+            'date_end' => today()->addDays(2)->toDateString(),
+            'quantity' => 2,
+            'status' => 'confirmed',
+            'affects_availability' => false,
+        ]);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => $date,
+            'available' => 4,
+        ]);
+
+        $this->deleteJson(cp_route('resrv.availability.delete'), [
+            'statamic_id' => $item->id(),
+            'date_start' => $date,
+            'date_end' => $date,
+            'rate_ids' => [$rate->id],
+        ])->assertStatus(200);
+
+        $this->assertDatabaseMissing('resrv_availabilities', [
             'statamic_id' => $item->id(),
             'rate_id' => $rate->id,
         ]);

@@ -52,6 +52,7 @@ class OptionCpController extends Controller
             'name' => 'required',
             'price' => 'required|numeric',
             'price_type' => 'required|in:free,fixed,perday',
+            'description' => 'nullable',
             'published' => 'required|boolean',
         ]);
 
@@ -90,6 +91,7 @@ class OptionCpController extends Controller
             'name' => 'required',
             'price' => 'required|numeric',
             'price_type' => 'required|in:free,fixed,perday',
+            'description' => 'nullable',
             'order' => 'required|integer',
             'published' => 'required|boolean',
         ]);

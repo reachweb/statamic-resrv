@@ -238,9 +238,9 @@ class AvailabilityCpController extends Controller
             $requestedRateIds
         ));
 
-        // Unlike inventory edits, deletion blocks on ALL non-terminal reservations: removing the
-        // rows would orphan the hold keys of confirmed bookings, so a later refund's
-        // removeFromPending would find nothing to restore.
+        // Unlike inventory edits, deletion blocks on ALL non-terminal affects-availability
+        // reservations: removing the rows would orphan the hold keys of confirmed bookings,
+        // so a later refund's removeFromPending would find nothing to restore.
         if (ActiveReservationsGuard::hasActiveReservationsForRange(
             $data['statamic_id'], $data['date_start'], $data['date_end'], $rateIds
         )) {

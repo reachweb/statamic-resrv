@@ -17,6 +17,7 @@ use Reach\StatamicResrv\Livewire\CheckoutPayment;
 use Reach\StatamicResrv\Livewire\Extras;
 use Reach\StatamicResrv\Livewire\LfAvailabilityFilter;
 use Reach\StatamicResrv\Livewire\Options;
+use Reach\StatamicResrv\Livewire\ReservationPayment;
 use Reach\StatamicResrv\Livewire\ReservationStatus;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityHooks;
 use Statamic\Providers\AddonServiceProvider;
@@ -59,6 +60,7 @@ class ResrvLivewireProvider extends AddonServiceProvider
         Livewire::component('checkout-form', CheckoutForm::class);
         Livewire::component('checkout-payment', CheckoutPayment::class);
         Livewire::component('reservation-status', ReservationStatus::class);
+        Livewire::component('reservation-payment', ReservationPayment::class);
         if (class_exists(LivewireCollection::class)) {
             Livewire::component('lf-availability-filter', LfAvailabilityFilter::class);
         }

@@ -22,13 +22,20 @@ class OfflinePaymentGateway implements PaymentInterface
         return 'statamic-resrv::livewire.checkout-payment-offline';
     }
 
-    public function paymentIntent($amount, Reservation $reservation, $data)
+    public function paymentIntent($amount, Reservation $reservation, $data, ?string $returnUrl = null)
     {
+        // Offline gateway: nothing is collected online, so $returnUrl is unused.
         $intent = new \stdClass;
         $intent->id = 'offline_'.Str::random(24);
         $intent->client_secret = 'offline_'.Str::random(48);
 
         return $intent;
+    }
+
+    public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+    {
+        // Offline payments have no remote intent to resume.
+        return null;
     }
 
     public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void

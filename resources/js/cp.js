@@ -7,6 +7,7 @@ import CutoffFieldtype from './fieldtypes/Cutoff.vue';
 import ReservationsIndex from './pages/Reservations/Index.vue';
 import ReservationsCalendarPage from './pages/Reservations/Calendar.vue';
 import ReservationsShow from './pages/Reservations/Show.vue';
+import ReservationsCreate from './pages/Reservations/Create.vue';
 import DataImportIndex from './pages/DataImport/Index.vue';
 import DataImportConfirm from './pages/DataImport/Confirm.vue';
 import DataImportStore from './pages/DataImport/Store.vue';
@@ -28,6 +29,7 @@ Statamic.booting(() => {
     Statamic.$inertia.register('resrv::Reservations/Index', ReservationsIndex);
     Statamic.$inertia.register('resrv::Reservations/Calendar', ReservationsCalendarPage);
     Statamic.$inertia.register('resrv::Reservations/Show', ReservationsShow);
+    Statamic.$inertia.register('resrv::Reservations/Create', ReservationsCreate);
     Statamic.$inertia.register('resrv::DataImport/Index', DataImportIndex);
     Statamic.$inertia.register('resrv::DataImport/Confirm', DataImportConfirm);
     Statamic.$inertia.register('resrv::DataImport/Store', DataImportStore);
