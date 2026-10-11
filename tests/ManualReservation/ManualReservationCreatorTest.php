@@ -24,6 +24,7 @@ use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\ExtraCategory;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
@@ -319,12 +320,10 @@ class ManualReservationCreatorTest extends TestCase
             $this->addToAssertionCount(1);
         }
 
-        try {
-            $this->creator()->quote($input, requireCustomAmount: false);
-            $this->fail('The live quote should also reject a positive custom amount on a zero total.');
-        } catch (ManualReservationException $e) {
-            $this->addToAssertionCount(1);
-        }
+        // The live quote keeps pricing but reports the rejection for the field.
+        $quote = $this->creator()->quote($input, requireCustomAmount: false);
+        $this->assertTrue($quote['payment']['amount']->isZero());
+        $this->assertSame(__('The custom amount cannot exceed the reservation total.'), $quote['payment']['custom_amount_error']);
 
         $this->assertSame(0, Reservation::count());
 
@@ -719,6 +718,82 @@ class ManualReservationCreatorTest extends TestCase
         $this->creator()->create($this->baseInput($entry, [
             'extras' => [['id' => $extra->id, 'quantity' => 1]],
         ]));
+    }
+
+    public function test_an_extra_in_an_unpublished_category_is_rejected()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // The quote's extras list and the frontend checkout both hide the extras of an
+        // unpublished category (Extra::scopeSelectable()); a stale CP selection must not book one.
+        $category = ExtraCategory::factory()->create(['published' => false]);
+        $extra = Extra::factory()->create(['category_id' => $category->id]);
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        $this->expectException(ManualReservationException::class);
+        $this->expectExceptionMessage('does not belong to this entry');
+
+        $this->creator()->create($this->baseInput($entry, [
+            'extras' => [['id' => $extra->id, 'quantity' => 1]],
+        ]));
+    }
+
+    public function test_a_clamped_extra_snapshots_the_charged_line_so_the_cp_shows_what_was_charged()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // A dynamic-pricing minimum binds differently per unit (priceForDates: max(25, 100) = 100)
+        // and per line (calculatePrice: max(25 × 3, 100) = 100). The booking charges 100 for all
+        // three units: price × quantity would display 300, and a rounded per-unit snapshot
+        // (33.33 × 3) 99.99 — only the charged line itself reconciles.
+        $extra = Extra::factory()->fixed()->create();
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        $dynamic = DynamicPricing::factory()->extra()->create([
+            'amount_type' => 'fixed',
+            'amount_operation' => 'minimum',
+            'amount' => '100',
+            'condition_value' => '1',
+        ]);
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $extra->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Extra',
+        ]);
+        Cache::flush();
+
+        $quote = $this->creator()->quote($this->baseInput($entry, [
+            'extras' => [['id' => $extra->id, 'quantity' => 3]],
+        ]));
+
+        $this->assertSame('100.00', $quote['pricing']['extras_total']->format());
+        $this->assertSame('100.00', $quote['extras'][$extra->id]['price']);
+
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'extras' => [['id' => $extra->id, 'quantity' => 3]],
+        ]));
+
+        $this->assertTrue($reservation->total->equals(Price::create('200.00')));
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $reservation->id,
+            'extra_id' => $extra->id,
+            'quantity' => 3,
+            'price' => '100.00',
+            'total' => '100.00',
+        ]);
+        $this->assertSame('100.00', $reservation->extras()->first()->priceFromPivot());
+    }
+
+    public function test_a_pivot_row_without_a_line_total_still_displays_price_times_quantity()
+    {
+        // Checkout-written rows predate the total column and are linear by construction.
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+        $extra = $this->attachExtraTo($entry);
+
+        $reservation = Reservation::factory()->create(['item_id' => $entry->id()]);
+        $reservation->extras()->attach($extra->id, ['quantity' => 3, 'price' => '4.65']);
+
+        $this->assertSame('13.95', $reservation->extras()->first()->priceFromPivot());
     }
 
     public function test_an_extra_that_does_not_allow_multiple_rejects_a_quantity_above_one()

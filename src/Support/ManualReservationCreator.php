@@ -145,7 +145,11 @@ class ManualReservationCreator
             if ($quote['extras']->isNotEmpty()) {
                 $reservation->extras()->sync(
                     $quote['extras']->mapWithKeys(fn ($extra, $id) => [
-                        $id => ['quantity' => $extra['quantity'], 'price' => $extra['price']],
+                        $id => [
+                            'quantity' => $extra['quantity'],
+                            'price' => $extra['price'],
+                            'total' => $extra['total']->format(),
+                        ],
                     ])
                 );
             }
@@ -287,7 +291,7 @@ class ManualReservationCreator
      *     availability: array{status: bool, available: int, overbook: bool},
      *     rate_id: int,
      *     pricing: array{base_price: PriceClass, original_base_price: ?string, extras_total: PriceClass, options_total: PriceClass, total: PriceClass, total_overridden: bool},
-     *     payment: array{mode: string, amount: PriceClass, surcharge: PriceClass, amount_with_surcharge: PriceClass, gateways: array},
+     *     payment: array{mode: string, amount: PriceClass, surcharge: PriceClass, amount_with_surcharge: PriceClass, gateways: array, custom_amount_error: ?string},
      *     extras: Collection,
      *     options: Collection,
      * }
@@ -378,7 +382,21 @@ class ManualReservationCreator
             $total = Price::create($basePrice->format())->add($extrasTotal, $optionsTotal);
         }
 
-        $amount = $this->requestedAmount($input, $basePrice, $total, $requireCustomAmount);
+        // The live quote keeps pricing through a rejected custom amount (e.g. a total lowered
+        // under it) and reports the reason, so the form refreshes the total the amount is judged
+        // against and shows the message under the field. Creation still throws.
+        $customAmountError = null;
+
+        try {
+            $amount = $this->requestedAmount($input, $basePrice, $total, $requireCustomAmount);
+        } catch (ManualReservationException $e) {
+            if ($requireCustomAmount || $this->paymentMode($input) !== ManualPaymentMode::Custom) {
+                throw $e;
+            }
+
+            $amount = Price::create(0);
+            $customAmountError = $e->getMessage();
+        }
 
         $gateway = $input['payment_gateway'] ?? null;
         $surcharge = ($gateway && ! $amount->isZero())
@@ -406,6 +424,7 @@ class ManualReservationCreator
                 'surcharge' => $surcharge,
                 'amount_with_surcharge' => Price::create($amount->format())->add($surcharge),
                 'gateways' => $this->perGatewayAmounts($amount),
+                'custom_amount_error' => $customAmountError,
             ],
             'extras' => $extras,
             'options' => $options,
@@ -630,10 +649,12 @@ class ManualReservationCreator
             $id = (int) ($item['id'] ?? 0);
             $quantity = (int) ($item['quantity'] ?? 0);
 
-            // Only extras published and attached to this entry — mirrors the frontend scoping;
-            // Extra::find() alone would let a stale/crafted payload attach a foreign extra.
+            // Only selectable extras attached to this entry — the same predicate as the quote's
+            // extras list and the frontend checkout (Extra::scopeSelectable(): published and not
+            // in an unpublished category). Extra::find() alone would let a stale/crafted payload
+            // attach a foreign or hidden extra.
             $extra = Extra::whereHas('entries', fn ($query) => $query->where('resrv_entries.item_id', $calcData['item_id']))
-                ->where('published', true)
+                ->selectable()
                 ->find($id);
 
             if (! $extra) {
@@ -667,6 +688,11 @@ class ManualReservationCreator
                 throw new ManualReservationException(__('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $extra->name]));
             }
 
+            // Both are snapshotted on the pivot: the unit price the form listed, and the line
+            // actually charged. They are not linear in each other once a dynamic-pricing
+            // minimum/maximum binds — priceForDates() clamps the unit, calculatePrice() the line
+            // — so the CP renders the line from `total` (Extra::priceFromPivot()), never from
+            // price × quantity, which would show 2 × 100 for a 100 charge.
             return [$id => [
                 'quantity' => $quantity,
                 'price' => $price,

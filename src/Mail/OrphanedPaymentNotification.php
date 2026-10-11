@@ -17,7 +17,8 @@ use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
  * Cases, distinguished by $context:
  *
  * - default (orphan): a successful webhook arrived for a terminal reservation
- *   (EXPIRED/REFUNDED/CANCELLED/PARTNER) — admins should refund the charge.
+ *   (EXPIRED/REFUNDED/CANCELLED/PARTNER) — admins should refund the charge. A CANCELLED
+ *   booking that deliberately kept its collected charge (no-refund cancellation) is exempt.
  * - CONTEXT_OUT_OF_BAND_DUPLICATE: an out-of-band CP confirm raced an intent that already
  *   captured money — the booking is paid TWICE.
  * - CONTEXT_OUT_OF_BAND_STILL_PAYABLE: the intent could not be voided and remains completable
@@ -62,7 +63,8 @@ class OrphanedPaymentNotification extends Mailable
      * Notify admins when a succeeded payment lands on a reservation that can no longer be
      * confirmed (EXPIRED/REFUNDED/CANCELLED/PARTNER), leaving the charge orphaned. Returns
      * true when an orphan was detected, so gateways can short-circuit on it. CANCELLED
-     * covers the hold-lapse race (sweep cancels while the payment is in flight).
+     * covers the hold-lapse race (sweep cancels while the payment is in flight) — but not a
+     * no-refund cancellation, which keeps its collected charge on purpose.
      */
     public static function notifyIfOrphaned(Reservation $reservation, string $paymentIntentId, ?string $stripeEventId = null): bool
     {
@@ -75,6 +77,10 @@ class OrphanedPaymentNotification extends Mailable
             return false;
         }
 
+        if (self::isRetainedCharge($reservation, $paymentIntentId)) {
+            return false;
+        }
+
         Log::warning('Succeeded payment for a non-confirmable reservation — manual refund likely required.', [
             'reservation_id' => $reservation->id,
             'reservation_status' => $reservation->status,
@@ -84,6 +90,22 @@ class OrphanedPaymentNotification extends Mailable
         self::dispatchFor($reservation, $paymentIntentId, $stripeEventId);
 
         return true;
+    }
+
+    /**
+     * A CANCELLED booking's own verified charge is retained revenue, not an orphan: a paid
+     * booking the customer cancelled outside the free-cancellation window
+     * (ReservationRefundProcessor::cancelByCustomer()) keeps payment_id on purpose, so a
+     * redelivered succeeded webhook for that intent must not tell admins to refund it.
+     * Every kept reference that never verifiably collected money is stamped payment_unresolved
+     * (cancelled unpaid holds, unverified out-of-band settlements) — any new path that keeps
+     * one on a CANCELLED row must stamp it too, or it matches this exemption.
+     */
+    protected static function isRetainedCharge(Reservation $reservation, string $paymentIntentId): bool
+    {
+        return $reservation->status === ReservationStatus::CANCELLED->value
+            && $reservation->payment_id === $paymentIntentId
+            && ! $reservation->payment_unresolved;
     }
 
     /**

@@ -337,6 +337,8 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('pi_captured', $reservation->payment_id);
+        // A captured charge is real gateway money, refundable through the gateway — not unresolved.
+        $this->assertFalse($reservation->payment_unresolved);
         $this->assertCount(0, $gateway->cancelledIntents);
 
         // The succeeded webhook no-ops on CONFIRMED, so this notification is the only duplicate-payment signal.
@@ -497,6 +499,8 @@ class AwaitingPaymentTransitionsTest extends TestCase
         // Cancel was attempted but could not be verified, so the reference survives.
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_unpaid_online', $reservation->payment_id);
+        // The money arrived out of band — the kept intent is a reconciliation handle, not the collected charge.
+        $this->assertTrue($reservation->payment_unresolved);
 
         // The retained intent is still payable and the webhook no-ops on CONFIRMED, so admins must be notified now.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
@@ -510,6 +514,46 @@ class AwaitingPaymentTransitionsTest extends TestCase
 
         $this->assertSame('refunded', $reservation->fresh()->status);
         $this->assertCount(1, $gateway->refundCalls);
+    }
+
+    public function test_customer_cannot_self_cancel_an_out_of_band_confirmation_that_kept_a_still_payable_intent()
+    {
+        Mail::fake();
+        Config::set('resrv-config.enable_customer_cancellations', true);
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        $gateway->cancelSucceeds = false;
+
+        // Outside a free-cancellation window that existed: a gateway-paid booking would be
+        // self-cancellable without a refund — but this money arrived out of band.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_still_payable',
+            'payment_gateway' => 'fake',
+            'cancellation_policy' => 'free_cancellation',
+            'free_cancellation_period' => 5,
+            'date_start' => now()->addDays(3)->startOfDay(),
+            'date_end' => now()->addDays(5)->startOfDay(),
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertSame('pi_still_payable', $reservation->payment_id);
+        $this->assertTrue($reservation->payment_unresolved);
+
+        // A no-refund self-cancellation would leave CANCELLED + its own intent, which the
+        // orphan detection reads as retained revenue — a later success on that still-payable
+        // intent would never alert. Route it to manual handling like any out-of-band booking.
+        $this->assertFalse($reservation->supportsAutomaticRefund());
+        $this->assertFalse($reservation->canCancelWithoutRefund());
+        $this->assertFalse($reservation->canBeCancelledByCustomer());
+        $this->assertFalse($reservation->refundIsAutomatic());
     }
 
     public function test_confirming_online_out_of_band_notifies_when_the_intent_cannot_be_verified()
@@ -539,6 +583,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('confirmed', $reservation->status);
         // Nothing is voided or cleared on an unverifiable intent — the reference is the only handle on a possibly-live charge.
         $this->assertSame('pi_unverifiable', $reservation->payment_id);
+        $this->assertTrue($reservation->payment_unresolved);
         $this->assertCount(0, $gateway->cancelledIntents);
 
         // The webhook no-ops on CONFIRMED, so admins must be notified of the possible silent duplicate.
@@ -580,6 +625,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         // The void was attempted but never verified, so the reference survives for reconciliation.
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_void_unverified', $reservation->payment_id);
+        $this->assertTrue($reservation->payment_unresolved);
 
         // Same silent-duplicate exposure as the still-payable branch: admins must be notified.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
@@ -609,6 +655,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('pi_removed_gateway', $reservation->payment_id);
+        $this->assertTrue($reservation->payment_unresolved);
 
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
             return $mail->hasTo('admin@example.com')
@@ -703,6 +750,45 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('pi_unpaid_hold', $reservation->payment_id);
         // The kept reference is a reconciliation handle, not collected money — reporting must skip it.
         $this->assertTrue($reservation->payment_unresolved);
+    }
+
+    public function test_a_webhook_landing_between_the_cancel_commit_and_reconciliation_still_alerts_when_verification_fails()
+    {
+        Mail::fake();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        // The intent already captured, so the provider void fails (swallowed, like Stripe)...
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_race_window',
+            'payment_gateway' => 'fake',
+        ]);
+
+        // ...the succeeded webhook lands after CANCELLED committed but before the post-commit
+        // reconciliation has written its verdict, and then that verification fails outright.
+        // Nothing after this point can alert, so the webhook's own orphan detection must have:
+        // the row it read has to already say the kept reference is not collected money.
+        $gateway->onRetrievePaymentIntent = function () use ($gateway, $reservation) {
+            $gateway->verifyPayment(Request::create('/resrv/api/webhook', 'POST', [
+                'reservation_id' => $reservation->id,
+                'status' => 'success',
+            ]));
+
+            throw new \RuntimeException('Gateway unreachable.');
+        };
+
+        app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation, cancelOpenIntent: true);
+
+        $reservation->refresh();
+        $this->assertSame('cancelled', $reservation->status);
+        $this->assertSame('pi_race_window', $reservation->payment_id);
+        $this->assertTrue($reservation->payment_unresolved);
+
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_race_window');
     }
 
     public function test_cancelling_an_unpaid_hold_with_a_removed_gateway_marks_the_reference_unresolved()

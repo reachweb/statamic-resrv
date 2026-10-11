@@ -387,6 +387,13 @@ class Reservation extends Model
             return false;
         }
 
+        // Same for an out-of-band confirmation that kept an unverified intent reference
+        // (settlePaidOutOfBand() stamps it unresolved): that intent never verifiably collected
+        // the money, so the customer must not self-cancel against it either.
+        if ($this->status === ReservationStatus::CONFIRMED->value && $this->payment_unresolved) {
+            return false;
+        }
+
         try {
             return $this->resolvePaymentGateway()->supportsAutomaticRefunds();
         } catch (UnknownPaymentGateway) {
@@ -795,7 +802,7 @@ class Reservation extends Model
 
     public function extras()
     {
-        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot(['quantity', 'price'])->withTrashed();
+        return $this->belongsToMany(Extra::class, 'resrv_reservation_extra')->withPivot(['quantity', 'price', 'total'])->withTrashed();
     }
 
     public function scopeFindByPaymentId($query, $id)

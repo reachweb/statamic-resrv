@@ -213,8 +213,18 @@ class Extra extends Model
         return $this->applyQuantityIfNeeded($price);
     }
 
+    /**
+     * The line charged for this extra on the reservation. The manual-reservation flow snapshots
+     * it on the pivot (total) because a binding dynamic-pricing clamp makes the line non-linear
+     * in the unit price — and a rounded unit price cannot rebuild it (100.00 ÷ 3 × 3 = 99.99).
+     * Checkout-written rows carry no total and are price × quantity by construction.
+     */
     public function priceFromPivot()
     {
+        if (($this->pivot->total ?? null) !== null) {
+            return Price::create($this->pivot->total)->format();
+        }
+
         return Price::create($this->pivot->price)->multiply($this->pivot->quantity)->format();
     }
 

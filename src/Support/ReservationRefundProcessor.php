@@ -110,7 +110,24 @@ class ReservationRefundProcessor
      */
     public function cancelWithoutRefund(Reservation $reservation, ?string $context = null, ?Closure $inTransaction = null, bool $cancelOpenIntent = false): bool
     {
-        $changed = $reservation->transitionTo(ReservationStatus::CANCELLED, inTransaction: $inTransaction);
+        $changed = $reservation->transitionTo(
+            ReservationStatus::CANCELLED,
+            inTransaction: function (Reservation $fresh) use ($inTransaction, $cancelOpenIntent) {
+                if ($inTransaction) {
+                    $inTransaction($fresh);
+                }
+
+                // An unpaid hold's kept intent reference is stamped unresolved IN THE SAME WRITE
+                // as CANCELLED, not by the post-commit reconciliation below: a succeeded webhook
+                // landing between the commit and that write reads CANCELLED + its own intent +
+                // not unresolved — a retained no-refund charge to the orphan detection — and
+                // returns 200, so if the reconciliation's verify then fails, no alert ever
+                // fires for that charge. A verified void clears the stamp with the reference.
+                if ($cancelOpenIntent && $fresh->hasGatewayPayment()) {
+                    $fresh->payment_unresolved = true;
+                }
+            },
+        );
 
         if ($changed) {
             // Reconcile the intent BEFORE dispatching so the emails can't declare an in-flight
@@ -203,7 +220,7 @@ class ReservationRefundProcessor
         }
 
         if ($intent === null || ($intent->status ?? '') === 'canceled') {
-            $reservation->update(['payment_id' => '']);
+            $reservation->update(['payment_id' => '', 'payment_unresolved' => false]);
 
             return false;
         }
@@ -228,7 +245,11 @@ class ReservationRefundProcessor
      * An uncaptured 'requires_capture' hold is voided like any open intent — releasing the
      * authorization prevents the duplicate rather than warning about it.
      * A capture can surface on either read; a read that THROWS leaves the state unknown, so
-     * those paths notify too (CONTEXT_OUT_OF_BAND_UNVERIFIED).
+     * those paths notify too (CONTEXT_OUT_OF_BAND_UNVERIFIED). A kept reference that never
+     * verifiably collected money (unverified, still payable, removed gateway) is stamped
+     * payment_unresolved: the money arrived out of band, so the intent must not read as the
+     * collected charge — customer self-cancellation stays manual, and should the booking later
+     * end CANCELLED, a late success on that intent still alerts instead of reading as retained.
      *
      * Callers must have synced the reservation to the committed row (via transitionTo()) first,
      * so a concurrent pay-page write is not missed.
@@ -243,6 +264,8 @@ class ReservationRefundProcessor
             $paymentId = (string) $reservation->payment_id;
 
             if ($paymentId !== '') {
+                $reservation->update(['payment_unresolved' => true]);
+
                 $this->notifyPossibleDuplicatePayment(
                     $reservation,
                     $paymentId,
@@ -280,6 +303,8 @@ class ReservationRefundProcessor
             // State unknown: keep the reference rather than risk dropping a real charge, and
             // notify — the follow-up webhook no-ops on CONFIRMED, so a log line alone would
             // bury the only warning of a silent duplicate.
+            $reservation->update(['payment_unresolved' => true]);
+
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
                 $paymentId,
@@ -314,6 +339,8 @@ class ReservationRefundProcessor
         } catch (\Throwable $e) {
             // Void outcome unknown — the payment may have landed inside the void window; same
             // silent-duplicate exposure as the still-payable branch below, so notify, not just log.
+            $reservation->update(['payment_unresolved' => true]);
+
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
                 $paymentId,
@@ -349,6 +376,8 @@ class ReservationRefundProcessor
         // The void failed and the intent is still payable: the customer's client secret can
         // still collect the full amount, and the succeeded webhook would no-op on CONFIRMED —
         // admins must be told now to cancel the intent at the gateway.
+        $reservation->update(['payment_unresolved' => true]);
+
         $this->notifyPossibleDuplicatePayment(
             $reservation,
             $paymentId,

@@ -276,10 +276,50 @@ class ManualReservationCpTest extends TestCase
             'total_override' => '1e3',
         ]))->assertStatus(422)->assertJson(['error' => __('The overridden total is not a valid amount.')]);
 
+        // A rejected custom amount keeps the quote pricing and reports the reason for the field.
         $this->postJson(cp_route('resrv.manual.quote'), array_merge($base, [
             'payment_mode' => 'custom',
             'custom_amount' => '1e3',
-        ]))->assertStatus(422)->assertJson(['error' => __('The custom amount is not a valid amount.')]);
+        ]))->assertOk()
+            ->assertJsonPath('payment.amount', '0.00')
+            ->assertJsonPath('payment.custom_amount_error', __('The custom amount is not a valid amount.'));
+    }
+
+    public function test_quote_endpoint_keeps_pricing_when_the_total_drops_under_the_custom_amount()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability();
+
+        $payload = [
+            'item_id' => $entry->id(),
+            'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
+            'date_end' => today()->addDays(3)->setTime(12, 0)->toDateTimeString(),
+            'quantity' => 1,
+            'rate_id' => Rate::forEntry($entry->id())->first()?->id,
+            'payment_mode' => 'custom',
+            'custom_amount' => '400',
+        ];
+
+        $this->postJson(cp_route('resrv.manual.quote'), array_merge($payload, ['total_override' => '500']))
+            ->assertOk()
+            ->assertJsonPath('payment.amount', '400.00')
+            ->assertJsonPath('payment.custom_amount_error', null);
+
+        // Lowering the override under the amount must refresh the total the form judges the
+        // amount against — a 422 would leave the old 500 total on screen with no field error.
+        $this->postJson(cp_route('resrv.manual.quote'), array_merge($payload, ['total_override' => '300']))
+            ->assertOk()
+            ->assertJsonPath('pricing.total', '300.00')
+            ->assertJsonPath('payment.amount', '0.00')
+            ->assertJsonPath('payment.custom_amount_error', __('The custom amount cannot exceed the reservation total.'));
+
+        // Creation still rejects it.
+        $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, [
+            'payment_mode' => 'custom',
+            'custom_amount' => '400',
+            'total_override' => '300',
+            'payment_gateway' => 'fake',
+        ]))->assertStatus(422)->assertJson(['error' => __('The custom amount cannot exceed the reservation total.')]);
     }
 
     public function test_quote_endpoint_tolerates_custom_mode_without_an_amount_yet()

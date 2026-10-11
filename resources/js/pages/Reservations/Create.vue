@@ -167,7 +167,7 @@ const selectedGatewayAmount = computed(() => {
 });
 
 // Client-side check so the message lands under the Custom amount field instead of in the booking card.
-const customAmountError = computed(() => {
+const customAmountLocalError = computed(() => {
     if (form.payment_mode !== 'custom' || ! quote.value) return null;
     if (form.custom_amount === '' || form.custom_amount === null) return null;
 
@@ -183,6 +183,23 @@ const customAmountError = computed(() => {
 
     return null;
 });
+
+// Plus what only the server can judge (e.g. an amount it cannot parse): the relaxed quote keeps
+// pricing through a rejected amount and reports why.
+const customAmountError = computed(
+    () => customAmountLocalError.value ?? (form.payment_mode === 'custom' ? quote.value?.payment.custom_amount_error ?? null : null),
+);
+
+// The custom amount the quote is asked to price. A locally rejected amount is dropped (null) so
+// the rest of the quote keeps refreshing — but that rejection is judged against the CURRENT
+// quote's total, so raising the override can turn the amount valid with no input change,
+// leaving a zero-payment quote on screen while submission would send the real amount. The
+// watcher below re-quotes whenever this value flips, so the quote always prices what is sent.
+// Only the LOCAL verdict gates it: the server's verdict comes from pricing this very value, so
+// letting it drop the value would flip-flop between quotes.
+const customAmountForQuote = computed(() =>
+    form.payment_mode === 'custom' && form.custom_amount !== '' && ! customAmountLocalError.value ? form.custom_amount : null,
+);
 
 // The relaxed quote returns zero for an as-yet-unentered custom amount, but creation requires
 // one — unless the total itself is zero, where an omitted amount is a comped booking (the
@@ -276,7 +293,7 @@ const quotePayload = () => ({
         .map(([id, value]) => ({ id: Number(id), value })),
     total_override: form.override_enabled && form.total_override !== '' ? form.total_override : null,
     payment_mode: form.payment_mode,
-    custom_amount: form.payment_mode === 'custom' && form.custom_amount !== '' && ! customAmountError.value ? form.custom_amount : null,
+    custom_amount: customAmountForQuote.value,
     payment_gateway: form.payment_gateway,
     // Custom-priced extras multiply by a checkout-form field, so the quote must price with the same customer data creation will use.
     customer: form.customer,
@@ -336,6 +353,10 @@ const customPriceFieldState = computed(() =>
 );
 
 watch(customPriceFieldState, requestQuote);
+
+// A total change can flip the custom amount between rejected and sendable without any form
+// input changing (see customAmountForQuote) — the form watcher above cannot catch that.
+watch(customAmountForQuote, requestQuote);
 
 // --- Customer field renderer helpers ---
 // The same field types the frontend checkout renders — the same value shapes must work here.

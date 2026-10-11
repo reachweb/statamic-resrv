@@ -191,6 +191,7 @@ class ManualReservationCpController extends Controller
                     'amount_with_surcharge' => $gateway['amount_with_surcharge']->format(),
                     'available' => $gateway['available'],
                 ])->all(),
+                'custom_amount_error' => $quote['payment']['custom_amount_error'],
             ],
         ];
     }
