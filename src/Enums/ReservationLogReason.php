@@ -6,6 +6,8 @@ enum ReservationLogReason: string
 {
     case CheckoutStarted = 'checkout_started';
 
+    case CpCreated = 'cp_created';
+
     case CheckoutConfirmed = 'checkout_confirmed';
 
     case WebhookConfirmed = 'webhook_confirmed';
@@ -22,6 +24,7 @@ enum ReservationLogReason: string
     {
         return match ($this) {
             self::CheckoutStarted => __('Checkout started'),
+            self::CpCreated => __('Created in the Control Panel'),
             self::CheckoutConfirmed => __('Confirmed at checkout'),
             self::WebhookConfirmed => __('Confirmed by payment webhook'),
             self::CpConfirmed => __('Confirmed in the Control Panel'),

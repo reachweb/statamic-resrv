@@ -61,6 +61,7 @@ Route::namespace('\Reach\StatamicResrv\Http\Controllers')
         Route::post('/resrv/reservation/{id}/confirm-payment', 'ReservationCpController@confirmPayment')->whereNumber('id')->name('reservation.confirmPayment');
         Route::post('/resrv/reservation/{id}/cancel-awaiting', 'ReservationCpController@cancelAwaitingPayment')->whereNumber('id')->name('reservation.cancelAwaiting');
         Route::post('/resrv/reservation/{id}/send-payment-request', 'ReservationCpController@sendPaymentRequest')->whereNumber('id')->name('reservation.sendPaymentRequest');
+        Route::post('/resrv/reservation/{id}/extend-hold', 'ReservationCpController@extendHold')->whereNumber('id')->name('reservation.extendHold');
 
         Route::get('/resrv/manual/entries', 'ManualReservationCpController@entries')->name('manual.entries');
         Route::get('/resrv/manual/entry/{item_id}', 'ManualReservationCpController@entry')->name('manual.entry');

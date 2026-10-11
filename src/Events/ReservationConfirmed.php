@@ -23,14 +23,18 @@ class ReservationConfirmed
 
     public $payment;
 
+    /** False skips the customer confirmation email only; the admin notification still goes out. */
+    public $notifyCustomer;
+
     /**
      * @param  string  $via  Which flow confirmed the reservation (VIA_CHECKOUT, VIA_WEBHOOK or VIA_CP).
      * @param  array  $payment  Gateway payment facts (gateway, payment_id) when a webhook confirmed.
      */
-    public function __construct(Reservation $reservation, string $via = self::VIA_CHECKOUT, array $payment = [])
+    public function __construct(Reservation $reservation, string $via = self::VIA_CHECKOUT, array $payment = [], bool $notifyCustomer = true)
     {
         $this->reservation = $reservation;
         $this->via = $via;
         $this->payment = $payment;
+        $this->notifyCustomer = $notifyCustomer;
     }
 }

@@ -106,7 +106,7 @@ class CancelLapsedHoldsTest extends TestCase
 
         // The lapsed wording actually renders in both bodies.
         $customerHtml = (new ReservationCancelledCustomer($reservation->fresh(), ReservationCancelledEvent::CONTEXT_HOLD_LAPSED))->render();
-        $this->assertStringContainsString('payment hold lapsed', $customerHtml);
+        $this->assertStringContainsString('did not receive your payment', $customerHtml);
         $adminHtml = (new ReservationCancelledMail($reservation->fresh(), ReservationCancelledEvent::CONTEXT_HOLD_LAPSED))->render();
         $this->assertStringContainsString('payment hold lapsed', $adminHtml);
 
@@ -182,6 +182,45 @@ class CancelLapsedHoldsTest extends TestCase
         Mail::assertNotSent(ReservationCancelledCustomer::class);
     }
 
+    public function test_a_hold_extended_or_cleared_while_the_sweep_runs_is_not_cancelled()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+
+        $first = $this->overdueReservation(['payment_id' => 'pi_first_lapsed', 'payment_gateway' => 'fake']);
+        $extended = $this->overdueReservation();
+        $cleared = $this->overdueReservation();
+
+        // Both CP writes commit after the candidate chunk was read, during the first row's gateway round trip.
+        $gateway->onRetrievePaymentIntent = function (Reservation $reservation) use ($first, $extended, $cleared, $gateway) {
+            if ((int) $reservation->id !== $first->id) {
+                return;
+            }
+
+            $gateway->onRetrievePaymentIntent = null;
+
+            $this->postJson(cp_route('resrv.reservation.extendHold', $extended->id), ['hold_days' => 3, 'resend' => false])->assertOk();
+            $this->postJson(cp_route('resrv.reservation.extendHold', $cleared->id), ['hold_days' => null])->assertOk();
+        };
+
+        $this->artisan('resrv:cancel-lapsed-holds')
+            ->expectsOutputToContain('Cancelled 1 lapsed hold(s).')
+            ->assertSuccessful();
+
+        $this->app->terminate();
+
+        $this->assertEquals('cancelled', $first->fresh()->status);
+        $this->assertEquals('awaiting_payment', $extended->fresh()->status);
+        $this->assertTrue($extended->fresh()->hold_expires_at->isFuture());
+        $this->assertEquals('awaiting_payment', $cleared->fresh()->status);
+        $this->assertNull($cleared->fresh()->hold_expires_at);
+
+        Mail::assertNotSent(ReservationCancelledCustomer::class, fn ($mail) => in_array($mail->reservation->id, [$extended->id, $cleared->id], true));
+    }
+
     public function test_race_b_webhook_success_after_lapse_cancel_notifies_orphan()
     {
         Mail::fake();
@@ -220,6 +259,6 @@ class CancelLapsedHoldsTest extends TestCase
 
         $html = (new ReservationCancelledCustomer($reservation->fresh()))->render();
         $this->assertStringContainsString('Your reservation has been cancelled.', $html);
-        $this->assertStringNotContainsString('payment hold lapsed', $html);
+        $this->assertStringNotContainsString('did not receive your payment', $html);
     }
 }

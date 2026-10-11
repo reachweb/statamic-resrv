@@ -64,9 +64,157 @@ class ReservationPaymentPageTest extends TestCase
             ->test(ReservationPayment::class)
             ->assertSet('reservationId', $reservation->id)
             ->assertSet('linkFailed', false)
+            ->assertSee(trans('statamic-resrv::frontend.completeYourPayment'))
             ->assertSee(trans('statamic-resrv::frontend.amountToPay'))
             ->assertSee('55.00')
-            ->assertSee($reservation->reference);
+            ->assertSee($reservation->reference)
+            ->assertSee(trans('statamic-resrv::frontend.paymentMethodIs', ['method' => 'Fake Online']))
+            // The button disables itself while pay() runs so a double click can't fire a second request.
+            ->assertSeeHtml('wire:loading.attr="disabled"')
+            ->assertSeeHtml('wire:target="pay"');
+    }
+
+    public function test_the_amount_and_deadline_lead_the_details()
+    {
+        $deadline = now()->addDays(2)->setTime(17, 30);
+        $reservation = $this->makeAwaitingReservation(['hold_expires_at' => $deadline]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSeeInOrder([
+                trans('statamic-resrv::frontend.amountToPay'),
+                '55.00',
+                trans('statamic-resrv::frontend.paymentDueBy', ['date' => $deadline->format('d-m-Y H:i T')]),
+                trans('statamic-resrv::frontend.bookingReference'),
+                $reservation->reference,
+                trans('statamic-resrv::frontend.reservationPeriod'),
+            ])
+            // The deadline is an instant: it carries its time zone.
+            ->assertSee($deadline->format('d-m-Y H:i').' '.$deadline->format('T'));
+    }
+
+    public function test_the_due_line_names_the_arrival_day_when_it_closes_payment_before_the_hold()
+    {
+        $arrival = now()->addDays(2)->setTime(12, 0);
+        $reservation = $this->makeAwaitingReservation([
+            'date_start' => $arrival,
+            'date_end' => $arrival->copy()->addDays(2),
+            'hold_expires_at' => now()->addDays(5)->setTime(9, 0),
+        ]);
+
+        // The pay page refuses once the arrival day ends, so it must not promise the later hold deadline.
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentDueByArrival', ['date' => $arrival->copy()->endOfDay()->format('d-m-Y H:i T')]))
+            ->assertDontSee($reservation->hold_expires_at->format('d-m-Y H:i'));
+    }
+
+    public function test_no_due_line_without_a_hold()
+    {
+        $reservation = $this->makeAwaitingReservation(['hold_expires_at' => null]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.amountToPay'))
+            ->assertDontSee('Please pay by');
+    }
+
+    public function test_the_state_heading_is_a_heading_element()
+    {
+        $reservation = $this->makeAwaitingReservation();
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSeeHtml('<h2 class="text-lg xl:text-xl font-medium">');
+    }
+
+    public function test_the_pay_button_hides_its_label_behind_the_spinner_while_paying()
+    {
+        $reservation = $this->makeAwaitingReservation();
+
+        // The spinner overlays the button: the label must go invisible, not smear underneath it.
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSeeHtml('<span wire:loading.class="invisible" wire:target="pay">');
+    }
+
+    public function test_a_partial_request_shows_the_total_and_the_remaining_balance()
+    {
+        $reservation = $this->makeAwaitingReservation([
+            'payment' => 25,
+            'payment_surcharge' => 0,
+            'total' => 70,
+        ]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSeeInOrder([
+                '25.00',
+                trans('statamic-resrv::frontend.total'),
+                '70.00',
+                trans('statamic-resrv::frontend.remainingBalance'),
+                '45.00',
+                trans('statamic-resrv::frontend.remainingBalanceNote'),
+            ])
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentSurcharge'));
+    }
+
+    public function test_a_full_request_shows_one_amount_without_a_duplicate_total_or_balance()
+    {
+        $reservation = $this->makeAwaitingReservation([
+            'payment' => 70,
+            'payment_surcharge' => 0,
+            'total' => 70,
+        ]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSee('70.00')
+            ->assertDontSee(trans('statamic-resrv::frontend.total'))
+            ->assertDontSee(trans('statamic-resrv::frontend.remainingBalance'));
+    }
+
+    public function test_the_total_shows_when_a_partial_request_plus_its_surcharge_equals_it()
+    {
+        // 100 now + 3 surcharge = 103 = total, yet 3 stays unpaid: the total must still be stated.
+        $reservation = $this->makeAwaitingReservation([
+            'payment' => 100,
+            'payment_surcharge' => 3,
+            'total' => 103,
+        ]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSeeInOrder([
+                trans('statamic-resrv::frontend.amountToPay'),
+                '103.00',
+                trans('statamic-resrv::frontend.total'),
+                '103.00',
+                trans('statamic-resrv::frontend.paymentSurcharge'),
+                '3.00',
+                trans('statamic-resrv::frontend.remainingBalance'),
+                '3.00',
+            ]);
+    }
+
+    public function test_a_surcharge_is_explained_next_to_the_total()
+    {
+        $reservation = $this->makeAwaitingReservation([
+            'payment' => 50,
+            'payment_surcharge' => 5,
+            'total' => 50,
+        ]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSeeInOrder([
+                '55.00',
+                trans('statamic-resrv::frontend.total'),
+                '50.00',
+                trans('statamic-resrv::frontend.paymentSurcharge'),
+                '5.00',
+            ])
+            ->assertDontSee(trans('statamic-resrv::frontend.remainingBalance'));
     }
 
     public function test_absent_or_invalid_hash_fails_the_link()
@@ -110,7 +258,11 @@ class ReservationPaymentPageTest extends TestCase
 
         $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class)
-            ->assertSee(trans('statamic-resrv::frontend.paymentLinkExpired'));
+            ->assertSee(trans('statamic-resrv::frontend.paymentHeadingExpired'))
+            ->assertSee(trans('statamic-resrv::frontend.paymentLinkExpired'))
+            ->assertSee($reservation->reference)
+            ->assertDontSee(trans('statamic-resrv::frontend.completeYourPayment'))
+            ->assertDontSee(trans('statamic-resrv::frontend.amountToPay'));
 
         // The pay action must refuse even when invoked directly — the hidden button is no guard.
         $component->call('pay')
@@ -119,6 +271,116 @@ class ReservationPaymentPageTest extends TestCase
 
         $this->assertCount(0, $gateway->createdIntents);
         $this->assertSame('', $reservation->fresh()->payment_id);
+    }
+
+    public function test_dead_end_states_show_the_business_contact_details()
+    {
+        Config::set('resrv-config.mail', 'desk@example.com');
+        Config::set('resrv-config.phone', '+30 210 123 4567');
+
+        $expired = $this->makeAwaitingReservation(['hold_expires_at' => now()->subHour()]);
+        $arrivalPassed = $this->makeAwaitingReservation([
+            'date_start' => now()->subDay()->startOfDay(),
+            'date_end' => now()->addDay()->startOfDay(),
+        ]);
+        $cancelled = $this->makeAwaitingReservation(['status' => ReservationStatus::CANCELLED->value]);
+
+        foreach ([
+            [$expired, 'paymentLinkExpired'],
+            [$arrivalPassed, 'paymentArrivalPassed'],
+            [$cancelled, 'paymentUnavailable'],
+        ] as [$reservation, $message]) {
+            // Every "please contact us" must come with a way to do so.
+            Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+                ->test(ReservationPayment::class)
+                ->assertSeeInOrder([
+                    trans('statamic-resrv::frontend.'.$message),
+                    'desk@example.com',
+                    '+30 210 123 4567',
+                ])
+                ->assertSeeHtml('href="mailto:desk@example.com"')
+                ->assertSeeHtml('href="tel:+302101234567"');
+        }
+
+        Livewire::withQueryParams([])
+            ->test(ReservationPayment::class)
+            ->assertSet('linkFailed', true)
+            ->assertSee(trans('statamic-resrv::frontend.paymentLinkFailed'))
+            ->assertSee('desk@example.com');
+    }
+
+    public function test_the_awaiting_state_shows_no_contact_block()
+    {
+        Config::set('resrv-config.mail', 'desk@example.com');
+
+        $reservation = $this->makeAwaitingReservation();
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertDontSeeHtml('href="mailto:desk@example.com"');
+    }
+
+    public function test_a_passed_arrival_day_closes_payment_even_without_a_deadline()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation([
+            'hold_expires_at' => null,
+            'date_start' => now()->subDay()->startOfDay(),
+            'date_end' => now()->addDay()->startOfDay(),
+        ]);
+
+        $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentHeadingExpired'))
+            ->assertSee(trans('statamic-resrv::frontend.paymentArrivalPassed'))
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentLinkExpired'))
+            ->assertSee($reservation->reference)
+            ->assertDontSee(trans('statamic-resrv::frontend.amountToPay'));
+
+        $component->call('pay')
+            ->assertSet('paymentView', '')
+            ->assertSet('clientSecret', '');
+
+        $this->assertCount(0, $gateway->createdIntents);
+        $this->assertSame('', $reservation->fresh()->payment_id);
+    }
+
+    public function test_the_arrival_day_itself_stays_payable()
+    {
+        $gateway = $this->fakeGateway();
+
+        // Date-only stays start at midnight: payment stays open until that day ends.
+        $reservation = $this->makeAwaitingReservation([
+            'date_start' => today(),
+            'date_end' => today()->addDays(2),
+        ]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentArrivalPassed'))
+            ->call('pay')
+            ->assertSet('paymentView', 'statamic-resrv::livewire.checkout-payment');
+
+        $this->assertCount(1, $gateway->createdIntents);
+    }
+
+    public function test_a_return_reporting_money_in_flight_wins_over_a_closed_window()
+    {
+        $reservation = $this->makeAwaitingReservation([
+            'payment_id' => 'pi_processing',
+            'hold_expires_at' => now()->subMinute(),
+        ]);
+
+        Livewire::withQueryParams([
+            'ref' => $reservation->reference,
+            'hash' => $reservation->customerLookupHash(),
+            'payment_intent' => 'pi_processing',
+            'redirect_status' => 'succeeded',
+        ])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentProcessing'))
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentLinkExpired'));
     }
 
     public function test_pay_creates_an_intent_and_persists_the_payment_id()
@@ -243,6 +505,31 @@ class ReservationPaymentPageTest extends TestCase
 
         $this->assertCount(0, $gateway->createdIntents);
         $this->assertSame('pi_bare', $reservation->fresh()->payment_id);
+    }
+
+    public function test_a_failing_intent_read_on_resume_never_mints_a_second_intent()
+    {
+        $gateway = $this->fakeGateway();
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_live']);
+
+        // A transient provider failure on the resume read must surface an error, never fall through to minting next to a live intent.
+        $gateway->onRetrievePaymentIntent = function () {
+            throw new \RuntimeException('Gateway timed out.');
+        };
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentError', true)
+            ->assertSet('clientSecret', '')
+            ->assertSet('paymentView', '')
+            ->assertSee(trans('statamic-resrv::frontend.paymentMountFailed'))
+            ->assertSeeHtml('role="alert"');
+
+        $this->assertCount(0, $gateway->createdIntents);
+        $this->assertCount(0, $gateway->cancelledIntents);
+        $this->assertSame('pi_live', $reservation->fresh()->payment_id);
     }
 
     public function test_pay_falls_back_to_the_default_gateway_when_none_is_recorded()
@@ -443,7 +730,11 @@ class ReservationPaymentPageTest extends TestCase
 
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class)
-            ->assertSee(trans('statamic-resrv::frontend.paymentAlreadyCompleted'));
+            ->assertSee(trans('statamic-resrv::frontend.paymentHeadingConfirmed'))
+            ->assertSee(trans('statamic-resrv::frontend.paymentAlreadyCompleted'))
+            ->assertSee($reservation->reference)
+            ->assertDontSee(trans('statamic-resrv::frontend.completeYourPayment'))
+            ->assertDontSee(trans('statamic-resrv::frontend.amountToPay'));
     }
 
     public function test_offline_gateway_shows_instructions_and_never_creates_an_intent()
@@ -454,15 +745,62 @@ class ReservationPaymentPageTest extends TestCase
             'payment_gateway' => 'offline',
         ]);
 
+        Config::set('resrv-config.mail', 'desk@example.com');
+
+        // Without the instructions setting the page must not point at instructions that don't exist.
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class)
-            ->assertSee(trans('statamic-resrv::frontend.paymentOfflineInstructions'))
+            ->assertSee(trans('statamic-resrv::frontend.paymentHeadingInstructions'))
+            ->assertSee(trans('statamic-resrv::frontend.paymentOfflineNoInstructions', ['reference' => $reservation->reference]))
+            ->assertSee(trans('statamic-resrv::frontend.paymentMethodIs', ['method' => 'Bank Transfer']))
+            ->assertSee('desk@example.com')
+            ->assertDontSee('instructions in your email')
             ->assertDontSee(trans('statamic-resrv::frontend.paymentLinkExpired'))
             ->call('pay')
             ->assertSet('paymentView', '');
 
         $this->assertCount(0, $gateway->createdIntents);
         $this->assertSame('', $reservation->fresh()->payment_id);
+    }
+
+    public function test_offline_instructions_setting_renders_escaped_with_line_breaks()
+    {
+        Config::set('resrv-config.manual_reservations_offline_instructions', "Bank: ACME <b>Ltd</b>\nIBAN: GR12 3456");
+
+        $reservation = $this->makeAwaitingReservation(['payment_gateway' => 'offline']);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSeeHtml('Bank: ACME &lt;b&gt;Ltd&lt;/b&gt;<br />')
+            ->assertSeeHtml('IBAN: GR12 3456')
+            ->assertDontSeeHtml('<b>Ltd</b>')
+            ->assertSee(trans('statamic-resrv::frontend.paymentOfflineInstructions', ['reference' => $reservation->reference]))
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentOfflineNoInstructions', ['reference' => $reservation->reference]));
+    }
+
+    public function test_offline_instructions_stay_literal_like_the_email()
+    {
+        Config::set('resrv-config.manual_reservations_offline_instructions', "1. Transfer to *ACME* [here](https://x.test)\n- IBAN: GR12 & co");
+
+        $reservation = $this->makeAwaitingReservation(['payment_gateway' => 'offline']);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertSeeHtml('1. Transfer to *ACME* [here](https://x.test)<br />')
+            ->assertSeeHtml('- IBAN: GR12 &amp; co')
+            ->assertDontSeeHtml('<em>ACME</em>');
+    }
+
+    public function test_offline_instructions_never_show_for_online_gateways()
+    {
+        Config::set('resrv-config.manual_reservations_offline_instructions', 'IBAN: GR12 3456');
+
+        $reservation = $this->makeAwaitingReservation();
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->assertDontSee('IBAN: GR12 3456')
+            ->assertSee(trans('statamic-resrv::frontend.pay'));
     }
 
     public function test_cancelled_reservation_link_shows_unavailable()
@@ -473,7 +811,11 @@ class ReservationPaymentPageTest extends TestCase
 
         Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class)
-            ->assertSee(trans('statamic-resrv::frontend.paymentUnavailable'));
+            ->assertSee(trans('statamic-resrv::frontend.paymentHeadingUnavailable'))
+            ->assertSee(trans('statamic-resrv::frontend.paymentUnavailable'))
+            ->assertSee($reservation->reference)
+            ->assertDontSee(trans('statamic-resrv::frontend.amountToPay'))
+            ->assertDontSee(trans('statamic-resrv::frontend.completeYourPayment'));
     }
 
     public function test_return_from_gateway_shows_processing_while_still_awaiting()
@@ -489,6 +831,7 @@ class ReservationPaymentPageTest extends TestCase
             'redirect_status' => 'processing',
         ])
             ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentHeadingProcessing'))
             ->assertSee(trans('statamic-resrv::frontend.paymentProcessing'));
     }
 

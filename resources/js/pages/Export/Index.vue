@@ -5,6 +5,7 @@ import ReservationsExport from '../../components/ReservationsExport.vue';
 const props = defineProps({
     fields: { type: Array, default: () => [] },
     statuses: { type: Array, default: () => [] },
+    statusLabels: { type: Object, default: () => ({}) },
     entries: { type: Array, default: () => [] },
     affiliates: { type: Array, default: () => [] },
     countUrl: { type: String, required: true },
@@ -21,6 +22,7 @@ const props = defineProps({
             :download-url="downloadUrl"
             :fields="fields"
             :statuses="statuses"
+            :status-labels="statusLabels"
             :entries="entries"
             :affiliates="affiliates"
         />

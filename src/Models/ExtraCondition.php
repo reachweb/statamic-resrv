@@ -123,6 +123,27 @@ class ExtraCondition extends Model
         return $extrasThatApply;
     }
 
+    /**
+     * requiredExtrasThatApply() keeping the applying condition objects instead of their debug
+     * messages, so callers can explain why an extra is required.
+     *
+     * @return Collection<int, Collection<int, object>> keyed by extra id
+     */
+    public function requiredConditionsThatApply($statamic_id, $data): Collection
+    {
+        $required = $this->requiredExtrasForEntry($statamic_id);
+
+        if (! $required) {
+            return collect();
+        }
+
+        return $required
+            ->map(fn ($conditions, $extraId) => collect($conditions)
+                ->filter(fn ($condition) => (bool) $this->checkAllParameters($condition, $extraId, $data))
+                ->values())
+            ->filter(fn (Collection $conditions) => $conditions->isNotEmpty());
+    }
+
     public function calculateConditionArrays(Collection $extras, EnabledExtras $enabledExtras, AvailabilityData|Reservation|array $data): Collection
     {
         $required = collect();

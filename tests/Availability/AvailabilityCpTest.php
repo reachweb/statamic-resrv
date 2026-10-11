@@ -698,7 +698,7 @@ class AvailabilityCpTest extends TestCase
         $this->assertDatabaseHas('resrv_availabilities', ['available' => 8]);
     }
 
-    public function test_update_rejects_when_an_awaiting_payment_reservation_overlaps()
+    public function test_update_allows_the_edit_when_a_stock_holding_awaiting_payment_reservation_overlaps()
     {
         $item = $this->makeStatamicItem();
         $rate = Rate::factory()->create(['collection' => 'pages']);
@@ -710,16 +710,57 @@ class AvailabilityCpTest extends TestCase
             'available' => 8,
         ]);
 
-        // An active hold releases stock asynchronously, so an absolute edit made now would be corrupted.
+        // A manual hold has no deadline by default and releases like a confirmed booking's refund
+        // (on top of the admin's value), so it must not freeze inventory edits — with or without a deadline.
+        foreach ([null, now()->addDays(2)] as $index => $holdExpiresAt) {
+            Reservation::factory()->create([
+                'id' => 42 + $index,
+                'item_id' => $item->id(),
+                'rate_id' => $rate->id,
+                'date_start' => today()->addDay()->toDateString(),
+                'date_end' => today()->addDays(2)->toDateString(),
+                'quantity' => 2,
+                'status' => 'awaiting_payment',
+                'affects_availability' => true,
+                'hold_expires_at' => $holdExpiresAt,
+            ]);
+        }
+
+        $response = $this->postJson(cp_route('resrv.availability.update'), [
+            'statamic_id' => $item->id(),
+            'date_start' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'date_end' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'price' => 150,
+            'available' => 10,
+            'rate_ids' => [$rate->id],
+        ]);
+
+        $response->assertStatus(200);
+        $this->assertDatabaseHas('resrv_availabilities', ['available' => 10]);
+    }
+
+    public function test_the_in_flight_rejection_names_the_blocking_reservations()
+    {
+        $item = $this->makeStatamicItem();
+        $rate = Rate::factory()->create(['collection' => 'pages']);
+
+        Availability::factory()->create([
+            'statamic_id' => $item->id(),
+            'rate_id' => $rate->id,
+            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+            'available' => 8,
+            'pending' => [42],
+        ]);
+
         Reservation::factory()->create([
             'id' => 42,
+            'reference' => 'PEND42',
             'item_id' => $item->id(),
             'rate_id' => $rate->id,
             'date_start' => today()->addDay()->toDateString(),
             'date_end' => today()->addDays(2)->toDateString(),
             'quantity' => 2,
-            'status' => 'awaiting_payment',
-            'affects_availability' => true,
+            'status' => 'pending',
         ]);
 
         $response = $this->postJson(cp_route('resrv.availability.update'), [
@@ -732,6 +773,7 @@ class AvailabilityCpTest extends TestCase
         ]);
 
         $response->assertStatus(422);
+        $this->assertStringContainsString('PEND42', $response->json('message'));
         $this->assertDatabaseHas('resrv_availabilities', ['available' => 8]);
     }
 

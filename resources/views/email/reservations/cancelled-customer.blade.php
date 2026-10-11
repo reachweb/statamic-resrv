@@ -7,18 +7,37 @@
 {{ __("Tel:") }} {{ config('resrv-config.phone') }}<br>
 {{ __("Email:") }} {{ config('resrv-config.mail') }}
 
-@if ($holdLapsed ?? false)
-{{ __("Your reservation has been cancelled because the payment hold lapsed — we did not receive your payment in time, so the reserved dates have been released.") }}
+@if (($holdLapsed ?? false) && $reservation->hold_expires_at)
+{{ __("We did not receive your payment by :deadline, so your reservation has been cancelled and the dates have been released.", ['deadline' => $reservation->hold_expires_at->format('d-m-Y H:i T')]) }}
+@elseif ($holdLapsed ?? false)
+{{ __("We did not receive your payment in time, so your reservation has been cancelled and the dates have been released.") }}
 @else
 {{ __("Your reservation has been cancelled.") }}
 @endif
 
 @component('mail::panel')
 {{ __("Reservation code") }} **{{ $reservation->id }}**<br>
-{{ __("Date") }}: **{{ $reservation->updated_at->format('d-m-Y H:i') }}**<br>
+{{ __("Cancelled on") }}: **{{ $reservation->updated_at->format('d-m-Y H:i') }}**<br>
 {{ __("Booking reference") }}: **{{ $reservation->reference }}**<br>
 {{ __("Email") }}: **{{ $reservation->customer?->email }}**
 @endcomponent
+
+@if ($holdLapsed ?? false)
+@php($resrvEntry = $reservation->entry())
+@component('mail::table')
+|{{ __("Reservation details") }}||
+| :------------------------------------------------ |:--------------------------------------------------------------------------|
+| {{ __("Pick-up date") }}      | {{ $reservation->date_start->format('d-m-Y H:i') }} |
+| {{ __("Drop-off date") }}     | {{ $reservation->date_end->format('d-m-Y H:i') }} |
+| {{ __("Property") }}   | {{ is_array($resrvEntry) ? ($resrvEntry['title'] ?? '') : $resrvEntry->title }} |
+@if (config('resrv-config.maximum_quantity') > 1)
+| {{ __("Quantity") }}  | x {{ $reservation->quantity }} |
+@endif
+@if ($reservation->rate_id)
+| {{ __("Rate") }} | {{ $reservation->getRateLabel() }} |
+@endif
+@endcomponent
+@endif
 
 @if ($paymentInFlight ?? false)
 {{ __("If you had just completed the payment for this reservation, don't worry — we have been notified and the charge will be refunded.") }}

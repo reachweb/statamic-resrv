@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\ManualReservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -11,12 +12,16 @@ use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled as ReservationCancelledEvent;
 use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
+use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
+use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Mail\ReservationCancelledCustomer;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
+use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
@@ -26,6 +31,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Role;
 use Statamic\Facades\User;
 use Statamic\Support\Str;
+use Symfony\Component\Mailer\Exception\TransportException;
 
 class AwaitingPaymentTransitionsTest extends TestCase
 {
@@ -337,8 +343,11 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('pi_captured', $reservation->payment_id);
-        // A captured charge is real gateway money, refundable through the gateway — not unresolved.
-        $this->assertFalse($reservation->payment_unresolved);
+        // The admin also recorded out-of-band money, so the kept charge is not the booking's whole
+        // payment: it is stamped unresolved and every refund surface reads as manual.
+        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertFalse($reservation->supportsAutomaticRefund());
+        $this->assertFalse($reservation->refundIsAutomatic());
         $this->assertCount(0, $gateway->cancelledIntents);
 
         // The succeeded webhook no-ops on CONFIRMED, so this notification is the only duplicate-payment signal.
@@ -509,11 +518,12 @@ class AwaitingPaymentTransitionsTest extends TestCase
                 && $mail->paymentIntentId === 'pi_unpaid_online';
         });
 
-        // A later refund routes through the gateway with the real id instead of being treated as a no-charge settlement.
+        // A later refund checks the kept intent first: it never captured (the money came out of
+        // band), so the provider — which would reject it — is skipped and the row still lands REFUNDED.
         app(ReservationRefundProcessor::class)->refund($reservation);
 
         $this->assertSame('refunded', $reservation->fresh()->status);
-        $this->assertCount(1, $gateway->refundCalls);
+        $this->assertCount(0, $gateway->refundCalls);
     }
 
     public function test_customer_cannot_self_cancel_an_out_of_band_confirmation_that_kept_a_still_payable_intent()
@@ -1074,6 +1084,381 @@ class AwaitingPaymentTransitionsTest extends TestCase
         });
     }
 
+    private function useOfflineGateway(): void
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Fake Online'],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+    }
+
+    private function confirmedOutOfBandKeepingIntent(string $paymentId): Reservation
+    {
+        return $this->awaitingPaymentReservation([
+            'status' => ReservationStatus::CONFIRMED->value,
+            'payment' => '50.00',
+            'payment_id' => $paymentId,
+            'payment_gateway' => 'fake',
+            'payment_unresolved' => true,
+            'affects_availability' => false,
+        ]);
+    }
+
+    public function test_refunding_an_out_of_band_settlement_returns_a_captured_kept_charge_through_the_gateway()
+    {
+        Mail::fake();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->refundCalls = [];
+        $gateway->retrievedIntentStatus = 'succeeded';
+
+        $reservation = $this->confirmedOutOfBandKeepingIntent('pi_kept_captured');
+
+        $this->assertTrue(app(ReservationRefundProcessor::class)->refund($reservation));
+
+        $this->assertSame('refunded', $reservation->fresh()->status);
+        $this->assertCount(1, $gateway->refundCalls);
+    }
+
+    public function test_refunding_an_out_of_band_settlement_skips_the_gateway_for_a_kept_intent_with_no_charge()
+    {
+        Mail::fake();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->refundCalls = [];
+
+        // The admin cancelled the kept intent at the provider afterwards (as the alert told them to):
+        // the provider would reject a refund on it, which used to strand the booking CONFIRMED.
+        $gateway->canceledIds[] = 'pi_kept_cancelled';
+        $cancelled = $this->confirmedOutOfBandKeepingIntent('pi_kept_cancelled');
+
+        $this->assertTrue(app(ReservationRefundProcessor::class)->refund($cancelled));
+        $this->assertSame('refunded', $cancelled->fresh()->status);
+        // The out-of-band money goes back by hand: every refund surface must say so.
+        $this->assertFalse($cancelled->fresh()->refundIsAutomatic());
+
+        // Never paid at all (still requires a payment method): same outcome.
+        $unpaid = $this->confirmedOutOfBandKeepingIntent('pi_kept_unpaid');
+
+        $this->assertTrue(app(ReservationRefundProcessor::class)->refund($unpaid));
+        $this->assertSame('refunded', $unpaid->fresh()->status);
+
+        $this->assertCount(0, $gateway->refundCalls);
+    }
+
+    public function test_refunding_an_out_of_band_settlement_fails_safely_when_the_kept_intent_cannot_be_read()
+    {
+        Mail::fake();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->refundCalls = [];
+        $gateway->onRetrievePaymentIntent = function (): void {
+            throw new \RuntimeException('gateway unreachable');
+        };
+
+        $reservation = $this->confirmedOutOfBandKeepingIntent('pi_kept_unreadable');
+
+        try {
+            app(ReservationRefundProcessor::class)->refund($reservation);
+            $this->fail('An unverifiable kept intent must abort the refund for a retry.');
+        } catch (RefundFailedException) {
+            $this->assertSame('confirmed', $reservation->fresh()->status);
+            $this->assertCount(0, $gateway->refundCalls);
+        }
+    }
+
+    public function test_the_cp_refund_of_a_double_paid_booking_is_reported_as_manual()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->refundCalls = [];
+        $gateway->retrievedIntentStatus = 'succeeded';
+
+        // The card charge captured while the admin recorded a cash payment too.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_double_paid',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))->assertOk();
+
+        // The card goes back through the gateway, but the cash must be returned by hand.
+        $this->patchJson(cp_route('resrv.reservation.refund'), ['id' => $reservation->id])
+            ->assertOk()
+            ->assertJson(['status' => 'refunded', 'refund_is_automatic' => false]);
+
+        $this->assertCount(1, $gateway->refundCalls);
+    }
+
+    public function test_a_failing_reconciliation_still_dispatches_the_cancellation_side_effects()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        $reservation = $this->awaitingPaymentReservationWithStock(available: 2, attributes: [
+            'affects_availability' => true,
+            'payment_id' => 'pi_reconcile_throws',
+            'payment_gateway' => 'fake',
+        ]);
+        (new Availability)->decrementAvailability(
+            date_start: $reservation->date_start,
+            date_end: $reservation->date_end,
+            quantity: $reservation->quantity,
+            statamic_id: $reservation->item_id,
+            reservationId: $reservation->id,
+            rateId: $reservation->rate_id,
+        );
+
+        // The post-commit write that drops the verified-void reference blows up.
+        Reservation::updating(function (Reservation $model) {
+            if ($model->status === ReservationStatus::CANCELLED->value && $model->isDirty('payment_id')) {
+                throw new \RuntimeException('connection lost');
+            }
+        });
+
+        $this->postJson(cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]))
+            ->assertOk();
+
+        // CANCELLED is terminal, so nothing could re-dispatch later: stock and email went out anyway.
+        $this->assertSame('cancelled', $reservation->fresh()->status);
+        $this->assertEquals(2, $this->availableOn($reservation->item_id, today()));
+        Mail::assertSent(ReservationCancelledCustomer::class);
+    }
+
+    public function test_cancelling_awaiting_without_notifying_skips_only_the_customer_email()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        $reservation = $this->awaitingPaymentReservationWithStock(available: 2, attributes: [
+            'affects_availability' => true,
+        ]);
+        (new Availability)->decrementAvailability(
+            date_start: $reservation->date_start,
+            date_end: $reservation->date_end,
+            quantity: $reservation->quantity,
+            statamic_id: $reservation->item_id,
+            reservationId: $reservation->id,
+            rateId: $reservation->rate_id,
+        );
+
+        $this->postJson(cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]), ['notify_customer' => false])
+            ->assertOk()
+            ->assertJsonPath('status', 'cancelled');
+
+        $this->assertEquals(2, $this->availableOn($reservation->item_id, today()));
+        Mail::assertNotSent(ReservationCancelledCustomer::class);
+    }
+
+    public function test_a_payment_in_flight_is_always_told_to_the_customer_even_when_notifying_is_off()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentStatus = 'succeeded';
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_in_flight_quiet',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]), ['notify_customer' => false])
+            ->assertOk();
+
+        Mail::assertSent(ReservationCancelledCustomer::class, fn ($mail) => $mail->context === ReservationCancelledEvent::CONTEXT_PAYMENT_IN_FLIGHT);
+    }
+
+    public function test_extending_a_hold_sets_a_new_deadline_or_removes_it()
+    {
+        $this->freezeSecond();
+        $this->signInAdmin();
+
+        // Already past its deadline, but the sweep has not run yet.
+        $reservation = $this->awaitingPaymentReservation(['hold_expires_at' => now()->subHour()]);
+
+        $this->postJson(cp_route('resrv.reservation.extendHold', ['id' => $reservation->id]), ['hold_days' => 5])
+            ->assertOk()
+            ->assertJsonPath('id', $reservation->id)
+            ->assertJsonPath('hold_deadline_passed', false)
+            ->assertJsonPath('hold_expires_at_iso', now()->addDays(5)->toIso8601String())
+            ->assertJsonPath('payment_request_sent', false);
+
+        $this->assertTrue($reservation->fresh()->hold_expires_at->equalTo(now()->addDays(5)));
+
+        $this->postJson(cp_route('resrv.reservation.extendHold', ['id' => $reservation->id]), ['hold_days' => null])
+            ->assertOk()
+            ->assertJsonPath('hold_expires_at_iso', null);
+
+        $this->assertNull($reservation->fresh()->hold_expires_at);
+    }
+
+    public function test_extending_a_hold_validates_the_day_count()
+    {
+        $this->freezeSecond();
+        $this->signInAdmin();
+        $this->withExceptionHandling();
+
+        $reservation = $this->awaitingPaymentReservation(['hold_expires_at' => now()->addDay()]);
+
+        foreach ([[], ['hold_days' => 0], ['hold_days' => 366], ['hold_days' => 'abc']] as $body) {
+            $this->postJson(cp_route('resrv.reservation.extendHold', ['id' => $reservation->id]), $body)
+                ->assertStatus(422)
+                ->assertJsonValidationErrors(['hold_days']);
+        }
+
+        $this->assertTrue($reservation->fresh()->hold_expires_at->equalTo(now()->addDay()));
+    }
+
+    public function test_extending_a_hold_can_resend_the_payment_request()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+        $this->useOfflineGateway();
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment_gateway' => 'offline',
+            'date_start' => today()->addDays(5),
+            'date_end' => today()->addDays(7),
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.extendHold', ['id' => $reservation->id]), ['hold_days' => 2, 'resend' => true])
+            ->assertOk()
+            ->assertJsonPath('payment_request_sent', true)
+            ->assertJsonPath('payment_request_error', null);
+
+        Mail::assertSent(ReservationPaymentRequest::class, fn ($mail) => $mail->hasTo($reservation->customer->email));
+        $this->assertNotNull($reservation->fresh()->payment_request_email_sent_at);
+    }
+
+    public function test_a_failing_mail_transport_on_an_extend_resend_still_reports_the_saved_deadline()
+    {
+        $this->signInAdmin();
+        $this->useOfflineGateway();
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment_gateway' => 'offline',
+            'hold_expires_at' => now()->subHour(),
+            'date_start' => today()->addDays(5),
+            'date_end' => today()->addDays(7),
+        ]);
+
+        // The deadline commits before the send: a transport failure must not read as a failed extension.
+        Event::listen(MessageSending::class, function () {
+            throw new TransportException('Connection could not be established.');
+        });
+
+        $this->postJson(cp_route('resrv.reservation.extendHold', ['id' => $reservation->id]), ['hold_days' => 3, 'resend' => true])
+            ->assertOk()
+            ->assertJsonPath('payment_request_sent', false)
+            ->assertJsonPath('payment_request_error', __('The payment request email could not be sent. Check the mail settings and try again.'));
+
+        $fresh = $reservation->fresh();
+        $this->assertTrue($fresh->hold_expires_at->isFuture());
+        $this->assertNull($fresh->payment_request_email_sent_at);
+    }
+
+    public function test_extending_a_hold_is_refused_once_the_reservation_left_awaiting_payment()
+    {
+        $this->signInAdmin();
+        $this->withExceptionHandling();
+
+        $reservation = $this->awaitingPaymentReservation(['status' => ReservationStatus::CANCELLED->value]);
+
+        $this->postJson(cp_route('resrv.reservation.extendHold', ['id' => $reservation->id]), ['hold_days' => 3])
+            ->assertStatus(422)
+            ->assertJsonPath('status', 'cancelled')
+            ->assertJsonPath('error', __('The hold on this reservation cannot be changed — its status is now :status.', ['status' => __('Cancelled')]));
+
+        $this->assertNull($reservation->fresh()->hold_expires_at);
+    }
+
+    public function test_stale_actions_name_the_status_the_reservation_moved_to()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+        $this->withExceptionHandling();
+
+        $cancelled = $this->awaitingPaymentReservation(['status' => ReservationStatus::CANCELLED->value]);
+        $confirmed = $this->awaitingPaymentReservation(['status' => ReservationStatus::CONFIRMED->value]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $cancelled->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('status', 'cancelled')
+            ->assertJsonPath('error', __('This reservation can no longer be marked as paid — its status is now :status.', ['status' => __('Cancelled')]));
+
+        $this->postJson(cp_route('resrv.reservation.cancelAwaiting', ['id' => $confirmed->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('status', 'confirmed');
+
+        $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $confirmed->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('status', 'confirmed');
+    }
+
+    public function test_a_payment_request_cannot_be_sent_once_the_arrival_day_is_over()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+        $this->withExceptionHandling();
+        $this->useOfflineGateway();
+
+        // No hold deadline, but the stay already began yesterday.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment_gateway' => 'offline',
+            'date_start' => today()->subDay(),
+            'date_end' => today()->addDay(),
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('error', __('The arrival date for this reservation has passed, so a payment request cannot be sent.'));
+
+        Mail::assertNotSent(ReservationPaymentRequest::class);
+
+        // Arriving today is still requestable until the day ends.
+        $today = $this->awaitingPaymentReservation([
+            'payment_gateway' => 'offline',
+            'date_start' => today(),
+            'date_end' => today()->addDay(),
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $today->id]))->assertOk();
+    }
+
+    public function test_a_missing_availability_flag_fails_safe_to_restoring_stock()
+    {
+        $reservation = $this->awaitingPaymentReservationWithStock(available: 2);
+        (new Availability)->decrementAvailability(
+            date_start: $reservation->date_start,
+            date_end: $reservation->date_end,
+            quantity: $reservation->quantity,
+            statamic_id: $reservation->item_id,
+            reservationId: $reservation->id,
+            rateId: $reservation->rate_id,
+        );
+        $this->assertEquals(1, $this->availableOn($reservation->item_id, today()));
+
+        // e.g. a row loaded before the column was migrated: only an explicit false skips the restore.
+        $reservation->setRawAttributes(array_merge($reservation->getAttributes(), ['affects_availability' => null]));
+
+        app(IncreaseAvailability::class)->handle(new ReservationCancelledEvent($reservation));
+
+        $this->assertEquals(2, $this->availableOn($reservation->item_id, today()));
+    }
+
     public function test_both_endpoints_are_forbidden_without_the_use_resrv_permission()
     {
         $this->withExceptionHandling();
@@ -1087,5 +1472,6 @@ class AwaitingPaymentTransitionsTest extends TestCase
 
         $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => 1]))->assertForbidden();
         $this->postJson(cp_route('resrv.reservation.cancelAwaiting', ['id' => 1]))->assertForbidden();
+        $this->postJson(cp_route('resrv.reservation.extendHold', ['id' => 1]), ['hold_days' => 2])->assertForbidden();
     }
 }

@@ -3,8 +3,10 @@
 namespace Reach\StatamicResrv\Http\Controllers;
 
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
@@ -53,6 +55,7 @@ class ReservationCpController extends Controller
             'confirmPaymentUrlTemplate' => cp_route('resrv.reservation.confirmPayment', 'RESRVURL'),
             'cancelAwaitingUrlTemplate' => cp_route('resrv.reservation.cancelAwaiting', 'RESRVURL'),
             'sendPaymentRequestUrlTemplate' => cp_route('resrv.reservation.sendPaymentRequest', 'RESRVURL'),
+            'extendHoldUrlTemplate' => cp_route('resrv.reservation.extendHold', 'RESRVURL'),
         ]);
     }
 
@@ -75,9 +78,13 @@ class ReservationCpController extends Controller
         $start = Carbon::parse($data['start'])->startOfDay();
         $end = Carbon::parse($data['end'])->endOfDay();
 
+        // Awaiting-payment holds that took stock are shown too (styled apart by status), so the
+        // calendar explains every reduction in availability; view-only holds took nothing.
         $reservations = $this->reservation->whereDate('date_start', '>=', $start)
             ->whereDate('date_end', '<=', $end)
-            ->whereIn('status', ['confirmed', 'partner'])
+            ->where(fn ($query) => $query->whereIn('status', ReservationStatus::live())
+                ->orWhere(fn ($query) => $query->where('status', ReservationStatus::AWAITING_PAYMENT->value)
+                    ->where('affects_availability', true)))
             ->with(['rate', 'childs.rate'])
             ->orderBy('date_start')
             ->get();
@@ -123,6 +130,7 @@ class ReservationCpController extends Controller
             'confirmPaymentUrl' => cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]),
             'cancelAwaitingUrl' => cp_route('resrv.reservation.cancelAwaiting', ['id' => $reservation->id]),
             'sendPaymentRequestUrl' => cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]),
+            'extendHoldUrl' => cp_route('resrv.reservation.extendHold', ['id' => $reservation->id]),
         ]);
     }
 
@@ -138,14 +146,25 @@ class ReservationCpController extends Controller
             ? $entry
             : $reservation->entryToArray($entry);
 
+        $amountReceived = $reservation->amountReceived();
+        $paymentDueAt = $reservation->isAwaitingPayment() ? $reservation->paymentDueAt() : null;
+
         return [
             'id' => $reservation->id,
             'reference' => $reservation->reference,
             'status' => $reservation->status,
+            'status_label' => ReservationStatus::labelFor($reservation->status),
             'type' => $reservation->type,
-            'created_at' => $reservation->created_at?->format('d-m-Y H:i'),
+            // Instants carry their zone (app timezone); stay dates are wall dates and do not.
+            'created_at' => $reservation->created_at?->format('d-m-Y H:i T'),
             'date_start' => $reservation->date_start?->format('d-m-Y H:i'),
             'date_end' => $reservation->date_end?->format('d-m-Y H:i'),
+            // ISO-8601 with offset for client-side formatting; stay dates are wall dates (their
+            // leading Y-m-d) unless stays are charged by time.
+            'created_at_iso' => $reservation->created_at?->toIso8601String(),
+            'date_start_iso' => $reservation->date_start?->toIso8601String(),
+            'date_end_iso' => $reservation->date_end?->toIso8601String(),
+            'stay_dates_have_time' => ReservationResource::stayDatesHaveTime(),
             'quantity' => $reservation->quantity,
             'rate_id' => $reservation->rate_id,
             'rate_label' => $rateLabel,
@@ -157,6 +176,8 @@ class ReservationCpController extends Controller
                 'id' => $child->id,
                 'date_start' => $child->date_start?->format('d-m-Y H:i'),
                 'date_end' => $child->date_end?->format('d-m-Y H:i'),
+                'date_start_iso' => $child->date_start?->toIso8601String(),
+                'date_end_iso' => $child->date_end?->toIso8601String(),
                 'quantity' => $child->quantity,
                 'rate_id' => $child->rate_id,
                 'rate_label' => $childRateLabels[$index],
@@ -216,10 +237,50 @@ class ReservationCpController extends Controller
             'created_by_name' => $reservation->created_by
                 ? (StatamicUser::find($reservation->created_by)?->name() ?? $reservation->created_by)
                 : null,
-            'hold_expires_at' => $reservation->hold_expires_at?->format('d-m-Y H:i'),
-            'payment_request_email_sent_at' => $reservation->payment_request_email_sent_at?->format('d-m-Y H:i'),
+            'hold_expires_at' => $reservation->hold_expires_at?->format('d-m-Y H:i T'),
+            'hold_expires_at_iso' => $reservation->hold_expires_at?->toIso8601String(),
+            'payment_request_email_sent_at' => $reservation->payment_request_email_sent_at?->format('d-m-Y H:i T'),
+            'payment_request_email_sent_at_iso' => $reservation->payment_request_email_sent_at?->toIso8601String(),
+            // The effective cut-off (hold deadline or end of the arrival day), while awaiting payment.
+            'payment_due_at' => $paymentDueAt?->format('d-m-Y H:i T'),
+            'payment_due_at_iso' => $paymentDueAt?->toIso8601String(),
             'payment_url' => $reservation->customerPaymentUrl(),
+            // Null when receipt is unknown (a frontend bank-transfer booking confirms unpaid).
+            'amount_paid_formatted' => $amountReceived?->format(),
+            'payment_status_known' => $amountReceived !== null,
+            // A refund of this row would only cancel it — no charge exists to return.
+            'holds_no_charge' => $reservation->gatewayHoldsNoCharge(),
+            // A partner booking's payment column is a would-be deposit nothing collected.
+            'balance_formatted' => $reservation->status === ReservationStatus::PARTNER->value
+                ? $reservation->total->format()
+                : $reservation->total->subtract($reservation->payment)->format(),
+            'payment_unresolved' => (bool) $reservation->payment_unresolved,
+            'payment_reference' => $reservation->hasGatewayPayment() ? $reservation->payment_id : null,
+            // Overdue flags only describe a booking that is still waiting for its payment.
+            'hold_deadline_passed' => $reservation->isAwaitingPayment() && $reservation->holdDeadlinePassed(),
+            'arrival_day_passed' => $reservation->isAwaitingPayment() && $reservation->arrivalDayPassed(),
+            'payment_window_closed' => $reservation->isAwaitingPayment() && $reservation->paymentWindowClosed(),
+            'refund_is_automatic' => $this->refundIsAutomaticFor($reservation),
+            'customer_email' => $reservation->customer?->email,
+            'customer_name' => $reservation->customerName(),
+            'payment_gateway_supports_manual_confirmation' => $reservation->paymentGatewaySupportsManualConfirmation(),
+            'can_extend_hold' => $reservation->isAwaitingPayment(),
         ];
+    }
+
+    /**
+     * Whether a refund of this booking returns (or returned) the money through the gateway — what
+     * the refund action reports — for rows a refund applies to; null where it means nothing.
+     */
+    protected function refundIsAutomaticFor(Reservation $reservation): ?bool
+    {
+        $applies = in_array($reservation->status, [
+            ReservationStatus::CONFIRMED->value,
+            ReservationStatus::PARTNER->value,
+            ReservationStatus::REFUNDED->value,
+        ], true);
+
+        return $applies ? $reservation->refundIsAutomatic() : null;
     }
 
     public function refund(Request $request)
@@ -240,19 +301,22 @@ class ReservationCpController extends Controller
         } catch (RefundFailedException $exception) {
             return response()->json(['error' => $exception->getMessage()], 400);
         } catch (InvalidStateTransition $e) {
-            return response()->json(['error' => 'Cannot refund a reservation in the '.$e->from->value.' state.'], 422);
+            return response()->json([
+                'error' => __('Cannot refund a reservation whose status is :status.', ['status' => $e->from->label()]),
+                'status' => $e->from->value,
+            ], 422);
         } catch (UnknownPaymentGateway $e) {
-            return response()->json(['error' => 'The payment gateway ['.$e->gateway.'] recorded for this reservation is no longer configured. Refund the charge manually through that provider.'], 422);
+            return response()->json(['error' => __('The payment gateway [:gateway] recorded for this reservation is no longer configured. Refund the charge manually through that provider.', ['gateway' => $e->gateway])], 422);
         } catch (\Throwable $e) {
             // Unmapped failure (e.g. lock-wait QueryException under contention); transaction
             // rolled back so the charge was never touched. Return a retryable 503, not a raw 500.
             report($e);
 
-            return response()->json(['error' => 'The refund could not be completed. Please try again.'], 503);
+            return response()->json(['error' => __('The refund could not be completed. Please try again.')], 503);
         }
 
         if (! $changed) {
-            return response()->json(['error' => 'This reservation has already been refunded or cancelled.'], 409);
+            return response()->json(['error' => __('This reservation has already been refunded or cancelled.')], 409);
         }
 
         // The processor lands no-charge bookings in CANCELLED instead of REFUNDED; return the
@@ -278,15 +342,14 @@ class ReservationCpController extends Controller
         // Pending/expired/refunded reservations never had a confirmation to resend.
         $resendable = [ReservationStatus::CONFIRMED->value, ReservationStatus::PARTNER->value];
         if (! in_array($reservation->status, $resendable, true)) {
-            return response()->json(['error' => 'Only confirmed reservations can have their confirmation email resent.'], 422);
+            return response()->json(['error' => __('Only confirmed reservations can have their confirmation email resent.')], 422);
         }
 
         // Mirror the dispatcher's own recipient validation (trim + filter_var) so the response
         // reflects reality: a blank or malformed address would be dropped before sending, which
         // would otherwise leave the CP reporting success while nothing actually goes out.
-        $customerEmail = trim((string) ($reservation->customer?->email ?? ''));
-        if (blank($customerEmail) || ! filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-            return response()->json(['error' => 'This reservation does not have a valid customer email address to send to.'], 422);
+        if (! $this->hasValidCustomerEmail($reservation)) {
+            return response()->json(['error' => __('This reservation does not have a valid customer email address to send to.')], 422);
         }
 
         // The disabled (enabled=false) email switch only governs automatic lifecycle sending.
@@ -306,13 +369,13 @@ class ReservationCpController extends Controller
         $reservation = $this->reservation->findOrFail($id);
 
         if (! $reservation->isAwaitingPayment()) {
-            return response()->json(['error' => 'Only awaiting-payment reservations can be confirmed manually.'], 422);
+            return $this->staleStateResponse(__('This reservation can no longer be marked as paid — its status is now :status.'), $reservation->status);
         }
 
         try {
             $changed = $reservation->transitionTo(ReservationStatus::CONFIRMED);
         } catch (InvalidStateTransition $e) {
-            return response()->json(['error' => 'Cannot confirm a reservation in the '.$e->from->value.' state.'], 422);
+            return $this->staleStateResponse(__('This reservation can no longer be marked as paid — its status is now :status.'), $e->from->value);
         }
 
         if ($changed) {
@@ -346,13 +409,16 @@ class ReservationCpController extends Controller
      * Cancel an awaiting-payment (manual) reservation via the ReservationCancelled chain.
      * Any pending intent is cancelled after the transition commits — never inside the
      * lock, and tolerantly (an unreachable gateway leaves an intent that dies of old age).
+     * `notify_customer` (default true) false skips only the customer email.
      */
-    public function cancelAwaitingPayment(int $id)
+    public function cancelAwaitingPayment(Request $request, int $id)
     {
+        $data = $request->validate(['notify_customer' => 'sometimes|boolean']);
+
         $reservation = $this->reservation->findOrFail($id);
 
         if (! $reservation->isAwaitingPayment()) {
-            return response()->json(['error' => 'Only awaiting-payment reservations can be cancelled this way.'], 422);
+            return $this->staleStateResponse(__('This reservation can no longer be cancelled this way — its status is now :status.'), $reservation->status);
         }
 
         try {
@@ -373,9 +439,10 @@ class ReservationCpController extends Controller
                     }
                 },
                 cancelOpenIntent: true,
+                notifyCustomer: (bool) ($data['notify_customer'] ?? true),
             );
         } catch (InvalidStateTransition $e) {
-            return response()->json(['error' => 'Cannot cancel a reservation in the '.$e->from->value.' state.'], 422);
+            return $this->staleStateResponse(__('This reservation can no longer be cancelled this way — its status is now :status.'), $e->from->value);
         }
 
         return response()->json($this->serializeFreshReservation($reservation->id));
@@ -391,23 +458,114 @@ class ReservationCpController extends Controller
         $reservation = $this->reservation->findOrFail($id);
 
         if (! $reservation->isAwaitingPayment()) {
-            return response()->json(['error' => 'Only awaiting-payment reservations can receive a payment request.'], 422);
+            return $this->staleStateResponse(__('A payment request cannot be sent for this reservation — its status is now :status.'), $reservation->status);
         }
 
-        $customerEmail = trim((string) ($reservation->customer?->email ?? ''));
-        if (blank($customerEmail) || ! filter_var($customerEmail, FILTER_VALIDATE_EMAIL)) {
-            return response()->json(['error' => 'This reservation does not have a valid customer email address to send to.'], 422);
-        }
-
-        try {
-            if (! app(ManualReservationCreator::class)->sendPaymentRequestEmail($reservation)) {
-                return response()->json(['error' => 'The payment request email is disabled in the email settings, so it was not sent.'], 422);
-            }
-        } catch (ManualReservationException $e) {
-            return response()->json(['error' => $e->getMessage()], 422);
+        if (($error = $this->sendPaymentRequestError($reservation)) !== null) {
+            return $error;
         }
 
         return response()->json($this->serializeFreshReservation($reservation->id));
+    }
+
+    /**
+     * Give an awaiting-payment hold a new deadline (now + hold_days days) or remove it (null) —
+     * also after the old deadline passed but before the lapse sweep ran — optionally re-sending
+     * the payment request. The deadline write is row-locked against a concurrent confirm/cancel.
+     */
+    public function extendHold(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'hold_days' => ['present', 'nullable', 'integer', 'min:1', 'max:365'],
+            'resend' => ['sometimes', 'boolean'],
+        ], [
+            'hold_days.present' => __('Enter the number of days to hold the reservation.'),
+            'hold_days.integer' => __('Enter the hold as a whole number of days.'),
+            'hold_days.min' => __('Hold the reservation for at least 1 day.'),
+            'hold_days.max' => __('Hold the reservation for at most :max days.'),
+        ]);
+
+        $this->reservation->findOrFail($id);
+        $message = __('The hold on this reservation cannot be changed — its status is now :status.');
+
+        $currentStatus = DB::transaction(function () use ($id, $data) {
+            $fresh = Reservation::query()->lockForUpdate()->findOrFail($id);
+
+            if (! $fresh->isAwaitingPayment()) {
+                return $fresh->status;
+            }
+
+            $fresh->hold_expires_at = $data['hold_days'] !== null ? now()->addDays((int) $data['hold_days']) : null;
+            $fresh->save();
+
+            return null;
+        });
+
+        if ($currentStatus !== null) {
+            return $this->staleStateResponse($message, $currentStatus);
+        }
+
+        $sendError = null;
+
+        if ($request->boolean('resend')) {
+            $sendError = $this->sendPaymentRequestError($this->reservation->findOrFail($id), deadlineChanged: true)?->getData(true)['error'] ?? null;
+        }
+
+        return response()->json(array_merge($this->serializeFreshReservation($id), [
+            'payment_request_sent' => $request->boolean('resend') && $sendError === null,
+            'payment_request_error' => $sendError,
+        ]));
+    }
+
+    /** Send the payment request through the creator's guards; null on success, the 422 otherwise. */
+    protected function sendPaymentRequestError(Reservation $reservation, bool $deadlineChanged = false): ?JsonResponse
+    {
+        if (! $this->hasValidCustomerEmail($reservation)) {
+            return response()->json(['error' => __('This reservation does not have a valid customer email address to send to.')], 422);
+        }
+
+        try {
+            if (! app(ManualReservationCreator::class)->sendPaymentRequestEmail($reservation, $deadlineChanged)) {
+                return response()->json(['error' => __('The payment request email is disabled in the email settings, so it was not sent.')], 422);
+            }
+        } catch (ManualReservationException $e) {
+            // The sender re-reads the row under its lock; a state change since the pre-check is stale state.
+            $fresh = $this->reservation->find($reservation->id);
+
+            if ($fresh && ! $fresh->isAwaitingPayment()) {
+                return $this->staleStateResponse(__('A payment request cannot be sent for this reservation — its status is now :status.'), $fresh->status);
+            }
+
+            return response()->json(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            // A mail transport failure: nothing was stamped, and extend-hold has already saved its
+            // deadline — report it as an unsent email, not a failed request.
+            report($e);
+
+            return response()->json(['error' => __('The payment request email could not be sent. Check the mail settings and try again.')], 422);
+        }
+
+        return null;
+    }
+
+    /**
+     * The row left the state the action needs (a webhook, the lapse sweep or another admin got
+     * there first): 422 naming the current status, which the CP uses to refresh its view.
+     */
+    protected function staleStateResponse(string $message, string $status): JsonResponse
+    {
+        return response()->json([
+            'error' => str_replace(':status', ReservationStatus::labelFor($status), $message),
+            'status' => $status,
+        ], 422);
+    }
+
+    /** Mirrors the email dispatcher's recipient validation (trim + filter_var). */
+    protected function hasValidCustomerEmail(Reservation $reservation): bool
+    {
+        $email = trim((string) ($reservation->customer?->email ?? ''));
+
+        return $email !== '' && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
     }
 
     private function serializeFreshReservation(int $id): array

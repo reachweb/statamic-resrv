@@ -97,10 +97,12 @@ enum ReservationStatus: string
 
     /**
      * Status values for checkouts still in flight — holds that may release asynchronously
-     * (expiry restores +quantity), which would corrupt an absolute CP inventory edit.
-     * Confirmed/partner bookings keep their hold key for life but only release on an
-     * explicit refund, so they are not in flight. AWAITING_PAYMENT belongs here too:
-     * hold-lapse/CP cancellation releases +quantity through the same chain.
+     * (expiry restores +quantity within minutes), which would corrupt an absolute CP inventory
+     * edit. Confirmed/partner bookings keep their hold key for life but only release on an
+     * explicit refund, so they are not in flight. AWAITING_PAYMENT is deliberately absent: a
+     * manual hold has no deadline by default and releases like a confirmed booking's refund
+     * (an admin cancel or a lapse adds +quantity on top of the admin's value), so blocking on
+     * it would freeze inventory edits for as long as the customer takes to pay.
      *
      * @return string[]
      */
@@ -109,7 +111,29 @@ enum ReservationStatus: string
         return [
             self::PENDING->value,
             self::WEBHOOK->value,
-            self::AWAITING_PAYMENT->value,
         ];
+    }
+
+    /** Human, translated label for the CP (badges, filters, errors). */
+    public function label(): string
+    {
+        return match ($this) {
+            self::PENDING => __('Pending'),
+            self::WEBHOOK => __('Webhook'),
+            self::CONFIRMED => __('Confirmed'),
+            self::REFUNDED => __('Refunded'),
+            self::CANCELLED => __('Cancelled'),
+            self::COMPLETED => __('Completed'),
+            self::AWAITING_PAYMENT => __('Awaiting payment'),
+            self::EXPIRED => __('Expired'),
+            self::PARTNER => __('Partner'),
+        };
+    }
+
+    /** label() for a raw status value; unknown or legacy values are humanized rather than thrown on. */
+    public static function labelFor(?string $status): string
+    {
+        return self::tryFrom((string) $status)?->label()
+            ?? ucfirst(str_replace('_', ' ', (string) $status));
     }
 }

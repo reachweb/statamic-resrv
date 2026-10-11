@@ -29,8 +29,11 @@ class ReservationCancelled
 
     public $reservation;
 
-    /** @param  ?string  $context  Why the booking was cancelled (CONTEXT_*) for email wording; null for the existing flows. */
-    public function __construct(Reservation $reservation, public ?string $context = null)
+    /**
+     * @param  ?string  $context  Why the booking was cancelled (CONTEXT_*) for email wording; null for the existing flows.
+     * @param  bool  $notifyCustomer  False skips the customer cancellation email only (admin emails and side effects still run).
+     */
+    public function __construct(Reservation $reservation, public ?string $context = null, public bool $notifyCustomer = true)
     {
         $this->reservation = $reservation;
     }

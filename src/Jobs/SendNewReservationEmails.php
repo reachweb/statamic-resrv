@@ -19,9 +19,16 @@ class SendNewReservationEmails implements ShouldQueue
 
     protected $reservation;
 
-    public function __construct(Reservation $reservation)
+    /**
+     * Not constructor-promoted: payloads queued before this property existed carry no key for it,
+     * and an uninitialized typed property would make handle() throw on unserialization.
+     */
+    protected bool $notifyCustomer = true;
+
+    public function __construct(Reservation $reservation, bool $notifyCustomer = true)
     {
         $this->reservation = $reservation;
+        $this->notifyCustomer = $notifyCustomer;
     }
 
     /**
@@ -34,11 +41,13 @@ class SendNewReservationEmails implements ShouldQueue
         /** @var ReservationEmailDispatcher $dispatcher */
         $dispatcher = app(ReservationEmailDispatcher::class);
 
-        $dispatcher->send(
-            $this->reservation,
-            ReservationEmailEvent::CustomerConfirmed,
-            new ReservationConfirmed($this->reservation),
-        );
+        if ($this->notifyCustomer) {
+            $dispatcher->send(
+                $this->reservation,
+                ReservationEmailEvent::CustomerConfirmed,
+                new ReservationConfirmed($this->reservation),
+            );
+        }
 
         $dispatcher->send(
             $this->reservation,

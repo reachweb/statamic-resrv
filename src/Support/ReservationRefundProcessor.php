@@ -105,10 +105,13 @@ class ReservationRefundProcessor
      *                                  transition commits, never inside the lock, tolerantly;
      *                                  the local reference is dropped only once the gateway
      *                                  confirms the void.
+     * @param  bool  $notifyCustomer  False skips the customer cancellation email — unless the
+     *                                reconcile finds a payment in flight, which the customer
+     *                                must always be told about.
      *
      * @throws InvalidStateTransition when the current status cannot transition to CANCELLED
      */
-    public function cancelWithoutRefund(Reservation $reservation, ?string $context = null, ?Closure $inTransaction = null, bool $cancelOpenIntent = false): bool
+    public function cancelWithoutRefund(Reservation $reservation, ?string $context = null, ?Closure $inTransaction = null, bool $cancelOpenIntent = false, bool $notifyCustomer = true): bool
     {
         $changed = $reservation->transitionTo(
             ReservationStatus::CANCELLED,
@@ -136,11 +139,18 @@ class ReservationRefundProcessor
             // from the just-transitioned row (transitionTo() syncs the locked committed row):
             // a pre-lock snapshot could miss a pay-page write and silently skip cancelling the
             // customer's live intent.
-            if ($cancelOpenIntent && $this->cancelOpenIntentAndClearVerifiedReference($reservation)) {
-                $context = ReservationCancelled::CONTEXT_PAYMENT_IN_FLIGHT;
+            try {
+                if ($cancelOpenIntent && $this->cancelOpenIntentAndClearVerifiedReference($reservation)) {
+                    $context = ReservationCancelled::CONTEXT_PAYMENT_IN_FLIGHT;
+                    $notifyCustomer = true;
+                }
+            } catch (\Throwable $e) {
+                // CANCELLED is committed and terminal (no retry re-dispatches), so a reconcile
+                // failure must never skip the event that restores stock and voids commission.
+                report($e);
+            } finally {
+                $this->dispatchCommitted(ReservationCancelled::class, $reservation, $context, $notifyCustomer);
             }
-
-            $this->dispatchCommitted(ReservationCancelled::class, $reservation, $context);
         }
 
         return $changed;
@@ -245,11 +255,11 @@ class ReservationRefundProcessor
      * An uncaptured 'requires_capture' hold is voided like any open intent — releasing the
      * authorization prevents the duplicate rather than warning about it.
      * A capture can surface on either read; a read that THROWS leaves the state unknown, so
-     * those paths notify too (CONTEXT_OUT_OF_BAND_UNVERIFIED). A kept reference that never
-     * verifiably collected money (unverified, still payable, removed gateway) is stamped
-     * payment_unresolved: the money arrived out of band, so the intent must not read as the
-     * collected charge — customer self-cancellation stays manual, and should the booking later
-     * end CANCELLED, a late success on that intent still alerts instead of reading as retained.
+     * those paths notify too (CONTEXT_OUT_OF_BAND_UNVERIFIED). EVERY kept reference is stamped
+     * payment_unresolved — captured ones included: the money arrived out of band, so the intent
+     * must not read as the booking's collected charge — customer self-cancellation stays manual,
+     * refunds report as manual, and should the booking later end CANCELLED, a late success on
+     * that intent still alerts instead of reading as retained.
      *
      * Callers must have synced the reservation to the committed row (via transitionTo()) first,
      * so a concurrent pay-page write is not missed.
@@ -317,7 +327,12 @@ class ReservationRefundProcessor
             return;
         }
 
+        // Stamped unresolved too: the admin recorded money that arrived out of band, so the kept
+        // charge is not this booking's whole payment — refunds must read as manual (see
+        // refundThroughGateway() for how the charge itself is still returned).
         if ($intent !== null && in_array($intent->status ?? '', self::REFUND_ONLY_INTENT_STATUSES, true)) {
+            $reservation->update(['payment_unresolved' => true]);
+
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
                 $paymentId,
@@ -363,6 +378,8 @@ class ReservationRefundProcessor
         // pre-void branch, one read later — and the last point the double payment is visible,
         // so it must not degrade to the generic could-not-verify warning below.
         if (in_array($intent->status ?? '', self::MONEY_MOVING_INTENT_STATUSES, true)) {
+            $reservation->update(['payment_unresolved' => true]);
+
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
                 $paymentId,
@@ -515,6 +532,14 @@ class ReservationRefundProcessor
      * the provider. Anything else with an empty payment_id (e.g. a PENDING row whose cancelled
      * intent may still carry an orphaned charge) keeps going through the gateway so the failure
      * surfaces to the caller instead of silently marking captured money as refunded.
+     *
+     * A CONFIRMED row stamped payment_unresolved was settled out of band but kept its intent
+     * reference: only an intent that verifiably captured (or is settling) money goes back through
+     * the gateway; a dead or never-paid one has no charge to refund (the provider would reject it
+     * and strand the booking), so the provider is skipped and the row lands REFUNDED — the money
+     * collected out of band is returned by hand. A failed read aborts the refund for a retry.
+     *
+     * @throws RefundFailedException
      */
     protected function refundThroughGateway(Reservation $fresh): void
     {
@@ -522,7 +547,27 @@ class ReservationRefundProcessor
             return;
         }
 
-        $refund = $fresh->resolvePaymentGateway()->refund($fresh);
+        $gateway = $fresh->resolvePaymentGateway();
+
+        if ($fresh->status === ReservationStatus::CONFIRMED->value && $fresh->payment_unresolved) {
+            try {
+                $intent = $gateway->retrievePaymentIntent((string) $fresh->payment_id, $fresh);
+            } catch (\Throwable $e) {
+                throw new RefundFailedException(__('The payment could not be verified with the payment provider. Please try again.'), 0, $e);
+            }
+
+            if (! in_array($intent?->status ?? '', self::REFUND_ONLY_INTENT_STATUSES, true)) {
+                Log::info('Skipped the gateway refund: the out-of-band settlement\'s kept intent holds no charge.', [
+                    'reservation_id' => $fresh->id,
+                    'payment_id' => $fresh->payment_id,
+                    'intent_status' => $intent?->status,
+                ]);
+
+                return;
+            }
+        }
+
+        $refund = $gateway->refund($fresh);
 
         // Logged inside the still-open transaction so a money-moved-but-commit-failed window
         // (deadlock victim, lock-wait timeout, or a dropped connection between this call and COMMIT —

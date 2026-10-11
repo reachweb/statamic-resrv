@@ -372,6 +372,286 @@ class ReservationCpTest extends TestCase
             );
     }
 
+    public function test_show_exposes_the_awaiting_payment_state_for_the_cp()
+    {
+        $this->travelTo(today()->setHour(12));
+        $item = $this->makeStatamicItem();
+
+        // Unpaid, the payment request went out yesterday, and the hold already lapsed (sweep pending).
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'awaiting_payment',
+            'price' => '90.00',
+            'total' => '90.00',
+            'payment' => '30.00',
+            'hold_expires_at' => now()->subHour(),
+            'payment_request_email_sent_at' => now()->subDay(),
+            'date_start' => today()->addDays(5)->toIso8601String(),
+            'date_end' => today()->addDays(7)->toIso8601String(),
+        ])->withCustomer()->create();
+        $customer = $reservation->customer;
+
+        $this->get(cp_route('resrv.reservation.show', $reservation->id))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('extendHoldUrl', cp_route('resrv.reservation.extendHold', ['id' => $reservation->id]))
+                ->where('reservation.status_label', 'Awaiting payment')
+                ->where('reservation.amount_paid_formatted', '0.00')
+                ->where('reservation.balance_formatted', '60.00')
+                ->where('reservation.payment_unresolved', false)
+                ->where('reservation.payment_reference', null)
+                ->where('reservation.hold_deadline_passed', true)
+                ->where('reservation.arrival_day_passed', false)
+                ->where('reservation.payment_window_closed', true)
+                ->where('reservation.can_extend_hold', true)
+                ->where('reservation.hold_expires_at_iso', now()->subHour()->toIso8601String())
+                ->where('reservation.payment_request_email_sent_at_iso', now()->subDay()->toIso8601String())
+                ->where('reservation.hold_expires_at', now()->subHour()->format('d-m-Y H:i T'))
+                ->where('reservation.refund_is_automatic', null)
+                ->where('reservation.customer_email', $customer->email)
+                ->where('reservation.customer_name', trim($customer->data->get('first_name').' '.$customer->data->get('last_name')))
+                ->where('reservation.payment_gateway_supports_manual_confirmation', false)
+            );
+    }
+
+    public function test_show_flags_a_past_arrival_only_while_the_booking_awaits_payment()
+    {
+        $this->travelTo(today()->setHour(12));
+        $item = $this->makeStatamicItem();
+
+        $attributes = [
+            'item_id' => $item->id(),
+            'date_start' => today()->subDay()->toIso8601String(),
+            'date_end' => today()->addDay()->toIso8601String(),
+        ];
+
+        $awaiting = Reservation::factory(array_merge($attributes, ['status' => 'awaiting_payment']))->withCustomer()->create();
+        $confirmed = Reservation::factory(array_merge($attributes, ['status' => 'confirmed', 'payment_id' => 'pi_paid']))->withCustomer()->create();
+
+        $this->get(cp_route('resrv.reservation.show', $awaiting->id))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('reservation.arrival_day_passed', true)
+                ->where('reservation.payment_window_closed', true)
+                ->where('reservation.hold_deadline_passed', false));
+
+        $this->get(cp_route('resrv.reservation.show', $confirmed->id))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('reservation.arrival_day_passed', false)
+                ->where('reservation.payment_window_closed', false)
+                ->where('reservation.can_extend_hold', false)
+                ->where('reservation.amount_paid_formatted', '50.00')
+                ->where('reservation.payment_reference', 'pi_paid')
+                ->where('reservation.refund_is_automatic', true));
+    }
+
+    public function test_show_reports_the_money_received_by_state()
+    {
+        $item = $this->makeStatamicItem();
+        $base = ['item_id' => $item->id(), 'payment' => '30.00', 'payment_surcharge' => '0'];
+
+        $cases = [
+            // Confirmed out of band in the CP: the requested amount arrived outside the gateway.
+            ['status' => 'confirmed', 'payment_id' => '', 'created_by' => '1', 'expected' => '30.00'],
+            // A manual booking refunded after an out-of-band confirmation had received it.
+            ['status' => 'refunded', 'payment_id' => '', 'created_by' => '1', 'expected' => '30.00'],
+            // An unpaid hold cancelled with an unverifiable intent kept for reconciliation.
+            ['status' => 'cancelled', 'payment_id' => 'pi_dead', 'payment_unresolved' => true, 'expected' => '0.00'],
+            // A paid booking the customer cancelled outside the window keeps its charge.
+            ['status' => 'cancelled', 'payment_id' => 'pi_kept', 'expected' => '30.00'],
+            ['status' => 'expired', 'payment_id' => 'pi_abandoned', 'expected' => '0.00'],
+        ];
+
+        foreach ($cases as $case) {
+            $expected = $case['expected'];
+            unset($case['expected']);
+
+            $reservation = Reservation::factory(array_merge($base, $case))->withCustomer()->create();
+
+            $this->get(cp_route('resrv.reservation.show', $reservation->id))
+                ->assertInertia(fn (AssertableInertia $page) => $page
+                    ->where('reservation.amount_paid_formatted', $expected));
+        }
+    }
+
+    public function test_frontend_bank_transfer_bookings_report_the_payment_receipt_as_unknown()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class],
+            'offline' => ['class' => OfflinePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $item = $this->makeStatamicItem();
+        $offline = ['item_id' => $item->id(), 'payment' => '80.00', 'total' => '80.00', 'payment_surcharge' => '0', 'payment_gateway' => 'offline'];
+
+        // Main's checkout confirms an offline booking straight away and mints an 'offline_…' reference before any money arrives.
+        $confirmed = Reservation::factory(array_merge($offline, ['status' => 'confirmed', 'payment_id' => 'offline_abc']))->withCustomer()->create();
+        $refunded = Reservation::factory(array_merge($offline, ['status' => 'refunded', 'payment_id' => 'offline_def']))->withCustomer()->create();
+        // Marked paid in the CP: the admin recorded the money as received.
+        $markedPaid = Reservation::factory(array_merge($offline, ['status' => 'confirmed', 'payment_id' => '', 'created_by' => '1']))->withCustomer()->create();
+
+        foreach ([$confirmed, $refunded] as $reservation) {
+            $this->assertNull($reservation->amountReceived());
+
+            $this->get(cp_route('resrv.reservation.show', $reservation->id))
+                ->assertInertia(fn (AssertableInertia $page) => $page
+                    ->where('reservation.amount_paid_formatted', null)
+                    ->where('reservation.payment_status_known', false));
+        }
+
+        $this->get(cp_route('resrv.reservation.show', $markedPaid->id))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('reservation.amount_paid_formatted', '80.00')
+                ->where('reservation.payment_status_known', true));
+
+        $rows = collect($this->getJson(cp_route('resrv.reservation.index'))->assertOk()->json('data'))->keyBy('id');
+
+        $this->assertNull($rows[$confirmed->id]['amount_paid_formatted']);
+        $this->assertNull($rows[$refunded->id]['amount_paid_formatted']);
+        $this->assertSame('80.00', $rows[$markedPaid->id]['amount_paid_formatted']);
+    }
+
+    public function test_the_payment_due_date_is_the_earlier_of_the_hold_and_the_end_of_the_arrival_day()
+    {
+        $this->travelTo(today()->setHour(12));
+        $item = $this->makeStatamicItem();
+        $arrival = today()->addDay();
+
+        $holdPastArrival = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'awaiting_payment',
+            'hold_expires_at' => now()->addDays(5),
+            'date_start' => $arrival->toIso8601String(),
+            'date_end' => $arrival->copy()->addDays(2)->toIso8601String(),
+        ])->withCustomer()->create();
+
+        $this->assertTrue($holdPastArrival->paymentDueAt()->equalTo($arrival->copy()->endOfDay()));
+
+        $holdBeforeArrival = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'awaiting_payment',
+            'hold_expires_at' => now()->addHours(3),
+            'date_start' => $arrival->toIso8601String(),
+            'date_end' => $arrival->copy()->addDays(2)->toIso8601String(),
+        ])->withCustomer()->create();
+
+        $this->assertTrue($holdBeforeArrival->paymentDueAt()->equalTo(now()->addHours(3)));
+
+        $noHold = Reservation::factory(['item_id' => $item->id(), 'status' => 'awaiting_payment', 'hold_expires_at' => null])->withCustomer()->create();
+        $this->assertNull($noHold->paymentDueAt());
+
+        $this->get(cp_route('resrv.reservation.show', $holdPastArrival->id))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('reservation.payment_due_at_iso', $arrival->copy()->endOfDay()->toIso8601String())
+                ->where('reservation.payment_due_at', $arrival->copy()->endOfDay()->format('d-m-Y H:i T')));
+
+        $rows = collect($this->getJson(cp_route('resrv.reservation.index'))->assertOk()->json('data'))->keyBy('id');
+        $this->assertSame(now()->addHours(3)->toIso8601String(), $rows[$holdBeforeArrival->id]['payment_due_at']);
+        $this->assertNull($rows[$noHold->id]['payment_due_at']);
+
+        // Only a booking still waiting for its payment has a due date.
+        $holdPastArrival->update(['status' => 'confirmed']);
+        $this->get(cp_route('resrv.reservation.show', $holdPastArrival->id))
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('reservation.payment_due_at_iso', null));
+    }
+
+    public function test_show_and_index_expose_iso_dates_for_client_side_formatting()
+    {
+        $this->freezeSecond();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'payment' => '30.00',
+            'payment_surcharge' => '1.50',
+            'date_start' => today()->addDays(3)->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+        ])->withCustomer()->create();
+
+        $this->get(cp_route('resrv.reservation.show', $reservation->id))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('reservation.created_at_iso', now()->toIso8601String())
+                ->where('reservation.date_start_iso', today()->addDays(3)->toIso8601String())
+                ->where('reservation.date_end_iso', today()->addDays(5)->toIso8601String())
+                ->where('reservation.stay_dates_have_time', false)
+                ->where('reservation.total_to_charge_formatted', '31.50'));
+
+        $this->getJson(cp_route('resrv.reservation.index'))
+            ->assertOk()
+            ->assertJsonPath('data.0.created_at_iso', now()->toIso8601String())
+            ->assertJsonPath('data.0.date_start_iso', today()->addDays(3)->toIso8601String())
+            ->assertJsonPath('data.0.stay_dates_have_time', false)
+            ->assertJsonPath('data.0.total_to_charge_formatted', '31.50')
+            ->assertJsonPath('data.0.payment_surcharge_formatted', '1.50')
+            ->assertJsonPath('data.0.payment_surcharge_is_zero', false);
+
+        Config::set('resrv-config.calculate_days_using_time', true);
+
+        $this->get(cp_route('resrv.reservation.show', $reservation->id))
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('reservation.stay_dates_have_time', true));
+    }
+
+    public function test_index_rows_carry_the_awaiting_payment_state()
+    {
+        $this->travelTo(today()->setHour(12));
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'awaiting_payment',
+            'payment' => '30.00',
+            'total' => '90.00',
+            'hold_expires_at' => now()->addDay(),
+            'date_start' => today()->addDays(3)->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+        ])->withCustomer()->create();
+
+        $this->getJson(cp_route('resrv.reservation.index'))
+            ->assertOk()
+            ->assertJsonPath('data.0.status_label', 'Awaiting payment')
+            ->assertJsonPath('data.0.payment_formatted', '30.00')
+            ->assertJsonPath('data.0.total_formatted', '90.00')
+            ->assertJsonPath('data.0.hold_expires_at', now()->addDay()->toIso8601String())
+            ->assertJsonPath('data.0.payment_request_email_sent_at', null)
+            ->assertJsonPath('data.0.payment_unresolved', false)
+            ->assertJsonPath('data.0.arrival_day_passed', false)
+            ->assertJsonPath('data.0.payment_window_closed', false)
+            ->assertJsonPath('data.0.supports_manual_confirmation', false)
+            ->assertJsonPath('data.0.customer_email', $reservation->customer->email)
+            ->assertJsonPath('data.0.customer_name', $reservation->customerName());
+    }
+
+    public function test_calendar_shows_stock_holding_awaiting_payment_holds_styled_apart()
+    {
+        $this->freezeSecond();
+        $item = $this->makeStatamicItem();
+        $range = '?start='.urlencode(now()->toIso8601String()).'&end='.urlencode(now()->addMonth()->toIso8601String());
+
+        $confirmed = Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed'])->create();
+        $hold = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'awaiting_payment',
+            'affects_availability' => true,
+            'hold_expires_at' => now()->addDays(2),
+        ])->create();
+        $viewOnly = Reservation::factory(['item_id' => $item->id(), 'status' => 'awaiting_payment', 'affects_availability' => false])->create();
+        $pending = Reservation::factory(['item_id' => $item->id(), 'status' => 'pending'])->create();
+
+        $events = collect($this->getJson(cp_route('resrv.reservations.calendar.list').$range)->assertOk()->json())->keyBy('id');
+
+        $this->assertTrue($events->has($confirmed->id));
+        $this->assertTrue($events->has($hold->id));
+        $this->assertFalse($events->has($viewOnly->id));
+        $this->assertFalse($events->has($pending->id));
+
+        $event = $events->get($hold->id);
+        $this->assertSame('awaiting_payment', $event['status']);
+        $this->assertContains('resrv-event--awaiting_payment', $event['classNames']);
+        $this->assertSame(now()->addDays(2)->toIso8601String(), $event['hold_expires_at']);
+        $this->assertSame('Awaiting payment', $event['extendedProps']['statusLabel']);
+        $this->assertNull($events->get($confirmed->id)['hold_expires_at']);
+    }
+
     public function test_can_show_child_reservations()
     {
         $item = $this->makeStatamicItem();

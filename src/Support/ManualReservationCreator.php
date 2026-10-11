@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Support;
 
 use Carbon\Carbon;
+use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -28,6 +29,7 @@ use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\ExtraCategory;
 use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Rate;
@@ -53,19 +55,25 @@ class ManualReservationCreator
      * layer; money figures and domain invariants are re-asserted here).
      *
      * @param  array  $input  quote() input plus: customer (form data incl. email),
-     *                        affects_availability?, affiliate_id?, hold_days?
+     *                        affects_availability?, affiliate_id?, hold_days?,
+     *                        send_payment_request_email?, expected_total?, expected_amount?.
+     *                        payment_gateway and hold_days are ignored when nothing is
+     *                        collected now (the booking confirms immediately).
      * @param  mixed  $creator  the Statamic user creating the reservation
+     * @param  ?Closure(Reservation): void  $onCommitted  runs right after the creation transaction
+     *                                                    commits, before any confirmation or email; a
+     *                                                    throw is reported, never aborts the creation
      *
      * @throws AvailabilityException|ManualReservationException|OptionsException|ExtrasException
      */
-    public function create(array $input, $creator = null, bool $requireGatewayForPayment = false): Reservation
+    public function create(array $input, $creator = null, bool $requireGatewayForPayment = false, ?Closure $onCommitted = null): Reservation
     {
         return $this->withoutCheckoutSession(
-            fn (): Reservation => $this->createReservation($input, $creator, $requireGatewayForPayment)
+            fn (): Reservation => $this->createReservation($input, $creator, $requireGatewayForPayment, $onCommitted)
         );
     }
 
-    protected function createReservation(array $input, $creator, bool $requireGatewayForPayment): Reservation
+    protected function createReservation(array $input, $creator, bool $requireGatewayForPayment, ?Closure $onCommitted = null): Reservation
     {
         // Normalize once so the quote, overbook assert, stored rate_id and cancellation
         // snapshot all see the SAME validated rate (see resolveRateId()).
@@ -73,23 +81,26 @@ class ManualReservationCreator
 
         $quote = $this->quote($input);
 
-        $gateway = (string) ($input['payment_gateway'] ?? '');
+        $this->assertQuoteMatchesWhatWasShown($input, $quote);
 
-        // The CP flow requires a gateway when money is collected now; a zero-amount booking
-        // confirms immediately with nothing to pay through, so it may omit one.
-        if ($requireGatewayForPayment && $gateway === '' && ! $quote['payment']['amount']->isZero()) {
-            throw new ManualReservationException(__('A payment method is required to collect a payment.'));
+        // A zero-amount booking collects through no gateway and confirms immediately, so — like
+        // Checkout::handleReservationWithZeroPayment — it records neither a gateway nor a hold.
+        $collectsPayment = ! $quote['payment']['amount']->isZero();
+        $gateway = $collectsPayment ? (string) ($input['payment_gateway'] ?? '') : '';
+
+        if ($requireGatewayForPayment && $gateway === '' && $collectsPayment) {
+            throw new ManualReservationException(__('A payment method is required to collect a payment.'), field: 'payment_gateway');
         }
 
         // A blank gateway on a paid booking would resolve to the DEFAULT at pay time
         // (resolvePaymentGateway's legacy-row rule) while bypassing its limits, page gate and
         // surcharge — pin the default now so the row is validated and priced against the
         // gateway that will actually collect.
-        if ($gateway === '' && ! $quote['payment']['amount']->isZero()) {
+        if ($gateway === '' && $collectsPayment) {
             $gateway = (string) $this->gatewayManager->defaultName();
 
             if ($gateway === '') {
-                throw new ManualReservationException(__('No payment gateway is configured to collect a payment.'));
+                throw new ManualReservationException(__('No payment gateway is configured to collect a payment.'), field: 'payment_gateway');
             }
 
             $quote['payment']['surcharge'] = $this->gatewayManager->calculateSurcharge($gateway, $quote['payment']['amount']);
@@ -114,7 +125,7 @@ class ManualReservationCreator
 
         $affiliate = $this->resolveAffiliate($input['affiliate_id'] ?? null);
         $cancellation = Rate::effectiveCancellationPolicyFor($this->rateIdFrom($input));
-        $holdDays = (int) ($input['hold_days'] ?? 0);
+        $holdDays = $collectsPayment ? (int) ($input['hold_days'] ?? 0) : 0;
 
         $reservation = DB::transaction(function () use ($input, $quote, $gateway, $cancellation, $affectsAvailability, $affiliate, $holdDays, $creator) {
             $customer = $this->createCustomer($input);
@@ -173,16 +184,30 @@ class ManualReservationCreator
             return $reservation;
         });
 
+        if ($onCommitted !== null) {
+            try {
+                $onCommitted($reservation);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
         // Mirrors Checkout::handleReservationWithZeroPayment(): keyed off the payment amount,
         // not the grand total. Nothing collected now → confirm immediately; never a payment
         // request for 0.00 or an awaiting-payment hold the lapse sweep would later cancel.
-        if ($quote['payment']['amount']->isZero()) {
+        if (! $collectsPayment) {
             if ($reservation->transitionTo(ReservationStatus::CONFIRMED)) {
                 // Everything is committed; a throwing synchronous listener must not turn the
                 // creation into a 500 the admin would retry. The confirmation email can be
-                // resent from the reservation page.
+                // resent from the reservation page. The CP's email switch governs the customer
+                // confirmation here (there is no payment request); the admin email always goes.
                 try {
-                    ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_CP);
+                    ReservationConfirmed::dispatch(
+                        $reservation,
+                        ReservationConfirmed::VIA_CP,
+                        [],
+                        (bool) ($input['send_payment_request_email'] ?? true),
+                    );
                 } catch (\Throwable $e) {
                     Log::error('Manual reservation confirmed but a ReservationConfirmed listener failed.', [
                         'reservation_id' => $reservation->id,
@@ -215,11 +240,12 @@ class ManualReservationCreator
      * when the dispatcher actually sent it (a config-disabled event must not stamp).
      *
      * @throws ManualReservationException when the request would be unusable: no longer
-     *                                    awaiting payment, hold deadline passed, recorded
-     *                                    gateway removed, or an online gateway with no pay
-     *                                    link (payment page unconfigured/unpublished).
+     *                                    awaiting payment, hold deadline or arrival day
+     *                                    passed, recorded gateway removed, or an online
+     *                                    gateway with no pay link (payment page
+     *                                    unconfigured/unpublished).
      */
-    public function sendPaymentRequestEmail(Reservation $reservation): bool
+    public function sendPaymentRequestEmail(Reservation $reservation, bool $deadlineChanged = false): bool
     {
         // Callers pre-check isAwaitingPayment() on a plain read, but a webhook/CP/sweep
         // transition can race the send. Re-read under the row lock (serializes with any
@@ -239,6 +265,13 @@ class ManualReservationCreator
         if ($reservation->holdDeadlinePassed()) {
             throw new ManualReservationException(
                 __('The payment deadline for this reservation has passed, so a payment request cannot be sent.')
+            );
+        }
+
+        // paymentWindowClosed()'s other half: the pay page refuses once the arrival day is over.
+        if ($reservation->arrivalDayPassed()) {
+            throw new ManualReservationException(
+                __('The arrival date for this reservation has passed, so a payment request cannot be sent.')
             );
         }
 
@@ -263,7 +296,7 @@ class ManualReservationCreator
         $sent = app(ReservationEmailDispatcher::class)->send(
             $reservation,
             ReservationEmailEvent::CustomerPaymentRequest,
-            new ReservationPaymentRequest($reservation),
+            new ReservationPaymentRequest($reservation, deadlineChanged: $deadlineChanged),
         );
 
         if ($sent) {
@@ -290,8 +323,8 @@ class ManualReservationCreator
      * @return array{
      *     availability: array{status: bool, available: int, overbook: bool},
      *     rate_id: int,
-     *     pricing: array{base_price: PriceClass, original_base_price: ?string, extras_total: PriceClass, options_total: PriceClass, total: PriceClass, total_overridden: bool},
-     *     payment: array{mode: string, amount: PriceClass, surcharge: PriceClass, amount_with_surcharge: PriceClass, gateways: array, custom_amount_error: ?string},
+     *     pricing: array{base_price: PriceClass, original_base_price: ?string, computed_base_price: PriceClass, computed_total: PriceClass, adjustment: PriceClass, discount: ?PriceClass, extras_total: PriceClass, options_total: PriceClass, total: PriceClass, balance: PriceClass, total_overridden: bool},
+     *     payment: array{mode: string, amount: PriceClass, standard_amount: PriceClass, full_amount: PriceClass, surcharge: PriceClass, amount_with_surcharge: PriceClass, gateways: array, custom_amount_error: ?string},
      *     extras: Collection,
      *     options: Collection,
      * }
@@ -337,6 +370,8 @@ class ManualReservationCreator
         $itemId = $input['item_id'];
         $data = $this->availabilityDataFrom($input);
 
+        $this->assertStayLengthAllowed($data);
+
         // Prune stale pending holds but never this session's own: quoting must not expire the
         // admin's in-progress checkout (same CP-safe pattern as AvailabilityCpController).
         ExpireReservations::dispatchSync(expireSessionHold: false);
@@ -361,25 +396,34 @@ class ManualReservationCreator
             throw new AvailabilityException(__('No pricing was found for the selected dates.'));
         }
 
-        $basePrice = Price::create($pricing['price']);
+        // An overbook bypasses only stock. The availability check it skips is also what guarantees
+        // a priced row for every night, and the pricing lookup sums whatever rows exist — so a
+        // partly unpriced stay would silently be undercharged.
+        if (! $status && ! $this->everyNightIsPriced($itemId, $data['rate_id'])) {
+            throw new ManualReservationException(__('These dates have no price configured for every night of the stay.'), field: 'dates');
+        }
+
+        $computedBasePrice = Price::create($pricing['price']);
+        $basePrice = Price::create($computedBasePrice->format());
 
         $extras = $this->priceExtras($input, $data);
         $options = $this->priceOptions($input, $data);
 
         $extrasTotal = Price::create(0)->add(...$extras->pluck('total')->all());
         $optionsTotal = Price::create(0)->add(...$options->pluck('total')->all());
+        $computedTotal = Price::create($computedBasePrice->format())->add($extrasTotal, $optionsTotal);
 
         $totalOverridden = array_key_exists('total_override', $input) && $input['total_override'] !== null && $input['total_override'] !== '';
 
         if ($totalOverridden) {
-            $total = $this->parseAmount($input['total_override'], __('The overridden total is not a valid amount.'));
+            $total = $this->parseAmount($input['total_override'], __('The overridden total is not a valid amount.'), 'total_override');
             $basePrice = Price::create($total->format())->subtract($extrasTotal, $optionsTotal);
 
             if (Price::create(0)->greaterThan($basePrice)) {
-                throw new ManualReservationException(__('The overridden total cannot be lower than the extras and options total.'));
+                throw new ManualReservationException(__('The overridden total cannot be lower than the extras and options total.'), field: 'total_override');
             }
         } else {
-            $total = Price::create($basePrice->format())->add($extrasTotal, $optionsTotal);
+            $total = Price::create($computedTotal->format());
         }
 
         // The live quote keeps pricing through a rejected custom amount (e.g. a total lowered
@@ -403,6 +447,15 @@ class ManualReservationCreator
             ? $this->gatewayManager->calculateSurcharge($gateway, $amount)
             : Price::create(0);
 
+        // Both choices are always priced so the form can show what each mode would request.
+        $standardAmount = $total->isZero()
+            ? Price::create(0)
+            : $this->standardAmount($input, $basePrice, $total);
+
+        $discount = $pricing['original_price'] !== null
+            ? Price::create($pricing['original_price'])->subtract($computedBasePrice)
+            : null;
+
         return [
             'availability' => [
                 'status' => $status,
@@ -413,14 +466,23 @@ class ManualReservationCreator
             'pricing' => [
                 'base_price' => $basePrice,
                 'original_base_price' => $pricing['original_price'],
+                // What base/total would be without an override; adjustment = total − computed_total.
+                'computed_base_price' => $computedBasePrice,
+                'computed_total' => $computedTotal,
+                'adjustment' => Price::create($total->format())->subtract($computedTotal),
+                'discount' => $discount,
                 'extras_total' => $extrasTotal,
                 'options_total' => $optionsTotal,
                 'total' => $total,
+                // What Resrv will not collect now.
+                'balance' => Price::create($total->format())->subtract($amount),
                 'total_overridden' => $totalOverridden,
             ],
             'payment' => [
                 'mode' => $this->paymentMode($input)->value,
                 'amount' => $amount,
+                'standard_amount' => $standardAmount,
+                'full_amount' => Price::create($total->format()),
                 'surcharge' => $surcharge,
                 'amount_with_surcharge' => Price::create($amount->format())->add($surcharge),
                 'gateways' => $this->perGatewayAmounts($amount),
@@ -455,6 +517,11 @@ class ManualReservationCreator
         };
     }
 
+    /**
+     * Capped at the total: a fixed deposit can exceed a total lowered by an override, and the
+     * request must never ask for more than the booking costs (custom amounts are bounded the
+     * same way). The frontend checkout keeps its unclamped calculatePayment().
+     */
     protected function standardAmount(array $input, PriceClass $basePrice, PriceClass $total): PriceClass
     {
         if (config('resrv-config.payment') === 'everything'
@@ -462,7 +529,9 @@ class ManualReservationCreator
             return Price::create($total->format());
         }
 
-        return $this->calculatePayment(Price::create($basePrice->format()));
+        $amount = $this->calculatePayment(Price::create($basePrice->format()));
+
+        return $amount->greaterThan($total) ? Price::create($total->format()) : $amount;
     }
 
     /**
@@ -475,20 +544,20 @@ class ManualReservationCreator
 
         if ($raw === null || $raw === '') {
             if ($requireAmount) {
-                throw new ManualReservationException(__('A custom amount is required for the custom payment mode.'));
+                throw new ManualReservationException(__('A custom amount is required for the custom payment mode.'), field: 'custom_amount');
             }
 
             return Price::create(0);
         }
 
-        $amount = $this->parseAmount($raw, __('The custom amount is not a valid amount.'));
+        $amount = $this->parseAmount($raw, __('The custom amount is not a valid amount.'), 'custom_amount');
 
         if ($amount->isZero() || Price::create(0)->greaterThan($amount)) {
-            throw new ManualReservationException(__('The custom amount must be greater than zero.'));
+            throw new ManualReservationException(__('The custom amount must be greater than zero.'), field: 'custom_amount');
         }
 
         if ($amount->greaterThan($total)) {
-            throw new ManualReservationException(__('The custom amount cannot exceed the reservation total.'));
+            throw new ManualReservationException(__('The custom amount cannot exceed the reservation total.'), field: 'custom_amount');
         }
 
         return $amount;
@@ -498,13 +567,78 @@ class ManualReservationCreator
      * The HTTP layer's `numeric` rule accepts values moneyphp's parser does not (scientific
      * notation, excess decimals) — surface parse failures as a 422 domain error, not a 500.
      */
-    protected function parseAmount(string|int|float $raw, string $message): PriceClass
+    protected function parseAmount(string|int|float $raw, string $message, ?string $field = null): PriceClass
     {
         try {
             return Price::create($raw);
         } catch (\Throwable) {
-            throw new ManualReservationException($message);
+            throw new ManualReservationException($message, field: $field);
         }
+    }
+
+    /**
+     * The store request may carry the total and amount the admin was shown. Anything that moved
+     * since (another admin's price edit, a dynamic pricing expiring, the free-cancellation window
+     * closing at midnight) must re-quote instead of persisting and emailing different figures.
+     *
+     * @throws ManualReservationException
+     */
+    protected function assertQuoteMatchesWhatWasShown(array $input, array $quote): void
+    {
+        $checks = [
+            'expected_total' => $quote['pricing']['total'],
+            'expected_amount' => $quote['payment']['amount'],
+        ];
+
+        foreach ($checks as $key => $actual) {
+            $expected = $input[$key] ?? null;
+
+            if ($expected === null || $expected === '') {
+                continue;
+            }
+
+            try {
+                $matches = Price::create($expected)->equals($actual);
+            } catch (\Throwable) {
+                $matches = false;
+            }
+
+            if (! $matches) {
+                throw new ManualReservationException(
+                    __('The price changed since it was last shown — review the updated figures and create again.'),
+                    reason: 'price_changed',
+                );
+            }
+        }
+    }
+
+    /**
+     * The availability engine enforces the same limits (checkDurationValidity()), but with
+     * customer-facing wording; measured the same way so both agree on the night count.
+     *
+     * @throws ManualReservationException
+     */
+    protected function assertStayLengthAllowed(array $data): void
+    {
+        $this->initiateAvailabilityUnsafe($data);
+
+        $maximum = config('resrv-config.maximum_reservation_period_in_days');
+        $minimum = config('resrv-config.minimum_reservation_period_in_days');
+
+        if (is_numeric($maximum) && $this->duration > (int) $maximum) {
+            throw new ManualReservationException(__('The stay is longer than the maximum of :days nights.', ['days' => (int) $maximum]), field: 'dates');
+        }
+
+        if (is_numeric($minimum) && $this->duration < (int) $minimum) {
+            throw new ManualReservationException(__('The stay is shorter than the minimum of :days nights.', ['days' => (int) $minimum]), field: 'dates');
+        }
+    }
+
+    /** Whether every night of the initiated stay has a priced row for the rate (its base pool for shared rates). */
+    protected function everyNightIsPriced(string $itemId, int $rateId): bool
+    {
+        return app(AvailabilityRepository::class)
+            ->itemPricedNightCount($this->date_start, $this->date_end, $itemId, $rateId) >= $this->duration;
     }
 
     /**
@@ -548,7 +682,7 @@ class ManualReservationCreator
             $rate = Rate::published()->find($rateId);
 
             if (! $rate || ! $rate->appliesToEntry($itemId)) {
-                throw new ManualReservationException(__('The selected rate is not available for this entry.'));
+                throw new ManualReservationException(__('The selected rate is not available for this entry.'), field: 'rate_id');
             }
 
             return $rateId;
@@ -557,7 +691,7 @@ class ManualReservationCreator
         $rate = Rate::forEntry($itemId)->published()->orderBy('order')->first();
 
         if (! $rate) {
-            throw new ManualReservationException(__('There is no published rate available for this entry.'));
+            throw new ManualReservationException(__('There is no published rate available for this entry.'), field: 'rate_id');
         }
 
         return $rate->id;
@@ -577,14 +711,14 @@ class ManualReservationCreator
         $entry = Entry::query()->itemId((string) $input['item_id'])->first();
 
         if ($entry === null || $entry->isDisabled()) {
-            throw new AvailabilityException(__('This entry is not enabled for reservations.'));
+            throw new ManualReservationException(__('This entry is not enabled for reservations.'));
         }
 
         $rateId = $this->rateIdFrom($input);
         $rate = $rateId !== null ? Rate::published()->find($rateId) : null;
 
         if (! $rate || ! $rate->appliesToEntry((string) $input['item_id'])) {
-            throw new ManualReservationException(__('The selected rate is not available for this entry.'));
+            throw new ManualReservationException(__('The selected rate is not available for this entry.'), field: 'rate_id');
         }
 
         $this->initiateAvailabilityUnsafe($this->availabilityDataFrom($input));
@@ -592,7 +726,7 @@ class ManualReservationCreator
         if (! $rate->isAvailableForDates($this->date_start, $this->date_end)
             || ! $rate->meetsStayRestrictions($this->duration)
             || ! $rate->meetsBookingLeadTime($this->date_start)) {
-            throw new ManualReservationException(__('The selected rate does not allow these dates.'));
+            throw new ManualReservationException(__('The selected rate does not allow these dates.'), field: 'dates');
         }
     }
 
@@ -611,7 +745,8 @@ class ManualReservationCreator
             && ! $instance->supportsManualConfirmation()
             && ! $instance->supportsWebhooks()) {
             throw new ManualReservationException(
-                __('This payment method cannot confirm online payments, so it cannot be used to collect a payment.')
+                __('This payment method cannot confirm online payments, so it cannot be used to collect a payment.'),
+                field: 'payment_gateway',
             );
         }
 
@@ -622,13 +757,15 @@ class ManualReservationCreator
             && Reservation::resolveCustomerPageEntry(config('resrv-config.manual_reservations_payment_entry')) === null
             && ! $instance->supportsManualConfirmation()) {
             throw new ManualReservationException(
-                __('The payment page entry is not configured, so only payment methods that support manual confirmation can be used.')
+                __('The payment page entry is not configured, so only payment methods that support manual confirmation can be used.'),
+                field: 'payment_gateway',
             );
         }
 
         if (! $amount->isZero() && ! $this->gatewayManager->isAvailableFor($gateway, $amount)) {
             throw new ManualReservationException(
-                __('The requested amount is outside the allowed limits for this payment method.')
+                __('The requested amount is outside the allowed limits for this payment method.'),
+                field: 'payment_gateway',
             );
         }
     }
@@ -658,21 +795,21 @@ class ManualReservationCreator
                 ->find($id);
 
             if (! $extra) {
-                throw new ManualReservationException(__('The selected extra does not belong to this entry.'));
+                throw new ManualReservationException(__('The selected extra does not belong to this entry.'), field: 'extras');
             }
 
             if ($quantity < 1) {
-                throw new ManualReservationException(__('The extra quantity must be at least 1.'));
+                throw new ManualReservationException(__('The extra quantity must be at least 1.'), field: 'extras');
             }
 
             // Non-multiple extras carry no maximum, so the cap below alone would accept any
             // quantity — cap them at one unit like the create form does.
             if (! $extra->allow_multiple && $quantity > 1) {
-                throw new ManualReservationException(__('The extra ":name" cannot be added more than once.', ['name' => $extra->name]));
+                throw new ManualReservationException(__('The extra ":name" cannot be added more than once.', ['name' => $extra->name]), field: 'extras');
             }
 
             if ($extra->maximum > 0 && $quantity > $extra->maximum) {
-                throw new ManualReservationException(__('The selected quantity exceeds the maximum allowed for this extra.'));
+                throw new ManualReservationException(__('The selected quantity exceeds the maximum allowed for this extra.'), field: 'extras');
             }
 
             try {
@@ -685,7 +822,7 @@ class ManualReservationCreator
             } catch (\Throwable $e) {
                 // A custom-priced extra throws when its driving customer field is absent or
                 // non-numeric — surface as a 422 domain error, not a 500.
-                throw new ManualReservationException(__('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $extra->name]));
+                throw new ManualReservationException(__('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $extra->name]), field: 'extras');
             }
 
             // Both are snapshotted on the pivot: the unit price the form listed, and the line
@@ -715,13 +852,13 @@ class ManualReservationCreator
             $option = Option::entry($input['item_id'])->where('published', true)->find($id);
 
             if (! $option) {
-                throw new ManualReservationException(__('The selected option does not belong to this entry.'));
+                throw new ManualReservationException(__('The selected option does not belong to this entry.'), field: 'options');
             }
 
             // calculatePrice() resolves values withTrashed() for historical reservations —
             // a NEW reservation must only accept published, non-trashed values still on offer.
             if (! $option->values()->where('published', true)->whereKey($value)->exists()) {
-                throw new ManualReservationException(__('The selected option value is no longer available.'));
+                throw new ManualReservationException(__('The selected option value is no longer available.'), field: 'options');
             }
 
             return [$id => [
@@ -738,29 +875,84 @@ class ManualReservationCreator
      */
     protected function assertRequiredExtrasAndOptions(array $input): void
     {
-        $data = array_merge($this->availabilityDataFrom($input), [
-            'extras' => collect($input['extras'] ?? []),
-            'options' => collect($input['options'] ?? []),
-        ]);
+        $missing = (new ExtraCondition)->hasRequiredExtrasSelected($input['item_id'], $this->conditionDataFrom($input));
 
-        $required = (new ExtraCondition)->hasRequiredExtrasSelected($input['item_id'], $data);
-
-        if ($required !== true) {
-            throw new ExtrasException($required->map(
-                fn ($messages, $extraId) => 'ID '.$extraId.' '.$messages->implode(' ')
-            )->implode(', '));
+        if ($missing !== true) {
+            throw new ExtrasException(__('Add the required extras: :extras.', [
+                'extras' => $this->extraNames($missing->keys())->implode(', '),
+            ]));
         }
-
-        $requiredOptionIds = Option::entry($input['item_id'])
-            ->where('published', true)
-            ->where('required', true)
-            ->pluck('id');
 
         $selected = collect($input['options'] ?? [])->pluck('id')->map(fn ($id) => (int) $id);
 
-        if (! $requiredOptionIds->every(fn ($id) => $selected->contains((int) $id))) {
-            throw new OptionsException(__('There are required options you did not select.'));
+        $missingOptions = Option::entry($input['item_id'])
+            ->where('published', true)
+            ->where('required', true)
+            ->get(['id', 'name'])
+            ->reject(fn ($option) => $selected->contains((int) $option->id));
+
+        if ($missingOptions->isNotEmpty()) {
+            throw new OptionsException(__('Select a value for: :options.', [
+                'options' => $missingOptions->pluck('name')->implode(', '),
+            ]));
         }
+    }
+
+    /**
+     * Extras the entry's conditions require for this stay and selection (the same rules the
+     * frontend extras step and creation enforce), each with a CP explanation of why.
+     *
+     * @return Collection<int, ?string> reason keyed by extra id
+     */
+    public function requiredExtras(array $input): Collection
+    {
+        return (new ExtraCondition)
+            ->requiredConditionsThatApply($input['item_id'], $this->conditionDataFrom($input))
+            ->map(fn (Collection $conditions) => $conditions
+                ->map(fn ($condition) => $this->requiredReason($condition))
+                ->filter()
+                ->unique()
+                ->implode(' ') ?: null);
+    }
+
+    protected function requiredReason(object $condition): ?string
+    {
+        $value = $condition->value ?? null;
+
+        return match ($condition->type ?? null) {
+            'always' => __('Always required for this entry.'),
+            'pickup_time' => __('Required for this start time.'),
+            'dropoff_time' => __('Required for this end time.'),
+            'reservation_dates' => __('Required for these dates.'),
+            'reservation_duration' => __('Required for this length of stay.'),
+            'extra_selected' => __('Required because :extra is selected.', ['extra' => $this->extraNames(collect([$value]))->first()]),
+            'extra_not_selected' => __('Required unless :extra is selected.', ['extra' => $this->extraNames(collect([$value]))->first()]),
+            'extra_in_category_selected' => __('Required because an extra from :category is selected.', ['category' => $this->categoryName($value)]),
+            'no_extra_in_category_selected' => __('Required unless an extra from :category is selected.', ['category' => $this->categoryName($value)]),
+            default => null,
+        };
+    }
+
+    /** @return Collection<int, string> names in the given id order, falling back to "#id" */
+    protected function extraNames(Collection $ids): Collection
+    {
+        $names = Extra::withTrashed()->whereIn('id', $ids->filter()->all())->pluck('name', 'id');
+
+        return $ids->map(fn ($id) => $names->get($id) ?? '#'.$id)->values();
+    }
+
+    protected function categoryName($id): string
+    {
+        return ExtraCategory::find($id)?->name ?? '#'.$id;
+    }
+
+    /** The data shape ExtraCondition evaluates: the stay plus the current extras/options selection. */
+    protected function conditionDataFrom(array $input): array
+    {
+        return array_merge($this->availabilityDataFrom($input), [
+            'extras' => collect($input['extras'] ?? []),
+            'options' => collect($input['options'] ?? []),
+        ]);
     }
 
     protected function createCustomer(array $input): ?Customer

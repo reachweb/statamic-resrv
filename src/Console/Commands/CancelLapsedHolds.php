@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled as ReservationCancelledEvent;
+use Reach\StatamicResrv\Exceptions\HoldNoLongerLapsed;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
@@ -62,6 +63,11 @@ class CancelLapsedHolds extends Command
                             $fresh->id,
                         );
                     }
+
+                    // Extend-hold can move or remove the deadline after the candidate query read it.
+                    if (! $fresh->holdDeadlinePassed()) {
+                        throw new HoldNoLongerLapsed($fresh->id);
+                    }
                 },
                 cancelOpenIntent: true,
             );
@@ -70,6 +76,12 @@ class CancelLapsedHolds extends Command
             Log::info('Skipped lapsed-hold cancellation: the reservation changed state first.', [
                 'reservation_id' => $reservation->id,
                 'status' => $e->from->value,
+            ]);
+
+            return false;
+        } catch (HoldNoLongerLapsed) {
+            Log::info('Skipped lapsed-hold cancellation: the hold was extended before the sweep reached it.', [
+                'reservation_id' => $reservation->id,
             ]);
 
             return false;

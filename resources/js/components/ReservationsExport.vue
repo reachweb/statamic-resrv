@@ -15,9 +15,8 @@
                             v-for="status in statuses"
                             :key="status"
                             :value="status"
-                        >
-                            <span class="capitalize">{{ status }}</span>
-                        </Checkbox>
+                            :label="statusLabels[status] ?? __(statusName(status))"
+                        />
                     </CheckboxGroup>
                     <Checkbox
                         v-model="withCustomerData"
@@ -116,6 +115,7 @@ import axios from 'axios';
 import dayjs from 'dayjs';
 import { useDateRangeModel } from '../composables/useDateRangeModel.js';
 import { useToast } from '../composables/useToast.js';
+import { statusName } from '../composables/useReservationDisplay.js';
 
 const STORAGE_KEY = 'resrv-export-selected-fields';
 
@@ -124,6 +124,7 @@ const props = defineProps({
     downloadUrl: { type: String, required: true },
     fields: { type: Array, default: () => [] },
     statuses: { type: Array, default: () => [] },
+    statusLabels: { type: Object, default: () => ({}) },
     entries: { type: Array, default: () => [] },
     affiliates: { type: Array, default: () => [] },
 });

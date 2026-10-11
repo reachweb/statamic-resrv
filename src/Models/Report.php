@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
@@ -43,6 +44,29 @@ class Report
                     });
             })
             ->get();
+    }
+
+    /**
+     * Awaiting-payment (manual) bookings in the same window and date field: how many, and the sum
+     * of the amounts their payment requests ask for. Kept apart from $this->reservations so
+     * revenue, averages and percentages stay what was actually collected.
+     *
+     * @return array{count: int, amount: PriceClass}
+     */
+    public function outstanding(): array
+    {
+        $awaiting = Reservation::whereDate($this->dateField, '>=', $this->date_start)
+            ->whereDate($this->dateField, '<=', $this->date_end)
+            ->where('status', ReservationStatus::AWAITING_PAYMENT->value)
+            ->get(['id', 'payment']);
+
+        return [
+            'count' => $awaiting->count(),
+            'amount' => $awaiting->reduce(
+                fn (PriceClass $carry, $reservation) => $carry->add($reservation->payment),
+                Price::create(0)
+            ),
+        ];
     }
 
     public function countReservations()

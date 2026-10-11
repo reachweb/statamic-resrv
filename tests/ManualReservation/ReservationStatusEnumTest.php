@@ -64,8 +64,9 @@ class ReservationStatusEnumTest extends TestCase
     {
         $this->assertFalse(ReservationStatus::AWAITING_PAYMENT->isTerminal());
         $this->assertNotContains(ReservationStatus::AWAITING_PAYMENT->value, ReservationStatus::live());
-        // Its hold releases stock asynchronously, so it must block absolute availability edits like PENDING.
-        $this->assertContains(ReservationStatus::AWAITING_PAYMENT->value, ReservationStatus::inFlight());
+        // A manual hold has no deadline by default and releases like a confirmed booking's refund, so
+        // it must not freeze absolute availability edits the way a minutes-long checkout hold does.
+        $this->assertNotContains(ReservationStatus::AWAITING_PAYMENT->value, ReservationStatus::inFlight());
         $this->assertNotContains(ReservationStatus::AWAITING_PAYMENT->value, ReservationStatus::terminal());
     }
 

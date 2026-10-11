@@ -653,13 +653,17 @@ class AvailabilityCpController extends Controller
 
         // Only block on inventory changes — price-only edits don't disturb the available/pending
         // invariant. And only in-flight checkouts block: their asynchronous expiry would release
-        // +quantity on top of the admin's absolute value. Confirmed bookings keep their hold key
-        // for life, so blocking on them would make any date with a booking permanently uneditable.
-        if (! is_null($data['available']) && ActiveReservationsGuard::hasInFlightReservationsForRange(
+        // +quantity on top of the admin's absolute value. Confirmed bookings and manual holds keep
+        // their hold key until refunded/cancelled, so blocking on them would freeze the dates.
+        $blocking = is_null($data['available']) ? [] : ActiveReservationsGuard::inFlightReservationReferencesForRange(
             $data['statamic_id'], $data['date_start'], $data['date_end'], [$resolvedRateId]
-        )) {
+        );
+
+        if ($blocking !== []) {
             throw new HttpResponseException(response()->json([
-                'message' => __('Cannot edit availability while reservations are pending for this date range.'),
+                'message' => __('Cannot edit availability while checkouts are in progress for this date range (:references). Try again once they complete or expire.', [
+                    'references' => implode(', ', $blocking),
+                ]),
             ], 422));
         }
 

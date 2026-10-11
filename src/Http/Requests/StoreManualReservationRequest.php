@@ -26,11 +26,35 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
             // ManualReservationCreator::requestedAmount(), which knows the total.
             'custom_amount' => 'nullable|numeric',
             'affects_availability' => 'sometimes|boolean',
-            'hold_days' => 'nullable|integer|min:1',
+            // Optional explicit switch: when sent and on, a blank day count is an error rather
+            // than silently meaning "no hold".
+            'hold_enabled' => 'sometimes|boolean',
+            'hold_days' => 'nullable|integer|min:1|max:365|required_if_accepted:hold_enabled',
             'send_payment_request_email' => 'sometimes|boolean',
             'affiliate_id' => 'nullable|integer',
             'customer' => 'required|array',
             'customer.email' => 'required|email',
+            // Retries with the same key (same admin) return the first reservation instead of a duplicate.
+            'idempotency_key' => 'nullable|string|max:100',
+            // The figures the admin was shown; a recomputed quote that differs is refused.
+            'expected_total' => 'nullable|numeric',
+            'expected_amount' => 'nullable|numeric',
+        ]);
+    }
+
+    /** @return array<string, string> */
+    public function messages(): array
+    {
+        return array_merge(parent::messages(), [
+            'payment_gateway.in' => __('Choose a valid payment method.'),
+            'hold_days.integer' => __('Enter the hold as a whole number of days.'),
+            'hold_days.min' => __('Hold the reservation for at least 1 day.'),
+            'hold_days.max' => __('Hold the reservation for at most :max days.'),
+            'hold_days.required_if_accepted' => __('Enter the number of days to hold the reservation.'),
+            'customer.required' => __('Enter the customer details.'),
+            'customer.email.required' => __("Enter the customer's email address."),
+            // Every email-rule form field (email, repeat_email, …) shares one wording.
+            'customer.*.email' => __('Enter a valid email address.'),
         ]);
     }
 

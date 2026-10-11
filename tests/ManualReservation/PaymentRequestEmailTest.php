@@ -13,6 +13,10 @@ use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
+use Reach\StatamicResrv\Models\Customer;
+use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\Option;
+use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ManualReservationCreator;
@@ -94,6 +98,11 @@ class PaymentRequestEmailTest extends TestCase
         $this->assertStringContainsString('110.00', $html);
         $this->assertStringContainsString('ref='.$reservation->reference, $html);
         $this->assertStringContainsString('Pay now', $html);
+
+        // The surcharge explains the gap between Total and Amount to pay; a full request leaves no balance.
+        $this->assertStringContainsString('Payment surcharge', $html);
+        $this->assertStringNotContainsString('Remaining amount', $html);
+        $this->assertStringContainsString('Hi Test,', $html);
     }
 
     public function test_create_with_the_toggle_off_sends_nothing_and_leaves_no_stamp()
@@ -124,6 +133,271 @@ class PaymentRequestEmailTest extends TestCase
         $this->assertStringNotContainsString('Pay now', $html);
         $this->assertStringContainsString('as soon as your payment arrives', $html);
         $this->assertStringContainsString($reservation->reference, $html);
+
+        // Without the instructions setting the email says payment is arranged directly and never promises instructions.
+        $this->assertStringContainsString('payment is arranged directly with us', $html);
+        $this->assertStringContainsString('quoting the booking reference '.$reservation->reference, $html);
+        $this->assertStringNotContainsString('How to pay', $html);
+    }
+
+    public function test_offline_instructions_setting_renders_escaped_with_line_breaks()
+    {
+        Mail::fake();
+        Config::set('resrv-config.manual_reservations_offline_instructions', "Bank: ACME <b>Ltd</b>\r\nIBAN: GR12 3456");
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        $offline = $this->creator()->create($this->baseInput($entry, [
+            'payment_gateway' => 'offline',
+            'send_payment_request_email' => false,
+        ]));
+
+        $html = (new ReservationPaymentRequest($offline))->render();
+        $this->assertStringContainsString('How to pay', $html);
+        $this->assertStringContainsString("Bank: ACME &lt;b&gt;Ltd&lt;/b&gt;<br>\nIBAN: GR12 3456", $html);
+        $this->assertStringNotContainsString('<b>Ltd</b>', $html);
+        $this->assertStringContainsString('Please include the booking reference '.$offline->reference.' with your payment.', $html);
+        $this->assertStringNotContainsString('payment is arranged directly with us', $html);
+
+        // Online requests carry the pay link, never the offline instructions.
+        $online = $this->creator()->create($this->baseInput($entry, [
+            'send_payment_request_email' => false,
+        ]));
+
+        $html = (new ReservationPaymentRequest($online))->render();
+        $this->assertStringNotContainsString('IBAN: GR12 3456', $html);
+        $this->assertStringContainsString('Pay now', $html);
+    }
+
+    public function test_offline_instructions_stay_literal_text_in_both_parts()
+    {
+        Config::set('resrv-config.manual_reservations_offline_instructions', "1. Transfer to *ACME* [here](https://x.test)\n- IBAN: GR12 & co\n\n# Quote your reference");
+
+        $reservation = $this->offlineReservationForRender();
+
+        $mail = new ReservationPaymentRequest($reservation);
+        $html = $mail->render();
+
+        // Same literal text as the pay page: no list, emphasis, link or heading parsing.
+        $this->assertStringContainsString('1. Transfer to *ACME* [here](https://x.test)<br>', $html);
+        $this->assertStringContainsString('- IBAN: GR12 &amp; co<br>', $html);
+        $this->assertStringContainsString('# Quote your reference', $html);
+        $this->assertStringNotContainsString('<em>ACME</em>', $html);
+        $this->assertStringNotContainsString('href="https://x.test"', $html);
+        $this->assertStringNotContainsString('<ol', $html);
+        $this->assertStringNotContainsString('<h1', $html);
+
+        // The plain-text alternative keeps one instruction per line.
+        (new ReservationPaymentRequest($reservation))->assertSeeInText("1. Transfer to *ACME* [here](https://x.test)\n- IBAN: GR12 & co\n");
+    }
+
+    public function test_plain_text_part_keeps_the_instruction_lines_apart()
+    {
+        Config::set('resrv-config.manual_reservations_offline_instructions', "Bank: Example Bank S.A.\nIBAN: GR16 0110 1250\nPlease quote your reference.");
+
+        (new ReservationPaymentRequest($this->offlineReservationForRender()))
+            ->assertSeeInText("Bank: Example Bank S.A.\nIBAN: GR16 0110 1250\nPlease quote your reference.")
+            ->assertDontSeeInText('S.A.IBAN');
+    }
+
+    public function test_the_deadline_carries_its_time_zone()
+    {
+        $reservation = $this->offlineReservationForRender([
+            'hold_expires_at' => now()->addDay()->setTime(20, 50),
+            'date_start' => now()->addDays(5)->setTime(12, 0),
+            'date_end' => now()->addDays(7)->setTime(12, 0),
+        ]);
+
+        $html = $this->withoutInlineStyles((new ReservationPaymentRequest($reservation))->render());
+
+        $this->assertStringContainsString('Please pay by: <strong>'.$reservation->hold_expires_at->format('d-m-Y H:i T').'</strong>', $html);
+    }
+
+    public function test_please_pay_by_names_the_end_of_the_arrival_day_when_it_comes_first()
+    {
+        $arrival = now()->addDay()->setTime(12, 0);
+        $reservation = $this->offlineReservationForRender([
+            'hold_expires_at' => now()->addDays(5)->setTime(9, 0),
+            'date_start' => $arrival,
+            'date_end' => $arrival->copy()->addDays(2),
+        ]);
+
+        $html = $this->withoutInlineStyles((new ReservationPaymentRequest($reservation))->render());
+
+        // Payment closes when the arrival day ends, so the later hold deadline must not be promised.
+        $this->assertStringContainsString('Please pay by the end of your arrival day: <strong>'.$arrival->copy()->endOfDay()->format('d-m-Y H:i T').'</strong>', $html);
+        $this->assertStringNotContainsString($reservation->hold_expires_at->format('d-m-Y H:i'), $html);
+    }
+
+    public function test_a_first_request_introduces_the_reservation()
+    {
+        $reservation = $this->offlineReservationForRender([
+            'hold_expires_at' => now()->addDays(2)->setTime(18, 0),
+            'payment_request_email_sent_at' => null,
+        ]);
+
+        $mail = new ReservationPaymentRequest($reservation);
+        $html = $mail->render();
+
+        $this->assertFalse($mail->reminder);
+        $this->assertStringContainsString('We have created a reservation for you.', $html);
+        $this->assertStringNotContainsString('for your reservation again', $html);
+    }
+
+    public function test_a_repeat_request_reads_as_a_reminder_with_the_current_deadline()
+    {
+        $reservation = $this->offlineReservationForRender([
+            'payment_gateway' => 'fake',
+            'hold_expires_at' => now()->addDays(2)->setTime(18, 0),
+            'payment_request_email_sent_at' => now()->subDay(),
+        ]);
+
+        $html = (new ReservationPaymentRequest($reservation))->render();
+
+        // A plain resend: the deadline did not change, so the panel's "Please pay by" carries it.
+        $this->assertStringContainsString('Here is the payment link for your reservation again.', $html);
+        $this->assertStringNotContainsString('Your payment deadline is now', $html);
+        $this->assertStringContainsString($reservation->hold_expires_at->format('d-m-Y H:i T'), $html);
+        $this->assertStringNotContainsString('We have created a reservation for you.', $html);
+
+        $html = (new ReservationPaymentRequest($reservation, deadlineChanged: true))->render();
+        $this->assertStringContainsString('Your payment deadline is now '.$reservation->hold_expires_at->format('d-m-Y H:i T').'.', $html);
+
+        // Offline reminders have no link to repeat; without a deadline they ask for the payment.
+        $reservation->update(['payment_gateway' => 'offline', 'hold_expires_at' => null]);
+
+        $html = (new ReservationPaymentRequest($reservation->fresh()))->render();
+
+        $this->assertStringContainsString('Here are the payment details for your reservation again.', $html);
+        $this->assertStringContainsString('Please complete the payment to confirm it.', $html);
+        $this->assertStringNotContainsString('Your payment deadline is now', $html);
+    }
+
+    public function test_an_explicit_flag_overrides_the_stamp()
+    {
+        $reservation = $this->offlineReservationForRender(['payment_request_email_sent_at' => now()->subDay()]);
+
+        $html = (new ReservationPaymentRequest($reservation, reminder: false))->render();
+
+        $this->assertStringContainsString('We have created a reservation for you.', $html);
+    }
+
+    public function test_the_resend_endpoint_sends_a_reminder_after_the_first_request()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $reservation = $this->creator()->create($this->baseInput($entry, ['hold_days' => 2]));
+
+        // The first send is captured before the stamp, so it never reads as a reminder.
+        Mail::assertSent(ReservationPaymentRequest::class, fn ($mail) => $mail->reminder === false);
+
+        $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
+            ->assertOk();
+
+        Mail::assertSent(ReservationPaymentRequest::class, 2);
+        Mail::assertSent(ReservationPaymentRequest::class, fn ($mail) => $mail->reminder === true && $mail->deadlineChanged === false);
+    }
+
+    public function test_extending_the_hold_with_a_resend_tells_the_customer_the_new_deadline()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $reservation = $this->creator()->create($this->baseInput($entry));
+
+        $this->postJson(cp_route('resrv.reservation.extendHold', ['id' => $reservation->id]), [
+            'hold_days' => 1,
+            'resend' => true,
+        ])->assertOk();
+
+        $deadline = $reservation->fresh()->hold_expires_at;
+        $this->assertNotNull($deadline);
+
+        $reminder = Mail::sent(ReservationPaymentRequest::class)->last();
+        $this->assertTrue($reminder->reminder);
+        $this->assertTrue($reminder->deadlineChanged);
+
+        $html = $this->withoutInlineStyles($reminder->render());
+        $this->assertStringContainsString('Your payment deadline is now '.$deadline->format('d-m-Y H:i T').'.', $html);
+        $this->assertStringContainsString('Please pay by: <strong>'.$deadline->format('d-m-Y H:i T').'</strong>', $html);
+        $this->assertStringNotContainsString('We have created a reservation for you.', $html);
+    }
+
+    private function offlineReservationForRender(array $attributes = []): Reservation
+    {
+        $item = $this->makeStatamicItem();
+
+        return Reservation::factory()->create(array_merge([
+            'status' => 'awaiting_payment',
+            'item_id' => $item->id(),
+            'customer_id' => Customer::factory()->create()->id,
+            'payment' => 30,
+            'payment_surcharge' => 0,
+            'total' => 30,
+            'payment_gateway' => 'offline',
+            'date_start' => now()->addDays(10)->setTime(12, 0),
+            'date_end' => now()->addDays(12)->setTime(12, 0),
+        ], $attributes));
+    }
+
+    private function withoutInlineStyles(string $html): string
+    {
+        return preg_replace('/ style="[^"]*"/', '', $html);
+    }
+
+    public function test_the_email_lists_extras_options_and_the_remaining_amount()
+    {
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory()->create([
+            'status' => 'awaiting_payment',
+            'item_id' => $item->id(),
+            'customer_id' => Customer::factory()->create(['data' => collect(['first_name' => 'Maria'])])->id,
+            'payment' => 30,
+            'payment_surcharge' => 0,
+            'total' => 90,
+            'payment_gateway' => 'offline',
+        ]);
+
+        $extra = Extra::factory()->create(['name' => 'High chair']);
+        $reservation->extras()->attach($extra->id, ['quantity' => 2, 'price' => 10]);
+
+        $option = Option::factory()->create(['name' => 'Seating', 'item_id' => $item->id()]);
+        $value = OptionValue::factory()->create(['option_id' => $option->id, 'name' => 'Outside']);
+        $reservation->options()->attach($option->id, ['value' => $value->id]);
+
+        $html = (new ReservationPaymentRequest($reservation))->render();
+
+        $this->assertStringContainsString('Hi Maria,', $html);
+        $this->assertStringContainsString('High chair', $html);
+        $this->assertStringContainsString('x2', $html);
+        $this->assertStringContainsString('Seating', $html);
+        $this->assertStringContainsString('Outside', $html);
+        $this->assertStringContainsString('Remaining amount', $html);
+        $this->assertStringContainsString('60.00', $html);
+        $this->assertStringNotContainsString('Payment surcharge', $html);
+    }
+
+    public function test_no_greeting_without_a_first_name()
+    {
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory()->create([
+            'status' => 'awaiting_payment',
+            'item_id' => $item->id(),
+            'customer_id' => Customer::factory()->create(['data' => collect(['last_name' => 'Doe'])])->id,
+            'payment' => 30,
+            'total' => 30,
+            'payment_gateway' => 'offline',
+        ]);
+
+        $html = (new ReservationPaymentRequest($reservation))->render();
+
+        $this->assertStringNotContainsString('Hi ', $html);
+        $this->assertStringContainsString('We have created a reservation for you.', $html);
     }
 
     public function test_disabled_event_config_sends_nothing_and_leaves_no_stamp()
@@ -274,6 +548,30 @@ class PaymentRequestEmailTest extends TestCase
         $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
             ->assertStatus(422)
             ->assertJsonPath('error', 'The payment deadline for this reservation has passed, so a payment request cannot be sent.');
+
+        Mail::assertNotSent(ReservationPaymentRequest::class);
+        $this->assertNull($reservation->fresh()->payment_request_email_sent_at);
+    }
+
+    public function test_resend_endpoint_rejects_once_the_arrival_day_has_passed()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+        $this->withExceptionHandling();
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'send_payment_request_email' => false,
+        ]));
+
+        // No deadline, but the stay has begun: the pay page refuses the link, so the resend must refuse too.
+        Reservation::whereKey($reservation->id)->update([
+            'date_start' => now()->subDays(2)->startOfDay(),
+            'date_end' => now()->addDay()->startOfDay(),
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
+            ->assertStatus(422);
 
         Mail::assertNotSent(ReservationPaymentRequest::class);
         $this->assertNull($reservation->fresh()->payment_request_email_sent_at);

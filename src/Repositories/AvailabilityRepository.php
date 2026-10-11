@@ -134,6 +134,22 @@ class AvailabilityRepository
     }
 
     /**
+     * Distinct nights in [date_start, date_end) that have a priced row for the rate (its base
+     * pool for shared rates) — the completeness check itemPricesBetween() lacks.
+     */
+    public function itemPricedNightCount(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): int
+    {
+        return Availability::query()
+            ->where('statamic_id', $statamic_id)
+            ->where('date', '>=', $date_start)
+            ->where('date', '<', $date_end)
+            ->whereNotNull('price')
+            ->when($rateId, fn (Builder $query, int $rateId) => $this->applyRateFilter($query, $rateId))
+            ->distinct()
+            ->count('date');
+    }
+
+    /**
      * Validates that every required day in date_start..date_end has a priced availability row.
      *
      * $onlyDays (0=Sun..6=Sat) limits the required days to those weekdays, matching the controller

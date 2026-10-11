@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 
@@ -144,6 +145,15 @@ class FakePaymentGateway implements PaymentInterface
     public function refund($reservation)
     {
         $this->refundCalls[] = $reservation->id;
+
+        // Like Stripe, a refund needs a successful (or settling) charge: an intent cancelled here,
+        // or one the test reports as never paid, is rejected instead of silently "refunded".
+        $paymentId = (string) $reservation->payment_id;
+
+        if (in_array($paymentId, $this->canceledIds, true)
+            || ($this->retrievedIntentStatus !== null && ! in_array($this->retrievedIntentStatus, ['succeeded', 'processing'], true))) {
+            throw new RefundFailedException("This PaymentIntent ({$paymentId}) does not have a successful charge to refund.");
+        }
 
         if ($this->getPublicKey($reservation)) {
             return true;

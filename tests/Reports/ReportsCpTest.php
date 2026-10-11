@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reports;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
+use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Report;
@@ -194,6 +195,46 @@ class ReportsCpTest extends TestCase
         $this->assertEquals(1, $row['reservations']);
         $this->assertSame(300.0, $row['total_revenue']);
         $this->assertSame(60.0, $row['commission']);
+    }
+
+    public function test_report_lists_outstanding_awaiting_payment_bookings_apart_from_revenue()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed', 'price' => '45.00'])->create();
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'awaiting_payment', 'price' => '90.00', 'payment' => '30.00'])->create();
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'awaiting_payment', 'price' => '60.00', 'payment' => '60.00'])->create();
+        // Outside the range.
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'awaiting_payment',
+            'payment' => '500.00',
+            'date_start' => now()->addMonths(2)->toIso8601String(),
+            'date_end' => now()->addMonths(2)->addDays(2)->toIso8601String(),
+        ])->create();
+
+        $this->getJson(cp_route('resrv.report.index').'?start='.now()->toDateString().'&end='.now()->addWeek()->toDateString())
+            ->assertOk()
+            ->assertJsonPath('outstanding.count', 2)
+            ->assertJsonPath('outstanding.amount', '90.00')
+            // Unpaid holds never count as reservations or revenue.
+            ->assertJsonPath('total_reservations', 1)
+            ->assertJsonPath('total_revenue', '45.00');
+
+        // The same window keyed on the booking date sees all three holds (all created today).
+        $this->getJson(cp_route('resrv.report.index').'?date_field=created_at&start='.now()->toDateString().'&end='.now()->addWeek()->toDateString())
+            ->assertOk()
+            ->assertJsonPath('outstanding.count', 3)
+            ->assertJsonPath('outstanding.amount', '590.00');
+    }
+
+    public function test_reports_page_links_to_the_awaiting_payment_listing()
+    {
+        $this->get(cp_route('resrv.reports.index'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('reservationsUrl', cp_route('resrv.reservations.index'))
+                ->has('report.outstanding'));
     }
 
     public function test_validates_date_field()

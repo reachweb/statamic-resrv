@@ -2,8 +2,13 @@
 
 namespace Reach\StatamicResrv\Http\Controllers;
 
+use Closure;
+use Illuminate\Contracts\Cache\LockProvider;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
@@ -20,7 +25,9 @@ use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Reach\StatamicResrv\Support\ManualReservationCreator;
+use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Dictionary;
+use Statamic\Facades\Entry as EntryFacade;
 use Statamic\Facades\User;
 use Statamic\Fields\Field;
 
@@ -43,7 +50,11 @@ class ManualReservationCpController extends Controller
             'maximumQuantity' => (int) config('resrv-config.maximum_quantity'),
             'maximumReservationPeriod' => (int) config('resrv-config.maximum_reservation_period_in_days', 30),
             'minimumDaysBefore' => (int) config('resrv-config.minimum_days_before', 0),
-            'gateways' => $this->gatewayManager->forCp(),
+            'gateways' => collect($this->gatewayManager->forCp())->map(fn (array $gateway) => $gateway + [
+                'description' => $gateway['supports_manual_confirmation']
+                    ? __('Customer pays outside Resrv (e.g. bank transfer); you mark the reservation as paid.')
+                    : __('Customer pays online through the payment link; the reservation confirms automatically.'),
+            ])->all(),
             'paymentEntryConfigured' => $this->paymentEntryConfigured(),
             'affiliates' => config('resrv-config.enable_affiliates')
                 ? Affiliate::where('published', true)
@@ -60,6 +71,9 @@ class ManualReservationCpController extends Controller
 
     public function entries()
     {
+        $collectionTitles = CollectionFacade::all()->mapWithKeys(fn ($collection) => [$collection->handle() => $collection->title()]);
+
+        // Sorted by collection, then title, so the picker's collection badge reads as a group label.
         return response()->json(
             ResrvEntry::where('enabled', true)
                 ->orderBy('title')
@@ -68,7 +82,9 @@ class ManualReservationCpController extends Controller
                     'item_id' => $entry->item_id,
                     'title' => $entry->title,
                     'collection' => $entry->collection,
+                    'collection_title' => $collectionTitles->get($entry->collection) ?? $entry->collection,
                 ])
+                ->sortBy([['collection_title', 'asc'], ['title', 'asc']])
                 ->values()
         );
     }
@@ -90,6 +106,8 @@ class ManualReservationCpController extends Controller
         return response()->json([
             'rates' => $rates,
             'form_fields' => $formFields,
+            // So the create page can point at the entry's availability when dates have no price.
+            'edit_url' => EntryFacade::find($item_id)?->editUrl(),
         ]);
     }
 
@@ -142,7 +160,7 @@ class ManualReservationCpController extends Controller
                 ]
             ));
         } catch (AvailabilityException|ManualReservationException|OptionsException|ExtrasException $e) {
-            return response()->json(['error' => $e->getMessage()], 422);
+            return $this->domainErrorResponse($e);
         }
 
         return response()->json($payload);
@@ -150,16 +168,120 @@ class ManualReservationCpController extends Controller
 
     public function store(StoreManualReservationRequest $request)
     {
-        try {
-            $reservation = $this->creator->create($request->validated(), User::current(), requireGatewayForPayment: true);
-        } catch (AvailabilityException|ManualReservationException|OptionsException|ExtrasException $e) {
-            return response()->json(['error' => $e->getMessage()], 422);
+        $data = $request->validated();
+        $user = User::current();
+        $key = $data['idempotency_key'] ?? null;
+
+        if ($key === null || $key === '') {
+            return $this->createReservation($data, $user);
         }
 
+        // Scoped to the admin: a retry of a timed-out or failed-looking submit returns the first
+        // reservation instead of booking (and decrementing stock) twice.
+        $cacheKey = 'resrv_manual_create:'.($user?->id() ?? 'guest').':'.hash('sha256', $key);
+        $fingerprint = $this->payloadFingerprint(Arr::except($data, ['idempotency_key']));
+
+        $attempt = function () use ($cacheKey, $fingerprint, $data, $user): JsonResponse {
+            $marker = Cache::get($cacheKey);
+            $existing = is_array($marker) && isset($marker['id']) ? Reservation::find($marker['id']) : null;
+
+            if ($existing) {
+                return ($marker['fingerprint'] ?? null) === $fingerprint
+                    ? $this->createdResponse($existing, 200, replayed: true)
+                    : $this->alreadyCreatedResponse($existing);
+            }
+
+            // Marked as soon as the row commits, so a death or throw during the emails/confirmation
+            // that follow still turns a same-key retry into a replay instead of a second booking.
+            return $this->createReservation($data, $user, function (Reservation $reservation) use ($cacheKey, $fingerprint) {
+                Cache::put($cacheKey, ['id' => $reservation->id, 'fingerprint' => $fingerprint], now()->addMinutes(30));
+            });
+        };
+
+        // Without lock support (e.g. APC) the marker alone still makes sequential retries safe.
+        if (! Cache::getStore() instanceof LockProvider) {
+            return $attempt();
+        }
+
+        // The lock serializes a concurrent double submit; the creation (including its inline email) runs inside it.
+        try {
+            return Cache::lock($cacheKey.':lock', 120)->block(10, $attempt);
+        } catch (LockTimeoutException) {
+            return response()->json([
+                'error' => __('This reservation is still being created. Check the reservations list before trying again.'),
+            ], 409);
+        }
+    }
+
+    protected function createReservation(array $data, $user, ?Closure $onCommitted = null): JsonResponse
+    {
+        try {
+            $reservation = $this->creator->create($data, $user, requireGatewayForPayment: true, onCommitted: $onCommitted);
+        } catch (AvailabilityException|ManualReservationException|OptionsException|ExtrasException $e) {
+            return $this->domainErrorResponse($e);
+        }
+
+        return $this->createdResponse($reservation, 201);
+    }
+
+    protected function createdResponse(Reservation $reservation, int $status, bool $replayed = false): JsonResponse
+    {
         return response()->json([
             'id' => $reservation->id,
             'redirect' => cp_route('resrv.reservation.show', $reservation->id),
-        ], 201);
+            'status' => $reservation->status,
+            'payment_request_sent' => $reservation->payment_request_email_sent_at !== null,
+            'replayed' => $replayed,
+        ], $status);
+    }
+
+    /** The same form session already created a reservation, but this submit carries different input. */
+    protected function alreadyCreatedResponse(Reservation $reservation): JsonResponse
+    {
+        return response()->json([
+            'error' => __('A reservation was already created from this form (#:id). Open it to review before creating another.', ['id' => $reservation->id]),
+            'redirect' => cp_route('resrv.reservation.show', $reservation->id),
+            'code' => 'already_created',
+        ], 409);
+    }
+
+    /** Order-insensitive hash of the validated input, so a replay can tell an identical retry from an edited one. */
+    protected function payloadFingerprint(array $data): string
+    {
+        $normalize = function ($value) use (&$normalize) {
+            if (! is_array($value)) {
+                return $value;
+            }
+
+            if (! array_is_list($value)) {
+                ksort($value);
+            }
+
+            return array_map($normalize, $value);
+        };
+
+        return hash('sha256', json_encode($normalize($data)));
+    }
+
+    /**
+     * Domain errors as {error, field?, code?}: `field` names the create-form input the message
+     * belongs to (so the page shows it under that control), `code` a cause the page branches on.
+     */
+    protected function domainErrorResponse(\Throwable $e): JsonResponse
+    {
+        $field = match (true) {
+            $e instanceof ManualReservationException => $e->field,
+            $e instanceof OptionsException => 'options',
+            $e instanceof ExtrasException => 'extras',
+            $e instanceof AvailabilityException => 'dates',
+            default => null,
+        };
+
+        return response()->json(array_filter([
+            'error' => $e->getMessage(),
+            'field' => $field,
+            'code' => $e instanceof ManualReservationException ? $e->reason : null,
+        ], fn ($value) => $value !== null), 422);
     }
 
     /** Same payment-entry check that gates online gateways in the creator and link building on the model. */
@@ -175,9 +297,14 @@ class ManualReservationCpController extends Controller
             'pricing' => [
                 'base_price' => $quote['pricing']['base_price']->format(),
                 'original_base_price' => $quote['pricing']['original_base_price'],
+                'computed_base_price' => $quote['pricing']['computed_base_price']->format(),
+                'computed_total' => $quote['pricing']['computed_total']->format(),
+                'adjustment' => $quote['pricing']['adjustment']->format(),
+                'discount' => $quote['pricing']['discount']?->format(),
                 'extras_total' => $quote['pricing']['extras_total']->format(),
                 'options_total' => $quote['pricing']['options_total']->format(),
                 'total' => $quote['pricing']['total']->format(),
+                'balance' => $quote['pricing']['balance']->format(),
                 'total_overridden' => $quote['pricing']['total_overridden'],
             ],
             'payment' => [
@@ -185,9 +312,12 @@ class ManualReservationCpController extends Controller
                 'amount' => $quote['payment']['amount']->format(),
                 'surcharge' => $quote['payment']['surcharge']->format(),
                 'amount_with_surcharge' => $quote['payment']['amount_with_surcharge']->format(),
+                'standard_amount' => $quote['payment']['standard_amount']->format(),
+                'full_amount' => $quote['payment']['full_amount']->format(),
                 'gateways' => collect($quote['payment']['gateways'])->map(fn ($gateway) => [
                     'label' => $gateway['label'],
                     'surcharge' => $gateway['surcharge']->format(),
+                    'surcharge_is_zero' => $gateway['surcharge']->isZero(),
                     'amount_with_surcharge' => $gateway['amount_with_surcharge']->format(),
                     'available' => $gateway['available'],
                 ])->all(),
@@ -209,7 +339,11 @@ class ManualReservationCpController extends Controller
 
         $customer = collect($data['customer'] ?? []);
 
-        return Extra::getPriceForDates($priceData)->map(function ($extra) use ($priceData, $customer) {
+        // Required by the entry's extra conditions for this stay and selection — creation refuses
+        // the booking without them, so the form must show (and gate on) them up front.
+        $required = $this->creator->requiredExtras($data);
+
+        return Extra::getPriceForDates($priceData)->map(function ($extra) use ($priceData, $customer, $required) {
             // Re-price custom-priced extras with the customer payload so the listed price matches
             // the quoted total — but only while the driving field holds a usable number:
             // getCustomPrice THROWS on unusable payloads, and an unfilled extra keeps the ×1 fallback.
@@ -230,6 +364,8 @@ class ManualReservationCpController extends Controller
                 'allow_multiple' => (bool) $extra->allow_multiple,
                 'maximum' => $extra->maximum,
                 'description' => $extra->description,
+                'required' => $required->has($extra->id),
+                'required_reason' => $required->get($extra->id),
             ];
         })->values()->all();
     }

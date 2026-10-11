@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Filters;
 
+use Reach\StatamicResrv\Enums\ReservationStatus as Status;
 use Statamic\Query\Scopes\Filter;
 
 class ReservationStatus extends Filter
@@ -18,23 +19,18 @@ class ReservationStatus extends Filter
         return [
             'status' => [
                 'type' => 'checkboxes',
-                'options' => [
-                    'confirmed' => 'Confirmed',
-                    'partner' => 'Partner',
-                    'awaiting_payment' => 'Awaiting payment',
-                    'refunded' => 'Refunded',
-                    'cancelled' => 'Cancelled',
-                    'pending' => 'Pending',
-                    'expired' => 'Expired',
-                ],
+                'options' => collect(['confirmed', 'partner', 'awaiting_payment', 'refunded', 'cancelled', 'pending', 'expired'])
+                    ->mapWithKeys(fn (string $status) => [$status => Status::labelFor($status)])
+                    ->all(),
             ],
         ];
     }
 
+    /** Awaiting-payment holds are shown by default: the admin is expected to act on them. */
     public function autoApply()
     {
         return [
-            'status' => ['confirmed', 'partner'],
+            'status' => ['confirmed', 'partner', 'awaiting_payment'],
         ];
     }
 
@@ -48,7 +44,10 @@ class ReservationStatus extends Filter
 
     public function badge($values)
     {
-        return implode(', ', array_map('ucwords', $values['status'] ?? []));
+        return implode(', ', array_map(
+            fn ($status) => Status::labelFor((string) $status),
+            $values['status'] ?? []
+        ));
     }
 
     public function visibleTo($key)

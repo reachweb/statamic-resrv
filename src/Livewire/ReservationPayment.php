@@ -8,6 +8,8 @@ use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus as ReservationStatusEnum;
 use Reach\StatamicResrv\Exceptions\ReservationNoLongerPayable;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
+use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Traits\HandlesCustomerLookup;
 use Reach\StatamicResrv\Livewire\Traits\HandlesDirectGatewayPayment;
 use Reach\StatamicResrv\Models\Reservation;
@@ -56,7 +58,9 @@ class ReservationPayment extends Component
 
     /**
      * The single state the blade renders, derived server-side per request: awaiting |
-     * instructions (offline gateway) | deadline_passed | processing | paid | unavailable.
+     * instructions (offline gateway) | processing | deadline_passed | arrival_passed | paid |
+     * unavailable. A gateway return reporting money in flight wins over a closed window: the
+     * customer has just paid, and the webhook still confirms a row that is awaiting payment.
      */
     #[Computed]
     public function state(): string
@@ -75,14 +79,18 @@ class ReservationPayment extends Component
             return 'unavailable';
         }
 
-        if ($this->deadlinePassed($reservation)) {
-            return 'deadline_passed';
-        }
-
         $returnStatus = $this->gatewayReturnStatus() ?? $this->redirectGatewayReturnStatus($reservation);
 
         if ($this->paymentProcessing || $returnStatus === 'processing' || $returnStatus === 'succeeded') {
             return 'processing';
+        }
+
+        if ($reservation->holdDeadlinePassed()) {
+            return 'deadline_passed';
+        }
+
+        if ($reservation->arrivalDayPassed()) {
+            return 'arrival_passed';
         }
 
         if ($reservation->paymentGatewaySupportsManualConfirmation()) {
@@ -90,6 +98,19 @@ class ReservationPayment extends Component
         }
 
         return 'awaiting';
+    }
+
+    #[Computed]
+    public function heading(): string
+    {
+        return trans('statamic-resrv::frontend.'.match ($this->state) {
+            'instructions' => 'paymentHeadingInstructions',
+            'processing' => 'paymentHeadingProcessing',
+            'paid' => 'paymentHeadingConfirmed',
+            'deadline_passed', 'arrival_passed' => 'paymentHeadingExpired',
+            'unavailable' => 'paymentHeadingUnavailable',
+            default => 'completeYourPayment',
+        });
     }
 
     /**
@@ -126,14 +147,14 @@ class ReservationPayment extends Component
     }
 
     /**
-     * Lazy guard: the lapse sweep may not have run yet, so a past-deadline link refuses NEW
-     * payment attempts itself. An already-mounted intent deliberately stays completable until
-     * the sweep voids it — the AWAITING_PAYMENT row still holds stock, so a buzzer-beating
-     * payment confirms a held booking rather than orphaning the charge.
+     * Lazy guard: the lapse sweep may not have run yet, and nothing sweeps a passed arrival day,
+     * so the page itself refuses NEW payment attempts once the window closes. An already-mounted
+     * intent deliberately stays completable — the AWAITING_PAYMENT row still holds stock, so a
+     * buzzer-beating payment confirms a held booking rather than orphaning the charge.
      */
-    protected function deadlinePassed(Reservation $reservation): bool
+    protected function paymentWindowClosed(Reservation $reservation): bool
     {
-        return $reservation->holdDeadlinePassed();
+        return $reservation->paymentWindowClosed();
     }
 
     /**
@@ -149,7 +170,7 @@ class ReservationPayment extends Component
 
         if (! $reservation
             || ! $reservation->isAwaitingPayment()
-            || $this->deadlinePassed($reservation)
+            || $this->paymentWindowClosed($reservation)
             || $reservation->paymentGatewaySupportsManualConfirmation()) {
             return;
         }
@@ -167,7 +188,7 @@ class ReservationPayment extends Component
                 $reservation,
                 $reservation->amountDue(),
                 $returnUrl,
-                fn (Reservation $fresh) => $fresh->isAwaitingPayment() && ! $this->deadlinePassed($fresh),
+                fn (Reservation $fresh) => $fresh->isAwaitingPayment() && ! $this->paymentWindowClosed($fresh),
             );
         } catch (ReservationNoLongerPayable $e) {
             // The row was transitioned mid-flight; the minted intent is already voided. Bust the
@@ -192,6 +213,72 @@ class ReservationPayment extends Component
     public function amountDue(): string
     {
         return $this->reservation?->amountDue()->format() ?? '';
+    }
+
+    /** What stays unpaid after this payment (total − requested amount), or null when nothing does. */
+    #[Computed]
+    public function balanceDue(): ?string
+    {
+        $reservation = $this->reservation;
+
+        if (! $reservation || ! $reservation->payment->lessThan($reservation->total)) {
+            return null;
+        }
+
+        return Price::create($reservation->total->format())->subtract($reservation->payment)->format();
+    }
+
+    /**
+     * The "pay by" line for the effective cut-off (paymentDueAt(): the hold deadline, or the end
+     * of the arrival day when that comes first, which the line then names), or null without a hold.
+     */
+    #[Computed]
+    public function paymentDueLine(): ?string
+    {
+        $reservation = $this->reservation;
+        $due = $reservation?->paymentDueAt();
+
+        if ($due === null) {
+            return null;
+        }
+
+        $arrivalIsCutOff = $reservation->hold_expires_at !== null && $due->lt($reservation->hold_expires_at);
+
+        return trans(
+            'statamic-resrv::frontend.'.($arrivalIsCutOff ? 'paymentDueByArrival' : 'paymentDueBy'),
+            ['date' => $due->format('d-m-Y H:i T')]
+        );
+    }
+
+    /** The configured label of the reservation's gateway (blank falls back to the default), or null. */
+    #[Computed]
+    public function gatewayLabel(): ?string
+    {
+        $reservation = $this->reservation;
+
+        if (! $reservation) {
+            return null;
+        }
+
+        $manager = app(PaymentGatewayManager::class);
+        $name = blank($reservation->payment_gateway) ? $manager->defaultName() : $reservation->payment_gateway;
+
+        if (! is_string($name) || ! $manager->has($name)) {
+            return null;
+        }
+
+        $label = trim($manager->label($name));
+
+        return $label !== '' ? $label : null;
+    }
+
+    /** The site's offline payment instructions setting, or null when unset. */
+    #[Computed]
+    public function offlineInstructions(): ?string
+    {
+        $instructions = config('resrv-config.manual_reservations_offline_instructions');
+
+        return is_string($instructions) && trim($instructions) !== '' ? trim($instructions) : null;
     }
 
     public function render()

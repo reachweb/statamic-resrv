@@ -288,6 +288,43 @@ class Reservation extends Model
     }
 
     /**
+     * Whether the whole arrival day is behind us. Awaiting-payment bookings carry no deadline
+     * by default, so this is the implicit one: nobody should be asked to pay for a stay that
+     * has already begun. Day granularity keeps same-day bookings (date-only, midnight starts)
+     * payable until the day ends.
+     */
+    public function arrivalDayPassed(): bool
+    {
+        return $this->date_start !== null && $this->date_start->copy()->endOfDay()->isPast();
+    }
+
+    /**
+     * Whether an awaiting-payment booking can no longer be paid or requested: its hold deadline
+     * or its arrival day has passed. Payment surfaces check this, not the status alone.
+     */
+    public function paymentWindowClosed(): bool
+    {
+        return $this->holdDeadlinePassed() || $this->arrivalDayPassed();
+    }
+
+    /**
+     * The effective cut-off of a held booking — the hold deadline, or the end of the arrival day
+     * when that comes first (see paymentWindowClosed()). Null when no hold is set.
+     */
+    public function paymentDueAt(): ?Carbon
+    {
+        if ($this->hold_expires_at === null) {
+            return null;
+        }
+
+        $arrivalDayEnd = $this->date_start?->copy()->endOfDay();
+
+        return $arrivalDayEnd !== null && $arrivalDayEnd->lt($this->hold_expires_at)
+            ? $arrivalDayEnd
+            : $this->hold_expires_at->copy();
+    }
+
+    /**
      * Whether the customer may self-cancel at all — with a refund inside the free
      * cancellation window, or without one after it closes.
      */
@@ -387,10 +424,10 @@ class Reservation extends Model
             return false;
         }
 
-        // Same for an out-of-band confirmation that kept an unverified intent reference
-        // (settlePaidOutOfBand() stamps it unresolved): that intent never verifiably collected
-        // the money, so the customer must not self-cancel against it either.
-        if ($this->status === ReservationStatus::CONFIRMED->value && $this->payment_unresolved) {
+        // Same for an out-of-band confirmation that kept an intent reference (settlePaidOutOfBand()
+        // stamps it unresolved): the money arrived outside the gateway, so the customer must not
+        // self-cancel against it, and a refund — before or after it lands — is reported as manual.
+        if ($this->payment_unresolved) {
             return false;
         }
 
@@ -501,6 +538,52 @@ class Reservation extends Model
         }
 
         return $this->payment->add($this->payment_surcharge);
+    }
+
+    /**
+     * Money the business received for this booking (before any refund), for CP displays. A
+     * confirmed booking was paid in full of its requested amount, through the gateway or out of
+     * band; a manual booking that reached REFUNDED with no intent was confirmed out of band first
+     * (awaiting-payment rows cannot reach REFUNDED directly). A cancelled row only holds money it
+     * retained through its own verified charge. Everything else received nothing.
+     *
+     * Null means unknown: a frontend checkout through a manual-confirmation gateway (bank
+     * transfer) confirms before any money arrives, so its minted reference proves nothing.
+     */
+    public function amountReceived(): ?PriceClass
+    {
+        if (in_array($this->status, [ReservationStatus::CONFIRMED->value, ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value], true)
+            && $this->created_by === null
+            && $this->hasGatewayPayment()
+            && $this->paymentGatewaySupportsManualConfirmation()) {
+            return null;
+        }
+
+        return match ($this->status) {
+            ReservationStatus::CONFIRMED->value => $this->amountDue(),
+            ReservationStatus::REFUNDED->value => $this->hasGatewayPayment() || $this->created_by !== null
+                ? $this->amountDue()
+                : Price::create(0),
+            ReservationStatus::CANCELLED->value => $this->hasGatewayPayment() && ! $this->payment_unresolved
+                ? $this->amountPaid()
+                : Price::create(0),
+            default => Price::create(0),
+        };
+    }
+
+    /** The customer's display name from the checkout form data, or null when none was given. */
+    public function customerName(): ?string
+    {
+        $data = $this->customer_data;
+        $part = fn (string $key): string => is_scalar($data->get($key)) ? trim((string) $data->get($key)) : '';
+
+        $name = trim($part('first_name').' '.$part('last_name'));
+
+        if ($name === '') {
+            $name = $part('name');
+        }
+
+        return $name === '' ? null : $name;
     }
 
     /**

@@ -399,6 +399,13 @@ tabs:
               max_items: 1
               localizable: false
               instructions: 'The Statamic entry that loads the `reservation-payment` Livewire component. Customers land here from the payment request email link to pay for a manually created reservation. Without it, online payment gateways are disabled for manual reservations.'
+          -
+            handle: manual_reservations_offline_instructions
+            field:
+              display: 'Offline Payment Instructions'
+              type: textarea
+              localizable: false
+              instructions: 'How customers pay a manual reservation that uses a manually confirmed payment method (e.g. bank transfer details). Shown on the payment page and in the payment request email. Leave empty to only tell customers that payment is arranged directly with you.'
   emails_settings:
     display: Emails
     sections:

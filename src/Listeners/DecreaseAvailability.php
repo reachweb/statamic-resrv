@@ -13,7 +13,8 @@ class DecreaseAvailability
     public function handle(ReservationCreated $event): void
     {
         // The flag lives on the parent row; children ride it. Mirrored guard in IncreaseAvailability.
-        if (! $event->reservation->affects_availability) {
+        // Strict: only an explicit false skips the stock movement.
+        if ($event->reservation->affects_availability === false) {
             return;
         }
 

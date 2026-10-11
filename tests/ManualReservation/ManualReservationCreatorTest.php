@@ -25,6 +25,7 @@ use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCategory;
+use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
@@ -115,10 +116,10 @@ class ManualReservationCreatorTest extends TestCase
      * Runs the real frontend checkout flow for the same booking (AvailabilityResults-style
      * reservation + Livewire first step) and returns the amount checkout would charge.
      */
-    private function frontendCheckoutPayment($entry, array $extrasPayload = []): string
+    private function frontendCheckoutPayment($entry, array $extrasPayload = [], int $quantity = 1): string
     {
         $rateId = Rate::forEntry($entry->id())->first()?->id;
-        $data = array_merge($this->dates(), ['quantity' => 1, 'rate_id' => $rateId]);
+        $data = array_merge($this->dates(), ['quantity' => $quantity, 'rate_id' => $rateId]);
 
         $result = (new Availability)->getAvailabilityForEntry($data, $entry->id());
         $cancellation = Rate::effectiveCancellationPolicyFor($rateId);
@@ -127,7 +128,7 @@ class ManualReservationCreatorTest extends TestCase
             'item_id' => $entry->id(),
             'date_start' => $data['date_start'],
             'date_end' => $data['date_end'],
-            'quantity' => 1,
+            'quantity' => $quantity,
             'rate_id' => $rateId,
             'price' => $result['data']['price'],
             'payment' => $result['data']['payment'],
@@ -687,6 +688,216 @@ class ManualReservationCreatorTest extends TestCase
         $this->assertSame('confirmed', $reservation->status);
         $this->assertFalse($reservation->total->isZero());
         $this->assertTrue($reservation->payment->isZero());
+    }
+
+    public function test_a_zero_amount_booking_records_neither_the_sent_gateway_nor_a_hold()
+    {
+        Mail::fake();
+
+        $comped = $this->creator()->create($this->baseInput($this->makeStatamicItemWithAvailability(available: 4), [
+            'total_override' => '0',
+            'payment_gateway' => 'fake',
+            'hold_days' => 3,
+        ]));
+
+        // A zero deposit on a nonzero total collects nothing now either.
+        Config::set('resrv-config.payment', 'fixed');
+        Config::set('resrv-config.fixed_amount', 0);
+
+        $zeroDeposit = $this->creator()->create($this->baseInput($this->makeStatamicItemWithAvailability(available: 4), [
+            'payment_gateway' => 'fake',
+            'hold_days' => 3,
+        ]));
+
+        // Confirmed at once and collected through nothing: like checkout's zero-payment path,
+        // no gateway is recorded and no hold deadline is set.
+        foreach ([$comped, $zeroDeposit] as $reservation) {
+            $this->assertSame('confirmed', $reservation->status);
+            $this->assertSame('', $reservation->payment_gateway);
+            $this->assertNull($reservation->hold_expires_at);
+        }
+
+        $this->assertFalse($zeroDeposit->total->isZero());
+    }
+
+    public function test_standard_amount_matches_checkout_when_free_cancellation_has_passed_and_for_several_units()
+    {
+        // Checkout's rule: full payment is forced when the free-cancellation window is already
+        // closed at booking time (check-in tomorrow, 14-day window).
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', 20);
+        Config::set('resrv-config.full_payment_after_free_cancellation', true);
+
+        $rate = Rate::factory()->freeCancellation(14)->create(['collection' => 'pages']);
+        $entry = $this->makeStatamicItemWithAvailability(available: 4, rateId: $rate->id);
+
+        $frontendAmount = $this->frontendCheckoutPayment($entry);
+        $quote = $this->creator()->quote($this->baseInput($entry));
+
+        $this->assertSame($frontendAmount, $quote['payment']['amount']->format());
+        $this->assertSame($quote['pricing']['total']->format(), $quote['payment']['amount']->format());
+
+        // Several units with an extra: the base and the extra both scale with the quantity.
+        Config::set('resrv-config.full_payment_after_free_cancellation', false);
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'rooms', available: 4);
+        $extra = $this->attachExtraTo($entry);
+        $extraPrice = Extra::find($extra->id)->priceForDates(array_merge($this->dates(), [
+            'quantity' => 2,
+            'item_id' => $entry->id(),
+        ]));
+
+        $frontendAmount = $this->frontendCheckoutPayment($entry, [
+            $extra->id => ['id' => $extra->id, 'quantity' => 1, 'price' => $extraPrice, 'name' => $extra->name],
+        ], quantity: 2);
+
+        $quote = $this->creator()->quote($this->baseInput($entry, [
+            'quantity' => 2,
+            'extras' => [['id' => $extra->id, 'quantity' => 1]],
+        ]));
+
+        $this->assertSame($frontendAmount, $quote['payment']['amount']->format());
+    }
+
+    public function test_the_standard_amount_never_exceeds_an_overridden_total()
+    {
+        Config::set('resrv-config.payment', 'fixed');
+        Config::set('resrv-config.fixed_amount', 50);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $quote = $this->creator()->quote($this->baseInput($entry, ['total_override' => '20.00']));
+
+        $this->assertSame('20.00', $quote['payment']['standard_amount']->format());
+        $this->assertSame('20.00', $quote['payment']['amount']->format());
+
+        $reservation = $this->creator()->create($this->baseInput($entry, ['total_override' => '20.00']));
+
+        $this->assertSame('20.00', $reservation->payment->format());
+        $this->assertSame('0.00', $reservation->amountRemaining());
+    }
+
+    public function test_the_quote_prices_every_payment_mode_and_the_computed_figures()
+    {
+        Config::set('resrv-config.payment', 'percent');
+        Config::set('resrv-config.percent_amount', 20);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $quote = $this->creator()->quote($this->baseInput($entry, [
+            'payment_mode' => 'custom',
+            'custom_amount' => '30.00',
+            'total_override' => '80.00',
+        ]));
+
+        $this->assertSame('30.00', $quote['payment']['amount']->format());
+        $this->assertSame('16.00', $quote['payment']['standard_amount']->format());
+        $this->assertSame('80.00', $quote['payment']['full_amount']->format());
+        $this->assertSame('100.00', $quote['pricing']['computed_base_price']->format());
+        $this->assertSame('100.00', $quote['pricing']['computed_total']->format());
+        $this->assertSame('-20.00', $quote['pricing']['adjustment']->format());
+        $this->assertSame('50.00', $quote['pricing']['balance']->format());
+        $this->assertNull($quote['pricing']['discount']);
+
+        $zero = $this->creator()->quote($this->baseInput($entry, ['total_override' => '0']));
+        $this->assertTrue($zero['payment']['standard_amount']->isZero());
+    }
+
+    public function test_overbooking_still_requires_a_price_for_every_night()
+    {
+        // Rows exist (no stock) from today to today+3: a stay running past them is partly unpriced.
+        $entry = $this->makeStatamicItemWithAvailability(available: 0);
+
+        $input = $this->baseInput($entry, [
+            'date_start' => today()->addDays(2)->setTime(12, 0)->toDateTimeString(),
+            'date_end' => today()->addDays(6)->setTime(12, 0)->toDateTimeString(),
+            'affects_availability' => false,
+        ]);
+
+        foreach (['quote', 'create'] as $method) {
+            try {
+                $this->creator()->{$method}($input);
+                $this->fail("{$method}() must refuse a stay with unpriced nights instead of undercharging it.");
+            } catch (ManualReservationException $e) {
+                $this->assertSame('dates', $e->field);
+                $this->assertSame(__('These dates have no price configured for every night of the stay.'), $e->getMessage());
+            }
+        }
+
+        $this->assertSame(0, Reservation::count());
+
+        // A fully priced stay is still overbookable.
+        $reservation = $this->creator()->create($this->baseInput($entry, ['affects_availability' => false]));
+        $this->assertSame('100.00', $reservation->total->format());
+    }
+
+    public function test_the_creation_rolls_back_when_the_stock_is_taken_between_the_quote_and_the_decrement()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 1);
+        $extra = $this->attachExtraTo($entry);
+
+        // Another booking takes the last unit after the quote passed but before the
+        // in-transaction ReservationCreated listeners decrement it.
+        Reservation::created(function () use ($entry) {
+            Availability::where('statamic_id', $entry->id())->update(['available' => 0]);
+        });
+
+        try {
+            $this->creator()->create($this->baseInput($entry, [
+                'extras' => [['id' => $extra->id, 'quantity' => 1]],
+                'affects_availability' => true,
+            ]));
+            $this->fail('The decrement must fail once the stock is gone.');
+        } catch (AvailabilityException) {
+            // The reservation, its customer and its add-on rows all roll back with the failed decrement.
+            $this->assertSame(0, Reservation::count());
+            $this->assertSame(0, DB::table('resrv_customers')->count());
+            $this->assertSame(0, DB::table('resrv_reservation_extra')->count());
+        }
+    }
+
+    public function test_creation_refuses_figures_that_differ_from_what_the_admin_was_shown()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        foreach (['expected_total', 'expected_amount'] as $key) {
+            try {
+                $this->creator()->create($this->baseInput($entry, ['payment_mode' => 'full', $key => '99.00']));
+                $this->fail("A mismatching {$key} must be refused.");
+            } catch (ManualReservationException $e) {
+                $this->assertSame('price_changed', $e->reason);
+            }
+        }
+
+        $this->assertSame(0, Reservation::count());
+
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'payment_mode' => 'full',
+            'expected_total' => '100.00',
+            'expected_amount' => '100',
+        ]));
+        $this->assertSame('100.00', $reservation->total->format());
+    }
+
+    public function test_required_extras_carry_the_reason_they_are_required()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $trigger = Extra::factory()->create(['name' => 'Bike rental']);
+        $helmet = Extra::factory()->create(['id' => 2, 'slug' => 'helmet', 'name' => 'Helmet']);
+        ResrvEntry::whereItemId($entry->id())->extras()->attach([$trigger->id, $helmet->id]);
+        ExtraCondition::factory()->create([
+            'extra_id' => $helmet->id,
+            'conditions' => [['operation' => 'required', 'type' => 'extra_selected', 'value' => $trigger->id]],
+        ]);
+
+        $this->assertTrue($this->creator()->requiredExtras($this->baseInput($entry))->isEmpty());
+
+        $required = $this->creator()->requiredExtras($this->baseInput($entry, [
+            'extras' => [['id' => $trigger->id, 'quantity' => 1]],
+        ]));
+
+        $this->assertSame([(int) $helmet->id], $required->keys()->all());
+        $this->assertSame(__('Required because :extra is selected.', ['extra' => 'Bike rental']), $required->get($helmet->id));
     }
 
     public function test_an_extra_from_another_entry_is_rejected()
