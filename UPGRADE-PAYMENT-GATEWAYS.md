@@ -4,7 +4,7 @@ This document provides step-by-step instructions for updating a custom payment g
 
 ## Background
 
-Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
+Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Step 14 covers what your webhook must do for admin-created (manual) reservations, which are paid from a pay-by-link page instead of the checkout. Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
 
 There are two gateway types:
 - **Inline gateways** (e.g. Stripe) — render a payment form directly on the checkout page via a Blade view. `redirectsForPayment()` returns `false`.
@@ -303,14 +303,16 @@ Throw `RefundFailedException` on failure — the CP controller catches it and re
 
 If your gateway embeds a JS SDK on the checkout page, create a Blade view and return its path from `paymentView()`.
 
-The view is rendered inside the `CheckoutPayment` Livewire component, which provides these properties via `$wire`:
+The view is rendered inside the `CheckoutPayment` Livewire component during checkout, and inside the `reservation-payment` (pay-by-link) component when a customer pays a manual reservation. Both provide these properties via `$wire`:
 
 | Property | Type | Description |
 |----------|------|-------------|
 | `$wire.clientSecret` | string | From `paymentIntent()->client_secret` |
 | `$wire.publicKey` | string | From `getPublicKey()` |
-| `$wire.checkoutCompletedUrl` | string | URL of the checkout-completed Statamic entry |
+| `$wire.checkoutCompletedUrl` | string | Where to send the customer after paying: the checkout-completed entry during checkout, the pay page's own URL (which already carries `?ref=…&hash=…`) on the pay-by-link page |
 | `$amount` | float | Formatted payment amount (available as Blade variable) |
+
+Always return the customer to `$wire.checkoutCompletedUrl` rather than a hard-coded checkout-completed URL, and if your JS appends query parameters to it, append them separator-aware (`&` when it already contains `?`).
 
 Example view at `resources/views/livewire/paypal-payment.blade.php`:
 
@@ -475,11 +477,31 @@ class PayPalPaymentGateway implements PaymentInterface
         // entry when null (a caller that doesn't set a base). Normal checkout passes the
         // checkout-complete entry here, so the fallback is only exercised for null. See Step 12.
         $returnBase = $returnUrl ?? $this->getReturnUrl($reservation);
+        // $returnBase may already carry a query string (the pay-by-link page's ?ref=…&hash=…).
+        $separator = str_contains($returnBase, '?') ? '&' : '?';
+        // Pass $returnBase.$separator.http_build_query([...]) to PayPal as the return URL.
 
         $result = new \stdClass;
         $result->id = 'PAYPAL_SESSION_ID';      // stored as reservation.payment_id
         $result->redirectTo = 'https://paypal.com/checkout/...'; // customer is sent here
         return $result;
+    }
+
+    public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+    {
+        // TODO: Fetch the order from PayPal (see Step 13).
+        // Return an object with ->status mapped to the Stripe-style vocabulary, plus ->redirectTo
+        // while it is still payable. Return null ONLY on a definitive 404; throw on anything else.
+        $order = new \stdClass;
+        $order->id = $paymentId;
+        $order->status = 'requires_payment_method';
+        $order->redirectTo = 'https://paypal.com/checkout/...';
+        return $order;
+    }
+
+    public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
+    {
+        // TODO: Void the order at PayPal; log and swallow provider errors (see Step 9).
     }
 
     public function redirectsForPayment(): bool
@@ -554,6 +576,7 @@ class PayPalPaymentGateway implements PaymentInterface
         }
 
         // A denied capture is a failed attempt — leave the reservation PENDING (retryable).
+        // Simplified: route the confirmation through transitionTo() as shown in Steps 10 and 14.
         if ($payload['event_type'] === 'PAYMENT.CAPTURE.COMPLETED') {
             ReservationConfirmed::dispatch($reservation);
         }
@@ -648,6 +671,24 @@ class SquarePaymentGateway implements PaymentInterface
         $result->id = 'SQUARE_PAYMENT_ID';         // stored as reservation.payment_id
         $result->client_secret = 'SQUARE_TOKEN';    // passed to frontend JS
         return $result;
+    }
+
+    public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+    {
+        // TODO: Fetch the payment from Square (see Step 13).
+        // Return an object with ->status mapped to the Stripe-style vocabulary, plus
+        // ->client_secret while it is still payable. Return null ONLY on a definitive 404;
+        // throw on anything else.
+        $payment = new \stdClass;
+        $payment->id = $paymentId;
+        $payment->status = 'requires_payment_method';
+        $payment->client_secret = 'SQUARE_TOKEN';
+        return $payment;
+    }
+
+    public function cancelPaymentIntent(string $paymentId, Reservation $reservation): void
+    {
+        // TODO: Cancel the payment at Square; log and swallow provider errors (see Step 9).
     }
 
     public function redirectsForPayment(): bool
@@ -783,7 +824,7 @@ Understanding the flow helps when debugging custom gateways.
 1. Admin clicks refund in the CP.
 2. `ReservationCpController::refund()` loads the reservation.
 3. Calls `PaymentGatewayManager::forReservation($reservation)` which reads `reservation.payment_gateway` and resolves the correct gateway.
-4. Calls `refund($reservation)` on that gateway.
+4. Calls `refund($reservation)` on that gateway — except when no charge reached it: partner / zero-payment bookings and manual reservations marked as paid in the CP with no intent reference skip the provider. A manual reservation marked as paid that kept an intent reference (`payment_unresolved`) is read through `retrievePaymentIntent()` first, and `refund()` runs only when the intent is `succeeded` or `processing` (see Step 13).
 
 ---
 
@@ -813,6 +854,9 @@ Before deploying your custom gateway:
 - [ ] For redirect gateways: return URL points to the Statamic page with `{{ resrv_checkout_redirect }}`
 - [ ] `paymentIntent()` declares the 4th `?string $returnUrl = null` parameter — the interface requires it, so a three-parameter declaration fatals at boot (see Step 12)
 - [ ] For redirect gateways: `paymentIntent()` builds the return/success URL from `$returnUrl ?? <checkout-complete entry>` with a **separator-aware** query append — `$returnUrl` may already carry `?ref=…&hash=…` (see Step 12)
+- [ ] For inline gateways: `retrievePaymentIntent()` also exposes `->client_secret` on still-payable intents, and the Blade view returns the customer to `$wire.checkoutCompletedUrl` (see Steps 6 and 13)
+- [ ] `verifyPayment()` confirms `awaiting_payment` reservations as well as `pending` ones — no status pre-check that only accepts `pending`, and a cancelled/failed intent never cancels an awaiting-payment reservation (see Step 14)
+- [ ] Online gateways return `true` from `supportsWebhooks()` if they should be offered for manual reservations (see Step 14)
 
 ---
 
@@ -1011,28 +1055,20 @@ If you stop there, a `false` return is treated as a clean no-op and you still re
 
 ```php
 // The transition was skipped because the row changed under the lock after the pre-checks
-// (e.g. ExpireReservations expired it). A concurrent CONFIRMED is a clean no-op, but a terminal
-// state means the captured charge is now orphaned — surface it for manual refund.
+// (e.g. ExpireReservations expired it, or the hold-lapse sweep cancelled a manual reservation).
+// A concurrent CONFIRMED is a clean no-op, but a terminal state means the captured charge is
+// now orphaned — surface it for manual refund.
 $reservation->refresh();
 
-if (in_array($reservation->status, [
-    ReservationStatus::EXPIRED->value,
-    ReservationStatus::REFUNDED->value,
-    ReservationStatus::PARTNER->value,
-], true)) {
-    Log::warning('Succeeded webhook lost the confirmation race to a terminal transition — manual refund likely required.', [
-        'reservation_id' => $reservation->id,
-        'reservation_status' => $reservation->status,
-        'payment_intent_id' => $data['id'],
-    ]);
-
-    // Notify admins for manual reconciliation. Safe to call from any gateway; it dedupes on
-    // (reservation, payment intent) so provider retries don't spam admins.
-    \Reach\StatamicResrv\Mail\OrphanedPaymentNotification::dispatchFor($reservation, $data['id'], $event->id ?? null);
-}
+// Logs and notifies admins when the row is EXPIRED, REFUNDED, CANCELLED or PARTNER (a cancelled
+// booking's own retained charge excepted). Safe to call from any gateway; it dedupes on
+// (reservation, payment intent) so provider retries don't spam admins.
+\Reach\StatamicResrv\Mail\OrphanedPaymentNotification::notifyIfOrphaned($reservation, $data['id'], $event->id ?? null);
 
 return response()->json([], 200);
 ```
+
+> ℹ️ Earlier revisions of this step checked `EXPIRED`/`REFUNDED`/`PARTNER` by hand and called `dispatchFor()`. Since manual reservations, a `CANCELLED` row can also lose this race (the hold-lapse sweep cancels a reservation whose payment is in flight), so call `notifyIfOrphaned()`, which covers all four statuses.
 
 This is the same trade-off as Step 9's stale-success policy: return `200` so the provider stops retrying, and rely on a logged/notified orphan for manual reconciliation rather than confirming a reservation whose hold is gone. The bundled `StripePaymentGateway` and `FakePaymentGateway` both do exactly this, and Resrv's webhook regression tests cover the race.
 
@@ -1126,7 +1162,7 @@ The bundled Stripe gateway uses exactly this key shape. Include the intent id, n
 
 **Applies to: all gateways (only redirect gateways act on it)**
 
-> 📅 Added 2026-07-06 alongside admin-created (manual) reservations, originally as an optional positional argument. **Required since 2026-07-11**: `PaymentInterface::paymentIntent()` now declares the 4th parameter, so a gateway that still declares only three parameters fatals at boot (*"Declaration must be compatible"*) until the parameter is added. This is deliberate, for the same reason `retrievePaymentIntent()` is required (Step 13): a redirect gateway that silently ignored the argument would strand pay-by-link customers on the checkout-complete page after paying — a broken return leg with no error anywhere.
+> 📅 Added in Resrv v6.5.0 alongside admin-created (manual) reservations. **Required**: `PaymentInterface::paymentIntent()` now declares the 4th parameter, so a gateway that still declares only three parameters fatals at boot (*"Declaration … must be compatible with …"*) until the parameter is added. The fatal fires wherever Resrv resolves its configured gateways (checkout, webhooks, the CP reservation pages), not only when that gateway is used. This is deliberate, for the same reason `retrievePaymentIntent()` is required (Step 13): a redirect gateway that silently ignored the argument would strand pay-by-link customers on the checkout-complete page after paying — a broken return leg with no error anywhere.
 
 ### Why
 
@@ -1184,7 +1220,7 @@ Your existing `handleRedirectBack()` needs no change. The manual pay-by-link pag
 
 ### Inline gateways
 
-Inline gateways (`redirectsForPayment()` returns `false`) return the customer through the embedded SDK, whose redirect target Resrv sets separately, so they can ignore `$returnUrl` entirely — but they must still declare the parameter, because the interface requires it. The bundled `StripePaymentGateway`, `FakePaymentGateway`, and `OfflinePaymentGateway` all declare it and do nothing with it.
+Inline gateways (`redirectsForPayment()` returns `false`) return the customer through the embedded SDK, whose redirect target Resrv passes to the view separately as `$wire.checkoutCompletedUrl` (see Step 6), so they can ignore `$returnUrl` entirely — but they must still declare the parameter, because the interface requires it. The bundled `StripePaymentGateway`, `FakePaymentGateway`, and `OfflinePaymentGateway` all declare it and do nothing with it.
 
 ---
 
@@ -1192,16 +1228,18 @@ Inline gateways (`redirectsForPayment()` returns `false`) return the customer th
 
 **Applies to: all gateways**
 
-> 📅 Added 2026-07-06 alongside admin-created (manual) reservations. `retrievePaymentIntent()` is a **required** interface method — a gateway written before this date will fatal at boot until it is implemented, exactly like the 4th `paymentIntent()` parameter in Step 12. (This is deliberate — see *Why a required method, not a shim* below.)
+> 📅 Added in Resrv v6.5.0 alongside admin-created (manual) reservations. `retrievePaymentIntent()` is a **required** interface method — a gateway written for an earlier version will fatal at boot until it is implemented, exactly like the 4th `paymentIntent()` parameter in Step 12. (This is deliberate — see *Why a required method, not a shim* below.)
 
 ### Why
 
-Resrv must be able to read the *current* state of a previously created intent, for two money-safety guarantees:
+Resrv must be able to read the *current* state of a previously created intent. Every caller belongs to the manual-reservation flow — the normal checkout never calls this method (it voids stale intents through `cancelPaymentIntent()`, Step 9, and mints fresh ones):
 
-1. **Resume instead of double-charge.** When a customer returns to an interrupted payment (the checkout payment step, or the manual pay-by-link page), Resrv re-reads the stored intent rather than blindly minting a second one. A succeeded or in-flight intent means "money is already moving — do not create another"; a dead one may be replaced.
-2. **Reconcile an out-of-band confirmation.** When an admin marks a manual reservation paid in person / by transfer, Resrv reads the customer's leftover intent to decide whether to void-and-forget it (never charged) or keep the reference (already capturing real money), so it never strands a charge or drops a live one.
+1. **Resume instead of double-charge.** When a customer returns to an interrupted payment on the manual pay-by-link page, Resrv re-reads the stored intent rather than blindly minting a second one. A succeeded or in-flight intent means "money is already moving — do not create another"; a dead one may be replaced. Before replacing a still-payable intent it cannot re-mount, Resrv voids it and re-reads it to prove the void (see *Redirect gateways* below).
+2. **Verify the void when an unpaid reservation is cancelled.** When an admin cancels an awaiting-payment reservation, or the `resrv:cancel-lapsed-holds` sweep cancels a lapsed one, Resrv calls `cancelPaymentIntent()` and then re-reads the intent. It drops the reference only when the intent reads `canceled` or `null`. If money moved, it keeps the reference, alerts the admins and tells the customer the charge will be refunded.
+3. **Reconcile an out-of-band confirmation.** When an admin marks a manual reservation as paid in person / by transfer, Resrv reads the customer's leftover intent to decide whether to void-and-forget it (never charged) or keep the reference (already capturing real money), so it never strands a charge or drops a live one.
+4. **Refund only real charges.** Refunding a reservation that was marked as paid but kept an intent reference (flagged `payment_unresolved`) reads the intent first. Resrv calls `refund()` only when the intent is `succeeded` or `processing`. Otherwise it skips the provider and the admin returns the out-of-band payment by hand. A read that throws aborts the refund so the admin can retry.
 
-Both callers branch on the returned `->status`, so the method's *semantics* matter as much as its presence — a stub that always returns `null` would defeat both guarantees (it would mint duplicate intents and discard references to live charges).
+Every caller branches on the returned `->status`, so the method's *semantics* matter as much as its presence. A stub that always returns `null` would mint duplicate intents, discard references to live charges, and skip refunds of real online charges.
 
 ### The signature
 
@@ -1211,13 +1249,15 @@ public function retrievePaymentIntent(string $paymentId, Reservation $reservatio
 
 - Return an **object exposing `->status`** (the provider's intent/charge object, or a small adapter).
 - Return **`null` only when the intent is definitively gone** — deleted, or never existed (e.g. Stripe's `resource_missing` / HTTP 404). `null` tells Resrv it is safe to mint a replacement.
-- On **any transient failure** (timeout, 429, 5xx, auth, connection) **throw** — do not return `null`. Returning `null` on a brownout would let Resrv replace a still-live intent with a second chargeable one, or clear the reference to a charge that later captures.
+- On **any transient failure** (timeout, 429, 5xx, auth, connection) **throw** — do not return `null`. Returning `null` on a brownout would let Resrv replace a still-live intent with a second chargeable one, clear the reference to a charge that later captures, or skip the gateway refund of a charge that did capture.
 
 ### Status vocabulary
 
 Resrv reads `->status` against the canonical Stripe-style vocabulary:
 
-- `succeeded`, `processing`, `requires_capture` → money is captured, settling, or held. Resrv will **not** mint another intent and will **keep** the reference. One exception: when an admin confirms a manual reservation as paid out of band, a `requires_capture` hold is still only an authorization, so Resrv **voids** it through `cancelPaymentIntent()` (verifying afterwards) instead of leaving it open to capture a duplicate payment.
+- `succeeded`, `processing`, `requires_capture` → money is captured, settling, or held. Resrv will **not** mint another intent and will **keep** the reference. Two refinements:
+  - When an admin marks a manual reservation as paid out of band, a `requires_capture` hold is still only an authorization, so Resrv **voids** it through `cancelPaymentIntent()` (verifying afterwards) instead of leaving it open to capture a duplicate payment.
+  - When such a reservation is later refunded, only `succeeded` and `processing` go back through `refund()`. Any other status, or `null`, skips the provider.
 - `canceled` → dead. Resrv treats it as replaceable / safe to clear.
 - any other value (e.g. `requires_payment_method`, `requires_confirmation`, `requires_action`) → still payable and resumable.
 
@@ -1266,4 +1306,27 @@ This is safe because offline gateways also `supportsManualConfirmation()`: Resrv
 
 ### Why a required method, not a shim
 
-You may wonder why Resrv doesn't guard the call sites with `method_exists()` or an optional companion interface so older gateways keep booting. Both call sites depend on the method's money-safety *semantics*, not merely its presence: a missing-method default that returned `null` would make the resume path always mint a fresh intent (the double-charge this method exists to prevent) and make the out-of-band reconciliation drop the reference to a possibly-captured charge (a silently stranded charge). A boot-time fatal is the *safe* failure mode — it forces the gateway author to implement correct behavior before the gateway can process a payment, rather than degrading silently in production. This mirrors how `cancelPaymentIntent()` (Step 9) and `supportsAutomaticRefunds()` (Step 11) were introduced.
+You may wonder why Resrv doesn't guard the call sites with `method_exists()` or an optional companion interface so older gateways keep booting. Every call site depends on the method's money-safety *semantics*, not merely its presence. A missing-method default that returned `null` would make the resume path always mint a fresh intent (the double-charge this method exists to prevent). It would make the cancel and out-of-band reconciliation paths drop the reference to a possibly-captured charge (a silently stranded charge), and make refunds skip a real online charge. A boot-time fatal is the *safe* failure mode — it forces the gateway author to implement correct behavior before the gateway can process a payment, rather than degrading silently in production. This mirrors how `cancelPaymentIntent()` (Step 9) and `supportsAutomaticRefunds()` (Step 11) were introduced.
+
+---
+
+## Step 14: Confirm Awaiting-Payment (Manual) Reservations in `verifyPayment()`
+
+**Applies to: provider-verified gateways (`supportsManualConfirmation()` returns `false`)**
+
+> 📅 Added in Resrv v6.5.0 alongside admin-created (manual) reservations. There is no interface change here, so nothing fatals. But a webhook that only confirms `pending` reservations will never confirm a pay-by-link payment, and the customer's money arrives with the booking still unconfirmed.
+
+### Background
+
+Control Panel users can now create reservations for customers. Unless the booking collects nothing, it is created in the new **`awaiting_payment`** status (`ReservationStatus::AWAITING_PAYMENT`). The customer pays from the `reservation-payment` page, which calls your `paymentIntent()` with a `$returnUrl` (Step 12) and stores the returned `->id` on the reservation's `payment_id` exactly as checkout does. The amount charged is `payment + payment_surcharge`, the same as checkout. As in checkout, your **webhook is the only thing that confirms the payment**; the redirect back to the pay page only drives interim messaging.
+
+### What `verifyPayment()` must do
+
+- **Don't pre-filter on `pending`.** Look the reservation up by `payment_id` as usual and confirm through `transitionTo(ReservationStatus::CONFIRMED, tolerant: true)` (Step 10). It accepts both `pending` and `awaiting_payment` rows and returns `false` for anything else, so gate `ReservationConfirmed` on its return value and drop any `status === 'pending'` check in front of it.
+- **Dispatch with the webhook facts** so the activity log records how the booking was confirmed: `ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, ['gateway' => $reservation->payment_gateway, 'payment_id' => $intentId])`.
+- **Don't end an awaiting-payment reservation on a failed or cancelled intent.** The customer can retry from the same link, and an admin can cancel the booking. `$reservation->expire()` already no-ops on anything but `pending`; don't call any other transition from those events.
+- **Surface late payments.** If the hold lapsed and `resrv:cancel-lapsed-holds` cancelled the reservation while the payment was in flight, the row is `cancelled` when your webhook arrives. Use the Step 10 re-read with `notifyIfOrphaned()`, which treats `cancelled` as terminal.
+
+### `supportsWebhooks()` gates manual reservations
+
+Because the webhook is the only confirmation path, the create-reservation page refuses an online gateway whose `supportsWebhooks()` returns `false`: *"This payment method cannot confirm online payments, so it cannot be used to collect a payment."* Return `true` if your gateway confirms through webhooks and should be offered for manual reservations. Manually-confirmed (offline) gateways are unaffected: an admin marks those bookings as paid in the CP.
