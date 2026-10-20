@@ -100,8 +100,8 @@
 @component('mail::table')
 |{{ __("Payment information") }}||
 | :----------------------------- |:----------------| 
-@if (config('resrv-config.payment') !== 'everything' && $reservation->status !== 'partner')
-| {{ __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
+@if ((config('resrv-config.payment') !== 'everything' || $reservation->payment->lessThan($reservation->total)) && $reservation->status !== 'partner')
+| {{ $reservation->amountPaidOnline()->isZero() ? __("Amount already paid") : __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
 | {{ __("Remaining amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
 @if (! $reservation->payment_surcharge->isZero())

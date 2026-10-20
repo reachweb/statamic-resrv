@@ -17,6 +17,7 @@ use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Stripe\Stripe;
@@ -381,6 +382,77 @@ class StripeWebhookTest extends TestCase
         // One notification despite two webhook deliveries for the same orphaned charge.
         Mail::assertSent(OrphanedPaymentNotification::class, 1);
         $this->assertEquals('expired', $reservation->fresh()->status);
+    }
+
+    public function test_redelivered_succeeded_webhook_for_a_no_refund_cancellation_is_not_an_orphan()
+    {
+        // A paid booking cancelled without a refund keeps its charge on purpose. Stripe may still
+        // redeliver the original succeeded event for that intent — it must not tell admins to refund.
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'cancelled',
+            'payment_id' => 'pi_test_retained',
+            'payment_gateway' => 'stripe',
+            'payment_unresolved' => false,
+        ]);
+
+        $request = $this->signedWebhookRequest('payment_intent.succeeded', 'pi_test_retained', 'whsec_test', time());
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('cancelled', $reservation->fresh()->status);
+        Mail::assertNotSent(OrphanedPaymentNotification::class);
+    }
+
+    public function test_succeeded_webhook_for_a_cancelled_hold_with_an_unresolved_intent_is_an_orphan()
+    {
+        // The hold-lapse race: the sweep cancelled while the payment was in flight and kept the
+        // reference stamped unresolved — that charge was never collected for a live booking.
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'cancelled',
+            'payment_id' => 'pi_test_unresolved',
+            'payment_gateway' => 'stripe',
+            'payment_unresolved' => true,
+        ]);
+
+        $request = $this->signedWebhookRequest('payment_intent.succeeded', 'pi_test_unresolved', 'whsec_test', time());
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('cancelled', $reservation->fresh()->status);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_test_unresolved');
+    }
+
+    public function test_fake_gateway_redelivered_success_after_a_no_refund_cancellation_is_not_an_orphan()
+    {
+        // End to end through the real cancel path: confirm → cancel without refund → redelivery.
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'fake_retained',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $this->assertTrue(app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation));
+        $this->assertEquals('cancelled', $reservation->fresh()->status);
+        $this->assertEquals('fake_retained', $reservation->fresh()->payment_id);
+
+        app(FakePaymentGateway::class)->verifyPayment($this->fakeGatewaySuccessRequest($reservation->id));
+
+        $this->assertEquals('cancelled', $reservation->fresh()->status);
+        Mail::assertNotSent(OrphanedPaymentNotification::class);
     }
 
     public function test_orphan_notification_sends_one_message_per_admin_recipient()

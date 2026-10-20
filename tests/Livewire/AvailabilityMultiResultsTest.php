@@ -10,6 +10,7 @@ use Livewire\Livewire;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
+use Reach\StatamicResrv\Facades\Price as PriceFacade;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Extras;
@@ -1558,6 +1559,133 @@ class AvailabilityMultiResultsTest extends TestCase
         // Checkout component can copy them onto the reservation.
         $this->assertNotEmpty(session('resrv-extras'));
         $this->assertNotEmpty(session('resrv-options'));
+    }
+
+    public function test_checkout_reprices_stale_session_extras_instead_of_throwing_drift()
+    {
+        // Multiple components persist the shared 'resrv-extras' session key on every
+        // Livewire dehydrate (AvailabilityMultiResults, Extras, AvailabilityResults).
+        // When a parent action re-prices the extras against the cart, the Extras child
+        // rides along in the same request (Reactive $errors prop) and its stale snapshot
+        // dehydrates last, clobbering the fresh prices. Checkout must therefore re-price
+        // the session-carried extras against the actual reservation instead of trusting
+        // them — otherwise validateTotal() throws ReservationDriftException on mount and
+        // the customer dead-ends.
+        $this->createCheckoutEntry();
+
+        [$entryId, $adultsRate] = $this->createMultiRateEntry();
+
+        $extra = ResrvExtra::factory()->create();
+        ResrvEntry::whereItemId($entryId)->extras()->attach($extra->id);
+
+        // Cart line at quantity 2: the per-day extra re-prices to 4.65 × 2 days × qty 2 = 18.60
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 2)
+            ->call('addSelections')
+            ->dispatch('extras-updated', [[
+                'id' => $extra->id,
+                'price' => '9.30',
+                'name' => $extra->name,
+                'quantity' => 1,
+            ]]);
+
+        $this->assertEquals('18.60', $component->get('enabledExtras.extras')->first()['price']);
+
+        $component->call('checkout');
+
+        // Simulate the stale child snapshot overwriting the session after the parent's
+        // fresh write: the extra is priced at the search quantity (1), not the cart's (2).
+        $sessionExtras = session('resrv-extras');
+        $sessionExtras->extras = $sessionExtras->extras->map(
+            fn ($sessionExtra) => array_merge($sessionExtra, ['price' => '9.30'])
+        );
+        session(['resrv-extras' => $sessionExtras]);
+
+        $checkout = Livewire::test(Checkout::class, ['enableExtrasStep' => false]);
+
+        $checkout->assertHasNoErrors('reservation')
+            ->assertSet('step', 2);
+
+        $this->assertEquals('18.60', $checkout->get('enabledExtras.extras')->first()['price']);
+
+        $parent = Reservation::where('type', 'parent')->first();
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $parent->id,
+            'total' => PriceFacade::create($parent->price)->add(PriceFacade::create('18.60'))->format(),
+        ]);
+    }
+
+    public function test_extras_component_reprices_stale_session_extras_on_mount()
+    {
+        [$entryId, $adultsRate] = $this->createMultiRateEntry();
+
+        $extra = ResrvExtra::factory()->create();
+        ResrvEntry::whereItemId($entryId)->extras()->attach($extra->id);
+
+        Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 2)
+            ->call('addSelections')
+            ->dispatch('extras-updated', [[
+                'id' => $extra->id,
+                'price' => '9.30',
+                'name' => $extra->name,
+                'quantity' => 1,
+            ]]);
+
+        // Plant a stale snapshot in the shared session key (price computed at quantity 1).
+        $sessionExtras = session('resrv-extras');
+        $sessionExtras->extras = $sessionExtras->extras->map(
+            fn ($sessionExtra) => array_merge($sessionExtra, ['price' => '9.30'])
+        );
+        session(['resrv-extras' => $sessionExtras]);
+
+        // Mounting the Extras child must re-derive the enabled prices for the current cart
+        // (4.65 × 2 days × qty 2 = 18.60) instead of trusting the session snapshot.
+        $extrasComponent = Livewire::test(Extras::class, [
+            'entryId' => $entryId,
+            'useMultiSelections' => true,
+        ]);
+
+        $this->assertEquals('18.60', $extrasComponent->get('enabledExtras.extras')->first()['price']);
+        $extrasComponent->assertDispatched('extras-updated');
+    }
+
+    public function test_extras_component_reprices_enabled_extras_when_selections_change()
+    {
+        [$entryId, $adultsRate] = $this->createMultiRateEntry();
+
+        $extra = ResrvExtra::factory()->create();
+        ResrvEntry::whereItemId($entryId)->extras()->attach($extra->id);
+
+        $parent = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('addSelections')
+            ->dispatch('extras-updated', [[
+                'id' => $extra->id,
+                'price' => '9.30',
+                'name' => $extra->name,
+                'quantity' => 1,
+            ]]);
+
+        $extrasComponent = Livewire::test(Extras::class, [
+            'entryId' => $entryId,
+            'useMultiSelections' => true,
+        ]);
+
+        $this->assertEquals('9.30', $extrasComponent->get('enabledExtras.extras')->first()['price']);
+
+        // The cart changes in the parent component: a second quantity-1 line doubles the
+        // aggregated extra price. The child's multi-selections-updated listener must
+        // re-price its own enabled extras, not re-broadcast the stale 9.30.
+        $parent->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('addSelections');
+
+        $extrasComponent->dispatch('multi-selections-updated');
+
+        $this->assertEquals('18.60', $extrasComponent->get('enabledExtras.extras')->first()['price']);
     }
 
     public function test_next_multi_results_visit_clears_stale_session_addons()

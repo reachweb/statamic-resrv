@@ -25,6 +25,7 @@
       <directory suffix="Test.php">tests/Jobs/</directory>
       <directory suffix="Test.php">tests/Settings/</directory>
       <directory suffix="Test.php">tests/ActivityLog/</directory>
+      <directory suffix="Test.php">tests/ManualReservation/</directory>
     </testsuite>
   </testsuites>
   <source>

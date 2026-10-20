@@ -184,6 +184,12 @@ class PaymentGatewayManager
         return isset($this->gateways[$name]);
     }
 
+    /** The config key gateway() falls back to when no name is given. */
+    public function defaultName(): ?string
+    {
+        return $this->defaultName;
+    }
+
     public function hasMultiple(): bool
     {
         return count($this->gateways) > 1;
@@ -227,5 +233,24 @@ class PaymentGatewayManager
                     'surcharge' => $this->gateways[$name]['surcharge'] ?? null,
                 ];
             })->values()->all();
+    }
+
+    /**
+     * Every configured gateway for the CP manual-reservation surfaces — unlike
+     * availableForFrontend() nothing is filtered: the create form disables unusable gateways
+     * instead of hiding them. Surcharges/amount limits stay server-side (quote endpoint).
+     *
+     * @return array<int, array{key: string, label: ?string, supports_manual_confirmation: bool}>
+     */
+    public function forCp(): array
+    {
+        return collect($this->gateways)->map(function ($config, $name) {
+            return [
+                'key' => $name,
+                'label' => $this->label($name),
+                'supports_manual_confirmation' => $this->resolve($name)->supportsManualConfirmation(),
+                'supports_webhooks' => $this->resolve($name)->supportsWebhooks(),
+            ];
+        })->values()->all();
     }
 }

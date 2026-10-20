@@ -14,6 +14,12 @@ class IncreaseAvailability
 
     public function handle($event): void
     {
+        // Mirrors the DecreaseAvailability guard: never restore stock that was never decremented.
+        // Strict: a null flag (column not selected / not yet migrated) fails safe to the DB default (true).
+        if ($event->reservation->affects_availability === false) {
+            return;
+        }
+
         $reason = $this->reasonForEvent($event);
 
         if ($event->reservation->type === 'parent') {

@@ -9,6 +9,7 @@ enum ReservationEmailEvent: string
     case CustomerRefunded = 'customer_refunded';
     case CustomerCancelled = 'customer_cancelled';
     case CustomerAbandoned = 'customer_abandoned';
+    case CustomerPaymentRequest = 'customer_payment_request';
     case AdminCancelled = 'admin_cancelled';
     case AdminOrphanedPayment = 'admin_orphaned_payment';
 

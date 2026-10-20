@@ -6,6 +6,7 @@ defineProps({
     report: { type: Object, default: () => ({}) },
     filters: { type: Object, default: () => ({}) },
     currency: { type: String, default: '' },
+    reservationsUrl: { type: String, default: null },
 });
 </script>
 
@@ -17,6 +18,7 @@ defineProps({
             :report="report"
             :filters="filters"
             :currency="currency"
+            :reservations-url="reservationsUrl"
         />
     </div>
 </template>

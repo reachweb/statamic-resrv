@@ -21,7 +21,7 @@ class LogReservationCreated
             reservation: $event->reservation,
             from: null,
             to: $status instanceof ReservationStatus ? $status : ReservationStatus::from($status),
-            reason: ReservationLogReason::CheckoutStarted,
+            reason: $event->data?->viaCp ? ReservationLogReason::CpCreated : ReservationLogReason::CheckoutStarted,
         );
     }
 }

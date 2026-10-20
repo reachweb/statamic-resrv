@@ -336,6 +336,7 @@ class Extras extends Component
         $this->updateExtraConditions();
 
         if ($this->enabledExtras->extras->count() !== 0) {
+            $this->updateEnabledExtraPrices();
             $this->dispatchExtrasUpdated();
         }
     }

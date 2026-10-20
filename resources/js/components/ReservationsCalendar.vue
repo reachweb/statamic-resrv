@@ -9,6 +9,14 @@
 
         <Card>
             <div class="statamic-resrv-reservations">
+                <ul class="resrv-calendar-legend mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs" :aria-label="__('Legend')">
+                    <li v-for="item in legend" :key="item.status" :class="`resrv-event--${item.status}`">
+                        <span class="resrv-event-card">
+                            <span class="resrv-event-dot" aria-hidden="true"></span>
+                            <span class="resrv-event-title">{{ item.label }}</span>
+                        </span>
+                    </li>
+                </ul>
                 <FullCalendar ref="fullCalendarRef" :options="calendarOptions" />
             </div>
         </Card>
@@ -21,6 +29,7 @@ import FullCalendar from '@fullcalendar/vue3';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { ref, watch } from 'vue';
+import { formatInstant } from '../composables/useReservationDisplay.js';
 
 const props = defineProps({
     calendarJsonUrl: { type: String, required: true },
@@ -36,10 +45,29 @@ function appendSpan(parent, className, text) {
     parent.appendChild(span);
 }
 
+const legend = [
+    { status: 'confirmed', label: __('Confirmed') },
+    { status: 'partner', label: __('Partner') },
+    { status: 'awaiting_payment', label: __('Awaiting payment (holds availability)') },
+];
+
+function eventTooltip(event) {
+    const { status, hold_expires_at: holdExpiresAt, holdExpiresAt: holdExpiresAtCamel } = event.extendedProps;
+    const isAwaiting = status === 'awaiting_payment' || event.classNames.includes('resrv-event--awaiting_payment');
+    if (!isAwaiting) return event.title;
+
+    const deadline = formatInstant(holdExpiresAt ?? holdExpiresAtCamel);
+    const note = deadline
+        ? __('Awaiting payment — cancels automatically if not paid by :deadline.', { deadline })
+        : __('Awaiting payment — no payment deadline.');
+    return `${event.title}\n${note}`;
+}
+
 function renderEvent(arg) {
     const { reservationId, entryTitle, rateLabel, quantity } = arg.event.extendedProps;
     const card = document.createElement('div');
     card.className = 'resrv-event-card';
+    card.title = eventTooltip(arg.event);
 
     appendSpan(card, 'resrv-event-dot', '');
 

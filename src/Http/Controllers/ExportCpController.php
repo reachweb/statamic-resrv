@@ -8,6 +8,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Entry;
@@ -17,7 +18,7 @@ use Statamic\Facades\Form as StatamicForm;
 
 class ExportCpController extends Controller
 {
-    public const STATUSES = ['pending', 'confirmed', 'partner', 'cancelled', 'expired', 'refunded'];
+    public const STATUSES = ['pending', 'awaiting_payment', 'confirmed', 'partner', 'cancelled', 'expired', 'refunded'];
 
     public const CUSTOMER_KEYS_CACHE_KEY = 'resrv.export.customer_data_keys';
 
@@ -48,6 +49,7 @@ class ExportCpController extends Controller
         return Inertia::render('resrv::Export/Index', [
             'fields' => $this->fieldMetadata(),
             'statuses' => self::STATUSES,
+            'statusLabels' => collect(self::STATUSES)->mapWithKeys(fn (string $status) => [$status => ReservationStatus::labelFor($status)])->all(),
             'entries' => Entry::query()->orderBy('title')->get(['item_id', 'title'])->values(),
             'affiliates' => Affiliate::withTrashed()->orderBy('name')->get(['id', 'name', 'code'])->values(),
             'countUrl' => cp_route('resrv.export.count'),

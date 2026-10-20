@@ -32,6 +32,8 @@ class ReportsCpController extends Controller
                 'dateField' => $dateField,
             ],
             'report' => (new ReportResource($report))->resolve($request),
+            // The Outstanding tile appends ?filters= (status + the report's date range) client-side.
+            'reservationsUrl' => cp_route('resrv.reservations.index'),
         ]);
     }
 

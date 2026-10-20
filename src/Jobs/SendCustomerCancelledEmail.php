@@ -11,16 +11,24 @@ use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Mail\ReservationCancelledCustomer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
+use Reach\StatamicResrv\Traits\IsolatesDeferredSendFailures;
 
 class SendCustomerCancelledEmail implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, IsolatesDeferredSendFailures, Queueable, SerializesModels;
 
     protected $reservation;
 
-    public function __construct(Reservation $reservation)
+    /**
+     * Not constructor-promoted: payloads queued before this property existed carry no `context`
+     * key, and an uninitialized typed property would make handle() throw on unserialization.
+     */
+    protected ?string $context = null;
+
+    public function __construct(Reservation $reservation, ?string $context = null)
     {
         $this->reservation = $reservation;
+        $this->context = $context;
     }
 
     public function handle(): void
@@ -31,7 +39,7 @@ class SendCustomerCancelledEmail implements ShouldQueue
         $dispatcher->send(
             $this->reservation,
             ReservationEmailEvent::CustomerCancelled,
-            new ReservationCancelledCustomer($this->reservation),
+            new ReservationCancelledCustomer($this->reservation, $this->context),
         );
     }
 }

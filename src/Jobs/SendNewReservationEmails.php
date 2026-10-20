@@ -12,16 +12,24 @@ use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
+use Reach\StatamicResrv\Traits\IsolatesDeferredSendFailures;
 
 class SendNewReservationEmails implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, IsolatesDeferredSendFailures, Queueable, SerializesModels;
 
     protected $reservation;
 
-    public function __construct(Reservation $reservation)
+    /**
+     * Not constructor-promoted: payloads queued before this property existed carry no key for it,
+     * and an uninitialized typed property would make handle() throw on unserialization.
+     */
+    protected bool $notifyCustomer = true;
+
+    public function __construct(Reservation $reservation, bool $notifyCustomer = true)
     {
         $this->reservation = $reservation;
+        $this->notifyCustomer = $notifyCustomer;
     }
 
     /**
@@ -34,11 +42,13 @@ class SendNewReservationEmails implements ShouldQueue
         /** @var ReservationEmailDispatcher $dispatcher */
         $dispatcher = app(ReservationEmailDispatcher::class);
 
-        $dispatcher->send(
-            $this->reservation,
-            ReservationEmailEvent::CustomerConfirmed,
-            new ReservationConfirmed($this->reservation),
-        );
+        if ($this->notifyCustomer) {
+            $dispatcher->send(
+                $this->reservation,
+                ReservationEmailEvent::CustomerConfirmed,
+                new ReservationConfirmed($this->reservation),
+            );
+        }
 
         $dispatcher->send(
             $this->reservation,

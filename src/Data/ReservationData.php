@@ -8,7 +8,9 @@ class ReservationData
 {
     public function __construct(
         public ?Affiliate $affiliate = null,
-        public ?string $coupon = null) {}
+        public ?string $coupon = null,
+        public bool $viaCp = false,
+        public bool $skipDynamicPricings = false) {}
 
     public function hasAffiliate(): bool
     {

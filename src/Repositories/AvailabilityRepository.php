@@ -134,6 +134,22 @@ class AvailabilityRepository
     }
 
     /**
+     * Distinct nights in [date_start, date_end) that have a priced row for the rate (its base
+     * pool for shared rates) — the completeness check itemPricesBetween() lacks.
+     */
+    public function itemPricedNightCount(string $date_start, string $date_end, string $statamic_id, ?int $rateId = null): int
+    {
+        return Availability::query()
+            ->where('statamic_id', $statamic_id)
+            ->where('date', '>=', $date_start)
+            ->where('date', '<', $date_end)
+            ->whereNotNull('price')
+            ->when($rateId, fn (Builder $query, int $rateId) => $this->applyRateFilter($query, $rateId))
+            ->distinct()
+            ->count('date');
+    }
+
+    /**
      * Validates that every required day in date_start..date_end has a priced availability row.
      *
      * $onlyDays (0=Sun..6=Sat) limits the required days to those weekdays, matching the controller
@@ -410,6 +426,23 @@ class AvailabilityRepository
         $this->validateMaxAvailableForDateRange($rate, $dateStart, $dateEnd, null, $quantity, false, false);
     }
 
+    /**
+     * How many more units the shared rate's own cap admits across the stay (its busiest night),
+     * or null when the rate is not capped. Counts the same reservations validateMaxAvailable() does.
+     */
+    public function remainingMaxAvailable(int $rateId, string $dateStart, string $dateEnd): ?int
+    {
+        $rate = Rate::withoutGlobalScopes()->find($rateId, ['id', 'max_available', 'availability_type']);
+
+        if (! $rate || ! $rate->isShared() || ! $rate->max_available) {
+            return null;
+        }
+
+        $bookedPerDay = $this->bookedPerDayForRate($rate, $dateStart, $dateEnd, null, false, false);
+
+        return max(0, $rate->max_available - (int) max([0, ...$bookedPerDay]));
+    }
+
     public function checkMaxAvailable(int $rateId, string $dateStart, string $dateEnd, int $quantity): bool
     {
         try {
@@ -450,6 +483,9 @@ class AvailabilityRepository
 
         $overlapping = Reservation::whereIn('rate_id', $rateIds)
             ->whereNotIn('status', ReservationStatus::terminal())
+            // View-only holds (affects_availability=false) never took inventory, so they don't consume
+            // shared-rate capacity. Children never carry the flag; their branch stays unfiltered.
+            ->where('affects_availability', true)
             ->when($rangeEnd, fn ($q) => $q->where('date_start', '<', $rangeEnd))
             ->when($rangeStart, fn ($q) => $q->where('date_end', '>', $rangeStart))
             ->get(['rate_id', 'quantity', 'date_start', 'date_end']);
@@ -502,12 +538,35 @@ class AvailabilityRepository
             return;
         }
 
+        $bookedPerDay = $this->bookedPerDayForRate($rate, $dateStart, $dateEnd, $reservationId, $isChildReservation, $useLocks);
+
+        $period = CarbonPeriod::create($dateStart, $dateEnd, CarbonPeriod::EXCLUDE_END_DATE);
+
+        foreach ($period as $date) {
+            $activeQuantity = $bookedPerDay[$date->toDateString()] ?? 0;
+
+            if (($activeQuantity + $quantity) > $rate->max_available) {
+                throw new AvailabilityException(__('The maximum number of bookings for this rate has been reached.'));
+            }
+        }
+    }
+
+    /**
+     * Units of the rate already booked on each day of the [dateStart, dateEnd) window, keyed by
+     * date string; days with nothing booked are absent.
+     *
+     * @return array<string, int>
+     */
+    protected function bookedPerDayForRate(Rate $rate, string $dateStart, string $dateEnd, ?int $reservationId, bool $isChildReservation, bool $useLocks): array
+    {
         $excludeParentId = ($reservationId && ! $isChildReservation) ? $reservationId : null;
         $excludeChildId = ($reservationId && $isChildReservation) ? $reservationId : null;
 
         $overlapping = Reservation::where('rate_id', $rate->id)
             ->when($excludeParentId, fn ($q) => $q->where('id', '!=', $excludeParentId))
             ->whereNotIn('status', ReservationStatus::terminal())
+            // Same view-only exclusion as getExhaustedDatesForRates; children stay unfiltered.
+            ->where('affects_availability', true)
             ->where('date_start', '<', $dateEnd)
             ->where('date_end', '>', $dateStart)
             ->when($useLocks, fn ($q) => $q->lockForUpdate())
@@ -533,7 +592,7 @@ class AvailabilityRepository
 
         $bookedPerDay = [];
         foreach ($allOverlapping as $reservation) {
-            // Only days inside the requested [dateStart, dateEnd) window are checked below, so clamp
+            // Only days inside the requested [dateStart, dateEnd) window are ever read, so clamp
             // each reservation to that window before expanding: a short request overlapping a
             // months-long booking would otherwise build hundreds of unused entries and needlessly
             // widen the lockForUpdate window. date_end stays exclusive (checkout day is free), and
@@ -552,14 +611,6 @@ class AvailabilityRepository
             }
         }
 
-        $period = CarbonPeriod::create($dateStart, $dateEnd, CarbonPeriod::EXCLUDE_END_DATE);
-
-        foreach ($period as $date) {
-            $activeQuantity = $bookedPerDay[$date->toDateString()] ?? 0;
-
-            if (($activeQuantity + $quantity) > $rate->max_available) {
-                throw new AvailabilityException(__('The maximum number of bookings for this rate has been reached.'));
-            }
-        }
+        return $bookedPerDay;
     }
 }

@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tests\Reports;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
+use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Report;
@@ -153,6 +154,27 @@ class ReportsCpTest extends TestCase
         $this->assertEquals(1.0, $top[0]['percentage']);
     }
 
+    // A cancelled unpaid hold can keep its payment_id only as a reconciliation handle on an
+    // unverifiable intent (payment_unresolved) — no money was collected, so it must not report.
+    public function test_report_excludes_cancelled_reservations_with_an_unresolved_payment_reference()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed'])->create();
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'cancelled', 'payment_id' => 'pi_kept'])->create();
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'cancelled',
+            'payment_id' => 'pi_unresolved',
+            'payment_unresolved' => true,
+        ])->create();
+
+        $report = new Report(now()->toDateString(), now()->addWeek()->toDateString());
+
+        $this->assertSame(2, $report->countReservations());
+        $this->assertSame('400.00', $report->sumRevenue()->format());
+    }
+
     // The retained commission of a paid no-refund cancellation must report; a voided pivot on a
     // loaded reservation must not. The second half can't occur through current flows (voiding and
     // the status whitelist track together), so it's manufactured — the explicit cancelled_at
@@ -173,6 +195,47 @@ class ReportsCpTest extends TestCase
         $this->assertEquals(1, $row['reservations']);
         $this->assertSame(300.0, $row['total_revenue']);
         $this->assertSame(60.0, $row['commission']);
+    }
+
+    public function test_report_lists_outstanding_awaiting_payment_bookings_apart_from_revenue()
+    {
+        $item = $this->makeStatamicItem();
+
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed', 'price' => '45.00'])->create();
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'awaiting_payment', 'price' => '90.00', 'payment' => '30.00'])->create();
+        // Payment requests ask for the surcharge too, so the tile does.
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'awaiting_payment', 'price' => '60.00', 'payment' => '60.00', 'payment_surcharge' => '3.00'])->create();
+        // Outside the range.
+        Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'awaiting_payment',
+            'payment' => '500.00',
+            'date_start' => now()->addMonths(2)->toIso8601String(),
+            'date_end' => now()->addMonths(2)->addDays(2)->toIso8601String(),
+        ])->create();
+
+        $this->getJson(cp_route('resrv.report.index').'?start='.now()->toDateString().'&end='.now()->addWeek()->toDateString())
+            ->assertOk()
+            ->assertJsonPath('outstanding.count', 2)
+            ->assertJsonPath('outstanding.amount', '93.00')
+            // Unpaid holds never count as reservations or revenue.
+            ->assertJsonPath('total_reservations', 1)
+            ->assertJsonPath('total_revenue', '45.00');
+
+        // The same window keyed on the booking date sees all three holds (all created today).
+        $this->getJson(cp_route('resrv.report.index').'?date_field=created_at&start='.now()->toDateString().'&end='.now()->addWeek()->toDateString())
+            ->assertOk()
+            ->assertJsonPath('outstanding.count', 3)
+            ->assertJsonPath('outstanding.amount', '593.00');
+    }
+
+    public function test_reports_page_links_to_the_awaiting_payment_listing()
+    {
+        $this->get(cp_route('resrv.reports.index'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('reservationsUrl', cp_route('resrv.reservations.index'))
+                ->has('report.outstanding'));
     }
 
     public function test_validates_date_field()

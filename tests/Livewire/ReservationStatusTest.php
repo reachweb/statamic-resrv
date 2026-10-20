@@ -27,6 +27,7 @@ use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Entry;
 
@@ -343,6 +344,70 @@ class ReservationStatusTest extends TestCase
             ->call('lookup')
             ->assertHasErrors(['lookup'])
             ->assertSee(trans('statamic-resrv::frontend.tooManyLookupAttempts'));
+    }
+
+    public function test_a_cancelled_unpaid_hold_never_reads_as_a_retained_payment()
+    {
+        Mail::fake();
+
+        // A cancelled unpaid hold has its voided intent cleared: the status page must show the plain cancelled label, not "no refund issued".
+        $reservation = $this->makeReservation([
+            'status' => 'awaiting_payment',
+            'payment_id' => 'pi_unpaid_hold',
+            'payment_gateway' => 'fake',
+        ]);
+
+        app(ReservationRefundProcessor::class)->cancelWithoutRefund(
+            $reservation,
+            ReservationCancelledEvent::CONTEXT_HOLD_LAPSED,
+            cancelOpenIntent: true,
+        );
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertHasNoErrors()
+            ->assertSee(trans('statamic-resrv::frontend.statusCancelledNoRefund'))
+            ->assertDontSee(trans('statamic-resrv::frontend.statusCancelledNoRefundIssued'));
+
+        $this->assertTrue($reservation->fresh()->amountPaidOnline()->isZero());
+    }
+
+    public function test_an_unresolved_payment_reference_never_reads_as_collected_money()
+    {
+        Mail::fake();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        // The void fails unverifiably, so the reference is kept and stamped unresolved:
+        // the status page must not present that handle as a paid amount or a retained payment.
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->makeReservation([
+            'status' => 'awaiting_payment',
+            'payment_id' => 'pi_unresolved_hold',
+            'payment_gateway' => 'fake',
+        ]);
+
+        app(ReservationRefundProcessor::class)->cancelWithoutRefund(
+            $reservation,
+            ReservationCancelledEvent::CONTEXT_HOLD_LAPSED,
+            cancelOpenIntent: true,
+        );
+
+        $reservation->refresh();
+        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertSame('pi_unresolved_hold', $reservation->payment_id);
+        $this->assertTrue($reservation->amountPaidOnline()->isZero());
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $reservation->customer->email)
+            ->set('reference', $reservation->reference)
+            ->call('lookup')
+            ->assertHasNoErrors()
+            ->assertSee(trans('statamic-resrv::frontend.statusCancelledNoRefund'))
+            ->assertDontSee(trans('statamic-resrv::frontend.statusCancelledNoRefundIssued'));
     }
 
     public function test_shows_cancel_button_within_the_free_cancellation_window()
@@ -967,6 +1032,28 @@ class ReservationStatusTest extends TestCase
             ->call('lookup')
             ->assertSee(trans('statamic-resrv::frontend.amountPaid'))
             ->assertDontSee('50.00');
+    }
+
+    public function test_a_receipt_recorded_by_an_admin_shows_as_paid()
+    {
+        // A manual booking marked as paid in the CP: the money arrived out of band, so no
+        // verified online charge exists — empty reference, or a kept intent stamped unresolved.
+        foreach ([['payment_id' => ''], ['payment_id' => 'pi_kept', 'payment_unresolved' => true]] as $attributes) {
+            $reservation = $this->makeReservation(array_merge([
+                'payment_gateway' => 'fake',
+                'payment' => 50,
+                'payment_surcharge' => 0,
+                'created_by' => 'admin',
+            ], $attributes));
+
+            $this->assertTrue($reservation->amountPaidOnline()->isZero());
+
+            Livewire::test(ReservationStatus::class)
+                ->set('email', $reservation->customer->email)
+                ->set('reference', $reservation->reference)
+                ->call('lookup')
+                ->assertSee('50.00');
+        }
     }
 
     public function test_customer_status_url_is_null_without_a_configured_status_entry()
