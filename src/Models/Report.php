@@ -58,12 +58,12 @@ class Report
         $awaiting = Reservation::whereDate($this->dateField, '>=', $this->date_start)
             ->whereDate($this->dateField, '<=', $this->date_end)
             ->where('status', ReservationStatus::AWAITING_PAYMENT->value)
-            ->get(['id', 'payment']);
+            ->get(['id', 'payment', 'payment_surcharge']);
 
         return [
             'count' => $awaiting->count(),
             'amount' => $awaiting->reduce(
-                fn (PriceClass $carry, $reservation) => $carry->add($reservation->payment),
+                fn (PriceClass $carry, $reservation) => $carry->add($reservation->amountDue()),
                 Price::create(0)
             ),
         ];

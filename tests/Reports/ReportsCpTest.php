@@ -203,7 +203,8 @@ class ReportsCpTest extends TestCase
 
         Reservation::factory(['item_id' => $item->id(), 'status' => 'confirmed', 'price' => '45.00'])->create();
         Reservation::factory(['item_id' => $item->id(), 'status' => 'awaiting_payment', 'price' => '90.00', 'payment' => '30.00'])->create();
-        Reservation::factory(['item_id' => $item->id(), 'status' => 'awaiting_payment', 'price' => '60.00', 'payment' => '60.00'])->create();
+        // Payment requests ask for the surcharge too, so the tile does.
+        Reservation::factory(['item_id' => $item->id(), 'status' => 'awaiting_payment', 'price' => '60.00', 'payment' => '60.00', 'payment_surcharge' => '3.00'])->create();
         // Outside the range.
         Reservation::factory([
             'item_id' => $item->id(),
@@ -216,7 +217,7 @@ class ReportsCpTest extends TestCase
         $this->getJson(cp_route('resrv.report.index').'?start='.now()->toDateString().'&end='.now()->addWeek()->toDateString())
             ->assertOk()
             ->assertJsonPath('outstanding.count', 2)
-            ->assertJsonPath('outstanding.amount', '90.00')
+            ->assertJsonPath('outstanding.amount', '93.00')
             // Unpaid holds never count as reservations or revenue.
             ->assertJsonPath('total_reservations', 1)
             ->assertJsonPath('total_revenue', '45.00');
@@ -225,7 +226,7 @@ class ReportsCpTest extends TestCase
         $this->getJson(cp_route('resrv.report.index').'?date_field=created_at&start='.now()->toDateString().'&end='.now()->addWeek()->toDateString())
             ->assertOk()
             ->assertJsonPath('outstanding.count', 3)
-            ->assertJsonPath('outstanding.amount', '590.00');
+            ->assertJsonPath('outstanding.amount', '593.00');
     }
 
     public function test_reports_page_links_to_the_awaiting_payment_listing()

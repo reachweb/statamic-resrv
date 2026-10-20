@@ -85,7 +85,11 @@ class ReservationResource extends ResourceCollection
                     'arrival_day_passed' => $reservation->isAwaitingPayment() && $reservation->arrivalDayPassed(),
                     'payment_window_closed' => $reservation->isAwaitingPayment() && $reservation->paymentWindowClosed(),
                     'supports_manual_confirmation' => $reservation->paymentGatewaySupportsManualConfirmation(),
-                    'refund_is_automatic' => $reservation->refundIsAutomatic(),
+                    // A pending checkout is refunded through its gateway even before an intent is
+                    // stored (it may hold an orphaned charge), so the gateway's capability applies.
+                    'refund_is_automatic' => $reservation->status === ReservationStatus::PENDING->value
+                        ? $reservation->supportsAutomaticRefund()
+                        : $reservation->refundIsAutomatic(),
                     'customer_email' => $reservation->customer?->email,
                     'customer_name' => $reservation->customerName(),
                     'created_at' => $this->dateIndexValue('created_at', $reservation->created_at),

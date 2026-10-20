@@ -367,6 +367,8 @@ class ReservationPaymentPageTest extends TestCase
 
     public function test_a_return_reporting_money_in_flight_wins_over_a_closed_window()
     {
+        $this->fakeGateway()->retrievedIntentStatus = 'succeeded';
+
         $reservation = $this->makeAwaitingReservation([
             'payment_id' => 'pi_processing',
             'hold_expires_at' => now()->subMinute(),
@@ -381,6 +383,40 @@ class ReservationPaymentPageTest extends TestCase
             ->test(ReservationPayment::class)
             ->assertSee(trans('statamic-resrv::frontend.paymentProcessing'))
             ->assertDontSee(trans('statamic-resrv::frontend.paymentLinkExpired'));
+    }
+
+    public function test_past_the_window_a_return_the_gateway_does_not_back_shows_the_closed_window()
+    {
+        // The stored intent never collected: a stale or edited return URL must not claim it did.
+        $this->fakeGateway()->retrievedIntentStatus = 'requires_payment_method';
+
+        $withIntent = $this->makeAwaitingReservation([
+            'payment_id' => 'pi_unpaid',
+            'hold_expires_at' => now()->subMinute(),
+        ]);
+        $withoutIntent = $this->makeAwaitingReservation([
+            'date_start' => now()->subDay()->startOfDay(),
+            'date_end' => now()->addDay()->startOfDay(),
+        ]);
+
+        Livewire::withQueryParams([
+            'ref' => $withIntent->reference,
+            'hash' => $withIntent->customerLookupHash(),
+            'payment_intent' => 'pi_unpaid',
+            'redirect_status' => 'succeeded',
+        ])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentLinkExpired'))
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentProcessing'));
+
+        Livewire::withQueryParams([
+            'ref' => $withoutIntent->reference,
+            'hash' => $withoutIntent->customerLookupHash(),
+            'payment_intent' => 'pi_forged',
+        ])
+            ->test(ReservationPayment::class)
+            ->assertSee(trans('statamic-resrv::frontend.paymentArrivalPassed'))
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentProcessing'));
     }
 
     public function test_pay_creates_an_intent_and_persists_the_payment_id()

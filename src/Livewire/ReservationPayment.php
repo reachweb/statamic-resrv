@@ -59,8 +59,9 @@ class ReservationPayment extends Component
     /**
      * The single state the blade renders, derived server-side per request: awaiting |
      * instructions (offline gateway) | processing | deadline_passed | arrival_passed | paid |
-     * unavailable. A gateway return reporting money in flight wins over a closed window: the
-     * customer has just paid, and the webhook still confirms a row that is awaiting payment.
+     * unavailable. Money in flight wins over a closed window — the customer has just paid, and
+     * the webhook still confirms a row that is awaiting payment — but past the window only the
+     * gateway can say so: a return URL's query is client-controlled and outlives its payment.
      */
     #[Computed]
     public function state(): string
@@ -79,18 +80,22 @@ class ReservationPayment extends Component
             return 'unavailable';
         }
 
-        $returnStatus = $this->gatewayReturnStatus() ?? $this->redirectGatewayReturnStatus($reservation);
-
-        if ($this->paymentProcessing || $returnStatus === 'processing' || $returnStatus === 'succeeded') {
+        if ($this->paymentProcessing) {
             return 'processing';
         }
 
-        if ($reservation->holdDeadlinePassed()) {
-            return 'deadline_passed';
+        if ($this->paymentWindowClosed($reservation)) {
+            if ($this->returnedFromGateway() && $this->storedIntentIsMovingMoney($reservation)) {
+                return 'processing';
+            }
+
+            return $reservation->holdDeadlinePassed() ? 'deadline_passed' : 'arrival_passed';
         }
 
-        if ($reservation->arrivalDayPassed()) {
-            return 'arrival_passed';
+        $returnStatus = $this->gatewayReturnStatus() ?? $this->redirectGatewayReturnStatus($reservation);
+
+        if ($returnStatus === 'processing' || $returnStatus === 'succeeded') {
+            return 'processing';
         }
 
         if ($reservation->paymentGatewaySupportsManualConfirmation()) {
@@ -144,6 +149,32 @@ class ReservationPayment extends Component
             false => 'failed',
             default => null,
         };
+    }
+
+    protected function returnedFromGateway(): bool
+    {
+        return $this->gatewayReturnStatus() !== null || request()->has('resrv_gateway');
+    }
+
+    /**
+     * Whether the gateway reports the stored intent captured or capturing money. A failed read
+     * reports false: the closed window shows, and the webhook still confirms a real payment.
+     */
+    protected function storedIntentIsMovingMoney(Reservation $reservation): bool
+    {
+        if (! $reservation->hasGatewayPayment()) {
+            return false;
+        }
+
+        try {
+            $intent = $reservation->resolvePaymentGateway()->retrievePaymentIntent((string) $reservation->payment_id, $reservation);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return false;
+        }
+
+        return in_array($intent?->status ?? '', ['succeeded', 'processing', 'requires_capture'], true);
     }
 
     /**

@@ -33,7 +33,7 @@ final class ActiveReservationsGuard
         string $dateEnd,
         ?array $rateIds = null,
     ): bool {
-        return self::inFlightReservationReferencesForRange($statamicId, $dateStart, $dateEnd, $rateIds) !== [];
+        return self::reservationsOverlapRange($statamicId, $dateStart, $dateEnd, $rateIds, self::inFlightConstraint());
     }
 
     /**
@@ -53,9 +53,14 @@ final class ActiveReservationsGuard
             $dateStart,
             $dateEnd,
             $rateIds,
-            fn ($query) => $query->whereIn('status', ReservationStatus::inFlight())
-                ->where('affects_availability', true),
+            self::inFlightConstraint(),
         );
+    }
+
+    private static function inFlightConstraint(): Closure
+    {
+        return fn ($query) => $query->whereIn('status', ReservationStatus::inFlight())
+            ->where('affects_availability', true);
     }
 
     /**

@@ -548,7 +548,8 @@ class Reservation extends Model
      * retained through its own verified charge. Everything else received nothing.
      *
      * Null means unknown: a frontend checkout through a manual-confirmation gateway (bank
-     * transfer) confirms before any money arrives, so its minted reference proves nothing.
+     * transfer) confirms before any money arrives, so its minted reference proves nothing; and a
+     * cancelled row's unresolved intent may have captured (admins are told to check and refund it).
      */
     public function amountReceived(): ?PriceClass
     {
@@ -564,9 +565,11 @@ class Reservation extends Model
             ReservationStatus::REFUNDED->value => $this->hasGatewayPayment() || $this->created_by !== null
                 ? $this->amountDue()
                 : Price::create(0),
-            ReservationStatus::CANCELLED->value => $this->hasGatewayPayment() && ! $this->payment_unresolved
-                ? $this->amountPaid()
-                : Price::create(0),
+            ReservationStatus::CANCELLED->value => match (true) {
+                ! $this->hasGatewayPayment() => Price::create(0),
+                (bool) $this->payment_unresolved => null,
+                default => $this->amountPaid(),
+            },
             default => Price::create(0),
         };
     }

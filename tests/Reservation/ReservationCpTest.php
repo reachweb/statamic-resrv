@@ -454,8 +454,8 @@ class ReservationCpTest extends TestCase
             ['status' => 'confirmed', 'payment_id' => '', 'created_by' => '1', 'expected' => '30.00'],
             // A manual booking refunded after an out-of-band confirmation had received it.
             ['status' => 'refunded', 'payment_id' => '', 'created_by' => '1', 'expected' => '30.00'],
-            // An unpaid hold cancelled with an unverifiable intent kept for reconciliation.
-            ['status' => 'cancelled', 'payment_id' => 'pi_dead', 'payment_unresolved' => true, 'expected' => '0.00'],
+            // A hold cancelled with its intent kept for reconciliation: it may have captured, so unknown.
+            ['status' => 'cancelled', 'payment_id' => 'pi_dead', 'payment_unresolved' => true, 'expected' => null],
             // A paid booking the customer cancelled outside the window keeps its charge.
             ['status' => 'cancelled', 'payment_id' => 'pi_kept', 'expected' => '30.00'],
             ['status' => 'expired', 'payment_id' => 'pi_abandoned', 'expected' => '0.00'],
@@ -509,6 +509,27 @@ class ReservationCpTest extends TestCase
         $this->assertNull($rows[$confirmed->id]['amount_paid_formatted']);
         $this->assertNull($rows[$refunded->id]['amount_paid_formatted']);
         $this->assertSame('80.00', $rows[$markedPaid->id]['amount_paid_formatted']);
+    }
+
+    public function test_listing_reports_a_pending_checkouts_refund_by_its_gateway_even_without_an_intent()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class],
+            'offline' => ['class' => OfflinePaymentGateway::class],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $item = $this->makeStatamicItem();
+        $base = ['item_id' => $item->id(), 'status' => 'pending', 'payment' => '40.00', 'payment_id' => ''];
+
+        // The refund action still goes through the gateway for these rows, so the modal must not call them offline payments.
+        $online = Reservation::factory(array_merge($base, ['payment_gateway' => 'fake']))->withCustomer()->create();
+        $offline = Reservation::factory(array_merge($base, ['payment_gateway' => 'offline']))->withCustomer()->create();
+
+        $rows = collect($this->getJson(cp_route('resrv.reservation.index'))->assertOk()->json('data'))->keyBy('id');
+
+        $this->assertTrue($rows[$online->id]['refund_is_automatic']);
+        $this->assertFalse($rows[$offline->id]['refund_is_automatic']);
     }
 
     public function test_the_payment_due_date_is_the_earlier_of_the_hold_and_the_end_of_the_arrival_day()

@@ -1,9 +1,5 @@
 import { DateFormatter } from '@statamic/cms';
 
-export function statusLabel(status) {
-    return status?.replace(/_/g, ' ').toUpperCase() ?? '';
-}
-
 // Sentence-case name for a raw status value ("awaiting_payment" → "Awaiting payment").
 export function statusName(status) {
     const name = (status ?? '').replace(/_/g, ' ');
