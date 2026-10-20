@@ -373,7 +373,10 @@ class ReservationCpController extends Controller
         }
 
         try {
-            $changed = $reservation->transitionTo(ReservationStatus::CONFIRMED);
+            $changed = $reservation->transitionTo(
+                ReservationStatus::CONFIRMED,
+                inTransaction: fn (Reservation $fresh) => app(ReservationRefundProcessor::class)->markConfirmedOutOfBand($fresh),
+            );
         } catch (InvalidStateTransition $e) {
             return $this->staleStateResponse(__('This reservation can no longer be marked as paid — its status is now :status.'), $e->from->value);
         }

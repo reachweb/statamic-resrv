@@ -670,6 +670,45 @@ class ManualReservationCreatorTest extends TestCase
         $this->assertTrue($quote['payment']['gateways']['offline']['surcharge']->isZero());
     }
 
+    public function test_creation_refuses_a_gateway_surcharge_that_moved_since_the_quote()
+    {
+        $this->configurePaymentEntry();
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Fake',
+                'surcharge' => ['type' => 'fixed', 'amount' => 25],
+            ],
+        ]);
+
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        // The admin approved 100.00 + 5.00; the fee became 25.00 before submit. Total and amount
+        // still match, so only the surcharge check stands between this and a 125.00 request.
+        try {
+            $this->creator()->create($this->baseInput($entry, [
+                'payment_mode' => 'full',
+                'payment_gateway' => 'fake',
+                'expected_total' => '100.00',
+                'expected_amount' => '100.00',
+                'expected_surcharge' => '5.00',
+            ]));
+            $this->fail('A moved surcharge must be refused.');
+        } catch (ManualReservationException $e) {
+            $this->assertSame('price_changed', $e->reason);
+        }
+
+        $this->assertSame(0, Reservation::count());
+
+        $reservation = $this->creator()->create($this->baseInput($entry, [
+            'payment_mode' => 'full',
+            'payment_gateway' => 'fake',
+            'expected_amount' => '100.00',
+            'expected_surcharge' => '25.00',
+        ]));
+        $this->assertSame('25.00', $reservation->payment_surcharge->format());
+    }
+
     public function test_a_zero_requested_amount_on_a_nonzero_total_confirms_immediately()
     {
         Mail::fake();

@@ -246,6 +246,22 @@ class ReservationRefundProcessor
     }
 
     /**
+     * Runs on the locked row of an out-of-band AWAITING_PAYMENT → CONFIRMED transition: a kept
+     * online intent is stamped payment_unresolved IN THE SAME WRITE as CONFIRMED, not by
+     * settlePaidOutOfBand() after the commit. In between, the row would read as a gateway-paid
+     * booking, so a customer self-cancellation landing there (canCancelWithoutRefund()) would end
+     * CANCELLED — and the verified void would then drop the reference, leaving amountReceived()
+     * at zero despite the out-of-band money. settlePaidOutOfBand() clears the stamp together with
+     * the reference once the void is verified. Offline gateways never minted a real charge.
+     */
+    public function markConfirmedOutOfBand(Reservation $fresh): void
+    {
+        if ($fresh->hasGatewayPayment() && ! $fresh->paymentGatewaySupportsManualConfirmation()) {
+            $fresh->payment_unresolved = true;
+        }
+    }
+
+    /**
      * Reconcile the gateway after an awaiting-payment reservation is confirmed out of band.
      * Manually-confirmable gateways never minted a real charge. For online gateways, void any
      * leftover intent and drop payment_id so downstream refund/cancel reads a no-gateway-charge
@@ -369,7 +385,7 @@ class ReservationRefundProcessor
         }
 
         if ($intent === null || ($intent->status ?? '') === 'canceled') {
-            $reservation->update(['payment_id' => '']);
+            $reservation->update(['payment_id' => '', 'payment_unresolved' => false]);
 
             return;
         }

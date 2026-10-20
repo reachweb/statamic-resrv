@@ -607,6 +607,44 @@ class ManualReservationCpTest extends TestCase
             ->assertStatus(422)->assertJsonValidationErrors(['customer.email']);
     }
 
+    public function test_customer_email_keeps_the_checkout_forms_extra_constraints()
+    {
+        $this->signInAdmin();
+        $this->useMultipleGateways();
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        // The mandatory required|email must be added to the form's own email rules, not replace them.
+        $field = \Mockery::mock();
+        $field->shouldReceive('handle')->andReturn('email');
+        $field->shouldReceive('config')->andReturn(['validate' => ['nullable', 'sometimes', 'email', 'ends_with:@company.com']]);
+
+        $fields = \Mockery::mock();
+        $fields->shouldReceive('values')->andReturn(collect([$field]));
+
+        $form = \Mockery::mock(FormContract::class);
+        $form->shouldReceive('fields')->andReturn($fields);
+
+        $resolver = \Mockery::mock(CheckoutFormResolver::class);
+        $resolver->shouldReceive('resolveForEntryId')->andReturn($form);
+        $resolver->shouldReceive('resolveForReservation')->andReturn($form);
+        $this->app->instance(CheckoutFormResolver::class, $resolver);
+
+        $payload = $this->storePayload($entry, ['send_payment_request_email' => false]);
+
+        $payload['customer'] = ['email' => 'jane@example.com'];
+        $this->postJson(cp_route('resrv.manual.store'), $payload)
+            ->assertStatus(422)->assertJsonValidationErrors(['customer.email']);
+
+        // The form's nullable/sometimes must not let a missing address through either.
+        $payload['customer'] = ['first_name' => 'Jane'];
+        $this->postJson(cp_route('resrv.manual.store'), $payload)
+            ->assertStatus(422)->assertJsonValidationErrors(['customer.email']);
+
+        $payload['customer'] = ['email' => 'jane@company.com'];
+        $this->postJson(cp_route('resrv.manual.store'), $payload)
+            ->assertStatus(201);
+    }
+
     public function test_dependent_checkout_rules_follow_the_fields_into_the_customer_namespace()
     {
         $this->signInAdmin();

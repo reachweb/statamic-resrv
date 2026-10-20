@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled as ReservationCancelledEvent;
 use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
+use Reach\StatamicResrv\Exceptions\CancellationNotAllowed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
@@ -305,6 +306,8 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('', $reservation->payment_id);
+        // The stamp set by the CONFIRMED transition goes with the verified-void reference.
+        $this->assertFalse($reservation->payment_unresolved);
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_unpaid_online', $gateway->cancelledIntents[0]['payment_id']);
 
@@ -564,6 +567,74 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertFalse($reservation->canCancelWithoutRefund());
         $this->assertFalse($reservation->canBeCancelledByCustomer());
         $this->assertFalse($reservation->refundIsAutomatic());
+    }
+
+    public function test_customer_cannot_self_cancel_while_an_out_of_band_confirmation_is_reconciling()
+    {
+        Mail::fake();
+        Config::set('resrv-config.enable_customer_cancellations', true);
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+
+        // Non-refundable, paid online through an auto-refundable gateway: once CONFIRMED commits,
+        // a self-cancellation without refund would be allowed — unless the out-of-band marker
+        // committed with it.
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_reconciling',
+            'payment_gateway' => 'fake',
+            'cancellation_policy' => 'non_refundable',
+            'date_start' => now()->addDays(10)->startOfDay(),
+            'date_end' => now()->addDays(12)->startOfDay(),
+        ]);
+
+        // A customer cancellation landing between the CONFIRMED commit and the reconciliation.
+        $customerCancelRefused = null;
+        $gateway->onRetrievePaymentIntent = function () use ($reservation, &$customerCancelRefused) {
+            if ($customerCancelRefused !== null) {
+                return;
+            }
+
+            try {
+                app(ReservationRefundProcessor::class)->cancelByCustomer(Reservation::find($reservation->id));
+                $customerCancelRefused = false;
+            } catch (CancellationNotAllowed) {
+                $customerCancelRefused = true;
+            }
+        };
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $this->assertTrue($customerCancelRefused);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertSame('', $reservation->payment_id);
+        $this->assertFalse($reservation->payment_unresolved);
+        $this->assertSame('50.00', $reservation->amountReceived()->format());
+    }
+
+    public function test_confirming_out_of_band_does_not_stamp_an_offline_reference()
+    {
+        Mail::fake();
+        $this->useOfflineGateway();
+        $this->signInAdmin();
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment_id' => 'offline_reference',
+            'payment_gateway' => 'offline',
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))
+            ->assertStatus(200);
+
+        $reservation->refresh();
+        $this->assertSame('confirmed', $reservation->status);
+        $this->assertFalse($reservation->payment_unresolved);
     }
 
     public function test_confirming_online_out_of_band_notifies_when_the_intent_cannot_be_verified()

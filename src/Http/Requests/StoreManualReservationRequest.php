@@ -11,9 +11,9 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        // checkoutFormRules() merges BEFORE the explicit rules so customer.email =>
-        // required|email always wins — a custom form must not weaken it.
-        return array_merge(parent::rules(), $this->checkoutFormRules(), [
+        $formRules = $this->checkoutFormRules();
+
+        return array_merge(parent::rules(), $formRules, [
             // Nullable: zero-amount bookings need no gateway. "Gateway required to collect a
             // payment" is enforced in ManualReservationCreator::create(), which knows the amount.
             'payment_gateway' => [
@@ -33,12 +33,15 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
             'send_payment_request_email' => 'sometimes|boolean',
             'affiliate_id' => 'nullable|integer',
             'customer' => 'required|array',
-            'customer.email' => 'required|email',
+            // The form's own email rules, hardened by checkoutFormRules(); a form without an
+            // email field still gets the mandatory pair.
+            'customer.email' => $formRules['customer.email'] ?? 'required|email',
             // Retries with the same key (same admin) return the first reservation instead of a duplicate.
             'idempotency_key' => 'nullable|string|max:100',
             // The figures the admin was shown; a recomputed quote that differs is refused.
             'expected_total' => 'nullable|numeric',
             'expected_amount' => 'nullable|numeric',
+            'expected_surcharge' => 'nullable|numeric',
         ]);
     }
 
@@ -79,9 +82,30 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
             ->mapWithKeys(function ($field) {
                 $validate = $field->config()['validate'] ?? null;
 
+                if ($field->handle() === 'email') {
+                    $validate = $this->mandatoryEmailRules($validate ?? []);
+                }
+
                 return ['customer.'.$field->handle() => $validate ? $this->namespacedRules($validate) : 'nullable'];
             })
             ->all();
+    }
+
+    /**
+     * The customer email is always required and valid. A custom form may add constraints
+     * (ends_with:@company.com) but must not weaken that, so rules that let a blank or missing
+     * address skip validation (nullable, sometimes, exclude_*) are dropped.
+     *
+     * @param  array<int, mixed>  $validate
+     * @return array<int, mixed>
+     */
+    protected function mandatoryEmailRules(array $validate): array
+    {
+        $kept = collect($validate)->reject(
+            fn ($rule) => is_string($rule) && preg_match('/^(nullable|sometimes|exclude\w*)(:|$)/', $rule)
+        );
+
+        return collect(['required', 'email'])->merge($kept)->unique()->values()->all();
     }
 
     /**

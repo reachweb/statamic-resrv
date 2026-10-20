@@ -663,6 +663,14 @@ const storeAlertText = computed(() => {
             new: money(current.payment.amount),
         });
     }
+    // Only for the same gateway: switching methods after the failure changes the surcharge legitimately.
+    const currentSurcharge = alert.expected?.gateway === form.payment_gateway ? selectedGatewayAmount.value?.surcharge : null;
+    if (current && alert.expected?.surcharge != null && currentSurcharge != null && currentSurcharge !== alert.expected.surcharge) {
+        return __('The payment surcharge changed from :old to :new since it was shown. Review the updated figures, then create again.', {
+            old: money(alert.expected.surcharge),
+            new: money(currentSurcharge),
+        });
+    }
     return alert.text;
 });
 
@@ -999,7 +1007,12 @@ const submit = async () => {
     failedSubmit = null;
 
     // What the admin approved: the server refuses to store different figures.
-    const expected = { total: quote.value.pricing.total, amount: quote.value.payment.amount };
+    const expected = {
+        total: quote.value.pricing.total,
+        amount: quote.value.payment.amount,
+        surcharge: paymentAmountIsZero.value ? null : selectedGatewayAmount.value?.surcharge ?? null,
+        gateway: form.payment_gateway,
+    };
 
     const payload = {
         ...quotePayload(),
@@ -1013,6 +1026,7 @@ const submit = async () => {
         idempotency_key: idempotencyKey,
         expected_total: expected.total,
         expected_amount: expected.amount,
+        expected_surcharge: expected.surcharge,
     };
 
     let response;

@@ -81,7 +81,10 @@ class ManualReservationCreator
 
         $quote = $this->quote($input);
 
-        $this->assertQuoteMatchesWhatWasShown($input, $quote);
+        $this->assertQuoteMatchesWhatWasShown($input, [
+            'expected_total' => $quote['pricing']['total'],
+            'expected_amount' => $quote['payment']['amount'],
+        ]);
 
         // A zero-amount booking collects through no gateway and confirms immediately, so — like
         // Checkout::handleReservationWithZeroPayment — it records neither a gateway nor a hold.
@@ -106,6 +109,12 @@ class ManualReservationCreator
             $quote['payment']['surcharge'] = $this->gatewayManager->calculateSurcharge($gateway, $quote['payment']['amount']);
             $quote['payment']['amount_with_surcharge'] = Price::create($quote['payment']['amount']->format())->add($quote['payment']['surcharge']);
         }
+
+        // Checked once the collecting gateway is final: the surcharge is part of what the
+        // customer is asked to pay, so a gateway fee that moved since the quote re-quotes too.
+        $this->assertQuoteMatchesWhatWasShown($input, [
+            'expected_surcharge' => $quote['payment']['surcharge'],
+        ]);
 
         if ($gateway !== '') {
             $this->assertGatewayIsUsable($gateway, $quote['payment']['amount']);
@@ -577,19 +586,17 @@ class ManualReservationCreator
     }
 
     /**
-     * The store request may carry the total and amount the admin was shown. Anything that moved
-     * since (another admin's price edit, a dynamic pricing expiring, the free-cancellation window
-     * closing at midnight) must re-quote instead of persisting and emailing different figures.
+     * The store request may carry the total, amount and surcharge the admin was shown. Anything
+     * that moved since (another admin's price edit, a dynamic pricing expiring, the
+     * free-cancellation window closing at midnight, a changed gateway fee) must re-quote instead
+     * of persisting and emailing different figures.
+     *
+     * @param  array<string, PriceClass>  $checks  input key => the freshly computed figure
      *
      * @throws ManualReservationException
      */
-    protected function assertQuoteMatchesWhatWasShown(array $input, array $quote): void
+    protected function assertQuoteMatchesWhatWasShown(array $input, array $checks): void
     {
-        $checks = [
-            'expected_total' => $quote['pricing']['total'],
-            'expected_amount' => $quote['payment']['amount'],
-        ];
-
         foreach ($checks as $key => $actual) {
             $expected = $input[$key] ?? null;
 
