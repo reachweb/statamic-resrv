@@ -11,10 +11,11 @@ use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
+use Reach\StatamicResrv\Traits\IsolatesDeferredSendFailures;
 
 class ResendConfirmationEmail implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, IsolatesDeferredSendFailures, Queueable, SerializesModels;
 
     protected $reservation;
 

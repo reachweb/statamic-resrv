@@ -12,10 +12,11 @@ use Reach\StatamicResrv\Mail\ReservationConfirmed;
 use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
+use Reach\StatamicResrv\Traits\IsolatesDeferredSendFailures;
 
 class SendNewReservationEmails implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, IsolatesDeferredSendFailures, Queueable, SerializesModels;
 
     protected $reservation;
 

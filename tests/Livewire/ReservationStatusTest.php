@@ -1034,6 +1034,28 @@ class ReservationStatusTest extends TestCase
             ->assertDontSee('50.00');
     }
 
+    public function test_a_receipt_recorded_by_an_admin_shows_as_paid()
+    {
+        // A manual booking marked as paid in the CP: the money arrived out of band, so no
+        // verified online charge exists — empty reference, or a kept intent stamped unresolved.
+        foreach ([['payment_id' => ''], ['payment_id' => 'pi_kept', 'payment_unresolved' => true]] as $attributes) {
+            $reservation = $this->makeReservation(array_merge([
+                'payment_gateway' => 'fake',
+                'payment' => 50,
+                'payment_surcharge' => 0,
+                'created_by' => 'admin',
+            ], $attributes));
+
+            $this->assertTrue($reservation->amountPaidOnline()->isZero());
+
+            Livewire::test(ReservationStatus::class)
+                ->set('email', $reservation->customer->email)
+                ->set('reference', $reservation->reference)
+                ->call('lookup')
+                ->assertSee('50.00');
+        }
+    }
+
     public function test_customer_status_url_is_null_without_a_configured_status_entry()
     {
         $reservation = $this->makeReservation();

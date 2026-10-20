@@ -3,8 +3,11 @@
 namespace Reach\StatamicResrv\Tests\ManualReservation;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Events\MessageSending;
+use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled as ReservationCancelledEvent;
@@ -19,6 +22,7 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
+use Symfony\Component\Mailer\Exception\TransportException;
 
 class CancelLapsedHoldsTest extends TestCase
 {
@@ -62,6 +66,39 @@ class CancelLapsedHoldsTest extends TestCase
             reservationId: $reservation->id,
             rateId: $reservation->rate_id,
         );
+    }
+
+    public function test_one_failed_customer_notice_does_not_drop_the_rest_of_the_sweep()
+    {
+        $first = $this->overdueReservation();
+        $second = $this->overdueReservation();
+        $failing = $first->customer->email;
+        $this->assertNotSame($failing, $second->customer->email);
+
+        Event::listen(MessageSending::class, function (MessageSending $event) use ($failing) {
+            if (collect($event->message->getTo())->contains(fn ($address) => $address->getAddress() === $failing)) {
+                throw new TransportException('Connection could not be established.');
+            }
+        });
+
+        $delivered = [];
+        Event::listen(MessageSent::class, function (MessageSent $event) use (&$delivered) {
+            foreach ($event->message->getTo() as $address) {
+                $delivered[] = $address->getAddress();
+            }
+        });
+
+        $this->artisan('resrv:cancel-lapsed-holds')
+            ->expectsOutputToContain('Cancelled 2 lapsed hold(s).')
+            ->assertSuccessful();
+
+        // The notices are deferred to termination, where the first failure used to skip the rest.
+        $this->app->terminate();
+
+        $this->assertSame('cancelled', $first->fresh()->status);
+        $this->assertSame('cancelled', $second->fresh()->status);
+        $this->assertNotContains($failing, $delivered);
+        $this->assertContains($second->customer->email, $delivered);
     }
 
     public function test_overdue_hold_is_cancelled_with_both_notifications_and_intent_cancel()

@@ -621,7 +621,8 @@ class Reservation extends Model
     }
 
     /**
-     * Amount the customer actually paid online at checkout, for customer-facing surfaces.
+     * Amount the customer actually paid online at checkout, for customer-facing surfaces (the
+     * status page prefers amountReceived() when an admin recorded the receipt).
      * Manual-confirmation gateways (offline / bank transfer) mint a payment_id without
      * collecting any money — the funds arrive out-of-band — so amountPaid() would overstate
      * them as paid. refundedAmount() intentionally keeps reporting the full deposit so the

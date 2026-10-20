@@ -606,6 +606,41 @@ class ManualReservationCreatorTest extends TestCase
         $this->assertEquals(1, $quote['availability']['available']);
     }
 
+    public function test_quote_bounds_a_shared_rates_stock_by_its_remaining_cap()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 10);
+        $baseRate = Rate::forEntry($entry->id())->first();
+        $sharedRate = Rate::factory()->shared()->create([
+            'collection' => $baseRate->collection,
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 3,
+        ]);
+
+        // The base pool has ten, but the shared rate admits three and two are already taken.
+        Reservation::factory()->create([
+            'item_id' => $entry->id(),
+            'rate_id' => $sharedRate->id,
+            'quantity' => 2,
+            'status' => 'confirmed',
+            'date_start' => today()->addDay()->toDateString(),
+            'date_end' => today()->addDays(2)->toDateString(),
+        ]);
+
+        $quote = $this->creator()->quote($this->baseInput($entry, ['rate_id' => $sharedRate->id, 'quantity' => 2]));
+
+        $this->assertFalse($quote['availability']['status']);
+        $this->assertSame(1, $quote['availability']['available']);
+
+        // A quantity above the cap itself: the status and the count must agree.
+        $sharedRate->update(['max_available' => 1]);
+        Reservation::query()->delete();
+
+        $quote = $this->creator()->quote($this->baseInput($entry, ['rate_id' => $sharedRate->id, 'quantity' => 2]));
+
+        $this->assertFalse($quote['availability']['status']);
+        $this->assertSame(1, $quote['availability']['available']);
+    }
+
     public function test_missing_required_option_throws()
     {
         $entry = $this->makeStatamicItemWithAvailability(available: 4);

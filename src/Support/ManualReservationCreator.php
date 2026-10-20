@@ -389,7 +389,8 @@ class ManualReservationCreator
         $status = (bool) ($result['message']['status'] ?? false);
 
         $this->initiateAvailabilityUnsafe($data);
-        $stockRow = app(AvailabilityRepository::class)->itemAvailableBetween(
+        $repository = app(AvailabilityRepository::class);
+        $stockRow = $repository->itemAvailableBetween(
             date_start: $this->date_start,
             date_end: $this->date_end,
             duration: $this->duration,
@@ -398,6 +399,14 @@ class ManualReservationCreator
             rateId: $data['rate_id'],
         )->first();
         $available = $stockRow ? (int) $stockRow->available : 0;
+
+        // A shared rate reads its base pool's stock, but its own max_available cap can admit
+        // fewer — report the tighter figure so the count agrees with the availability status.
+        $rateCapacity = $data['rate_id'] ? $repository->remainingMaxAvailable((int) $data['rate_id'], $this->date_start, $this->date_end) : null;
+
+        if ($rateCapacity !== null) {
+            $available = min($available, $rateCapacity);
+        }
 
         $pricing = (new Availability)->getPricing($data, $itemId);
 
