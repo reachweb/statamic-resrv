@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Runs whenever the orb starts or wakes: bring PostgreSQL back for `composer test-pgsql`.
+set -euo pipefail
+
+version="$(basename "$(dirname "$(ls -d /etc/postgresql/*/main | sort -V | tail -n1)")")"
+pg_lsclusters -h "$version" main | grep -q online || sudo pg_ctlcluster "$version" main start

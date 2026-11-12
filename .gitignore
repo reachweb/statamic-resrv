@@ -35,3 +35,6 @@ claude-loop.sh
 # Collection blueprints written by tests that point Blueprint::setDirectory() at resources/blueprints
 # (CreatesEntries::findOrCreateCollection saves one); the addon ships none.
 resources/blueprints/collections/
+
+# Amp orb portal metadata
+.amp/portals/*

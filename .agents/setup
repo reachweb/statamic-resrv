@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Prepares a fresh Amp orb (Debian) for this repository: PHP 8.4 + Composer,
+# PostgreSQL for `composer test-pgsql`, Composer and npm dependencies.
+# Must stay non-interactive and idempotent; it also reruns on stale snapshots.
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+step() {
+  local name="$1"
+  shift
+  local start=$SECONDS
+  echo "==> $name"
+  "$@"
+  echo "<== $name ($((SECONDS - start))s)"
+}
+
+# PHP extensions mirror the CI setup-php list (.github/workflows/tests.yml).
+apt_packages=(
+  php8.4-cli php8.4-bcmath php8.4-curl php8.4-gd php8.4-intl php8.4-mbstring
+  php8.4-pgsql php8.4-soap php8.4-sqlite3 php8.4-xml php8.4-zip php8.4-imagick
+  composer unzip postgresql
+)
+
+install_apt_packages() {
+  local missing=()
+  for pkg in "${apt_packages[@]}"; do
+    dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' || missing+=("$pkg")
+  done
+  if ((${#missing[@]} == 0)); then
+    echo "all apt packages present"
+    return
+  fi
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "${missing[@]}"
+}
+
+# Throwaway test database: trust auth for the passwordless `postgres` user that
+# phpunit.pgsql.xml uses, and durability off for speed.
+configure_postgres() {
+  local conf_dir
+  conf_dir="$(ls -d /etc/postgresql/*/main | sort -V | tail -n1)"
+  local version
+  version="$(basename "$(dirname "$conf_dir")")"
+
+  sudo tee "$conf_dir/conf.d/zz-amp-orb.conf" >/dev/null <<'EOF'
+listen_addresses = '127.0.0.1'
+fsync = off
+synchronous_commit = off
+full_page_writes = off
+EOF
+  sudo tee "$conf_dir/pg_hba.conf" >/dev/null <<'EOF'
+local all all trust
+host  all all 127.0.0.1/32 trust
+host  all all ::1/128 trust
+EOF
+
+  sudo pg_ctlcluster "$version" main restart
+  if ! psql -h 127.0.0.1 -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname = 'resrv_test'" | grep -q 1; then
+    psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE resrv_test'
+  fi
+  # Processes do not survive the snapshot; .agents/resume starts it again.
+  sudo pg_ctlcluster "$version" main stop
+}
+
+step "apt packages" install_apt_packages
+step "postgres" configure_postgres
+step "composer install" composer install --prefer-dist --no-interaction --no-progress
+# package.json depends on vendor/statamic/cms/resources/dist-package, so npm runs after Composer.
+step "npm ci" npm ci --no-audit --no-fund
+
+# Dusk (`composer test:browser`) looks for Chrome at /usr/bin/google-chrome; point it at the
+# orb's preinstalled Chrome for Testing and fetch the matching ChromeDriver, as CI does.
+setup_dusk() {
+  local chrome
+  chrome="$(ls -d "$HOME"/.agent-browser/browsers/chrome-*/chrome 2>/dev/null | sort -V | tail -n1)"
+  if [[ -z "$chrome" ]]; then
+    echo "no Chrome for Testing found; skipping Dusk setup"
+    return
+  fi
+  sudo ln -sfn "$chrome" /usr/bin/google-chrome
+  php vendor/bin/testbench dusk:chrome-driver --detect
+  chmod -R 0755 vendor/laravel/dusk/bin/
+  php vendor/bin/testbench workbench:build
+}
+step "dusk" setup_dusk
