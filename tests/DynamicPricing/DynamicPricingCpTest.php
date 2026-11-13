@@ -94,7 +94,8 @@ class DynamicPricingCpTest extends TestCase
         $response = $this->postJson(cp_route('resrv.dynamicpricing.create'), $dynamic);
 
         $response->assertStatus(422)->assertJsonValidationErrors('amount');
-        $this->assertDatabaseMissing('resrv_dynamic_pricing', ['amount' => '20,5']);
+        // Match on title: Postgres rejects '20,5' as a literal for the real amount column.
+        $this->assertDatabaseMissing('resrv_dynamic_pricing', ['title' => $dynamic['title']]);
     }
 
     public function test_can_edit_dynamic_pricing_for_statamic_item()
