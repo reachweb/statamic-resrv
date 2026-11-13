@@ -48,6 +48,7 @@ class ManualReservationCpController extends Controller
             'backUrl' => cp_route('resrv.reservations.index'),
             'currencySymbol' => config('resrv-config.currency_symbol'),
             'maximumQuantity' => (int) config('resrv-config.maximum_quantity'),
+            'maximumTotal' => QuoteManualReservationRequest::MAX_TOTAL,
             'maximumReservationPeriod' => (int) config('resrv-config.maximum_reservation_period_in_days', 30),
             'minimumDaysBefore' => (int) config('resrv-config.minimum_days_before', 0),
             'gateways' => collect($this->gatewayManager->forCp())->map(fn (array $gateway) => $gateway + [

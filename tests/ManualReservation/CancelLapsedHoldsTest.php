@@ -101,6 +101,32 @@ class CancelLapsedHoldsTest extends TestCase
         $this->assertContains($second->customer->email, $delivered);
     }
 
+    public function test_one_hold_that_cannot_be_cancelled_does_not_block_the_rest_of_the_sweep()
+    {
+        Mail::fake();
+
+        $broken = $this->overdueReservation();
+        $second = $this->overdueReservation();
+        $third = $this->overdueReservation();
+
+        // Stands in for a deadlock or a host-app observer throwing while the first row is saved.
+        Reservation::updating(function (Reservation $model) use ($broken) {
+            if ((int) $model->id === $broken->id) {
+                throw new \RuntimeException('Deadlock found when trying to get lock.');
+            }
+        });
+
+        // The run still reports failure, so the scheduler's failure hooks fire for the stuck row.
+        $this->artisan('resrv:cancel-lapsed-holds')
+            ->expectsOutputToContain('Cancelled 2 lapsed hold(s).')
+            ->expectsOutputToContain('1 lapsed hold(s) could not be cancelled.')
+            ->assertFailed();
+
+        $this->assertSame('awaiting_payment', $broken->fresh()->status);
+        $this->assertSame('cancelled', $second->fresh()->status);
+        $this->assertSame('cancelled', $third->fresh()->status);
+    }
+
     public function test_overdue_hold_is_cancelled_with_both_notifications_and_intent_cancel()
     {
         Mail::fake();

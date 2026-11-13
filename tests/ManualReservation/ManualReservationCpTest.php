@@ -566,6 +566,12 @@ class ManualReservationCpTest extends TestCase
         $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, ['hold_days' => 0]))
             ->assertStatus(422)->assertJsonValidationErrors(['hold_days']);
 
+        // Regression: a 15-digit total used to be stored, then read back as "1.0E+14", which
+        // Price cannot parse, so the reservations list and the reservation page returned 500.
+        $this->postJson(cp_route('resrv.manual.store'), $this->storePayload($entry, ['total_override' => 100000000000000]))
+            ->assertStatus(422)->assertJsonValidationErrors(['total_override']);
+        $this->assertSame(0, Reservation::count());
+
         // Missing customer email.
         $payload = $this->storePayload($entry);
         unset($payload['customer']['email']);
@@ -856,6 +862,15 @@ class ManualReservationCpTest extends TestCase
         $this->postJson(cp_route('resrv.manual.quote'), $this->quotePayload($entry, ['quantity' => 0]))
             ->assertStatus(422)
             ->assertJsonPath('errors.quantity.0', __('Quantity must be at least 1.'));
+
+        // The override is capped at what the reservation money columns hold; the cap itself is allowed.
+        $this->postJson(cp_route('resrv.manual.quote'), $this->quotePayload($entry, ['total_override' => '1000000']))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.total_override.0', 'The new total cannot be more than 999999.99.');
+
+        $this->postJson(cp_route('resrv.manual.quote'), $this->quotePayload($entry, ['total_override' => '999999.99']))
+            ->assertOk()
+            ->assertJsonPath('pricing.total', '999999.99');
 
         // A booking starting today is not "in the past".
         $this->postJson(cp_route('resrv.manual.quote'), $this->quotePayload($entry, [

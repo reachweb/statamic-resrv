@@ -42,6 +42,7 @@ const props = defineProps({
     backUrl: { type: String, required: true },
     currencySymbol: { type: String, default: '' },
     maximumQuantity: { type: Number, default: 1 },
+    maximumTotal: { type: Number, default: null },
     maximumReservationPeriod: { type: Number, default: 30 },
     minimumDaysBefore: { type: Number, default: 0 },
     gateways: { type: Array, default: () => [] },
@@ -964,7 +965,7 @@ const showStoreFailure = (error, expected) => {
         storeAlert.value = {
             variant: 'error',
             persistent: true,
-            text: __('The reservation may have been created, but the server did not confirm it. Check the reservations list before trying again. Creating again from this page will not book it twice.'),
+            text: __('The reservation may have been created, but the server did not confirm it. Check the reservations list before trying again. Creating again from this page within 30 minutes returns the same reservation instead of booking twice.'),
         };
         toast.error(__('The server did not confirm the reservation.'));
     } else if (status === 409) {
@@ -1457,6 +1458,7 @@ const submit = async () => {
                                             type="number"
                                             step="0.01"
                                             :min="0"
+                                            :max="maximumTotal"
                                             :prepend="currencySymbol"
                                             :loading="quoting"
                                         />

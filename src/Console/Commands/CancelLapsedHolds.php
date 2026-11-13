@@ -31,16 +31,36 @@ class CancelLapsedHolds extends Command
         }
 
         $cancelled = 0;
+        $failed = 0;
 
         // lazyById pages by primary key, not offset, so rows leaving the filtered set mid-run
         // (cancelling flips the status) don't shift the cursor; constant memory for any backlog.
         foreach ($candidates->lazyById(100) as $reservation) {
-            if ($this->cancelLapsedHold($reservation)) {
-                $cancelled++;
+            try {
+                if ($this->cancelLapsedHold($reservation)) {
+                    $cancelled++;
+                }
+            } catch (\Throwable $e) {
+                // One row that cannot be cancelled (a deadlock, a host-app observer throwing…)
+                // must not keep every later hold, and the stock it holds, waiting behind it.
+                $failed++;
+
+                Log::error('Failed to cancel a lapsed hold.', [
+                    'reservation_id' => $reservation->id,
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 
         $this->info("Cancelled {$cancelled} lapsed hold(s).");
+
+        if ($failed > 0) {
+            // Still a failed run, as it was when the exception escaped: the scheduler's failure
+            // hooks keep firing until the row is dealt with.
+            $this->error("{$failed} lapsed hold(s) could not be cancelled. See the log for details.");
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

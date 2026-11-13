@@ -9,6 +9,13 @@ use Reach\StatamicResrv\Enums\ManualPaymentMode;
 class QuoteManualReservationRequest extends FormRequest
 {
     /**
+     * The largest total the reservation money columns (float(8,2)) are declared to hold. A total
+     * far past it is stored, then read back in exponent notation that Price cannot parse, which
+     * breaks every page listing the reservation.
+     */
+    public const MAX_TOTAL = 999999.99;
+
+    /**
      * Shape validation only — every money figure is recomputed server-side by
      * ManualReservationCreator, which enforces the domain invariants.
      *
@@ -30,7 +37,8 @@ class QuoteManualReservationRequest extends FormRequest
             'options' => 'nullable|array',
             'options.*.id' => 'required|integer',
             'options.*.value' => 'required|integer',
-            'total_override' => 'nullable|numeric|min:0',
+            // custom_amount needs no cap of its own: the creator refuses one above the total.
+            'total_override' => 'nullable|numeric|min:0|max:'.self::MAX_TOTAL,
             'payment_mode' => ['required', Rule::enum(ManualPaymentMode::class)],
             'custom_amount' => 'nullable|numeric',
             'payment_gateway' => 'nullable|string',
@@ -64,6 +72,7 @@ class QuoteManualReservationRequest extends FormRequest
             'extras.*.quantity.min' => __('Extra quantities must be at least 1.'),
             'total_override.numeric' => __('The new total must be a number.'),
             'total_override.min' => __('The new total cannot be negative.'),
+            'total_override.max' => __('The new total cannot be more than :max.'),
             'payment_mode.required' => __('Choose the amount to request.'),
             'custom_amount.numeric' => __('The custom amount must be a number.'),
         ];
