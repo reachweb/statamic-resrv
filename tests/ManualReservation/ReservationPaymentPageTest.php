@@ -1009,6 +1009,75 @@ class ReservationPaymentPageTest extends TestCase
         $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id);
     }
 
+    public function test_pay_asks_the_customer_to_wait_while_an_unvoidable_order_is_still_open()
+    {
+        $this->useRedirectGateway();
+        $this->travelTo(now()->setTime(10, 0));
+
+        // A Cardlink-style order: the bank has it, it cannot be voided or re-posted, and it times out.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
+        $gateway->retrieveIncludesRedirectTo = false;
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentExpiresAt = now()->addMinutes(15)->getTimestamp();
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_gateway' => 'fakeredirect',
+            'payment_id' => 'redir_open',
+        ]);
+
+        $retryAt = now()->addMinutes(15)->setTimezone(config('app.timezone'))->format('d-m-Y H:i T');
+
+        $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertNoRedirect()
+            ->assertSet('paymentError', false)
+            ->assertSee(trans('statamic-resrv::frontend.paymentAttemptStillOpen', ['date' => $retryAt]))
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentMountFailed'))
+            ->assertSeeHtml('wire:click="pay"');
+
+        $this->assertCount(0, $gateway->createdIntents, 'No second order may be minted while the first can still be paid.');
+        $this->assertSame('redir_open', $reservation->fresh()->payment_id);
+
+        // The order has timed out and the gateway now reports it dead: Pay mints a replacement.
+        $this->travel(16)->minutes();
+        $gateway->canceledIds[] = 'redir_open';
+
+        $component->call('pay')
+            ->assertSet('paymentRetryAt', null);
+
+        $this->assertCount(1, $gateway->createdIntents);
+        $fresh = $reservation->fresh();
+        $this->assertSame($gateway->createdIntents[0]['payment_id'], $fresh->payment_id);
+        $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id);
+    }
+
+    public function test_a_passed_expiry_never_lets_pay_mint_next_to_an_order_the_gateway_still_reports_open()
+    {
+        $this->useRedirectGateway();
+
+        $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
+        $gateway->retrieveIncludesRedirectTo = false;
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentExpiresAt = now()->subMinute();
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_gateway' => 'fakeredirect',
+            'payment_id' => 'redir_open',
+        ]);
+
+        // Only `canceled` (or null) proves the order dead; the expiry is messaging, not permission.
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertNoRedirect()
+            ->assertSet('paymentError', true)
+            ->assertSet('paymentRetryAt', null);
+
+        $this->assertCount(0, $gateway->createdIntents);
+        $this->assertSame('redir_open', $reservation->fresh()->payment_id);
+    }
+
     public function test_return_from_redirect_gateway_shows_processing_while_still_awaiting()
     {
         $this->useRedirectGateway();

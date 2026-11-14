@@ -138,4 +138,5 @@ return [
     'paymentOfflineInstructions' => 'Please include your booking reference :reference with your payment. We will confirm your reservation as soon as the payment arrives.',
     'paymentOfflineNoInstructions' => 'This reservation is not paid online: payment is arranged directly with us. Please contact us for the payment details and quote your booking reference :reference. We will confirm your reservation as soon as the payment arrives.',
     'paymentMountFailed' => 'We could not start the payment process. Please try again or contact us for assistance.',
+    'paymentAttemptStillOpen' => 'An earlier payment attempt for this reservation is still open with the payment provider. If you did not complete it, you can try again after :date.',
 ];

@@ -59,6 +59,12 @@ class FakePaymentGateway implements PaymentInterface
     public bool $retrieveOmitsClientSecret = false;
 
     /**
+     * The `expires_at` retrievePaymentIntent() reports on a live intent (Unix timestamp or
+     * DateTimeInterface), modelling a provider order that cannot be voided but times out.
+     */
+    public int|\DateTimeInterface|null $retrievedIntentExpiresAt = null;
+
+    /**
      * Fired INSIDE paymentIntent() with the reservation — simulates a concurrent transition
      * landing during the gateway round-trip (exercises resolveOrCreateIntent's locked re-check).
      *
@@ -121,6 +127,10 @@ class FakePaymentGateway implements PaymentInterface
         $data->status = in_array($paymentId, $this->canceledIds, true)
             ? 'canceled'
             : ($this->retrievedIntentStatus ?? 'requires_payment_method');
+
+        if ($this->retrievedIntentExpiresAt !== null) {
+            $data->expires_at = $this->retrievedIntentExpiresAt;
+        }
 
         if ($this->onRetrievePaymentIntent !== null) {
             ($this->onRetrievePaymentIntent)($reservation);

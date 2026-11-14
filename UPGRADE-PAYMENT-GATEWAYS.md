@@ -837,6 +837,7 @@ Before deploying your custom gateway:
 - [ ] `cancelPaymentIntent()` cancels or voids an intent at the provider (see Step 9)
 - [ ] `retrievePaymentIntent()` returns the provider's intent as an object exposing `->status`, returns `null` **only** when the intent is definitively gone, and **throws** on transient failures rather than returning `null` (see Step 13)
 - [ ] For redirect gateways: `retrievePaymentIntent()` also exposes `->redirectTo` on still-payable intents so an interrupted payment can resume (see Step 13)
+- [ ] For providers that cannot void an open order: `retrievePaymentIntent()` never reports `canceled` for an order that can still be paid — it reports it still payable without `->redirectTo` and with `->expires_at`, and `canceled` only once the provider no longer accepts it (see Step 13)
 - [ ] For inline gateways: custom Blade view works and is publishable
 - [ ] For redirect gateways: return URL points to the Statamic page with `{{ resrv_checkout_redirect }}`
 - [ ] `paymentIntent()` declares the 4th `?string $returnUrl = null` parameter — the interface requires it, so a three-parameter declaration fatals at boot (see Step 12)
@@ -1000,6 +1001,8 @@ public function cancelPaymentIntent(string $paymentId, Reservation $reservation)
 ```
 
 `OfflinePaymentGateway` and `FakePaymentGateway` both use this pattern.
+
+This is different from a provider that *does* hold an order but offers no way to void it (some bank redirect pages, such as Cardlink). Such a gateway cannot make the order dead, so it must not report it `canceled` either — see *Providers that cannot void an open order* in Step 13.
 
 ### When Resrv calls you
 
@@ -1257,6 +1260,67 @@ When Resrv resumes a still-payable intent on a **redirect** gateway (`redirectsF
 **Inline** gateways follow the same rule for `->client_secret`: Resrv re-mounts a resumed inline intent's payment view around `$intent->client_secret`, so include it whenever the intent is still payable. If it is absent, Resrv voids the intent and mints a replacement the same way — never rendering a payment form with an empty secret.
 
 In both void-and-remint cases the superseded intent's credentials were already handed to the customer (an earlier tab or the provider's hosted page can still complete it), so Resrv **verifies the void** before minting: it calls `cancelPaymentIntent()`, then re-reads the intent through `retrievePaymentIntent()` and only mints when the provider reports it dead (`canceled`, or `null`). A read that still shows the intent payable aborts the attempt with a retryable error, and one that shows the money already moving surfaces the processing state — never two chargeable intents for one reservation. For this to work, your `retrievePaymentIntent()` must report `canceled` for an intent your `cancelPaymentIntent()` just voided.
+
+### Providers that cannot void an open order: report `->expires_at`
+
+> 📅 Added in Resrv v6.5.1. Optional, and no interface change: a gateway that can void its intents needs nothing here.
+
+Some redirect providers (Cardlink and other bank-hosted payment pages) cannot void an order the bank has not answered yet, and reject a second post of the same order id. Once the customer has been sent to the bank, such an order can be neither voided nor resumed; it only stops being payable when the bank's page times out. Until this version, no answer from `retrievePaymentIntent()` was both truthful and usable for it:
+
+- Reporting `canceled` after a void that did nothing lets Resrv mint a second order while the first can still be paid — two chargeable orders for one reservation.
+- Reporting it still payable **with** `->redirectTo` makes Resrv resume it, and the bank rejects the repeated order id.
+- Reporting it still payable **without** `->redirectTo` is the truth, but every Pay press then failed with the generic *"We could not start the payment process"* error for as long as the order lived.
+
+Keep the third, truthful answer and add **`->expires_at`** — the moment the provider itself stops accepting the order — as a Unix timestamp (as Stripe's Checkout Sessions use) or a `DateTimeInterface`:
+
+```php
+public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+{
+    $order = $this->findOrder($paymentId); // however your gateway stores what it sent to the bank
+
+    // ... return null if it never existed; map paid / settling orders to succeeded / processing ...
+
+    $intent = new \stdClass;
+    $intent->id = $paymentId;
+
+    if (! $order->sentToBank()) {
+        // The bank has not seen this order id yet: it can still be posted, or dropped locally.
+        // (Your payment page must refuse to post an order you dropped.)
+        $intent->status = $order->voided() ? 'canceled' : 'requires_payment_method';
+        $intent->redirectTo = $order->paymentPageUrl();
+
+        return $intent;
+    }
+
+    $expiresAt = $order->sent_at->addMinutes(self::BANK_PAGE_TIMEOUT_MINUTES);
+
+    if ($expiresAt->isPast()) {
+        // The bank no longer accepts it: dead, safe to replace.
+        $intent->status = 'canceled';
+
+        return $intent;
+    }
+
+    // At the bank, unanswered: still payable, cannot be voided or re-posted.
+    $intent->status = 'requires_payment_method';
+    $intent->expires_at = $expiresAt->getTimestamp(); // and NO ->redirectTo
+
+    return $intent;
+}
+```
+
+What Resrv does with it on the pay-by-link page: the order is unmountable (no `->redirectTo`), so Resrv tries the void and re-reads it as usual. Finding it still payable with an `->expires_at` in the future, it mints nothing, keeps the stored reference, and shows the customer *"An earlier payment attempt for this reservation is still open with the payment provider. If you did not complete it, you can try again after …"* (`frontend.paymentAttemptStillOpen`) instead of an error. Nothing is reported to your error tracker — this is an expected state. If the customer does complete the open order, your webhook confirms the reservation as always.
+
+Rules that keep this money-safe:
+
+- **`->expires_at` never permits a replacement.** Only `canceled` or `null` does. Once the order has expired, your `retrievePaymentIntent()` must report `canceled` itself, as above. An `->expires_at` in the past on an intent you still report payable is ignored, and the customer gets the generic error.
+- **Use the provider's real cut-off, with margin.** The timeout must be the point after which the bank can no longer accept a payment for that order, not the point where its page looks idle. If you are unsure, choose the longer value: too long makes a customer wait, too short allows a double charge.
+- **Leave `->redirectTo` off** while the order cannot be re-posted. With it, Resrv resumes the order instead.
+- **Report money that moved.** A paid or settling order still maps to `succeeded` / `processing`, with or without `->expires_at`.
+
+The other callers of `retrievePaymentIntent()` do not read `->expires_at` and behave as before for a still-payable intent they could not void: cancelling or lapsing the reservation, or marking it paid out of band, keeps the payment reference and flags the reservation `payment_unresolved` so a payment that still lands on the open order is reconciled rather than lost.
+
+The **normal checkout** does not use `retrievePaymentIntent()` at all (see *Why* above): when the customer steps back or switches gateway it calls `cancelPaymentIntent()` and mints a fresh order without verifying the void. For a provider that cannot void, the earlier order therefore stays payable until it times out, and a payment on it arrives after its `payment_id` was replaced — handle it with the stale-intent fallback in Step 9.
 
 ### Reference: StripePaymentGateway (inline)
 

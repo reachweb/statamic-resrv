@@ -2,11 +2,14 @@
 
 namespace Reach\StatamicResrv\Livewire\Traits;
 
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Locked;
+use Reach\StatamicResrv\Exceptions\PaymentAttemptStillOpen;
 use Reach\StatamicResrv\Exceptions\ReservationNoLongerPayable;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -50,6 +53,7 @@ trait HandlesDirectGatewayPayment
      *
      * @throws UnknownPaymentGateway
      * @throws ReservationNoLongerPayable
+     * @throws PaymentAttemptStillOpen
      */
     protected function mountGatewayPayment(Reservation $reservation, PriceClass $amount, string $returnUrl, ?Closure $stillPayable = null)
     {
@@ -220,6 +224,10 @@ trait HandlesDirectGatewayPayment
      * the caller mints a replacement (Stripe's cancel swallows API errors). Re-read after the
      * cancel gates the mint: gone/canceled → true; money already moving → false (caller shows
      * processing, keeps the reference); anything still live throws so no replacement is created.
+     * A live intent that reports when it dies throws PaymentAttemptStillOpen, so the caller can
+     * tell the customer when to retry — the expiry never permits a mint, only `canceled` does.
+     *
+     * @throws PaymentAttemptStillOpen
      */
     protected function voidSupersededIntent(PaymentInterface $gateway, Reservation $reservation, string $paymentId): bool
     {
@@ -241,9 +249,31 @@ trait HandlesDirectGatewayPayment
             return false;
         }
 
+        if ($expiresAt = $this->intentExpiry($existing)) {
+            throw new PaymentAttemptStillOpen($reservation->id, $expiresAt);
+        }
+
         throw $cancelException ?? new \RuntimeException(
             "Could not void the superseded payment intent [{$paymentId}] for reservation [{$reservation->id}]; refusing to mint a replacement next to a live intent."
         );
+    }
+
+    /**
+     * When a still-open intent dies by itself: the optional `->expires_at` of Step 13, a Unix
+     * timestamp or a DateTimeInterface. Null when absent, unreadable or already past — a gateway
+     * must report `canceled` once its intent has expired.
+     */
+    protected function intentExpiry(object $intent): ?CarbonInterface
+    {
+        $expiresAt = $intent->expires_at ?? null;
+
+        $expiresAt = match (true) {
+            $expiresAt instanceof \DateTimeInterface => Carbon::instance($expiresAt),
+            is_int($expiresAt), is_string($expiresAt) && ctype_digit($expiresAt) => Carbon::createFromTimestamp((int) $expiresAt),
+            default => null,
+        };
+
+        return $expiresAt?->isFuture() ? $expiresAt : null;
     }
 
     /**

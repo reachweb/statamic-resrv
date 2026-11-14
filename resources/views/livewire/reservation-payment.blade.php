@@ -165,6 +165,11 @@
                     @endif
                 </div>
             @elseif ($state === 'awaiting')
+                @if ($paymentRetryAt)
+                <div class="flex flex-col my-4 p-4 bg-amber-50 border border-amber-300 rounded" role="status">
+                    <p class="text-gray-700">{{ trans('statamic-resrv::frontend.paymentAttemptStillOpen', ['date' => $paymentRetryAt]) }}</p>
+                </div>
+                @endif
                 @if ($paymentError)
                 <div class="flex flex-col my-4 p-4 bg-red-50 border border-red-300 rounded" role="alert">
                     <p class="text-gray-700">{{ trans('statamic-resrv::frontend.paymentMountFailed') }}</p>
