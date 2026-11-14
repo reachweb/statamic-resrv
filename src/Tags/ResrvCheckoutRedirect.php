@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Tags;
 
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Http\Payment\PendingPayment;
 use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Tags\Tags;
 
@@ -13,10 +14,12 @@ class ResrvCheckoutRedirect extends Tags
     {
         $payment = $this->resolveGateway();
 
-        $redirectData = $payment->handleRedirectBack();
+        // payment_pending is visitor input, so the gateway's answer is filtered here as well:
+        // a gateway that still looks the id up unchecked must not reach the template.
+        $redirectData = PendingPayment::guard($payment->handleRedirectBack());
 
         session()->forget('resrv-search');
-        session()->forget('resrv_reservation');
+        PendingPayment::endCheckout();
 
         if ($redirectData['status'] === false) {
             return $this->makeResponse('failed', __('Payment failed'), __('Your payment was not successful. Please contact us or try again.'));

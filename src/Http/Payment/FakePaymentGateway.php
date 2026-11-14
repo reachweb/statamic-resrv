@@ -238,16 +238,7 @@ class FakePaymentGateway implements PaymentInterface
 
     public function handlePaymentPending(): bool|array
     {
-        if (! request()->has('payment_pending')) {
-            return false;
-        }
-
-        $reservation = Reservation::find(request()->input('payment_pending'));
-
-        return [
-            'status' => 'pending',
-            'reservation' => $reservation ? $reservation->toArray() : [],
-        ];
+        return PendingPayment::fromRequest();
     }
 
     public function verifyPayment($request)

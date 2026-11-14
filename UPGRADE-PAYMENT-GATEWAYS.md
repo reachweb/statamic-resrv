@@ -4,7 +4,7 @@ This document provides step-by-step instructions for updating a custom payment g
 
 ## Background
 
-Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Step 14 covers what your webhook must do for admin-created (manual) reservations, which are paid from a pay-by-link page instead of the checkout. Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
+Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Step 14 covers what your webhook must do for admin-created (manual) reservations, which are paid from a pay-by-link page instead of the checkout. Step 15 closes a data exposure in the documented `handlePaymentPending()` body and applies to every gateway. Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
 
 There are two gateway types:
 - **Inline gateways** (e.g. Stripe) — render a payment form directly on the checkout page via a Blade view. `redirectsForPayment()` returns `false`.
@@ -174,7 +174,7 @@ This method must return an array with a `status` key:
 ```php
 public function handleRedirectBack(): array
 {
-    // Always check for pending payments first
+    // Always check for pending payments first (handlePaymentPending() must be the Step 15 version)
     if ($pending = $this->handlePaymentPending()) {
         return $pending;
     }
@@ -433,6 +433,7 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Http\Payment\PendingPayment;
 use Reach\StatamicResrv\Models\Reservation;
 
 class PayPalPaymentGateway implements PaymentInterface
@@ -539,16 +540,8 @@ class PayPalPaymentGateway implements PaymentInterface
 
     public function handlePaymentPending(): bool|array
     {
-        if (! request()->has('payment_pending')) {
-            return false;
-        }
-
-        $reservation = Reservation::find(request()->input('payment_pending'));
-
-        return [
-            'status' => 'pending',
-            'reservation' => $reservation ? $reservation->toArray() : [],
-        ];
+        // Never look the id up yourself: it is visitor input (see Step 15).
+        return PendingPayment::fromRequest();
     }
 
     // --- Webhooks ---
@@ -628,6 +621,7 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Http\Payment\PendingPayment;
 use Reach\StatamicResrv\Models\Reservation;
 
 class SquarePaymentGateway implements PaymentInterface
@@ -718,16 +712,8 @@ class SquarePaymentGateway implements PaymentInterface
 
     public function handlePaymentPending(): bool|array
     {
-        if (! request()->has('payment_pending')) {
-            return false;
-        }
-
-        $reservation = Reservation::find(request()->input('payment_pending'));
-
-        return [
-            'status' => 'pending',
-            'reservation' => $reservation ? $reservation->toArray() : [],
-        ];
+        // Never look the id up yourself: it is visitor input (see Step 15).
+        return PendingPayment::fromRequest();
     }
 
     // --- Webhooks ---
@@ -840,6 +826,7 @@ Before deploying your custom gateway:
 - [ ] `paymentIntent()` returns an object with `->id` and either `->client_secret` (inline) or `->redirectTo` (redirect)
 - [ ] `redirectsForPayment()` returns the correct boolean for your gateway type
 - [ ] `handleRedirectBack()` checks `handlePaymentPending()` first, then returns the correct status array
+- [ ] `handlePaymentPending()` returns `PendingPayment::fromRequest()` and nothing in the gateway loads a reservation from the `payment_pending` query value (see Step 15)
 - [ ] `verifyPayment()` verifies the webhook signature and dispatches `ReservationConfirmed` on success (a failed attempt stays PENDING for retry)
 - [ ] `verifyPayment()` routes the success state change through `transitionTo(CONFIRMED, tolerant: true)`, gates `ReservationConfirmed` on its return value, and re-reads on `false` to surface orphaned charges (see Step 10)
 - [ ] `refund()` throws `RefundFailedException` for **every** provider failure mode — catch the SDK's base exception class, not just invalid-request errors (see Step 11)
@@ -1330,3 +1317,62 @@ Control Panel users can now create reservations for customers. Unless the bookin
 ### `supportsWebhooks()` gates manual reservations
 
 Because the webhook is the only confirmation path, the create-reservation page refuses an online gateway whose `supportsWebhooks()` returns `false`: *"This payment method cannot confirm online payments, so it cannot be used to collect a payment."* Return `true` if your gateway confirms through webhooks and should be offered for manual reservations. Manually-confirmed (offline) gateways are unaffected: an admin marks those bookings as paid in the CP.
+
+---
+
+## Step 15: Resolve `payment_pending` Through `PendingPayment`
+
+**Applies to: all gateways**
+
+> 🔒 Security fix, added in Resrv v6.5.1. There is no interface change, so nothing fatals — but a gateway that keeps the old `handlePaymentPending()` body keeps the unsafe lookup in its own code. Update it.
+
+### Background
+
+Resrv sends the customer to the checkout-complete page with `?payment_pending=<reservation id>` when a booking finishes without a provider return: offline confirmation, zero-payment and affiliate (skip-payment) bookings, and a customer who navigates back to the checkout of a reservation that is already confirmed. The `{{ resrv_checkout_redirect }}` tag calls `handleRedirectBack()`, which calls `handlePaymentPending()`, and passes the returned `reservation` array to the site's template.
+
+Every earlier version of this guide, and the bundled gateways up to v6.5.0, implemented `handlePaymentPending()` like this:
+
+```php
+// Before — unsafe: returns whichever reservation the URL names
+public function handlePaymentPending(): bool|array
+{
+    if (! request()->has('payment_pending')) {
+        return false;
+    }
+
+    $reservation = Reservation::find(request()->input('payment_pending'));
+
+    return [
+        'status' => 'pending',
+        'reservation' => $reservation ? $reservation->toArray() : [],
+    ];
+}
+```
+
+The id is visitor input and reservation ids are sequential. Anyone could request the checkout-complete page with another booking's id and receive that reservation's row (reference, dates, amounts, `payment_id`, `customer_id`, the booked entry) in whatever the template renders. An array (`payment_pending[]=1&payment_pending[]=2`) returned several rows at once.
+
+### What to change
+
+Replace the body with the shared helper:
+
+```php
+use Reach\StatamicResrv\Http\Payment\PendingPayment;
+
+// After
+public function handlePaymentPending(): bool|array
+{
+    return PendingPayment::fromRequest();
+}
+```
+
+`PendingPayment::fromRequest()` keeps the same contract: `false` when the request has no `payment_pending`, otherwise `['status' => 'pending', 'reservation' => [...]]`. The `reservation` array is filled only when the id is the reservation of the visitor's own checkout session (the `resrv_reservation` session key Resrv sets when the reservation is created). For any other id it is empty, and the customer still sees the pending message.
+
+Your redirects need no change. Resrv's own redirects, and any `?payment_pending=<id>` redirect your payment view performs for the customer who just booked, arrive in the session that owns the reservation. The tag remembers that reservation when it ends the checkout session, so refreshing the checkout-complete page keeps working.
+
+### What Resrv enforces for you
+
+The `{{ resrv_checkout_redirect }}` tag also filters the result of `handleRedirectBack()`: when the request carries a `payment_pending` id the session does not own, it drops the `reservation` array before the template sees it. A gateway that has not been updated is therefore no longer exposed through the tag. Still make the change, so that your gateway is safe for any other caller of `handleRedirectBack()` / `handlePaymentPending()`.
+
+### The same rule for your own return parameters
+
+`handleRedirectBack()` should only return a reservation it found through a value the provider issued and a visitor cannot guess: the provider's payment, session or order id stored in `payment_id` (`Reservation::findByPaymentId(...)`, as in Step 3). Never load a reservation from its numeric id, or any other sequential value, taken from the query string.

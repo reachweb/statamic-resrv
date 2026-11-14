@@ -4,10 +4,14 @@ namespace Reach\StatamicResrv\Tests\Payment;
 
 use Illuminate\Support\Facades\Config;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
+use Reach\StatamicResrv\Tests\Support\UncheckedPendingGateway;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
 
@@ -114,5 +118,100 @@ class ResrvCheckoutRedirectTest extends TestCase
         $this->get($this->entry->absoluteUrl().'?resrv_gateway=gateway_b')
             ->assertOk()
             ->assertSee('failed');
+    }
+
+    public static function gateways(): array
+    {
+        return [
+            'default gateway' => [''],
+            'stripe' => ['&resrv_gateway=stripe'],
+            'offline' => ['&resrv_gateway=offline'],
+            'fake' => ['&resrv_gateway=fake'],
+            'third-party gateway with an unchecked lookup' => ['&resrv_gateway=unchecked'],
+        ];
+    }
+
+    #[DataProvider('gateways')]
+    public function test_payment_pending_does_not_expose_a_reservation_the_session_does_not_own(string $gatewayQuery)
+    {
+        $this->configureAllGateways();
+
+        $victim = $this->reservation('VICTIM');
+        $own = $this->reservation('MYOWN1');
+
+        $this->fakeCheckoutCompleteView();
+
+        // Anonymous visitor: a fresh session and nothing but a guessed sequential id.
+        $this->get($this->entry->absoluteUrl().'?payment_pending='.$victim->id.$gatewayQuery)
+            ->assertOk()
+            ->assertSee('[pending]')
+            ->assertSee('[ref:]', false)
+            ->assertDontSee('VICTIM')
+            ->assertDontSee('pi_VICTIM');
+
+        // An array id would make Reservation::find() return every listed row.
+        $this->get($this->entry->absoluteUrl().'?payment_pending[]='.$victim->id.'&payment_pending[]='.$own->id.$gatewayQuery)
+            ->assertOk()
+            ->assertDontSee('VICTIM')
+            ->assertDontSee('MYOWN1');
+
+        // A visitor in the middle of their own checkout must not unlock other ids either.
+        session(['resrv_reservation' => $own->id]);
+
+        $this->get($this->entry->absoluteUrl().'?payment_pending='.$victim->id.$gatewayQuery)
+            ->assertOk()
+            ->assertSee('[ref:]', false)
+            ->assertDontSee('VICTIM')
+            ->assertDontSee('pi_VICTIM');
+    }
+
+    #[DataProvider('gateways')]
+    public function test_payment_pending_returns_the_sessions_own_reservation_and_survives_a_refresh(string $gatewayQuery)
+    {
+        $this->configureAllGateways();
+
+        $own = $this->reservation('MYOWN1');
+
+        session(['resrv_reservation' => $own->id]);
+
+        $this->fakeCheckoutCompleteView();
+
+        $url = $this->entry->absoluteUrl().'?payment_pending='.$own->id.$gatewayQuery;
+
+        $this->get($url)->assertOk()->assertSee('[pending]')->assertSee('[ref:MYOWN1]', false);
+
+        // The tag ended the checkout session on the first render.
+        $this->assertNull(session('resrv_reservation'));
+
+        $this->get($url)->assertOk()->assertSee('[pending]')->assertSee('[ref:MYOWN1]', false);
+    }
+
+    protected function configureAllGateways(): void
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'default' => ['class' => FakePaymentGateway::class],
+            'stripe' => ['class' => StripePaymentGateway::class],
+            'offline' => ['class' => OfflinePaymentGateway::class],
+            'fake' => ['class' => FakePaymentGateway::class],
+            'unchecked' => ['class' => UncheckedPendingGateway::class],
+        ]);
+
+        app()->forgetInstance(PaymentGatewayManager::class);
+    }
+
+    protected function reservation(string $reference): Reservation
+    {
+        return Reservation::factory()->create([
+            'item_id' => $this->entries->first()->id(),
+            'reference' => $reference,
+            'payment_id' => 'pi_'.$reference,
+        ]);
+    }
+
+    protected function fakeCheckoutCompleteView(): void
+    {
+        $this->withFakeViews();
+        $this->viewShouldReturnRaw('layout', '{{ template_content }}');
+        $this->viewShouldReturnRaw('default', '{{ resrv_checkout_redirect }}[{{ status }}][ref:{{ reservation:reference }}][{{ reservation:payment_id }}]{{ /resrv_checkout_redirect }}');
     }
 }

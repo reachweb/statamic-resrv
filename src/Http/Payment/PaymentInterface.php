@@ -54,6 +54,12 @@ interface PaymentInterface
 
     public function handleRedirectBack(): array;
 
+    /**
+     * Answer the checkout-complete page's `?payment_pending=<id>` request. The id is visitor
+     * input, so never look the reservation up from it directly: return
+     * `PendingPayment::fromRequest()`, which only exposes the reservation to the session that
+     * booked it. See UPGRADE-PAYMENT-GATEWAYS.md Step 15.
+     */
     public function handlePaymentPending(): bool|array;
 
     public function verifyPayment($request);
