@@ -837,7 +837,7 @@ Before deploying your custom gateway:
 - [ ] `cancelPaymentIntent()` cancels or voids an intent at the provider (see Step 9)
 - [ ] `retrievePaymentIntent()` returns the provider's intent as an object exposing `->status`, returns `null` **only** when the intent is definitively gone, and **throws** on transient failures rather than returning `null` (see Step 13)
 - [ ] For redirect gateways: `retrievePaymentIntent()` also exposes `->redirectTo` on still-payable intents so an interrupted payment can resume (see Step 13)
-- [ ] For providers that cannot void an open order: `retrievePaymentIntent()` never reports `canceled` for an order that can still be paid. An order already sent to the provider reads as still payable, without `->redirectTo` and with `->expires_at`, and as `canceled` only once the provider no longer accepts it (see Step 13)
+- [ ] For providers that cannot void an open order: `retrievePaymentIntent()` never reports `canceled` for an order that can still be paid. An order already sent to the provider reads as still payable, without `->redirectTo` and with `->expires_at`, and as `canceled` only once the provider no longer accepts it: by the provider's own expiry where it enforces one, otherwise by a timeout that also covers the latest moment your posting page can still post the order (see Step 13)
 - [ ] For inline gateways: custom Blade view works and is publishable
 - [ ] For redirect gateways: return URL points to the Statamic page with `{{ resrv_checkout_redirect }}`
 - [ ] `paymentIntent()` declares the 4th `?string $returnUrl = null` parameter — the interface requires it, so a three-parameter declaration fatals at boot (see Step 12)
@@ -1294,8 +1294,10 @@ public function retrievePaymentIntent(string $paymentId, Reservation $reservatio
         return $intent;
     }
 
-    // ORDER_DEAD_AFTER_MINUTES is the bank's own timeout PLUS a safety margin: the bank's clock
-    // starts when it receives the order, which is later than sent_at.
+    // If your provider enforces an expiry of its own, use that here instead (see the rules below).
+    // Otherwise: sent_at is when YOU served the posting page, and the bank's clock starts only when
+    // it RECEIVES the order. ORDER_DEAD_AFTER_MINUTES must therefore be the latest your posting page
+    // can still post the order, PLUS the bank's own timeout, PLUS a safety margin.
     $expiresAt = $order->sent_at->addMinutes(self::ORDER_DEAD_AFTER_MINUTES);
 
     if ($expiresAt->isPast()) {
@@ -1318,7 +1320,9 @@ What Resrv does with it on the pay-by-link page: the order is unmountable (no `-
 Rules that keep this money-safe:
 
 - **`->expires_at` never permits a replacement.** Only `canceled` or `null` does. Once the order has expired, your `retrievePaymentIntent()` must report `canceled` itself, as above. An `->expires_at` in the past on an intent you still report payable is ignored, and the customer gets the generic error.
-- **Use the provider's real cut-off, with margin.** The timeout must be the point after which the bank can no longer accept a payment for that order, not the point where its page looks idle. The sample reports `canceled` at the same moment the customer is told to retry, so the margin has to be inside that one value. If you are unsure, choose the longer value: too long makes a customer wait, too short allows a double charge.
+- **Use the provider's real cut-off.** The timeout must be the point after which the bank can no longer accept a payment for that order, not the point where its page looks idle. If the provider enforces an expiry itself — a lifetime or timestamp it validates on the posted order, or a status query that reports the order closed — derive both `->expires_at` and `canceled` from that instead of from `sent_at`.
+- **Elapsed time proves an order dead only if you bound how late it can reach the bank.** `sent_at` is when you served the posting page; the bank's timer starts when it receives the order. In between, the form sits in the customer's browser: a suspended mobile tab or a stalled request can deliver it minutes later, and until it is delivered there is no bank timer at all. No fixed margin covers a gap you have not bounded. So serve the posting form once per order, with `Cache-Control: no-store`, make it submit itself on load with no manual submit button, and have it refuse to post after a short deadline. `ORDER_DEAD_AFTER_MINUTES` is then that deadline plus the bank's timeout plus a margin. The sample reports `canceled` at the same moment the customer is told to retry, so all three have to be inside that one value. If you are unsure, choose the longer value: too long makes a customer wait, too short allows a double charge.
+- **A deadline that runs in the browser is not a guarantee.** A form that still reaches the bank after you reported `canceled` opens a payable order beside its replacement. A payment on it arrives on a superseded `payment_id`: catch it with the stale-intent fallback in Step 9, which logs it instead of confirming the reservation, and refund or reconcile it by hand.
 - **Seconds or a date object, nothing else.** A Unix timestamp may be an integer, a float or a numeric string. A formatted date string is not read, and a value more than a year ahead is treated as a unit mistake (milliseconds, for example). Both are ignored, and the customer gets the generic error.
 - **Don't throw from `cancelPaymentIntent()` for an order you cannot void.** Return quietly, as Step 9 asks. If it does throw while the order reports an `->expires_at`, the customer still sees the notice and Resrv logs the exception as a warning.
 - **Leave `->redirectTo` off** while the order cannot be re-posted. With it, Resrv resumes the order instead.
