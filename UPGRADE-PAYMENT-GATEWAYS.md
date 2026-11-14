@@ -837,7 +837,7 @@ Before deploying your custom gateway:
 - [ ] `cancelPaymentIntent()` cancels or voids an intent at the provider (see Step 9)
 - [ ] `retrievePaymentIntent()` returns the provider's intent as an object exposing `->status`, returns `null` **only** when the intent is definitively gone, and **throws** on transient failures rather than returning `null` (see Step 13)
 - [ ] For redirect gateways: `retrievePaymentIntent()` also exposes `->redirectTo` on still-payable intents so an interrupted payment can resume (see Step 13)
-- [ ] For providers that cannot void an open order: `retrievePaymentIntent()` never reports `canceled` for an order that can still be paid — it reports it still payable without `->redirectTo` and with `->expires_at`, and `canceled` only once the provider no longer accepts it (see Step 13)
+- [ ] For providers that cannot void an open order: `retrievePaymentIntent()` never reports `canceled` for an order that can still be paid. An order already sent to the provider reads as still payable, without `->redirectTo` and with `->expires_at`, and as `canceled` only once the provider no longer accepts it (see Step 13)
 - [ ] For inline gateways: custom Blade view works and is publishable
 - [ ] For redirect gateways: return URL points to the Statamic page with `{{ resrv_checkout_redirect }}`
 - [ ] `paymentIntent()` declares the 4th `?string $returnUrl = null` parameter — the interface requires it, so a three-parameter declaration fatals at boot (see Step 12)
@@ -1271,7 +1271,7 @@ Some redirect providers (Cardlink and other bank-hosted payment pages) cannot vo
 - Reporting it still payable **with** `->redirectTo` makes Resrv resume it, and the bank rejects the repeated order id.
 - Reporting it still payable **without** `->redirectTo` is the truth, but every Pay press then failed with the generic *"We could not start the payment process"* error for as long as the order lived.
 
-Keep the third, truthful answer and add **`->expires_at`** — the moment the provider itself stops accepting the order — as a Unix timestamp (as Stripe's Checkout Sessions use) or a `DateTimeInterface`:
+Keep the third, truthful answer and add **`->expires_at`** — the moment the provider itself stops accepting the order — as a Unix timestamp in **seconds** (as Stripe's Checkout Sessions use) or a `DateTimeInterface`:
 
 ```php
 public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
@@ -1283,6 +1283,8 @@ public function retrievePaymentIntent(string $paymentId, Reservation $reservatio
     $intent = new \stdClass;
     $intent->id = $paymentId;
 
+    // Record sent_at BEFORE you serve the page that posts the order to the bank. Recording it
+    // afterwards leaves a moment where an order the customer is already paying reads as unsent.
     if (! $order->sentToBank()) {
         // The bank has not seen this order id yet: it can still be posted, or dropped locally.
         // (Your payment page must refuse to post an order you dropped.)
@@ -1292,7 +1294,9 @@ public function retrievePaymentIntent(string $paymentId, Reservation $reservatio
         return $intent;
     }
 
-    $expiresAt = $order->sent_at->addMinutes(self::BANK_PAGE_TIMEOUT_MINUTES);
+    // ORDER_DEAD_AFTER_MINUTES is the bank's own timeout PLUS a safety margin: the bank's clock
+    // starts when it receives the order, which is later than sent_at.
+    $expiresAt = $order->sent_at->addMinutes(self::ORDER_DEAD_AFTER_MINUTES);
 
     if ($expiresAt->isPast()) {
         // The bank no longer accepts it: dead, safe to replace.
@@ -1314,7 +1318,9 @@ What Resrv does with it on the pay-by-link page: the order is unmountable (no `-
 Rules that keep this money-safe:
 
 - **`->expires_at` never permits a replacement.** Only `canceled` or `null` does. Once the order has expired, your `retrievePaymentIntent()` must report `canceled` itself, as above. An `->expires_at` in the past on an intent you still report payable is ignored, and the customer gets the generic error.
-- **Use the provider's real cut-off, with margin.** The timeout must be the point after which the bank can no longer accept a payment for that order, not the point where its page looks idle. If you are unsure, choose the longer value: too long makes a customer wait, too short allows a double charge.
+- **Use the provider's real cut-off, with margin.** The timeout must be the point after which the bank can no longer accept a payment for that order, not the point where its page looks idle. The sample reports `canceled` at the same moment the customer is told to retry, so the margin has to be inside that one value. If you are unsure, choose the longer value: too long makes a customer wait, too short allows a double charge.
+- **Seconds or a date object, nothing else.** A Unix timestamp may be an integer, a float or a numeric string. A formatted date string is not read, and a value more than a year ahead is treated as a unit mistake (milliseconds, for example). Both are ignored, and the customer gets the generic error.
+- **Don't throw from `cancelPaymentIntent()` for an order you cannot void.** Return quietly, as Step 9 asks. If it does throw while the order reports an `->expires_at`, the customer still sees the notice and Resrv logs the exception as a warning.
 - **Leave `->redirectTo` off** while the order cannot be re-posted. With it, Resrv resumes the order instead.
 - **Report money that moved.** A paid or settling order still maps to `succeeded` / `processing`, with or without `->expires_at`.
 

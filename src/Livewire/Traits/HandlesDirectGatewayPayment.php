@@ -250,6 +250,15 @@ trait HandlesDirectGatewayPayment
         }
 
         if ($expiresAt = $this->intentExpiry($existing)) {
+            // The notice replaces the error report, so a void that failed for its own reason
+            // (revoked key, provider outage) must still leave a trace.
+            if ($cancelException !== null) {
+                Log::warning('Could not void a payment intent that is still open at the provider: '.$cancelException->getMessage(), [
+                    'reservation_id' => $reservation->id,
+                    'payment_id' => $paymentId,
+                ]);
+            }
+
             throw new PaymentAttemptStillOpen($reservation->id, $expiresAt);
         }
 
@@ -260,20 +269,31 @@ trait HandlesDirectGatewayPayment
 
     /**
      * When a still-open intent dies by itself: the optional `->expires_at` of Step 13, a Unix
-     * timestamp or a DateTimeInterface. Null when absent, unreadable or already past — a gateway
-     * must report `canceled` once its intent has expired.
+     * timestamp in seconds or a DateTimeInterface. Null when absent, unreadable or already past
+     * (a gateway must report `canceled` once its intent has expired), and null when more than a
+     * year away: no payment attempt stays open that long, so the value is a unit mistake such as
+     * milliseconds, and the customer must not be shown a date thousands of years out.
      */
     protected function intentExpiry(object $intent): ?CarbonInterface
     {
         $expiresAt = $intent->expires_at ?? null;
 
-        $expiresAt = match (true) {
-            $expiresAt instanceof \DateTimeInterface => Carbon::instance($expiresAt),
-            is_int($expiresAt), is_string($expiresAt) && ctype_digit($expiresAt) => Carbon::createFromTimestamp((int) $expiresAt),
+        $seconds = match (true) {
+            $expiresAt instanceof \DateTimeInterface => (float) $expiresAt->getTimestamp(),
+            is_int($expiresAt), is_float($expiresAt) => (float) $expiresAt,
+            is_string($expiresAt) && is_numeric($expiresAt) => (float) $expiresAt,
             default => null,
         };
 
-        return $expiresAt?->isFuture() ? $expiresAt : null;
+        // Compared as floats, before any int cast: an absurd value must not overflow on the way.
+        if ($seconds === null
+            || ! is_finite($seconds)
+            || $seconds <= Carbon::now()->getTimestamp()
+            || $seconds > Carbon::now()->addYear()->getTimestamp()) {
+            return null;
+        }
+
+        return Carbon::createFromTimestamp((int) $seconds);
     }
 
     /**

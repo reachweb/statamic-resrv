@@ -2,10 +2,13 @@
 
 namespace Reach\StatamicResrv\Tests\ManualReservation;
 
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
@@ -1012,7 +1015,8 @@ class ReservationPaymentPageTest extends TestCase
     public function test_pay_asks_the_customer_to_wait_while_an_unvoidable_order_is_still_open()
     {
         $this->useRedirectGateway();
-        $this->travelTo(now()->setTime(10, 0));
+        Config::set('app.timezone', 'Europe/Athens');
+        $this->travelTo(Carbon::parse('2026-11-20 13:00:00', 'UTC'));
 
         // A Cardlink-style order: the bank has it, it cannot be voided or re-posted, and it times out.
         $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
@@ -1025,26 +1029,35 @@ class ReservationPaymentPageTest extends TestCase
             'payment_id' => 'redir_open',
         ]);
 
-        $retryAt = now()->addMinutes(15)->setTimezone(config('app.timezone'))->format('d-m-Y H:i T');
-
         $component = Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
             ->test(ReservationPayment::class)
             ->call('pay')
             ->assertNoRedirect()
             ->assertSet('paymentError', false)
-            ->assertSee(trans('statamic-resrv::frontend.paymentAttemptStillOpen', ['date' => $retryAt]))
+            // 13:15 UTC, shown in the site's timezone.
+            ->assertSee(trans('statamic-resrv::frontend.paymentAttemptStillOpen', ['date' => '20-11-2026 15:15 EET']))
             ->assertDontSee(trans('statamic-resrv::frontend.paymentMountFailed'))
             ->assertSeeHtml('wire:click="pay"');
 
         $this->assertCount(0, $gateway->createdIntents, 'No second order may be minted while the first can still be paid.');
         $this->assertSame('redir_open', $reservation->fresh()->payment_id);
 
-        // The order has timed out and the gateway now reports it dead: Pay mints a replacement.
+        // Time alone changes nothing: past its expiry the order still reads as open, so Pay
+        // falls back to the generic error and still mints nothing.
         $this->travel(16)->minutes();
+
+        $component->call('pay')
+            ->assertNoRedirect()
+            ->assertSet('paymentRetryAt', null)
+            ->assertSet('paymentError', true);
+
+        $this->assertCount(0, $gateway->createdIntents, 'A passed expiry is not proof the order is dead.');
+
+        // Only the gateway reporting it dead lets Pay mint a replacement.
         $gateway->canceledIds[] = 'redir_open';
 
         $component->call('pay')
-            ->assertSet('paymentRetryAt', null);
+            ->assertSet('paymentError', false);
 
         $this->assertCount(1, $gateway->createdIntents);
         $fresh = $reservation->fresh();
@@ -1052,14 +1065,61 @@ class ReservationPaymentPageTest extends TestCase
         $component->assertRedirect('https://provider.test/checkout/'.$fresh->payment_id);
     }
 
-    public function test_a_passed_expiry_never_lets_pay_mint_next_to_an_order_the_gateway_still_reports_open()
+    public static function readableExpiries(): array
+    {
+        return [
+            'unix timestamp' => [fn () => now()->addMinutes(15)->getTimestamp()],
+            'float timestamp' => [fn () => now()->addMinutes(15)->getTimestamp() + 0.75],
+            'numeric string' => [fn () => (string) now()->addMinutes(15)->getTimestamp()],
+            'DateTimeImmutable' => [fn () => now()->addMinutes(15)->toDateTimeImmutable()],
+        ];
+    }
+
+    #[DataProvider('readableExpiries')]
+    public function test_pay_reads_the_expiry_of_an_open_order_in_every_documented_shape(\Closure $expiresAt)
+    {
+        $this->useRedirectGateway();
+        $this->travelTo(Carbon::parse('2026-11-20 13:00:00', 'UTC'));
+
+        $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
+        $gateway->retrieveIncludesRedirectTo = false;
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentExpiresAt = $expiresAt();
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_gateway' => 'fakeredirect',
+            'payment_id' => 'redir_open',
+        ]);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentRetryAt', '20-11-2026 13:15 UTC')
+            ->assertSet('paymentError', false);
+
+        $this->assertCount(0, $gateway->createdIntents);
+    }
+
+    public static function unusableExpiries(): array
+    {
+        return [
+            'already past' => [fn () => now()->subMinute()],
+            'milliseconds instead of seconds' => [fn () => now()->addMinutes(15)->getTimestamp() * 1000],
+            'beyond any integer timestamp' => [fn () => PHP_INT_MAX],
+            'exponent string' => [fn () => '1e30'],
+            'date string' => [fn () => now()->addMinutes(15)->toIso8601String()],
+        ];
+    }
+
+    #[DataProvider('unusableExpiries')]
+    public function test_an_unusable_expiry_falls_back_to_the_payment_error_and_never_mints(\Closure $expiresAt)
     {
         $this->useRedirectGateway();
 
         $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
         $gateway->retrieveIncludesRedirectTo = false;
         $gateway->cancelSucceeds = false;
-        $gateway->retrievedIntentExpiresAt = now()->subMinute();
+        $gateway->retrievedIntentExpiresAt = $expiresAt();
 
         $reservation = $this->makeAwaitingReservation([
             'payment_gateway' => 'fakeredirect',
@@ -1076,6 +1136,81 @@ class ReservationPaymentPageTest extends TestCase
 
         $this->assertCount(0, $gateway->createdIntents);
         $this->assertSame('redir_open', $reservation->fresh()->payment_id);
+    }
+
+    public function test_pay_shows_processing_when_an_open_order_with_an_expiry_was_paid()
+    {
+        $gateway = $this->fakeGateway();
+        $gateway->retrieveOmitsClientSecret = true;
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentExpiresAt = now()->addMinutes(15)->getTimestamp();
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_open']);
+
+        // The customer pays the open order between the resume read and the void: money moving
+        // outranks the expiry, so the page shows processing and not "try again later".
+        $gateway->onRetrievePaymentIntent = function () use ($gateway) {
+            $gateway->retrievedIntentStatus = 'succeeded';
+        };
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentProcessing', true)
+            ->assertSet('paymentRetryAt', null)
+            ->assertSet('paymentError', false);
+
+        $this->assertCount(0, $gateway->createdIntents);
+        $this->assertSame('pi_open', $reservation->fresh()->payment_id);
+    }
+
+    public function test_pay_asks_the_customer_to_wait_for_an_open_inline_intent_too()
+    {
+        $this->travelTo(Carbon::parse('2026-11-20 13:00:00', 'UTC'));
+
+        $gateway = $this->fakeGateway();
+        $gateway->retrieveOmitsClientSecret = true;
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentExpiresAt = now()->addMinutes(15)->getTimestamp();
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_open']);
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertSet('paymentRetryAt', '20-11-2026 13:15 UTC')
+            ->assertSet('paymentError', false)
+            ->assertSet('clientSecret', '');
+
+        $this->assertCount(0, $gateway->createdIntents);
+        $this->assertSame('pi_open', $reservation->fresh()->payment_id);
+    }
+
+    public function test_a_void_that_throws_is_logged_when_the_customer_only_sees_the_retry_notice()
+    {
+        $gateway = $this->fakeGateway();
+        $gateway->retrieveOmitsClientSecret = true;
+        $gateway->cancelThrows = new \RuntimeException('The provider rejected the API key.');
+        $gateway->retrievedIntentExpiresAt = now()->addMinutes(15)->getTimestamp();
+
+        $reservation = $this->makeAwaitingReservation(['payment_id' => 'pi_open']);
+
+        Log::spy();
+
+        Livewire::withQueryParams(['ref' => $reservation->reference, 'hash' => $reservation->customerLookupHash()])
+            ->test(ReservationPayment::class)
+            ->call('pay')
+            ->assertNotSet('paymentRetryAt', null)
+            ->assertSet('paymentError', false);
+
+        // The notice replaces the reported error, so the failed void must not vanish with it.
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn ($message, $context = []) => str_contains($message, 'The provider rejected the API key.')
+                && ($context['payment_id'] ?? null) === 'pi_open'
+                && ($context['reservation_id'] ?? null) === $reservation->id)
+            ->once();
+
+        $this->assertCount(0, $gateway->createdIntents);
     }
 
     public function test_return_from_redirect_gateway_shows_processing_while_still_awaiting()
