@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Events\CouponUpdated;
+use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Jobs\SendRefundReservationEmails as SendRefundJob;
 use Reach\StatamicResrv\Listeners\CancelAffiliateCommission;
@@ -103,6 +104,26 @@ class AffiliateCommissionCancellationTest extends TestCase
         $this->assertTrue($changed);
         $this->assertDatabaseHas('resrv_reservations', ['id' => $reservation->id, 'status' => 'cancelled']);
         $this->assertNull($this->pivotRow($reservation->id)->cancelled_at);
+    }
+
+    public function test_cancelling_an_unpaid_hold_voids_the_commission_even_when_the_pay_link_left_an_intent_id()
+    {
+        Mail::fake();
+
+        // Both unpaid-hold cancellation contexts: an opened-but-unpaid intent id must not keep the commission alive.
+        $affiliate = Affiliate::factory()->create(['fee' => 20]);
+
+        foreach ([ReservationCancelled::CONTEXT_UNPAID_HOLD, ReservationCancelled::CONTEXT_HOLD_LAPSED] as $context) {
+            $reservation = $this->makeAffiliateReservation($affiliate, [
+                'status' => 'awaiting_payment',
+                'payment_id' => 'pi_unpaid_'.$context,
+            ]);
+
+            $changed = app(ReservationRefundProcessor::class)->cancelWithoutRefund($reservation, $context);
+
+            $this->assertTrue($changed);
+            $this->assertCommissionCancelled($reservation);
+        }
     }
 
     public function test_no_charge_void_cancels_the_affiliate_commission()

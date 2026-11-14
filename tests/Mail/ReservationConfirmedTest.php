@@ -3,7 +3,9 @@
 namespace Reach\StatamicResrv\Tests\Mail;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Mail\ReservationConfirmed;
+use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
@@ -50,5 +52,39 @@ class ReservationConfirmedTest extends TestCase
 
         $this->assertStringContainsString($option->name, $html);
         $this->assertStringContainsString($value->name, $html);
+    }
+
+    // Manual reservations request any amount whatever the global payment mode, so a partial
+    // payment on an 'everything' site must still show what remains.
+    public function test_a_partial_payment_shows_the_remaining_amount_even_in_everything_mode()
+    {
+        Config::set('resrv-config.payment', 'everything');
+
+        $item = $this->makeStatamicItem();
+
+        $partial = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment' => '30.00',
+            'total' => '90.00',
+        ])->withCustomer()->create();
+
+        foreach ([new ReservationConfirmed($partial), new ReservationMade($partial)] as $mail) {
+            $html = $mail->render();
+
+            $this->assertStringContainsString('Remaining amount', $html);
+            $this->assertStringContainsString('60.00', $html);
+        }
+
+        $full = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'confirmed',
+            'payment' => '90.00',
+            'total' => '90.00',
+        ])->withCustomer()->create();
+
+        foreach ([new ReservationConfirmed($full), new ReservationMade($full)] as $mail) {
+            $this->assertStringNotContainsString('Remaining amount', $mail->render());
+        }
     }
 }

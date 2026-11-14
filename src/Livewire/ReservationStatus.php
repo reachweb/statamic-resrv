@@ -3,22 +3,20 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\RateLimiter;
 use Livewire\Attributes\Computed;
-use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus as ReservationStatusEnum;
 use Reach\StatamicResrv\Exceptions\CancellationNotAllowed;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Livewire\Traits\HandlesCustomerLookup;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 
 class ReservationStatus extends Component
 {
-    #[Locked]
-    public ?int $reservationId = null;
+    use HandlesCustomerLookup;
 
     #[Validate('required|email')]
     public string $email = '';
@@ -27,14 +25,6 @@ class ReservationStatus extends Component
     public string $reference = '';
 
     public bool $cancelled = false;
-
-    /**
-     * Set when an attempted deep link (?ref=&hash=) failed to resolve for any reason, so the
-     * blade can show a neutral "this link didn't work, use the form" notice instead of an
-     * unexplained empty form. Never reveals which failure occurred (preserves the rate-limit
-     * and reference-enumeration posture).
-     */
-    public bool $linkFailed = false;
 
     public function mount(): void
     {
@@ -54,39 +44,9 @@ class ReservationStatus extends Component
         return (bool) config('resrv-config.enable_reservation_status_page');
     }
 
-    /**
-     * Deep-link entry: ?ref=&hash=<customerLookupHash()>; the HMAC authenticates the link so no email entry is needed.
-     */
-    protected function loadReservationFromUri(): void
+    protected function lookupRateLimiterPrefix(): string
     {
-        $reference = request()->query('ref');
-        $hash = request()->query('hash');
-
-        // No deep link supplied — render the normal lookup form.
-        if (! is_string($reference) || $reference === '' || ! is_string($hash) || $hash === '') {
-            return;
-        }
-
-        // A link was attempted: on any failure surface a single neutral notice (never the cause,
-        // to preserve the rate-limit/enumeration posture) so the customer knows the link — not the
-        // page — is at fault. Shares the lookup form's per-(IP, reference) budget so mount can't
-        // brute-force the hash.
-        if (strlen($hash) !== 64 || $this->tooManyLookupAttempts($reference)) {
-            $this->linkFailed = true;
-
-            return;
-        }
-
-        $reservation = Reservation::findForCustomerLookup($reference, $hash, $this->visibleStatuses());
-
-        if ($reservation === null) {
-            $this->recordFailedLookup($reference);
-            $this->linkFailed = true;
-
-            return;
-        }
-
-        $this->reservationId = $reservation->id;
+        return 'resrv-status-lookup';
     }
 
     public function lookup(): void
@@ -117,37 +77,6 @@ class ReservationStatus extends Component
         }
 
         $this->reservationId = $reservation->id;
-    }
-
-    /**
-     * Two buckets guard every lookup path. The tight per-(IP, reference) bucket caps guesses
-     * per reference without letting one user exhaust a shared egress IP; on its own it is
-     * bypassable by varying the reference (every guess gets a fresh bucket), so a looser
-     * IP-wide bucket caps total failed lookups from one address across all references.
-     */
-    protected function tooManyLookupAttempts(string $reference): bool
-    {
-        return RateLimiter::tooManyAttempts($this->rateLimiterKey($reference), 10)
-            || RateLimiter::tooManyAttempts($this->ipRateLimiterKey(), 30);
-    }
-
-    protected function recordFailedLookup(string $reference): void
-    {
-        RateLimiter::hit($this->rateLimiterKey($reference), 600);
-        RateLimiter::hit($this->ipRateLimiterKey(), 600);
-    }
-
-    /**
-     * Reference is normalized to match the lookup path.
-     */
-    protected function rateLimiterKey(string $reference): string
-    {
-        return 'resrv-status-lookup:'.sha1((string) request()->ip().'|'.strtoupper(trim($reference)));
-    }
-
-    protected function ipRateLimiterKey(): string
-    {
-        return 'resrv-status-lookup-ip:'.sha1((string) request()->ip());
     }
 
     public function cancel(): void
@@ -205,20 +134,6 @@ class ReservationStatus extends Component
     }
 
     #[Computed]
-    public function reservation(): ?Reservation
-    {
-        if (! $this->reservationId) {
-            return null;
-        }
-
-        // Option values are soft-deleted to preserve reservation history — a value removed
-        // after booking must still render, so load them withTrashed() like optionsForEmail().
-        return Reservation::query()
-            ->with(['customer', 'rate', 'extras', 'options.values' => fn ($query) => $query->withTrashed(), 'childs.rate'])
-            ->find($this->reservationId);
-    }
-
-    #[Computed]
     public function statusLabel(): string
     {
         $reservation = $this->reservation;
@@ -240,8 +155,9 @@ class ReservationStatus extends Component
         }
 
         if ($reservation->status === ReservationStatusEnum::CANCELLED->value) {
-            // A retained payment must read as such — never as a refund.
-            return $reservation->hasGatewayPayment()
+            // A retained payment must read as such — never as a refund. An unresolved
+            // reference is not verified collected money, so it must not read as retained.
+            return $reservation->hasGatewayPayment() && ! $reservation->payment_unresolved
                 ? trans('statamic-resrv::frontend.statusCancelledNoRefundIssued')
                 : trans('statamic-resrv::frontend.statusCancelledNoRefund');
         }

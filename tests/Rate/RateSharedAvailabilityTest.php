@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
@@ -133,6 +134,66 @@ class RateSharedAvailabilityTest extends TestCase
             rateId: $setup['sharedRate']->id,
             reservationId: $thirdReservation->id,
         );
+    }
+
+    public function test_view_only_manual_reservation_does_not_consume_shared_rate_capacity()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        // A view-only hold (affects_availability=false) never took inventory, so it must not consume the shared-rate cap.
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => ReservationStatus::AWAITING_PAYMENT->value,
+            'affects_availability' => false,
+        ]);
+
+        $newReservation = Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => 'pending',
+        ]);
+
+        // With the view-only hold excluded the cap (1) still has room, so the decrement must not throw.
+        AvailabilityRepository::decrement(
+            date_start: $setup['startDate']->toDateString(),
+            date_end: $setup['startDate']->copy()->addDays(2)->toDateString(),
+            quantity: 1,
+            statamic_id: $setup['entry']->id(),
+            rateId: $setup['sharedRate']->id,
+            reservationId: $newReservation->id,
+        );
+
+        // The real booking went through and decremented the base pool.
+        foreach ($this->getBaseRateAvailabilities($setup) as $availability) {
+            $this->assertEquals(9, $availability->available);
+        }
+    }
+
+    public function test_view_only_manual_reservation_is_excluded_from_exhausted_dates_for_shared_rates()
+    {
+        $setup = $this->createSharedSetup(baseAvailable: 10, maxAvailable: 1);
+
+        Reservation::factory()->create([
+            'item_id' => $setup['entry']->id(),
+            'rate_id' => $setup['sharedRate']->id,
+            'date_start' => $setup['startDate']->toDateString(),
+            'date_end' => $setup['startDate']->copy()->addDays(2)->toDateString(),
+            'status' => ReservationStatus::AWAITING_PAYMENT->value,
+            'affects_availability' => false,
+        ]);
+
+        $exhausted = AvailabilityRepository::getExhaustedDatesForRates(
+            collect([$setup['sharedRate']]),
+            quantity: 1,
+        );
+
+        // The view-only hold doesn't count against the cap, so no date is greyed out for the shared rate.
+        $this->assertTrue($exhausted->get($setup['sharedRate']->id)->isEmpty());
     }
 
     public function test_max_available_is_enforced_per_day_for_partially_overlapping_reservations()
@@ -980,6 +1041,81 @@ class RateSharedAvailabilityTest extends TestCase
 
         // Price should be 75.00 (100 - 25%), not the raw 100.00
         $this->assertEquals('75.00', (string) $calendar[$dateKey]['price']);
+    }
+
+    public function test_calendar_price_serializes_as_plain_decimal_string_for_relative_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        $sharedRelativeRate = Rate::factory()->relative()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 10,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'date' => $startDate,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $sharedRelativeRate->id);
+
+        $dateKey = $startDate->format('Y-m-d');
+
+        // The transform rewrites ->price on a fetched model; that write must land as the
+        // formatted string, not a Price object, or the JSON payload the frontend datepicker
+        // consumes becomes {"money":{...}} and Math.round(info.price) renders NaN.
+        $this->assertIsString($calendar[$dateKey]['price']);
+        $this->assertStringContainsString('"price":"90.00"', json_encode($calendar));
+    }
+
+    public function test_browse_calendar_price_serializes_as_plain_decimal_string_when_relative_rate_is_cheapest()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+
+        $baseRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'base-rate',
+        ]);
+
+        Rate::factory()->relative()->shared()->create([
+            'collection' => 'pages',
+            'base_rate_id' => $baseRate->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 25,
+        ]);
+
+        $startDate = now()->startOfDay();
+
+        Availability::factory()->create([
+            'statamic_id' => $entry->id(),
+            'rate_id' => $baseRate->id,
+            'date' => $startDate,
+            'price' => 100,
+            'available' => 5,
+        ]);
+
+        // No rate selected: the calendar expands published rates from the base rows and the
+        // relative rate's 75.00 wins as the cheapest row for the date.
+        $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), null);
+
+        $dateKey = $startDate->format('Y-m-d');
+
+        $this->assertIsString($calendar[$dateKey]['price']);
+        $this->assertStringContainsString('"price":"75.00"', json_encode($calendar));
     }
 
     public function test_calendar_rewrites_rate_id_for_shared_non_relative_rate()

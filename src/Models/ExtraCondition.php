@@ -123,6 +123,27 @@ class ExtraCondition extends Model
         return $extrasThatApply;
     }
 
+    /**
+     * requiredExtrasThatApply() keeping the applying condition objects instead of their debug
+     * messages, so callers can explain why an extra is required.
+     *
+     * @return Collection<int, Collection<int, object>> keyed by extra id
+     */
+    public function requiredConditionsThatApply($statamic_id, $data): Collection
+    {
+        $required = $this->requiredExtrasForEntry($statamic_id);
+
+        if (! $required) {
+            return collect();
+        }
+
+        return $required
+            ->map(fn ($conditions, $extraId) => collect($conditions)
+                ->filter(fn ($condition) => (bool) $this->checkAllParameters($condition, $extraId, $data))
+                ->values())
+            ->filter(fn (Collection $conditions) => $conditions->isNotEmpty());
+    }
+
     public function calculateConditionArrays(Collection $extras, EnabledExtras $enabledExtras, AvailabilityData|Reservation|array $data): Collection
     {
         $required = collect();
@@ -253,7 +274,7 @@ class ExtraCondition extends Model
                 }
                 break;
             case 'no_extra_in_category_selected':
-                if (! $this->checkNoExtraInCategorySelected($condition, $data)) {
+                if ($this->checkNoExtraInCategorySelected($condition, $data)) {
                     return 'Extra required because no extra in category with ID '.$condition->value.' is selected';
                 }
                 break;
@@ -359,8 +380,9 @@ class ExtraCondition extends Model
 
         $categoryExtras = $this->extraIdsInCategory($condition->value);
 
-        $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
-            return $categoryExtras->contains($extraId);
+        // Selections arrive as plain ids (extras UI) or as id/quantity rows (checkout, manual reservations).
+        $selected = $data['extras']->filter(function ($extra) use ($categoryExtras) {
+            return $categoryExtras->contains(is_array($extra) ? ($extra['id'] ?? null) : $extra);
         });
 
         return $selected->count() > 0;
@@ -381,8 +403,9 @@ class ExtraCondition extends Model
 
         $categoryExtras = $this->extraIdsInCategory($condition->value);
 
-        $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
-            return $categoryExtras->contains($extraId);
+        // Selections arrive as plain ids (extras UI) or as id/quantity rows (checkout, manual reservations).
+        $selected = $data['extras']->filter(function ($extra) use ($categoryExtras) {
+            return $categoryExtras->contains(is_array($extra) ? ($extra['id'] ?? null) : $extra);
         });
 
         return $selected->count() == 0;

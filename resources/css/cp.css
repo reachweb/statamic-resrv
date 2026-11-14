@@ -232,6 +232,19 @@
     }
     .resrv-event--partner .resrv-event-dot { @apply bg-indigo-500; }
 
+    /* Unpaid manual hold: it takes stock, so it is shown, but dashed to read as not yet paid */
+    .resrv-event--awaiting_payment .resrv-event-card {
+        @apply bg-blue-50 text-blue-900 border border-dashed border-blue-400;
+    }
+    :is(.dark .resrv-event--awaiting_payment .resrv-event-card) {
+        @apply bg-blue-900/30 text-blue-100 border-blue-400/70;
+    }
+    .resrv-event--awaiting_payment .resrv-event-dot { @apply bg-transparent border border-dashed border-blue-500; }
+
+    .resrv-calendar-legend .resrv-event-card {
+        @apply w-auto;
+    }
+
     .resrv-event--pending .resrv-event-card {
         @apply bg-amber-50 text-amber-900;
     }
@@ -305,6 +318,15 @@
 /* In dark mode Statamic's multi-select chips (Combobox selected options) use a gray-800 fill with no border, which matches the Modal/Panel surface they sit on and makes them read as flat text. Give them a lighter fill and a border so they keep their pill shape. */
 .dark [data-ui-combobox-selected-options] [data-ui-badge] {
     @apply bg-gray-700 border border-gray-600;
+}
+
+/* Reservation facts in the CP action modals. Unlayered on purpose: core ships .bg-gray-50 in its
+   `utilities` layer, which outranks the addon's dark: variants and left this panel white in dark mode. */
+.resrv-action-summary {
+    @apply rounded-lg border border-gray-200 bg-gray-50 text-gray-900;
+}
+:is(.dark .resrv-action-summary) {
+    @apply border-gray-700 bg-gray-900/50 text-gray-100;
 }
 
 .\@container {

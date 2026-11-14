@@ -24,6 +24,12 @@ class ReportResource extends ResourceCollection
             'dynamic_pricing_applications' => $this->report->dynamicPricingApplications(),
         ];
 
+        $outstanding = $this->report->outstanding();
+        $data['outstanding'] = [
+            'count' => $outstanding['count'],
+            'amount' => $outstanding['amount']->format(),
+        ];
+
         // Gate the affiliate section on the feature flag so the Vue panel hides when it's off.
         if (Affiliate::enabled()) {
             $data['affiliate_sales'] = $this->report->affiliateSales();

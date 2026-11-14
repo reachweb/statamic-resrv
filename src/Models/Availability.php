@@ -81,6 +81,18 @@ class Availability extends Model implements AvailabilityContract
     }
 
     /**
+     * Writes must normalize to the formatted string here instead of the PriceClass cast:
+     * the cast's set() would keep the assigned Price object in Laravel's classCastCache,
+     * and toArray()/JSON would then emit the raw money object ({"money":{...}}) instead of
+     * the decimal string — several calendar/expansion transforms assign Price objects to
+     * ->price on fetched rows that are later serialized.
+     */
+    public function setPriceAttribute($value)
+    {
+        $this->attributes['price'] = Price::create($value)->format();
+    }
+
+    /**
      * Defaults to RateSorting::Price to preserve the historical batched/browse behaviour
      * (and direct callers that depend on the cheapest rate surfacing first). The Livewire
      * AvailabilityCollection component opts into RateSorting::Order via resolveRateSorting()

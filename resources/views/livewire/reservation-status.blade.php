@@ -202,7 +202,8 @@
                         {{ trans('statamic-resrv::frontend.amountPaid') }}
                     </p>
                     <p class="text-gray-900 truncate">
-                        {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountPaidOnline()->format() }}
+                        {{-- A receipt the admin recorded counts as paid; when receipt is unknown (offline checkout, unresolved intent) only what was verifiably collected online does. --}}
+                        {{ config('resrv-config.currency_symbol') }} {{ ($reservation->amountReceived() ?? $reservation->amountPaidOnline())->format() }}
                     </p>
                 </div>
             </div>

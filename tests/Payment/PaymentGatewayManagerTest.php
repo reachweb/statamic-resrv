@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
+use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -747,5 +748,16 @@ class PaymentGatewayManagerTest extends TestCase
         $this->expectExceptionMessage('Payment gateway [stripe] has invalid amount_limits: min (10.50) cannot exceed max (10.49).');
 
         new PaymentGatewayManager;
+    }
+
+    public function test_payment_intent_interface_declares_the_return_url_parameter()
+    {
+        // The 4th $returnUrl parameter is load-bearing for pay-by-link payments; it lives on the
+        // interface so an unupgraded gateway fails at boot (UPGRADE-PAYMENT-GATEWAYS.md Step 12).
+        $parameters = (new \ReflectionMethod(PaymentInterface::class, 'paymentIntent'))->getParameters();
+
+        $this->assertCount(4, $parameters);
+        $this->assertSame('returnUrl', $parameters[3]->getName());
+        $this->assertTrue($parameters[3]->isOptional());
     }
 }

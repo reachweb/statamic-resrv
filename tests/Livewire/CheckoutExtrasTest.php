@@ -367,6 +367,47 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
+    // The same carried-over selection with the extras step disabled: Checkout re-prices the session
+    // extras on mount, before the validation that rejects them. A custom-priced extra of another
+    // entry finds no custom field in this reservation's customer data, so re-pricing it must not
+    // throw out of mount() — the selection has to reach the validation and get its extras error.
+    public function test_it_rejects_a_custom_extra_carried_over_from_another_entry_when_the_extras_step_is_disabled()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = ResrvExtra::factory()->custom()->create();
+
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($extra->id);
+
+        // Selected on the first entry, where the customer data has the custom field...
+        $selectedOn = Reservation::factory()->for(Customer::factory()->withGuests(3))->create([
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        Livewire::test(Extras::class, ['reservation' => $selectedOn])
+            ->call('toggleExtra', $extra->id);
+
+        $this->assertEquals($extra->id, collect(session('resrv-extras')->extras)->first()['id']);
+
+        // ...then another entry is booked, whose customer data does not have it.
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '100.00',
+            'item_id' => $this->entries->get('two-available')->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class, ['enableExtrasStep' => false])
+            ->assertHasErrors('extras')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+    }
+
     // An extra whose category was unpublished after selection disappears from the list and must be
     // rejected at checkout exactly like an unpublished extra.
     public function test_it_rejects_a_selected_extra_whose_category_was_unpublished_after_selection()
@@ -837,6 +878,141 @@ class CheckoutExtrasTest extends TestCase
 
         // The conditional extra should no longer be required
         $this->assertFalse($component->extraConditions->get('required')->contains($conditionalExtra->id));
+    }
+
+    // The checkout validates the selection as id/quantity rows, not the plain ids the extras step
+    // evaluates, so the category conditions must be enforced on that shape too.
+    public function test_checkout_requires_an_extra_when_a_category_extra_is_selected()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        [$categoryExtra, $conditionalExtra] = $this->extrasWithCategoryCondition('extra_in_category_selected');
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // Nothing from the category is selected: the conditional extra is not required.
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertHasNoErrors(['extras'])
+            ->assertSet('step', 2);
+
+        // A category extra without the conditional one is refused.
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$categoryExtra->id => $this->selectedExtra($categoryExtra)])
+            ->call('handleFirstStep')
+            ->assertHasErrors(['extras'])
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $categoryExtra->id,
+        ]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [
+                $categoryExtra->id => $this->selectedExtra($categoryExtra),
+                $conditionalExtra->id => $this->selectedExtra($conditionalExtra),
+            ])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors(['extras'])
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $categoryExtra->id,
+        ]);
+
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $conditionalExtra->id,
+        ]);
+    }
+
+    public function test_checkout_requires_an_extra_unless_a_category_extra_is_selected()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        [$categoryExtra, $conditionalExtra] = $this->extrasWithCategoryCondition('no_extra_in_category_selected');
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // Nothing from the category is selected, so the conditional extra is required.
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->assertHasErrors(['extras'])
+            ->assertSet('step', 1);
+
+        // An extra outside the category does not lift the requirement.
+        $otherExtra = $this->extras->first();
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$otherExtra->id => $this->selectedExtra($otherExtra)])
+            ->call('handleFirstStep')
+            ->assertHasErrors(['extras'])
+            ->assertSet('step', 1);
+
+        // An extra from the category does.
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$categoryExtra->id => $this->selectedExtra($categoryExtra)])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors(['extras'])
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $categoryExtra->id,
+        ]);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $conditionalExtra->id,
+        ]);
+    }
+
+    /**
+     * An extra in a category and one made required by a condition on that category, both attached
+     * to the reservation's entry.
+     *
+     * @return array{0: ResrvExtra, 1: ResrvExtra}
+     */
+    private function extrasWithCategoryCondition(string $type): array
+    {
+        $category = ExtraCategory::factory()->create(['name' => 'Test Category']);
+
+        // Fixed prices, so a selected row's price is the extra's own and the totals check passes.
+        $categoryExtra = ResrvExtra::factory()->fixed()->create([
+            'id' => 10,
+            'name' => 'Category Extra',
+            'category_id' => $category->id,
+        ]);
+
+        $conditionalExtra = ResrvExtra::factory()->fixed()->create([
+            'id' => 11,
+            'name' => 'Conditional Extra',
+        ]);
+
+        ResrvEntry::whereItemId($this->entries->first()->id())->extras()->attach([$categoryExtra->id, $conditionalExtra->id]);
+
+        ExtraCondition::factory()->create([
+            'extra_id' => $conditionalExtra->id,
+            'conditions' => [[
+                'operation' => 'required',
+                'type' => $type,
+                'value' => $category->id,
+            ]],
+        ]);
+
+        return [$categoryExtra, $conditionalExtra];
+    }
+
+    private function selectedExtra(ResrvExtra $extra): array
+    {
+        return [
+            'id' => $extra->id,
+            'quantity' => 1,
+            'price' => $extra->price->format(),
+            'name' => $extra->name,
+        ];
     }
 
     // Test that an extra can be hidden when an extra from a category is selected

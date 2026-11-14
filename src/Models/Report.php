@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
@@ -28,7 +29,9 @@ class Report
         // Follow the money: the report covers reservations whose revenue the business holds —
         // confirmed/partner bookings plus no-refund cancellations that kept their gateway payment.
         // A returned charge always ends REFUNDED, and no-charge voids (partner / zero-payment)
-        // carry an empty payment_id, so "cancelled with a payment_id" is exactly the retained set.
+        // carry an empty payment_id, so "cancelled with a payment_id" is the retained set — minus
+        // payment_unresolved rows, whose payment_id is only a reconciliation handle on an
+        // unverifiable intent that never collected money (cancelled unpaid holds).
         $this->reservations = Reservation::whereDate($this->dateField, '>=', $this->date_start)
             ->whereDate($this->dateField, '<=', $this->date_end)
             ->where(function ($query) {
@@ -36,10 +39,34 @@ class Report
                     ->orWhere(function ($query) {
                         $query->where('status', 'cancelled')
                             ->whereNotNull('payment_id')
-                            ->where('payment_id', '!=', '');
+                            ->where('payment_id', '!=', '')
+                            ->where('payment_unresolved', false);
                     });
             })
             ->get();
+    }
+
+    /**
+     * Awaiting-payment (manual) bookings in the same window and date field: how many, and the sum
+     * of the amounts their payment requests ask for. Kept apart from $this->reservations so
+     * revenue, averages and percentages stay what was actually collected.
+     *
+     * @return array{count: int, amount: PriceClass}
+     */
+    public function outstanding(): array
+    {
+        $awaiting = Reservation::whereDate($this->dateField, '>=', $this->date_start)
+            ->whereDate($this->dateField, '<=', $this->date_end)
+            ->where('status', ReservationStatus::AWAITING_PAYMENT->value)
+            ->get(['id', 'payment', 'payment_surcharge']);
+
+        return [
+            'count' => $awaiting->count(),
+            'amount' => $awaiting->reduce(
+                fn (PriceClass $carry, $reservation) => $carry->add($reservation->amountDue()),
+                Price::create(0)
+            ),
+        ];
     }
 
     public function countReservations()

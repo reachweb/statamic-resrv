@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Resources;
 use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\ResourceCollection;
 use Illuminate\Support\Collection;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Resources\Concerns\ResolvesReservationEntries;
 
 class ReservationCalendarResource extends ResourceCollection
@@ -98,12 +99,17 @@ class ReservationCalendarResource extends ResourceCollection
             'end' => $onlyStart ? null : $this->formatDate($dateEnd),
             'url' => cp_route('resrv.reservation.show', $reservation->id),
             'status' => $reservation->status,
+            // Awaiting-payment holds are styled apart; their deadline (ISO, null = none) goes in the tooltip.
+            'hold_expires_at' => $reservation->hold_expires_at?->toIso8601String(),
             'classNames' => $classNames,
             'extendedProps' => [
                 'reservationId' => $reservation->id,
                 'entryTitle' => $entryTitle,
                 'rateLabel' => $rateLabel,
                 'quantity' => $showQuantity ? $quantity : null,
+                'status' => $reservation->status,
+                'statusLabel' => ReservationStatus::labelFor($reservation->status),
+                'holdExpiresAt' => $reservation->hold_expires_at?->toIso8601String(),
             ],
         ];
     }

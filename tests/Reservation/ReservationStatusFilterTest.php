@@ -63,4 +63,23 @@ class ReservationStatusFilterTest extends TestCase
         $this->assertSame('', $filter->badge(['status' => null]));
         $this->assertSame('', $filter->badge([]));
     }
+
+    public function test_badge_uses_the_option_labels()
+    {
+        $filter = new ReservationStatus;
+
+        $this->assertSame('Awaiting payment, Confirmed', $filter->badge(['status' => ['awaiting_payment', 'confirmed']]));
+        $this->assertSame('Awaiting payment', $filter->fieldItems()['status']['options']['awaiting_payment']);
+        // Legacy or unknown values are humanized rather than dropped.
+        $this->assertSame('Some legacy', $filter->badge(['status' => ['some_legacy']]));
+    }
+
+    public function test_awaiting_payment_is_applied_by_default_but_abandoned_checkouts_are_not()
+    {
+        $defaults = (new ReservationStatus)->autoApply()['status'];
+
+        $this->assertSame(['confirmed', 'partner', 'awaiting_payment'], $defaults);
+        $this->assertNotContains('pending', $defaults);
+        $this->assertNotContains('expired', $defaults);
+    }
 }

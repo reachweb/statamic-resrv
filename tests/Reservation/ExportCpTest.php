@@ -34,7 +34,10 @@ class ExportCpTest extends TestCase
         $response = $this->get(cp_route('resrv.export.index'));
 
         $response->assertStatus(200)
-            ->assertInertia(fn (AssertableInertia $page) => $page->component('resrv::Export/Index'));
+            ->assertInertia(fn (AssertableInertia $page) => $page->component('resrv::Export/Index')
+                // Human labels for the status checkboxes; the CSV keeps the raw values.
+                ->where('statusLabels.awaiting_payment', 'Awaiting payment')
+                ->where('statusLabels.confirmed', 'Confirmed'));
     }
 
     public function test_count_endpoint_returns_matching_reservations()

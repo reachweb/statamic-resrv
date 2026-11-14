@@ -6,15 +6,19 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Reach\StatamicResrv\Data\ReservationData;
+use Reach\StatamicResrv\Enums\ReservationLogReason;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationCreated;
+use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Livewire\Traits\HandlesReservationConfirmation;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Models\ReservationLog;
+use Reach\StatamicResrv\Support\ManualReservationCreator;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -88,6 +92,49 @@ class ReservationLogTest extends TestCase
             'status_to' => 'pending',
             'reason' => 'checkout_started',
         ]);
+    }
+
+    public function test_a_cp_created_reservation_is_logged_as_created_in_the_control_panel()
+    {
+        $reservation = $this->makeReservation(['status' => ReservationStatus::AWAITING_PAYMENT->value]);
+
+        Event::dispatch(new ReservationCreated($reservation, new ReservationData(viaCp: true)));
+
+        $this->assertDatabaseHas('resrv_reservation_logs', [
+            'reservation_id' => $reservation->id,
+            'status_from' => null,
+            'status_to' => 'awaiting_payment',
+            'reason' => 'cp_created',
+        ]);
+        $this->assertSame(__('Created in the Control Panel'), ReservationLogReason::CpCreated->label());
+    }
+
+    public function test_a_manual_reservation_logs_its_cp_creation_and_cp_confirmation()
+    {
+        $this->signInAdmin();
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $reservation = app(ManualReservationCreator::class)->create([
+            'item_id' => $this->entry->id(),
+            'date_start' => today()->addDay()->toDateTimeString(),
+            'date_end' => today()->addDays(2)->toDateTimeString(),
+            'quantity' => 1,
+            'payment_mode' => 'full',
+            'payment_gateway' => 'offline',
+            'send_payment_request_email' => false,
+            'customer' => ['email' => 'jane@example.com', 'first_name' => 'Jane', 'last_name' => 'Doe'],
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))->assertOk();
+
+        $this->assertSame(
+            ['cp_created', 'cp_confirmed'],
+            ReservationLog::forReservation($reservation->id)->orderBy('id')->get()->map(fn ($log) => $log->reason->value)->all()
+        );
+        $this->assertDatabaseMissing('resrv_reservation_logs', ['reservation_id' => $reservation->id, 'reason' => 'checkout_started']);
     }
 
     public function test_checkout_confirmation_logs_the_transition()
@@ -251,6 +298,7 @@ class ReservationLogTest extends TestCase
         ]);
 
         $gateway = \Mockery::mock(PaymentInterface::class);
+        $gateway->shouldReceive('supportsAutomaticRefunds')->andReturn(true);
         $gateway->shouldReceive('refund')->andReturnUsing(function ($refunding) {
             Reservation::whereKey($refunding->id)->update(['status' => 'confirmed']);
 

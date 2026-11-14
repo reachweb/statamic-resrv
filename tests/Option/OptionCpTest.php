@@ -63,6 +63,7 @@ class OptionCpTest extends TestCase
             'name' => 'This is an option value',
             'price' => '22.75',
             'price_type' => 'perday',
+            'description' => 'This value has a description',
             'published' => true,
         ];
 
@@ -71,6 +72,7 @@ class OptionCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_options_values', [
             'name' => 'This is an option value',
+            'description' => 'This value has a description',
         ]);
     }
 
@@ -118,6 +120,7 @@ class OptionCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_options', [
             'slug' => 'this-is-another-option',
+            'description' => 'This option is less cool but still has a description',
         ]);
         $this->assertDatabaseMissing('resrv_options', [
             'slug' => 'reservation-option',
@@ -139,6 +142,7 @@ class OptionCpTest extends TestCase
             'name' => 'This is another option value',
             'price' => '22.75',
             'price_type' => 'perday',
+            'description' => 'This value now has a description',
             'order' => 1,
             'published' => true,
         ];
@@ -148,6 +152,7 @@ class OptionCpTest extends TestCase
 
         $this->assertDatabaseHas('resrv_options_values', [
             'name' => 'This is another option value',
+            'description' => 'This value now has a description',
         ]);
     }
 
