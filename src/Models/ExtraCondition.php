@@ -274,7 +274,7 @@ class ExtraCondition extends Model
                 }
                 break;
             case 'no_extra_in_category_selected':
-                if (! $this->checkNoExtraInCategorySelected($condition, $data)) {
+                if ($this->checkNoExtraInCategorySelected($condition, $data)) {
                     return 'Extra required because no extra in category with ID '.$condition->value.' is selected';
                 }
                 break;
@@ -380,8 +380,9 @@ class ExtraCondition extends Model
 
         $categoryExtras = $this->extraIdsInCategory($condition->value);
 
-        $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
-            return $categoryExtras->contains($extraId);
+        // Selections arrive as plain ids (extras UI) or as id/quantity rows (checkout, manual reservations).
+        $selected = $data['extras']->filter(function ($extra) use ($categoryExtras) {
+            return $categoryExtras->contains(is_array($extra) ? ($extra['id'] ?? null) : $extra);
         });
 
         return $selected->count() > 0;
@@ -402,8 +403,9 @@ class ExtraCondition extends Model
 
         $categoryExtras = $this->extraIdsInCategory($condition->value);
 
-        $selected = $data['extras']->filter(function ($extraId) use ($categoryExtras) {
-            return $categoryExtras->contains($extraId);
+        // Selections arrive as plain ids (extras UI) or as id/quantity rows (checkout, manual reservations).
+        $selected = $data['extras']->filter(function ($extra) use ($categoryExtras) {
+            return $categoryExtras->contains(is_array($extra) ? ($extra['id'] ?? null) : $extra);
         });
 
         return $selected->count() == 0;

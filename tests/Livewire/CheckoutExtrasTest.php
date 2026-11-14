@@ -367,6 +367,47 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
+    // The same carried-over selection with the extras step disabled: Checkout re-prices the session
+    // extras on mount, before the validation that rejects them. A custom-priced extra of another
+    // entry finds no custom field in this reservation's customer data, so re-pricing it must not
+    // throw out of mount() — the selection has to reach the validation and get its extras error.
+    public function test_it_rejects_a_custom_extra_carried_over_from_another_entry_when_the_extras_step_is_disabled()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = ResrvExtra::factory()->custom()->create();
+
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($extra->id);
+
+        // Selected on the first entry, where the customer data has the custom field...
+        $selectedOn = Reservation::factory()->for(Customer::factory()->withGuests(3))->create([
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        Livewire::test(Extras::class, ['reservation' => $selectedOn])
+            ->call('toggleExtra', $extra->id);
+
+        $this->assertEquals($extra->id, collect(session('resrv-extras')->extras)->first()['id']);
+
+        // ...then another entry is booked, whose customer data does not have it.
+        $reservation = Reservation::factory()->create([
+            'price' => '100.00',
+            'payment' => '100.00',
+            'item_id' => $this->entries->get('two-available')->id(),
+        ]);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class, ['enableExtrasStep' => false])
+            ->assertHasErrors('extras')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+    }
+
     // An extra whose category was unpublished after selection disappears from the list and must be
     // rejected at checkout exactly like an unpublished extra.
     public function test_it_rejects_a_selected_extra_whose_category_was_unpublished_after_selection()

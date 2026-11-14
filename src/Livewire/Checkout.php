@@ -22,7 +22,7 @@ use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
-use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 
@@ -193,8 +193,12 @@ class Checkout extends Component
                 'customer' => $reservation->customerData ?? collect(),
             ])];
 
-        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($datasets) {
-            $extraModel = Extra::find($extra['id']);
+        // Resolve extras through the query Reservation::extraForValidation() uses — the entry's
+        // selectable extras — so a selection carried over from another entry is never priced here.
+        $entry = ResrvEntry::query()->itemId($reservation->item_id)->first();
+
+        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($datasets, $entry) {
+            $extraModel = $entry?->extras()->selectable()->find($extra['id']);
 
             // Leave unresolvable extras untouched — extraForValidation() raises the designed
             // ExtrasException for them during validation, so the stale selection must reach

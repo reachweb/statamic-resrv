@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
+use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\ManualReservationException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
 use Reach\StatamicResrv\Facades\Price;
@@ -972,6 +973,83 @@ class ManualReservationCreatorTest extends TestCase
 
         $this->assertSame([(int) $helmet->id], $required->keys()->all());
         $this->assertSame(__('Required because :extra is selected.', ['extra' => 'Bike rental']), $required->get($helmet->id));
+    }
+
+    public function test_an_extra_required_when_a_category_extra_is_selected_is_enforced()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $category = ExtraCategory::factory()->create(['name' => 'Bikes']);
+        $bike = Extra::factory()->create(['name' => 'Bike rental', 'category_id' => $category->id]);
+        $helmet = Extra::factory()->create(['id' => 2, 'slug' => 'helmet', 'name' => 'Helmet']);
+        ResrvEntry::whereItemId($entry->id())->extras()->attach([$bike->id, $helmet->id]);
+        ExtraCondition::factory()->create([
+            'extra_id' => $helmet->id,
+            'conditions' => [['operation' => 'required', 'type' => 'extra_in_category_selected', 'value' => $category->id]],
+        ]);
+
+        $this->assertTrue($this->creator()->requiredExtras($this->baseInput($entry))->isEmpty());
+
+        // The selection reaches the conditions as id/quantity rows, not as the plain ids the extras UI sends.
+        $withBike = $this->baseInput($entry, ['extras' => [['id' => $bike->id, 'quantity' => 1]]]);
+        $required = $this->creator()->requiredExtras($withBike);
+
+        $this->assertSame([(int) $helmet->id], $required->keys()->all());
+        $this->assertSame(__('Required because an extra from :category is selected.', ['category' => 'Bikes']), $required->get($helmet->id));
+
+        try {
+            $this->creator()->create($withBike);
+            $this->fail('A booking missing the extra its category condition requires must be refused.');
+        } catch (ExtrasException $e) {
+            $this->assertSame(__('Add the required extras: :extras.', ['extras' => 'Helmet']), $e->getMessage());
+        }
+
+        $this->assertSame(0, Reservation::count());
+
+        $this->creator()->create($this->baseInput($entry, [
+            'extras' => [['id' => $bike->id, 'quantity' => 1], ['id' => $helmet->id, 'quantity' => 1]],
+        ]));
+
+        $this->assertSame(1, Reservation::count());
+        $this->assertSame(2, DB::table('resrv_reservation_extra')->count());
+    }
+
+    public function test_an_extra_required_unless_a_category_extra_is_selected_is_enforced()
+    {
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+
+        $category = ExtraCategory::factory()->create(['name' => 'Bikes']);
+        $bike = Extra::factory()->create(['name' => 'Bike rental', 'category_id' => $category->id]);
+        $helmet = Extra::factory()->create(['id' => 2, 'slug' => 'helmet', 'name' => 'Helmet']);
+        ResrvEntry::whereItemId($entry->id())->extras()->attach([$bike->id, $helmet->id]);
+        ExtraCondition::factory()->create([
+            'extra_id' => $helmet->id,
+            'conditions' => [['operation' => 'required', 'type' => 'no_extra_in_category_selected', 'value' => $category->id]],
+        ]);
+
+        $required = $this->creator()->requiredExtras($this->baseInput($entry));
+
+        $this->assertSame([(int) $helmet->id], $required->keys()->all());
+        $this->assertSame(__('Required unless an extra from :category is selected.', ['category' => 'Bikes']), $required->get($helmet->id));
+
+        try {
+            $this->creator()->create($this->baseInput($entry));
+            $this->fail('A booking with nothing from the category must include the extra the condition requires.');
+        } catch (ExtrasException $e) {
+            $this->assertSame(__('Add the required extras: :extras.', ['extras' => 'Helmet']), $e->getMessage());
+        }
+
+        $this->assertSame(0, Reservation::count());
+
+        // An extra from the category lifts the requirement.
+        $withBike = $this->baseInput($entry, ['extras' => [['id' => $bike->id, 'quantity' => 1]]]);
+
+        $this->assertTrue($this->creator()->requiredExtras($withBike)->isEmpty());
+
+        $this->creator()->create($withBike);
+
+        $this->assertSame(1, Reservation::count());
+        $this->assertSame(1, DB::table('resrv_reservation_extra')->count());
     }
 
     public function test_an_extra_from_another_entry_is_rejected()
