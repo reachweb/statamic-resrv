@@ -13,6 +13,8 @@ use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\StatamicResrvServiceProvider;
+use ReflectionClass;
+use ReflectionProperty;
 use Spatie\LaravelRay\RayServiceProvider;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
@@ -77,6 +79,43 @@ class TestCase extends AddonTestCase
         parent::tearDown();
 
         $this->restoreHandlerBaseline();
+    }
+
+    public function createApplication()
+    {
+        $this->forgetStatamicStaticState();
+
+        return parent::createApplication();
+    }
+
+    /**
+     * Reset Statamic's static registries to their defaults, as in a fresh process.
+     *
+     * Every boot pushes route closures (and after-installed callbacks) into
+     * statics on Statamic\Statamic, and nothing empties them. Without this, each
+     * test re-registers the routes of every earlier test, and each closure keeps
+     * its whole application alive, so the suite slows down and grows in memory
+     * the longer it runs.
+     */
+    private function forgetStatamicStaticState(): void
+    {
+        foreach ((new ReflectionClass(Statamic::class))->getProperties(ReflectionProperty::IS_STATIC) as $property) {
+            $property->setValue(null, $property->getDefaultValue());
+        }
+    }
+
+    /**
+     * Migrate the in-memory SQLite database once per process, not once per test.
+     *
+     * Testbench clears RefreshDatabaseState after every test when it detects an
+     * in-memory SQLite connection, so RefreshDatabase re-runs every migration
+     * before each test. Reporting "not in-memory" here leaves that state alone:
+     * Laravel keeps the migrated PDO and wraps each test in a rolled-back
+     * transaction, the same way the PostgreSQL suite already runs.
+     */
+    protected function usesSqliteInMemoryDatabaseConnection(?string $connection = null): bool
+    {
+        return false;
     }
 
     protected function setUpFaker()
