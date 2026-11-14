@@ -925,6 +925,12 @@ class AwaitingPaymentTransitionsTest extends TestCase
         Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_captured_in_flight'
             && $mail->context === OrphanedPaymentNotification::CONTEXT_CANCELLED_CAPTURED);
 
+        // The succeeded webhook that follows reports the same captured charge: no second alert.
+        app(StripePaymentGateway::class)
+            ->verifyPayment($this->signedWebhookRequest('payment_intent.succeeded', 'pi_captured_in_flight', ['amount_received' => 5000]));
+
+        Mail::assertSent(OrphanedPaymentNotification::class, 1);
+
         // The customer email must not claim the payment was never received.
         Mail::assertSent(ReservationCancelledCustomer::class, fn ($mail) => $mail->hasTo($reservation->customer->email)
             && $mail->context === ReservationCancelledEvent::CONTEXT_PAYMENT_IN_FLIGHT);
@@ -1288,6 +1294,54 @@ class AwaitingPaymentTransitionsTest extends TestCase
         // The money that landed must go back through the gateway, not be left on a REFUNDED row.
         $this->assertCount(1, $gateway->refundCalls);
         $this->assertSame('refunded', $reservation->fresh()->status);
+    }
+
+    public function test_a_payment_landing_on_a_refunded_booking_alerts_despite_the_earlier_open_intent_warning()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        $gateway->refundCalls = [];
+        // The void fails when the admin marks the booking paid and again when they refund it.
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_paid_after_refund',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))->assertOk();
+
+        Mail::assertSent(OrphanedPaymentNotification::class, 1);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_STILL_PAYABLE);
+
+        $this->patchJson(cp_route('resrv.reservation.refund'), ['id' => $reservation->id])
+            ->assertOk()
+            ->assertJson(['status' => 'refunded']);
+
+        // The customer then pays with the client secret that could not be voided. That is a new
+        // fact — money to refund — so the warning that the intent was still open must not
+        // count as having already reported it.
+        $paid = fn () => app(StripePaymentGateway::class)
+            ->verifyPayment($this->signedWebhookRequest('payment_intent.succeeded', 'pi_paid_after_refund', ['amount_received' => 5000]));
+
+        $paid();
+
+        $this->assertSame('refunded', $reservation->fresh()->status);
+        Mail::assertSent(OrphanedPaymentNotification::class, 2);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->hasTo('admin@example.com')
+            && $mail->paymentIntentId === 'pi_paid_after_refund'
+            && $mail->context === null);
+
+        // A redelivery of that webhook is still reported only once.
+        $paid();
+
+        Mail::assertSent(OrphanedPaymentNotification::class, 2);
     }
 
     public function test_refunding_an_out_of_band_settlement_fails_safely_when_the_kept_intent_cannot_be_read()

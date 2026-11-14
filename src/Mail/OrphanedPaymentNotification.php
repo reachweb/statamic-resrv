@@ -45,6 +45,16 @@ class OrphanedPaymentNotification extends Mailable
 
     public const CONTEXT_CANCELLED_UNVERIFIED = 'cancelled_unverified';
 
+    /**
+     * Contexts that warn about an intent not known to have taken money. Every other alert
+     * (including the default orphan) reports a captured charge.
+     */
+    private const UNCAPTURED_CONTEXTS = [
+        self::CONTEXT_OUT_OF_BAND_STILL_PAYABLE,
+        self::CONTEXT_OUT_OF_BAND_UNVERIFIED,
+        self::CONTEXT_CANCELLED_UNVERIFIED,
+    ];
+
     public function __construct(
         public Reservation $reservation,
         public string $paymentIntentId,
@@ -115,8 +125,11 @@ class OrphanedPaymentNotification extends Mailable
     public static function dispatchFor(Reservation $reservation, string $paymentIntentId, ?string $stripeEventId = null, ?string $context = null): void
     {
         // Stripe redelivers webhooks for up to ~3 days, so an orphan charge would otherwise re-email
-        // admins on every retry. Notify only once per (reservation, payment intent).
-        $dedupeKey = 'resrv_orphan_notified:'.$reservation->id.':'.$paymentIntentId;
+        // admins on every retry. Notify only once per (reservation, payment intent) — but a
+        // warning that the intent is still open or unverified is counted apart, so it cannot
+        // silence the later alert that the intent did take money.
+        $dedupeKey = 'resrv_orphan_notified:'.$reservation->id.':'.$paymentIntentId
+            .(in_array($context, self::UNCAPTURED_CONTEXTS, true) ? ':uncaptured' : '');
 
         if (Cache::has($dedupeKey)) {
             return;
