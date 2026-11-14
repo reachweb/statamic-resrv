@@ -15,7 +15,10 @@ class SendHoldLapsedAdminEmail
 {
     public function handle(ReservationCancelled $event): void
     {
-        if ($event->context !== ReservationCancelled::CONTEXT_HOLD_LAPSED) {
+        // A lapsed hold whose payment was in flight carries CONTEXT_PAYMENT_IN_FLIGHT instead, so
+        // the sweep's origin rides on holdLapsed. Other in-flight cancellations (control panel)
+        // stay silent to admins here.
+        if ($event->context !== ReservationCancelled::CONTEXT_HOLD_LAPSED && ! $event->holdLapsed) {
             return;
         }
 

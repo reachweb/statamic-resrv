@@ -32,8 +32,9 @@ class ReservationCancelled
     /**
      * @param  ?string  $context  Why the booking was cancelled (CONTEXT_*) for email wording; null for the existing flows.
      * @param  bool  $notifyCustomer  False skips the customer cancellation email only (admin emails and side effects still run).
+     * @param  bool  $holdLapsed  The hold-lapse sweep cancelled the booking, even when the context was swapped for CONTEXT_PAYMENT_IN_FLIGHT.
      */
-    public function __construct(Reservation $reservation, public ?string $context = null, public bool $notifyCustomer = true)
+    public function __construct(Reservation $reservation, public ?string $context = null, public bool $notifyCustomer = true, public bool $holdLapsed = false)
     {
         $this->reservation = $reservation;
     }

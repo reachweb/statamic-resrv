@@ -90,7 +90,7 @@ The new `reservation-payment` Livewire component lets the customer pay from the 
 ### ✉️ Emails
 - **Customer payment request** is a new email event, enabled by default and overridable per form like the others. It is sent on creation (switchable per booking) and from the CP's send/resend action. It includes a greeting, the amount and deadline, the reservation details, extras and options, the remaining balance and a **Pay now** button; offline methods get the payment instructions instead. A resend opens with "Here is the payment link for your reservation again" (or "Here are the payment details…" for offline methods); one sent from **Extend hold** also says "Your payment deadline is now …". Every send is stamped on the reservation.
 - **Lapsed holds** email the customer ("We did not receive your payment by …, so your reservation has been cancelled") and the admins ("cancelled because its payment hold lapsed"). The customer email follows the **Customer cancelled** email event and the admin email the **Admin cancelled (by customer)** event, so disabling either one also silences these.
-- If a reservation is cancelled while its online payment is going through, the customer is told the charge will be refunded (even if you unticked the cancellation email), and the admins get a reconciliation alert.
+- If a reservation is cancelled while its online payment is going through, the customer is told the charge will be refunded (even if you unticked the cancellation email), and the admins get a reconciliation alert. For a lapsed hold, the admins' cancellation email is still sent and says the charge needs refunding instead of "payment hold lapsed".
 - **Reconciliation alerts** (the orphaned-payment email) gained specific wording and a recommended action for each manual-payment case, e.g. a booking marked as paid while an online payment also went through ("The customer may have paid twice").
 
 ## Behaviour changes for existing sites
@@ -128,7 +128,7 @@ Both changes are enforced by PHP when a gateway class loads. `PaymentGatewayMana
 ### Other changes
 - **New status `ReservationStatus::AWAITING_PAYMENT`** (`awaiting_payment`). Code with an exhaustive `match` over the enum throws `UnhandledMatchError` until it handles the new case. It is created directly (never transitioned into), can move only to `CONFIRMED` or `CANCELLED`, and is in none of `live()`, `terminal()` or `inFlight()`. `inFlight()` is still `PENDING` + `WEBHOOK`. The enum also gained `label()` and `labelFor(?string)` for translated labels.
 - **New email event** `ReservationEmailEvent::CustomerPaymentRequest` (`customer_payment_request`) with the `Mail\ReservationPaymentRequest` mailable. Exhaustive `match`es over `ReservationEmailEvent` need the new case too.
-- **`ReservationCancelled`** is now `__construct(Reservation $reservation, ?string $context = null, bool $notifyCustomer = true)`.
+- **`ReservationCancelled`** is now `__construct(Reservation $reservation, ?string $context = null, bool $notifyCustomer = true, bool $holdLapsed = false)`.
   - Contexts: `CONTEXT_HOLD_LAPSED` (lapse sweep), `CONTEXT_UNPAID_HOLD` (admin cancelled an awaiting-payment booking) and `CONTEXT_PAYMENT_IN_FLIGHT` (a payment was going through at cancellation). The cancellation mailables use the context for their wording.
   - `CancelAffiliateCommission` voids the commission for all three contexts, even when a `payment_id` is still present.
   - `notifyCustomer: false` makes the bundled listener skip the customer email only. Custom listeners that email customers should honour it. A payment-in-flight cancellation always notifies.
@@ -136,7 +136,7 @@ Both changes are enforced by PHP when a gateway class loads. `PaymentGatewayMana
 - **`payment_unresolved`** marks a `payment_id` that is *not* proof this booking was paid through the gateway. It is set when Resrv keeps an intent reference only for reconciliation: an unpaid hold was cancelled but its open intent couldn't be verified as voided (or turned out to be capturing money), or a booking was marked as paid in the CP while an online intent still existed. While it is set:
   - `amountPaidOnline()` returns zero, and Reports exclude cancelled rows that carry it from retained revenue.
   - Customers can't self-cancel, and `refundIsAutomatic()` is `false`.
-  - A CP refund reads the intent first and only calls the gateway's `refund()` when it is `succeeded` or `processing`.
+  - A CP refund reads the intent first and only calls the gateway's `refund()` when it is `succeeded` or `processing`. An intent that is still open is voided with `cancelPaymentIntent()` and read again before that decision.
   - A later succeeded webhook for the kept intent on a cancelled row raises an orphaned-payment alert.
 
   Don't treat `payment_id !== ''` alone as revenue.

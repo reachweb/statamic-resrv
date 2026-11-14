@@ -60,8 +60,9 @@ class ReservationPayment extends Component
      * The single state the blade renders, derived server-side per request: awaiting |
      * instructions (offline gateway) | processing | deadline_passed | arrival_passed | paid |
      * unavailable. Money in flight wins over a closed window — the customer has just paid, and
-     * the webhook still confirms a row that is awaiting payment — but past the window only the
-     * gateway can say so: a return URL's query is client-controlled and outlives its payment.
+     * the webhook still confirms a row that is awaiting payment — but only the gateway can say
+     * so, inside the window as well as past it: a return URL's query is client-controlled and
+     * outlives its payment, and a delayed debit that fails after the return must stay payable.
      */
     #[Computed]
     public function state(): string
@@ -92,9 +93,15 @@ class ReservationPayment extends Component
             return $reservation->holdDeadlinePassed() ? 'deadline_passed' : 'arrival_passed';
         }
 
-        $returnStatus = $this->gatewayReturnStatus() ?? $this->redirectGatewayReturnStatus($reservation);
+        // A query claiming money in flight counts only while the stored intent agrees; a redirect
+        // gateway's return is already the provider's own answer.
+        $moneyInFlight = match ($this->gatewayReturnStatus()) {
+            'processing', 'succeeded' => $this->storedIntentIsMovingMoney($reservation),
+            null => $this->redirectGatewayReturnStatus($reservation) === 'processing',
+            default => false,
+        };
 
-        if ($returnStatus === 'processing' || $returnStatus === 'succeeded') {
+        if ($moneyInFlight) {
             return 'processing';
         }
 
@@ -158,7 +165,8 @@ class ReservationPayment extends Component
 
     /**
      * Whether the gateway reports the stored intent captured or capturing money. A failed read
-     * reports false: the closed window shows, and the webhook still confirms a real payment.
+     * reports false: the closed window shows (or Pay, which re-reads and resumes the stored
+     * intent), and the webhook still confirms a real payment.
      */
     protected function storedIntentIsMovingMoney(Reservation $reservation): bool
     {

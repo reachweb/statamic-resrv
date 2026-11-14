@@ -138,7 +138,10 @@ class ReservationRefundProcessor
             // the unpaid-hold context for CONTEXT_PAYMENT_IN_FLIGHT. Reads payment_id/gateway
             // from the just-transitioned row (transitionTo() syncs the locked committed row):
             // a pre-lock snapshot could miss a pay-page write and silently skip cancelling the
-            // customer's live intent.
+            // customer's live intent. The sweep's origin is recorded before the swap: its admin
+            // email must still go out when the context no longer says the hold lapsed.
+            $holdLapsed = $context === ReservationCancelled::CONTEXT_HOLD_LAPSED;
+
             try {
                 if ($cancelOpenIntent && $this->cancelOpenIntentAndClearVerifiedReference($reservation)) {
                     $context = ReservationCancelled::CONTEXT_PAYMENT_IN_FLIGHT;
@@ -149,7 +152,7 @@ class ReservationRefundProcessor
                 // failure must never skip the event that restores stock and voids commission.
                 report($e);
             } finally {
-                $this->dispatchCommitted(ReservationCancelled::class, $reservation, $context, $notifyCustomer);
+                $this->dispatchCommitted(ReservationCancelled::class, $reservation, $context, $notifyCustomer, $holdLapsed);
             }
         }
 
@@ -553,7 +556,11 @@ class ReservationRefundProcessor
      * reference: only an intent that verifiably captured (or is settling) money goes back through
      * the gateway; a dead or never-paid one has no charge to refund (the provider would reject it
      * and strand the booking), so the provider is skipped and the row lands REFUNDED — the money
-     * collected out of band is returned by hand. A failed read aborts the refund for a retry.
+     * collected out of band is returned by hand. A still-open intent (payable, or an uncaptured
+     * hold) is voided first and read again, so it cannot take money on a REFUNDED row: a payment
+     * that landed inside the void window is refunded through the gateway like any captured one,
+     * and a void that failed again still lands REFUNDED but logs that the intent is open at the
+     * gateway. A failed read aborts the refund for a retry.
      *
      * @throws RefundFailedException
      */
@@ -566,17 +573,44 @@ class ReservationRefundProcessor
         $gateway = $fresh->resolvePaymentGateway();
 
         if ($fresh->status === ReservationStatus::CONFIRMED->value && $fresh->payment_unresolved) {
+            $paymentId = (string) $fresh->payment_id;
+
             try {
-                $intent = $gateway->retrievePaymentIntent((string) $fresh->payment_id, $fresh);
+                $intent = $gateway->retrievePaymentIntent($paymentId, $fresh);
+
+                // Still open (payable or an uncaptured hold): void it before REFUNDED commits, or
+                // the customer's stale client secret could still complete a payment on a refunded
+                // booking. The re-read catches a payment that landed inside the void window.
+                if ($intent !== null && ! in_array($intent->status ?? '', ['canceled', ...self::REFUND_ONLY_INTENT_STATUSES], true)) {
+                    try {
+                        $gateway->cancelPaymentIntent($paymentId, $fresh);
+                    } catch (\Throwable $e) {
+                        // Tolerated: the re-read decides, and a void that failed is logged below.
+                        report($e);
+                    }
+
+                    $intent = $gateway->retrievePaymentIntent($paymentId, $fresh);
+                }
             } catch (\Throwable $e) {
                 throw new RefundFailedException(__('The payment could not be verified with the payment provider. Please try again.'), 0, $e);
             }
 
-            if (! in_array($intent?->status ?? '', self::REFUND_ONLY_INTENT_STATUSES, true)) {
+            if ($intent === null || ($intent->status ?? '') === 'canceled') {
                 Log::info('Skipped the gateway refund: the out-of-band settlement\'s kept intent holds no charge.', [
                     'reservation_id' => $fresh->id,
                     'payment_id' => $fresh->payment_id,
                     'intent_status' => $intent?->status,
+                ]);
+
+                return;
+            }
+
+            if (! in_array($intent->status ?? '', self::REFUND_ONLY_INTENT_STATUSES, true)) {
+                Log::warning('Skipped the gateway refund, but the out-of-band settlement\'s kept intent could not be voided and is still open at the gateway — cancel it there.', [
+                    'reservation_id' => $fresh->id,
+                    'payment_id' => $fresh->payment_id,
+                    'payment_gateway' => $fresh->payment_gateway,
+                    'intent_status' => $intent->status ?? null,
                 ]);
 
                 return;

@@ -178,6 +178,45 @@ class CancelLapsedHoldsTest extends TestCase
         $this->assertStringNotContainsString('No action is required', $adminHtml);
     }
 
+    public function test_overdue_hold_with_a_payment_in_flight_still_sends_the_admin_cancellation_email()
+    {
+        Mail::fake();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        // A captured intent cannot be voided and the post-void read reports it money-moving.
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentStatus = 'succeeded';
+
+        $reservation = $this->overdueReservation([
+            'payment_id' => 'pi_lapsed_in_flight',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $this->artisan('resrv:cancel-lapsed-holds')
+            ->expectsOutputToContain('Cancelled 1 lapsed hold(s).')
+            ->assertSuccessful();
+
+        $this->app->terminate();
+
+        $this->assertEquals('cancelled', $reservation->fresh()->status);
+
+        // The in-flight context replaces the hold-lapsed one, but the sweep's admin email must still go out.
+        Mail::assertSent(ReservationCancelledMail::class, function ($mail) {
+            return $mail->hasTo('admin@example.com')
+                && $mail->context === ReservationCancelledEvent::CONTEXT_PAYMENT_IN_FLIGHT;
+        });
+        Mail::assertSent(ReservationCancelledCustomer::class, function ($mail) use ($reservation) {
+            return $mail->hasTo($reservation->customer->email)
+                && $mail->context === ReservationCancelledEvent::CONTEXT_PAYMENT_IN_FLIGHT;
+        });
+
+        // The admin body carries the in-flight wording, not "the customer did not pay in time".
+        $adminHtml = (new ReservationCancelledMail($reservation->fresh(), ReservationCancelledEvent::CONTEXT_PAYMENT_IN_FLIGHT))->render();
+        $this->assertStringContainsString('refund the charge', $adminHtml);
+        $this->assertStringNotContainsString('payment hold lapsed', $adminHtml);
+    }
+
     public function test_stock_is_not_restored_when_the_flag_is_off()
     {
         Mail::fake();

@@ -856,6 +856,8 @@ class ReservationPaymentPageTest extends TestCase
 
     public function test_return_from_gateway_shows_processing_while_still_awaiting()
     {
+        $this->fakeGateway()->retrievedIntentStatus = 'processing';
+
         $reservation = $this->makeAwaitingReservation([
             'payment_id' => 'pi_processing',
         ]);
@@ -869,6 +871,59 @@ class ReservationPaymentPageTest extends TestCase
             ->test(ReservationPayment::class)
             ->assertSee(trans('statamic-resrv::frontend.paymentHeadingProcessing'))
             ->assertSee(trans('statamic-resrv::frontend.paymentProcessing'));
+    }
+
+    public function test_inside_the_window_a_return_whose_payment_failed_shows_the_pay_button()
+    {
+        // A delayed-notification debit (SEPA, ACH) that failed after the return: the row is still payable.
+        $gateway = $this->fakeGateway();
+        $gateway->retrievedIntentStatus = 'requires_payment_method';
+
+        $reads = 0;
+        $gateway->onRetrievePaymentIntent = function () use (&$reads) {
+            $reads++;
+        };
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_id' => 'pi_failed',
+            'hold_expires_at' => now()->addDays(5),
+        ]);
+
+        Livewire::withQueryParams([
+            'ref' => $reservation->reference,
+            'hash' => $reservation->customerLookupHash(),
+            'payment_intent' => 'pi_failed',
+            'redirect_status' => 'processing',
+        ])
+            ->test(ReservationPayment::class)
+            ->assertSet('state', 'awaiting')
+            ->assertSee(trans('statamic-resrv::frontend.completeYourPayment'))
+            ->assertSeeHtml('wire:click="pay"')
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentProcessing'));
+
+        $this->assertSame(1, $reads, 'The stored intent is read once per page load.');
+    }
+
+    public function test_inside_the_window_a_return_whose_intent_was_cancelled_shows_the_pay_button()
+    {
+        $this->fakeGateway()->retrievedIntentStatus = 'canceled';
+
+        $reservation = $this->makeAwaitingReservation([
+            'payment_id' => 'pi_cancelled',
+            'hold_expires_at' => now()->addDays(5),
+        ]);
+
+        Livewire::withQueryParams([
+            'ref' => $reservation->reference,
+            'hash' => $reservation->customerLookupHash(),
+            'payment_intent' => 'pi_cancelled',
+            'redirect_status' => 'processing',
+        ])
+            ->test(ReservationPayment::class)
+            ->assertSet('state', 'awaiting')
+            ->assertSee(trans('statamic-resrv::frontend.completeYourPayment'))
+            ->assertSeeHtml('wire:click="pay"')
+            ->assertDontSee(trans('statamic-resrv::frontend.paymentProcessing'));
     }
 
     protected function useRedirectGateway(): void

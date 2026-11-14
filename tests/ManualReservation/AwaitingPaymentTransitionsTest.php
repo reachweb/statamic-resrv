@@ -20,6 +20,7 @@ use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
 use Reach\StatamicResrv\Listeners\IncreaseAvailability;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
+use Reach\StatamicResrv\Mail\ReservationCancelled as ReservationCancelledMail;
 use Reach\StatamicResrv\Mail\ReservationCancelledCustomer;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
@@ -927,6 +928,9 @@ class AwaitingPaymentTransitionsTest extends TestCase
         // The customer email must not claim the payment was never received.
         Mail::assertSent(ReservationCancelledCustomer::class, fn ($mail) => $mail->hasTo($reservation->customer->email)
             && $mail->context === ReservationCancelledEvent::CONTEXT_PAYMENT_IN_FLIGHT);
+
+        // Only a lapsed hold sends the admin cancellation email: the admin cancelled this one themselves.
+        Mail::assertNotSent(ReservationCancelledMail::class);
     }
 
     public function test_cancel_without_refund_voids_the_freshly_written_intent_not_a_stale_snapshot()
@@ -1218,6 +1222,72 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('refunded', $unpaid->fresh()->status);
 
         $this->assertCount(0, $gateway->refundCalls);
+    }
+
+    public function test_refunding_an_out_of_band_settlement_voids_a_kept_intent_that_is_still_payable()
+    {
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        $gateway->refundCalls = [];
+        // The void fails while the admin marks the booking paid, so the still-payable intent is kept.
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_kept_payable',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))->assertOk();
+
+        $this->assertSame('pi_kept_payable', $reservation->fresh()->payment_id);
+        $this->assertTrue($reservation->fresh()->payment_unresolved);
+        $this->assertCount(1, $gateway->cancelledIntents);
+
+        // The provider has recovered by the time the booking is refunded.
+        $gateway->cancelSucceeds = true;
+
+        $this->patchJson(cp_route('resrv.reservation.refund'), ['id' => $reservation->id])
+            ->assertOk()
+            ->assertJson(['status' => 'refunded']);
+
+        // The refund retried the void: the customer's stale client secret can no longer pay a
+        // REFUNDED booking, and no charge existed for the provider to refund.
+        $this->assertCount(2, $gateway->cancelledIntents);
+        $this->assertSame('pi_kept_payable', $gateway->cancelledIntents[1]['payment_id']);
+        $this->assertSame('canceled', $gateway->retrievePaymentIntent('pi_kept_payable', $reservation)->status);
+        $this->assertCount(0, $gateway->refundCalls);
+        $this->assertSame('refunded', $reservation->fresh()->status);
+    }
+
+    public function test_refunding_an_out_of_band_settlement_returns_a_payment_that_landed_while_voiding_the_kept_intent()
+    {
+        Mail::fake();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelledIntents = [];
+        $gateway->refundCalls = [];
+        // The customer pays inside the void window: the first read still reports the intent
+        // payable, the void then fails and the re-read finds the captured charge.
+        $gateway->cancelSucceeds = false;
+        $gateway->onRetrievePaymentIntent = function () use ($gateway): void {
+            $gateway->retrievedIntentStatus = 'succeeded';
+        };
+
+        $reservation = $this->confirmedOutOfBandKeepingIntent('pi_kept_paid_mid_void');
+
+        $this->assertTrue(app(ReservationRefundProcessor::class)->refund($reservation));
+
+        $this->assertCount(1, $gateway->cancelledIntents);
+        // The money that landed must go back through the gateway, not be left on a REFUNDED row.
+        $this->assertCount(1, $gateway->refundCalls);
+        $this->assertSame('refunded', $reservation->fresh()->status);
     }
 
     public function test_refunding_an_out_of_band_settlement_fails_safely_when_the_kept_intent_cannot_be_read()
