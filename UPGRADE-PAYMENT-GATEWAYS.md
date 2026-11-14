@@ -1431,11 +1431,20 @@ public function handlePaymentPending(): bool|array
 
 `PendingPayment::fromRequest()` keeps the same contract: `false` when the request has no `payment_pending`, otherwise `['status' => 'pending', 'reservation' => [...]]`. The `reservation` array is filled only when the id is the reservation of the visitor's own checkout session (the `resrv_reservation` session key Resrv sets when the reservation is created). For any other id it is empty, and the customer still sees the pending message.
 
-Your redirects need no change. Resrv's own redirects, and any `?payment_pending=<id>` redirect your payment view performs for the customer who just booked, arrive in the session that owns the reservation. The tag remembers that reservation when it ends the checkout session, so refreshing the checkout-complete page keeps working.
+Your redirects need no change. Resrv's own redirects, and any `?payment_pending=<id>` redirect your payment view performs for the customer who just booked, arrive in the session that owns the reservation. The tag remembers that reservation when it ends the checkout session, so refreshing the checkout-complete page keeps working. It stays readable from its own URL for 60 minutes; after that the page shows the pending message without data. A customer who makes several bookings in one session keeps each one's page for its own 60 minutes.
 
 ### What Resrv enforces for you
 
-The `{{ resrv_checkout_redirect }}` tag also filters the result of `handleRedirectBack()`: when the request carries a `payment_pending` id the session does not own, it drops the `reservation` array before the template sees it. A gateway that has not been updated is therefore no longer exposed through the tag. Still make the change, so that your gateway is safe for any other caller of `handleRedirectBack()` / `handlePaymentPending()`.
+The `{{ resrv_checkout_redirect }}` tag also filters the result of `handleRedirectBack()`. When the request carries a `payment_pending` anywhere (query string or body), the tag checks the reservation your gateway actually returned and drops it unless it is the session's own. It checks the returned row, not the request value, so it holds however your gateway reads the parameter. A gateway that has not been updated is therefore no longer exposed through the tag. Still make the change, so that your gateway is safe for any other caller of `handleRedirectBack()` / `handlePaymentPending()`.
+
+### Static caching
+
+A statically cached copy of the checkout-complete page is served without running the tag, so the session check never happens: whoever asks for a cached `?payment_pending=<id>` URL gets the page the booking's owner saw. From v6.5.1 a page that renders `{{ resrv_checkout_redirect }}` is never written to Statamic's static cache (Resrv adds the `X-Statamic-Uncacheable` response header). You do not need to exclude the page yourself.
+
+Two things Resrv cannot do for you:
+
+- **Clear the static cache once after upgrading** (`php please static:clear`) if the site uses static caching and did not exclude the checkout-complete page. Copies cached before the upgrade stay in the cache, and are still served, until they are cleared.
+- **Check any cache in front of Statamic** (a CDN or reverse proxy that caches HTML). It must not cache the checkout-complete page.
 
 ### The same rule for your own return parameters
 

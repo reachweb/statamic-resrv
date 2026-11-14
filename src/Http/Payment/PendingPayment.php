@@ -15,8 +15,15 @@ class PendingPayment
     /** The reservation being checked out, set by AddReservationIdToSession. */
     protected const CHECKOUT_KEY = 'resrv_reservation';
 
-    /** The reservation this session last brought to the checkout-complete page. */
-    protected const COMPLETED_KEY = 'resrv_completed_reservation';
+    /** Reservations this session brought to the checkout-complete page: [id => Unix time]. */
+    protected const COMPLETED_KEY = 'resrv_completed_reservations';
+
+    /**
+     * How long a completed reservation stays readable from its checkout-complete URL. Long enough
+     * for a refresh or a second tab, short enough that a later user of a shared browser cannot
+     * reopen the page from its history.
+     */
+    protected const COMPLETED_MINUTES = 60;
 
     /**
      * The whole body of a gateway's handlePaymentPending(): false when the request carries no
@@ -41,12 +48,20 @@ class PendingPayment
 
     /**
      * Strip the reservation from a gateway's handleRedirectBack() result when the request names
-     * a `payment_pending` id the session does not own. Covers gateways whose
-     * handlePaymentPending() still looks the id up unchecked.
+     * a `payment_pending` and the reservation that came back is not the session's own. Covers
+     * gateways whose handlePaymentPending() still looks the id up unchecked. The returned row is
+     * what gets checked, not the request value: a gateway may read the id from the query string
+     * while a request body carries a different one.
      */
     public static function guard(array $redirectData): array
     {
-        if (request()->has('payment_pending') && ! static::ownedBySession(request()->input('payment_pending'))) {
+        if (! static::requestNamesPendingPayment()) {
+            return $redirectData;
+        }
+
+        $reservation = $redirectData['reservation'] ?? [];
+
+        if (! is_array($reservation) || ! static::ownedBySession($reservation['id'] ?? null)) {
             $redirectData['reservation'] = [];
         }
 
@@ -59,9 +74,29 @@ class PendingPayment
      */
     public static function endCheckout(): void
     {
+        $completed = static::completedReservations();
+
         if ($id = session()->pull(self::CHECKOUT_KEY)) {
-            session([self::COMPLETED_KEY => $id]);
+            $completed[(string) $id] = now()->getTimestamp();
         }
+
+        if ($completed === []) {
+            session()->forget(self::COMPLETED_KEY);
+
+            return;
+        }
+
+        session([self::COMPLETED_KEY => $completed]);
+    }
+
+    /** `payment_pending` anywhere a gateway could read it: merged input, query string or body. */
+    protected static function requestNamesPendingPayment(): bool
+    {
+        $request = request();
+
+        return $request->has('payment_pending')
+            || $request->query->has('payment_pending')
+            || $request->request->has('payment_pending');
     }
 
     protected static function ownedBySession(mixed $id): bool
@@ -71,8 +106,27 @@ class PendingPayment
             return false;
         }
 
-        return collect([session(self::CHECKOUT_KEY), session(self::COMPLETED_KEY)])
-            ->filter()
-            ->contains(fn ($owned) => (string) $owned === (string) $id);
+        $id = (string) $id;
+
+        return (string) session(self::CHECKOUT_KEY) === $id
+            || array_key_exists($id, static::completedReservations());
+    }
+
+    /**
+     * The completed reservations still inside their window, as [id => Unix time].
+     *
+     * @return array<string, int>
+     */
+    protected static function completedReservations(): array
+    {
+        $completed = session(self::COMPLETED_KEY);
+
+        if (! is_array($completed)) {
+            return [];
+        }
+
+        $cutoff = now()->subMinutes(self::COMPLETED_MINUTES)->getTimestamp();
+
+        return array_filter($completed, fn ($completedAt) => is_int($completedAt) && $completedAt >= $cutoff);
     }
 }

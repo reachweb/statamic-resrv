@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tags;
 
+use Reach\StatamicResrv\Http\Middleware\MarkCheckoutCompleteUncacheable;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Http\Payment\PendingPayment;
@@ -12,6 +13,9 @@ class ResrvCheckoutRedirect extends Tags
 {
     public function index(): array
     {
+        // What this tag renders belongs to one visitor's session: never let it be static cached.
+        request()->attributes->set(MarkCheckoutCompleteUncacheable::ATTRIBUTE, true);
+
         $payment = $this->resolveGateway();
 
         // payment_pending is visitor input, so the gateway's answer is filtered here as well:

@@ -30,6 +30,7 @@ use Reach\StatamicResrv\Filters\ReservationStartingDate;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Helpers\DataImport;
+use Reach\StatamicResrv\Http\Middleware\MarkCheckoutCompleteUncacheable;
 use Reach\StatamicResrv\Http\Middleware\SetResrvAffiliateCookie;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -92,6 +93,7 @@ class ResrvProvider extends AddonServiceProvider
     protected $middlewareGroups = [
         'statamic.web' => [
             SetResrvAffiliateCookie::class,
+            MarkCheckoutCompleteUncacheable::class,
         ],
     ];
 
