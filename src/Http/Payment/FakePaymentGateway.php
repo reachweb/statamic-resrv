@@ -59,6 +59,15 @@ class FakePaymentGateway implements PaymentInterface
     public bool $retrieveOmitsClientSecret = false;
 
     /**
+     * The `expires_at` retrievePaymentIntent() reports on a live intent, in any shape a gateway
+     * might hand back, modelling a provider order that cannot be voided but times out.
+     */
+    public int|float|string|\DateTimeInterface|null $retrievedIntentExpiresAt = null;
+
+    /** When set, cancelPaymentIntent() records the call and then throws it, as a provider outage would. */
+    public ?\Throwable $cancelThrows = null;
+
+    /**
      * Fired INSIDE paymentIntent() with the reservation — simulates a concurrent transition
      * landing during the gateway round-trip (exercises resolveOrCreateIntent's locked re-check).
      *
@@ -122,6 +131,10 @@ class FakePaymentGateway implements PaymentInterface
             ? 'canceled'
             : ($this->retrievedIntentStatus ?? 'requires_payment_method');
 
+        if ($this->retrievedIntentExpiresAt !== null) {
+            $data->expires_at = $this->retrievedIntentExpiresAt;
+        }
+
         if ($this->onRetrievePaymentIntent !== null) {
             ($this->onRetrievePaymentIntent)($reservation);
         }
@@ -135,6 +148,10 @@ class FakePaymentGateway implements PaymentInterface
             'payment_id' => $paymentId,
             'reservation_id' => $reservation->id,
         ];
+
+        if ($this->cancelThrows !== null) {
+            throw $this->cancelThrows;
+        }
 
         // A swallowed failure (cancelSucceeds=false) leaves the intent live, as a real gateway would.
         if ($this->cancelSucceeds) {
@@ -238,16 +255,7 @@ class FakePaymentGateway implements PaymentInterface
 
     public function handlePaymentPending(): bool|array
     {
-        if (! request()->has('payment_pending')) {
-            return false;
-        }
-
-        $reservation = Reservation::find(request()->input('payment_pending'));
-
-        return [
-            'status' => 'pending',
-            'reservation' => $reservation ? $reservation->toArray() : [],
-        ];
+        return PendingPayment::fromRequest();
     }
 
     public function verifyPayment($request)

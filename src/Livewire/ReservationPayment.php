@@ -4,8 +4,10 @@ namespace Reach\StatamicResrv\Livewire;
 
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Reach\StatamicResrv\Enums\ReservationStatus as ReservationStatusEnum;
+use Reach\StatamicResrv\Exceptions\PaymentAttemptStillOpen;
 use Reach\StatamicResrv\Exceptions\ReservationNoLongerPayable;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Facades\Price;
@@ -24,6 +26,13 @@ class ReservationPayment extends Component
     use HandlesCustomerLookup, HandlesDirectGatewayPayment;
 
     public bool $paymentError = false;
+
+    /**
+     * Set when an earlier payment attempt is still open at the provider and can be neither
+     * voided nor resumed: the formatted time after which Pay will work again.
+     */
+    #[Locked]
+    public ?string $paymentRetryAt = null;
 
     public function mount(): void
     {
@@ -204,6 +213,7 @@ class ReservationPayment extends Component
     public function pay()
     {
         $this->paymentError = false;
+        $this->paymentRetryAt = null;
 
         $reservation = $this->reservation;
 
@@ -234,6 +244,14 @@ class ReservationPayment extends Component
             // cached computed (it may hold the pre-transition row) so this render shows the new
             // state instead of a payment form. No error notice.
             unset($this->reservation);
+
+            return;
+        } catch (PaymentAttemptStillOpen $e) {
+            // Expected for gateways that cannot void an order the provider has not answered yet:
+            // nothing was minted and nothing is wrong, so this is a notice, not a reported error.
+            $this->paymentRetryAt = $e->expiresAt->copy()
+                ->setTimezone(config('app.timezone'))
+                ->format('d-m-Y H:i T');
 
             return;
         } catch (UnknownPaymentGateway $e) {

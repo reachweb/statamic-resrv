@@ -4,7 +4,7 @@ This document provides step-by-step instructions for updating a custom payment g
 
 ## Background
 
-Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Step 14 covers what your webhook must do for admin-created (manual) reservations, which are paid from a pay-by-link page instead of the checkout. Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
+Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Step 14 covers what your webhook must do for admin-created (manual) reservations, which are paid from a pay-by-link page instead of the checkout. Step 15 closes a data exposure in the documented `handlePaymentPending()` body and applies to every gateway. Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
 
 There are two gateway types:
 - **Inline gateways** (e.g. Stripe) — render a payment form directly on the checkout page via a Blade view. `redirectsForPayment()` returns `false`.
@@ -174,7 +174,7 @@ This method must return an array with a `status` key:
 ```php
 public function handleRedirectBack(): array
 {
-    // Always check for pending payments first
+    // Always check for pending payments first (handlePaymentPending() must be the Step 15 version)
     if ($pending = $this->handlePaymentPending()) {
         return $pending;
     }
@@ -433,6 +433,7 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Http\Payment\PendingPayment;
 use Reach\StatamicResrv\Models\Reservation;
 
 class PayPalPaymentGateway implements PaymentInterface
@@ -539,16 +540,8 @@ class PayPalPaymentGateway implements PaymentInterface
 
     public function handlePaymentPending(): bool|array
     {
-        if (! request()->has('payment_pending')) {
-            return false;
-        }
-
-        $reservation = Reservation::find(request()->input('payment_pending'));
-
-        return [
-            'status' => 'pending',
-            'reservation' => $reservation ? $reservation->toArray() : [],
-        ];
+        // Never look the id up yourself: it is visitor input (see Step 15).
+        return PendingPayment::fromRequest();
     }
 
     // --- Webhooks ---
@@ -628,6 +621,7 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
+use Reach\StatamicResrv\Http\Payment\PendingPayment;
 use Reach\StatamicResrv\Models\Reservation;
 
 class SquarePaymentGateway implements PaymentInterface
@@ -718,16 +712,8 @@ class SquarePaymentGateway implements PaymentInterface
 
     public function handlePaymentPending(): bool|array
     {
-        if (! request()->has('payment_pending')) {
-            return false;
-        }
-
-        $reservation = Reservation::find(request()->input('payment_pending'));
-
-        return [
-            'status' => 'pending',
-            'reservation' => $reservation ? $reservation->toArray() : [],
-        ];
+        // Never look the id up yourself: it is visitor input (see Step 15).
+        return PendingPayment::fromRequest();
     }
 
     // --- Webhooks ---
@@ -840,6 +826,7 @@ Before deploying your custom gateway:
 - [ ] `paymentIntent()` returns an object with `->id` and either `->client_secret` (inline) or `->redirectTo` (redirect)
 - [ ] `redirectsForPayment()` returns the correct boolean for your gateway type
 - [ ] `handleRedirectBack()` checks `handlePaymentPending()` first, then returns the correct status array
+- [ ] `handlePaymentPending()` returns `PendingPayment::fromRequest()` and nothing in the gateway loads a reservation from the `payment_pending` query value (see Step 15)
 - [ ] `verifyPayment()` verifies the webhook signature and dispatches `ReservationConfirmed` on success (a failed attempt stays PENDING for retry)
 - [ ] `verifyPayment()` routes the success state change through `transitionTo(CONFIRMED, tolerant: true)`, gates `ReservationConfirmed` on its return value, and re-reads on `false` to surface orphaned charges (see Step 10)
 - [ ] `refund()` throws `RefundFailedException` for **every** provider failure mode — catch the SDK's base exception class, not just invalid-request errors (see Step 11)
@@ -850,6 +837,7 @@ Before deploying your custom gateway:
 - [ ] `cancelPaymentIntent()` cancels or voids an intent at the provider (see Step 9)
 - [ ] `retrievePaymentIntent()` returns the provider's intent as an object exposing `->status`, returns `null` **only** when the intent is definitively gone, and **throws** on transient failures rather than returning `null` (see Step 13)
 - [ ] For redirect gateways: `retrievePaymentIntent()` also exposes `->redirectTo` on still-payable intents so an interrupted payment can resume (see Step 13)
+- [ ] For providers that cannot void an open order: `retrievePaymentIntent()` never reports `canceled` for an order that can still be paid. An order already sent to the provider reads as still payable, without `->redirectTo` and with `->expires_at`, and as `canceled` only once the provider no longer accepts it: by the provider's own expiry where it enforces one, otherwise by a timeout that also covers the latest moment your posting page can still post the order (see Step 13)
 - [ ] For inline gateways: custom Blade view works and is publishable
 - [ ] For redirect gateways: return URL points to the Statamic page with `{{ resrv_checkout_redirect }}`
 - [ ] `paymentIntent()` declares the 4th `?string $returnUrl = null` parameter — the interface requires it, so a three-parameter declaration fatals at boot (see Step 12)
@@ -1013,6 +1001,8 @@ public function cancelPaymentIntent(string $paymentId, Reservation $reservation)
 ```
 
 `OfflinePaymentGateway` and `FakePaymentGateway` both use this pattern.
+
+This is different from a provider that *does* hold an order but offers no way to void it (some bank redirect pages, such as Cardlink). Such a gateway cannot make the order dead, so it must not report it `canceled` either — see *Providers that cannot void an open order* in Step 13.
 
 ### When Resrv calls you
 
@@ -1271,6 +1261,77 @@ When Resrv resumes a still-payable intent on a **redirect** gateway (`redirectsF
 
 In both void-and-remint cases the superseded intent's credentials were already handed to the customer (an earlier tab or the provider's hosted page can still complete it), so Resrv **verifies the void** before minting: it calls `cancelPaymentIntent()`, then re-reads the intent through `retrievePaymentIntent()` and only mints when the provider reports it dead (`canceled`, or `null`). A read that still shows the intent payable aborts the attempt with a retryable error, and one that shows the money already moving surfaces the processing state — never two chargeable intents for one reservation. For this to work, your `retrievePaymentIntent()` must report `canceled` for an intent your `cancelPaymentIntent()` just voided.
 
+### Providers that cannot void an open order: report `->expires_at`
+
+> 📅 Added in Resrv v6.5.1. Optional, and no interface change: a gateway that can void its intents needs nothing here.
+
+Some redirect providers (Cardlink and other bank-hosted payment pages) cannot void an order the bank has not answered yet, and reject a second post of the same order id. Once the customer has been sent to the bank, such an order can be neither voided nor resumed; it only stops being payable when the bank's page times out. Until this version, no answer from `retrievePaymentIntent()` was both truthful and usable for it:
+
+- Reporting `canceled` after a void that did nothing lets Resrv mint a second order while the first can still be paid — two chargeable orders for one reservation.
+- Reporting it still payable **with** `->redirectTo` makes Resrv resume it, and the bank rejects the repeated order id.
+- Reporting it still payable **without** `->redirectTo` is the truth, but every Pay press then failed with the generic *"We could not start the payment process"* error for as long as the order lived.
+
+Keep the third, truthful answer and add **`->expires_at`** — the moment the provider itself stops accepting the order — as a Unix timestamp in **seconds** (as Stripe's Checkout Sessions use) or a `DateTimeInterface`:
+
+```php
+public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object
+{
+    $order = $this->findOrder($paymentId); // however your gateway stores what it sent to the bank
+
+    // ... return null if it never existed; map paid / settling orders to succeeded / processing ...
+
+    $intent = new \stdClass;
+    $intent->id = $paymentId;
+
+    // Record sent_at BEFORE you serve the page that posts the order to the bank. Recording it
+    // afterwards leaves a moment where an order the customer is already paying reads as unsent.
+    if (! $order->sentToBank()) {
+        // The bank has not seen this order id yet: it can still be posted, or dropped locally.
+        // (Your payment page must refuse to post an order you dropped.)
+        $intent->status = $order->voided() ? 'canceled' : 'requires_payment_method';
+        $intent->redirectTo = $order->paymentPageUrl();
+
+        return $intent;
+    }
+
+    // If your provider enforces an expiry of its own, use that here instead (see the rules below).
+    // Otherwise: sent_at is when YOU served the posting page, and the bank's clock starts only when
+    // it RECEIVES the order. ORDER_DEAD_AFTER_MINUTES must therefore be the latest your posting page
+    // can still post the order, PLUS the bank's own timeout, PLUS a safety margin.
+    $expiresAt = $order->sent_at->addMinutes(self::ORDER_DEAD_AFTER_MINUTES);
+
+    if ($expiresAt->isPast()) {
+        // The bank no longer accepts it: dead, safe to replace.
+        $intent->status = 'canceled';
+
+        return $intent;
+    }
+
+    // At the bank, unanswered: still payable, cannot be voided or re-posted.
+    $intent->status = 'requires_payment_method';
+    $intent->expires_at = $expiresAt->getTimestamp(); // and NO ->redirectTo
+
+    return $intent;
+}
+```
+
+What Resrv does with it on the pay-by-link page: the order is unmountable (no `->redirectTo`), so Resrv tries the void and re-reads it as usual. Finding it still payable with an `->expires_at` in the future, it mints nothing, keeps the stored reference, and shows the customer *"An earlier payment attempt for this reservation is still open with the payment provider. If you did not complete it, you can try again after …"* (`frontend.paymentAttemptStillOpen`) instead of an error. Nothing is reported to your error tracker — this is an expected state. If the customer does complete the open order, your webhook confirms the reservation as always.
+
+Rules that keep this money-safe:
+
+- **`->expires_at` never permits a replacement.** Only `canceled` or `null` does. Once the order has expired, your `retrievePaymentIntent()` must report `canceled` itself, as above. An `->expires_at` in the past on an intent you still report payable is ignored, and the customer gets the generic error.
+- **Use the provider's real cut-off.** The timeout must be the point after which the bank can no longer accept a payment for that order, not the point where its page looks idle. If the provider enforces an expiry itself — a lifetime or timestamp it validates on the posted order, or a status query that reports the order closed — derive both `->expires_at` and `canceled` from that instead of from `sent_at`.
+- **Elapsed time proves an order dead only if you bound how late it can reach the bank.** `sent_at` is when you served the posting page; the bank's timer starts when it receives the order. In between, the form sits in the customer's browser: a suspended mobile tab or a stalled request can deliver it minutes later, and until it is delivered there is no bank timer at all. No fixed margin covers a gap you have not bounded. So serve the posting form once per order, with `Cache-Control: no-store`, make it submit itself on load with no manual submit button, and have it refuse to post after a short deadline. `ORDER_DEAD_AFTER_MINUTES` is then that deadline plus the bank's timeout plus a margin. The sample reports `canceled` at the same moment the customer is told to retry, so all three have to be inside that one value. If you are unsure, choose the longer value: too long makes a customer wait, too short allows a double charge.
+- **A deadline that runs in the browser is not a guarantee.** A form that still reaches the bank after you reported `canceled` opens a payable order beside its replacement. A payment on it arrives on a superseded `payment_id`: catch it with the stale-intent fallback in Step 9, which logs it instead of confirming the reservation, and refund or reconcile it by hand.
+- **Seconds or a date object, nothing else.** A Unix timestamp may be an integer, a float or a numeric string. A formatted date string is not read, and a value more than a year ahead is treated as a unit mistake (milliseconds, for example). Both are ignored, and the customer gets the generic error.
+- **Don't throw from `cancelPaymentIntent()` for an order you cannot void.** Return quietly, as Step 9 asks. If it does throw while the order reports an `->expires_at`, the customer still sees the notice and Resrv logs the exception as a warning.
+- **Leave `->redirectTo` off** while the order cannot be re-posted. With it, Resrv resumes the order instead.
+- **Report money that moved.** A paid or settling order still maps to `succeeded` / `processing`, with or without `->expires_at`.
+
+The other callers of `retrievePaymentIntent()` do not read `->expires_at` and behave as before for a still-payable intent they could not void: cancelling or lapsing the reservation, or marking it paid out of band, keeps the payment reference and flags the reservation `payment_unresolved` so a payment that still lands on the open order is reconciled rather than lost.
+
+The **normal checkout** does not use `retrievePaymentIntent()` at all (see *Why* above): when the customer steps back or switches gateway it calls `cancelPaymentIntent()` and mints a fresh order without verifying the void. For a provider that cannot void, the earlier order therefore stays payable until it times out, and a payment on it arrives after its `payment_id` was replaced — handle it with the stale-intent fallback in Step 9.
+
 ### Reference: StripePaymentGateway (inline)
 
 ```php
@@ -1330,3 +1391,71 @@ Control Panel users can now create reservations for customers. Unless the bookin
 ### `supportsWebhooks()` gates manual reservations
 
 Because the webhook is the only confirmation path, the create-reservation page refuses an online gateway whose `supportsWebhooks()` returns `false`: *"This payment method cannot confirm online payments, so it cannot be used to collect a payment."* Return `true` if your gateway confirms through webhooks and should be offered for manual reservations. Manually-confirmed (offline) gateways are unaffected: an admin marks those bookings as paid in the CP.
+
+---
+
+## Step 15: Resolve `payment_pending` Through `PendingPayment`
+
+**Applies to: all gateways**
+
+> 🔒 Security fix, added in Resrv v6.5.1. There is no interface change, so nothing fatals — but a gateway that keeps the old `handlePaymentPending()` body keeps the unsafe lookup in its own code. Update it.
+
+### Background
+
+Resrv sends the customer to the checkout-complete page with `?payment_pending=<reservation id>` when a booking finishes without a provider return: offline confirmation, zero-payment and affiliate (skip-payment) bookings, and a customer who navigates back to the checkout of a reservation that is already confirmed. The `{{ resrv_checkout_redirect }}` tag calls `handleRedirectBack()`, which calls `handlePaymentPending()`, and passes the returned `reservation` array to the site's template.
+
+Every earlier version of this guide, and the bundled gateways up to v6.5.0, implemented `handlePaymentPending()` like this:
+
+```php
+// Before — unsafe: returns whichever reservation the URL names
+public function handlePaymentPending(): bool|array
+{
+    if (! request()->has('payment_pending')) {
+        return false;
+    }
+
+    $reservation = Reservation::find(request()->input('payment_pending'));
+
+    return [
+        'status' => 'pending',
+        'reservation' => $reservation ? $reservation->toArray() : [],
+    ];
+}
+```
+
+The id is visitor input and reservation ids are sequential. Anyone could request the checkout-complete page with another booking's id and receive that reservation's row (reference, dates, amounts, `payment_id`, `customer_id`, the booked entry) in whatever the template renders. An array (`payment_pending[]=1&payment_pending[]=2`) returned several rows at once.
+
+### What to change
+
+Replace the body with the shared helper:
+
+```php
+use Reach\StatamicResrv\Http\Payment\PendingPayment;
+
+// After
+public function handlePaymentPending(): bool|array
+{
+    return PendingPayment::fromRequest();
+}
+```
+
+`PendingPayment::fromRequest()` keeps the same contract: `false` when the request has no `payment_pending`, otherwise `['status' => 'pending', 'reservation' => [...]]`. The `reservation` array is filled only when the id is the reservation of the visitor's own checkout session (the `resrv_reservation` session key Resrv sets when the reservation is created). For any other id it is empty, and the customer still sees the pending message.
+
+Your redirects need no change. Resrv's own redirects, and any `?payment_pending=<id>` redirect your payment view performs for the customer who just booked, arrive in the session that owns the reservation. The tag remembers that reservation when it ends the checkout session, so refreshing the checkout-complete page keeps working. It stays readable from its own URL for 60 minutes; after that the page shows the pending message without data. A customer who makes several bookings in one session keeps each one's page for its own 60 minutes.
+
+### What Resrv enforces for you
+
+The `{{ resrv_checkout_redirect }}` tag also filters the result of `handleRedirectBack()`. When the request carries a `payment_pending` anywhere (query string or body), the tag checks the reservation your gateway actually returned and drops it unless it is the session's own. It checks the returned row, not the request value, so it holds however your gateway reads the parameter. A gateway that has not been updated is therefore no longer exposed through the tag. Still make the change, so that your gateway is safe for any other caller of `handleRedirectBack()` / `handlePaymentPending()`.
+
+### Static caching
+
+A statically cached copy of the checkout-complete page is served without running the tag, so the session check never happens: whoever asks for a cached `?payment_pending=<id>` URL gets the page the booking's owner saw. From v6.5.1 a page that renders `{{ resrv_checkout_redirect }}` is never written to Statamic's static cache (Resrv adds the `X-Statamic-Uncacheable` response header). You do not need to exclude the page yourself.
+
+Two things Resrv cannot do for you:
+
+- **Clear the static cache once after upgrading** (`php please static:clear`) if the site uses static caching and did not exclude the checkout-complete page. Copies cached before the upgrade stay in the cache, and are still served, until they are cleared.
+- **Check any cache in front of Statamic** (a CDN or reverse proxy that caches HTML). It must not cache the checkout-complete page.
+
+### The same rule for your own return parameters
+
+`handleRedirectBack()` should only return a reservation it found through a value the provider issued and a visitor cannot guess: the provider's payment, session or order id stored in `payment_id` (`Reservation::findByPaymentId(...)`, as in Step 3). Never load a reservation from its numeric id, or any other sequential value, taken from the query string.

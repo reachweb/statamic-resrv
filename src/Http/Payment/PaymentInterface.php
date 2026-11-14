@@ -25,7 +25,9 @@ interface PaymentInterface
      * second one. Return an object exposing `->status`; return null ONLY when the intent is
      * definitively gone (safe to mint a replacement). On any transient failure (timeout, 429,
      * 5xx, auth) THROW — null on a brownout would let Resrv replace a still-live intent with a
-     * second chargeable one. See UPGRADE-PAYMENT-GATEWAYS.md Step 13.
+     * second chargeable one. A still-payable intent the provider can neither void nor resume
+     * may expose `->expires_at` (Unix timestamp or DateTimeInterface): the pay-by-link page then
+     * asks the customer to retry after it instead of failing. See UPGRADE-PAYMENT-GATEWAYS.md Step 13.
      */
     public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object;
 
@@ -54,6 +56,12 @@ interface PaymentInterface
 
     public function handleRedirectBack(): array;
 
+    /**
+     * Answer the checkout-complete page's `?payment_pending=<id>` request. The id is visitor
+     * input, so never look the reservation up from it directly: return
+     * `PendingPayment::fromRequest()`, which only exposes the reservation to the session that
+     * booked it. See UPGRADE-PAYMENT-GATEWAYS.md Step 15.
+     */
     public function handlePaymentPending(): bool|array;
 
     public function verifyPayment($request);

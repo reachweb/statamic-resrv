@@ -58,6 +58,10 @@ class FakeRedirectGateway extends FakePaymentGateway
             ? 'canceled'
             : ($this->retrievedIntentStatus ?? 'requires_payment_method');
 
+        if ($this->retrievedIntentExpiresAt !== null) {
+            $intent->expires_at = $this->retrievedIntentExpiresAt;
+        }
+
         if ($this->retrieveIncludesRedirectTo) {
             $intent->id = $paymentId;
             $intent->client_secret = 'redir_cs_'.$paymentId;
