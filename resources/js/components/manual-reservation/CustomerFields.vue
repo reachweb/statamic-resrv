@@ -19,7 +19,7 @@ import {
     fieldIsRequired,
     fieldSelectOptions,
     knownFieldTypes,
-    mirrorSourceHandle,
+    mirrorSourceMap,
 } from './customerForm.js';
 import { vAccessibleName } from './accessibleName.js';
 
@@ -68,13 +68,7 @@ const labelId = (field) => `resrv-create-customer-${field.handle}-label`;
 const valueId = (field) => `resrv-create-customer-${field.handle}-value`;
 
 // --- Repeat/confirm fields follow their source until the admin edits them ---
-const mirrorSources = computed(() =>
-    Object.fromEntries(
-        props.fields
-            .map((field) => [field.handle, mirrorSourceHandle(field, props.fields)])
-            .filter(([, source]) => source !== null),
-    ),
-);
+const mirrorSources = computed(() => mirrorSourceMap(props.fields));
 
 const touchedMirrors = ref(new Set());
 
@@ -191,6 +185,7 @@ const update = (field, value) => {
                 v-accessible-name="{ labelId: labelId(field), valueId: valueId(field) }"
                 :model-value="values[field.handle] === '' ? null : values[field.handle]"
                 :options="field.dictionary_items ?? []"
+                option-value="label"
                 :placeholder="__('Please select')"
                 @update:model-value="(value) => update(field, value ?? '')"
             >

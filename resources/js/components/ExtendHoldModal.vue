@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { getLocalTimeZone, now } from '@internationalized/date';
 import { Alert, Checkbox, ConfirmationModal, Description, Field, Input } from '@statamic/cms/ui';
 import ReservationActionSummary from './ReservationActionSummary.vue';
 import { arrivalDayEnd, formatInstant, formatWallDate } from '../composables/useReservationDisplay.js';
@@ -10,6 +11,7 @@ const props = defineProps({
     busy: { type: Boolean, default: false },
     facts: { type: Object, default: null },
     errors: { type: Object, default: () => ({}) },
+    appTimezone: { type: String, default: null },
 });
 
 const emit = defineEmits(['confirm', 'cancel']);
@@ -31,9 +33,11 @@ const daysError = computed(() => {
     return props.errors?.hold_days?.[0] ?? null;
 });
 
+// Mirrors the server's now()->addDays(hold_days): calendar days in the app timezone, so the
+// clock time holds across a daylight-saving change there.
 const newDeadlineDate = computed(() => {
     if (noDeadline.value || parsedDays.value === null) return null;
-    return new Date(Date.now() + parsedDays.value * 86400000);
+    return now(props.appTimezone ?? getLocalTimeZone()).add({ days: parsedDays.value }).toDate();
 });
 
 const newDeadline = computed(() => (newDeadlineDate.value ? formatInstant(newDeadlineDate.value) : null));

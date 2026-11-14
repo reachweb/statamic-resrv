@@ -39,6 +39,7 @@ const props = defineProps({
     cancelAwaitingUrlTemplate: { type: String, default: null },
     sendPaymentRequestUrlTemplate: { type: String, default: null },
     extendHoldUrlTemplate: { type: String, default: null },
+    appTimezone: { type: String, default: null },
 });
 
 const toast = useToast();
@@ -469,6 +470,7 @@ const copyLink = (reservation) => copyPaymentLink(reservation.payment_url, toast
             :busy="actionBusy"
             :facts="facts(extendHoldRow)"
             :errors="extendErrors"
+            :app-timezone="appTimezone"
             @confirm="extendHold"
             @cancel="closeExtendHold"
         />

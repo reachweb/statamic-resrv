@@ -483,6 +483,82 @@ class ManualReservationCpTest extends TestCase
         $this->assertSame([], $dialingCode['dictionary_items']);
     }
 
+    public function test_entry_endpoint_adds_an_email_field_to_a_form_without_one()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability();
+
+        // Storing always requires customer.email, so the create page must be able to collect it.
+        $this->useCheckoutBlueprint(<<<'YAML'
+        tabs:
+          main:
+            sections:
+              -
+                fields:
+                  -
+                    handle: first_name
+                    field:
+                      type: text
+                      display: 'First name'
+        YAML);
+
+        $fields = collect(
+            $this->getJson(cp_route('resrv.manual.entry', ['item_id' => $entry->id()]))
+                ->assertOk()
+                ->json('form_fields')
+        );
+
+        $this->assertSame(['first_name', 'email'], $fields->pluck('handle')->all());
+        $this->assertSame('email', $fields->last()['input_type']);
+        $this->assertSame(['required', 'email'], $fields->last()['validate']);
+    }
+
+    public function test_entry_endpoint_replaces_a_hidden_email_field_with_one_the_admin_can_fill()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability();
+
+        // The create page skips hidden text inputs, so a hidden email could never be typed.
+        $this->useCheckoutBlueprint(<<<'YAML'
+        tabs:
+          main:
+            sections:
+              -
+                fields:
+                  -
+                    handle: email
+                    field:
+                      type: text
+                      input_type: hidden
+                      display: Email
+                  -
+                    handle: first_name
+                    field:
+                      type: text
+                      display: 'First name'
+        YAML);
+
+        $fields = collect(
+            $this->getJson(cp_route('resrv.manual.entry', ['item_id' => $entry->id()]))
+                ->assertOk()
+                ->json('form_fields')
+        );
+
+        $this->assertSame(['first_name', 'email'], $fields->pluck('handle')->all());
+        $this->assertSame('email', $fields->last()['input_type']);
+    }
+
+    // A scratch blueprint directory keeps the addon's shipped checkout blueprint untouched.
+    private function useCheckoutBlueprint(string $yaml): void
+    {
+        $directory = sys_get_temp_dir().'/resrv-blueprints-'.uniqid();
+        mkdir($directory.'/forms', 0755, true);
+        file_put_contents($directory.'/forms/checkout.yaml', $yaml);
+        Blueprint::setDirectory($directory);
+
+        $this->beforeApplicationDestroyed(fn () => app('files')->deleteDirectory($directory));
+    }
+
     public function test_create_page_exposes_gateways_and_configuration_state()
     {
         $this->signInAdmin();
@@ -685,6 +761,40 @@ class ManualReservationCpTest extends TestCase
             ->assertStatus(422)->assertJsonValidationErrors(['customer.state']);
 
         $payload['customer'] = ['email' => 'jane@example.com', 'country' => 'GR'];
+
+        $this->postJson(cp_route('resrv.manual.store'), $payload)
+            ->assertStatus(201);
+    }
+
+    public function test_a_checkout_regex_rule_holding_a_pipe_is_applied_whole()
+    {
+        $this->signInAdmin();
+        $this->useMultipleGateways();
+        $entry = $this->makeStatamicItemWithAvailability(available: 2);
+
+        // Joined into a "a|b" rule string, the validator would split this regex at its pipe.
+        $plan = \Mockery::mock();
+        $plan->shouldReceive('handle')->andReturn('plan');
+        $plan->shouldReceive('config')->andReturn(['validate' => ['required', 'regex:/^(basic|premium)$/']]);
+
+        $fields = \Mockery::mock();
+        $fields->shouldReceive('values')->andReturn(collect([$plan]));
+
+        $form = \Mockery::mock(FormContract::class);
+        $form->shouldReceive('fields')->andReturn($fields);
+
+        $resolver = \Mockery::mock(CheckoutFormResolver::class);
+        $resolver->shouldReceive('resolveForEntryId')->andReturn($form);
+        $resolver->shouldReceive('resolveForReservation')->andReturn($form);
+        $this->app->instance(CheckoutFormResolver::class, $resolver);
+
+        $payload = $this->storePayload($entry, ['send_payment_request_email' => false]);
+        $payload['customer'] = ['email' => 'jane@example.com', 'plan' => 'gold'];
+
+        $this->postJson(cp_route('resrv.manual.store'), $payload)
+            ->assertStatus(422)->assertJsonValidationErrors(['customer.plan']);
+
+        $payload['customer'] = ['email' => 'jane@example.com', 'plan' => 'premium'];
 
         $this->postJson(cp_route('resrv.manual.store'), $payload)
             ->assertStatus(201);

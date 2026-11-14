@@ -717,6 +717,37 @@ class ReservationCpTest extends TestCase
         Mail::assertSent(ReservationRefunded::class);
     }
 
+    public function test_refund_reports_the_charge_the_processor_refunded_not_the_copy_read_before_the_lock()
+    {
+        Mail::fake();
+        $item = $this->makeStatamicItem();
+
+        $reservation = Reservation::factory([
+            'item_id' => $item->id(),
+            'status' => 'pending',
+            'payment_id' => '',
+        ])->withCustomer()->create();
+
+        // Stands in for a payment that commits between the controller's read and the
+        // processor's row lock: the refund then goes through the gateway.
+        $paid = false;
+        Reservation::retrieved(function (Reservation $read) use (&$paid) {
+            if ($paid) {
+                return;
+            }
+
+            $paid = true;
+            DB::table('resrv_reservations')->where('id', $read->id)->update([
+                'status' => 'confirmed',
+                'payment_id' => 'pi_paid_123',
+            ]);
+        });
+
+        $this->patch(cp_route('resrv.reservation.refund', ['id' => $reservation->id]))
+            ->assertStatus(200)
+            ->assertJson(['id' => $reservation->id, 'status' => 'refunded', 'refund_is_automatic' => true]);
+    }
+
     public function test_refunding_an_out_of_band_confirmation_reports_a_manual_refund()
     {
         Mail::fake();

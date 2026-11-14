@@ -56,6 +56,8 @@ class ReservationCpController extends Controller
             'cancelAwaitingUrlTemplate' => cp_route('resrv.reservation.cancelAwaiting', 'RESRVURL'),
             'sendPaymentRequestUrlTemplate' => cp_route('resrv.reservation.sendPaymentRequest', 'RESRVURL'),
             'extendHoldUrlTemplate' => cp_route('resrv.reservation.extendHold', 'RESRVURL'),
+            // Hold deadlines are counted in calendar days of this zone (now()->addDays()).
+            'appTimezone' => config('app.timezone'),
         ]);
     }
 
@@ -125,6 +127,8 @@ class ReservationCpController extends Controller
             'fields' => $reservation->checkoutFormFieldsArray($entryId),
             'currencySymbol' => config('resrv-config.currency_symbol'),
             'maximumQuantity' => (int) config('resrv-config.maximum_quantity'),
+            // Hold deadlines are counted in calendar days of this zone (now()->addDays()).
+            'appTimezone' => config('app.timezone'),
             'backUrl' => cp_route('resrv.reservations.index'),
             'refundUrl' => cp_route('resrv.reservation.refund'),
             'confirmPaymentUrl' => cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]),
@@ -290,12 +294,6 @@ class ReservationCpController extends Controller
         ]);
         $reservation = $this->reservation->findOrFail($data['id']);
 
-        // A refund only moves money when a charge reached a gateway that can refund via
-        // API — an offline gateway's refund() is a bookkeeping no-op, so its payment_id
-        // alone must not read as "money returned". Captured before the call so the flag
-        // can't drift from what the processor actually saw.
-        $refundIsAutomatic = $reservation->refundIsAutomatic();
-
         try {
             $changed = app(ReservationRefundProcessor::class)->refund($reservation);
         } catch (RefundFailedException $exception) {
@@ -322,11 +320,15 @@ class ReservationCpController extends Controller
         // The processor lands no-charge bookings in CANCELLED instead of REFUNDED; return the
         // terminal status so the UI can say "cancelled" instead of claiming money moved.
         // refund_is_automatic is false when no gateway returned the money (out-of-band or
-        // offline payment) — the admin must be told to return those funds by hand.
+        // offline payment) — the admin must be told to return those funds by hand. A refund
+        // only moves money when a charge reached a gateway that can refund via API: an offline
+        // gateway's refund() is a bookkeeping no-op, so its payment_id alone must not read as
+        // "money returned". Read after the call, when the model holds the row the processor
+        // locked and refunded; the copy loaded above may predate a concurrent payment.
         return response()->json([
             'id' => $reservation->id,
             'status' => $reservation->status,
-            'refund_is_automatic' => $refundIsAutomatic,
+            'refund_is_automatic' => $reservation->refundIsAutomatic(),
         ]);
     }
 

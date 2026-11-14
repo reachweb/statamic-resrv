@@ -14,8 +14,9 @@ function rulesOf(field) {
     return Array.isArray(rules) ? rules : String(rules).split('|');
 }
 
+// Only an unconditional rule: required_if, required_with etc. depend on other fields.
 export function fieldIsRequired(field) {
-    return rulesOf(field).some((rule) => String(rule).startsWith('required'));
+    return rulesOf(field).some((rule) => String(rule) === 'required');
 }
 
 // The frontend skips hidden text inputs; they stay in the payload with their empty value.
@@ -24,14 +25,17 @@ export function fieldIsHidden(field) {
 }
 
 // Statamic stores options as an assoc map, {key, value} rows, or a plain list — normalize all three.
+// The checkout's checkbox and radio views submit a plain list's index ("0", "1"), so those do too.
 export function fieldSelectOptions(field) {
     const options = field.options ?? {};
 
     if (Array.isArray(options)) {
-        return options.map((option) =>
+        const indexed = ['checkboxes', 'radio'].includes(field.type);
+
+        return options.map((option, index) =>
             option !== null && typeof option === 'object'
                 ? { value: option.key, label: option.value ?? String(option.key) }
-                : { value: option, label: String(option) },
+                : { value: indexed ? String(index) : option, label: String(option) },
         );
     }
 
@@ -55,7 +59,8 @@ export function carriedFieldValue(field, value) {
             return allowed().has(String(value)) ? value : empty;
         case 'dictionary':
             if (field.phone_dictionary) break;
-            return (field.dictionary_items ?? []).some((item) => String(item.value) === String(value)) ? value : empty;
+            // The checkout stores a dictionary item's label, so that is the value here too.
+            return (field.dictionary_items ?? []).some((item) => String(item.label) === String(value)) ? value : empty;
     }
 
     return Array.isArray(value) || typeof value === 'boolean' ? empty : value;
@@ -79,4 +84,26 @@ export function mirrorSourceHandle(field, fields) {
     });
 
     return candidates.find((handle) => handles.has(handle)) ?? null;
+}
+
+const namedAsMirror = (handle) => /^(?:repeat|confirm)_.+$|^.+_confirmation$/.test(handle);
+
+// Each mirror field's handle mapped to its source's. Fields that point at each other (two same:
+// rules) would copy back and forth forever, so a link that closes a loop is dropped: a field
+// named as a repeat/confirm field stays the mirror, otherwise the later field of the form does.
+export function mirrorSourceMap(fields) {
+    const links = fields
+        .map((field, index) => ({ mirror: field.handle, source: mirrorSourceHandle(field, fields), index }))
+        .filter((link) => link.source !== null)
+        .sort((a, b) => namedAsMirror(b.mirror) - namedAsMirror(a.mirror) || b.index - a.index);
+
+    const sources = new Map();
+
+    links.forEach(({ mirror, source }) => {
+        let handle = source;
+        while (handle !== undefined && handle !== mirror) handle = sources.get(handle);
+        if (handle === undefined) sources.set(mirror, source);
+    });
+
+    return Object.fromEntries(sources);
 }

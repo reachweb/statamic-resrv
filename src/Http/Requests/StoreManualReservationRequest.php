@@ -65,7 +65,7 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
      * The checkout form's validate rules applied to the customer payload, derived as
      * CheckoutForm::rules() derives them.
      *
-     * @return array<string, string>
+     * @return array<string, mixed>
      */
     protected function checkoutFormRules(): array
     {
@@ -112,11 +112,13 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
      * Checkout rules reference sibling fields as form.<handle> (Livewire\CheckoutForm nests
      * them under `form`). Here the fields live under `customer`, so dependent-rule parameters
      * (required_if:form.country,US etc.) must be re-pointed or they resolve to nothing and
-     * silently pass.
+     * silently pass. The rules stay an array: joined with "|" a regex holding a pipe
+     * (regex:/^(A|B)$/) would be split apart by the validator.
      *
      * @param  array<int, mixed>  $validate
+     * @return array<int, mixed>
      */
-    protected function namespacedRules(array $validate): string
+    protected function namespacedRules(array $validate): array
     {
         return collect($validate)
             ->map(function ($rule) {
@@ -126,6 +128,6 @@ class StoreManualReservationRequest extends QuoteManualReservationRequest
 
                 return preg_replace('/(?<=[:,])form\./', 'customer.', $rule);
             })
-            ->implode('|');
+            ->all();
     }
 }

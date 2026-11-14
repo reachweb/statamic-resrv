@@ -41,6 +41,7 @@ const props = defineProps({
     fields: { type: Object, default: () => ({}) },
     currencySymbol: { type: String, default: '' },
     maximumQuantity: { type: Number, default: 1 },
+    appTimezone: { type: String, default: null },
     backUrl: { type: String, required: true },
     refundUrl: { type: String, required: true },
     confirmPaymentUrl: { type: String, default: null },
@@ -589,6 +590,7 @@ const copyPaymentLink = () => copyLink(reservation.value.payment_url, toast);
             :busy="busy"
             :facts="facts"
             :errors="extendErrors"
+            :app-timezone="appTimezone"
             @confirm="extendHold"
             @cancel="closeExtendModal"
         />

@@ -8,6 +8,7 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Reach\StatamicResrv\Exceptions\AvailabilityException;
@@ -106,10 +107,36 @@ class ManualReservationCpController extends Controller
 
         return response()->json([
             'rates' => $rates,
-            'form_fields' => $formFields,
+            'form_fields' => $this->withEmailField($formFields),
             // So the create page can point at the entry's availability when dates have no price.
             'edit_url' => EntryFacade::find($item_id)?->editUrl(),
         ]);
+    }
+
+    /**
+     * Storing always requires customer.email (StoreManualReservationRequest), so a form with no
+     * email field the create page renders gets one. The page skips hidden text inputs, so a
+     * hidden email field is replaced rather than left unfillable.
+     */
+    protected function withEmailField(Collection $fields): Collection
+    {
+        $rendered = fn (array $field) => ! (($field['type'] ?? null) === 'text' && ($field['input_type'] ?? null) === 'hidden');
+
+        if ($fields->contains(fn (array $field) => $field['handle'] === 'email' && $rendered($field))) {
+            return $fields;
+        }
+
+        return $fields
+            ->reject(fn (array $field) => $field['handle'] === 'email')
+            ->values()
+            ->push([
+                'handle' => 'email',
+                'type' => 'text',
+                'input_type' => 'email',
+                'display' => __('Email'),
+                'validate' => ['required', 'email'],
+                'width' => 100,
+            ]);
     }
 
     /**
