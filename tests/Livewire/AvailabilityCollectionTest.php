@@ -980,4 +980,39 @@ class AvailabilityCollectionTest extends TestCase
             ->test(AvailabilityCollection::class, ['collection' => 'pages'])
             ->assertSee('resrv-collection-'.$entry->id());
     }
+
+    public function test_valid_search_clears_the_error_recorded_on_mount_from_an_empty_session_search()
+    {
+        $entry = $this->pagesEntry(50);
+
+        // The search bar renders first and writes its still-empty form to the shared session,
+        // so mounting the collection validates it and records an 'availability' error.
+        Livewire::test(AvailabilitySearch::class)->assertSessionHas('resrv-search');
+
+        $component = Livewire::test(AvailabilityCollection::class, ['collection' => 'pages'])
+            ->assertHasErrors('availability');
+
+        $this->search($component)
+            ->assertHasNoErrors()
+            ->assertSee('resrv-collection-'.$entry->id());
+    }
+
+    public function test_new_search_clears_a_stale_item_not_available_error()
+    {
+        $inScope = $this->pagesEntry(price: 50);
+        $outOfScope = $this->pagesEntry(price: 30);
+
+        $component = $this->search(
+            Livewire::test(AvailabilityCollection::class, ['entries' => [$inScope->id()]])
+        );
+
+        $component->call('select', $outOfScope->id())
+            ->assertHasErrors('availability')
+            ->assertSee('This item is not available.');
+
+        $this->search($component)
+            ->assertHasNoErrors()
+            ->assertDontSee('This item is not available.')
+            ->assertSee('resrv-collection-'.$inScope->id());
+    }
 }

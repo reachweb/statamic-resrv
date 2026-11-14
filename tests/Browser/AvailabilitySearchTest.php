@@ -40,6 +40,10 @@ class AvailabilitySearchTest extends BrowserTestCase
                 ->assertPresent('[wire\\:click="checkout()"]');
             $this->assertNotEmpty($browser->value('[name=datepicker]'));
 
+            // On this fresh session the results mounted against the search bar's still-empty
+            // form and recorded a validation error; the valid search must not show it.
+            $browser->assertDontSee('Search error');
+
             // clearDates() resets the form and re-dispatches → results revert and the
             // calendar input empties (the clear button shows once a date is set).
             $browser->click('[aria-label="Clear selection"]')

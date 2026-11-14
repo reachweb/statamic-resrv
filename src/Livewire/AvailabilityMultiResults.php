@@ -134,6 +134,11 @@ class AvailabilityMultiResults extends Component
     #[On('availability-search-updated')]
     public function availabilitySearchChanged($data): void
     {
+        // Start every search with a clean error bag. Validating the form only clears its own
+        // data.* errors (Livewire 4.4.8+), so an earlier search or checkout error would otherwise
+        // show next to the new results.
+        $this->resetErrorBag();
+
         $this->availability = collect();
         $this->rateQuantities = [];
 

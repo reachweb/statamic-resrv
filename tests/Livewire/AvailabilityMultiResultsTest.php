@@ -12,6 +12,7 @@ use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Facades\Price as PriceFacade;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
+use Reach\StatamicResrv\Livewire\AvailabilitySearch;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Extras;
 use Reach\StatamicResrv\Livewire\Options;
@@ -1903,5 +1904,34 @@ class AvailabilityMultiResultsTest extends TestCase
             ->assertHasErrors('availability');
 
         $this->assertDatabaseMissing('resrv_reservations', ['item_id' => $entryId]);
+    }
+
+    public function test_valid_search_clears_the_error_recorded_on_mount_from_an_empty_session_search()
+    {
+        [$entryId, $rates] = $this->getEntryAndRates();
+
+        // The search bar renders first and writes its still-empty form to the shared session,
+        // so mounting the results validates it and records an 'availability' error.
+        Livewire::test(AvailabilitySearch::class)->assertSessionHas('resrv-search');
+
+        Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->assertHasErrors('availability')
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->assertHasNoErrors()
+            ->assertViewHas('availability.'.$rates->first()->id.'.data.price');
+    }
+
+    public function test_new_search_clears_a_stale_select_a_rate_error()
+    {
+        [$entryId] = $this->getEntryAndRates();
+
+        Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('checkout')
+            ->assertHasErrors('availability')
+            ->assertSee('Please select at least one rate.')
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->assertHasNoErrors()
+            ->assertDontSee('Please select at least one rate.');
     }
 }

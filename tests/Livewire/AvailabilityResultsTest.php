@@ -1929,4 +1929,36 @@ class AvailabilityResultsTest extends TestCase
         $this->assertEquals('200.00', data_get($availability, $baseRate->id.'.data.price'));
         $this->assertEquals('60.00', data_get($availability, $sharedRate->id.'.data.price'));
     }
+
+    public function test_valid_search_clears_the_error_recorded_on_mount_from_an_empty_session_search()
+    {
+        // The search bar renders first and writes its still-empty form to the shared session,
+        // so mounting the results validates it and records an 'availability' error.
+        Livewire::test(AvailabilitySearch::class)->assertSessionHas('resrv-search');
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->assertHasErrors('availability');
+
+        $this->dispatchSearch($component)
+            ->assertHasNoErrors()
+            ->assertViewHas('availability.data.price', '100.00');
+    }
+
+    public function test_new_search_clears_a_stale_select_a_rate_error()
+    {
+        [$entry] = $this->makeEntryWithCheaperHigherOrderRate();
+
+        $component = $this->dispatchSearch(
+            Livewire::test(AvailabilityResults::class, ['entry' => $entry->id(), 'rates' => true]),
+            rate: 'any'
+        );
+
+        $component->call('checkout')
+            ->assertHasErrors('availability')
+            ->assertSee('Please select a rate before proceeding.');
+
+        $this->dispatchSearch($component, rate: 'any')
+            ->assertHasNoErrors()
+            ->assertDontSee('Please select a rate before proceeding.');
+    }
 }
