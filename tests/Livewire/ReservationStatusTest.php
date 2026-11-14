@@ -1231,6 +1231,10 @@ class ReservationStatusTest extends TestCase
     {
         Event::fake([ReservationRefunded::class, ReservationCancelledByCustomer::class]);
 
+        // Freeze mid-afternoon so the 23:55 check-in below is still ahead; on the real clock the
+        // last minutes of the day put it in the past and the timed check-in guard closes the cancel.
+        $this->travelTo(now()->setTime(18, 0));
+
         // deadlineFor() = date_start->startOfDay()->subDays(period); with period 0 the deadline
         // is the start of arrival day, and the inclusive-through-end-of-day contract keeps the
         // refund cancel available ON the arrival day itself. This matches the "free cancellation
