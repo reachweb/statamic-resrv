@@ -1,6 +1,6 @@
 # Statamic Resrv v6.5.0
 
-Resrv v6.5 introduces **manual reservations**. You can create bookings for your customers straight from the Control Panel, email them a secure pay-by-link page, and optionally give the booking a payment deadline after which it cancels itself.
+Resrv v6.5 introduces **manual reservations**. You can create bookings for your customers straight from the Control Panel, email them a secure pay-by-link page, and optionally give the booking a payment deadline after which it cancels itself. It also adds a per-rate **Booked units per add-on** setting and fixes payment webhooks on **Laravel 13**.
 
 > ⚠️ **Custom payment gateways must be updated before you upgrade.** `PaymentInterface` changed. A configured gateway that doesn't implement the changes causes a fatal error on every request that loads Resrv's gateways (checkout, webhooks, the CP reservation pages). See [For developers](#for-developers).
 
@@ -14,12 +14,13 @@ Resrv v6.5 introduces **manual reservations**. You can create bookings for your 
    php please migrate
    ```
 
-   This release adds three migrations:
+   This release adds four migrations:
 
    | Migration | Adds |
    | --- | --- |
    | `2026_07_05_000000_add_manual_reservation_columns_to_resrv_reservations_table` | `resrv_reservations.affects_availability` (boolean, default `true`), `created_by`, `hold_expires_at`, `payment_request_email_sent_at` |
    | `2026_07_21_000000_add_payment_unresolved_to_resrv_reservations_table` | `resrv_reservations.payment_unresolved` (boolean, default `false`) |
+   | `2026_09_08_000000_add_units_per_addon_to_rates` | `resrv_rates.units_per_addon` (nullable integer) |
    | `2026_09_14_000000_add_total_column_to_resrv_reservation_extra_table` | `resrv_reservation_extra.total` (nullable) |
 
    Reservation extras are now always loaded with the pivot `total` column, so any page or email that lists a reservation's extras fails until the migrations have run. Existing rows need no backfill: the defaults keep every existing reservation affecting availability, and a `null` extra total falls back to price × quantity.
@@ -50,7 +51,7 @@ Resrv v6.5 introduces **manual reservations**. You can create bookings for your 
 
 7. **Re-publish or merge customised views and translations.**
    - **Emails** (published with the `resrv-emails` tag, or custom templates set per email event or form): `cancelled`, `cancelled-customer`, `confirmed`, `made`, `orphaned-payment` and `refunded` changed, and `payment-request` is new. Old copies keep rendering, but they ignore the new `$holdLapsed`, `$paymentInFlight`, `$paymentCollected`, `$context`, `$refundedAutomatically` and `$returnedSeparately` data and fall back to the old wording. For example, an old `cancelled` template tells admins that a lapsed hold was "cancelled by the customer". An unpublished `payment-request` falls back to the packaged copy.
-   - **Checkout views** (`resrv-checkout-views`): `livewire/reservation-status.blade.php` changed, and `livewire/reservation-payment.blade.php` and `livewire/components/partials/business-contact.blade.php` are new. The status page's paid amount now reads `$reservation->amountReceived() ?? $reservation->amountPaidOnline()`. An old copy keeps rendering, but it shows 0 paid for a booking you marked as paid in the CP. Unpublished, the new files fall back to the packaged copies.
+   - **Checkout views** (`resrv-checkout-views`): `livewire/availability-results.blade.php` and `livewire/reservation-status.blade.php` changed, and `livewire/reservation-payment.blade.php` and `livewire/components/partials/business-contact.blade.php` are new. The status page's paid amount now reads `$reservation->amountReceived() ?? $reservation->amountPaidOnline()`. An old copy keeps rendering, but it shows 0 paid for a booking you marked as paid in the CP. Unpublished, the new files fall back to the packaged copies. The results view now passes `:effectiveRateId="$this->effectiveRateId()"` to the extras and options components; an old copy keeps working, but the add-on prices next to the results correct themselves one round trip after load.
    - **Frontend language file** (`resrv-language`): `frontend.php` gained 23 keys for the pay page: `completeYourPayment`, `paymentHeadingInstructions`, `paymentHeadingProcessing`, `paymentHeadingConfirmed`, `paymentHeadingExpired`, `paymentHeadingUnavailable`, `amountToPay`, `paymentDeadline`, `paymentDueBy`, `paymentDueByArrival`, `remainingBalance`, `remainingBalanceNote`, `paymentMethodIs`, `contactPhone`, `paymentLinkFailed`, `paymentLinkExpired`, `paymentArrivalPassed`, `paymentAlreadyCompleted`, `paymentProcessing`, `paymentUnavailable`, `paymentOfflineInstructions`, `paymentOfflineNoInstructions`, `paymentMountFailed`. Only English ships, so add them to every published locale.
    - New email and CP sentences go through `__()`. If you translate Resrv through `lang/<locale>.json`, add the new sentences there.
 
@@ -93,8 +94,16 @@ The new `reservation-payment` Livewire component lets the customer pay from the 
 - If a reservation is cancelled while its online payment is going through, the customer is told the charge will be refunded (even if you unticked the cancellation email), and the admins get a reconciliation alert. For a lapsed hold, the admins' cancellation email is still sent and says the charge needs refunding instead of "payment hold lapsed".
 - **Reconciliation alerts** (the orphaned-payment email) gained specific wording and a recommended action for each manual-payment case, e.g. a booking marked as paid while an online payment also went through ("The customer may have paid twice").
 
+### ➗ Booked units per add-on
+Rates gained a **Booked units per add-on** field. Extras and options are multiplied by the booked quantity, so a single-occupancy cabin rate booked as quantity 2 (two berths, one guest) charged a per-person extra twice. With the field set to `2` on that rate, quantity 2 counts as one add-on unit.
+
+- The add-on quantity is the booked quantity divided by the field, rounded up and never below 1. Empty or `1` keeps the previous behaviour, and the global **Ignore quantity for prices** setting still wins.
+- The price of the booking itself, the stock and the availability calendar are not affected. Cart bookings divide per line.
+- Extras and options shown next to the availability results are now priced under the rate the booking will actually get, and checkout re-prices the selection under the final rate before booking.
+
 ## Behaviour changes for existing sites
 
+- **Extras required by a category condition** ("required when an extra from a category is selected" and "required unless an extra from a category is selected") are now enforced when the checkout is submitted. Before, the extras step marked them as required, but they were not checked when the checkout was submitted.
 - **Reservations listing default filter** is now Confirmed + Partner + Awaiting payment (was Confirmed + Partner).
 - **Permissions:** the existing `use resrv` permission now also lets a CP user create reservations, mark them as paid, cancel them and extend their holds.
 - **Availability edits:** setting an absolute availability is still blocked only by checkouts in progress (pending/webhook), and the error now names their references. Awaiting-payment holds don't block it. If such a hold is later cancelled or lapses, its quantity is added back on top of the value you set, as when a confirmed booking is refunded. Deleting availability is blocked by awaiting-payment holds that took stock. Deleting an entry is blocked by any awaiting-payment reservation, like other non-final reservations.
@@ -108,6 +117,7 @@ The new `reservation-payment` Livewire component lets the customer pay from the 
 
 ## Fixes
 
+- **Payment webhooks on Laravel 13:** the webhook routes are excluded from CSRF again. On Laravel 13 the payment providers' POSTs were answered with 419, so payments never confirmed their reservation. If you worked around this with `preventRequestForgery(except: [...])`, you can remove it after updating.
 - **Relative rates:** frontend calendar prices on relative rates no longer render as `NaN` (calendar price writes now stay decimal strings instead of serializing as money objects).
 - **Multi-cart checkout:** a stale add-on price snapshot in the session no longer causes a dead-end "reservation changed" error when checkout loads. Checkout now re-prices session extras and options against the actual reservation, and the Extras component re-prices on load and when the multi-cart selection changes. If you added app-level workarounds for either issue, you can remove them after updating.
 - **Options:** option value descriptions are no longer dropped when saving in the CP.
