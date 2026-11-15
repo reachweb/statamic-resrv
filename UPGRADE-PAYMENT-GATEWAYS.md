@@ -1263,7 +1263,7 @@ In both void-and-remint cases the superseded intent's credentials were already h
 
 ### Providers that cannot void an open order: report `->expires_at`
 
-> 📅 Added in Resrv v6.5.1. Optional, and no interface change: a gateway that can void its intents needs nothing here.
+> 📅 Added in Resrv v6.5.2. Optional, and no interface change: a gateway that can void its intents needs nothing here.
 
 Some redirect providers (Cardlink and other bank-hosted payment pages) cannot void an order the bank has not answered yet, and reject a second post of the same order id. Once the customer has been sent to the bank, such an order can be neither voided nor resumed; it only stops being payable when the bank's page times out. Until this version, no answer from `retrievePaymentIntent()` was both truthful and usable for it:
 
@@ -1398,13 +1398,13 @@ Because the webhook is the only confirmation path, the create-reservation page r
 
 **Applies to: all gateways**
 
-> 🔒 Security fix, added in Resrv v6.5.1. There is no interface change, so nothing fatals — but a gateway that keeps the old `handlePaymentPending()` body keeps the unsafe lookup in its own code. Update it.
+> 🔒 Security fix, added in Resrv v6.5.2. There is no interface change, so nothing fatals — but a gateway that keeps the old `handlePaymentPending()` body keeps the unsafe lookup in its own code. Update it.
 
 ### Background
 
 Resrv sends the customer to the checkout-complete page with `?payment_pending=<reservation id>` when a booking finishes without a provider return: offline confirmation, zero-payment and affiliate (skip-payment) bookings, and a customer who navigates back to the checkout of a reservation that is already confirmed. The `{{ resrv_checkout_redirect }}` tag calls `handleRedirectBack()`, which calls `handlePaymentPending()`, and passes the returned `reservation` array to the site's template.
 
-Every earlier version of this guide, and the bundled gateways up to v6.5.0, implemented `handlePaymentPending()` like this:
+Every earlier version of this guide, and the bundled gateways up to v6.5.1, implemented `handlePaymentPending()` like this:
 
 ```php
 // Before — unsafe: returns whichever reservation the URL names
@@ -1449,7 +1449,7 @@ The `{{ resrv_checkout_redirect }}` tag also filters the result of `handleRedire
 
 ### Static caching
 
-A statically cached copy of the checkout-complete page is served without running the tag, so the session check never happens: whoever asks for a cached `?payment_pending=<id>` URL gets the page the booking's owner saw. From v6.5.1 a page that renders `{{ resrv_checkout_redirect }}` is never written to Statamic's static cache (Resrv adds the `X-Statamic-Uncacheable` response header). You do not need to exclude the page yourself.
+A statically cached copy of the checkout-complete page is served without running the tag, so the session check never happens: whoever asks for a cached `?payment_pending=<id>` URL gets the page the booking's owner saw. From v6.5.2 a page that renders `{{ resrv_checkout_redirect }}` is never written to Statamic's static cache (Resrv adds the `X-Statamic-Uncacheable` response header). You do not need to exclude the page yourself.
 
 Two things Resrv cannot do for you:
 
