@@ -245,7 +245,7 @@ class AvailabilityCollectionTest extends TestCase
             'slug' => 'rate-b',
             'title' => 'Rate B',
             'cancellation_policy' => 'free_cancellation',
-            'free_cancellation_period' => 7,
+            'free_cancellation_period' => 1,
         ]);
         $this->createAvailabilityForEntry($entry, 30, 2, $rateB->id, 10);
 
@@ -258,9 +258,11 @@ class AvailabilityCollectionTest extends TestCase
         );
 
         // Each booking button is a direct commitment to a rate — its policy must show beside it.
-        // Rate B's 7-day window closed 6 days before tomorrow's check-in.
+        // Rate B's 1-day window before tomorrow's check-in is still open until the end of today.
         $component->assertSee(trans('statamic-resrv::frontend.nonRefundable'));
-        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationPassed'));
+        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationUntilDate', [
+            'date' => today()->format('D d M Y'),
+        ]));
     }
 
     public function test_shows_the_cancellation_policy_for_the_from_rate()

@@ -333,15 +333,17 @@ class AvailabilityMultiResultsTest extends TestCase
         [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry();
 
         $adultsRate->update(['cancellation_policy' => 'non_refundable']);
-        $childrenRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 3]);
+        $childrenRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 1]);
 
         $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
             ->dispatch('availability-search-updated', $this->searchPayload());
 
         // Each rate row advertises its policy before the customer adds it to the cart.
-        // The children rate's 3-day window closed 2 days before tomorrow's check-in.
+        // The children rate's 1-day window before tomorrow's check-in is still open until the end of today.
         $component->assertSee(trans('statamic-resrv::frontend.nonRefundable'));
-        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationPassed'));
+        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationUntilDate', [
+            'date' => today()->format('D d M Y'),
+        ]));
 
         $component
             ->call('updateRateQuantity', $adultsRate->id, 2)
@@ -360,7 +362,7 @@ class AvailabilityMultiResultsTest extends TestCase
         $this->assertDatabaseHas('resrv_child_reservations', [
             'rate_id' => $childrenRate->id,
             'cancellation_policy' => 'free_cancellation',
-            'free_cancellation_period' => 3,
+            'free_cancellation_period' => 1,
         ]);
 
         // The parent (which gates the single payment) gets the strictest policy.
