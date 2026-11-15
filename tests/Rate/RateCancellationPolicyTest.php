@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
@@ -302,10 +303,33 @@ class RateCancellationPolicyTest extends TestCase
             'free_cancellation_period' => 7,
         ]);
 
-        $this->assertEquals(
-            trans('statamic-resrv::frontend.freeCancellationUntilDate', ['date' => today()->addDays(3)->format('D d M Y')]),
-            $flexible->cancellationPolicyLabel()
-        );
+        $untilDeadline = trans('statamic-resrv::frontend.freeCancellationUntilDate', ['date' => today()->addDays(3)->format('D d M Y')]);
+        $this->assertEquals($untilDeadline, $flexible->cancellationPolicyLabel());
+
+        // The label shows the terms as they stood when the guest committed: confirming on the
+        // deadline day still includes free cancellation, confirming the day after doesn't (even
+        // for a booking created before the deadline), and the passing deadline never rewrites a
+        // confirmed booking's label. Bookings confirmed before confirmed_at existed keep created_at.
+        $booking = $flexible->only(['date_start', 'date_end', 'cancellation_policy', 'free_cancellation_period']);
+        $flexible->transitionTo(ReservationStatus::CONFIRMED);
+        $legacy = Reservation::factory()->create([...$booking, 'status' => 'confirmed']);
+        $paidLate = Reservation::factory()->create([...$booking, 'status' => 'awaiting_payment']);
+
+        $this->travelTo(today()->addDays(3)->setTime(23, 59, 59));
+        $onDeadlineDay = Reservation::factory()->create($booking);
+        $onDeadlineDay->transitionTo(ReservationStatus::CONFIRMED);
+
+        $this->travelTo(today()->addDay());
+        $passed = trans('statamic-resrv::frontend.freeCancellationPassed');
+
+        // Not confirmed yet, so it is judged as of now.
+        $this->assertEquals($passed, $paidLate->fresh()->cancellationPolicyLabel());
+        $paidLate->transitionTo(ReservationStatus::CONFIRMED);
+
+        $this->assertEquals($untilDeadline, $flexible->fresh()->cancellationPolicyLabel());
+        $this->assertEquals($untilDeadline, $legacy->fresh()->cancellationPolicyLabel());
+        $this->assertEquals($untilDeadline, $onDeadlineDay->fresh()->cancellationPolicyLabel());
+        $this->assertEquals($passed, $paidLate->fresh()->cancellationPolicyLabel());
     }
 
     public function test_cancellation_policy_label_is_hidden_for_the_untouched_global_default()

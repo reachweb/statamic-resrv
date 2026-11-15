@@ -85,6 +85,7 @@ class Reservation extends Model
         'payment_unresolved' => 'boolean',
         'hold_expires_at' => 'datetime',
         'payment_request_email_sent_at' => 'datetime',
+        'confirmed_at' => 'datetime',
     ];
 
     // Mirrors the DB default so a model create()d without the flag (frontend checkout) reads
@@ -239,13 +240,18 @@ class Reservation extends Model
 
     /**
      * Customer-facing label for the booked cancellation terms — used in the checkout
-     * sidebar and the reservation emails.
+     * sidebar and the reservation emails. Judged as of when the guest committed
+     * (confirmed_at), so it shows the terms they booked under and doesn't change as the
+     * deadline passes. Live bookings confirmed before confirmed_at existed fall back to
+     * created_at; a booking not confirmed yet (mid-checkout, awaiting payment) is judged
+     * as of now, since committing now is what the label describes.
      */
     public function cancellationPolicyLabel(): ?string
     {
         $cancellation = $this->effectiveCancellationPolicy();
+        $asOf = $this->confirmed_at ?? ($this->isLive() ? $this->created_at : null);
 
-        return CancellationPolicy::labelFor($cancellation['policy'], $cancellation['period'], $this->date_start);
+        return CancellationPolicy::labelFor($cancellation['policy'], $cancellation['period'], $this->date_start, $asOf);
     }
 
     /**
@@ -945,6 +951,13 @@ class Reservation extends Model
             }
 
             $fresh->status = $to->value;
+
+            // Live states are entered once, from PENDING or AWAITING_PAYMENT: this is when the
+            // guest committed, which cancellationPolicyLabel() is judged against.
+            if (in_array($to->value, ReservationStatus::live(), true)) {
+                $fresh->confirmed_at = now();
+            }
+
             $fresh->save();
 
             $this->lastTransitionFrom = $current;
