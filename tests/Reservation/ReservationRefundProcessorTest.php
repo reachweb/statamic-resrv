@@ -52,10 +52,11 @@ class ReservationRefundProcessorTest extends TestCase
 
     /**
      * refund() returns whatever the provider's SDK returns: Stripe and Mollie refunds expose a
-     * public `id`, while PayPal's SDK model only has a getId() getter.
+     * public `id`, while PayPal's SDK model only has a getId() getter. Reading the id runs after
+     * the money moved, so a getter that throws must not abort the refund.
      */
     #[DataProvider('gatewayRefundResults')]
-    public function test_logs_the_refund_id_the_gateway_returned(object $refund, string $refundId)
+    public function test_logs_the_refund_id_the_gateway_returned(object $refund, ?string $refundId)
     {
         Event::fake([ReservationRefunded::class]);
         Log::spy();
@@ -84,6 +85,22 @@ class ReservationRefundProcessorTest extends TestCase
                     return $this->id;
                 }
             }, '4NV36909U5225480T'],
+            'magic __get without __isset' => [new class
+            {
+                public function __get(string $name): ?string
+                {
+                    return $name === 'id' ? 'tr_123' : null;
+                }
+            }, 'tr_123'],
+            'getId() that throws' => [new class
+            {
+                private string $id;
+
+                public function getId(): string
+                {
+                    return $this->id;
+                }
+            }, null],
         ];
     }
 

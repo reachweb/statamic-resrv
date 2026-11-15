@@ -629,12 +629,11 @@ class ReservationRefundProcessor
             'reservation_id' => $fresh->id,
             'payment_id' => $fresh->payment_id,
             // refund() returns the provider SDK's result: Stripe and Mollie expose a public `id`,
-            // PayPal's SDK model only getId().
-            'refund_id' => match (true) {
-                isset($refund->id) => $refund->id,
-                is_object($refund) && method_exists($refund, 'getId') => $refund->getId(),
-                default => null,
-            },
+            // PayPal's SDK model only getId(). The money has already moved, so reading the id
+            // must never throw and roll the transition back.
+            'refund_id' => rescue(fn () => is_object($refund)
+                ? ($refund->id ?? (method_exists($refund, 'getId') ? $refund->getId() : null))
+                : null, report: false),
         ]);
     }
 }
