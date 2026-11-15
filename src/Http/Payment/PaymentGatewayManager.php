@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Http\Payment;
 
+use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -224,7 +225,17 @@ class PaymentGatewayManager
         return collect($this->gateways)
             ->filter(fn ($config, $name) => $amount === null || $this->passesAmountLimits($name, $amount))
             ->map(function ($config, $name) {
-                $instance = $this->resolve($name);
+                // One gateway that cannot be built (missing credentials, a failing constructor)
+                // must not take the payment step down for customers paying with the others.
+                try {
+                    $instance = $this->resolve($name);
+                } catch (\Throwable $e) {
+                    Log::error("Resrv: payment gateway [{$name}] could not be constructed and was left out of checkout.", [
+                        'exception' => $e,
+                    ]);
+
+                    return null;
+                }
 
                 return [
                     'name' => $name,
@@ -232,7 +243,7 @@ class PaymentGatewayManager
                     'redirects' => $instance->redirectsForPayment(),
                     'surcharge' => $this->gateways[$name]['surcharge'] ?? null,
                 ];
-            })->values()->all();
+            })->filter()->values()->all();
     }
 
     /**

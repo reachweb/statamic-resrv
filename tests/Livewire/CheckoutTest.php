@@ -6,6 +6,7 @@ use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
@@ -23,6 +24,7 @@ use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
+use Reach\StatamicResrv\Tests\Support\UnconstructibleGateway;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint;
@@ -1592,6 +1594,37 @@ class CheckoutTest extends TestCase
 
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('5.00', $reservation->payment_surcharge->format());
+    }
+
+    public function test_gateway_that_cannot_be_constructed_is_left_out_and_logged()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => UnconstructibleGateway::class,
+                'label' => 'PayPal',
+            ],
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+        ]);
+
+        Log::spy();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $component->assertHasNoErrors()
+            ->assertSet('availableGateways', fn ($gateways) => array_column($gateways, 'name') === ['stripe'])
+            ->assertSet('selectedGateway', 'stripe')
+            ->assertSet('step', 3);
+
+        Log::shouldHaveReceived('error')
+            ->withArgs(fn ($message, $context) => str_contains($message, '[paypal]') && $context['exception'] instanceof \TypeError)
+            ->once();
     }
 
     public function test_error_when_all_gateways_filtered_out()
