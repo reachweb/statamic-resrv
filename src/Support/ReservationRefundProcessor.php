@@ -628,7 +628,13 @@ class ReservationRefundProcessor
         Log::info('Gateway refund processed for reservation.', [
             'reservation_id' => $fresh->id,
             'payment_id' => $fresh->payment_id,
-            'refund_id' => is_object($refund) ? ($refund->id ?? null) : null,
+            // refund() returns the provider SDK's result: Stripe and Mollie expose a public `id`,
+            // PayPal's SDK model only getId().
+            'refund_id' => match (true) {
+                isset($refund->id) => $refund->id,
+                is_object($refund) && method_exists($refund, 'getId') => $refund->getId(),
+                default => null,
+            },
         ]);
     }
 }

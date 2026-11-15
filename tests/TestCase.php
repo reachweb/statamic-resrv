@@ -386,7 +386,7 @@ class TestCase extends AddonTestCase
      * Bind a payment gateway mock whose refund() runs exactly once, returning $outcome or
      * throwing it when it is an exception.
      */
-    protected function mockRefundGateway(bool|\Throwable $outcome = true): void
+    protected function mockRefundGateway(bool|object $outcome = true): void
     {
         $gateway = \Mockery::mock(FakePaymentGateway::class)->makePartial();
         $expectation = $gateway->shouldReceive('refund')->once();
