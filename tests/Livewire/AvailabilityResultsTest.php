@@ -752,14 +752,15 @@ class AvailabilityResultsTest extends TestCase
     {
         $entryId = $this->advancedEntries->first()->id();
         $testRate = Rate::forEntry($entryId)->first();
-        $testRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 7]);
+        $testRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 2]);
+        $checkIn = today()->addDays(3)->setTime(12, 0);
 
         $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
             ->dispatch('availability-search-updated',
                 [
                     'dates' => [
-                        'date_start' => $this->date->toISOString(),
-                        'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+                        'date_start' => $checkIn->toISOString(),
+                        'date_end' => $checkIn->copy()->add(1, 'day')->toISOString(),
                     ],
                     'quantity' => 1,
                     'rate' => 'any',
@@ -767,8 +768,33 @@ class AvailabilityResultsTest extends TestCase
             );
 
         $component->assertSee(trans('statamic-resrv::frontend.freeCancellationUntilDate', [
-            'date' => $this->date->copy()->subDays(7)->format('D d M Y'),
+            'date' => today()->addDay()->format('D d M Y'),
         ]));
+    }
+
+    public function test_advanced_rate_selection_does_not_offer_a_passed_free_cancellation_deadline()
+    {
+        $entryId = $this->advancedEntries->first()->id();
+        $testRate = Rate::forEntry($entryId)->first();
+        $testRate->update(['cancellation_policy' => 'free_cancellation', 'free_cancellation_period' => 7]);
+        $checkIn = today()->addDays(3)->setTime(12, 0);
+
+        $component = Livewire::test(AvailabilityResults::class, ['entry' => $entryId, 'rates' => true])
+            ->dispatch('availability-search-updated',
+                [
+                    'dates' => [
+                        'date_start' => $checkIn->toISOString(),
+                        'date_end' => $checkIn->copy()->add(1, 'day')->toISOString(),
+                    ],
+                    'quantity' => 1,
+                    'rate' => 'any',
+                ]
+            );
+
+        // Check-in minus 7 days was 4 days ago: pricing already treats the window as closed,
+        // so the label must not offer free cancellation until that past date.
+        $component->assertDontSee(today()->subDays(4)->format('D d M Y'));
+        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationPassed'));
     }
 
     /**

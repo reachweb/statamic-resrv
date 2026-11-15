@@ -258,10 +258,9 @@ class AvailabilityCollectionTest extends TestCase
         );
 
         // Each booking button is a direct commitment to a rate — its policy must show beside it.
+        // Rate B's 7-day window closed 6 days before tomorrow's check-in.
         $component->assertSee(trans('statamic-resrv::frontend.nonRefundable'));
-        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationUntilDate', [
-            'date' => $this->date->copy()->subDays(7)->format('D d M Y'),
-        ]));
+        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationPassed'));
     }
 
     public function test_shows_the_cancellation_policy_for_the_from_rate()

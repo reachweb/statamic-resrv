@@ -339,10 +339,9 @@ class AvailabilityMultiResultsTest extends TestCase
             ->dispatch('availability-search-updated', $this->searchPayload());
 
         // Each rate row advertises its policy before the customer adds it to the cart.
+        // The children rate's 3-day window closed 2 days before tomorrow's check-in.
         $component->assertSee(trans('statamic-resrv::frontend.nonRefundable'));
-        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationUntilDate', [
-            'date' => $this->date->copy()->subDays(3)->format('D d M Y'),
-        ]));
+        $component->assertSee(trans('statamic-resrv::frontend.freeCancellationPassed'));
 
         $component
             ->call('updateRateQuantity', $adultsRate->id, 2)

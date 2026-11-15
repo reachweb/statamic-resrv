@@ -239,13 +239,14 @@ class Reservation extends Model
 
     /**
      * Customer-facing label for the booked cancellation terms — used in the checkout
-     * sidebar and the reservation emails.
+     * sidebar and the reservation emails. Judged as of the booking time, so it shows the
+     * terms the guest booked under and doesn't change as the deadline passes.
      */
     public function cancellationPolicyLabel(): ?string
     {
         $cancellation = $this->effectiveCancellationPolicy();
 
-        return CancellationPolicy::labelFor($cancellation['policy'], $cancellation['period'], $this->date_start);
+        return CancellationPolicy::labelFor($cancellation['policy'], $cancellation['period'], $this->date_start, $this->created_at);
     }
 
     /**

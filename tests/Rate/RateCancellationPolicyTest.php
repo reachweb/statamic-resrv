@@ -302,10 +302,23 @@ class RateCancellationPolicyTest extends TestCase
             'free_cancellation_period' => 7,
         ]);
 
-        $this->assertEquals(
-            trans('statamic-resrv::frontend.freeCancellationUntilDate', ['date' => today()->addDays(3)->format('D d M Y')]),
-            $flexible->cancellationPolicyLabel()
-        );
+        $untilDeadline = trans('statamic-resrv::frontend.freeCancellationUntilDate', ['date' => today()->addDays(3)->format('D d M Y')]);
+        $this->assertEquals($untilDeadline, $flexible->cancellationPolicyLabel());
+
+        // The label shows the terms as booked: booking on the deadline day still includes free
+        // cancellation, booking the day after doesn't, and the passing deadline never rewrites
+        // an earlier booking's label.
+        $booking = $flexible->only(['date_start', 'date_end', 'cancellation_policy', 'free_cancellation_period']);
+
+        $this->travelTo(today()->addDays(3)->setTime(23, 59, 59));
+        $onDeadlineDay = Reservation::factory()->create($booking);
+
+        $this->travelTo(today()->addDay());
+        $afterDeadline = Reservation::factory()->create($booking);
+
+        $this->assertEquals($untilDeadline, $flexible->fresh()->cancellationPolicyLabel());
+        $this->assertEquals($untilDeadline, $onDeadlineDay->fresh()->cancellationPolicyLabel());
+        $this->assertEquals(trans('statamic-resrv::frontend.freeCancellationPassed'), $afterDeadline->fresh()->cancellationPolicyLabel());
     }
 
     public function test_cancellation_policy_label_is_hidden_for_the_untouched_global_default()

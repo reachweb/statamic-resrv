@@ -39,12 +39,25 @@ enum CancellationPolicy: string
     }
 
     /**
+     * Whether a free-cancellation period still allows cancelling free of charge at $asOf
+     * (default: now). The deadline day counts in full, matching Reservation::freeCancellationExpired().
+     */
+    public static function freeCancellationOpen(?int $period, Carbon $dateStart, ?Carbon $asOf = null): bool
+    {
+        return $period !== null
+            && self::deadlineFor($dateStart, $period)->endOfDay()->gte($asOf ?? now());
+    }
+
+    /**
      * Customer-facing label for a resolved policy. Returns null when there is nothing
      * meaningful to advertise (a NULL period from the untouched global default), so sites
      * that never configured cancellation don't suddenly grow a policy line. An explicit
      * zero-day period still labels — free cancellation until the check-in date itself.
+     * A deadline that has already passed at $asOf (default: now) labels as no free
+     * cancellation for these dates, not as non-refundable: the rate stays refundable
+     * for later check-ins.
      */
-    public static function labelFor(self|string|null $policy, ?int $period, Carbon $dateStart): ?string
+    public static function labelFor(self|string|null $policy, ?int $period, Carbon $dateStart, ?Carbon $asOf = null): ?string
     {
         if (is_string($policy)) {
             $policy = self::tryFrom($policy);
@@ -56,6 +69,10 @@ enum CancellationPolicy: string
 
         if ($period === null) {
             return null;
+        }
+
+        if (! self::freeCancellationOpen($period, $dateStart, $asOf)) {
+            return trans('statamic-resrv::frontend.freeCancellationPassed');
         }
 
         return trans('statamic-resrv::frontend.freeCancellationUntilDate', [

@@ -64,6 +64,7 @@ return [
     'cancellationPolicy' => 'Cancellation policy',
     'nonRefundable' => 'Non-refundable',
     'freeCancellationUntilDate' => 'Free cancellation until :date',
+    'freeCancellationPassed' => 'No free cancellation for these dates',
     'availableDates' => 'Available dates',
     'availableDatesFrom' => 'Available from',
     'noAvailableDates' => 'No available dates',
