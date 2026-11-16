@@ -318,20 +318,24 @@ class ResrvCheckoutRedirectTest extends TestCase
         $failed = Reservation::factory()->create(['item_id' => $this->entries->first()->id(), 'payment_gateway' => 'fake']);
         $this->fakeCheckoutCompleteView();
 
-        session(['resrv_reservation' => $failed->id]);
+        session(['resrv_reservation' => $failed->id, 'resrv-search' => 'search']);
         $this->get($this->entry->absoluteUrl().'?resrv_gateway=fake&status=error')->assertSee('[failed]', false);
+
+        // Back at the checkout, the Extras component reads the search again when a coupon changes.
+        $this->assertSame('search', session('resrv-search'));
 
         // Told to try again, the customer searches: their own hold must not block the dates.
         $this->assertSame($failed->id, session('resrv_reservation'));
         ExpireReservations::dispatchSync();
         $this->assertSame(ReservationStatus::EXPIRED->value, $failed->fresh()->status);
 
-        // A successful payment still ends the checkout.
+        // A successful payment still ends the checkout, search included.
         $paid = Reservation::factory()->create(['item_id' => $this->entries->first()->id(), 'payment_gateway' => 'fake']);
-        session(['resrv_reservation' => $paid->id]);
+        session(['resrv_reservation' => $paid->id, 'resrv-search' => 'search']);
         $this->get($this->entry->absoluteUrl().'?resrv_gateway=fake&status=success')->assertSee('[success]', false);
 
         $this->assertNull(session('resrv_reservation'));
+        $this->assertNull(session('resrv-search'));
         ExpireReservations::dispatchSync();
         $this->assertSame(ReservationStatus::PENDING->value, $paid->fresh()->status);
     }

@@ -22,15 +22,15 @@ class ResrvCheckoutRedirect extends Tags
         // a gateway that still looks the id up unchecked must not reach the template.
         $redirectData = PendingPayment::guard($payment->handleRedirectBack());
 
-        session()->forget('resrv-search');
-
-        // A failed payment leaves the checkout open, so "try again" works: the customer can go
-        // back to the checkout and pay, and their next search releases the reservation's hold
-        // (ExpireReservations) instead of the dates staying blocked until the hold lapses.
+        // A failed payment leaves the checkout open, search included, so "try again" works: the
+        // customer can go back to the checkout and pay, and their next search releases the
+        // reservation's hold (ExpireReservations) instead of the dates staying blocked until the
+        // hold lapses. The checkout's Extras component reads the search when a coupon changes.
         if ($redirectData['status'] === false) {
             return $this->makeResponse('failed', __('Payment failed'), __('Your payment was not successful. Please contact us or try again.'));
         }
 
+        session()->forget('resrv-search');
         PendingPayment::endCheckout();
 
         if ($redirectData['status'] === true) {
