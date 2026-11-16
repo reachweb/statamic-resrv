@@ -1602,10 +1602,12 @@ class CheckoutTest extends TestCase
             'paypal' => [
                 'class' => UnconstructibleGateway::class,
                 'label' => 'PayPal',
+                'amount_limits' => ['max' => 200],
             ],
             'stripe' => [
                 'class' => FakePaymentGateway::class,
                 'label' => 'Credit Card',
+                'amount_limits' => ['max' => 200],
             ],
         ]);
 
@@ -1638,6 +1640,17 @@ class CheckoutTest extends TestCase
         $this->assertSame($reservation->payment_id, $after->payment_id);
         $this->assertSame('stripe', $after->payment_gateway);
         Exceptions::assertReportedCount(2);
+
+        // Once no gateway accepts the amount, naming the broken gateway still resets the stale
+        // intent and returns to step 2, as for any gateway the amount rules out.
+        $this->reservation->update(['payment' => '500.00']);
+
+        $component->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertHasErrors('reservation')
+            ->assertSet('selectedGateway', '')
+            ->assertSet('step', 2);
+
+        $this->assertSame('', $this->reservation->fresh()->payment_id);
     }
 
     public function test_error_when_all_gateways_filtered_out()
