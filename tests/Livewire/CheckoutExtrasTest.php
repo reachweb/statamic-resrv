@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -12,6 +13,7 @@ use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
+use Reach\StatamicResrv\Livewire\AvailabilitySearch;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Extras;
 use Reach\StatamicResrv\Models\ChildReservation;
@@ -24,6 +26,7 @@ use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Blueprint;
@@ -181,6 +184,28 @@ class CheckoutExtrasTest extends TestCase
             ]])
             ->assertSee('€ 9.3')
             ->assertSee('109.30');
+    }
+
+    // The checkout-complete page asks a customer whose payment failed to try again, so going back
+    // must resume the checkout. A coupon change there makes Extras re-read the session search.
+    public function test_the_checkout_resumes_after_a_failed_payment()
+    {
+        $this->reservation->update(['payment_gateway' => 'fake', 'payment_id' => 'pi_failed']);
+        Livewire::test(AvailabilitySearch::class)->set('data.dates', [
+            'date_start' => $this->date,
+            'date_end' => $this->date->copy()->addDay(),
+        ]);
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $this->app->instance('request', Request::create('/checkout-completed', 'GET', ['resrv_gateway' => 'fake', 'status' => 'error']));
+        $this->assertSame('failed', (new ResrvCheckoutRedirect)->index()['status']);
+
+        Livewire::test(Checkout::class)->assertSet('reservationError', false);
+        $this->assertSame('', $this->reservation->fresh()->payment_id, 'Resuming voids the failed payment');
+
+        Livewire::test(Extras::class, ['reservation' => $this->reservation])
+            ->dispatch('extras-coupon-changed')
+            ->assertOk();
     }
 
     // Test that extras relative to a checkout form item are correctly calculated

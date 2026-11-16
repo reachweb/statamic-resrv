@@ -216,6 +216,12 @@ The return array `status` must be one of:
 - `false` — payment failed, customer sees the failure message
 - `'pending'` — payment is pending (e.g. bank transfer), customer sees the pending message
 
+After `false`, the checkout stays open so the customer can try again. Going back to the checkout, or searching again, clears the payment from the reservation and asks your gateway to cancel it through `cancelPaymentIntent()`. Cancelling is best effort: the provider may refuse, and the payment can stay payable. If the customer still pays it, it reaches your webhook as a stale intent (see "Handle stale-intent races in verifyPayment()").
+
+So decide by what the customer still has to do, not by whether the provider keeps the payment open:
+- Return `false` when the attempt didn't succeed and the customer has to act again, such as a declined card or a cancelled or abandoned attempt. This holds even when the provider keeps the payment open for another try, as Mollie does after a declined card.
+- Return `'pending'` when the customer has done their part and the payment is completing without them, such as a bank transfer or a payment still processing.
+
 **Important**: Resrv appends `resrv_gateway=<config_key>` to the redirect URL automatically. Your provider's success/cancel URL does NOT need to include it — Resrv adds it. However, any additional query parameters your provider returns (e.g. `session_id`, `token`) will be available via `request()->input(...)` in `handleRedirectBack()`.
 
 ---
@@ -796,7 +802,7 @@ Understanding the flow helps when debugging custom gateways.
 3. The `{{ resrv_checkout_redirect }}` tag reads `resrv_gateway` from the URL query.
 4. If present, resolves the gateway via `PaymentGatewayManager::gateway($name)`.
 5. Calls `handleRedirectBack()` on that gateway to check payment status.
-6. Renders success, failure, or pending message.
+6. Renders success, failure, or pending message. Success and pending end the checkout session; a failure leaves it open for another try.
 
 ### Webhook flow
 
