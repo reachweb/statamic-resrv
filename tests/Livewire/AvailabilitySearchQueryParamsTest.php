@@ -358,6 +358,27 @@ class AvailabilitySearchQueryParamsTest extends TestCase
             ]);
     }
 
+    public function test_dated_link_without_rate_drops_the_session_rate()
+    {
+        // An earlier visit left a rate in the shared session; a link that names
+        // dates but no rate must search every rate instead of narrowing to it.
+        Livewire::test(AvailabilitySearch::class, ['rates' => true])
+            ->set('data.rate', '7');
+
+        Livewire::withQueryParams(['date' => $this->day(5)])
+            ->test(AvailabilitySearch::class, ['rates' => true])
+            ->assertSet('data.rate', null)
+            ->assertDispatched('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->day(5),
+                    'date_end' => $this->day(6),
+                ],
+                'quantity' => 1,
+                'rate' => null,
+                'customer' => [],
+            ]);
+    }
+
     public function test_rate_only_seed_without_dates_does_not_dispatch_or_error()
     {
         Livewire::withQueryParams(['rate' => '7'])

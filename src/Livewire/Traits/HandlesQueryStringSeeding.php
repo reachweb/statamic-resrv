@@ -26,6 +26,12 @@ trait HandlesQueryStringSeeding
             return;
         }
 
+        // A dated link without ?rate= searches every rate: a rate carried in the
+        // session from an earlier visit must not narrow it.
+        if (! $rateSeeded) {
+            $this->data->rate = null;
+        }
+
         // A page can hold several search bars with different rate contexts, and an
         // earlier bar's dehydrate rewrites the shared session before a later one
         // mounts. Each bar therefore seeds its own state from the URL (a
