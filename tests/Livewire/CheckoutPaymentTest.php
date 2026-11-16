@@ -51,6 +51,23 @@ class CheckoutPaymentTest extends TestCase
             });
     }
 
+    public function test_payment_views_show_the_amount_with_the_currency_decimals()
+    {
+        // Checkout passes the amount as a float, which drops the trailing zero (316.8).
+        Livewire::test(CheckoutPayment::class, ['amount' => 316.80])
+            ->assertSeeHtml('€ 316.80</span>');
+
+        Livewire::test(CheckoutPayment::class, ['amount' => 316.80, 'paymentView' => 'statamic-resrv::livewire.checkout-payment-offline'])
+            ->assertSeeHtml('€ 316.80</span>');
+
+        // The yen has no minor unit: a fixed two-decimal format would print "¥ 3,168.00".
+        Config::set('resrv-config.currency_isoCode', 'JPY');
+        Config::set('resrv-config.currency_symbol', '¥');
+
+        Livewire::test(CheckoutPayment::class, ['amount' => 3168.0])
+            ->assertSeeHtml('¥ 3168</span>');
+    }
+
     public function test_confirm_payment_on_non_pending_reservation_surfaces_error_without_500()
     {
         // A REFUNDED reservation cannot transition to CONFIRMED. confirmPayment() routes through

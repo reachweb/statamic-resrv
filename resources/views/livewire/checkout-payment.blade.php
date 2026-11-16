@@ -28,7 +28,7 @@
                         </span>
                         <span x-transition x-show="loading === false">
                             {{ trans('statamic-resrv::frontend.pay') }} 
-                            <span class="font-bold">{{ config('resrv-config.currency_symbol') }} {{ $amount }} </span>
+                            <span class="font-bold">{{ config('resrv-config.currency_symbol') }} {{ \Reach\StatamicResrv\Facades\Price::create($amount)->format() }}</span>
                             {{ trans('statamic-resrv::frontend.toCompleteYourReservation') }}
                         </span>                     
                     </button>

@@ -11,7 +11,7 @@
         <div class="my-6 xl:my-8">
             <div class="text-base font-medium mb-4">
                 {{ trans('statamic-resrv::frontend.offlinePaymentAmount') }}:
-                <span class="font-bold">{{ config('resrv-config.currency_symbol') }} {{ $amount }}</span>
+                <span class="font-bold">{{ config('resrv-config.currency_symbol') }} {{ \Reach\StatamicResrv\Facades\Price::create($amount)->format() }}</span>
             </div>
             <button
                 type="button"
