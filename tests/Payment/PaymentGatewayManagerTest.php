@@ -3,12 +3,14 @@
 namespace Reach\StatamicResrv\Tests\Payment;
 
 use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Exceptions;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
+use Reach\StatamicResrv\Tests\Support\ThrowingLabelGateway;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class PaymentGatewayManagerTest extends TestCase
@@ -535,6 +537,36 @@ class PaymentGatewayManagerTest extends TestCase
         $manager = new PaymentGatewayManager;
 
         $this->assertCount(0, $manager->availableForFrontend(Price::create(500)));
+    }
+
+    public function test_available_for_frontend_keeps_out_a_gateway_whose_label_throws_on_every_call()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'broken' => [
+                'class' => ThrowingLabelGateway::class,
+            ],
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+        ]);
+
+        Exceptions::fake();
+
+        $manager = new PaymentGatewayManager;
+
+        // Read by index, not through array_column(), which would renumber a list with gaps.
+        $available = $manager->availableForFrontend();
+        $this->assertCount(1, $available);
+        $this->assertSame('stripe', $available[0]['name']);
+
+        // The failed resolve must not leave a half-built instance behind to be listed next time.
+        $available = $manager->availableForFrontend();
+        $this->assertCount(1, $available);
+        $this->assertSame('stripe', $available[0]['name']);
+
+        // Each listing tries the gateway again and reports it again.
+        Exceptions::assertReportedCount(2);
     }
 
     public function test_is_available_for_returns_false_for_unknown_gateway()

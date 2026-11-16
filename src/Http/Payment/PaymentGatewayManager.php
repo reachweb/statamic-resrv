@@ -128,16 +128,25 @@ class PaymentGatewayManager
         return $this->has($gateway) && $this->passesAmountLimits($gateway, $amount);
     }
 
+    /** Whether the amount limits of at least one configured gateway allow $amount. */
+    public function allowsAmount(PriceClass $amount): bool
+    {
+        return collect($this->gateways)->keys()->contains(fn ($name) => $this->passesAmountLimits($name, $amount));
+    }
+
     protected function resolve(string $name): PaymentInterface
     {
         if ($this->gateways[$name]['instance'] === null) {
             $instance = app($this->gateways[$name]['class']);
-            $this->gateways[$name]['instance'] = $instance;
 
             // Resolve the label lazily if it wasn't set in config
             if ($this->gateways[$name]['label'] === null) {
                 $this->gateways[$name]['label'] = $instance->label();
             }
+
+            // Cached only once fully resolved: a gateway whose label() throws must not be served
+            // from cache on the next call with a null label.
+            $this->gateways[$name]['instance'] = $instance;
         }
 
         return $this->gateways[$name]['instance'];
@@ -224,7 +233,17 @@ class PaymentGatewayManager
         return collect($this->gateways)
             ->filter(fn ($config, $name) => $amount === null || $this->passesAmountLimits($name, $amount))
             ->map(function ($config, $name) {
-                $instance = $this->resolve($name);
+                // One gateway that cannot be built (missing credentials, a failing constructor)
+                // must not take the payment step down for customers paying with the others.
+                // It is reported rather than only logged, so the site's error tracker still hears
+                // about a gateway that quietly dropped out of checkout.
+                try {
+                    $instance = $this->resolve($name);
+                } catch (\Throwable $e) {
+                    report(new \RuntimeException("Payment gateway [{$name}] could not be loaded and was left out of checkout.", 0, $e));
+
+                    return null;
+                }
 
                 return [
                     'name' => $name,
@@ -232,7 +251,7 @@ class PaymentGatewayManager
                     'redirects' => $instance->redirectsForPayment(),
                     'surcharge' => $this->gateways[$name]['surcharge'] ?? null,
                 ];
-            })->values()->all();
+            })->filter()->values()->all();
     }
 
     /**

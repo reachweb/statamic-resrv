@@ -6,6 +6,7 @@ use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
@@ -23,6 +24,7 @@ use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
+use Reach\StatamicResrv\Tests\Support\UnconstructibleGateway;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint;
@@ -1594,6 +1596,64 @@ class CheckoutTest extends TestCase
         $this->assertEquals('5.00', $reservation->payment_surcharge->format());
     }
 
+    public function test_gateway_that_cannot_be_constructed_is_left_out_and_reported()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'paypal' => [
+                'class' => UnconstructibleGateway::class,
+                'label' => 'PayPal',
+                'amount_limits' => ['max' => 200],
+            ],
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+                'amount_limits' => ['max' => 200],
+            ],
+        ]);
+
+        Exceptions::fake();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $component->assertHasNoErrors()
+            ->assertSet('availableGateways', fn ($gateways) => array_column($gateways, 'name') === ['stripe'])
+            ->assertSet('selectedGateway', 'stripe')
+            ->assertSet('step', 3);
+
+        Exceptions::assertReportedCount(1);
+        Exceptions::assertReported(fn (\RuntimeException $e) => str_contains($e->getMessage(), '[paypal]') && $e->getPrevious() instanceof \TypeError);
+
+        // A crafted or stale gateway-selected for the left-out gateway is refused, and the live
+        // Stripe intent stays in place.
+        $reservation = $this->reservation->fresh();
+        $this->assertNotSame('', $reservation->payment_id);
+
+        $component->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertHasErrors('reservation')
+            ->assertSet('selectedGateway', 'stripe');
+
+        $after = $this->reservation->fresh();
+        $this->assertSame($reservation->payment_id, $after->payment_id);
+        $this->assertSame('stripe', $after->payment_gateway);
+        Exceptions::assertReportedCount(2);
+        Exceptions::assertNotReported(\TypeError::class);
+
+        // Once no gateway accepts the amount, naming the broken gateway still resets the stale
+        // intent and returns to step 2, as for any gateway the amount rules out.
+        $this->reservation->update(['payment' => '500.00']);
+
+        $component->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertHasErrors('reservation')
+            ->assertSet('selectedGateway', '')
+            ->assertSet('step', 2);
+
+        $this->assertSame('', $this->reservation->fresh()->payment_id);
+    }
+
     public function test_error_when_all_gateways_filtered_out()
     {
         Config::set('resrv-config.payment_gateways', [
@@ -1615,9 +1675,163 @@ class CheckoutTest extends TestCase
             ->call('handleFirstStep')
             ->dispatch('checkout-form-submitted');
 
-        $component->assertHasErrors('reservation')
+        $component->assertHasErrors(['reservation' => __('statamic-resrv::frontend.noGatewayAvailableForAmount')])
             ->assertSet('step', 2)
             ->assertSet('selectedGateway', '');
+    }
+
+    public function test_error_when_every_gateway_the_amount_allows_fails_to_load()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => UnconstructibleGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => UnconstructibleGateway::class,
+                'label' => 'PayPal',
+                'amount_limits' => ['min' => 500],
+            ],
+        ]);
+
+        Exceptions::fake();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // The amount rules PayPal out but allows Stripe, so it is not what the customer has to fix.
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted');
+
+        $component->assertHasErrors(['reservation' => __('statamic-resrv::frontend.noGatewayAvailable')])
+            ->assertSet('step', 2)
+            ->assertSet('selectedGateway', '');
+
+        // Only Stripe was tried: PayPal is left out by its amount limit before it is built.
+        Exceptions::assertReportedCount(1);
+    }
+
+    public function test_picker_drops_a_gateway_that_stopped_loading_after_it_was_shown()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        Exceptions::fake();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertSet('step', 3)
+            ->assertSet('selectedGateway', '');
+
+        // PayPal stops loading (its credentials removed, say) while the picker is on screen.
+        Config::set('resrv-config.payment_gateways.paypal.class', UnconstructibleGateway::class);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $component->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertSet('availableGateways', fn ($gateways) => array_column($gateways, 'name') === ['stripe'])
+            ->assertSet('selectedGateway', 'stripe')
+            ->assertSet('step', 3);
+
+        $reservation = $this->reservation->fresh();
+        $this->assertSame('stripe', $reservation->payment_gateway);
+        $this->assertNotSame('', $reservation->payment_id);
+        Exceptions::assertNotReported(\TypeError::class);
+    }
+
+    public function test_stale_picker_refusing_a_broken_gateway_keeps_another_tabs_payment()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        Exceptions::fake();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // One tab is left on the picker while another, on the same reservation, starts paying by card.
+        $stalePicker = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertSet('selectedGateway', '');
+
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->dispatch('gateway-selected', gateway: 'stripe');
+
+        $paymentId = $this->reservation->fresh()->payment_id;
+        $this->assertNotSame('', $paymentId);
+
+        Config::set('resrv-config.payment_gateways.paypal.class', UnconstructibleGateway::class);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $stalePicker->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertHasErrors(['reservation' => 'Invalid payment gateway selected.'])
+            ->assertSet('selectedGateway', '')
+            ->assertSet('step', 3);
+
+        $reservation = $this->reservation->fresh();
+        $this->assertSame($paymentId, $reservation->payment_id);
+        $this->assertSame('stripe', $reservation->payment_gateway);
+    }
+
+    public function test_stale_picker_refusing_a_broken_gateway_keeps_a_payment_started_while_it_loads()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        Exceptions::fake();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $stalePicker = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertSet('selectedGateway', '');
+
+        // PayPal stops loading, and another tab's card payment lands while this request is still
+        // building it: after selectGateway() first read the reservation, before the build fails.
+        Config::set('resrv-config.payment_gateways.paypal.class', UnconstructibleGateway::class);
+        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->app->bind(UnconstructibleGateway::class, function () {
+            $this->reservation->update(['payment_id' => 'pi_other_tab', 'payment_gateway' => 'stripe']);
+
+            throw new \TypeError('PayPal SDK client could not be built.');
+        });
+
+        $stalePicker->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertHasErrors(['reservation' => 'Invalid payment gateway selected.'])
+            ->assertSet('selectedGateway', '');
+
+        $reservation = $this->reservation->fresh();
+        $this->assertSame('pi_other_tab', $reservation->payment_id);
+        $this->assertSame('stripe', $reservation->payment_gateway);
     }
 
     public function test_select_gateway_bounces_to_step_2_when_no_gateway_remains()
