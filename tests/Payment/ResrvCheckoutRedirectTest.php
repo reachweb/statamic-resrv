@@ -5,10 +5,12 @@ namespace Reach\StatamicResrv\Tests\Payment;
 use Illuminate\Support\Facades\Config;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
+use Reach\StatamicResrv\Jobs\ExpireReservations;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\Support\QueryReadingPendingGateway;
@@ -308,6 +310,30 @@ class ResrvCheckoutRedirectTest extends TestCase
 
         $this->get($firstUrl)->assertSee('[pending][ref:][][n:0]', false)->assertDontSee('FIRST1');
         $this->get($secondUrl)->assertSee('[ref:SECND2]', false);
+    }
+
+    public function test_a_failed_payment_keeps_the_checkout_so_the_next_search_releases_its_hold()
+    {
+        $this->configureAllGateways();
+        $failed = Reservation::factory()->create(['item_id' => $this->entries->first()->id(), 'payment_gateway' => 'fake']);
+        $this->fakeCheckoutCompleteView();
+
+        session(['resrv_reservation' => $failed->id]);
+        $this->get($this->entry->absoluteUrl().'?resrv_gateway=fake&status=error')->assertSee('[failed]', false);
+
+        // Told to try again, the customer searches: their own hold must not block the dates.
+        $this->assertSame($failed->id, session('resrv_reservation'));
+        ExpireReservations::dispatchSync();
+        $this->assertSame(ReservationStatus::EXPIRED->value, $failed->fresh()->status);
+
+        // A successful payment still ends the checkout.
+        $paid = Reservation::factory()->create(['item_id' => $this->entries->first()->id(), 'payment_gateway' => 'fake']);
+        session(['resrv_reservation' => $paid->id]);
+        $this->get($this->entry->absoluteUrl().'?resrv_gateway=fake&status=success')->assertSee('[success]', false);
+
+        $this->assertNull(session('resrv_reservation'));
+        ExpireReservations::dispatchSync();
+        $this->assertSame(ReservationStatus::PENDING->value, $paid->fresh()->status);
     }
 
     public function test_the_checkout_complete_page_is_never_served_from_the_static_cache()

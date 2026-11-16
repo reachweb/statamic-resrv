@@ -23,11 +23,16 @@ class ResrvCheckoutRedirect extends Tags
         $redirectData = PendingPayment::guard($payment->handleRedirectBack());
 
         session()->forget('resrv-search');
-        PendingPayment::endCheckout();
 
+        // A failed payment leaves the checkout open, so "try again" works: the customer can go
+        // back to the checkout and pay, and their next search releases the reservation's hold
+        // (ExpireReservations) instead of the dates staying blocked until the hold lapses.
         if ($redirectData['status'] === false) {
             return $this->makeResponse('failed', __('Payment failed'), __('Your payment was not successful. Please contact us or try again.'));
         }
+
+        PendingPayment::endCheckout();
+
         if ($redirectData['status'] === true) {
             return $this->makeResponse('success', __('Payment successful'), __('Your payment has been processed successfully. You will receive an email confirmation shortly.'), $redirectData);
         }
