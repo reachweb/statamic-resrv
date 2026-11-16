@@ -6,7 +6,7 @@ use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
@@ -1596,7 +1596,7 @@ class CheckoutTest extends TestCase
         $this->assertEquals('5.00', $reservation->payment_surcharge->format());
     }
 
-    public function test_gateway_that_cannot_be_constructed_is_left_out_and_logged()
+    public function test_gateway_that_cannot_be_constructed_is_left_out_and_reported()
     {
         Config::set('resrv-config.payment_gateways', [
             'paypal' => [
@@ -1609,7 +1609,7 @@ class CheckoutTest extends TestCase
             ],
         ]);
 
-        Log::spy();
+        Exceptions::fake();
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -1622,9 +1622,8 @@ class CheckoutTest extends TestCase
             ->assertSet('selectedGateway', 'stripe')
             ->assertSet('step', 3);
 
-        Log::shouldHaveReceived('error')
-            ->withArgs(fn ($message, $context) => str_contains($message, '[paypal]') && $context['exception'] instanceof \TypeError)
-            ->once();
+        Exceptions::assertReportedCount(1);
+        Exceptions::assertReported(fn (\RuntimeException $e) => str_contains($e->getMessage(), '[paypal]') && $e->getPrevious() instanceof \TypeError);
     }
 
     public function test_error_when_all_gateways_filtered_out()

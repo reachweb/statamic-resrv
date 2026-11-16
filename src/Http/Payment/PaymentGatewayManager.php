@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Http\Payment;
 
-use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -133,12 +132,15 @@ class PaymentGatewayManager
     {
         if ($this->gateways[$name]['instance'] === null) {
             $instance = app($this->gateways[$name]['class']);
-            $this->gateways[$name]['instance'] = $instance;
 
             // Resolve the label lazily if it wasn't set in config
             if ($this->gateways[$name]['label'] === null) {
                 $this->gateways[$name]['label'] = $instance->label();
             }
+
+            // Cached only once fully resolved: a gateway whose label() throws must not be served
+            // from cache on the next call with a null label.
+            $this->gateways[$name]['instance'] = $instance;
         }
 
         return $this->gateways[$name]['instance'];
@@ -227,12 +229,12 @@ class PaymentGatewayManager
             ->map(function ($config, $name) {
                 // One gateway that cannot be built (missing credentials, a failing constructor)
                 // must not take the payment step down for customers paying with the others.
+                // It is reported rather than only logged, so the site's error tracker still hears
+                // about a gateway that quietly dropped out of checkout.
                 try {
                     $instance = $this->resolve($name);
                 } catch (\Throwable $e) {
-                    Log::error("Resrv: payment gateway [{$name}] could not be constructed and was left out of checkout.", [
-                        'exception' => $e,
-                    ]);
+                    report(new \RuntimeException("Payment gateway [{$name}] could not be loaded and was left out of checkout.", 0, $e));
 
                     return null;
                 }
