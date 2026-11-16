@@ -318,26 +318,45 @@ class ResrvCheckoutRedirectTest extends TestCase
         $failed = Reservation::factory()->create(['item_id' => $this->entries->first()->id(), 'payment_gateway' => 'fake']);
         $this->fakeCheckoutCompleteView();
 
+        // The tag only keeps or clears the search, so any value stands in for it here.
         session(['resrv_reservation' => $failed->id, 'resrv-search' => 'search']);
         $this->get($this->entry->absoluteUrl().'?resrv_gateway=fake&status=error')->assertSee('[failed]', false);
 
-        // Back at the checkout, the Extras component reads the search again when a coupon changes.
+        // Told to try again, the customer can go back to the checkout: it is all still there.
+        // CheckoutExtrasTest resumes that checkout.
+        $this->assertSame(ReservationStatus::PENDING->value, $failed->fresh()->status);
+        $this->assertSame($failed->id, session('resrv_reservation'));
         $this->assertSame('search', session('resrv-search'));
 
-        // Told to try again, the customer searches: their own hold must not block the dates.
-        $this->assertSame($failed->id, session('resrv_reservation'));
+        // Or they search again: their own hold must not block the dates.
         ExpireReservations::dispatchSync();
         $this->assertSame(ReservationStatus::EXPIRED->value, $failed->fresh()->status);
+    }
 
-        // A successful payment still ends the checkout, search included.
-        $paid = Reservation::factory()->create(['item_id' => $this->entries->first()->id(), 'payment_gateway' => 'fake']);
-        session(['resrv_reservation' => $paid->id, 'resrv-search' => 'search']);
-        $this->get($this->entry->absoluteUrl().'?resrv_gateway=fake&status=success')->assertSee('[success]', false);
+    #[DataProvider('completedReturns')]
+    public function test_a_completed_return_ends_the_checkout_and_its_search(string $query, string $status)
+    {
+        $this->configureAllGateways();
+        $reservation = Reservation::factory()->create(['item_id' => $this->entries->first()->id(), 'payment_gateway' => 'fake']);
+        $this->fakeCheckoutCompleteView();
+
+        session(['resrv_reservation' => $reservation->id, 'resrv-search' => 'search']);
+        $this->get($this->entry->absoluteUrl().sprintf($query, $reservation->id))->assertSee("[{$status}]", false);
 
         $this->assertNull(session('resrv_reservation'));
         $this->assertNull(session('resrv-search'));
+
+        // The next search leaves the reservation to its webhook.
         ExpireReservations::dispatchSync();
-        $this->assertSame(ReservationStatus::PENDING->value, $paid->fresh()->status);
+        $this->assertSame(ReservationStatus::PENDING->value, $reservation->fresh()->status);
+    }
+
+    public static function completedReturns(): array
+    {
+        return [
+            'success' => ['?resrv_gateway=fake&status=success', 'success'],
+            'pending' => ['?resrv_gateway=fake&payment_pending=%d', 'pending'],
+        ];
     }
 
     public function test_the_checkout_complete_page_is_never_served_from_the_static_cache()
