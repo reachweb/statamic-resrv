@@ -374,7 +374,7 @@ class AvailabilitySearchTest extends TestCase
     {
         // The cleared search reaches the results through the event; reloading the page
         // would also reset unrelated client state around the search bar, such as tabs.
-        Livewire::test(AvailabilitySearch::class, ['live' => false])
+        $component = Livewire::test(AvailabilitySearch::class, ['live' => false])
             ->set('data.dates', [
                 'date_start' => $this->date,
                 'date_end' => $this->date->copy()->add(1, 'day'),
@@ -383,8 +383,10 @@ class AvailabilitySearchTest extends TestCase
             ->assertSet('data.dates', [])
             ->assertDispatched('availability-search-updated')
             ->assertDispatched('availability-results-updated')
-            ->assertNoJs()
             ->assertNoRedirect();
+
+        // assertNoJs() only exists from Livewire 4; read the effect directly.
+        $this->assertEmpty($component->effects['xjs'] ?? []);
     }
 
     public function test_clear_dates_keeps_the_guest_counts()
