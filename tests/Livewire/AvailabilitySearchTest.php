@@ -387,6 +387,25 @@ class AvailabilitySearchTest extends TestCase
             ->assertNoRedirect();
     }
 
+    public function test_clear_dates_keeps_the_guest_counts()
+    {
+        // The Guests control reads data.customer only on load, so after a clear it still
+        // shows the counts: the server must keep them for checkout and per-guest extras.
+        Livewire::test(AvailabilitySearch::class, ['live' => false])
+            ->set('data.customer.adults', 2)
+            ->set('data.quantity', 2)
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->call('clearDates')
+            ->assertSet('data.dates', [])
+            ->assertSet('data.quantity', 1)
+            ->assertSet('data.customer', ['adults' => 2]);
+
+        $this->assertSame(['adults' => 2], session('resrv-search')->customer);
+    }
+
     public function test_can_return_rates_from_rate_model()
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
