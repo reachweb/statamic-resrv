@@ -216,6 +216,8 @@ The return array `status` must be one of:
 - `false` — payment failed, customer sees the failure message
 - `'pending'` — payment is pending (e.g. bank transfer), customer sees the pending message
 
+After `false`, the checkout stays open so the customer can try again. Going back to the checkout or searching again voids the payment through `cancelPaymentIntent()`, so a late payment on it reaches your webhook as a stale intent (see "Handle stale-intent races in verifyPayment()"). Return `false` only when the payment has failed or been cancelled. While it can still complete, return `'pending'`.
+
 **Important**: Resrv appends `resrv_gateway=<config_key>` to the redirect URL automatically. Your provider's success/cancel URL does NOT need to include it — Resrv adds it. However, any additional query parameters your provider returns (e.g. `session_id`, `token`) will be available via `request()->input(...)` in `handleRedirectBack()`.
 
 ---
@@ -796,7 +798,7 @@ Understanding the flow helps when debugging custom gateways.
 3. The `{{ resrv_checkout_redirect }}` tag reads `resrv_gateway` from the URL query.
 4. If present, resolves the gateway via `PaymentGatewayManager::gateway($name)`.
 5. Calls `handleRedirectBack()` on that gateway to check payment status.
-6. Renders success, failure, or pending message.
+6. Renders success, failure, or pending message. Success and pending end the checkout session; a failure leaves it open for another try.
 
 ### Webhook flow
 
