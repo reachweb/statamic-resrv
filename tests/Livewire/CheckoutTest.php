@@ -1624,6 +1624,20 @@ class CheckoutTest extends TestCase
 
         Exceptions::assertReportedCount(1);
         Exceptions::assertReported(fn (\RuntimeException $e) => str_contains($e->getMessage(), '[paypal]') && $e->getPrevious() instanceof \TypeError);
+
+        // A crafted or stale gateway-selected for the left-out gateway is refused, and the live
+        // Stripe intent stays in place.
+        $reservation = $this->reservation->fresh();
+        $this->assertNotSame('', $reservation->payment_id);
+
+        $component->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertHasErrors('reservation')
+            ->assertSet('selectedGateway', 'stripe');
+
+        $after = $this->reservation->fresh();
+        $this->assertSame($reservation->payment_id, $after->payment_id);
+        $this->assertSame('stripe', $after->payment_gateway);
+        Exceptions::assertReportedCount(2);
     }
 
     public function test_error_when_all_gateways_filtered_out()

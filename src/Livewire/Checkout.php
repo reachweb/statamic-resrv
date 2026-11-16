@@ -375,6 +375,18 @@ class Checkout extends Component
             return;
         }
 
+        // A gateway that cannot be built is left out of availableForFrontend(), but a crafted or
+        // stale gateway-selected can still name it. Refuse it here, before cancelActiveIntent()
+        // voids the intent of the gateway the customer is already paying with.
+        try {
+            $manager->gateway($gateway);
+        } catch (\Throwable $e) {
+            report($e);
+            $this->addError('reservation', __('Invalid payment gateway selected.'));
+
+            return;
+        }
+
         $reservation = $this->reservation->fresh();
         if (! $manager->isAvailableFor($gateway, $reservation->payment)) {
             // The clicked gateway is being rejected — fully reset payment state (intent + surcharge)

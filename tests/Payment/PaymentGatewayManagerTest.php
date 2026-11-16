@@ -555,9 +555,15 @@ class PaymentGatewayManagerTest extends TestCase
 
         $manager = new PaymentGatewayManager;
 
-        $this->assertSame(['stripe'], array_column($manager->availableForFrontend(), 'name'));
+        // Read by index, not through array_column(), which would renumber a list with gaps.
+        $available = $manager->availableForFrontend();
+        $this->assertCount(1, $available);
+        $this->assertSame('stripe', $available[0]['name']);
+
         // The failed resolve must not leave a half-built instance behind to be listed next time.
-        $this->assertSame(['stripe'], array_column($manager->availableForFrontend(), 'name'));
+        $available = $manager->availableForFrontend();
+        $this->assertCount(1, $available);
+        $this->assertSame('stripe', $available[0]['name']);
     }
 
     public function test_is_available_for_returns_false_for_unknown_gateway()
