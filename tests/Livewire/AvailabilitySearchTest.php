@@ -370,6 +370,23 @@ class AvailabilitySearchTest extends TestCase
             ->assertSet('data.rate', null);
     }
 
+    public function test_clear_dates_on_a_non_live_search_without_redirect_stays_on_the_page()
+    {
+        // The cleared search reaches the results through the event; reloading the page
+        // would also reset unrelated client state around the search bar, such as tabs.
+        Livewire::test(AvailabilitySearch::class, ['live' => false])
+            ->set('data.dates', [
+                'date_start' => $this->date,
+                'date_end' => $this->date->copy()->add(1, 'day'),
+            ])
+            ->call('clearDates')
+            ->assertSet('data.dates', [])
+            ->assertDispatched('availability-search-updated')
+            ->assertDispatched('availability-results-updated')
+            ->assertNoJs()
+            ->assertNoRedirect();
+    }
+
     public function test_can_return_rates_from_rate_model()
     {
         $item = $this->makeStatamicItemWithResrvAvailabilityField();

@@ -145,9 +145,6 @@ class AvailabilitySearch extends Component
 
         if (! $this->live) {
             $this->dispatch('availability-results-updated');
-            if (! $this->redirectTo) {
-                $this->js('window.location.reload()');
-            }
         }
     }
 
