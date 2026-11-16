@@ -4,6 +4,8 @@ namespace Reach\StatamicResrv\Tests\Reservation;
 
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Events\ReservationRefunded;
@@ -46,6 +48,60 @@ class ReservationRefundProcessorTest extends TestCase
             'status' => 'refunded',
         ]);
         Event::assertDispatched(ReservationRefunded::class);
+    }
+
+    /**
+     * refund() returns whatever the provider's SDK returns: Stripe and Mollie refunds expose a
+     * public `id`, while PayPal's SDK model only has a getId() getter. Reading the id runs after
+     * the money moved, so a getter that throws must not abort the refund.
+     */
+    #[DataProvider('gatewayRefundResults')]
+    public function test_logs_the_refund_id_the_gateway_returned(object $refund, ?string $refundId)
+    {
+        Event::fake([ReservationRefunded::class]);
+        Log::spy();
+
+        $reservation = $this->makeConfirmedReservation();
+
+        $this->mockRefundGateway($refund);
+
+        app(ReservationRefundProcessor::class)->refund($reservation);
+
+        Log::shouldHaveReceived('info')
+            ->with('Gateway refund processed for reservation.', \Mockery::on(fn ($context) => $context['refund_id'] === $refundId))
+            ->once();
+    }
+
+    public static function gatewayRefundResults(): array
+    {
+        return [
+            'public id (Stripe, Mollie)' => [(object) ['id' => 're_123', 'status' => 'succeeded'], 're_123'],
+            'getId() getter (PayPal SDK)' => [new class
+            {
+                private ?string $id = '4NV36909U5225480T';
+
+                public function getId(): ?string
+                {
+                    return $this->id;
+                }
+            }, '4NV36909U5225480T'],
+            'magic __get without __isset' => [new class
+            {
+                public function __get(string $name): ?string
+                {
+                    return $name === 'id' ? 'tr_123' : null;
+                }
+            }, 'tr_123'],
+            'getId() that throws' => [new class
+            {
+                private string $id;
+
+                public function getId(): string
+                {
+                    return $this->id;
+                }
+            }, null],
+        ];
     }
 
     public function test_skips_the_gateway_when_a_concurrent_caller_already_refunded()
