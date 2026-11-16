@@ -393,8 +393,9 @@ class Checkout extends Component
         } catch (\Throwable $e) {
             report(new \RuntimeException("Payment gateway [{$gateway}] could not be loaded and its selection was refused.", 0, $e));
 
-            // A customer already paying through another gateway keeps that payment as it is.
-            if ($this->selectedGateway !== '') {
+            // A customer already paying through another gateway keeps that payment as it is. The
+            // reservation is checked too: a stale picker holds '' while another tab's payment is live.
+            if ($this->selectedGateway !== '' || $reservation->hasGatewayPayment()) {
                 $this->addError('reservation', __('Invalid payment gateway selected.'));
 
                 return;
