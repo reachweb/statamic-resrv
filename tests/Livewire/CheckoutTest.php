@@ -1793,6 +1793,47 @@ class CheckoutTest extends TestCase
         $this->assertSame('stripe', $reservation->payment_gateway);
     }
 
+    public function test_stale_picker_refusing_a_broken_gateway_keeps_a_payment_started_while_it_loads()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'stripe' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'paypal' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'PayPal',
+            ],
+        ]);
+
+        Exceptions::fake();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $stalePicker = Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertSet('selectedGateway', '');
+
+        // PayPal stops loading, and another tab's card payment lands while this request is still
+        // building it: after selectGateway() first read the reservation, before the build fails.
+        Config::set('resrv-config.payment_gateways.paypal.class', UnconstructibleGateway::class);
+        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->app->bind(UnconstructibleGateway::class, function () {
+            $this->reservation->update(['payment_id' => 'pi_other_tab', 'payment_gateway' => 'stripe']);
+
+            throw new \TypeError('PayPal SDK client could not be built.');
+        });
+
+        $stalePicker->dispatch('gateway-selected', gateway: 'paypal')
+            ->assertHasErrors(['reservation' => 'Invalid payment gateway selected.'])
+            ->assertSet('selectedGateway', '');
+
+        $reservation = $this->reservation->fresh();
+        $this->assertSame('pi_other_tab', $reservation->payment_id);
+        $this->assertSame('stripe', $reservation->payment_gateway);
+    }
+
     public function test_select_gateway_bounces_to_step_2_when_no_gateway_remains()
     {
         Config::set('resrv-config.payment_gateways', [
