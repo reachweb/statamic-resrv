@@ -128,6 +128,12 @@ class PaymentGatewayManager
         return $this->has($gateway) && $this->passesAmountLimits($gateway, $amount);
     }
 
+    /** Whether the amount limits of at least one configured gateway allow $amount. */
+    public function allowsAmount(PriceClass $amount): bool
+    {
+        return collect($this->gateways)->keys()->contains(fn ($name) => $this->passesAmountLimits($name, $amount));
+    }
+
     protected function resolve(string $name): PaymentInterface
     {
         if ($this->gateways[$name]['instance'] === null) {

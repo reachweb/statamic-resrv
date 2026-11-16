@@ -83,6 +83,7 @@ return [
     'surcharge' => 'surcharge',
     'paymentSurcharge' => 'Payment surcharge',
     'noGatewayAvailableForAmount' => 'No payment method is available for this amount.',
+    'noGatewayAvailable' => 'No payment method is available right now. Please try again later.',
     'gatewayNotAvailableForAmount' => 'The selected payment method is not available for this amount.',
     'findYourReservation' => 'Find your reservation',
     'findYourReservationDescription' => 'Enter the email address you used for your booking and your booking reference code.',

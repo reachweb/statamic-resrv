@@ -564,6 +564,9 @@ class PaymentGatewayManagerTest extends TestCase
         $available = $manager->availableForFrontend();
         $this->assertCount(1, $available);
         $this->assertSame('stripe', $available[0]['name']);
+
+        // Each listing tries the gateway again and reports it again.
+        Exceptions::assertReportedCount(2);
     }
 
     public function test_is_available_for_returns_false_for_unknown_gateway()
