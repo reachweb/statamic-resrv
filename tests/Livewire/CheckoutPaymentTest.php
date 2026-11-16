@@ -66,6 +66,9 @@ class CheckoutPaymentTest extends TestCase
 
         Livewire::test(CheckoutPayment::class, ['amount' => 3168.0])
             ->assertSeeHtml('¥ 3168</span>');
+
+        Livewire::test(CheckoutPayment::class, ['amount' => 3168.0, 'paymentView' => 'statamic-resrv::livewire.checkout-payment-offline'])
+            ->assertSeeHtml('¥ 3168</span>');
     }
 
     public function test_confirm_payment_on_non_pending_reservation_surfaces_error_without_500()
