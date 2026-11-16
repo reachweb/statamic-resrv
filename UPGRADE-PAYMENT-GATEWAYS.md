@@ -216,7 +216,11 @@ The return array `status` must be one of:
 - `false` — payment failed, customer sees the failure message
 - `'pending'` — payment is pending (e.g. bank transfer), customer sees the pending message
 
-After `false`, the checkout stays open so the customer can try again. Going back to the checkout or searching again voids the payment through `cancelPaymentIntent()`, so a late payment on it reaches your webhook as a stale intent (see "Handle stale-intent races in verifyPayment()"). Return `false` only when the payment has failed or been cancelled. While it can still complete, return `'pending'`.
+After `false`, the checkout stays open so the customer can try again. Going back to the checkout, or searching again, clears the payment from the reservation and asks your gateway to cancel it through `cancelPaymentIntent()`. Cancelling is best effort: the provider may refuse, and the payment can stay payable. If the customer still pays it, it reaches your webhook as a stale intent (see "Handle stale-intent races in verifyPayment()").
+
+So decide by what the customer still has to do, not by whether the provider keeps the payment open:
+- Return `false` when the attempt didn't succeed and the customer has to act again, such as a declined card or a cancelled or abandoned attempt. This holds even when the provider keeps the payment open for another try, as Mollie does after a declined card.
+- Return `'pending'` when the customer has done their part and the payment is completing without them, such as a bank transfer or a payment still processing.
 
 **Important**: Resrv appends `resrv_gateway=<config_key>` to the redirect URL automatically. Your provider's success/cancel URL does NOT need to include it — Resrv adds it. However, any additional query parameters your provider returns (e.g. `session_id`, `token`) will be available via `request()->input(...)` in `handleRedirectBack()`.
 
