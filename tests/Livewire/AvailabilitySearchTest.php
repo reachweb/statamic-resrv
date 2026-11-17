@@ -242,6 +242,23 @@ class AvailabilitySearchTest extends TestCase
         $this->assertEquals(config('resrv-config.maximum_quantity'), $component->__get('maxQuantity'));
     }
 
+    public function test_only_a_search_without_a_quantity_control_resets_a_carried_quantity()
+    {
+        // A search with a quantity control (a spa treatment's "Guests") leaves 2 in the shared session.
+        Livewire::test(AvailabilitySearch::class, ['enableQuantity' => true])->set('data.quantity', 2);
+
+        // Another page whose search also has the control keeps the guest's choice.
+        Livewire::test(AvailabilitySearch::class, ['enableQuantity' => true])
+            ->assertSet('data.quantity', 2);
+
+        // A search without one books a single unit, and resets before the URL seed so the
+        // seeded search it dispatches does not carry the old quantity either.
+        Livewire::withQueryParams(['date' => $this->date->copy()->addDay()->toDateString()])
+            ->test(AvailabilitySearch::class)
+            ->assertSet('data.quantity', 1)
+            ->assertDispatched('availability-search-updated', fn ($event, $params) => $params[0]['quantity'] === 1);
+    }
+
     public function test_can_set_rate()
     {
         // A rate is only meaningful when rates are enabled. Without an entry the search

@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -145,6 +146,58 @@ class AvailabilityResultsTest extends TestCase
             ->test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
             ->assertViewHas('availability.data.price', '100.00')
             ->assertViewHas('availability.request.days', 2);
+    }
+
+    public function test_results_below_a_search_without_a_quantity_control_price_and_book_one_unit()
+    {
+        $this->createCheckoutEntry();
+        $entry = $this->entries->get('two-available');
+
+        // A spa treatment page: the guest picks 2 in a search with a quantity control, which
+        // leaves it in the shared 'resrv-search' session.
+        Livewire::test(AvailabilitySearch::class, ['enableQuantity' => true])
+            ->set('data.dates', [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+            ])
+            ->set('data.quantity', 2);
+
+        // A page with results and no search keeps it, as a redirect-style search hands it over.
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->assertViewHas('availability.data.price', '200.00');
+
+        // A room page: its search has no quantity control and renders before the results.
+        Livewire::test(AvailabilitySearch::class);
+
+        Livewire::test(AvailabilityResults::class, ['entry' => $entry->id()])
+            ->assertViewHas('availability.data.price', '100.00')
+            ->call('checkout');
+
+        $this->assertDatabaseHas('resrv_reservations', ['item_id' => $entry->id(), 'quantity' => 1]);
+    }
+
+    public function test_a_search_without_a_quantity_control_keeps_the_quantity_of_an_earlier_search_on_the_page()
+    {
+        $entry = $this->entries->get('two-available');
+
+        Livewire::test(AvailabilitySearch::class, ['enableQuantity' => true])
+            ->set('data.dates', [
+                'date_start' => $this->date->toISOString(),
+                'date_end' => $this->date->copy()->add(2, 'day')->toISOString(),
+            ])
+            ->set('data.quantity', 2);
+
+        // One page load: a search with a quantity control, a second search without one (such as a
+        // header bar), then results. The second search must not undo the quantity the control shows.
+        $html = Blade::render(
+            '@livewire("availability-search", ["enableQuantity" => true])'
+            .'@livewire("availability-search")'
+            .'@livewire("availability-results", ["entry" => $entry])',
+            ['entry' => $entry->id()]
+        );
+
+        $this->assertStringContainsString('200.00', $html);
+        $this->assertSame(2, session('resrv-search')->quantity);
     }
 
     public function test_returns_no_availability_if_zero()

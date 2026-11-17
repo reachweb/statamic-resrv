@@ -319,18 +319,19 @@ class AvailabilitySearchQueryParamsTest extends TestCase
     {
         Config::set('resrv-config.maximum_quantity', 5);
 
-        Livewire::test(AvailabilitySearch::class)->set('data.quantity', 5);
+        Livewire::test(AvailabilitySearch::class, ['enableQuantity' => true])->set('data.quantity', 5);
 
         // The persisted quantity is now above the maximum: it must not reject
         // the URL dates, only hold back the auto-dispatch (a seeded page load
-        // never dispatches a search the receivers would reject).
+        // never dispatches a search the receivers would reject). Only a search
+        // with a quantity control keeps a carried quantity.
         Config::set('resrv-config.maximum_quantity', 2);
 
         Livewire::withQueryParams([
             'date_start' => $this->day(5),
             'date_end' => $this->day(7),
         ])
-            ->test(AvailabilitySearch::class)
+            ->test(AvailabilitySearch::class, ['enableQuantity' => true])
             ->assertSet('data.dates', [
                 'date_start' => $this->day(5),
                 'date_end' => $this->day(7),

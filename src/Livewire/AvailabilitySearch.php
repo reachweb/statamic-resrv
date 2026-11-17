@@ -62,6 +62,20 @@ class AvailabilitySearch extends Component
 
     public function mount(): void
     {
+        // A search without enableQuantity books one unit, even when its view renders a quantity
+        // control of its own. The quantity lives in the shared 'resrv-search' session, so a guest's
+        // pick on another page's quantity search would otherwise price and book this page's results.
+        // Siblings rendered after this search read the reset from the session. A search with
+        // enableQuantity rendered earlier in this request (a page template renders before its
+        // layout) owns the page's quantity, so it is kept and the results agree with its control.
+        // It runs before the URL seed, so a seeded dispatch and its validity check never see the
+        // carried value either.
+        if ($this->enableQuantity) {
+            request()->attributes->set('resrv-quantity-search-mounted', true);
+        } elseif (! request()->attributes->get('resrv-quantity-search-mounted')) {
+            $this->data->quantity = 1;
+        }
+
         $this->seedFromQueryString();
 
         $this->reconcileRateForContext();
