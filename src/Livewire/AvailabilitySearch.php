@@ -135,7 +135,9 @@ class AvailabilitySearch extends Component
 
     public function clearDates(): void
     {
-        $this->data->reset();
+        // Keep the customer data: the Guests control reads it only on load, so the page
+        // would keep showing guest counts the server no longer has.
+        $this->data->reset('dates', 'quantity', 'rate');
         // Apparently validation errors don't reset with the above
         $this->resetValidation();
         // Re-heal / auto-select after the reset wiped the rate, before dispatch.
@@ -145,9 +147,6 @@ class AvailabilitySearch extends Component
 
         if (! $this->live) {
             $this->dispatch('availability-results-updated');
-            if (! $this->redirectTo) {
-                $this->js('window.location.reload()');
-            }
         }
     }
 

@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\CreatesEntries;
@@ -218,18 +219,20 @@ class AvailabilitySearchQueryParamsTest extends TestCase
 
     public function test_invalid_url_dates_keep_previous_session_search()
     {
-        Livewire::test(AvailabilitySearch::class)
+        Livewire::test(AvailabilitySearch::class, ['rates' => true])
+            ->set('data.rate', '7')
             ->set('data.dates', [
                 'date_start' => $this->day(3),
                 'date_end' => $this->day(4),
             ]);
 
         Livewire::withQueryParams(['date' => 'not-a-date'])
-            ->test(AvailabilitySearch::class)
+            ->test(AvailabilitySearch::class, ['rates' => true])
             ->assertSet('data.dates', [
                 'date_start' => $this->day(3),
                 'date_end' => $this->day(4),
             ])
+            ->assertSet('data.rate', '7')
             ->assertNotDispatched('availability-search-updated')
             ->assertHasNoErrors();
     }
@@ -356,6 +359,58 @@ class AvailabilitySearchQueryParamsTest extends TestCase
                 'rate' => '7',
                 'customer' => [],
             ]);
+    }
+
+    #[DataProvider('datedLinksWithoutAValidRate')]
+    public function test_dated_link_without_a_valid_rate_drops_the_session_rate(array $rateParam)
+    {
+        // An earlier visit left a rate in the shared session; a link that names
+        // dates but no usable rate must search every rate instead of narrowing to it.
+        Livewire::test(AvailabilitySearch::class, ['rates' => true])
+            ->set('data.rate', '7');
+
+        Livewire::withQueryParams(['date' => $this->day(5), ...$rateParam])
+            ->test(AvailabilitySearch::class, ['rates' => true])
+            ->assertSet('data.rate', null)
+            ->assertDispatched('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->day(5),
+                    'date_end' => $this->day(6),
+                ],
+                'quantity' => 1,
+                'rate' => null,
+                'customer' => [],
+            ]);
+    }
+
+    public static function datedLinksWithoutAValidRate(): array
+    {
+        return [
+            'no rate' => [[]],
+            'invalid rate' => [['rate' => 'abc']],
+        ];
+    }
+
+    public function test_later_bar_does_not_inherit_a_rate_a_sibling_auto_selected()
+    {
+        // 'pages' has exactly one rate: the entry-scoped bar dispatches the dated
+        // link, then auto-selects that rate and saves it to the shared session
+        // before the collection-wide bar mounts. The later bar must still search
+        // every rate, since the link named none.
+        $entry = $this->makeStatamicItemWithAvailability(collection: 'pages');
+        $rateId = Rate::forEntry($entry->id())->first()->id;
+
+        request()->merge(['date' => $this->day(5)]);
+
+        Blade::render('@livewire("availability-search", ["rates" => true, "entry" => $entry])', ['entry' => $entry->id()]);
+
+        $this->assertEquals($rateId, session('resrv-search')->rate);
+
+        // Same request: the later bar sees the link and the claimed dispatch.
+        Blade::render('@livewire("availability-search", ["rates" => true])');
+
+        $this->assertSame(['date_start' => $this->day(5), 'date_end' => $this->day(6)], session('resrv-search')->dates);
+        $this->assertNull(session('resrv-search')->rate);
     }
 
     public function test_rate_only_seed_without_dates_does_not_dispatch_or_error()
