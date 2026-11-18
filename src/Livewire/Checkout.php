@@ -6,7 +6,6 @@ use Carbon\Carbon;
 use Closure;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -16,9 +15,11 @@ use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
+use Reach\StatamicResrv\Exceptions\PaymentAttemptStillOpen;
 use Reach\StatamicResrv\Exceptions\ReservationDriftException;
 use Reach\StatamicResrv\Exceptions\ReservationException;
 use Reach\StatamicResrv\Exceptions\ReservationExpiredException;
+use Reach\StatamicResrv\Exceptions\ReservationNoLongerPayable;
 use Reach\StatamicResrv\Exceptions\ReservationTerminatedException;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
@@ -33,7 +34,8 @@ use Reach\StatamicResrv\Models\Reservation;
 
 class Checkout extends Component
 {
-    use Traits\HandlesExtrasQueries,
+    use Traits\HandlesDirectGatewayPayment,
+        Traits\HandlesExtrasQueries,
         Traits\HandlesOptionsQueries,
         Traits\HandlesPricing,
         Traits\HandlesReservationConfirmation,
@@ -47,15 +49,6 @@ class Checkout extends Component
 
     #[Locked]
     public EnabledOptions $enabledOptions;
-
-    #[Locked]
-    public string $clientSecret;
-
-    #[Locked]
-    public string $publicKey;
-
-    #[Locked]
-    public string $paymentView = '';
 
     #[Locked]
     public string $selectedGateway = '';
@@ -136,8 +129,8 @@ class Checkout extends Component
 
     public function goToStep(int $step): void
     {
-        if ($step < 3 && $this->selectedGateway !== '') {
-            $this->resetPaymentState();
+        if ($step < 3 && $this->selectedGateway !== '' && ! $this->resetPaymentState()) {
+            return;
         }
         $this->step = $step;
     }
@@ -241,9 +234,9 @@ class Checkout extends Component
      */
     protected function withReservationLock(Closure $write)
     {
-        // The TTL outlives a gateway round-trip: updateTotals() can cancel a payment intent.
+        // The TTL outlives voiding a payment intent (two gateway round-trips), as updateTotals() does.
         try {
-            return Cache::lock('resrv-checkout-'.session('resrv_reservation'), 120)->block(10, function () use ($write) {
+            return Cache::lock('resrv-checkout-'.session('resrv_reservation'), 300)->block(10, function () use ($write) {
                 // Read the row afresh: the request we waited for may have just written it.
                 unset($this->reservation);
 
@@ -357,7 +350,9 @@ class Checkout extends Component
         }
 
         // Reset any stale payment state from a previous pass through checkout
-        $this->resetPaymentState();
+        if (! $this->resetPaymentState()) {
+            return;
+        }
 
         // Populate available gateways: those the current payment amount allows and that load
         $manager = app(PaymentGatewayManager::class);
@@ -373,9 +368,7 @@ class Checkout extends Component
 
         // If only one surviving gateway, auto-select and initialize payment
         if (count($this->availableGateways) === 1) {
-            $this->selectedGateway = $this->availableGateways[0]['name'];
-
-            return $this->initializePayment();
+            return $this->initializePayment($this->availableGateways[0]['name']);
         }
 
         // Multiple gateways — show picker
@@ -405,7 +398,7 @@ class Checkout extends Component
         }
 
         // A gateway that cannot be built is left out of availableForFrontend(), but a crafted or
-        // stale gateway-selected can still name it. Refuse it before cancelActiveIntent() voids the
+        // stale gateway-selected can still name it. Refuse it before initializePayment() voids the
         // intent of the gateway the customer is already paying with. It comes after the amount
         // check, which never builds the gateway and must still reset stale payment state.
         try {
@@ -427,12 +420,7 @@ class Checkout extends Component
             return $this->relistGateways($reservation, __('Invalid payment gateway selected.'));
         }
 
-        // A prior gateway selection at this step may have created an intent we're now abandoning.
-        $this->cancelActiveIntent($reservation);
-
-        $this->selectedGateway = $gateway;
-
-        return $this->initializePayment();
+        return $this->initializePayment($gateway);
     }
 
     /**
@@ -441,7 +429,10 @@ class Checkout extends Component
      */
     protected function relistGateways(Reservation $reservation, string $error)
     {
-        $this->resetPaymentState();
+        if (! $this->resetPaymentState()) {
+            return;
+        }
+
         $this->availableGateways = app(PaymentGatewayManager::class)->availableForFrontend($reservation->payment);
 
         // No gateway left — bounce back to step 2 with the no-gateway error
@@ -454,9 +445,7 @@ class Checkout extends Component
 
         // Single surviving gateway — auto-select and initialize payment
         if (count($this->availableGateways) === 1) {
-            $this->selectedGateway = $this->availableGateways[0]['name'];
-
-            return $this->initializePayment();
+            return $this->initializePayment($this->availableGateways[0]['name']);
         }
 
         // Multiple still available — keep the picker visible with a contextual error
@@ -474,117 +463,148 @@ class Checkout extends Component
             : __('statamic-resrv::frontend.noGatewayAvailableForAmount'));
     }
 
-    public function resetPaymentState(): void
+    /**
+     * Void the stored intent and drop its surcharge. False when the intent could not be voided: the
+     * reservation keeps both, and underIntentLock() has told the customer.
+     */
+    public function resetPaymentState(): bool
     {
-        $reservation = $this->reservation->fresh();
+        $reset = $this->underIntentLock($this->reservation->fresh(), function (Reservation $reservation) {
+            // MUST NOT wipe payment_id/gateway or cancel the intent for non-PENDING reservations —
+            // StripePaymentGateway::refund() needs payment_id to call Stripe, and cancelling a
+            // live intent for a confirmed reservation would unwind a completed booking.
+            if ($reservation->status !== ReservationStatus::PENDING->value) {
+                return true;
+            }
 
-        // MUST NOT wipe payment_id/gateway or cancel the intent for non-PENDING reservations —
-        // StripePaymentGateway::refund() needs payment_id to call Stripe, and cancelling a
-        // live intent for a confirmed reservation would unwind a completed booking.
-        if ($reservation->status !== ReservationStatus::PENDING->value) {
-            return;
+            if (! $this->cancelActiveIntent($reservation)) {
+                return null;
+            }
+
+            // selectedGateway resets on page refresh but payment_surcharge persists in DB
+            if (! $reservation->payment_surcharge->isZero()) {
+                $reservation->update(['payment_surcharge' => 0]);
+            }
+
+            return true;
+        });
+
+        if ($reset) {
+            $this->reset('selectedGateway', 'clientSecret', 'publicKey', 'paymentView');
         }
 
-        $this->cancelActiveIntent($reservation);
-
-        // selectedGateway resets on page refresh but payment_surcharge persists in DB
-        if (! $reservation->payment_surcharge->isZero()) {
-            $reservation->update(['payment_surcharge' => 0]);
-            unset($this->reservation);
-        }
-
-        $this->selectedGateway = '';
-        $this->clientSecret = '';
-        $this->publicKey = '';
-        $this->paymentView = '';
+        return (bool) $reset;
     }
 
     /**
-     * Callers must pass a fresh reservation instance (e.g. via `$this->reservation->fresh()`)
-     * so status and payment-field checks reflect committed DB state.
+     * Void the stored intent; false when it already moves money. Call under the intent lock with a
+     * fresh PENDING reservation. Unlike the pay page's AWAITING_PAYMENT row, a PENDING one is expired
+     * by the old intent's cancellation webhook, so the reference (payment_id and payment_gateway, a
+     * pair) is cleared before the void and restored when voidSupersededIntent() can't prove it dead.
+     *
+     * @throws PaymentAttemptStillOpen
      */
-    protected function cancelActiveIntent(Reservation $reservation): void
+    protected function cancelActiveIntent(Reservation $reservation): bool
     {
-        // Belt-and-braces for future callers that skip the guard in resetPaymentState.
-        if ($reservation->status !== ReservationStatus::PENDING->value) {
-            return;
-        }
-
-        if ($reservation->payment_id === '' || empty($reservation->payment_gateway)) {
-            return;
-        }
-
         $manager = app(PaymentGatewayManager::class);
+        $reference = $reservation->only('payment_id', 'payment_gateway');
 
-        if (! $manager->has($reservation->payment_gateway)) {
-            return;
+        if (blank($reference['payment_id']) || ! $manager->has((string) $reference['payment_gateway'])) {
+            return true;
         }
 
-        $oldPaymentId = $reservation->payment_id;
-        $gateway = $manager->gateway($reservation->payment_gateway);
-
-        // Clear payment_id AND payment_gateway together before calling the gateway so a
-        // cancellation webhook from the old intent can't look up the reservation and fire
-        // ReservationCancelled against it. payment_id and payment_gateway must be paired —
-        // a lingering payment_gateway without a payment_id leaves state inconsistent and
-        // can misroute future operations through forReservation().
         $reservation->update(['payment_id' => '', 'payment_gateway' => '']);
-        unset($this->reservation);
+        $voided = false;
 
         try {
-            $gateway->cancelPaymentIntent($oldPaymentId, $reservation);
-        } catch (\Throwable $e) {
-            Log::warning('Failed to cancel stale payment intent: '.$e->getMessage(), [
-                'reservation_id' => $reservation->id,
-                'payment_id' => $oldPaymentId,
-            ]);
+            return $voided = $this->voidSupersededIntent($manager->gateway($reference['payment_gateway']), $reservation, $reference['payment_id']);
+        } finally {
+            if (! $voided) {
+                $reservation->update($reference);
+            }
         }
     }
 
-    protected function initializePayment()
+    /**
+     * Void the stored intent, then create and mount one for $gatewayName's total. Unlike the pay page,
+     * the checkout never resumes a stored intent: it may be priced for another amount or surcharge.
+     */
+    protected function initializePayment(string $gatewayName)
     {
-        // Get a fresh record from the database
         $reservation = $this->reservation->fresh();
-
-        // Resolve the selected gateway
         $manager = app(PaymentGatewayManager::class);
-        $payment = $manager->gateway($this->selectedGateway);
+        $gateway = $manager->gateway($gatewayName);
+        $payment = $reservation->payment;
+        $surcharge = $manager->calculateSurcharge($gatewayName, $payment);
+        $amount = Price::create($payment->format())->add($surcharge);
+        $returnUrl = $this->getCheckoutCompleteEntry()->absoluteUrl();
 
-        $surcharge = $manager->calculateSurcharge($this->selectedGateway, $reservation->payment);
-        $totalToCharge = $reservation->payment->add($surcharge);
+        // The intent is stored only while the reservation still owes the amount it was priced from:
+        // no intent outlives an amount change, such as a coupon applied in another tab.
+        $stillPayable = fn (Reservation $fresh) => $fresh->status === ReservationStatus::PENDING->value
+            && $fresh->payment->equals($payment);
 
-        // Set the public key
-        $this->publicKey = $payment->getPublicKey($reservation);
+        $intent = $this->underIntentLock($reservation, function (Reservation $reservation) use ($gateway, $gatewayName, $amount, $surcharge, $returnUrl, $stillPayable) {
+            if (! $stillPayable($reservation)) {
+                throw new ReservationNoLongerPayable($reservation->id);
+            }
 
-        // Set the payment view
-        $this->paymentView = $payment->paymentView();
+            // `payment` stays the reservation amount (read by CP, API, emails); the surcharge is stored apart.
+            return $this->cancelActiveIntent($reservation)
+                ? $this->createIntent($gateway, $reservation, $amount, $returnUrl, $stillPayable, [
+                    'payment_gateway' => $gatewayName,
+                    'payment_surcharge' => $surcharge->format(),
+                ])
+                : null;
+        });
 
-        // Create a payment intent with the full amount (including surcharge) before touching the DB.
-        // 4th arg = return-URL base for redirect gateways (Step 12); normal checkout is unchanged.
-        $paymentIndent = $payment->paymentIntent($totalToCharge, $reservation, $reservation->customerData, $this->getCheckoutCompleteEntry()->absoluteUrl());
+        // Back to choosing: the picker when there is a choice, otherwise the details step.
+        if ($intent === null) {
+            $this->reset('selectedGateway', 'clientSecret', 'publicKey', 'paymentView');
+            $this->step = count($this->availableGateways) > 1 ? 3 : 2;
 
-        // `payment` stays as the reservation amount (read by CP, API, emails). Only the surcharge
-        // and intent id get persisted — the gateway receives the full total via $totalToCharge above.
-        $reservation->update([
-            'payment_surcharge' => $surcharge->format(),
-            'payment_gateway' => $this->selectedGateway,
-            'payment_id' => $paymentIndent->id,
-        ]);
-        unset($this->reservation);
-
-        // If the payment method needs to redirect to another website do so
-        if ($payment->redirectsForPayment()) {
-            $redirectUrl = $paymentIndent->redirectTo;
-            $separator = str_contains($redirectUrl, '?') ? '&' : '?';
-            $redirectUrl .= $separator.http_build_query(['resrv_gateway' => $this->selectedGateway]);
-
-            return redirect()->away($redirectUrl);
+            return;
         }
 
-        // Set it in a public property so that we can access it at the payment step
-        $this->clientSecret = $paymentIndent->client_secret;
-
+        $this->selectedGateway = $gatewayName;
         $this->step = 3;
+
+        return $this->mountIntent($gateway, $reservation, $intent, $amount, $returnUrl);
+    }
+
+    /**
+     * Run $step under the intent lock on $reservation, read again inside it. Null when $step could
+     * not finish: a failure is shown, and a null from $step (the stored intent already moves money,
+     * so its webhook confirms the booking) sends the customer to checkout complete.
+     */
+    protected function underIntentLock(Reservation $reservation, Closure $step): mixed
+    {
+        try {
+            $result = $this->withIntentLock($reservation, fn () => $step($reservation->refresh()));
+        } catch (PaymentAttemptStillOpen $e) {
+            $this->addError('reservation', __('statamic-resrv::frontend.paymentAttemptStillOpen', [
+                'date' => $e->expiresAt->copy()->setTimezone(config('app.timezone'))->format('d-m-Y H:i T'),
+            ]));
+
+            return null;
+        } catch (\Throwable $e) {
+            // A transition or another tab changing the reservation meanwhile is not a fault.
+            if (! $e instanceof ReservationNoLongerPayable) {
+                report($e);
+            }
+
+            $this->addError('reservation', __('statamic-resrv::frontend.paymentMountFailed'));
+
+            return null;
+        } finally {
+            unset($this->reservation);
+        }
+
+        if ($result === null) {
+            $this->redirectToCheckoutComplete($reservation->id);
+        }
+
+        return $result;
     }
 
     #[On('checkout-form-submitted-without-payment')]
@@ -749,7 +769,9 @@ class Checkout extends Component
             // persisted reservation — resetPaymentState() reads payment_id — not the component-local
             // selectedGateway, which a stale tab can hold as '' while the row still has a live intent.
             $wasOnPaymentStep = $this->selectedGateway !== '' || $this->step >= 3;
-            $this->resetPaymentState();
+            if (! $this->resetPaymentState()) {
+                return;
+            }
             if ($wasOnPaymentStep) {
                 $this->step = 2;
             }

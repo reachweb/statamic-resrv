@@ -28,6 +28,7 @@ use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
+use Reach\StatamicResrv\Tests\Support\FakeRedirectGateway;
 use Reach\StatamicResrv\Tests\Support\UnconstructibleGateway;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -2327,6 +2328,93 @@ class CheckoutTest extends TestCase
         $reservation = Reservation::find($this->reservation->id);
         $this->assertEquals('', $reservation->payment_id);
         $this->assertEquals('0.00', $reservation->payment_surcharge->format());
+    }
+
+    public function test_an_intent_that_cannot_be_voided_is_kept_and_not_replaced()
+    {
+        // The provider refuses the cancel (Stripe's cancelPaymentIntent swallows the error), so the
+        // stored intent can still be paid.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelSucceeds = false;
+        Exceptions::fake();
+
+        $this->reservation->update(['payment_id' => 'pi_open', 'payment_gateway' => 'fake', 'payment_surcharge' => '4.00']);
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->assertHasErrors(['reservation' => __('statamic-resrv::frontend.paymentMountFailed')])
+            ->assertNotSet('step', 3)
+            ->assertSet('selectedGateway', '');
+
+        $this->assertSame([], $gateway->createdIntents, 'No second intent may be minted while the first can still be paid.');
+        $reservation = $this->reservation->fresh();
+        $this->assertSame('pi_open', $reservation->payment_id);
+        $this->assertSame('fake', $reservation->payment_gateway);
+        $this->assertSame('4.00', $reservation->payment_surcharge->format());
+        Exceptions::assertReported(fn (\RuntimeException $e) => str_contains($e->getMessage(), '[pi_open]'));
+
+        // Once the provider reports it cancelled, the checkout replaces it.
+        $gateway->cancelSucceeds = true;
+
+        $component->call('handleSecondStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 3)
+            ->assertSet('selectedGateway', 'fake');
+
+        $this->assertCount(1, $gateway->createdIntents);
+        $this->assertSame($gateway->createdIntents[0]['payment_id'], $this->reservation->fresh()->payment_id);
+    }
+
+    public function test_an_intent_already_moving_money_is_kept_and_the_customer_sent_to_checkout_complete()
+    {
+        // The customer paid in another tab and the payment is still processing, so it can't be cancelled.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentStatus = 'processing';
+
+        $this->reservation->update(['payment_id' => 'pi_paid', 'payment_gateway' => 'fake']);
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->assertRedirect(Entry::find(Config::get('resrv-config.checkout_completed_entry'))->absoluteUrl().'?payment_pending='.$this->reservation->id);
+
+        // The reference stays, so the webhook confirms the booking instead of reporting an orphan.
+        $this->assertSame('pi_paid', $this->reservation->fresh()->payment_id);
+        $this->assertSame([], $gateway->createdIntents);
+    }
+
+    public function test_an_intent_minted_while_the_amount_changes_is_voided()
+    {
+        // Another tab applies a coupon while the provider creates the intent for the old amount.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->onPaymentIntent = fn (Reservation $reservation) => Reservation::whereKey($reservation->id)->update(['payment' => '80.00']);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->assertHasErrors('reservation')
+            ->assertSet('selectedGateway', '')
+            ->assertSet('clientSecret', '');
+
+        $this->assertCount(1, $gateway->createdIntents);
+        $this->assertSame([$gateway->createdIntents[0]['payment_id']], array_column($gateway->cancelledIntents, 'payment_id'));
+        $this->assertSame('', $this->reservation->fresh()->payment_id);
+    }
+
+    public function test_redirect_gateway_sends_the_customer_to_the_provider_url_unchanged()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Fake Redirect'],
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)->call('handleSecondStep');
+
+        // Appending a parameter could invalidate a signed provider URL.
+        $component->assertRedirect('https://provider.test/checkout/'.$this->reservation->fresh()->payment_id);
     }
 
     public function test_amount_limits_compare_payment_not_including_surcharge()

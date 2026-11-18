@@ -18,9 +18,9 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 
 /**
- * Mounts a gateway payment outside the checkout session (manual pay page; plan-008 balance
- * section later): resolve the gateway, create/resume an intent, and expose the properties
- * the gateway's paymentView() blade reads.
+ * Creates, resumes and voids payment intents under a per-reservation lock, and mounts the gateway's
+ * paymentView(). The pay page resumes a stored intent (mountGatewayPayment); the checkout voids it
+ * and mints another.
  */
 trait HandlesDirectGatewayPayment
 {
