@@ -1202,17 +1202,17 @@ class Reservation extends Model
 
     /**
      * Same for options: the option must be the entry's and published, exactly what
-     * HandlesOptionsQueries::getOptionsForId() lists, and the chosen value must be a live value of
-     * that option — the list renders $option->values under the soft-delete scope, while
-     * Option::calculatePrice() resolves values withTrashed() for historical pricing, so a deleted
-     * (or tampered) value has to be rejected here, before pricing.
+     * HandlesOptionsQueries::getOptionsForId() lists, and the chosen value must be a published,
+     * live value of that option — the list renders only published values under the soft-delete
+     * scope, while Option::calculatePrice() resolves values withTrashed() for historical pricing,
+     * so a deleted, unpublished (or tampered) value has to be rejected here, before pricing.
      */
     protected function optionForValidation(array $option, $statamic_id): Option
     {
-        $model = Option::entry($statamic_id)->where('published', true)->find($option['id'])
+        $model = Option::entry($statamic_id)->selectable()->find($option['id'])
             ?? throw new OptionsException(__('The selected option is not valid.'));
 
-        if (! $model->values()->whereKey($option['value'] ?? null)->exists()) {
+        if (! $model->values->contains('id', $option['value'] ?? null)) {
             throw new OptionsException(__('The selected option value is not valid.'));
         }
 

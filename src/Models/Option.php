@@ -72,6 +72,17 @@ class Option extends Model
         return $query->where('item_id', $entry);
     }
 
+    /**
+     * The options a customer can pick: published, with only their published values loaded. The
+     * checkout lists these, the CP create form offers them, and both validate a chosen value
+     * against the loaded values (values() also returns unpublished ones).
+     */
+    public function scopeSelectable($query)
+    {
+        return $query->where('resrv_options.published', true)
+            ->with(['values' => fn ($values) => $values->where('published', true)]);
+    }
+
     protected function orderingQuery()
     {
         return $this->newQuery()->entry($this->item_id);

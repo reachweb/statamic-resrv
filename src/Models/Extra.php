@@ -212,6 +212,23 @@ class Extra extends Model
     }
 
     /**
+     * Why $quantity units of this extra cannot be booked, or null when they can. An extra that
+     * does not allow multiple carries no maximum, so it is capped at one unit here.
+     */
+    public function quantityError(int $quantity): ?string
+    {
+        if (! $this->allow_multiple && $quantity > 1) {
+            return __('The extra ":name" cannot be added more than once.', ['name' => $this->name]);
+        }
+
+        if ($this->maximum > 0 && $quantity > $this->maximum) {
+            return __('The selected quantity exceeds the maximum allowed for this extra.');
+        }
+
+        return null;
+    }
+
+    /**
      * The extras a customer can see and select: published, not trashed (global scope) and not in
      * an unpublished category. Apply it on an entry's extras() relation for the attachment half.
      * An extra without a category (or whose category was deleted — category_id is nulled) is

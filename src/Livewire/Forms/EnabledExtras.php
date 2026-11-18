@@ -50,10 +50,8 @@ class EnabledExtras extends Form
                         return;
                     }
 
-                    $extra = Extra::find($extraId);
-
-                    if ($extra && $extra->maximum > 0 && $value > $extra->maximum) {
-                        $fail(__('The selected quantity exceeds the maximum allowed for this extra.'));
+                    if ($error = Extra::find($extraId)?->quantityError((int) $value)) {
+                        $fail($error);
                     }
                 },
             ],

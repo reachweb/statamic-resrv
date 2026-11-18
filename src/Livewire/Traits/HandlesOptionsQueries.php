@@ -19,15 +19,13 @@ trait HandlesOptionsQueries
         }
 
         return $this->getOptionsForId($reservation->item_id)->map(function ($option) use ($reservation) {
-            return Option::find($option->id)->valuesPriceForDates($reservation);
+            return $option->valuesPriceForDates($reservation);
         });
     }
 
     protected function getOptionsWithParentPricing(Reservation $reservation): Collection
     {
         return $this->getOptionsForId($reservation->item_id)->map(function ($option) use ($reservation) {
-            $option = Option::find($option->id);
-
             foreach ($option->values as $value) {
                 $value->original_price = $value->price->format();
                 $totalPrice = Price::create(0);
@@ -54,7 +52,7 @@ trait HandlesOptionsQueries
     public function getOptionsForSearch($data, $entryId): Collection
     {
         $options = $this->getOptionsForId($entryId)->map(function ($option) use ($data) {
-            return Option::find($option->id)->valuesPriceForDates($data);
+            return $option->valuesPriceForDates($data);
         });
 
         return $options;
@@ -69,8 +67,6 @@ trait HandlesOptionsQueries
     public function getOptionsForSelections(array $selections, string $entryId): Collection
     {
         return $this->getOptionsForId($entryId)->map(function ($option) use ($selections, $entryId) {
-            $option = Option::find($option->id);
-
             foreach ($option->values as $value) {
                 $value->original_price = $value->price->format();
                 $totalPrice = Price::create(0);
@@ -146,11 +142,9 @@ trait HandlesOptionsQueries
         });
     }
 
+    /** Callers price these instances; re-finding an option would reload every value. */
     protected function getOptionsForId($id): Collection
     {
-        return Option::entry($id)
-            ->where('published', true)
-            ->with('values')
-            ->get();
+        return Option::entry($id)->selectable()->get();
     }
 }

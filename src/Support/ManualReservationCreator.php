@@ -818,14 +818,8 @@ class ManualReservationCreator
                 throw new ManualReservationException(__('The extra quantity must be at least 1.'), field: 'extras');
             }
 
-            // Non-multiple extras carry no maximum, so the cap below alone would accept any
-            // quantity — cap them at one unit like the create form does.
-            if (! $extra->allow_multiple && $quantity > 1) {
-                throw new ManualReservationException(__('The extra ":name" cannot be added more than once.', ['name' => $extra->name]), field: 'extras');
-            }
-
-            if ($extra->maximum > 0 && $quantity > $extra->maximum) {
-                throw new ManualReservationException(__('The selected quantity exceeds the maximum allowed for this extra.'), field: 'extras');
+            if ($error = $extra->quantityError($quantity)) {
+                throw new ManualReservationException($error, field: 'extras');
             }
 
             try {
@@ -865,7 +859,7 @@ class ManualReservationCreator
 
             // Only published options belonging to this entry — a plain Option::find() would
             // accept an option unpublished after the form loaded.
-            $option = Option::entry($input['item_id'])->where('published', true)->find($id);
+            $option = Option::entry($input['item_id'])->selectable()->find($id);
 
             if (! $option) {
                 throw new ManualReservationException(__('The selected option does not belong to this entry.'), field: 'options');
@@ -873,7 +867,7 @@ class ManualReservationCreator
 
             // calculatePrice() resolves values withTrashed() for historical reservations —
             // a NEW reservation must only accept published, non-trashed values still on offer.
-            if (! $option->values()->where('published', true)->whereKey($value)->exists()) {
+            if (! $option->values->contains('id', $value)) {
                 throw new ManualReservationException(__('The selected option value is no longer available.'), field: 'options');
             }
 

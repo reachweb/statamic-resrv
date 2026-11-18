@@ -185,7 +185,7 @@ class Extras extends Component
         $extra = $this->enabledExtras->extras->get($extraId);
         $originalExtra = $this->extras->firstWhere('id', $extraId);
 
-        if ($quantity > 0 && ($originalExtra->maximum == 0 || $quantity <= $originalExtra->maximum)) {
+        if ($quantity > 0 && $originalExtra->quantityError($quantity) === null) {
             $extra['quantity'] = $quantity;
             $this->enabledExtras->extras->put($extraId, $extra);
         }

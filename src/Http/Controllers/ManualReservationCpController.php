@@ -410,8 +410,7 @@ class ManualReservationCpController extends Controller
         ];
 
         return Option::entry($data['item_id'])
-            ->where('published', true)
-            ->with(['values' => fn ($query) => $query->where('published', true)])
+            ->selectable()
             ->get()
             ->map(fn ($option) => $option->valuesPriceForDates($calcData))
             ->map(fn ($option) => [

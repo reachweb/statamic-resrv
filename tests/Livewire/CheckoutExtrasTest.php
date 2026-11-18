@@ -645,6 +645,47 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
+    // allow_multiple false caps the extra at one unit, as the CP does (it carries no maximum, so
+    // the maximum check alone accepts any quantity). The client-callable action must ignore it...
+    public function test_update_extra_quantity_ignores_a_quantity_above_one_for_an_extra_that_does_not_allow_multiple()
+    {
+        $extra = $this->extras->first();
+        ResrvExtra::whereKey($extra->id)->update(['allow_multiple' => false, 'maximum' => null]);
+
+        $component = Livewire::test(Extras::class, ['reservation' => $this->reservation])
+            ->call('toggleExtra', $extra->id)
+            ->call('updateExtraQuantity', $extra->id, 2);
+
+        $this->assertSame(1, $component->instance()->getExtraQuantity($extra->id));
+    }
+
+    // ...and the checkout must refuse such a payload instead of booking it.
+    public function test_it_rejects_a_quantity_above_one_for_an_extra_that_does_not_allow_multiple()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+        ResrvExtra::whereKey($extra->id)->update(['allow_multiple' => false, 'maximum' => null]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 2,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasErrors(['enabledExtras.extras.'.$extra->id.'.quantity'])
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+        ]);
+    }
+
     // Test that it handles extras that are required when a specific other extra is selected
     public function test_it_handles_extra_that_is_required_when_another_is_selected()
     {
