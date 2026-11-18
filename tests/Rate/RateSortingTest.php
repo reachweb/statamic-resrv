@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Rate;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
@@ -167,6 +168,139 @@ class RateSortingTest extends TestCase
         $this->assertEquals($byOrder['data']['rate_id'], $byPrice['data']['rate_id']);
         $this->assertEquals($byOrder['data']['price'], $byPrice['data']['price']);
         $this->assertEquals('200.00', $byPrice['data']['price']);
+    }
+
+    public function test_order_sorting_skips_first_rate_that_fails_restrictions()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $startDate = now()->startOfDay();
+
+        // Lowest-order rate, but its min_stay rejects the 2-night search below.
+        $restrictedRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'restricted-rate',
+            'order' => 0,
+            'min_stay' => 3,
+        ]);
+
+        // Next rate by order, bookable for the search.
+        $bookableRate = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'bookable-rate',
+            'order' => 1,
+        ]);
+
+        foreach ([$restrictedRate, $bookableRate] as $rate) {
+            Availability::factory()
+                ->count(2)
+                ->sequence(
+                    ['date' => $startDate],
+                    ['date' => $startDate->copy()->addDay()],
+                )
+                ->create([
+                    'statamic_id' => $entry->id(),
+                    'rate_id' => $rate->id,
+                    'price' => 100,
+                    'available' => 5,
+                ]);
+        }
+
+        $result = (new Availability)->getAvailabilityForEntry(
+            $this->searchData($startDate),
+            $entry->id(),
+            rateSorting: RateSorting::Order,
+        );
+
+        // Same rate the listing (getAvailable) and price sorting return for this search.
+        $this->assertTrue($result['message']['status']);
+        $this->assertEquals($bookableRate->id, $result['data']['rate_id']);
+        $this->assertEquals('200.00', $result['data']['price']);
+    }
+
+    // The detail page picks the rate the listing shows first. A shared rate can come before its
+    // base and before another rate, and it is still the first bookable one.
+    public function test_order_sorting_returns_a_shared_rate_ordered_before_its_base()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $startDate = now()->startOfDay();
+
+        $base = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base', 'order' => 2]);
+        $other = Rate::factory()->create(['collection' => 'pages', 'slug' => 'other', 'order' => 1]);
+        $shared = Rate::factory()->create([
+            'collection' => 'pages',
+            'slug' => 'shared',
+            'order' => 0,
+            'pricing_type' => 'independent',
+            'availability_type' => 'shared',
+            'base_rate_id' => $base->id,
+        ]);
+
+        foreach ([[$base, 100], [$other, 80]] as [$rate, $price]) {
+            Availability::factory()
+                ->count(2)
+                ->sequence(['date' => $startDate], ['date' => $startDate->copy()->addDay()])
+                ->create(['statamic_id' => $entry->id(), 'rate_id' => $rate->id, 'price' => $price, 'available' => 5]);
+        }
+
+        foreach ([0, 1] as $day) {
+            RatePrice::create([
+                'rate_id' => $shared->id,
+                'statamic_id' => $entry->id(),
+                'date' => $startDate->copy()->addDays($day)->toDateString(),
+                'price' => 30,
+            ]);
+        }
+
+        $result = (new Availability)->getAvailabilityForEntry($this->searchData($startDate), $entry->id(), rateSorting: RateSorting::Order);
+
+        $this->assertEquals($shared->id, $result['data']['rate_id']);
+        $this->assertEquals('60.00', $result['data']['price']);
+    }
+
+    public function test_order_sorting_stops_at_the_first_bookable_rate()
+    {
+        $entry = $this->makeStatamicItemWithResrvAvailabilityField();
+        $startDate = now()->startOfDay();
+
+        $baseRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base', 'order' => 0]);
+
+        Availability::factory()
+            ->count(2)
+            ->sequence(['date' => $startDate], ['date' => $startDate->copy()->addDay()])
+            ->create(['statamic_id' => $entry->id(), 'rate_id' => $baseRate->id, 'price' => 100, 'available' => 5]);
+
+        // Capped shared rates after the bookable base rate: checking one costs extra queries.
+        $addCappedRates = fn (int $count, int $from) => Rate::factory()->count($count)->sequence(
+            fn ($sequence) => ['slug' => 'capped-'.($from + $sequence->index), 'order' => $from + $sequence->index],
+        )->create([
+            'collection' => 'pages',
+            'availability_type' => 'shared',
+            'base_rate_id' => $baseRate->id,
+            'max_available' => 2,
+        ]);
+
+        $queriesForSearch = function () use ($entry, $startDate) {
+            $search = fn () => (new Availability)->getAvailabilityForEntry($this->searchData($startDate), $entry->id(), rateSorting: RateSorting::Order);
+            $search();
+
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+            $result = $search();
+            $count = count(DB::getQueryLog());
+            DB::disableQueryLog();
+
+            return [$count, $result['data']['rate_id']];
+        };
+
+        $addCappedRates(1, 1);
+        [$withOneLaterRate, $rateId] = $queriesForSearch();
+        $this->assertEquals($baseRate->id, $rateId);
+
+        $addCappedRates(3, 2);
+        [$withFourLaterRates, $rateId] = $queriesForSearch();
+        $this->assertEquals($baseRate->id, $rateId);
+
+        $this->assertSame($withOneLaterRate, $withFourLaterRates);
     }
 
     public function test_price_sorting_skips_unavailable_cheapest_rate()

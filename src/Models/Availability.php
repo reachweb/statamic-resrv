@@ -408,13 +408,9 @@ class Availability extends Model implements AvailabilityContract
      * Returns (and memoizes) an entry's published rate set. Date-restriction checks still run
      * per call; only the DB query is cached.
      */
-    protected function publishedRatesForEntry($itemId, bool $withEntries = false): Collection
+    protected function publishedRatesForEntry($itemId): Collection
     {
-        $key = $itemId.'|'.($withEntries ? 'with-entries' : 'bare');
-
-        return $this->publishedRatesCache[$key] ??= ($withEntries
-            ? Rate::forEntry($itemId)->published()->with('entries')->get()
-            : Rate::forEntry($itemId)->published()->get());
+        return $this->publishedRatesCache[$itemId] ??= Rate::forEntry($itemId)->published()->get();
     }
 
     protected function getSpecificItemCollection($statamic_id)
@@ -446,21 +442,21 @@ class Availability extends Model implements AvailabilityContract
             }
         }
 
-        if (! $rate && $this->rateSorting === RateSorting::Price) {
-            return $this->getCheapestRateAvailability($resrvEntry, $request);
+        if (! $rate) {
+            if ($this->rateSorting === RateSorting::Price) {
+                return $this->getCheapestRateAvailability($resrvEntry, $request);
+            }
+
+            // Rates come in rate order, so the first bookable one is the answer.
+            $first = $this->buildRatesAvailabilityCollection($resrvEntry, firstOnly: true)->first();
+
+            return new AvailabilityItemResource($first === null ? $availability : collect([$first]), $request);
         }
 
         $results = $this->getResultsForItem($resrvEntry)->first();
 
         if (! $results) {
             return new AvailabilityItemResource($availability, $request);
-        }
-
-        if (! $rate) {
-            $rate = $this->resolveRateForResult($results, $resrvEntry);
-            if (! $rate) {
-                return new AvailabilityItemResource($availability, $request);
-            }
         }
 
         if ($populated = $this->populateAvailability($results, rateId: $rate->id, rate: $rate)) {
@@ -470,24 +466,7 @@ class Availability extends Model implements AvailabilityContract
         return new AvailabilityItemResource($availability, $request);
     }
 
-    protected function resolveRateForResult($result, Entry $entry): ?Rate
-    {
-        $rates = $this->publishedRatesForEntry($entry->item_id, withEntries: true);
-
-        foreach ($rates as $rate) {
-            $matchesResult = ($rate->isShared() && $rate->base_rate_id)
-                ? $rate->base_rate_id == $result->rate_id
-                : $rate->id == $result->rate_id;
-
-            if ($matchesResult && $this->ratePassesRestrictions($rate)) {
-                return $rate;
-            }
-        }
-
-        return null;
-    }
-
-    protected function buildRatesAvailabilityCollection(Entry $entry): Collection
+    protected function buildRatesAvailabilityCollection(Entry $entry, bool $firstOnly = false): Collection
     {
         $availability = collect();
 
@@ -516,6 +495,10 @@ class Availability extends Model implements AvailabilityContract
 
             if ($populated = $this->populateAvailability($result, $rate->title, rateId: $rate->id, rate: $rate)) {
                 $availability->put($rate->id, $populated);
+
+                if ($firstOnly) {
+                    break;
+                }
             }
         }
 
