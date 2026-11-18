@@ -71,4 +71,9 @@ class Option extends Model
     {
         return $query->where('item_id', $entry);
     }
+
+    protected function orderingQuery()
+    {
+        return $this->newQuery()->entry($this->item_id);
+    }
 }

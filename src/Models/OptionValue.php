@@ -10,10 +10,11 @@ use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
+use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class OptionValue extends Model
 {
-    use HandlesAvailabilityDates, HasFactory, SoftDeletes;
+    use HandlesAvailabilityDates, HandlesOrdering, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_options_values';
 
@@ -71,25 +72,8 @@ class OptionValue extends Model
         return $this->price;
     }
 
-    public function changeOrder($order)
+    protected function orderingQuery()
     {
-        if ($this->order == $order) {
-            return;
-        }
-
-        $items = $this->where('option_id', $this->option_id)->orderBy('order')->get()->keyBy('id');
-        $movingItem = $items->pull($this->id);
-        $count = ($order == 1 ? 2 : 1);
-
-        foreach ($items as $item) {
-            if ($count == $order) {
-                $count++;
-            }
-            $item->order = $count;
-            $item->saveOrFail();
-            $count++;
-        }
-        $movingItem->order = $order;
-        $movingItem->saveOrFail();
+        return $this->newQuery()->where('option_id', $this->option_id);
     }
 }
