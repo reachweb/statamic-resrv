@@ -547,6 +547,9 @@ class Checkout extends Component
             return true;
         }
 
+        // Restore the surcharge too: forgetPaymentState() in another tab zeroes it while payment_id is blank.
+        $reference['payment_surcharge'] = $reservation->payment_surcharge->format();
+
         $reservation->update(['payment_id' => '', 'payment_gateway' => '']);
         $voided = false;
 
@@ -590,6 +593,16 @@ class Checkout extends Component
                 $resumed = $this->resumeExistingIntent($gateway, $reservation);
 
                 if ($resumed === null || ($resumed && $this->resumedIntentIsMountable($gateway, $resumed))) {
+                    // As on the pay page, re-check on a fresh row after the retrieve's round-trip, during
+                    // which a transition such as expiry can commit, before handing the intent out.
+                    if ($resumed !== null) {
+                        $fresh = Reservation::query()->find($reservation->id);
+
+                        if ($fresh === null || ! $stillPayable($fresh)) {
+                            throw new ReservationNoLongerPayable($reservation->id);
+                        }
+                    }
+
                     // The webhook checks payment plus surcharge, and step 1 may have dropped the surcharge.
                     $reservation->update(['payment_surcharge' => $surcharge->format()]);
 
@@ -744,6 +757,12 @@ class Checkout extends Component
 
             return;
         }
+
+        // The coupon changes what is owed: void a stored intent first, and keep the coupon out when it can't be.
+        if (! $this->resetPaymentState()) {
+            return;
+        }
+
         session(['resrv_coupon' => $data['coupon']]);
         $this->coupon = $data['coupon'];
         $this->resetValidation('coupon');
@@ -752,6 +771,10 @@ class Checkout extends Component
 
     public function removeCoupon()
     {
+        if (! $this->resetPaymentState()) {
+            return;
+        }
+
         $this->dispatch('coupon-removed', $this->coupon, true);
         session()->forget('resrv_coupon');
         $this->coupon = null;
@@ -818,6 +841,11 @@ class Checkout extends Component
             // selectedGateway, which a stale tab can hold as '' while the row still has a live intent.
             $wasOnPaymentStep = $this->selectedGateway !== '' || $this->step >= 3;
             if (! $this->resetPaymentState()) {
+                // Another tab stored an intent since addCoupon()/removeCoupon() voided one: undo the
+                // coupon change, so the coupon in the session matches the totals left in place.
+                $removeCoupon ? session(['resrv_coupon' => $coupon]) : session()->forget('resrv_coupon');
+                $this->coupon = $removeCoupon ? $coupon : null;
+
                 return;
             }
             if ($wasOnPaymentStep) {

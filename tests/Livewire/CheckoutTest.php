@@ -2471,6 +2471,90 @@ class CheckoutTest extends TestCase
         $this->assertSame(Price::create('100.00')->add(Price::create($extras->first()->price->format()))->format(), $reservation->payment->format());
     }
 
+    public function test_a_kept_intent_keeps_its_surcharge_when_another_tab_loads_during_the_void()
+    {
+        // The customer paid in another tab, so the intent can't be voided, and a third tab loads the
+        // checkout while the provider is asked.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelSucceeds = false;
+        $gateway->retrievedIntentStatus = 'processing';
+        $gateway->onRetrievePaymentIntent = function () use ($gateway) {
+            $gateway->onRetrievePaymentIntent = null;
+            Livewire::test(Checkout::class);
+        };
+
+        $this->reservation->update(['payment_id' => 'pi_paid', 'payment_gateway' => 'fake', 'payment_surcharge' => '4.00']);
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)->call('handleSecondStep');
+
+        $reservation = $this->reservation->fresh();
+        $this->assertSame('pi_paid', $reservation->payment_id);
+        $this->assertSame('104.00', $reservation->totalToCharge(), 'The webhook expects what the kept intent charges.');
+    }
+
+    public function test_a_stored_intent_is_not_resumed_when_the_amount_changes_during_the_retrieve()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Bank'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+        $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
+        $gateway->cancelSucceeds = false;
+        // Another tab applies a coupon (or the hold expires) while the provider is asked.
+        $gateway->onRetrievePaymentIntent = function (Reservation $reservation) use ($gateway) {
+            $gateway->onRetrievePaymentIntent = null;
+            Reservation::whereKey($reservation->id)->update(['payment' => '80.00']);
+        };
+
+        $this->reservation->update(['payment_id' => 'redir_open', 'payment_gateway' => 'fakeredirect', 'payment_intent_amount' => '100.00']);
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->assertNoRedirect()
+            ->assertHasErrors('reservation')
+            ->assertSet('selectedGateway', '');
+
+        $this->assertSame([], $gateway->createdIntents);
+    }
+
+    public function test_a_coupon_is_not_applied_while_the_stored_intent_cannot_be_voided()
+    {
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        Exceptions::fake();
+
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)->call('handleFirstStep')->dispatch('checkout-form-submitted');
+        $paymentId = $this->reservation->fresh()->payment_id;
+
+        // A customer back at the details step adds a coupon the provider won't let the intent follow.
+        $gateway->cancelSucceeds = false;
+
+        $component->call('addCoupon', '20OFF')
+            ->assertHasErrors('reservation')
+            ->assertNotDispatched('coupon-applied')
+            ->assertSet('coupon', null);
+
+        $this->assertNull(session('resrv_coupon'));
+        $this->assertSame($paymentId, $this->reservation->fresh()->payment_id);
+
+        // Another tab stores an intent between addCoupon() and the totals update: the coupon is undone.
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF')->assertHasErrors('reservation');
+
+        $this->assertNull(session('resrv_coupon'));
+        $this->assertSame('100.00', $this->reservation->fresh()->payment->format());
+        $this->assertSame($paymentId, $this->reservation->fresh()->payment_id);
+    }
+
     public function test_an_intent_already_moving_money_is_kept_and_the_customer_sent_to_checkout_complete()
     {
         // The customer paid in another tab and the payment is still processing, so it can't be cancelled.
