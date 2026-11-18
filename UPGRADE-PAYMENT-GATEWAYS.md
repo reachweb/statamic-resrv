@@ -313,15 +313,16 @@ The legacy route (`POST /resrv/api/webhook` without a gateway segment) still wor
 > 📅 Added 2026-11-18. No interface change: gateways that confirm by hand, as earlier revisions of this guide taught, keep working. See *Moving an existing gateway* below.
 
 ```php
-protected function confirmFromGateway(Reservation $reservation, string $paymentId, bool $stale = false, int|string|null $amount = null, ?string $eventId = null): bool
+protected function confirmFromGateway(Reservation $reservation, string $paymentId, bool $stale = false, int|string|null $amount = null, ?string $eventId = null, ?Closure $inTransaction = null): bool
 ```
 
 | Parameter | Pass |
 | --- | --- |
-| `$paymentId` | The provider's id for this payment. The admin alert names it, and the activity log records it. |
+| `$paymentId` | The provider's id for this payment, as stored in `payment_id` (or as `$inTransaction` stores it). The admin alert names it, and the activity log records it. |
 | `$stale` | `true` when the reservation was found through the payment's metadata because its `payment_id` no longer names this payment. Pass it only for a payment you know is this site's (Step 9). |
 | `$amount` | What the provider charged, in minor units, as `Price::create($decimal)->raw()` gives them. Leave it `null` when the provider doesn't report it. |
 | `$eventId` | The provider's event id, shown in the admin alert. |
+| `$inTransaction` | A closure that gets the locked row and runs before the confirming save, so a change it makes is saved with `confirmed` or not at all. Use it when the id you confirm with isn't the one in `payment_id` yet, such as a capture id that replaces an order id: `fn (Reservation $fresh) => $fresh->payment_id = $captureId`. |
 
 It runs these checks in order, and returns `true` only when this call confirmed the reservation:
 
@@ -330,7 +331,7 @@ It runs these checks in order, and returns `true` only when this call confirmed 
 3. **Terminal reservation** (`expired`, `refunded`, `partner`, or `cancelled` unless it kept this charge on purpose): emails the admins, because the money can't attach to a live booking.
 4. **Amount mismatch:** when `$amount` differs from `payment + payment_surcharge`, emails the admins and doesn't confirm.
 5. **Confirm:** `transitionTo(CONFIRMED, tolerant: true)`, which accepts `pending` (checkout) and `awaiting_payment` (manual reservation) rows alike, then dispatches `ReservationConfirmed` with `VIA_WEBHOOK`, the gateway and the payment id.
-6. **Lost race:** if the row changed under the lock, re-reads it and emails the admins when it is now terminal (Step 10).
+6. **Lost race:** if the row changed under the lock, re-reads it. It emails the admins when the row is now terminal, or confirmed by another payment: its `payment_id` names a different payment, or an admin marked it as paid (Step 10).
 
 Fixes to any of these land in Resrv, so every gateway that calls the method gets them without a release of its own.
 
@@ -369,7 +370,7 @@ if ($reservation->status === ReservationStatus::CONFIRMED->value) {
 
 Move any early return for a confirmed reservation below the success branch, as above. Otherwise a stale payment that succeeds after the booking was confirmed another way never reaches the method, and the customer's second charge goes unreported.
 
-Keep any check the method doesn't make, such as comparing the payment's currency with `resrv-config.currency_isoCode`, before the call. If your gateway writes to the reservation in the confirming transaction (`transitionTo(..., inTransaction: ...)`), keep confirming by hand for now.
+Keep any check the method doesn't make, such as comparing the payment's currency with `resrv-config.currency_isoCode`, before the call. If your gateway writes to the reservation in the confirming transaction (`transitionTo(..., inTransaction: ...)`), pass the same closure as `inTransaction:`.
 
 ---
 
@@ -1093,9 +1094,14 @@ Step 9's stale-intent fallback handles a charge whose `payment_id` was already c
 
 Resrv's reservation state changes go through `Reservation::transitionTo()`, which re-reads the row under a `lockForUpdate` and — when called with `tolerant: true` — returns `false` (instead of throwing) if the row moved to an incompatible state under the lock. A `false` here means the customer was already charged, but the hold is gone. Returning `200` and stopping would leave nobody told: the provider will not retry.
 
-`confirmFromGateway()` (Step 4) handles this race for you: it confirms through `transitionTo(CONFIRMED, tolerant: true)`, dispatches `ReservationConfirmed` only when that returns `true`, and otherwise re-reads the row and calls `OrphanedPaymentNotification::notifyIfOrphaned()`. That emails the admins when the row is now `expired`, `refunded`, `cancelled` or `partner` (a cancelled booking's own retained charge excepted), and dedupes on (reservation, payment) so provider retries don't spam them. A concurrent `confirmed` is a clean no-op.
+`confirmFromGateway()` (Step 4) handles this race for you: it confirms through `transitionTo(CONFIRMED, tolerant: true)`, dispatches `ReservationConfirmed` only when that returns `true`, and otherwise re-reads the row and emails the admins in two cases. Both dedupe on (reservation, payment), so provider retries don't spam them:
 
-A gateway that still confirms by hand must do the same three things: gate `ReservationConfirmed` on `transitionTo()`'s return value, `refresh()` the reservation on `false`, and call `notifyIfOrphaned()`.
+- **The row is now terminal:** `expired`, `refunded`, `cancelled` or `partner` (a cancelled booking's own retained charge excepted), through `OrphanedPaymentNotification::notifyIfOrphaned()`.
+- **Another payment confirmed it:** the row is `confirmed`, but its `payment_id` names a different payment (the customer switched gateway and confirmed with it), or it is stamped `payment_unresolved` (an admin pressed **Mark as paid**, which keeps this payment's id for reconciliation). The customer has then paid twice.
+
+A concurrent `confirmed` by this same payment, such as a second delivery of its webhook, is a clean no-op.
+
+A gateway that still confirms by hand must do the same: gate `ReservationConfirmed` on `transitionTo()`'s return value, `refresh()` the reservation on `false`, call `OrphanedPaymentNotification::dispatchFor()` when another payment confirmed it, and otherwise call `notifyIfOrphaned()`.
 
 > ℹ️ Earlier revisions of this step checked `EXPIRED`/`REFUNDED`/`PARTNER` by hand and called `dispatchFor()`. Since manual reservations, a `CANCELLED` row can also lose this race (the hold-lapse sweep cancels a reservation whose payment is in flight), which `notifyIfOrphaned()` covers.
 

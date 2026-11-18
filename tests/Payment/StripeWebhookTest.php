@@ -136,11 +136,17 @@ class StripeWebhookTest extends TestCase
      */
     private function expireRowOnFirstPendingRead(int $reservationId): void
     {
-        Reservation::retrieved(function (Reservation $model) use ($reservationId) {
+        $this->updateRowOnFirstPendingRead($reservationId, ['status' => ReservationStatus::EXPIRED->value]);
+    }
+
+    /** Commit $changes to the row the first time it is hydrated as PENDING, as a concurrent writer would. */
+    private function updateRowOnFirstPendingRead(int $reservationId, array $changes): void
+    {
+        Reservation::retrieved(function (Reservation $model) use ($reservationId, $changes) {
             if ((int) $model->id === $reservationId && $model->status === ReservationStatus::PENDING->value) {
                 DB::table('resrv_reservations')
                     ->where('id', $reservationId)
-                    ->update(['status' => ReservationStatus::EXPIRED->value]);
+                    ->update($changes);
             }
         });
     }
@@ -195,6 +201,85 @@ class StripeWebhookTest extends TestCase
         $this->assertEquals('expired', $reservation->fresh()->status);
         Event::assertNotDispatched(ReservationConfirmed::class);
         Mail::assertSent(OrphanedPaymentNotification::class, fn ($m) => $m->hasTo('admin@example.com'));
+    }
+
+    public function test_succeeded_webhook_that_loses_the_confirm_race_to_another_payment_notifies_orphan()
+    {
+        // The webhook finds the row PENDING, then another confirmation commits before
+        // transitionTo() locks it. A booking confirmed by another payment means this card charge
+        // is a second payment; only a concurrent delivery of the same payment is a clean no-op.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $races = [
+            // The customer switched to the offline gateway and confirmed with it.
+            'pi_lost_to_offline' => ['payment_id' => 'offline_123', 'payment_gateway' => 'offline'],
+            // An admin pressed Mark as paid: the same write keeps the intent's id but stamps it unresolved.
+            'pi_lost_to_mark_as_paid' => ['payment_unresolved' => true],
+            // Another delivery of this payment's own webhook confirmed it first.
+            'pi_lost_to_redelivery' => [],
+        ];
+
+        foreach ($races as $paymentIntentId => $changes) {
+            $reservation = Reservation::factory()->withCustomer()->create([
+                'item_id' => $this->entries->first()->id(),
+                'status' => 'pending',
+                'payment_id' => $paymentIntentId,
+                'payment_gateway' => 'stripe',
+            ]);
+
+            $this->updateRowOnFirstPendingRead($reservation->id, ['status' => ReservationStatus::CONFIRMED->value] + $changes);
+
+            $response = app(StripePaymentGateway::class)->verifyPayment($this->signedSucceededWebhookRequest($paymentIntentId, 'whsec_test', time()));
+
+            $this->assertEquals(200, $response->getStatusCode());
+            $this->assertEquals('confirmed', $reservation->fresh()->status);
+        }
+
+        Event::assertNotDispatched(ReservationConfirmed::class);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_offline' && $mail->hasTo('admin@example.com'));
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_mark_as_paid');
+        Mail::assertNotSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_redelivery');
+    }
+
+    public function test_confirm_from_gateway_saves_the_in_transaction_change_only_with_the_confirmation()
+    {
+        // PayPal-style gateways store the capture id they confirm with in the same write as
+        // CONFIRMED. A row that can no longer be confirmed must keep its old payment_id.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+
+        $gateway = new class extends FakePaymentGateway
+        {
+            public function confirm(Reservation $reservation, string $paymentId, \Closure $inTransaction): bool
+            {
+                return $this->confirmFromGateway($reservation, $paymentId, inTransaction: $inTransaction);
+            }
+        };
+        $storeCaptureId = fn (Reservation $fresh) => $fresh->payment_id = 'capture_1';
+
+        $pending = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'order_1',
+            'payment_gateway' => 'fake',
+        ]);
+
+        $this->assertTrue($gateway->confirm($pending, 'capture_1', $storeCaptureId));
+        $this->assertDatabaseHas('resrv_reservations', ['id' => $pending->id, 'status' => 'confirmed', 'payment_id' => 'capture_1']);
+
+        $expiring = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'order_2',
+            'payment_gateway' => 'fake',
+        ]);
+        $this->expireRowOnFirstPendingRead($expiring->id);
+
+        $this->assertFalse($gateway->confirm(Reservation::find($expiring->id), 'capture_2', $storeCaptureId));
+        $this->assertDatabaseHas('resrv_reservations', ['id' => $expiring->id, 'status' => 'expired', 'payment_id' => 'order_2']);
+        Event::assertDispatchedTimes(ReservationConfirmed::class, 1);
     }
 
     public function test_verify_payment_short_circuits_for_already_confirmed_reservation()

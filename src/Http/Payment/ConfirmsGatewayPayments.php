@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Http\Payment;
 
+use Closure;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
@@ -27,8 +28,12 @@ trait ConfirmsGatewayPayments
      * @param  int|string|null  $amount  What the provider charged, in minor units as Price::raw()
      *                                   gives them, or null when the provider doesn't report it.
      * @param  string|null  $eventId  The provider's event id, shown in the admin alert.
+     * @param  Closure(Reservation): void|null  $inTransaction  Runs on the locked row before the
+     *                                                          confirming save, so a change to it,
+     *                                                          such as the provider's capture id
+     *                                                          in payment_id, is saved with CONFIRMED.
      */
-    protected function confirmFromGateway(Reservation $reservation, string $paymentId, bool $stale = false, int|string|null $amount = null, ?string $eventId = null): bool
+    protected function confirmFromGateway(Reservation $reservation, string $paymentId, bool $stale = false, int|string|null $amount = null, ?string $eventId = null, ?Closure $inTransaction = null): bool
     {
         // The customer moved on (went back, switched gateway, paid another way) before this payment
         // succeeded. It no longer matches the booking's amount or gateway, and a booking confirmed
@@ -77,7 +82,7 @@ trait ConfirmsGatewayPayments
         }
 
         // Accepts PENDING (checkout) and AWAITING_PAYMENT (payment link) rows alike.
-        if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
+        if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true, inTransaction: $inTransaction)) {
             ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, [
                 'gateway' => $reservation->payment_gateway ?: $this->name(),
                 'payment_id' => $paymentId,
@@ -86,9 +91,28 @@ trait ConfirmsGatewayPayments
             return true;
         }
 
-        // Lost the confirm race: the row changed under the lock (ExpireReservations expired it, or
-        // the hold-lapse sweep cancelled it). Surface the charge if it is now orphaned.
+        // Lost the confirm race: the row changed under the lock. ExpireReservations or the
+        // hold-lapse sweep may have ended it, or another payment confirmed it.
         $reservation->refresh();
+
+        // Confirmed, but not by this payment: payment_id names another one (the customer switched
+        // gateway and paid with it), or an admin marked the booking as paid, which keeps this
+        // payment's id stamped unresolved. Either way this charge is a second payment.
+        if ($reservation->status === ReservationStatus::CONFIRMED->value
+            && ($reservation->payment_id !== $paymentId || $reservation->payment_unresolved)) {
+            Log::warning('Payment succeeded for a reservation another payment confirmed first — manual refund likely required.', [
+                'gateway' => $this->name(),
+                'reservation_id' => $reservation->id,
+                'payment_intent_id' => $paymentId,
+                'current_payment_id' => $reservation->payment_id,
+                'current_payment_gateway' => $reservation->payment_gateway,
+            ]);
+
+            OrphanedPaymentNotification::dispatchFor($reservation, $paymentId, $eventId);
+
+            return false;
+        }
+
         OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId, $eventId);
 
         return false;
