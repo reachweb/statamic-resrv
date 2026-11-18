@@ -4,7 +4,7 @@ This document provides step-by-step instructions for updating a custom payment g
 
 ## Background
 
-Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Step 14 covers what your webhook must do for admin-created (manual) reservations, which are paid from a pay-by-link page instead of the checkout. Step 15 closes a data exposure in the documented `handlePaymentPending()` body and applies to every gateway. Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
+Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Step 14 covers what your webhook must do for admin-created (manual) reservations, which are paid from a pay-by-link page instead of the checkout. Step 15 closes a data exposure in the documented `handlePaymentPending()` body and applies to every gateway. Step 4 now hands a successful payment to Resrv's `confirmFromGateway()`, which replaces the confirm and orphan-alert code that Steps 9, 10 and 14 used to have you write. Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
 
 There are two gateway types:
 - **Inline gateways** (e.g. Stripe) — render a payment form directly on the checkout page via a Blade view. `redirectsForPayment()` returns `false`.
@@ -237,46 +237,139 @@ POST https://yoursite.com/resrv/api/webhook/paypal
 POST https://yoursite.com/resrv/api/webhook/stripe
 ```
 
-The `{gateway}` segment routes the webhook to the correct gateway class. Your `verifyPayment()` method receives the raw `$request` and should:
+The `{gateway}` segment routes the webhook to the correct gateway class. Your `verifyPayment()` method receives the raw `$request`. It only talks to the provider: Resrv decides what a successful payment does to the booking. It should:
 
-1. Verify the webhook signature/authenticity
-2. Find the reservation via `payment_id`
-3. Dispatch `ReservationConfirmed` on success. Leave a failed *attempt* PENDING — a declined card is retryable, so don't cancel it or release the hold.
-4. Return a 200 response
+1. Verify the webhook signature/authenticity before acting on any reservation.
+2. Find the reservation via `payment_id`. When no reservation has it, fall back to the reservation id stored in the payment's metadata, and mark the payment stale (Step 9).
+3. Hand a payment that succeeded to `confirmFromGateway()`, from the `ConfirmsGatewayPayments` trait.
+4. Leave a failed *attempt* PENDING — a declined card is retryable, so don't cancel it or release the hold. A payment the provider cancelled ends a checkout through `$reservation->expire()`, unless it is stale.
+5. Return a 200 response.
 
 ```php
-public function verifyPayment($request)
+use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Http\Payment\ConfirmsGatewayPayments;
+
+class AcmePaymentGateway implements PaymentInterface
 {
-    // 1. Verify signature
-    $payload = $request->getContent();
-    $signature = $request->header('X-Provider-Signature');
-    if (!$this->verifySignature($payload, $signature)) {
-        abort(403);
-    }
+    use ConfirmsGatewayPayments;
 
-    // 2. Parse event and find reservation
-    $event = json_decode($payload, true);
-    $paymentId = $event['data']['payment_id'];
-    $reservation = Reservation::findByPaymentId($paymentId)->first();
+    public function verifyPayment($request)
+    {
+        // 1. Verify signature
+        $payload = $request->getContent();
+        $signature = $request->header('X-Provider-Signature');
+        if (! $this->verifySignature($payload, $signature)) {
+            abort(403);
+        }
 
-    if (!$reservation) {
+        // 2. Parse event and find reservation
+        $event = json_decode($payload, true);
+        $payment = $event['data'];
+        $reservation = Reservation::findByPaymentId($payment['id'])->first();
+
+        // The customer left this payment behind, so payment_id no longer names it (Step 9).
+        $stale = false;
+        if (! $reservation && isset($payment['metadata']['reservation_id'])) {
+            $reservation = Reservation::find($payment['metadata']['reservation_id']);
+
+            // Another site on the same provider account can have a reservation with this id.
+            if ($reservation && ($payment['metadata']['reservation_reference'] ?? null) !== $reservation->reference) {
+                $reservation = null;
+            }
+
+            $stale = (bool) $reservation;
+        }
+
+        if (! $reservation) {
+            return response()->json([], 200);
+        }
+
+        // 3. Let Resrv confirm the booking, or alert the admins when it can't.
+        if ($event['type'] === 'payment.completed') {
+            $this->confirmFromGateway(
+                $reservation,
+                $payment['id'],
+                stale: $stale,
+                amount: Price::create($payment['amount'])->raw(), // minor units; leave out if unknown
+                eventId: $event['id'] ?? null,
+            );
+        }
+
+        // 4. A failed ATTEMPT is retryable: do nothing. A cancelled payment is dead.
+        if ($event['type'] === 'payment.canceled' && ! $stale) {
+            $reservation->expire(); // no-op unless the reservation is PENDING
+        }
+
+        // 5. Respond
         return response()->json([], 200);
     }
-
-    // 3. Confirm on success. A failed ATTEMPT is retryable, so leave the reservation
-    //    PENDING; ExpireReservations reclaims the hold if the customer abandons.
-    if ($event['type'] === 'payment.completed') {
-        ReservationConfirmed::dispatch($reservation);
-    }
-
-    // 4. Respond
-    return response()->json([], 200);
 }
 ```
 
 The legacy route (`POST /resrv/api/webhook` without a gateway segment) still works and resolves to the default gateway. Existing single-gateway webhook configurations require zero changes.
 
-> ⚠️ The `ReservationConfirmed::dispatch()` call above is simplified for clarity. A production gateway that captures funds must route the confirmation through `Reservation::transitionTo(CONFIRMED, tolerant: true)` and handle a `false` return (a concurrent expiry that orphans the charge) — see **Step 10**. The bundled Stripe gateway also guards against terminal-state reservations and amount mismatches before confirming.
+### What `confirmFromGateway()` does
+
+> 📅 Added 2026-11-18. No interface change: gateways that confirm by hand, as earlier revisions of this guide taught, keep working. See *Moving an existing gateway* below.
+
+```php
+protected function confirmFromGateway(Reservation $reservation, string $paymentId, bool $stale = false, int|string|null $amount = null, ?string $eventId = null): bool
+```
+
+| Parameter | Pass |
+| --- | --- |
+| `$paymentId` | The provider's id for this payment. The admin alert names it, and the activity log records it. |
+| `$stale` | `true` when the reservation was found through the payment's metadata because its `payment_id` no longer names this payment. Pass it only for a payment you know is this site's (Step 9). |
+| `$amount` | What the provider charged, in minor units, as `Price::create($decimal)->raw()` gives them. Leave it `null` when the provider doesn't report it. |
+| `$eventId` | The provider's event id, shown in the admin alert. |
+
+It runs these checks in order, and returns `true` only when this call confirmed the reservation:
+
+1. **Stale payment:** logs a warning and emails the admins (`OrphanedPaymentNotification`) for a manual refund, and leaves the reservation untouched, whatever its status. A booking confirmed since through another payment is then paid twice, which is why this check comes before the next one.
+2. **Already confirmed:** a redelivery, so nothing happens.
+3. **Terminal reservation** (`expired`, `refunded`, `partner`, or `cancelled` unless it kept this charge on purpose): emails the admins, because the money can't attach to a live booking.
+4. **Amount mismatch:** when `$amount` differs from `payment + payment_surcharge`, emails the admins and doesn't confirm.
+5. **Confirm:** `transitionTo(CONFIRMED, tolerant: true)`, which accepts `pending` (checkout) and `awaiting_payment` (manual reservation) rows alike, then dispatches `ReservationConfirmed` with `VIA_WEBHOOK`, the gateway and the payment id.
+6. **Lost race:** if the row changed under the lock, re-reads it and emails the admins when it is now terminal (Step 10).
+
+Fixes to any of these land in Resrv, so every gateway that calls the method gets them without a release of its own.
+
+`confirmFromGateway()` reads `$this->name()` for its log lines, and for the activity log when the reservation has no stored gateway key.
+
+### Moving an existing gateway
+
+If your `verifyPayment()` was built from an earlier revision of this guide, its success branch checks for a confirmed reservation, calls `notifyIfOrphaned()`, compares the amount, calls `transitionTo()`, dispatches `ReservationConfirmed` and re-reads after a lost race. Replace all of that, and your stale-intent branch's log and `dispatchFor()`, with one call:
+
+```php
+// Before
+if ($reservation->status === ReservationStatus::CONFIRMED->value) {
+    return response()->json([], 200);
+}
+
+if ($paid) {
+    if ($isStaleIntent) { /* log, OrphanedPaymentNotification::dispatchFor(), return */ }
+    if (OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId)) { /* return */ }
+    if (/* amount differs */) { /* log, dispatchFor(), return */ }
+    if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) { /* dispatch, return */ }
+    $reservation->refresh();
+    OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId);
+}
+
+// After
+if ($paid) {
+    $this->confirmFromGateway($reservation, $paymentId, stale: $isStaleIntent, amount: $minorUnits, eventId: $eventId);
+
+    return response()->json([], 200);
+}
+
+if ($reservation->status === ReservationStatus::CONFIRMED->value) {
+    return response()->json([], 200);
+}
+```
+
+Move any early return for a confirmed reservation below the success branch, as above. Otherwise a stale payment that succeeds after the booking was confirmed another way never reaches the method, and the customer's second charge goes unreported.
+
+Keep any check the method doesn't make, such as comparing the payment's currency with `resrv-config.currency_isoCode`, before the call. If your gateway writes to the reservation in the confirming transaction (`transitionTo(..., inTransaction: ...)`), keep confirming by hand for now.
 
 ---
 
@@ -436,14 +529,17 @@ Here is a complete skeleton for a redirect-based gateway (like PayPal or Mollie)
 namespace App\Payment;
 
 use Illuminate\Support\Str;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Http\Payment\ConfirmsGatewayPayments;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Http\Payment\PendingPayment;
 use Reach\StatamicResrv\Models\Reservation;
 
 class PayPalPaymentGateway implements PaymentInterface
 {
+    use ConfirmsGatewayPayments; // confirmFromGateway(), see Step 4
+
     // --- Identity methods (new) ---
 
     public function name(): string
@@ -564,8 +660,7 @@ class PayPalPaymentGateway implements PaymentInterface
 
     public function verifyPayment($request)
     {
-        // TODO: Verify webhook signature
-        // TODO: Parse payload, find reservation, dispatch event
+        // TODO: Verify webhook signature, and fall back to the metadata for a stale payment (Steps 4 and 9)
         $payload = json_decode($request->getContent(), true);
 
         $reservation = Reservation::findByPaymentId($payload['resource']['id'])->first();
@@ -575,9 +670,13 @@ class PayPalPaymentGateway implements PaymentInterface
         }
 
         // A denied capture is a failed attempt — leave the reservation PENDING (retryable).
-        // Simplified: route the confirmation through transitionTo() as shown in Steps 10 and 14.
         if ($payload['event_type'] === 'PAYMENT.CAPTURE.COMPLETED') {
-            ReservationConfirmed::dispatch($reservation);
+            $this->confirmFromGateway(
+                $reservation,
+                $payload['resource']['id'],
+                amount: Price::create($payload['resource']['amount']['value'])->raw(),
+                eventId: $payload['id'] ?? null,
+            );
         }
 
         return response()->json([], 200);
@@ -624,14 +723,16 @@ And here is a complete skeleton for an inline gateway (like Square or Braintree)
 namespace App\Payment;
 
 use Illuminate\Support\Str;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Http\Payment\ConfirmsGatewayPayments;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
 use Reach\StatamicResrv\Http\Payment\PendingPayment;
 use Reach\StatamicResrv\Models\Reservation;
 
 class SquarePaymentGateway implements PaymentInterface
 {
+    use ConfirmsGatewayPayments; // confirmFromGateway(), see Step 4
+
     // --- Identity methods (new) ---
 
     public function name(): string
@@ -736,7 +837,7 @@ class SquarePaymentGateway implements PaymentInterface
 
     public function verifyPayment($request)
     {
-        // TODO: Verify signature, parse, find reservation, dispatch event
+        // TODO: Verify signature, find reservation, call confirmFromGateway() on success (see Step 4)
         return response()->json([], 200);
     }
 
@@ -809,7 +910,7 @@ Understanding the flow helps when debugging custom gateways.
 1. Provider sends POST to `/resrv/api/webhook/{config_key}`.
 2. `WebhookController::store()` resolves the gateway from the URL segment.
 3. Calls `verifyPayment($request)` on that gateway.
-4. Gateway verifies signature, finds reservation, and dispatches `ReservationConfirmed` on success (a failed attempt stays PENDING for retry).
+4. Gateway verifies signature, finds reservation, and on success calls `confirmFromGateway()`, which confirms the reservation and dispatches `ReservationConfirmed`, or alerts the admins when the charge can't attach to it (a failed attempt stays PENDING for retry).
 
 ### Refund flow
 
@@ -833,8 +934,8 @@ Before deploying your custom gateway:
 - [ ] `redirectsForPayment()` returns the correct boolean for your gateway type
 - [ ] `handleRedirectBack()` checks `handlePaymentPending()` first, then returns the correct status array
 - [ ] `handlePaymentPending()` returns `PendingPayment::fromRequest()` and nothing in the gateway loads a reservation from the `payment_pending` query value (see Step 15)
-- [ ] `verifyPayment()` verifies the webhook signature and dispatches `ReservationConfirmed` on success (a failed attempt stays PENDING for retry)
-- [ ] `verifyPayment()` routes the success state change through `transitionTo(CONFIRMED, tolerant: true)`, gates `ReservationConfirmed` on its return value, and re-reads on `false` to surface orphaned charges (see Step 10)
+- [ ] `verifyPayment()` verifies the webhook signature before acting on a reservation, and hands a successful payment to `confirmFromGateway()` with the charged amount and event id when the provider reports them (a failed attempt stays PENDING for retry) (see Step 4)
+- [ ] `paymentIntent()` stores `reservation_id` and `reservation_reference` in the provider's metadata, and `verifyPayment()` falls back to them, passing `stale: true` only when the reference matches (see Step 9)
 - [ ] `refund()` throws `RefundFailedException` for **every** provider failure mode — catch the SDK's base exception class, not just invalid-request errors (see Step 11)
 - [ ] `refund()` sends a stable idempotency key when the provider supports one (see Step 11)
 - [ ] `supportsAutomaticRefunds()` returns `true` only when `refund()` actually moves money through the provider's API, `false` for out-of-band collection (see Step 11)
@@ -849,7 +950,7 @@ Before deploying your custom gateway:
 - [ ] `paymentIntent()` declares the 4th `?string $returnUrl = null` parameter — the interface requires it, so a three-parameter declaration fatals at boot (see Step 12)
 - [ ] For redirect gateways: `paymentIntent()` builds the return/success URL from `$returnUrl ?? <checkout-complete entry>` with a **separator-aware** query append — `$returnUrl` may already carry `?ref=…&hash=…` (see Step 12)
 - [ ] For inline gateways: `retrievePaymentIntent()` also exposes `->client_secret` on still-payable intents, and the Blade view returns the customer to `$wire.checkoutCompletedUrl` (see Steps 6 and 13)
-- [ ] `verifyPayment()` confirms `awaiting_payment` reservations as well as `pending` ones — no status pre-check that only accepts `pending`, and a cancelled/failed intent never cancels an awaiting-payment reservation (see Step 14)
+- [ ] `verifyPayment()` has no status pre-check that only accepts `pending` in front of `confirmFromGateway()`, which confirms `awaiting_payment` reservations too, and a cancelled/failed intent never cancels an awaiting-payment reservation (see Step 14)
 - [ ] Online gateways return `true` from `supportsWebhooks()` if they should be offered for manual reservations (see Step 14)
 
 ---
@@ -902,7 +1003,7 @@ Key points:
 
 ### Recommended: Handle stale-intent races in verifyPayment()
 
-Because Resrv clears `payment_id` *before* calling `cancelPaymentIntent()`, a webhook that arrives after the cancellation request was issued (but before the provider actually applied it) can no longer find the reservation via `findByPaymentId`. The bundled Stripe gateway handles this by stashing `reservation_id` in the intent metadata when the intent is created, then falling back to it in `verifyPayment()`:
+Because Resrv clears `payment_id` *before* calling `cancelPaymentIntent()`, a webhook that arrives after the cancellation request was issued (but before the provider actually applied it) can no longer find the reservation via `findByPaymentId`. Store the reservation's id and reference in the provider's metadata when you create the intent, so `verifyPayment()` can fall back to them:
 
 ```php
 public function paymentIntent($amount, Reservation $reservation, $data, ?string $returnUrl = null)
@@ -910,68 +1011,21 @@ public function paymentIntent($amount, Reservation $reservation, $data, ?string 
     return YourProvider::createIntent([
         'amount' => $amount->raw(),
         'metadata' => [
-            'reservation_id' => $reservation->id, // <-- critical for the stale-intent fallback below
+            'reservation_id' => $reservation->id,               // <-- finds the reservation
+            'reservation_reference' => $reservation->reference, // <-- proves it is this site's
         ],
         // ...
     ]);
 }
-
-public function verifyPayment($request)
-{
-    $payload = json_decode($request->getContent(), true);
-    $data = $payload['data']['object'];
-
-    $reservation = Reservation::findByPaymentId($data['id'])->first();
-
-    // Stale-intent fallback: payment_id was cleared by Checkout::cancelActiveIntent before
-    // the provider's cancellation took effect. Use the metadata stashed at creation time
-    // so the charge isn't lost.
-    $isStaleIntent = false;
-    if (! $reservation && isset($data['metadata']['reservation_id'])) {
-        $reservation = Reservation::find($data['metadata']['reservation_id']);
-        $isStaleIntent = (bool) $reservation;
-    }
-
-    if (! $reservation) {
-        return response()->json([], 200);
-    }
-
-    // ... signature verification, etc ...
-
-    if ($eventType === 'succeeded') {
-        if ($isStaleIntent) {
-            // The customer moved on (refresh, back, gateway switch, coupon change) before
-            // this webhook arrived. The charge exists at the provider but no longer matches
-            // the reservation's current state — confirming it would send emails / decrease
-            // inventory against an amount or gateway the reservation is no longer tied to.
-            // Log for manual reconciliation and DO NOT dispatch ReservationConfirmed.
-            Log::warning('Payment intent succeeded after being abandoned by the customer — manual reconciliation may be required.', [
-                'reservation_id' => $reservation->id,
-                'payment_intent_id' => $data['id'],
-                'current_payment_id' => $reservation->payment_id,
-                'current_payment_gateway' => $reservation->payment_gateway,
-            ]);
-
-            return response()->json([], 200);
-        }
-
-        ReservationConfirmed::dispatch($reservation);
-    }
-
-    // A failed ATTEMPT is retryable: do nothing, leaving the reservation PENDING so the customer
-    // can retry the same intent (ExpireReservations reclaims the hold if abandoned).
-
-    if ($eventType === 'canceled' && ! $isStaleIntent) {
-        // A genuinely-canceled intent is dead — expire (EXPIRED, not REFUNDED: no money moved).
-        // Stale intents were cancelled by us, so skip them. expire() no-ops if not PENDING.
-        $reservation->expire();
-    }
-
-    return response()->json([], 200);
-}
 ```
 
-The "log and ignore stale success" policy is intentional. It guarantees that Resrv never confirms a reservation against an amount or gateway the customer has since walked away from — at the cost of requiring you to manually reconcile the orphan charge at the provider. Resrv ships this trade-off for Stripe; you should adopt the same trade-off for any provider that supports asynchronous confirmation.
+`verifyPayment()` then finds the reservation through the metadata and passes `stale: true` to `confirmFromGateway()`, exactly as the Step 4 example does. Check the reference: if several sites share one provider account and the provider sends every site every event, another site's reservation can have the same id. Treat a reference that doesn't match as not found.
+
+If earlier releases of your gateway stored only `reservation_id`, the payments they created carry no reference. The bundled Stripe gateway still matches those on the id. It doesn't pass them to `confirmFromGateway()` when the booking is already confirmed, because such a payment is more likely another site's customer paying than a second charge.
+
+For a stale payment that succeeded, `confirmFromGateway()` logs it, emails the admins (`OrphanedPaymentNotification`) and leaves the reservation alone, even when it is confirmed: the customer moved on (refresh, back, gateway switch, coupon change, or another payment), so the charge no longer matches the reservation's amount or gateway. For a stale payment that failed or was cancelled, do nothing: you cancelled it yourself, and expiring the reservation would end the checkout the customer moved on to.
+
+The "alert and never confirm a stale success" policy is intentional. It guarantees that Resrv never confirms a reservation against an amount or gateway the customer has since walked away from — at the cost of requiring you to manually reconcile the orphan charge at the provider. Resrv ships this trade-off for Stripe; you should adopt the same trade-off for any provider that supports asynchronous confirmation.
 
 ### Reference: PayPal / redirect gateway skeleton
 
@@ -1037,36 +1091,15 @@ The cancellation path runs whenever `payment_id` is non-empty — it is **not** 
 
 Step 9's stale-intent fallback handles a charge whose `payment_id` was already cleared. A second, subtler race remains even for a *live* intent: `ExpireReservations` runs on every availability search, and it can flip a still-`PENDING` reservation to `EXPIRED` in the window between your webhook's in-memory pre-checks and the moment it actually writes the confirmation.
 
-Resrv's reservation state changes go through `Reservation::transitionTo()`, which re-reads the row under a `lockForUpdate` and — when called with `tolerant: true` — returns `false` (instead of throwing) if the row moved to an incompatible state under the lock. Your webhook's success path should go through this method and **gate `ReservationConfirmed` on its return value** (this replaces the bare `ReservationConfirmed::dispatch()` shown in the simplified examples in Steps 4 and 9):
+Resrv's reservation state changes go through `Reservation::transitionTo()`, which re-reads the row under a `lockForUpdate` and — when called with `tolerant: true` — returns `false` (instead of throwing) if the row moved to an incompatible state under the lock. A `false` here means the customer was already charged, but the hold is gone. Returning `200` and stopping would leave nobody told: the provider will not retry.
 
-```php
-if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
-    ReservationConfirmed::dispatch($reservation);
+`confirmFromGateway()` (Step 4) handles this race for you: it confirms through `transitionTo(CONFIRMED, tolerant: true)`, dispatches `ReservationConfirmed` only when that returns `true`, and otherwise re-reads the row and calls `OrphanedPaymentNotification::notifyIfOrphaned()`. That emails the admins when the row is now `expired`, `refunded`, `cancelled` or `partner` (a cancelled booking's own retained charge excepted), and dedupes on (reservation, payment) so provider retries don't spam them. A concurrent `confirmed` is a clean no-op.
 
-    return response()->json([], 200);
-}
-```
+A gateway that still confirms by hand must do the same three things: gate `ReservationConfirmed` on `transitionTo()`'s return value, `refresh()` the reservation on `false`, and call `notifyIfOrphaned()`.
 
-If you stop there, a `false` return is treated as a clean no-op and you still return `200` — but the customer was already charged. The provider will not retry, the hold has been released, and nobody is told. **Re-read the row on `false` and surface a terminal state as an orphaned charge:**
+> ℹ️ Earlier revisions of this step checked `EXPIRED`/`REFUNDED`/`PARTNER` by hand and called `dispatchFor()`. Since manual reservations, a `CANCELLED` row can also lose this race (the hold-lapse sweep cancels a reservation whose payment is in flight), which `notifyIfOrphaned()` covers.
 
-```php
-// The transition was skipped because the row changed under the lock after the pre-checks
-// (e.g. ExpireReservations expired it, or the hold-lapse sweep cancelled a manual reservation).
-// A concurrent CONFIRMED is a clean no-op, but a terminal state means the captured charge is
-// now orphaned — surface it for manual refund.
-$reservation->refresh();
-
-// Logs and notifies admins when the row is EXPIRED, REFUNDED, CANCELLED or PARTNER (a cancelled
-// booking's own retained charge excepted). Safe to call from any gateway; it dedupes on
-// (reservation, payment intent) so provider retries don't spam admins.
-\Reach\StatamicResrv\Mail\OrphanedPaymentNotification::notifyIfOrphaned($reservation, $data['id'], $event->id ?? null);
-
-return response()->json([], 200);
-```
-
-> ℹ️ Earlier revisions of this step checked `EXPIRED`/`REFUNDED`/`PARTNER` by hand and called `dispatchFor()`. Since manual reservations, a `CANCELLED` row can also lose this race (the hold-lapse sweep cancels a reservation whose payment is in flight), so call `notifyIfOrphaned()`, which covers all four statuses.
-
-This is the same trade-off as Step 9's stale-success policy: return `200` so the provider stops retrying, and rely on a logged/notified orphan for manual reconciliation rather than confirming a reservation whose hold is gone. The bundled `StripePaymentGateway` and `FakePaymentGateway` both do exactly this, and Resrv's webhook regression tests cover the race.
+This is the same trade-off as Step 9's stale-success policy: return `200` so the provider stops retrying, and rely on a logged/notified orphan for manual reconciliation rather than confirming a reservation whose hold is gone. Resrv's webhook regression tests cover the race through the bundled gateways.
 
 > **Manual-confirmation gateways** (`supportsManualConfirmation() === true`, e.g. offline/bank-transfer) confirm through Resrv's built-in `CheckoutPayment::confirmPayment()`, which already performs this re-read and shows the customer an "expired" error instead of a false success page. You do **not** need to add anything for that path — it lives in Resrv core, not your gateway.
 
@@ -1328,7 +1361,7 @@ Rules that keep this money-safe:
 - **`->expires_at` never permits a replacement.** Only `canceled` or `null` does. Once the order has expired, your `retrievePaymentIntent()` must report `canceled` itself, as above. An `->expires_at` in the past on an intent you still report payable is ignored, and the customer gets the generic error.
 - **Use the provider's real cut-off.** The timeout must be the point after which the bank can no longer accept a payment for that order, not the point where its page looks idle. If the provider enforces an expiry itself — a lifetime or timestamp it validates on the posted order, or a status query that reports the order closed — derive both `->expires_at` and `canceled` from that instead of from `sent_at`.
 - **Elapsed time proves an order dead only if you bound how late it can reach the bank.** `sent_at` is when you served the posting page; the bank's timer starts when it receives the order. In between, the form sits in the customer's browser: a suspended mobile tab or a stalled request can deliver it minutes later, and until it is delivered there is no bank timer at all. No fixed margin covers a gap you have not bounded. So serve the posting form once per order, with `Cache-Control: no-store`, make it submit itself on load with no manual submit button, and have it refuse to post after a short deadline. `ORDER_DEAD_AFTER_MINUTES` is then that deadline plus the bank's timeout plus a margin. The sample reports `canceled` at the same moment the customer is told to retry, so all three have to be inside that one value. If you are unsure, choose the longer value: too long makes a customer wait, too short allows a double charge.
-- **A deadline that runs in the browser is not a guarantee.** A form that still reaches the bank after you reported `canceled` opens a payable order beside its replacement. A payment on it arrives on a superseded `payment_id`: catch it with the stale-intent fallback in Step 9, which logs it instead of confirming the reservation, and refund or reconcile it by hand.
+- **A deadline that runs in the browser is not a guarantee.** A form that still reaches the bank after you reported `canceled` opens a payable order beside its replacement. A payment on it arrives on a superseded `payment_id`: catch it with the stale-intent fallback in Step 9, which alerts the admins instead of confirming the reservation, and refund or reconcile it by hand.
 - **Seconds or a date object, nothing else.** A Unix timestamp may be an integer, a float or a numeric string. A formatted date string is not read, and a value more than a year ahead is treated as a unit mistake (milliseconds, for example). Both are ignored, and the customer gets the generic error.
 - **Don't throw from `cancelPaymentIntent()` for an order you cannot void.** Return quietly, as Step 9 asks. If it does throw while the order reports an `->expires_at`, the customer still sees the notice and Resrv logs the exception as a warning.
 - **Leave `->redirectTo` off** while the order cannot be re-posted. With it, Resrv resumes the order instead.
@@ -1389,10 +1422,10 @@ Control Panel users can now create reservations for customers. Unless the bookin
 
 ### What `verifyPayment()` must do
 
-- **Don't pre-filter on `pending`.** Look the reservation up by `payment_id` as usual and confirm through `transitionTo(ReservationStatus::CONFIRMED, tolerant: true)` (Step 10). It accepts both `pending` and `awaiting_payment` rows and returns `false` for anything else, so gate `ReservationConfirmed` on its return value and drop any `status === 'pending'` check in front of it.
-- **Dispatch with the webhook facts** so the activity log records how the booking was confirmed: `ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, ['gateway' => $reservation->payment_gateway, 'payment_id' => $intentId])`.
+- **Don't pre-filter on `pending`.** Look the reservation up by `payment_id` as usual and hand a successful payment to `confirmFromGateway()` (Step 4). It confirms `pending` and `awaiting_payment` rows alike, so drop any `status === 'pending'` check in front of it.
+- **The activity log records the webhook.** `confirmFromGateway()` dispatches `ReservationConfirmed` with `VIA_WEBHOOK`, the gateway and the payment id, so the log shows how the booking was confirmed. A gateway that confirms by hand must pass the same: `ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, ['gateway' => $reservation->payment_gateway, 'payment_id' => $intentId])`.
 - **Don't end an awaiting-payment reservation on a failed or cancelled intent.** The customer can retry from the same link, and an admin can cancel the booking. `$reservation->expire()` already no-ops on anything but `pending`; don't call any other transition from those events.
-- **Surface late payments.** If the hold lapsed and `resrv:cancel-lapsed-holds` cancelled the reservation while the payment was in flight, the row is `cancelled` when your webhook arrives. Use the Step 10 re-read with `notifyIfOrphaned()`, which treats `cancelled` as terminal.
+- **Late payments are surfaced.** If the hold lapsed and `resrv:cancel-lapsed-holds` cancelled the reservation while the payment was in flight, the row is `cancelled` when your webhook arrives. `confirmFromGateway()` treats `cancelled` as terminal and emails the admins (Step 10).
 
 ### `supportsWebhooks()` gates manual reservations
 
