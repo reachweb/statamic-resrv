@@ -982,6 +982,7 @@ class CheckoutTest extends TestCase
         $this->assertEquals('80.00', $fresh->price->format());
         $this->assertEquals('119.30', $fresh->total->format());
         $this->assertEquals('119.30', $fresh->payment->format());
+        $this->assertSidebarTotalIsTheCharge($component);
 
         // Every add-on dropped, then the coupon removed.
         $component->dispatch('extras-updated', []);
@@ -992,6 +993,7 @@ class CheckoutTest extends TestCase
         $fresh = $this->reservation->fresh();
         $this->assertEquals('139.30', $fresh->total->format());
         $this->assertEquals('139.30', $fresh->payment->format());
+        $this->assertSidebarTotalIsTheCharge($component);
     }
 
     // Going back to step 1 and deselecting everything must unbook it, not only drop it from the total.
@@ -1079,9 +1081,10 @@ class CheckoutTest extends TestCase
         $this->assertMatchesRegularExpression('/\(x2\)[^€]*€ 18\.60/', $component->html());
     }
 
-    // An extra unpublished after step 1 stays booked, and charged, until the customer goes back. A
-    // coupon change re-prices it, so the sidebar must show that line, not the one it held before.
-    public function test_the_sidebar_shows_what_a_coupon_charges_for_an_extra_unpublished_after_step_one()
+    // Add-ons booked at step 1 stay booked, and charged, until the customer goes back, even an extra
+    // unpublished since. A coupon change prices them again, the option at its new catalog price, so
+    // the sidebar must show those lines, not the ones it held before.
+    public function test_the_sidebar_shows_what_a_coupon_charges_for_add_ons_changed_after_step_one()
     {
         Config::set('resrv-config.payment', 'everything');
 
@@ -1095,16 +1098,19 @@ class CheckoutTest extends TestCase
 
         $component = Livewire::test(Checkout::class)
             ->dispatch('extras-updated', [$this->extra->id => $this->extraPayload(['quantity' => 2])])
+            ->dispatch('options-updated', [$this->options->id => $this->optionPayload()])
             ->call('handleFirstStep')
             ->assertSet('step', 2);
 
         ResrvExtra::whereKey($this->extra->id)->update(['published' => false]);
+        $this->options->values->first()->update(['price' => '50.00']);
 
         session(['resrv_coupon' => '20OFF']);
         $component->dispatch('coupon-applied', '20OFF');
 
-        $charged = $this->reservation->fresh()->payment->format();
-        $this->assertMatchesRegularExpression('/dusk="payment-total">\s*€ '.preg_quote($charged).'\s*</', $component->html());
+        // 80 for the stay + 3.72 × 2 nights × 2 units + the option at 50.
+        $this->assertEquals('144.88', $this->reservation->fresh()->payment->format());
+        $this->assertSidebarTotalIsTheCharge($component);
     }
 
     // At step 1 the Extras component re-prices the selection for a coupon, from the reservation. A
@@ -1226,6 +1232,13 @@ class CheckoutTest extends TestCase
         ]);
 
         return $dynamic;
+    }
+
+    private function assertSidebarTotalIsTheCharge($component): void
+    {
+        $charged = $this->reservation->fresh()->payment->format();
+
+        $this->assertMatchesRegularExpression('/dusk="payment-total">\s*€ '.preg_quote($charged).'\s*</', $component->html());
     }
 
     private function extraPayload(array $override = []): array

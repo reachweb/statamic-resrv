@@ -26,6 +26,8 @@ use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
+use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 
@@ -753,21 +755,28 @@ class Checkout extends Component
             }
 
             // A coupon can change the extras' prices too: re-price the booked ones, which the total below
-            // charges. At step 1 the Extras component re-prices the selection; past it, nothing does, so
-            // the sidebar shows the booked lines, including one no longer selectable but still charged.
+            // charges. At step 1 the Extras component re-prices the selection.
             $this->reservation->repriceBookedExtras();
 
+            // Past step 1 nothing re-prices the selection, and it can differ from what is booked (another
+            // tab booked other add-ons, or the browser sent another selection). The sidebar lists the
+            // booked add-ons instead, priced as bookedAddonsTotal() charges them below.
             if ($this->step > 1) {
-                $booked = $this->reservation->extras()->get()->keyBy('id');
+                $this->enabledExtras->extras = $this->reservation->extras()->get()->mapWithKeys(fn (Extra $extra) => [$extra->id => [
+                    'id' => $extra->id,
+                    'name' => $extra->override_label ?? $extra->name,
+                    'quantity' => (int) $extra->pivot->quantity,
+                    'price' => Price::create($extra->pivot->price)->format(),
+                    'total' => $extra->priceFromPivot(),
+                ]]);
 
-                $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($booked) {
-                    if ($model = $booked->get($extra['id'])) {
-                        $extra['price'] = Price::create($model->pivot->price)->format();
-                        $extra['total'] = $model->priceFromPivot();
-                    }
-
-                    return $extra;
-                });
+                $this->enabledOptions->options = $this->reservation->optionsForEmail()->mapWithKeys(fn (Option $option) => [$option->id => [
+                    'id' => $option->id,
+                    'value' => (int) $option->pivot->value,
+                    'price' => $this->reservation->bookedOptionPrice($option)->format(),
+                    'optionName' => $option->name,
+                    'valueName' => $option->values->firstWhere('id', $option->pivot->value)?->name,
+                ]]);
             }
 
             // Recompute price, total and payment, then persist in one update so a concurrent

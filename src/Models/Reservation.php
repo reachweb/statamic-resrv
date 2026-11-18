@@ -1106,9 +1106,19 @@ class Reservation extends Model
         }
 
         foreach ($this->options()->get() as $option) {
-            foreach ($this->addonPricingData() as $data) {
-                $total->add($option->calculatePrice($data, $option->pivot->value));
-            }
+            $total->add($this->bookedOptionPrice($option));
+        }
+
+        return $total;
+    }
+
+    /** What a booked option, loaded with its pivot, adds for this reservation's stays. */
+    public function bookedOptionPrice(Option $option): PriceClass
+    {
+        $total = Price::create(0);
+
+        foreach ($this->addonPricingData() as $data) {
+            $total->add($option->calculatePrice($data, $option->pivot->value));
         }
 
         return $total;
