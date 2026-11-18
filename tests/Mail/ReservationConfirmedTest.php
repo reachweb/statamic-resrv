@@ -117,6 +117,7 @@ class ReservationConfirmedTest extends TestCase
         // What the customer must transfer: the payment plus the gateway's surcharge.
         $this->assertMatchesRegularExpression('/Amount due<\/td>\s*<td[^>]*>[^<]*32\.50/', $html);
         $this->assertStringNotContainsString('Amount already paid', $html);
+        $this->assertStringNotContainsString('Total charged', $html);
         $this->assertStringContainsString("Bank: ACME &lt;b&gt;Ltd&lt;/b&gt;<br>\nΔικαιούχος: Ευχαριστούμε ΑΕ<br>\nIBAN: GR12 3456", $html);
         $this->assertStringContainsString('Please include the booking reference '.$checkout->reference.' with your payment.', $html);
 
@@ -127,5 +128,32 @@ class ReservationConfirmedTest extends TestCase
 
         $this->assertStringContainsString('Amount already paid', $html);
         $this->assertStringNotContainsString('IBAN: GR12 3456', $html);
+    }
+
+    // In everything mode, or on a non-refundable rate, the payment is the whole total, so the
+    // deposit rows are hidden. The customer still owes it all, and the gateway charged nothing.
+    public function test_an_offline_checkout_paying_the_whole_total_shows_the_amount_due()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $reservation = Reservation::factory([
+            'item_id' => $this->makeStatamicItem()->id(),
+            'status' => 'confirmed',
+            'payment' => '90.00',
+            'total' => '90.00',
+            'payment_gateway' => 'offline',
+            'payment_id' => 'offline_abc',
+            'payment_surcharge' => '2.50',
+        ])->withCustomer()->create();
+
+        $html = (new ReservationConfirmed($reservation))->render();
+
+        $this->assertMatchesRegularExpression('/Amount due<\/td>\s*<td[^>]*>[^<]*92\.50/', $html);
+        $this->assertStringNotContainsString('Total charged', $html);
+        $this->assertStringNotContainsString('Remaining amount', $html);
     }
 }
