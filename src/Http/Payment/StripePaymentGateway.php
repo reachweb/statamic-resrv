@@ -59,7 +59,12 @@ class StripePaymentGateway implements PaymentInterface
         $paymentIntent = $stripe->paymentIntents->create([
             'amount' => $payment->raw(),
             'currency' => Str::lower(config('resrv-config.currency_isoCode')),
-            'metadata' => array_merge(['reservation_id' => $reservation->id], $this->filterCustomerData($data)),
+            // Merged last so a checkout field of the same name can't replace them; verifyPayment()
+            // finds a stale intent's reservation by both.
+            'metadata' => array_merge($this->filterCustomerData($data), [
+                'reservation_id' => $reservation->id,
+                'reservation_reference' => $reservation->reference,
+            ]),
             'automatic_payment_methods' => [
                 'enabled' => true,
             ],
@@ -187,10 +192,11 @@ class StripePaymentGateway implements PaymentInterface
     {
         // Stripe caps metadata at 50 keys with keys ≤ 40 and values ≤ 500 characters. The customer
         // payload is free-text from the checkout form, so clamp it to those limits — the caller merges
-        // reservation_id in separately, so cap at 49 — to avoid an InvalidRequestException on create().
+        // reservation_id and reservation_reference in separately, so cap at 48 — to avoid an
+        // InvalidRequestException on create().
         return collect($data)
             ->filter(fn ($value, $key) => is_string($value) && mb_strlen((string) $key) <= 40)
-            ->take(49)
+            ->take(48)
             ->map(fn ($value) => mb_substr($value, 0, 500))
             ->toArray();
     }
@@ -304,10 +310,18 @@ class StripePaymentGateway implements PaymentInterface
         $reservation = Reservation::findByPaymentId($data['id'])->first();
 
         // Checkout::cancelActiveIntent clears payment_id, so fall back to metadata reservation_id
-        // for a racing .succeeded webhook.
+        // for a racing .succeeded webhook. Every endpoint on a Stripe account receives every event,
+        // and another site's reservation can share the id, so the reference must match as well.
+        // Intents created before the reference was stored match on the id alone.
         $isStaleIntent = false;
         if (! $reservation && isset($data['metadata']['reservation_id'])) {
             $reservation = Reservation::find($data['metadata']['reservation_id']);
+            $reference = $data['metadata']['reservation_reference'] ?? null;
+
+            if ($reservation && $reference !== null && $reference !== $reservation->reference) {
+                $reservation = null;
+            }
+
             $isStaleIntent = (bool) $reservation;
         }
 
@@ -354,26 +368,27 @@ class StripePaymentGateway implements PaymentInterface
         // reservation state, so an unsigned request can't probe status before verification.
         $data = $event->data->object;
 
+        // Stale intent: the customer moved on and this charge is now orphaned. Notify admins for
+        // manual refund; leave the reservation untouched. Checked before the confirmed
+        // short-circuit: a booking confirmed through another payment makes this a second charge.
+        if ($isStaleIntent && $event->type === 'payment_intent.succeeded') {
+            Log::warning('Stripe payment intent succeeded after being abandoned by the customer — manual reconciliation may be required.', [
+                'reservation_id' => $reservation->id,
+                'payment_intent_id' => $data['id'],
+                'current_payment_id' => $reservation->payment_id,
+                'current_payment_gateway' => $reservation->payment_gateway,
+            ]);
+
+            OrphanedPaymentNotification::dispatchFor($reservation, $data['id'], $event->id ?? null);
+
+            return response()->json([], 200);
+        }
+
         if ($reservation->status === ReservationStatus::CONFIRMED->value) {
             return response()->json([], 200);
         }
 
         if ($event->type === 'payment_intent.succeeded') {
-            // Stale intent: the customer moved on and this charge is now orphaned. Notify
-            // admins for manual refund; leave the reservation untouched.
-            if ($isStaleIntent) {
-                Log::warning('Stripe payment intent succeeded after being abandoned by the customer — manual reconciliation may be required.', [
-                    'reservation_id' => $reservation->id,
-                    'payment_intent_id' => $data['id'],
-                    'current_payment_id' => $reservation->payment_id,
-                    'current_payment_gateway' => $reservation->payment_gateway,
-                ]);
-
-                OrphanedPaymentNotification::dispatchFor($reservation, $data['id'], $event->id ?? null);
-
-                return response()->json([], 200);
-            }
-
             // Terminal reservation: the charge can't attach to a live booking, so notify and stop.
             if (OrphanedPaymentNotification::notifyIfOrphaned($reservation, $data['id'], $event->id ?? null)) {
                 return response()->json([], 200);

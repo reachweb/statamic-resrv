@@ -221,6 +221,62 @@ class StripeWebhookTest extends TestCase
         Event::assertNotDispatched(ReservationConfirmed::class);
     }
 
+    public function test_abandoned_intent_succeeding_after_the_booking_was_confirmed_another_way_notifies_orphan()
+    {
+        // The customer switched away from Stripe (the cancel of pi_abandoned failed quietly) and
+        // confirmed with another payment, so payment_id no longer names this intent. Its later
+        // success is a second charge and must reach the admins, confirmed booking or not.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'offline_current',
+            'payment_gateway' => 'offline',
+        ]);
+
+        $request = $this->signedWebhookRequest('payment_intent.succeeded', 'pi_abandoned', 'whsec_test', time(), [
+            'metadata' => ['reservation_id' => (string) $reservation->id, 'reservation_reference' => $reservation->reference],
+        ]);
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $reservation->id,
+            'status' => 'confirmed',
+            'payment_id' => 'offline_current',
+        ]);
+        Event::assertNotDispatched(ReservationConfirmed::class);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->hasTo('admin@example.com'));
+    }
+
+    public function test_another_sites_intent_with_the_same_reservation_id_is_not_an_orphan_here()
+    {
+        // Every endpoint on a Stripe account receives every event, signed for that endpoint. A
+        // second site's reservation can share this id, so only a matching reference ties it here.
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'pi_ours',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $request = $this->signedWebhookRequest('payment_intent.succeeded', 'pi_other_site', 'whsec_test', time(), [
+            'metadata' => ['reservation_id' => (string) $reservation->id, 'reservation_reference' => 'OTHER1'],
+        ]);
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($request);
+
+        $this->assertEquals(200, $response->getStatusCode());
+        Mail::assertNotSent(OrphanedPaymentNotification::class);
+    }
+
     public function test_unhandled_stripe_event_type_returns_a_200_response_without_acting_on_the_reservation()
     {
         Event::fake([ReservationConfirmed::class]);

@@ -3,6 +3,7 @@
 namespace Reach\StatamicResrv\Tests\Payment;
 
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
+use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\StripePaymentGateway;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -45,8 +46,39 @@ class StripePaymentGatewayTest extends TestCase
             $input['field_'.$i] = 'value';
         }
 
-        // ≤ 49 leaves room for the reservation_id the caller merges in (Stripe allows 50 keys total).
-        $this->assertLessThanOrEqual(49, count($this->filterCustomerData($input)));
+        // ≤ 48 leaves room for the reservation_id and reservation_reference the caller merges in
+        // (Stripe allows 50 keys total).
+        $this->assertLessThanOrEqual(48, count($this->filterCustomerData($input)));
+    }
+
+    public function test_payment_intent_metadata_identifies_the_reservation_over_same_named_form_fields()
+    {
+        $paymentIntents = new class
+        {
+            public array $params = [];
+
+            public function create($params = null, $opts = null)
+            {
+                $this->params = $params;
+
+                return (object) ['id' => 'pi_new', 'client_secret' => 'pi_new_secret'];
+            }
+        };
+
+        $reservation = new Reservation;
+        $reservation->id = 42;
+        $reservation->reference = 'ABC123';
+
+        $this->gatewayUsingPaymentIntents($paymentIntents)->paymentIntent(Price::create('10.00'), $reservation, collect([
+            'first_name' => 'John',
+            'reservation_id' => '7',
+            'reservation_reference' => 'FORGED',
+        ]));
+
+        // The webhook's stale-intent fallback finds the reservation by both keys.
+        $this->assertSame(42, $paymentIntents->params['metadata']['reservation_id']);
+        $this->assertSame('ABC123', $paymentIntents->params['metadata']['reservation_reference']);
+        $this->assertSame('John', $paymentIntents->params['metadata']['first_name']);
     }
 
     public function test_refund_reconciles_an_already_refunded_charge_to_the_existing_refund()
