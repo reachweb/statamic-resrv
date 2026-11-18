@@ -515,7 +515,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         // The money arrived out of band — the kept intent is a reconciliation handle, not the collected charge.
         $this->assertTrue($reservation->payment_unresolved);
 
-        // The retained intent is still payable and the webhook no-ops on CONFIRMED, so admins must be notified now.
+        // The retained intent is still payable, so admins must be told now to cancel it.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
             return $mail->hasTo('admin@example.com')
                 && $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_STILL_PAYABLE
@@ -1294,6 +1294,98 @@ class AwaitingPaymentTransitionsTest extends TestCase
         // The money that landed must go back through the gateway, not be left on a REFUNDED row.
         $this->assertCount(1, $gateway->refundCalls);
         $this->assertSame('refunded', $reservation->fresh()->status);
+    }
+
+    public function test_a_payment_completing_after_mark_as_paid_alerts_despite_the_earlier_open_intent_warning()
+    {
+        Mail::fake();
+        Event::fake([ReservationConfirmedEvent::class]);
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelSucceeds = false;
+
+        $markedAsPaid = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_paid_after_mark_as_paid',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $markedAsPaid->id]))->assertOk();
+
+        Mail::assertSent(OrphanedPaymentNotification::class, 1);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->context === OrphanedPaymentNotification::CONTEXT_OUT_OF_BAND_STILL_PAYABLE);
+
+        // The customer then completes the intent the admin couldn't void, so the booking is paid
+        // twice. The warning that the intent was still open must not count as reporting that.
+        $paid = fn () => app(StripePaymentGateway::class)
+            ->verifyPayment($this->signedWebhookRequest('payment_intent.succeeded', 'pi_paid_after_mark_as_paid', ['amount_received' => 5000]));
+
+        $paid();
+
+        $this->assertSame('confirmed', $markedAsPaid->fresh()->status);
+        Mail::assertSent(OrphanedPaymentNotification::class, 2);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->hasTo('admin@example.com')
+            && $mail->paymentIntentId === 'pi_paid_after_mark_as_paid'
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT);
+
+        // A redelivery of that webhook is still reported only once.
+        $paid();
+
+        Mail::assertSent(OrphanedPaymentNotification::class, 2);
+
+        // A redelivery of the payment that did confirm a booking stays silent.
+        $paidOnline = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'pi_confirmed_by_webhook',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+        $confirmedByWebhook = fn () => app(StripePaymentGateway::class)
+            ->verifyPayment($this->signedWebhookRequest('payment_intent.succeeded', 'pi_confirmed_by_webhook', ['amount_received' => 5000]));
+
+        $confirmedByWebhook();
+        $confirmedByWebhook();
+
+        $this->assertSame('confirmed', $paidOnline->fresh()->status);
+        Mail::assertSent(OrphanedPaymentNotification::class, 2);
+        // Once by the CP confirm and once by the webhook, never by a redelivery or the late payment.
+        Event::assertDispatchedTimes(ReservationConfirmedEvent::class, 2);
+    }
+
+    public function test_a_fake_gateway_payment_completing_after_mark_as_paid_alerts()
+    {
+        // The Fake gateway runs confirmFromGateway() before its confirmed no-op, as Stripe does,
+        // so it reports the same paid-twice case.
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'fake_paid_after_mark_as_paid',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))->assertOk();
+
+        $paid = fn () => $this->post(route('resrv.webhook.gateway.store', ['gateway' => 'fake', 'reservation_id' => $reservation->id, 'status' => 'success']))
+            ->assertOk();
+
+        $paid();
+        $paid();
+
+        $this->assertSame('confirmed', $reservation->fresh()->status);
+        Mail::assertSent(OrphanedPaymentNotification::class, 2);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->hasTo('admin@example.com')
+            && $mail->paymentIntentId === 'fake_paid_after_mark_as_paid'
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT);
     }
 
     public function test_a_payment_landing_on_a_refunded_booking_alerts_despite_the_earlier_open_intent_warning()

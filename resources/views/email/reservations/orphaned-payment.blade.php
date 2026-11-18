@@ -1,11 +1,13 @@
 @component('mail::message')
 
-@if ($context === 'out_of_band_duplicate')
+@if ($context === 'confirmed_by_another_payment')
+{{ __("A successful payment arrived for a reservation that another payment had already confirmed: the customer switched payment method and paid with it, or the booking was marked as paid out of band. The customer may have paid twice.") }}
+@elseif ($context === 'out_of_band_duplicate')
 {{ __("A reservation was confirmed as paid out of band (in person / by bank transfer) while its online payment intent had already captured — or was still capturing — money at the gateway. The customer may have paid twice: once out of band and once online.") }}
 @elseif ($context === 'out_of_band_still_payable')
-{{ __("A reservation was confirmed as paid out of band (in person / by bank transfer), but its open online payment intent could not be cancelled at the gateway and can still collect payment. If the customer completes that payment, the booking will be paid twice — and no further alert will be sent.") }}
+{{ __("A reservation was confirmed as paid out of band (in person / by bank transfer), but its open online payment intent could not be cancelled at the gateway and can still collect payment. If the customer completes that payment, the booking will be paid twice.") }}
 @elseif ($context === 'out_of_band_unverified')
-{{ __("A reservation was confirmed as paid out of band (in person / by bank transfer), but its online payment intent could not be verified at the gateway. It may have already collected a payment, or may still be able to collect one — if it does, the booking will be paid twice and no further alert will be sent.") }}
+{{ __("A reservation was confirmed as paid out of band (in person / by bank transfer), but its online payment intent could not be verified at the gateway. It may have already collected a payment, or may still be able to collect one. If it does, the booking will be paid twice.") }}
 @elseif ($context === 'cancelled_captured')
 {{ __("A reservation was cancelled while its online payment intent had already captured — or was still capturing — money at the gateway. The customer was told the charge will be refunded.") }}
 @elseif ($context === 'cancelled_unverified')
@@ -27,7 +29,9 @@
 @endif
 @endcomponent
 
-@if ($context === 'out_of_band_duplicate')
+@if ($context === 'confirmed_by_another_payment')
+{{ __("Recommended action: check this payment intent in your payment provider's dashboard and, if the booking's other payment was also received, refund one of the two payments.") }}
+@elseif ($context === 'out_of_band_duplicate')
 {{ __("Recommended action: check this payment intent in your payment provider's dashboard and, if the out-of-band payment was also received, refund one of the two payments.") }}
 @elseif ($context === 'out_of_band_still_payable')
 {{ __("Recommended action: cancel this payment intent in your payment provider's dashboard so it can no longer be completed. If it has already collected a payment, refund one of the two payments.") }}

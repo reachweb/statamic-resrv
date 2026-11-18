@@ -270,7 +270,7 @@ class ReservationRefundProcessor
      * leftover intent and drop payment_id so downstream refund/cancel reads a no-gateway-charge
      * settlement — UNLESS the intent captured or is settling money (a webhook confirm racing
      * this one): then keep the reference so the charge stays refundable, and notify admins of
-     * the possible duplicate (the follow-up webhook no-ops on the CONFIRMED row silently).
+     * the possible duplicate (if the webhook confirmed the booking first, nothing else reports it).
      * An uncaptured 'requires_capture' hold is voided like any open intent — releasing the
      * authorization prevents the duplicate rather than warning about it.
      * A capture can surface on either read; a read that THROWS leaves the state unknown, so
@@ -321,8 +321,8 @@ class ReservationRefundProcessor
         }
 
         // A captured or settling intent means a webhook confirm is racing this manual one:
-        // keep the reference so the charge stays refundable, and notify — the succeeded
-        // webhook that follows sees CONFIRMED and no-ops, so silence here would hide the
+        // keep the reference so the charge stays refundable, and notify — if the webhook
+        // confirmed the booking first, nothing else reports it, so silence here would hide the
         // double payment. An uncaptured 'requires_capture' hold falls through to the void
         // below instead — cancelling it releases the customer's authorization and PREVENTS
         // the duplicate; a capture racing the void is caught by the post-void verify.
@@ -330,8 +330,8 @@ class ReservationRefundProcessor
             $intent = $gateway->retrievePaymentIntent($paymentId, $reservation);
         } catch (\Throwable $e) {
             // State unknown: keep the reference rather than risk dropping a real charge, and
-            // notify — the follow-up webhook no-ops on CONFIRMED, so a log line alone would
-            // bury the only warning of a silent duplicate.
+            // notify — a log line alone would bury the only warning of a duplicate the webhook
+            // may already have confirmed.
             $reservation->update(['payment_unresolved' => true]);
 
             $this->notifyPossibleDuplicatePayment(
@@ -410,8 +410,8 @@ class ReservationRefundProcessor
         }
 
         // The void failed and the intent is still payable: the customer's client secret can
-        // still collect the full amount, and the succeeded webhook would no-op on CONFIRMED —
-        // admins must be told now to cancel the intent at the gateway.
+        // still collect the full amount — admins must be told now to cancel the intent at the
+        // gateway, before the customer pays it a second time.
         $reservation->update(['payment_unresolved' => true]);
 
         $this->notifyPossibleDuplicatePayment(
@@ -426,8 +426,9 @@ class ReservationRefundProcessor
     /**
      * Alert admins to an actual or possible duplicate payment: an out-of-band payment plus a
      * gateway charge that captured, is still payable, or could not be verified. Every caller
-     * keeps the charge reference; the succeeded webhook no-ops on CONFIRMED, so this
-     * notification is the only reconciliation signal.
+     * keeps the charge reference stamped unresolved. A succeeded webhook that arrives later
+     * alerts again through confirmFromGateway(), but one that already confirmed the booking
+     * won't, so this notification may be the only signal.
      */
     protected function notifyPossibleDuplicatePayment(
         Reservation $reservation,
