@@ -294,13 +294,34 @@ class Checkout extends Component
             ];
 
             if (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible()) {
-                $toUpdate['payment'] = $totals->get('total')->format();
-                // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
-                $toUpdate['payment_surcharge'] = 0;
-            }
+                // A stored intent charges payment plus surcharge, which its webhook checks: keep both
+                // while the payment holds, and void the intent before the payment changes. Under the
+                // intent lock, so an intent minted in another tab can't slip in before the write.
+                $payment = $totals->get('total');
 
-            // Update the reservation with the total
-            $this->reservation->update($toUpdate);
+                $updated = $this->underIntentLock($this->reservation, function (Reservation $reservation) use ($payment, $toUpdate) {
+                    if ($reservation->status !== ReservationStatus::PENDING->value) {
+                        return null;
+                    }
+
+                    if (blank($reservation->payment_id) || ! $reservation->payment->equals($payment)) {
+                        if (! $this->cancelActiveIntent($reservation)) {
+                            return null;
+                        }
+
+                        // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
+                        $toUpdate += ['payment' => $payment->format(), 'payment_surcharge' => 0];
+                    }
+
+                    return $reservation->update($toUpdate);
+                });
+
+                if (! $updated) {
+                    return;
+                }
+            } else {
+                $this->reservation->update($toUpdate);
+            }
 
             // Sync extras & options to the database. Don't advance if either fails —
             // the total was already written above, so proceeding would let the user pay

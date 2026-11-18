@@ -15,6 +15,7 @@ use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\CouponUpdated;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
@@ -2384,7 +2385,7 @@ class CheckoutTest extends TestCase
         $paymentId = $this->reservation->fresh()->payment_id;
 
         // The customer comes back from the provider's page and goes through the checkout again.
-        // Step 1 writes the payment afresh and drops the surcharge.
+        // Step 1 leaves the payment, and the surcharge the open order charges, as they were.
         Livewire::test(Checkout::class)
             ->call('handleFirstStep')
             ->dispatch('checkout-form-submitted')
@@ -2407,6 +2408,67 @@ class CheckoutTest extends TestCase
         $reservation = $this->reservation->fresh();
         $this->assertSame($gateway->createdIntents[1]['payment_id'], $reservation->payment_id);
         $this->assertSame('94.00', $reservation->totalToCharge());
+    }
+
+    public function test_step_one_keeps_a_stored_intent_payable_or_voids_it_before_the_payment_changes()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Card', 'surcharge' => ['type' => 'fixed', 'amount' => 4]],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // Tab A reaches the payment step with an intent for 104.
+        Livewire::test(Checkout::class)->call('handleFirstStep')->dispatch('checkout-form-submitted');
+        $paymentId = $this->reservation->fresh()->payment_id;
+        $this->assertSame('104.00', $this->reservation->fresh()->totalToCharge());
+
+        // Tab B submits step 1 unchanged: tab A's intent stays payable for what the webhook expects.
+        Livewire::test(Checkout::class)->call('handleFirstStep')->assertSet('step', 2);
+
+        $reservation = $this->reservation->fresh();
+        $this->assertSame($paymentId, $reservation->payment_id);
+        $this->assertSame('104.00', $reservation->totalToCharge());
+        $this->assertSame([], $gateway->cancelledIntents);
+
+        // Tab B adds an extra, but the provider won't void tab A's intent: nothing is written.
+        $extras = ResrvExtra::getPriceForDates($this->reservation);
+        $addExtra = [$extras->first()->id => [
+            'id' => $extras->first()->id,
+            'quantity' => 1,
+            'price' => $extras->first()->price->format(),
+            'name' => $extras->first()->name,
+        ]];
+        $gateway->cancelSucceeds = false;
+        Exceptions::fake();
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', $addExtra)
+            ->call('handleFirstStep')
+            ->assertHasErrors('reservation')
+            ->assertNotSet('step', 2);
+
+        $reservation = $this->reservation->fresh();
+        $this->assertSame($paymentId, $reservation->payment_id);
+        $this->assertSame('100.00', $reservation->payment->format());
+        $this->assertSame('104.00', $reservation->totalToCharge());
+
+        // Once the provider voids it, the new payment is written without the old intent or surcharge.
+        $gateway->cancelSucceeds = true;
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', $addExtra)
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        $reservation = $this->reservation->fresh();
+        $this->assertContains($paymentId, array_column($gateway->cancelledIntents, 'payment_id'));
+        $this->assertSame('', $reservation->payment_id);
+        $this->assertSame('0.00', $reservation->payment_surcharge->format());
+        $this->assertSame(Price::create('100.00')->add(Price::create($extras->first()->price->format()))->format(), $reservation->payment->format());
     }
 
     public function test_an_intent_already_moving_money_is_kept_and_the_customer_sent_to_checkout_complete()
