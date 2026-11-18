@@ -2555,6 +2555,32 @@ class CheckoutTest extends TestCase
         $this->assertSame($paymentId, $this->reservation->fresh()->payment_id);
     }
 
+    public function test_no_intent_is_minted_while_another_request_updates_the_totals()
+    {
+        // updateTotals() holds the checkout lock from its void until it writes the new payment, so an
+        // intent minted meanwhile would charge the old payment.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        Sleep::fake(syncWithCarbon: true);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+        $component = Livewire::test(Checkout::class)->call('handleFirstStep');
+
+        $otherRequest = Cache::lock('resrv-checkout-'.$this->reservation->id, 300);
+        $otherRequest->get();
+
+        $component->dispatch('checkout-form-submitted')
+            ->assertHasErrors('reservation')
+            ->assertNotSet('step', 3);
+
+        $this->assertSame([], $gateway->createdIntents);
+        $this->assertSame('', $this->reservation->fresh()->payment_id);
+
+        $otherRequest->release();
+
+        $component->dispatch('checkout-form-submitted')->assertHasNoErrors()->assertSet('step', 3);
+        $this->assertCount(1, $gateway->createdIntents);
+    }
+
     public function test_an_intent_already_moving_money_is_kept_and_the_customer_sent_to_checkout_complete()
     {
         // The customer paid in another tab and the payment is still processing, so it can't be cancelled.

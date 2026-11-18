@@ -233,7 +233,8 @@ class Checkout extends Component
      */
     protected function withReservationLock(Closure $write)
     {
-        // The TTL outlives voiding a payment intent (two gateway round-trips), as updateTotals() does.
+        // The TTL outlives the intent work run under it: updateTotals() voids an intent (two gateway
+        // round-trips), and initializePayment() voids, resumes or mints one.
         try {
             return Cache::lock('resrv-checkout-'.session('resrv_reservation'), 300)->block(10, function () use ($write) {
                 // Read the row afresh: the request we waited for may have just written it.
@@ -569,68 +570,73 @@ class Checkout extends Component
      */
     protected function initializePayment(string $gatewayName)
     {
-        $reservation = $this->reservation->fresh();
-        $manager = app(PaymentGatewayManager::class);
-        $gateway = $manager->gateway($gatewayName);
-        $payment = $reservation->payment;
-        $surcharge = $manager->calculateSurcharge($gatewayName, $payment);
-        $amount = Price::create($payment->format())->add($surcharge);
-        $returnUrl = $this->getCheckoutCompleteEntry()->absoluteUrl();
+        // Under the checkout lock as well, taken before the intent lock: updateTotals() writes the new
+        // payment after its void has released the intent lock, and no intent may be minted for the old
+        // payment in between.
+        return $this->withReservationLock(function () use ($gatewayName) {
+            $reservation = $this->reservation->fresh();
+            $manager = app(PaymentGatewayManager::class);
+            $gateway = $manager->gateway($gatewayName);
+            $payment = $reservation->payment;
+            $surcharge = $manager->calculateSurcharge($gatewayName, $payment);
+            $amount = Price::create($payment->format())->add($surcharge);
+            $returnUrl = $this->getCheckoutCompleteEntry()->absoluteUrl();
 
-        // The intent is stored only while the reservation still owes the amount it was priced from:
-        // no intent outlives an amount change, such as a coupon applied in another tab.
-        $stillPayable = fn (Reservation $fresh) => $fresh->status === ReservationStatus::PENDING->value
-            && $fresh->payment->equals($payment);
+            // The intent is stored only while the reservation still owes the amount it was priced from:
+            // no intent outlives an amount change, such as a coupon applied in another tab.
+            $stillPayable = fn (Reservation $fresh) => $fresh->status === ReservationStatus::PENDING->value
+                && $fresh->payment->equals($payment);
 
-        $intent = $this->underIntentLock($reservation, function (Reservation $reservation) use ($gateway, $gatewayName, $amount, $surcharge, $returnUrl, $stillPayable) {
-            if (! $stillPayable($reservation)) {
-                throw new ReservationNoLongerPayable($reservation->id);
-            }
-
-            // A customer back from the provider's page continues the payment they started.
-            if ($reservation->payment_gateway === $gatewayName && $reservation->payment_intent_amount !== null
-                && Price::create((string) $reservation->payment_intent_amount)->equals($amount)) {
-                $resumed = $this->resumeExistingIntent($gateway, $reservation);
-
-                if ($resumed === null || ($resumed && $this->resumedIntentIsMountable($gateway, $resumed))) {
-                    // As on the pay page, re-check on a fresh row after the retrieve's round-trip, during
-                    // which a transition such as expiry can commit, before handing the intent out.
-                    if ($resumed !== null) {
-                        $fresh = Reservation::query()->find($reservation->id);
-
-                        if ($fresh === null || ! $stillPayable($fresh)) {
-                            throw new ReservationNoLongerPayable($reservation->id);
-                        }
-                    }
-
-                    // The webhook checks payment plus surcharge, and step 1 may have dropped the surcharge.
-                    $reservation->update(['payment_surcharge' => $surcharge->format()]);
-
-                    return $resumed;
+            $intent = $this->underIntentLock($reservation, function (Reservation $reservation) use ($gateway, $gatewayName, $amount, $surcharge, $returnUrl, $stillPayable) {
+                if (! $stillPayable($reservation)) {
+                    throw new ReservationNoLongerPayable($reservation->id);
                 }
+
+                // A customer back from the provider's page continues the payment they started.
+                if ($reservation->payment_gateway === $gatewayName && $reservation->payment_intent_amount !== null
+                    && Price::create((string) $reservation->payment_intent_amount)->equals($amount)) {
+                    $resumed = $this->resumeExistingIntent($gateway, $reservation);
+
+                    if ($resumed === null || ($resumed && $this->resumedIntentIsMountable($gateway, $resumed))) {
+                        // As on the pay page, re-check on a fresh row after the retrieve's round-trip, during
+                        // which a transition such as expiry can commit, before handing the intent out.
+                        if ($resumed !== null) {
+                            $fresh = Reservation::query()->find($reservation->id);
+
+                            if ($fresh === null || ! $stillPayable($fresh)) {
+                                throw new ReservationNoLongerPayable($reservation->id);
+                            }
+                        }
+
+                        // The webhook checks payment plus surcharge, and step 1 may have dropped the surcharge.
+                        $reservation->update(['payment_surcharge' => $surcharge->format()]);
+
+                        return $resumed;
+                    }
+                }
+
+                // `payment` stays the reservation amount (read by CP, API, emails); the surcharge is stored apart.
+                return $this->cancelActiveIntent($reservation)
+                    ? $this->createIntent($gateway, $reservation, $amount, $returnUrl, $stillPayable, [
+                        'payment_gateway' => $gatewayName,
+                        'payment_surcharge' => $surcharge->format(),
+                    ])
+                    : null;
+            });
+
+            // Back to choosing: the picker when there is a choice, otherwise the details step.
+            if ($intent === null) {
+                $this->reset('selectedGateway', 'clientSecret', 'publicKey', 'paymentView');
+                $this->step = count($this->availableGateways) > 1 ? 3 : 2;
+
+                return;
             }
 
-            // `payment` stays the reservation amount (read by CP, API, emails); the surcharge is stored apart.
-            return $this->cancelActiveIntent($reservation)
-                ? $this->createIntent($gateway, $reservation, $amount, $returnUrl, $stillPayable, [
-                    'payment_gateway' => $gatewayName,
-                    'payment_surcharge' => $surcharge->format(),
-                ])
-                : null;
+            $this->selectedGateway = $gatewayName;
+            $this->step = 3;
+
+            return $this->mountIntent($gateway, $reservation, $intent, $amount, $returnUrl);
         });
-
-        // Back to choosing: the picker when there is a choice, otherwise the details step.
-        if ($intent === null) {
-            $this->reset('selectedGateway', 'clientSecret', 'publicKey', 'paymentView');
-            $this->step = count($this->availableGateways) > 1 ? 3 : 2;
-
-            return;
-        }
-
-        $this->selectedGateway = $gatewayName;
-        $this->step = 3;
-
-        return $this->mountIntent($gateway, $reservation, $intent, $amount, $returnUrl);
     }
 
     /**
