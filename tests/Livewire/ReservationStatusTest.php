@@ -126,6 +126,27 @@ class ReservationStatusTest extends TestCase
             ->assertSet('reservationId', null);
     }
 
+    // The payment request email of a booking that awaits payment carries its reference, so the page
+    // finds it. Like a manual reservation's, only the business cancels it: the customer is asked to
+    // contact them.
+    public function test_an_awaiting_payment_booking_shows_as_awaiting_and_cannot_be_cancelled_online()
+    {
+        $awaiting = $this->makeReservation(['status' => 'awaiting_payment', 'payment_id' => '', 'payment_gateway' => 'offline']);
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $awaiting->customer->email)
+            ->set('reference', $awaiting->reference)
+            ->call('lookup')
+            ->assertHasNoErrors()
+            ->assertSee(trans('statamic-resrv::frontend.statusAwaitingPayment'))
+            ->assertSee(trans('statamic-resrv::frontend.awaitingPaymentNote'))
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
+            ->call('cancel')
+            ->assertHasErrors(['cancellation']);
+
+        $this->assertSame('awaiting_payment', $awaiting->fresh()->status);
+    }
+
     public function test_lookup_is_rate_limited_after_too_many_failed_attempts()
     {
         $reservation = $this->makeReservation();

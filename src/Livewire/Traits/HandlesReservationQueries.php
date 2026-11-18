@@ -41,6 +41,11 @@ trait HandlesReservationQueries
             throw new ReservationTerminatedException(ReservationStatus::PARTNER, 'This reservation is already confirmed.');
         }
 
+        // Placed through an offline gateway: the booking is made and only its payment is outstanding.
+        if ($reservation->status === ReservationStatus::AWAITING_PAYMENT->value) {
+            throw new ReservationTerminatedException(ReservationStatus::AWAITING_PAYMENT, 'This reservation is awaiting payment.');
+        }
+
         if ($reservation->status === ReservationStatus::REFUNDED->value) {
             throw new ReservationTerminatedException(ReservationStatus::REFUNDED, 'This reservation has been cancelled.');
         }

@@ -512,17 +512,6 @@ class Reservation extends Model
     }
 
     /**
-     * A frontend checkout through a manual-confirmation gateway (bank transfer): it confirms
-     * before any money arrives, and its minted payment reference proves nothing was collected.
-     */
-    public function isOfflineCheckout(): bool
-    {
-        return $this->created_by === null
-            && $this->hasGatewayPayment()
-            && $this->paymentGatewaySupportsManualConfirmation();
-    }
-
-    /**
      * CONFIRMED with no charge reference — only possible via an out-of-band/manual confirmation
      * (a webhook confirm always stores the intent id), so a refund must skip the provider.
      */
@@ -565,14 +554,17 @@ class Reservation extends Model
      * (awaiting-payment rows cannot reach REFUNDED directly). A cancelled row only holds money it
      * retained through its own verified charge. Everything else received nothing.
      *
-     * Null means unknown: a frontend checkout through a manual-confirmation gateway (bank
-     * transfer) confirms before any money arrives, so its minted reference proves nothing; and a
-     * cancelled row's unresolved intent may have captured (admins are told to check and refund it).
+     * Null means unknown: before v6.6.0 a frontend checkout through a manual-confirmation gateway
+     * (bank transfer) confirmed before any money arrived, and its minted reference proves nothing
+     * (such bookings now wait in AWAITING_PAYMENT with no reference); and a cancelled row's
+     * unresolved intent may have captured (admins are told to check and refund it).
      */
     public function amountReceived(): ?PriceClass
     {
         if (in_array($this->status, [ReservationStatus::CONFIRMED->value, ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value], true)
-            && $this->isOfflineCheckout()) {
+            && $this->created_by === null
+            && $this->hasGatewayPayment()
+            && $this->paymentGatewaySupportsManualConfirmation()) {
             return null;
         }
 

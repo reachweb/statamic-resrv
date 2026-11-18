@@ -196,6 +196,27 @@ class ResrvCheckoutRedirectTest extends TestCase
         $this->get($url)->assertOk()->assertSee('[pending][ref:MYOWN1][pi_MYOWN1]', false);
     }
 
+    public function test_an_offline_booking_reads_as_received_and_awaiting_payment()
+    {
+        $this->configureAllGateways();
+
+        $own = Reservation::factory()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => ReservationStatus::AWAITING_PAYMENT->value,
+            'payment_gateway' => 'offline',
+        ]);
+
+        session(['resrv_reservation' => $own->id]);
+
+        $this->withFakeViews();
+        $this->viewShouldReturnRaw('layout', '{{ template_content }}');
+        $this->viewShouldReturnRaw('default', '{{ resrv_checkout_redirect }}[{{ status }}][{{ title }}][{{ message }}]{{ /resrv_checkout_redirect }}');
+
+        $this->get($this->entry->absoluteUrl().'?payment_pending='.$own->id)
+            ->assertOk()
+            ->assertSee('[pending][Reservation received][Your reservation has been received and is awaiting payment.', false);
+    }
+
     public static function bundledGateways(): array
     {
         return [

@@ -78,8 +78,11 @@ public function paymentView(): string
  * external payment provider verifying the transaction in real time
  * (e.g. offline / bank-transfer / pay-on-premises gateways).
  *
- * When true, the checkout UI shows a "Confirm Reservation" button that
- * immediately confirms the reservation without a provider callback.
+ * When true, the checkout UI shows a "Confirm Reservation" button and
+ * creates no payment intent. From v6.6.0 the button places the booking
+ * in Awaiting payment, holding its dates until an admin marks it as
+ * paid or cancels it in the control panel. Before v6.6.0 it confirmed
+ * the booking at once.
  *
  * For gateways backed by a payment provider (Stripe, PayPal, etc.)
  * this MUST return false — confirmation comes from the provider's
@@ -1132,7 +1135,7 @@ A gateway that still confirms by hand must do the same: gate `ReservationConfirm
 
 This is the same trade-off as Step 9's stale-success policy: return `200` so the provider stops retrying, and rely on a logged/notified orphan for manual reconciliation rather than confirming a reservation whose hold is gone. Resrv's webhook regression tests cover the race through the bundled gateways.
 
-> **Manual-confirmation gateways** (`supportsManualConfirmation() === true`, e.g. offline/bank-transfer) confirm through Resrv's built-in `CheckoutPayment::confirmPayment()`, which already performs this re-read and shows the customer an "expired" error instead of a false success page. You do **not** need to add anything for that path — it lives in Resrv core, not your gateway.
+> **Manual-confirmation gateways** (`supportsManualConfirmation() === true`, e.g. offline/bank-transfer) never confirm from the checkout. From v6.6.0 Resrv's built-in `CheckoutPayment::confirmPayment()` moves the booking to Awaiting payment under the same lock, and shows the customer an "expired" error instead of a false success page when the hold is gone. An admin confirms it later with **Mark as paid**. You do **not** need to add anything for that path — it lives in Resrv core, not your gateway.
 
 ---
 
@@ -1473,7 +1476,7 @@ Because the webhook is the only confirmation path, the create-reservation page r
 
 ### Background
 
-Resrv sends the customer to the checkout-complete page with `?payment_pending=<reservation id>` when a booking finishes without a provider return: offline confirmation, zero-payment and affiliate (skip-payment) bookings, and a customer who navigates back to the checkout of a reservation that is already confirmed. The `{{ resrv_checkout_redirect }}` tag calls `handleRedirectBack()`, which calls `handlePaymentPending()`, and passes the returned `reservation` array to the site's template.
+Resrv sends the customer to the checkout-complete page with `?payment_pending=<reservation id>` when a booking finishes without a provider return: an offline booking placed awaiting payment, zero-payment and affiliate (skip-payment) bookings, and a customer who navigates back to the checkout of a reservation that is already confirmed. The `{{ resrv_checkout_redirect }}` tag calls `handleRedirectBack()`, which calls `handlePaymentPending()`, and passes the returned `reservation` array to the site's template.
 
 Every earlier version of this guide, and the bundled gateways up to v6.5.1, implemented `handlePaymentPending()` like this:
 

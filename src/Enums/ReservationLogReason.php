@@ -10,6 +10,8 @@ enum ReservationLogReason: string
 
     case CheckoutConfirmed = 'checkout_confirmed';
 
+    case CheckoutAwaitingPayment = 'checkout_awaiting_payment';
+
     case WebhookConfirmed = 'webhook_confirmed';
 
     case CpConfirmed = 'cp_confirmed';
@@ -26,6 +28,7 @@ enum ReservationLogReason: string
             self::CheckoutStarted => __('Checkout started'),
             self::CpCreated => __('Created in the Control Panel'),
             self::CheckoutConfirmed => __('Confirmed at checkout'),
+            self::CheckoutAwaitingPayment => __('Placed at checkout, awaiting payment'),
             self::WebhookConfirmed => __('Confirmed by payment webhook'),
             self::CpConfirmed => __('Confirmed in the Control Panel'),
             self::Cancelled => __('Reservation cancelled'),

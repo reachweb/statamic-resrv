@@ -5,8 +5,9 @@ namespace Reach\StatamicResrv\Exceptions;
 use Exception;
 
 /**
- * Thrown when a reservation leaves a payable state between a pay page's outer guard and the
- * locked intent write. The just-minted intent is already voided; abort quietly and re-render.
+ * Thrown under the row lock when the reservation can no longer be paid the way the caller set out to:
+ * it left a payable state after a pay page's outer guard (the just-minted intent is already voided),
+ * or its payment method changed since the caller read it. Abort quietly and re-render.
  */
 class ReservationNoLongerPayable extends Exception
 {

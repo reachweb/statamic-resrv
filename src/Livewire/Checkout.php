@@ -539,9 +539,23 @@ class Checkout extends Component
             $stillPayable = fn (Reservation $fresh) => $fresh->status === ReservationStatus::PENDING->value
                 && $fresh->payment->equals($payment);
 
-            $intent = $this->underIntentLock($reservation, function (Reservation $reservation) use ($gateway, $gatewayName, $amount, $surcharge, $returnUrl, $stillPayable) {
+            // A manual-confirmation gateway (bank transfer) takes nothing online, so it gets no intent.
+            // Its step records the method and surcharge, and confirming leaves the booking awaiting payment.
+            $manual = $gateway->supportsManualConfirmation();
+
+            $intent = $this->underIntentLock($reservation, function (Reservation $reservation) use ($gateway, $gatewayName, $amount, $surcharge, $returnUrl, $stillPayable, $manual) {
                 if (! $stillPayable($reservation)) {
                     throw new ReservationNoLongerPayable($reservation->id);
+                }
+
+                if ($manual) {
+                    if (! $this->cancelActiveIntent($reservation)) {
+                        return null;
+                    }
+
+                    $reservation->update(['payment_gateway' => $gatewayName, 'payment_surcharge' => $surcharge->format()]);
+
+                    return true;
                 }
 
                 // A customer back from the provider's page continues the payment they started.
@@ -586,6 +600,13 @@ class Checkout extends Component
 
             $this->selectedGateway = $gatewayName;
             $this->step = 3;
+
+            if ($manual) {
+                $this->reset('clientSecret', 'publicKey');
+                $this->paymentView = $gateway->paymentView();
+
+                return null;
+            }
 
             return $this->mountIntent($gateway, $reservation, $intent, $amount, $returnUrl);
         });

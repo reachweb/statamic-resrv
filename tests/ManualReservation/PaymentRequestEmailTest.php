@@ -143,7 +143,8 @@ class PaymentRequestEmailTest extends TestCase
     public function test_offline_instructions_setting_renders_escaped_with_line_breaks()
     {
         Mail::fake();
-        Config::set('resrv-config.manual_reservations_offline_instructions', "Bank: ACME <b>Ltd</b>\r\nIBAN: GR12 3456");
+        // Greek υ is CF 85 in UTF-8: a line-break match that reads bytes splits it at 0x85 (NEL).
+        Config::set('resrv-config.manual_reservations_offline_instructions', "Bank: ACME <b>Ltd</b>\r\nΔικαιούχος: Ευχαριστούμε ΑΕ\nIBAN: GR12 3456");
 
         $entry = $this->makeStatamicItemWithAvailability(available: 2);
 
@@ -154,7 +155,7 @@ class PaymentRequestEmailTest extends TestCase
 
         $html = (new ReservationPaymentRequest($offline))->render();
         $this->assertStringContainsString('How to pay', $html);
-        $this->assertStringContainsString("Bank: ACME &lt;b&gt;Ltd&lt;/b&gt;<br>\nIBAN: GR12 3456", $html);
+        $this->assertStringContainsString("Bank: ACME &lt;b&gt;Ltd&lt;/b&gt;<br>\nΔικαιούχος: Ευχαριστούμε ΑΕ<br>\nIBAN: GR12 3456", $html);
         $this->assertStringNotContainsString('<b>Ltd</b>', $html);
         $this->assertStringContainsString('Please include the booking reference '.$offline->reference.' with your payment.', $html);
         $this->assertStringNotContainsString('payment is arranged directly with us', $html);
@@ -242,6 +243,14 @@ class PaymentRequestEmailTest extends TestCase
         $this->assertFalse($mail->reminder);
         $this->assertStringContainsString('We have created a reservation for you.', $html);
         $this->assertStringNotContainsString('for your reservation again', $html);
+
+        // A booking the customer made at checkout has no creator: it was not created for them.
+        $reservation->update(['created_by' => null]);
+
+        $html = (new ReservationPaymentRequest($reservation->fresh()))->render();
+
+        $this->assertStringContainsString('Thank you for your reservation! We have received it and are holding it for you until your payment arrives.', $html);
+        $this->assertStringNotContainsString('We have created a reservation for you.', $html);
     }
 
     public function test_a_repeat_request_reads_as_a_reminder_with_the_current_deadline()
@@ -333,6 +342,7 @@ class PaymentRequestEmailTest extends TestCase
         return Reservation::factory()->create(array_merge([
             'status' => 'awaiting_payment',
             'item_id' => $item->id(),
+            'created_by' => 'admin-id',
             'customer_id' => Customer::factory()->create()->id,
             'payment' => 30,
             'payment_surcharge' => 0,
@@ -388,6 +398,7 @@ class PaymentRequestEmailTest extends TestCase
         $reservation = Reservation::factory()->create([
             'status' => 'awaiting_payment',
             'item_id' => $item->id(),
+            'created_by' => 'admin-id',
             'customer_id' => Customer::factory()->create(['data' => collect(['last_name' => 'Doe'])])->id,
             'payment' => 30,
             'total' => 30,

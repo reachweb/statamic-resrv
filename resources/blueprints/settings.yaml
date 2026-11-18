@@ -405,7 +405,7 @@ tabs:
               display: 'Offline Payment Instructions'
               type: textarea
               localizable: false
-              instructions: 'How customers pay a reservation that uses a manually confirmed payment method (e.g. bank transfer details). Shown at checkout and in the confirmation email of frontend bookings, and on the payment page and in the payment request email of manual reservations. When empty, frontend bookings show no payment details, and the payment page and payment request email tell customers that payment is arranged directly with you.'
+              instructions: 'How customers pay a reservation that uses a manually confirmed payment method (e.g. bank transfer details). Shown at checkout, in the payment request email and on the payment page. When empty, the checkout shows no payment details, and the payment request email and payment page tell customers that payment is arranged directly with you.'
   emails_settings:
     display: Emails
     sections:
@@ -446,6 +446,9 @@ tabs:
                       -
                         key: customer_payment_request
                         value: 'Customer payment request'
+                      -
+                        key: admin_awaiting_payment
+                        value: 'Admin awaiting payment'
                       -
                         key: admin_cancelled
                         value: 'Admin cancelled (by customer)'
@@ -538,6 +541,9 @@ tabs:
                       -
                         key: customer_payment_request
                         value: 'Customer payment request'
+                      -
+                        key: admin_awaiting_payment
+                        value: 'Admin awaiting payment'
                       -
                         key: admin_cancelled
                         value: 'Admin cancelled (by customer)'

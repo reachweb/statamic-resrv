@@ -43,6 +43,8 @@ class ReservationPaymentRequest extends Mailable
             'offlineInstructions' => $isOffline ? $this->offlineInstructions() : null,
             'customerFirstName' => $this->customerFirstName(),
             'isReminder' => $this->reminder,
+            // A booking the customer made at checkout, rather than one an admin created for them.
+            'placedByCustomer' => $this->reservation->created_by === null,
             'deadlineChanged' => $this->deadlineChanged,
             'paymentDueBy' => $dueAt?->format('d-m-Y H:i T'),
             // The arrival day closes payment before a later hold deadline does.

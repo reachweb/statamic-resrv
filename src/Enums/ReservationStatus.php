@@ -29,9 +29,10 @@ enum ReservationStatus: string
     case COMPLETED = 'completed';
 
     /**
-     * Unpaid admin-created hold, created directly by the CP manual flow — never transitioned
-     * into. Exempt from minutes_to_hold expiry, abandoned emails and housekeeping (all keyed
-     * off PENDING/EXPIRED); leaves only to CONFIRMED or CANCELLED.
+     * Unpaid hold: created directly by the CP manual flow, or entered from PENDING when a checkout
+     * customer confirms through a manual-confirmation (offline) gateway. Exempt from
+     * minutes_to_hold expiry, abandoned emails and housekeeping (all keyed off PENDING/EXPIRED);
+     * leaves only to CONFIRMED or CANCELLED.
      */
     case AWAITING_PAYMENT = 'awaiting_payment';
 
@@ -46,7 +47,7 @@ enum ReservationStatus: string
     public function canTransitionTo(self $to): bool
     {
         return in_array($to, match ($this) {
-            self::PENDING => [self::CONFIRMED, self::EXPIRED, self::REFUNDED, self::PARTNER],
+            self::PENDING => [self::CONFIRMED, self::AWAITING_PAYMENT, self::EXPIRED, self::REFUNDED, self::PARTNER],
             self::CONFIRMED => [self::REFUNDED, self::CANCELLED],
             self::PARTNER => [self::REFUNDED, self::CANCELLED],
             self::AWAITING_PAYMENT => [self::CONFIRMED, self::CANCELLED],
@@ -99,10 +100,11 @@ enum ReservationStatus: string
      * Status values for checkouts still in flight — holds that may release asynchronously
      * (expiry restores +quantity within minutes), which would corrupt an absolute CP inventory
      * edit. Confirmed/partner bookings keep their hold key for life but only release on an
-     * explicit refund, so they are not in flight. AWAITING_PAYMENT is deliberately absent: a
-     * manual hold has no deadline by default and releases like a confirmed booking's refund
-     * (an admin cancel or a lapse adds +quantity on top of the admin's value), so blocking on
-     * it would freeze inventory edits for as long as the customer takes to pay.
+     * explicit refund, so they are not in flight. AWAITING_PAYMENT is deliberately absent: an
+     * unpaid hold (manual or offline checkout) has no deadline by default and releases like a
+     * confirmed booking's refund (an admin cancel or a lapse adds +quantity on top of the
+     * admin's value), so blocking on it would freeze inventory edits for as long as the
+     * customer takes to pay.
      *
      * @return string[]
      */

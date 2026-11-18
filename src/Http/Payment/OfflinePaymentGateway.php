@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Http\Payment;
 
-use Illuminate\Support\Str;
 use Reach\StatamicResrv\Models\Reservation;
 
 class OfflinePaymentGateway implements PaymentInterface
@@ -24,12 +23,9 @@ class OfflinePaymentGateway implements PaymentInterface
 
     public function paymentIntent($amount, Reservation $reservation, $data, ?string $returnUrl = null)
     {
-        // Offline gateway: nothing is collected online, so $returnUrl is unused.
-        $intent = new \stdClass;
-        $intent->id = 'offline_'.Str::random(24);
-        $intent->client_secret = 'offline_'.Str::random(48);
-
-        return $intent;
+        // Resrv never asks a manual-confirmation gateway for an intent: its bookings wait for the
+        // payment in AWAITING_PAYMENT until an admin marks them as paid.
+        throw new \LogicException('The offline gateway takes no payment online, so it has no payment intent.');
     }
 
     public function retrievePaymentIntent(string $paymentId, Reservation $reservation): ?object

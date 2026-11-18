@@ -146,6 +146,10 @@ class ReservationStatus extends Component
             return trans('statamic-resrv::frontend.statusConfirmed');
         }
 
+        if ($reservation->isAwaitingPayment()) {
+            return trans('statamic-resrv::frontend.statusAwaitingPayment');
+        }
+
         if ($reservation->status === ReservationStatusEnum::REFUNDED->value) {
             // Rows refunded before CANCELLED existed include no-charge voids; don't claim
             // a refund when no money moved.
@@ -188,14 +192,15 @@ class ReservationStatus extends Component
     }
 
     /**
-     * Lookable statuses: live, terminated-after-confirmation, and completed stays — a
-     * post-stay link visit must resolve, not claim the reservation doesn't exist.
-     * PENDING/EXPIRED were never confirmed, so no reference was issued.
+     * Lookable statuses: live, awaiting payment (its payment request email carries the reference),
+     * terminated-after-confirmation, and completed stays — a post-stay link visit must resolve, not
+     * claim the reservation doesn't exist. PENDING/EXPIRED were never placed, so no reference was issued.
      */
     protected function visibleStatuses(): array
     {
         return [
             ...ReservationStatusEnum::live(),
+            ReservationStatusEnum::AWAITING_PAYMENT->value,
             ReservationStatusEnum::REFUNDED->value,
             ReservationStatusEnum::CANCELLED->value,
             ReservationStatusEnum::COMPLETED->value,

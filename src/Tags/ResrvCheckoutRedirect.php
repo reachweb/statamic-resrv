@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tags;
 
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Http\Middleware\MarkCheckoutCompleteUncacheable;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -37,7 +38,12 @@ class ResrvCheckoutRedirect extends Tags
             return $this->makeResponse('success', __('Payment successful'), __('Your payment has been processed successfully. You will receive an email confirmation shortly.'), $redirectData);
         }
         if ($redirectData['status'] === 'pending') {
-            return $this->makeResponse('pending', __('Reservation received'), __('Your reservation has been received and held. It will be confirmed upon payment. You will receive an email with further details shortly.'), $redirectData);
+            // An offline booking: placed and held, but not confirmed until its payment arrives.
+            $message = ($redirectData['reservation']['status'] ?? null) === ReservationStatus::AWAITING_PAYMENT->value
+                ? __('Your reservation has been received and is awaiting payment. We have emailed you the payment details, and we will confirm your reservation once your payment arrives.')
+                : __('Your reservation has been received and held. It will be confirmed upon payment. You will receive an email with further details shortly.');
+
+            return $this->makeResponse('pending', __('Reservation received'), $message, $redirectData);
         }
     }
 

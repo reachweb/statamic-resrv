@@ -14,12 +14,12 @@ use Reach\StatamicResrv\Models\Reservation;
  *
  * The 328 headless Livewire tests own the per-step validation/pricing/state; this
  * proves the funnel actually renders and round-trips through Statamic's routing in
- * a real DOM and lands a CONFIRMED reservation with availability decremented. It is
+ * a real DOM and lands a reservation awaiting payment with availability decremented. It is
  * the living documentation of the flow, so it reads top-to-bottom as one journey.
  */
 class StandardCheckoutFlowTest extends BrowserTestCase
 {
-    public function test_a_standard_booking_completes_to_a_confirmed_reservation(): void
+    public function test_a_standard_booking_completes_to_a_reservation_awaiting_payment(): void
     {
         // The whole seed window is available before this booking decrements one night.
         $availableBefore = Availability::where('available', '>', 0)->count();
@@ -60,14 +60,14 @@ class StandardCheckoutFlowTest extends BrowserTestCase
             $browser->click('[wire\\:click="submit()"]')
                 ->waitFor('@confirm-payment', 10);
 
-            // 6. Offline confirm → ReservationConfirmed → redirect to the completed page.
+            // 6. Offline confirm → the booking awaits its payment → redirect to the completed page.
             $browser->click('@confirm-payment')
                 ->waitForLocation('/checkout-completed', 10);
 
             $completedUrl = $browser->driver->getCurrentURL();
         });
 
-        // --- Acceptance: completed URL + CONFIRMED row + decremented availability ---
+        // --- Acceptance: completed URL + AWAITING_PAYMENT row + decremented availability ---
         $reservation = Reservation::latest('id')->first();
         $this->assertNotNull($reservation, 'A reservation should have been created by the funnel.');
 
@@ -78,8 +78,8 @@ class StandardCheckoutFlowTest extends BrowserTestCase
             'The completed page URL must carry the reservation id as payment_pending.'
         );
 
-        // The offline confirm transitioned the reservation to CONFIRMED.
-        $this->assertSame(ReservationStatus::CONFIRMED->value, $reservation->status);
+        // Nothing was paid online, so the offline confirm left the reservation awaiting payment.
+        $this->assertSame(ReservationStatus::AWAITING_PAYMENT->value, $reservation->status);
 
         // The extra + option chosen in step 1 were assigned to the reservation.
         $this->assertSame(1, $reservation->extras()->count());

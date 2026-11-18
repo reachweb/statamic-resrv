@@ -205,6 +205,13 @@ class ReservationEmailConfigResolver
                 'markdown' => 'statamic-resrv::email.reservations.payment-request',
                 'recipients' => [['type' => 'customer']],
             ],
+            ReservationEmailEvent::AdminAwaitingPayment->value => [
+                'enabled' => true,
+                'from' => ['address' => null, 'name' => null],
+                'subject' => null,
+                'markdown' => 'statamic-resrv::email.reservations.awaiting-payment',
+                'recipients' => [['type' => 'admins']],
+            ],
             ReservationEmailEvent::AdminCancelled->value => [
                 'enabled' => true,
                 'from' => ['address' => null, 'name' => null],
