@@ -357,7 +357,30 @@ if ($paid) {
 }
 
 // After
+$isStaleIntent = false;
+$referenceMatched = false;
+if (! $reservation && isset($metadata['reservation_id'])) {
+    $reservation = Reservation::find($metadata['reservation_id']);
+    $reference = $metadata['reservation_reference'] ?? null;
+
+    // Another site on the same provider account can have a reservation with this id.
+    if ($reservation && $reference !== null && $reference !== $reservation->reference) {
+        $reservation = null;
+    }
+
+    $isStaleIntent = (bool) $reservation;
+    $referenceMatched = $isStaleIntent && $reference !== null;
+}
+
+// ... verify the signature, return 200 when no reservation was found ...
+
 if ($paid) {
+    // A payment created before you stored the reference, matched on the id alone, is more
+    // likely another site's than a second charge on a booking confirmed here.
+    if ($isStaleIntent && ! $referenceMatched && $reservation->status === ReservationStatus::CONFIRMED->value) {
+        return response()->json([], 200);
+    }
+
     $this->confirmFromGateway($reservation, $paymentId, stale: $isStaleIntent, amount: $minorUnits, eventId: $eventId);
 
     return response()->json([], 200);
@@ -369,6 +392,8 @@ if ($reservation->status === ReservationStatus::CONFIRMED->value) {
 ```
 
 Move any early return for a confirmed reservation below the success branch, as above. Otherwise a stale payment that succeeds after the booking was confirmed another way never reaches the method, and the customer's second charge goes unreported.
+
+Check your stale fallback's reference before you pass `stale:`. Earlier revisions of this guide matched the fallback on `reservation_id` alone and only logged, and the confirmed return above stopped it before it could alert. `confirmFromGateway()` emails the admins for every stale success, confirmed bookings included. When sites share a provider account, an id-only match would therefore ask your admins to refund another site's customer. Store `reservation_reference` in the payment's metadata (Step 9), and drop a match whose reference differs. Keep the confirmed guard above for payments created before you stored the reference, as the bundled Stripe gateway does.
 
 Keep any check the method doesn't make, such as comparing the payment's currency with `resrv-config.currency_isoCode`, before the call. If your gateway writes to the reservation in the confirming transaction (`transitionTo(..., inTransaction: ...)`), pass the same closure as `inTransaction:`.
 
@@ -1101,7 +1126,7 @@ Resrv's reservation state changes go through `Reservation::transitionTo()`, whic
 
 A concurrent `confirmed` by this same payment, such as a second delivery of its webhook, is a clean no-op.
 
-A gateway that still confirms by hand must do the same: gate `ReservationConfirmed` on `transitionTo()`'s return value, `refresh()` the reservation on `false`, call `OrphanedPaymentNotification::dispatchFor()` when another payment confirmed it, and otherwise call `notifyIfOrphaned()`.
+A gateway that still confirms by hand must do the same: gate `ReservationConfirmed` on `transitionTo()`'s return value, `refresh()` the reservation on `false`, call `OrphanedPaymentNotification::dispatchFor()` with `context: OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT` when another payment confirmed it, and otherwise call `notifyIfOrphaned()`.
 
 > ℹ️ Earlier revisions of this step checked `EXPIRED`/`REFUNDED`/`PARTNER` by hand and called `dispatchFor()`. Since manual reservations, a `CANCELLED` row can also lose this race (the hold-lapse sweep cancels a reservation whose payment is in flight), which `notifyIfOrphaned()` covers.
 
