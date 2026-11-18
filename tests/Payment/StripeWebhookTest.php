@@ -247,6 +247,32 @@ class StripeWebhookTest extends TestCase
         Mail::assertNotSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_redelivery');
     }
 
+    public function test_a_payment_superseded_between_the_lookup_and_the_lock_is_stale()
+    {
+        // The webhook finds the booking by this payment, then the customer switches gateway and a new
+        // payment is stored before the confirm takes the row lock. The old payment must not confirm a
+        // booking that now owes the new one: it is an abandoned payment, so the admins are alerted.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_left_behind',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $this->updateRowOnFirstPendingRead($reservation->id, ['payment_id' => 'fake_switched_to', 'payment_gateway' => 'fake']);
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($this->signedSucceededWebhookRequest('pi_left_behind', 'whsec_test', time()));
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertDatabaseHas('resrv_reservations', ['id' => $reservation->id, 'status' => 'pending', 'payment_id' => 'fake_switched_to']);
+        Event::assertNotDispatched(ReservationConfirmed::class);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_left_behind' && $mail->hasTo('admin@example.com'));
+    }
+
     public function test_confirm_from_gateway_saves_the_in_transaction_change_only_with_the_confirmation()
     {
         // PayPal-style gateways store the capture id they confirm with in the same write as
