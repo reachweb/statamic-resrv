@@ -57,6 +57,7 @@ class Reservation extends Model
         'payment_surcharge',
         'payment_id',
         'payment_gateway',
+        'payment_intent_amount',
         'payment_unresolved',
         'total',
         'customer_id',

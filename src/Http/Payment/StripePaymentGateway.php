@@ -2,6 +2,8 @@
 
 namespace Reach\StatamicResrv\Http\Payment;
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Enums\ReservationStatus;
@@ -369,6 +371,25 @@ class StripePaymentGateway implements PaymentInterface
         // Signature verified: re-read the payload from the trusted event and only now act on
         // reservation state, so an unsigned request can't probe status before verification.
         $data = $event->data->object;
+
+        // Checkout::cancelActiveIntent() blanks payment_id while it voids under the intent lock (the
+        // one HandlesDirectGatewayPayment::withIntentLock() takes), and restores it when the void finds
+        // the intent paid. Wait for that void, so the payment is confirmed below rather than taken for
+        // an abandoned one. While it runs past the wait, answer 503 so Stripe redelivers the event.
+        if ($isStaleIntent && $event->type === 'payment_intent.succeeded'
+            && $reservation->status === ReservationStatus::PENDING->value && blank($reservation->payment_id)) {
+            try {
+                $current = Cache::lock('resrv-payment-intent-'.$reservation->id, 300)
+                    ->block(10, fn () => Reservation::findByPaymentId($data['id'])->first());
+            } catch (LockTimeoutException) {
+                return response()->json([], 503);
+            }
+
+            if ($current) {
+                $reservation = $current;
+                $isStaleIntent = false;
+            }
+        }
 
         $confirmed = $reservation->status === ReservationStatus::CONFIRMED->value;
 

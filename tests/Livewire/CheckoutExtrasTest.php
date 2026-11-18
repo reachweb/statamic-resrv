@@ -201,7 +201,7 @@ class CheckoutExtrasTest extends TestCase
         $this->assertSame('failed', (new ResrvCheckoutRedirect)->index()['status']);
 
         Livewire::test(Checkout::class)->assertSet('reservationError', false);
-        $this->assertSame('', $this->reservation->fresh()->payment_id, 'Resuming voids the failed payment');
+        $this->assertSame('pi_failed', $this->reservation->fresh()->payment_id, 'The payment step resumes or voids the failed payment');
 
         Livewire::test(Extras::class, ['reservation' => $this->reservation])
             ->dispatch('extras-coupon-changed')

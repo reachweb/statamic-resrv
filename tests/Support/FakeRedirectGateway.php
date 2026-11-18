@@ -68,6 +68,10 @@ class FakeRedirectGateway extends FakePaymentGateway
             $intent->redirectTo = 'https://provider.test/checkout/'.$paymentId;
         }
 
+        if ($this->onRetrievePaymentIntent !== null) {
+            ($this->onRetrievePaymentIntent)($reservation);
+        }
+
         return $intent;
     }
 

@@ -3,10 +3,12 @@
 namespace Reach\StatamicResrv\Tests\Payment;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Sleep;
 use Mockery;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
@@ -401,6 +403,50 @@ class StripeWebhookTest extends TestCase
         $this->assertEquals('pending', $pending->fresh()->status);
         Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->reservation->is($pending)
             && $mail->paymentIntentId === 'pi_abandoned_before_upgrade');
+    }
+
+    public function test_a_success_during_the_checkouts_void_waits_for_it_and_confirms_the_booking()
+    {
+        // The checkout holds the intent lock while it voids pi_paid, with payment_id blanked, and the
+        // customer's payment succeeds meanwhile.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+        Sleep::fake(syncWithCarbon: true);
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => '',
+            'payment_gateway' => '',
+        ]);
+        $lock = Cache::lock('resrv-payment-intent-'.$reservation->id, 300);
+        $lock->get();
+
+        $request = fn () => $this->signedWebhookRequest('payment_intent.succeeded', 'pi_paid', 'whsec_test', time(), [
+            'metadata' => ['reservation_id' => (string) $reservation->id, 'reservation_reference' => $reservation->reference],
+        ]);
+
+        // A void that outlasts the wait: Stripe is asked to redeliver, and nothing is decided yet.
+        $response = app(StripePaymentGateway::class)->verifyPayment($request());
+
+        $this->assertEquals(503, $response->getStatusCode());
+        $this->assertEquals('pending', $reservation->fresh()->status);
+        Mail::assertNothingSent();
+
+        // The void finds the intent paid and restores the reference while the webhook waits.
+        Sleep::whenFakingSleep(function () use ($lock, $reservation) {
+            if ($lock->release()) {
+                $reservation->update(['payment_id' => 'pi_paid', 'payment_gateway' => 'stripe']);
+            }
+        });
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($request());
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertEquals('confirmed', $reservation->fresh()->status);
+        Event::assertDispatched(ReservationConfirmed::class);
+        Mail::assertNotSent(OrphanedPaymentNotification::class);
     }
 
     public function test_unhandled_stripe_event_type_returns_a_200_response_without_acting_on_the_reservation()

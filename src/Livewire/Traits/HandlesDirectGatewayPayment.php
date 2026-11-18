@@ -18,9 +18,9 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 
 /**
- * Mounts a gateway payment outside the checkout session (manual pay page; plan-008 balance
- * section later): resolve the gateway, create/resume an intent, and expose the properties
- * the gateway's paymentView() blade reads.
+ * Creates, resumes and voids payment intents under a per-reservation lock, and mounts the gateway's
+ * paymentView(). The pay page resumes a stored intent (mountGatewayPayment); the checkout voids it
+ * and mints another.
  */
 trait HandlesDirectGatewayPayment
 {
@@ -77,6 +77,12 @@ trait HandlesDirectGatewayPayment
             return null;
         }
 
+        return $this->mountIntent($gateway, $reservation, $intent, $amount, $returnUrl);
+    }
+
+    /** Mount $intent's payment view, or return the redirect to the provider for redirect gateways. */
+    protected function mountIntent(PaymentInterface $gateway, Reservation $reservation, object $intent, PriceClass $amount, string $returnUrl)
+    {
         // Resumed intents without a provider URL were re-minted in resolveOrCreateIntent, so an
         // empty redirectTo means the gateway broke its paymentIntent() contract — fail loudly
         // rather than redirect the customer to a dead URL.
@@ -89,9 +95,9 @@ trait HandlesDirectGatewayPayment
                 );
             }
 
-            // The provider URL is used verbatim: the resrv_gateway marker already rides the
-            // return URL (baked in above), and appending to a signed/opaque provider URL
-            // could invalidate it.
+            // The provider URL is used verbatim: appending to a signed/opaque provider URL could
+            // invalidate it. A return page that needs the resrv_gateway marker gets it on the
+            // return URL instead (mountGatewayPayment bakes it in).
             return redirect()->away($redirectUrl);
         }
 
@@ -115,13 +121,9 @@ trait HandlesDirectGatewayPayment
      */
     protected function resolveOrCreateIntent(PaymentInterface $gateway, Reservation $reservation, PriceClass $amount, string $returnUrl, ?Closure $stillPayable = null): ?object
     {
-        // App-level lock (holds no DB connection through the network round-trips) serializes
-        // concurrent pay() calls so two requests can't each mint a chargeable intent; a waiter
-        // resumes the winner's. Resume rides the same lock so a stored intent is never handed out
-        // without the payability re-check. The TTL must outlive the whole critical section — up to
-        // three provider round-trips at Stripe's 80s client timeout — or a waiter could mint a
-        // duplicate mid-flight; waiters give up after 10s (a retryable payment error).
-        return Cache::lock('resrv-payment-intent-'.$reservation->id, 300)->block(10, function () use ($gateway, $reservation, $amount, $returnUrl, $stillPayable) {
+        // A waiter resumes the winner's intent. Resume rides the same lock so a stored intent is
+        // never handed out without the payability re-check.
+        return $this->withIntentLock($reservation, function () use ($gateway, $reservation, $amount, $returnUrl, $stillPayable) {
             $reservation->refresh();
 
             if ($stillPayable !== null && ! $stillPayable($reservation)) {
@@ -159,42 +161,66 @@ trait HandlesDirectGatewayPayment
                 }
             }
 
-            $intent = $gateway->paymentIntent($amount, $reservation, $reservation->customerData ?? collect(), $returnUrl);
+            return $this->createIntent($gateway, $reservation, $amount, $returnUrl, $stillPayable);
+        });
+    }
 
-            // The app lock only serializes pay() calls; transitions go through transitionTo()'s DB
-            // row lock (a different mutex) and can commit during the paymentIntent() round-trip.
-            // So re-verify payability under the row lock in the same write as payment_id; if the
-            // row is no longer payable the just-minted intent is voided below.
-            $committed = DB::transaction(function () use ($reservation, $intent, $stillPayable) {
-                $fresh = Reservation::query()->lockForUpdate()->find($reservation->id);
+    /**
+     * Run $critical under the per-reservation intent lock, which every intent write takes. App-level
+     * (it holds no DB connection through the network round-trips), it serializes concurrent payment
+     * attempts so two requests can't each mint a chargeable intent. The TTL must outlive the whole
+     * critical section — up to three provider round-trips at Stripe's 80s client timeout — or a
+     * waiter could mint a duplicate mid-flight; waiters give up after 10s (a retryable payment
+     * error). The checkout takes it inside its own reservation lock, never the other way round.
+     */
+    protected function withIntentLock(Reservation $reservation, Closure $critical)
+    {
+        return Cache::lock('resrv-payment-intent-'.$reservation->id, 300)->block(10, $critical);
+    }
 
-                if ($fresh === null || ($stillPayable !== null && ! $stillPayable($fresh))) {
-                    return false;
-                }
+    /**
+     * Mint an intent under withIntentLock() and store its id and amount together with $attributes.
+     *
+     * @throws ReservationNoLongerPayable
+     */
+    protected function createIntent(PaymentInterface $gateway, Reservation $reservation, PriceClass $amount, string $returnUrl, ?Closure $stillPayable = null, array $attributes = []): object
+    {
+        $intent = $gateway->paymentIntent($amount, $reservation, $reservation->customerData ?? collect(), $returnUrl);
 
-                $attributes = ['payment_id' => $intent->id];
+        // The app lock only serializes intent writes; transitions go through transitionTo()'s DB
+        // row lock (a different mutex) and can commit during the paymentIntent() round-trip.
+        // So re-verify payability under the row lock in the same write as payment_id; if the
+        // row is no longer payable the just-minted intent is voided below.
+        $committed = DB::transaction(function () use ($reservation, $intent, $amount, $stillPayable, $attributes) {
+            $fresh = Reservation::query()->lockForUpdate()->find($reservation->id);
 
-                // Stamp the gateway the intent was actually minted through, atomically with its id:
-                // later readers (cancel/lapse void, out-of-band reconcile, refund) must reach THIS
-                // provider even if the configured default changes — a blank gateway strands them.
-                if (blank($fresh->payment_gateway)) {
-                    $attributes['payment_gateway'] = app(PaymentGatewayManager::class)->defaultName();
-                }
-
-                $fresh->update($attributes);
-                $reservation->setRawAttributes($fresh->getAttributes(), true);
-
-                return true;
-            });
-
-            if (! $committed) {
-                $this->voidIntentQuietly($gateway, $reservation, (string) $intent->id);
-
-                throw new ReservationNoLongerPayable($reservation->id);
+            if ($fresh === null || ($stillPayable !== null && ! $stillPayable($fresh))) {
+                return false;
             }
 
-            return $intent;
+            $attributes['payment_id'] = $intent->id;
+            $attributes['payment_intent_amount'] = $amount->format();
+
+            // Stamp the gateway the intent was actually minted through, atomically with its id:
+            // later readers (cancel/lapse void, out-of-band reconcile, refund) must reach THIS
+            // provider even if the configured default changes — a blank gateway strands them.
+            if (blank($fresh->payment_gateway)) {
+                $attributes += ['payment_gateway' => app(PaymentGatewayManager::class)->defaultName()];
+            }
+
+            $fresh->update($attributes);
+            $reservation->setRawAttributes($fresh->getAttributes(), true);
+
+            return true;
         });
+
+        if (! $committed) {
+            $this->voidIntentQuietly($gateway, $reservation, (string) $intent->id);
+
+            throw new ReservationNoLongerPayable($reservation->id);
+        }
+
+        return $intent;
     }
 
     /**

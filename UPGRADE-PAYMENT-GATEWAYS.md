@@ -157,7 +157,7 @@ public function paymentIntent($amount, Reservation $reservation, $data, ?string 
 }
 ```
 
-**Important for redirect gateways**: Resrv automatically appends `resrv_gateway=<config_key>` to the `redirectTo` URL before redirecting. You do NOT need to add this yourself. However, your return/success URL should point to the Statamic page that uses the `{{ resrv_checkout_redirect }}` tag. That tag reads `resrv_gateway` from the query string to resolve the correct gateway for `handleRedirectBack()`.
+**Important for redirect gateways**: Resrv sends the customer to the `redirectTo` URL exactly as you return it, since adding a parameter could invalidate a signed provider URL. Add `resrv_gateway=<config_key>` to your return/success URL yourself (Step 12). That URL should point to the Statamic page that uses the `{{ resrv_checkout_redirect }}` tag, which reads `resrv_gateway` to resolve the gateway for `handleRedirectBack()` when the session doesn't name it.
 
 Build that return/success URL from the **4th `$returnUrl` parameter** rather than hard-coding the checkout-complete entry: `$base = $returnUrl ?? $this->getReturnUrl($reservation)`. Resrv passes the checkout-complete entry there during normal checkout (so behavior is unchanged) but a different base for other surfaces such as the manual pay-by-link page. The parameter is part of the interface — see **Step 12**.
 
@@ -216,13 +216,13 @@ The return array `status` must be one of:
 - `false` — payment failed, customer sees the failure message
 - `'pending'` — payment is pending (e.g. bank transfer), customer sees the pending message
 
-After `false`, the checkout stays open so the customer can try again. Going back to the checkout, or searching again, clears the payment from the reservation and asks your gateway to cancel it through `cancelPaymentIntent()`. Cancelling is best effort: the provider may refuse, and the payment can stay payable. If the customer still pays it, it reaches your webhook as a stale intent (see "Handle stale-intent races in verifyPayment()").
+After `false`, the checkout stays open so the customer can try again. When they pay again with the same gateway and amount, Resrv resumes the payment through `retrievePaymentIntent()` if it is still payable and has a `->redirectTo` (see Step 13). Otherwise it asks your gateway to cancel the payment through `cancelPaymentIntent()` and re-reads it; if it is still payable, Resrv keeps it and creates no other until it is cancelled or expires. Searching again releases the reservation and cancels the payment best effort: the provider may refuse, and if the customer still pays it, it reaches your webhook as a stale intent (see "Handle stale-intent races in verifyPayment()").
 
 So decide by what the customer still has to do, not by whether the provider keeps the payment open:
 - Return `false` when the attempt didn't succeed and the customer has to act again, such as a declined card or a cancelled or abandoned attempt. This holds even when the provider keeps the payment open for another try, as Mollie does after a declined card.
 - Return `'pending'` when the customer has done their part and the payment is completing without them, such as a bank transfer or a payment still processing.
 
-**Important**: Resrv appends `resrv_gateway=<config_key>` to the redirect URL automatically. Your provider's success/cancel URL does NOT need to include it — Resrv adds it. However, any additional query parameters your provider returns (e.g. `session_id`, `token`) will be available via `request()->input(...)` in `handleRedirectBack()`.
+**Important**: Resrv does not add `resrv_gateway=<config_key>` to the provider's URL, so put it on your success/cancel URL yourself (Step 12). Any query parameters your provider returns (e.g. `session_id`, `token`) will be available via `request()->input(...)` in `handleRedirectBack()`.
 
 ---
 
@@ -909,9 +909,9 @@ Understanding the flow helps when debugging custom gateways.
 
 1. Customer fills extras/options (step 1) and personal details (step 2).
 2. `handleSecondStep()` detects one gateway, auto-selects it, calls `initializePayment()`.
-3. `initializePayment()` saves the config key to `reservation.payment_gateway`, calls `paymentIntent()`, saves `payment_id`.
+3. `initializePayment()` resumes a stored intent created for the same gateway and amount (Step 13). Otherwise it voids the stored intent (Step 9), calls `paymentIntent()`, and saves `payment_id` with the config key in `reservation.payment_gateway`.
 4. For inline: sets `clientSecret`, `publicKey`, `paymentView`, renders step 3.
-5. For redirect: returns `redirect()->away(...)` with `resrv_gateway` appended.
+5. For redirect: returns `redirect()->away($intent->redirectTo)`, with the URL unchanged.
 
 ### Multiple gateways
 
@@ -1093,15 +1093,15 @@ This is different from a provider that *does* hold an order but offers no way to
 ### When Resrv calls you
 
 1. **Customer navigates back from step 3 to step 1 or 2** (`Checkout::goToStep` → `resetPaymentState`).
-2. **Customer switches gateway at the picker on step 3** (`Checkout::selectGateway` → `cancelActiveIntent` before creating the new intent).
-3. **Customer re-enters step 2 with a stale intent still persisted** from a previous session/pass (`Checkout::handleSecondStep` → `resetPaymentState`).
-4. **Customer reopens a time-expired PENDING checkout** (`Checkout::mount` → `cancelActiveIntent`).
+2. **Customer switches gateway at the picker on step 3** (`Checkout::selectGateway` → `initializePayment` before creating the new intent).
+3. **Customer pays with a stored intent created for another gateway or amount**, such as one left from a previous pass (`Checkout::handleSecondStep` → `initializePayment`). One created for the same gateway and amount is resumed instead (Step 13).
+4. **Customer applies or removes a coupon** (`Checkout::updateTotals` → `resetPaymentState`).
 
 In all cases, Resrv:
-1. Reads `payment_id` and `payment_gateway` from a fresh reservation record.
+1. Reads `payment_id` and `payment_gateway` from a fresh reservation record, under a per-reservation lock.
 2. Clears `payment_id` in the database *first* — so any cancellation webhook your provider fires in response can no longer look up the reservation and cannot accidentally mark it cancelled.
-3. Calls `cancelPaymentIntent($oldPaymentId, $reservation)`.
-4. Continues with whatever action triggered the reset (showing the gateway picker, creating a new intent for a different gateway, etc.).
+3. Calls `cancelPaymentIntent($oldPaymentId, $reservation)`, then `retrievePaymentIntent()` (Step 13) to check that the intent is dead.
+4. If it reads `canceled` or `null`, continues with whatever action triggered the reset (showing the gateway picker, creating a new intent for a different gateway, etc.). Otherwise it restores `payment_id` and creates no new intent: money already moving sends the customer to the checkout-complete page, and a still-payable intent shows an error, or Step 13's retry notice when the intent reports `->expires_at`.
 
 ### Why this matters for setups without a surcharge
 
@@ -1292,7 +1292,7 @@ Inline gateways (`redirectsForPayment()` returns `false`) return the customer th
 
 ### Why
 
-Resrv must be able to read the *current* state of a previously created intent. Every caller belongs to the manual-reservation flow — the normal checkout never calls this method (it voids stale intents through `cancelPaymentIntent()`, Step 9, and mints fresh ones):
+Resrv must be able to read the *current* state of a previously created intent. Besides the normal checkout, which re-reads a stored intent to resume it for the same gateway and amount or to verify its void (Step 9), every caller belongs to the manual-reservation flow:
 
 1. **Resume instead of double-charge.** When a customer returns to an interrupted payment on the manual pay-by-link page, Resrv re-reads the stored intent rather than blindly minting a second one. A succeeded or in-flight intent means "money is already moving — do not create another"; a dead one may be replaced. Before replacing a still-payable intent it cannot re-mount, Resrv voids it and re-reads it to prove the void (see *Redirect gateways* below).
 2. **Verify the void when an unpaid reservation is cancelled.** When an admin cancels an awaiting-payment reservation, or the `resrv:cancel-lapsed-holds` sweep cancels a lapsed one, Resrv calls `cancelPaymentIntent()` and then re-reads the intent. It drops the reference only when the intent reads `canceled` or `null`. If money moved, it keeps the reference, alerts the admins and tells the customer the charge will be refunded.
@@ -1400,7 +1400,7 @@ Rules that keep this money-safe:
 
 The other callers of `retrievePaymentIntent()` do not read `->expires_at` and behave as before for a still-payable intent they could not void: cancelling or lapsing the reservation, or marking it paid out of band, keeps the payment reference and flags the reservation `payment_unresolved` so a payment that still lands on the open order is reconciled rather than lost.
 
-The **normal checkout** does not use `retrievePaymentIntent()` at all (see *Why* above): when the customer steps back or switches gateway it calls `cancelPaymentIntent()` and mints a fresh order without verifying the void. For a provider that cannot void, the earlier order therefore stays payable until it times out, and a payment on it arrives after its `payment_id` was replaced — handle it with the stale-intent fallback in Step 9.
+The **normal checkout** resumes an order with a `->redirectTo` when the customer pays again with the same gateway and amount, and reads `->expires_at` as the pay-by-link page does: when the customer steps back, switches gateway or changes a coupon and the earlier order can't be voided, it creates no second order, keeps the stored reference and shows the same notice (Step 9).
 
 ### Reference: StripePaymentGateway (inline)
 
