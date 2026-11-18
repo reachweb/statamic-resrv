@@ -5,9 +5,7 @@ namespace Reach\StatamicResrv\Http\Payment;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
-use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 use Stripe\ApiRequestor;
 use Stripe\Exception\ApiErrorException;
@@ -21,6 +19,8 @@ use Stripe\Webhook;
 
 class StripePaymentGateway implements PaymentInterface
 {
+    use ConfirmsGatewayPayments;
+
     public function name(): string
     {
         return 'stripe';
@@ -370,22 +370,23 @@ class StripePaymentGateway implements PaymentInterface
         // reservation state, so an unsigned request can't probe status before verification.
         $data = $event->data->object;
 
-        // Stale intent: the customer moved on and this charge is now orphaned. Notify admins for
-        // manual refund; leave the reservation untouched. A booking confirmed through another
-        // payment makes this a second charge, but only a matching reference proves the intent is
-        // this site's. One matched on the id alone is more likely another site's on the same
-        // Stripe account (one that stores no reference), so a confirmed booking skips it below.
         $confirmed = $reservation->status === ReservationStatus::CONFIRMED->value;
 
-        if ($isStaleIntent && $event->type === 'payment_intent.succeeded' && ($referenceMatched || ! $confirmed)) {
-            Log::warning('Stripe payment intent succeeded after being abandoned by the customer — manual reconciliation may be required.', [
-                'reservation_id' => $reservation->id,
-                'payment_intent_id' => $data['id'],
-                'current_payment_id' => $reservation->payment_id,
-                'current_payment_gateway' => $reservation->payment_gateway,
-            ]);
+        if ($event->type === 'payment_intent.succeeded') {
+            // Only a matching reference proves a stale intent is this site's. One matched on the id
+            // alone is more likely another site's on the same Stripe account (one that stores no
+            // reference) than a second charge, so a confirmed booking leaves it alone.
+            if ($isStaleIntent && ! $referenceMatched && $confirmed) {
+                return response()->json([], 200);
+            }
 
-            OrphanedPaymentNotification::dispatchFor($reservation, $data['id'], $event->id ?? null);
+            $this->confirmFromGateway(
+                $reservation,
+                $data['id'],
+                stale: $isStaleIntent,
+                amount: $data['amount_received'] ?? null,
+                eventId: $event->id ?? null,
+            );
 
             return response()->json([], 200);
         }
@@ -394,43 +395,6 @@ class StripePaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
 
-        if ($event->type === 'payment_intent.succeeded') {
-            // Terminal reservation: the charge can't attach to a live booking, so notify and stop.
-            if (OrphanedPaymentNotification::notifyIfOrphaned($reservation, $data['id'], $event->id ?? null)) {
-                return response()->json([], 200);
-            }
-
-            // Defense-in-depth: refuse to confirm if the charged amount no longer matches what's owed.
-            $expectedAmount = $reservation->payment->add($reservation->payment_surcharge)->raw();
-
-            if (isset($data['amount_received']) && (int) $data['amount_received'] !== (int) $expectedAmount) {
-                Log::warning('Stripe succeeded webhook amount does not match the reservation total; not confirming.', [
-                    'reservation_id' => $reservation->id,
-                    'payment_intent_id' => $data['id'],
-                    'amount_received' => $data['amount_received'],
-                    'expected_amount' => $expectedAmount,
-                ]);
-
-                OrphanedPaymentNotification::dispatchFor($reservation, $data['id'], $event->id ?? null);
-
-                return response()->json([], 200);
-            }
-
-            if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
-                ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, [
-                    'gateway' => $reservation->payment_gateway ?: 'stripe',
-                    'payment_id' => $data['id'],
-                ]);
-
-                return response()->json([], 200);
-            }
-
-            // Lost the confirm race (row expired under the lock): surface any orphaned charge.
-            $reservation->refresh();
-            OrphanedPaymentNotification::notifyIfOrphaned($reservation, $data['id'], $event->id ?? null);
-
-            return response()->json([], 200);
-        }
         if ($event->type === 'payment_intent.payment_failed') {
             // A failed attempt is retryable: keep the reservation PENDING so the customer can retry
             // the same intent. ExpireReservations reclaims the hold if they abandon.

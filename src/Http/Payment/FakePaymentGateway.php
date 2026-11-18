@@ -5,13 +5,13 @@ namespace Reach\StatamicResrv\Http\Payment;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
-use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 
 class FakePaymentGateway implements PaymentInterface
 {
+    use ConfirmsGatewayPayments;
+
     /**
      * In-memory log of every intent id this instance was asked to cancel. Tests assert on
      * this to verify the real Stripe gateway's cancelPaymentIntent would have been called —
@@ -262,32 +262,16 @@ class FakePaymentGateway implements PaymentInterface
     {
         $reservation = Reservation::findOrFail($request->get('reservation_id'));
 
-        // Mirror StripePaymentGateway: already-confirmed reservations are an idempotent no-op.
-        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
+        // Mirror StripePaymentGateway: a success reaches confirmFromGateway() even for a confirmed
+        // reservation, so a payment completed after Mark as paid alerts the admins.
+        if ($request->get('status') === 'success') {
+            $this->confirmFromGateway($reservation, (string) ($reservation->payment_id ?: 'fake_intent'));
+
             return response()->json([], 200);
         }
 
-        if ($request->get('status') === 'success') {
-            $paymentId = (string) ($reservation->payment_id ?: 'fake_intent');
-
-            // Terminal reservation: the charge can't attach to a live booking, so notify and stop.
-            if (OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId)) {
-                return response()->json([], 200);
-            }
-
-            if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true)) {
-                ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, [
-                    'gateway' => $reservation->payment_gateway ?: 'fake',
-                    'payment_id' => $paymentId,
-                ]);
-
-                return response()->json([], 200);
-            }
-
-            // Lost the confirm race (row expired under the lock): surface any orphaned charge.
-            $reservation->refresh();
-            OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId);
-
+        // Every other event is a no-op for an already-confirmed reservation.
+        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
             return response()->json([], 200);
         }
         if ($request->get('status') === 'fail') {
