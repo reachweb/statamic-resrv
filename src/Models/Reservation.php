@@ -1120,7 +1120,16 @@ class Reservation extends Model
      */
     public function repriceBookedExtras(): void
     {
+        $customer = $this->customerData;
+
         foreach ($this->extras()->get() as $extra) {
+            // A custom-priced extra multiplies by a customer field. The checkout form saves only its
+            // own fields, so one missing from it is gone once the form is submitted, and a visible
+            // one may hold text: keep the line step 1 validated (the CP's create form does the same).
+            if ($extra->price_type === 'custom' && ! is_numeric($customer->get($extra->custom))) {
+                continue;
+            }
+
             $this->extras()->updateExistingPivot($extra->id, [
                 'price' => $this->extraUnitPrice($extra)->format(),
                 'total' => $this->extraLineTotal($extra, (int) $extra->pivot->quantity)->format(),

@@ -18,7 +18,9 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Livewire\CheckoutForm;
 use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
@@ -1122,6 +1124,56 @@ class CheckoutTest extends TestCase
             ->assertSet('step', 1);
 
         $this->assertEquals('80.00', $this->reservation->fresh()->price->format());
+    }
+
+    // A custom-priced extra multiplies by a customer field, here the guests the search passed on.
+    // The checkout form saves only its own fields, so on a site whose form lacks that one it is gone
+    // once the form is submitted. A coupon change then keeps the line step 1 booked, not a 500.
+    public function test_a_coupon_after_the_checkout_form_dropped_a_custom_extras_field_keeps_its_booked_line()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+        $this->assignCouponToEntry();
+
+        $this->reservation->customer()->associate(Customer::factory()->withGuests(3)->create())->save();
+        $custom = ResrvExtra::factory()->custom()->create();
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($custom->id);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // 100 for the stay + 10 × 3 adults.
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$custom->id => ['id' => $custom->id, 'quantity' => 1, 'price' => '30.00', 'name' => $custom->name]])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertEquals('130.00', $this->reservation->fresh()->payment->format());
+
+        Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])
+            ->set('form', [
+                'first_name' => 'Jerry',
+                'last_name' => 'Seinfeld',
+                'email' => 'about@nothing.com',
+                'repeat_email' => 'about@nothing.com',
+                'phone' => '1234567890',
+            ])
+            ->call('submit')
+            ->assertHasNoErrors();
+
+        $this->assertFalse($this->reservation->fresh()->customerData->has('adults'));
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        // 80 for the stay + the 30 step 1 booked.
+        $this->assertEquals('110.00', $this->reservation->fresh()->payment->format());
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $custom->id,
+            'price' => '30.00',
+            'total' => '30.00',
+        ]);
     }
 
     // Booking the add-ons and applying a coupon both write the add-on lines and then a total from
