@@ -380,6 +380,12 @@ class AvailabilityMultiResults extends Component
         $extras = Extra::findMany($this->enabledExtras->extras->pluck('id'))->keyBy('id');
 
         $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($selectionDataArrays, $extras) {
+            // A selection whose extra no longer exists keeps its stored price; the checkout
+            // rejects it with an explicit extras error (see AvailabilityResults::repriceEnabledAddons()).
+            if (! $extras->has($extra['id'])) {
+                return $extra;
+            }
+
             $totalPrice = Price::create(0);
 
             foreach ($selectionDataArrays as $selectionData) {
@@ -405,6 +411,10 @@ class AvailabilityMultiResults extends Component
 
         $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($selectionDataArrays, $values) {
             $totalPrice = Price::create(0);
+
+            if (! $values->has($option['value'])) {
+                return $option;
+            }
 
             foreach ($selectionDataArrays as $selectionData) {
                 $totalPrice->add(Price::create($values->get($option['value'])->priceForDates($selectionData)));

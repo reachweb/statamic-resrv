@@ -1085,6 +1085,84 @@ class AvailabilityMultiResultsTest extends TestCase
         $this->assertEquals('91.00', $options->first()['price']);
     }
 
+    /**
+     * A selected extra deleted in the CP while it sits in the cart keeps its stored price when the
+     * cart changes (like AvailabilityResults::repriceEnabledAddons()); the checkout then rejects it
+     * with an explicit extras error instead of the re-pricing fataling on the missing model.
+     */
+    public function test_reprice_keeps_the_stored_price_of_an_extra_deleted_after_selection()
+    {
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry();
+
+        $live = ResrvExtra::factory()->create();
+        $gone = ResrvExtra::factory()->fixed()->create();
+        ResrvEntry::whereItemId($entryId)->extras()->attach([$live->id, $gone->id]);
+
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('updateRateQuantity', $childrenRate->id, 1)
+            ->call('addSelections')
+            ->dispatch('extras-updated', [
+                ['id' => $live->id, 'price' => '9.30', 'name' => $live->name, 'quantity' => 1],
+                ['id' => $gone->id, 'price' => '25.00', 'name' => $gone->name, 'quantity' => 1],
+            ]);
+
+        $extras = $component->get('enabledExtras.extras')->keyBy('id');
+        $this->assertEquals('18.60', $extras->get($live->id)['price']);
+        $this->assertEquals('50.00', $extras->get($gone->id)['price']);
+
+        $gone->delete();
+
+        $component->call('removeSelection', 0)->assertHasNoErrors();
+
+        $extras = $component->get('enabledExtras.extras')->keyBy('id');
+        $this->assertEquals('9.30', $extras->get($live->id)['price']);
+        $this->assertEquals('50.00', $extras->get($gone->id)['price']);
+    }
+
+    /**
+     * Same for an option value deleted while it sits in the cart.
+     */
+    public function test_reprice_keeps_the_stored_price_of_an_option_value_deleted_after_selection()
+    {
+        [$entryId, $adultsRate, $childrenRate] = $this->createMultiRateEntry();
+
+        $liveOption = Option::factory()
+            ->notRequired()
+            ->has(OptionValue::factory(), 'values')
+            ->create(['item_id' => $entryId]);
+        $goneOption = Option::factory()
+            ->notRequired()
+            ->has(OptionValue::factory()->fixed(), 'values')
+            ->create(['item_id' => $entryId]);
+
+        $liveValue = $liveOption->values->first();
+        $goneValue = $goneOption->values->first();
+
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('updateRateQuantity', $childrenRate->id, 1)
+            ->call('addSelections')
+            ->dispatch('options-updated', [
+                ['id' => $liveOption->id, 'value' => $liveValue->id, 'price' => '45.50', 'optionName' => $liveOption->name, 'valueName' => $liveValue->name],
+                ['id' => $goneOption->id, 'value' => $goneValue->id, 'price' => '30.00', 'optionName' => $goneOption->name, 'valueName' => $goneValue->name],
+            ]);
+
+        $options = $component->get('enabledOptions.options')->keyBy('id');
+        $this->assertEquals('91.00', $options->get($liveOption->id)['price']);
+        $this->assertEquals('60.00', $options->get($goneOption->id)['price']);
+
+        $goneValue->delete();
+
+        $component->call('removeSelection', 0)->assertHasNoErrors();
+
+        $options = $component->get('enabledOptions.options')->keyBy('id');
+        $this->assertEquals('45.50', $options->get($liveOption->id)['price']);
+        $this->assertEquals('60.00', $options->get($goneOption->id)['price']);
+    }
+
     // --- Bug 3: totalPrice includes extras/options ---
 
     public function test_total_price_includes_extras()
