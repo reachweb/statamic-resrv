@@ -13,8 +13,7 @@ use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
-use Reach\StatamicResrv\Models\Extra;
-use Reach\StatamicResrv\Models\OptionValue;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry;
 use Statamic\Support\Traits\Hookable;
@@ -336,25 +335,14 @@ class AvailabilityMultiResults extends Component
     public function updateExtras($extras): void
     {
         $this->enabledExtras->extras = collect($extras);
-        $this->recalculateExtrasPricing();
+        $this->priceExtras();
     }
 
     #[On('options-updated')]
     public function updateOptions($options): void
     {
         $this->enabledOptions->options = collect($options);
-        $this->recalculateOptionsPricing();
-    }
-
-    protected function buildSelectionDataArrays(): array
-    {
-        return array_map(fn ($selection) => [
-            'date_start' => $selection['date_start'],
-            'date_end' => $selection['date_end'],
-            'quantity' => $selection['quantity'],
-            'item_id' => $this->entryId,
-            'rate_id' => $selection['rate_id'],
-        ], $this->selections);
+        $this->priceOptions();
     }
 
     protected function recalculateAddonPricing(): void
@@ -366,66 +354,27 @@ class AvailabilityMultiResults extends Component
             return;
         }
 
-        $this->recalculateExtrasPricing();
-        $this->recalculateOptionsPricing();
+        $this->priceExtras();
+        $this->priceOptions();
     }
 
-    protected function recalculateExtrasPricing(): void
+    /**
+     * Price the selected extras for every stay in the cart. A selection the entry can no longer
+     * book keeps its stored price; the checkout rejects it with an explicit error.
+     */
+    protected function priceExtras(): void
     {
-        if ($this->enabledExtras->extras->isEmpty() || empty($this->selections)) {
-            return;
+        if (! empty($this->selections)) {
+            $this->enabledExtras->extras = (new AddonQuote($this->entryId, $this->selections))->price($this->enabledExtras->extras)['extras'];
         }
-
-        $selectionDataArrays = $this->buildSelectionDataArrays();
-        $extras = Extra::findMany($this->enabledExtras->extras->pluck('id'))->keyBy('id');
-
-        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($selectionDataArrays, $extras) {
-            // A selection whose extra no longer exists keeps its stored price; the checkout
-            // rejects it with an explicit extras error (see AvailabilityResults::repriceEnabledAddons()).
-            if (! $extras->has($extra['id'])) {
-                return $extra;
-            }
-
-            $totalPrice = Price::create(0);
-
-            foreach ($selectionDataArrays as $selectionData) {
-                // Clone per call: Extra::priceForDates() mutates $this->price for dynamic
-                // pricing, so each selection must start from the freshly-loaded base price.
-                $totalPrice->add(Price::create((clone $extras->get($extra['id']))->priceForDates($selectionData)));
-            }
-
-            // A line total belongs to the price it was computed with (EnabledExtras::lineTotal()).
-            unset($extra['total']);
-            $extra['price'] = $totalPrice->format();
-
-            return $extra;
-        });
     }
 
-    protected function recalculateOptionsPricing(): void
+    /** The same for the selected options. */
+    protected function priceOptions(): void
     {
-        if ($this->enabledOptions->options->isEmpty() || empty($this->selections)) {
-            return;
+        if (! empty($this->selections)) {
+            $this->enabledOptions->options = (new AddonQuote($this->entryId, $this->selections))->price([], $this->enabledOptions->options)['options'];
         }
-
-        $selectionDataArrays = $this->buildSelectionDataArrays();
-        $values = OptionValue::findMany($this->enabledOptions->options->pluck('value'))->keyBy('id');
-
-        $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($selectionDataArrays, $values) {
-            if (! $values->has($option['value'])) {
-                return $option;
-            }
-
-            $totalPrice = Price::create(0);
-
-            foreach ($selectionDataArrays as $selectionData) {
-                $totalPrice->add(Price::create($values->get($option['value'])->priceForDates($selectionData)));
-            }
-
-            $option['price'] = $totalPrice->format();
-
-            return $option;
-        });
     }
 
     public function render()

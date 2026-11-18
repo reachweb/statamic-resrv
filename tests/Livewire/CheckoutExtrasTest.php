@@ -13,6 +13,7 @@ use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Exceptions\CouponNotFoundException;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
+use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Livewire\AvailabilitySearch;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Livewire\Extras;
@@ -26,6 +27,7 @@ use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -62,7 +64,7 @@ class CheckoutExtrasTest extends TestCase
 
         $entry->extras()->attach($extra->id);
 
-        $this->extras = ResrvExtra::getPriceForDates($this->reservation);
+        $this->extras = AddonQuote::forReservation($this->reservation)->extras();
     }
 
     // Test that extras are correctly loaded for the Reservation
@@ -433,6 +435,31 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
+    // The Extras step lists a custom-priced extra at ×1 while the customer data lacks its field, but
+    // the booking can't be priced: it gets an extras error, as in the CP, instead of a server error.
+    public function test_it_rejects_a_custom_extra_whose_customer_field_is_missing()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = ResrvExtra::factory()->custom()->create();
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($extra->id);
+
+        $extras = Livewire::test(Extras::class, ['reservation' => $this->reservation])
+            ->call('toggleExtra', $extra->id);
+
+        $this->assertEquals('10.00', $extras->get('enabledExtras.extras')->get($extra->id)['price']);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', $extras->get('enabledExtras.extras')->all())
+            ->call('handleFirstStep')
+            ->assertHasErrors(['extras' => 'The extra "'.$extra->name.'" is not available for this reservation.'])
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', ['reservation_id' => $this->reservation->id]);
+    }
+
     // An extra whose category was unpublished after selection disappears from the list and must be
     // rejected at checkout exactly like an unpublished extra.
     public function test_it_rejects_a_selected_extra_whose_category_was_unpublished_after_selection()
@@ -463,6 +490,47 @@ class CheckoutExtrasTest extends TestCase
             'reservation_id' => $this->reservation->id,
             'extra_id' => $extra->id,
         ]);
+    }
+
+    // The checkout and the CP price add-ons through one service, but each words what blocks booking.
+    // The customer sees the checkout's strings, which sites have translated, not the CP's.
+    public function test_an_add_on_that_cannot_be_booked_shows_the_checkouts_message_not_the_cps()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+        $option = Option::factory()->notRequired()->has(OptionValue::factory()->fixed(), 'values')
+            ->create(['item_id' => $this->entries->first()->id()]);
+        $value = $option->values->first();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 1,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]]);
+
+        ResrvExtra::whereKey($extra->id)->update(['published' => false]);
+
+        $component->call('handleFirstStep')->assertSet('step', 1);
+        $this->assertSame([__('The selected extra is not available anymore.')], $component->errors()->get('extras'));
+
+        $component->dispatch('extras-updated', [])
+            ->dispatch('options-updated', [$option->id => [
+                'id' => $option->id,
+                'value' => $value->id,
+                'price' => $value->price->format(),
+                'optionName' => $option->name,
+                'valueName' => $value->name,
+            ]]);
+
+        $value->update(['published' => false]);
+
+        $component->call('handleFirstStep')->assertSet('step', 1);
+        $this->assertSame([__('The selected option value is not valid.')], $component->errors()->get('options'));
     }
 
     // The unpublished-category filter used to live only in frontendExtras() (render), while
@@ -718,6 +786,33 @@ class CheckoutExtrasTest extends TestCase
             'price' => '100.00',
             'total' => '100.00',
         ]);
+    }
+
+    // Picked next to the results, before a reservation exists, the selection carries the clamped
+    // line too, so the results total agrees with what the checkout will charge.
+    public function test_a_clamped_extra_with_a_quantity_shows_the_clamped_line_next_to_the_results()
+    {
+        $extra = $this->attachFixedExtraWithDynamicPricing('minimum', '100');
+
+        $results = Livewire::test(AvailabilityResults::class, ['entry' => $this->entries->first()->id()])
+            ->dispatch('availability-search-updated', [
+                'dates' => [
+                    'date_start' => $this->date->toISOString(),
+                    'date_end' => $this->date->copy()->addDays(2)->toISOString(),
+                ],
+                'quantity' => 1,
+                'rate' => null,
+            ])
+            ->assertHasNoErrors();
+
+        $extras = Livewire::test(Extras::class, ['entryId' => $this->entries->first()->id(), 'data' => session('resrv-search')])
+            ->call('toggleExtra', $extra->id)
+            ->call('updateExtraQuantity', $extra->id, 3);
+
+        // 100 for the two nights and 100 for the three units, not 100 × 3.
+        $results->dispatch('extras-updated', $extras->get('enabledExtras.extras')->all())
+            ->assertSee('200.00')
+            ->assertDontSee('400.00');
     }
 
     // Back to one unit, the line is the unit price again: a maximum binds the 3-unit line (60, not
@@ -2054,6 +2149,24 @@ class CheckoutExtrasTest extends TestCase
         // NOT: 10 * 1 (session fallback) * 2 = 20
         $charges = $reservation->extraCharges();
         $this->assertEquals('60.00', $charges->format());
+    }
+
+    // The same for a single stay: the multiplier is the reservation's customer data, which the checkout
+    // charged, not what a later search left in the session.
+    public function test_custom_extra_uses_customer_data_not_session()
+    {
+        $reservation = Reservation::factory()->for(Customer::factory()->withGuests(3))->create([
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        $extra = ResrvExtra::factory()->custom()->create();
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($extra->id);
+        $reservation->extras()->sync([$extra->id => ['quantity' => 1, 'price' => '30.00']]);
+
+        session(['resrv-search' => (object) ['customer' => ['adults' => 5]]]);
+
+        // 10 × 3 adults, not 10 × the session's 5.
+        $this->assertEquals('30.00', $reservation->extraCharges()->format());
     }
 
     // A selected quantity above one makes the Extras component price the line itself. For a parent

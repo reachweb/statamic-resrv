@@ -5,9 +5,9 @@ namespace Reach\StatamicResrv\Livewire\Forms;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Validate;
 use Livewire\Form;
-use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Support\AddonQuote;
 
 class EnabledExtras extends Form
 {
@@ -18,8 +18,8 @@ class EnabledExtras extends Form
     {
         $this->validate();
 
-        // Snapshot both, like the CP (ManualReservationCreator::priceExtras()): the unit price
-        // listed and the line charged, which Extra::priceFromPivot() renders.
+        // Snapshot both, like the CP (ManualReservationCreator::create()): the unit price listed
+        // and the line charged, which Extra::priceFromPivot() renders.
         return $this->extras->mapWithKeys(function ($extra) {
             return [
                 $extra['id'] => [
@@ -31,19 +31,10 @@ class EnabledExtras extends Form
         });
     }
 
-    /**
-     * The amount a selected extra adds to the total. A line priced against the reservation
-     * carries it as 'total' (Extra::calculatePrice(), see HandlesExtrasQueries::withExtraLineTotal()):
-     * once a dynamic-pricing minimum/maximum binds it is not price × quantity, because
-     * priceForDates() clamps the unit and calculatePrice() the line. Any other line is linear.
-     */
+    /** The amount a selected extra adds to the total (AddonQuote::rowTotal()). */
     public function lineTotal(array $extra): PriceClass
     {
-        if (isset($extra['total'])) {
-            return Price::create($extra['total']);
-        }
-
-        return Price::create($extra['price'])->multiply($extra['quantity']);
+        return AddonQuote::rowTotal($extra);
     }
 
     public function rules(): array

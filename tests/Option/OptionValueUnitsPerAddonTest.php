@@ -9,6 +9,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -95,6 +96,12 @@ class OptionValueUnitsPerAddonTest extends TestCase
     private function data(int $quantity, $rateId): array
     {
         return array_merge($this->baseData($quantity), ['rate_id' => $rateId]);
+    }
+
+    /** $option as AddonQuote::options() lists it for one stay. */
+    private function listed(Option $option, array $data): Option
+    {
+        return (new AddonQuote($this->item->id(), [$data]))->options()->firstWhere('id', $option->id);
     }
 
     /**
@@ -255,7 +262,7 @@ class OptionValueUnitsPerAddonTest extends TestCase
     }
 
     // Option::calculatePrice($data, $valueId) is the entry point used by
-    // Reservation::extraCharges() / validateExtraCharges().
+    // Reservation::extraCharges() and AddonQuote.
     public function test_option_calculate_price_entry_point_applies_the_divisor()
     {
         $divisorData = $this->data(2, $this->divisorRate->id);
@@ -267,11 +274,10 @@ class OptionValueUnitsPerAddonTest extends TestCase
         $this->assertEquals('91.00', Option::find($this->option->id)->calculatePrice($defaultData, $this->perdayValue->id)->format());
     }
 
-    // Option::valuesPriceForDates($data) is the display entry point used by the Options
-    // Livewire component.
+    // AddonQuote::options() is the listing the Options Livewire component shows.
     public function test_option_values_price_for_dates_display_entry_point_applies_the_divisor()
     {
-        $option = Option::find($this->option->id)->valuesPriceForDates($this->data(2, $this->divisorRate->id));
+        $option = $this->listed($this->option, $this->data(2, $this->divisorRate->id));
 
         $fixed = $option->values->firstWhere('price_type', 'fixed');
         $perday = $option->values->firstWhere('price_type', 'perday');
@@ -284,7 +290,7 @@ class OptionValueUnitsPerAddonTest extends TestCase
         $this->assertEquals('0.00', $free->price->format());
 
         // Same values under the default rate keep the ×quantity behaviour.
-        $option = Option::find($this->option->id)->valuesPriceForDates($this->data(2, $this->defaultRate->id));
+        $option = $this->listed($this->option, $this->data(2, $this->defaultRate->id));
 
         $this->assertEquals('60.00', $option->values->firstWhere('price_type', 'fixed')->price->format());
         $this->assertEquals('91.00', $option->values->firstWhere('price_type', 'perday')->price->format());
@@ -304,7 +310,7 @@ class OptionValueUnitsPerAddonTest extends TestCase
             DB::flushQueryLog();
             DB::enableQueryLog();
 
-            $priced = Option::find($option->id)->valuesPriceForDates($this->data(2, $rate->id));
+            $priced = $this->listed($option, $this->data(2, $rate->id));
 
             $rateQueries = collect(DB::getQueryLog())
                 ->filter(fn ($query) => str_contains($query['query'], 'resrv_rates'))
@@ -317,7 +323,7 @@ class OptionValueUnitsPerAddonTest extends TestCase
         }
 
         // The prices themselves are unaffected by the memo.
-        $this->assertEquals('30.00', Option::find($option->id)->valuesPriceForDates($this->data(2, $this->divisorRate->id))->values->first()->price->format());
-        $this->assertEquals('60.00', Option::find($option->id)->valuesPriceForDates($this->data(2, $this->defaultRate->id))->values->first()->price->format());
+        $this->assertEquals('30.00', $this->listed($option, $this->data(2, $this->divisorRate->id))->values->first()->price->format());
+        $this->assertEquals('60.00', $this->listed($option, $this->data(2, $this->defaultRate->id))->values->first()->price->format());
     }
 }

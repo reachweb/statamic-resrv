@@ -3,123 +3,11 @@
 namespace Reach\StatamicResrv\Livewire\Traits;
 
 use Illuminate\Support\Collection;
-use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Livewire\AvailabilityMultiResults;
-use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCondition;
-use Reach\StatamicResrv\Models\Reservation;
 
 trait HandlesExtrasQueries
 {
-    public function getExtrasForReservation(): Collection
-    {
-        $reservation = $this->reservation ?? Reservation::findOrFail($this->reservation->id);
-
-        $extras = $reservation->isParent()
-            ? $this->getExtrasWithParentPricing($reservation)
-            : Extra::getPriceForDates($reservation);
-
-        $this->loadConditionsAsCollection($extras);
-
-        $this->handleExtrasConditions($extras);
-
-        return $extras;
-    }
-
-    protected function getExtrasWithParentPricing(Reservation $reservation): Collection
-    {
-        $firstChild = $reservation->childs->first();
-
-        $extras = Extra::getPriceForDates([
-            'item_id' => $reservation->item_id,
-            'date_start' => $firstChild->date_start,
-            'date_end' => $firstChild->date_end,
-            'quantity' => 1,
-        ]);
-
-        return $extras->transform(function ($extra) use ($reservation) {
-            $totalPrice = Price::create(0);
-
-            foreach ($reservation->childs as $child) {
-                $childData = [
-                    'date_start' => $child->date_start,
-                    'date_end' => $child->date_end,
-                    'quantity' => $child->quantity,
-                    'item_id' => $reservation->item_id,
-                    'rate_id' => $child->rate_id,
-                ];
-
-                // Fresh instance required: Extra::priceForDates mutates $this->price via dynamic pricing
-                $freshExtra = Extra::find($extra->id);
-                $totalPrice->add(Price::create($freshExtra->priceForDates($childData)));
-            }
-
-            $extra->price = $totalPrice->format();
-
-            return $extra;
-        });
-    }
-
-    public function getExtrasForSearch($data, $entryId): Collection
-    {
-        $extras = Extra::getPriceForDates(array_merge($data, ['item_id' => $entryId]));
-
-        $this->loadConditionsAsCollection($extras);
-
-        $this->handleExtrasConditions($extras);
-
-        return $extras;
-    }
-
-    /**
-     * Aggregate available-extra prices across the multi-result cart selections so the
-     * displayed prices reflect the whole cart, not just the most recent search. Mirrors
-     * the parent-reservation pricing path used during checkout.
-     *
-     * @param  array<int, array{date_start: string, date_end: string, quantity: int, rate_id: int}>  $selections
-     */
-    public function getExtrasForSelections(array $selections, string $entryId): Collection
-    {
-        $first = $selections[0];
-
-        // Seed the available extras list with one selection's worth of data, then
-        // overwrite each extra's price with the across-selections aggregate.
-        $extras = Extra::getPriceForDates([
-            'item_id' => $entryId,
-            'date_start' => $first['date_start'],
-            'date_end' => $first['date_end'],
-            'quantity' => 1,
-        ]);
-
-        $extras->transform(function ($extra) use ($selections, $entryId) {
-            $totalPrice = Price::create(0);
-
-            foreach ($selections as $selection) {
-                $selectionData = [
-                    'item_id' => $entryId,
-                    'date_start' => $selection['date_start'],
-                    'date_end' => $selection['date_end'],
-                    'quantity' => $selection['quantity'],
-                    'rate_id' => $selection['rate_id'],
-                ];
-
-                // Fresh instance required: Extra::priceForDates mutates $this->price via dynamic pricing
-                $freshExtra = Extra::find($extra->id);
-                $totalPrice->add(Price::create($freshExtra->priceForDates($selectionData)));
-            }
-
-            $extra->price = $totalPrice->format();
-
-            return $extra;
-        });
-
-        $this->loadConditionsAsCollection($extras);
-
-        $this->handleExtrasConditions($extras);
-
-        return $extras;
-    }
-
     /**
      * Fetch every extra's conditions in a single query instead of a find() + conditions()->get()
      * per extra (the N+1 this replaces). conditions() is declared hasOne, but an extra can hold
@@ -135,45 +23,6 @@ trait HandlesExtrasQueries
         $extras->each(function ($extra) use ($conditionsByExtra) {
             $extra->setRelation('conditions', $conditionsByExtra->get($extra->id, collect()));
         });
-    }
-
-    /**
-     * Re-derive the price stored on each selected extra from the (freshly priced) available
-     * list. A selection that is no longer listed (filtered view, unpublished meanwhile) keeps
-     * its stored price: the checkout re-validates every selection against the reservation.
-     */
-    public function updateEnabledExtraPrices(): void
-    {
-        $this->enabledExtras->extras->transform(function ($extra) {
-            $available = $this->extras->firstWhere('id', $extra['id']);
-
-            if ($available) {
-                $extra['price'] = $available->price->format();
-                $extra = $this->withExtraLineTotal($extra);
-            }
-
-            return $extra;
-        });
-    }
-
-    /**
-     * Carry the line a reservation is charged for a selected extra as 'total'
-     * (Reservation::extraLineTotal()). A single unit agrees with its price, and without a
-     * reservation the line stays price × quantity (EnabledExtras::lineTotal()), so a total carried
-     * over in the shared session is dropped there.
-     */
-    protected function withExtraLineTotal(array $extra): array
-    {
-        unset($extra['total']);
-
-        // Quantity first: reading $this->reservation loads it. Conditions are not needed to price.
-        $model = $extra['quantity'] > 1 && isset($this->reservation) ? Extra::without('conditions')->find($extra['id']) : null;
-
-        if ($model) {
-            $extra['total'] = $this->reservation->extraLineTotal($model, (int) $extra['quantity'])->format();
-        }
-
-        return $extra;
     }
 
     public function handleExtrasConditions($extras)
@@ -212,10 +61,7 @@ trait HandlesExtrasQueries
      */
     protected function getMultiSelectionsFromSession(): ?array
     {
-        // property_exists guard: this trait is also used by Checkout, which
-        // does not declare $useMultiSelections. Touching a typed property that
-        // does not exist on the host class would otherwise raise an error.
-        if (! property_exists($this, 'useMultiSelections') || ! $this->useMultiSelections) {
+        if (! $this->useMultiSelections) {
             return null;
         }
 

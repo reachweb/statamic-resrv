@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
+use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
@@ -165,9 +166,8 @@ class Extra extends Model
         return $this->priceForDates($data);
     }
 
-    // TODO: merge these two methods ?
-    // More info: this one calculates the price for the extra including the quantity the user has selected
-    // and is used to validate the price for the reservation. Probably should merge with getPriceForDates.
+    // The line for $quantity units, clamped as a whole by dynamic pricing; priceForDates() is one unit's
+    // price. AddonQuote prices both.
     public function calculatePrice($data, $quantity)
     {
         $this->initiateAvailabilityUnsafe($data);
@@ -215,17 +215,23 @@ class Extra extends Model
      * Why $quantity units of this extra cannot be booked, or null when they can. An extra that
      * does not allow multiple carries no maximum, so it is capped at one unit here.
      */
+    public function quantityBlocker(int $quantity): ?AddonBlocker
+    {
+        return match (true) {
+            ! $this->allow_multiple && $quantity > 1 => AddonBlocker::ExtraNotMultiple,
+            $this->maximum > 0 && $quantity > $this->maximum => AddonBlocker::ExtraOverMaximum,
+            default => null,
+        };
+    }
+
+    /** quantityBlocker() as the message the checkout form and the CP both show. */
     public function quantityError(int $quantity): ?string
     {
-        if (! $this->allow_multiple && $quantity > 1) {
-            return __('The extra ":name" cannot be added more than once.', ['name' => $this->name]);
-        }
-
-        if ($this->maximum > 0 && $quantity > $this->maximum) {
-            return __('The selected quantity exceeds the maximum allowed for this extra.');
-        }
-
-        return null;
+        return match ($this->quantityBlocker($quantity)) {
+            AddonBlocker::ExtraNotMultiple => __('The extra ":name" cannot be added more than once.', ['name' => $this->name]),
+            AddonBlocker::ExtraOverMaximum => __('The selected quantity exceeds the maximum allowed for this extra.'),
+            default => null,
+        };
     }
 
     /**
@@ -233,11 +239,9 @@ class Extra extends Model
      * an unpublished category. Apply it on an entry's extras() relation for the attachment half.
      * An extra without a category (or whose category was deleted — category_id is nulled) is
      * listed under "Uncategorized" (HandlesExtrasQueries::createExtraCategoryObject()), so only
-     * a live, unpublished category hides it. The selectable list (scopeGetPriceForDates()) and
-     * checkout validation (Reservation::extraForValidation()) both apply this scope; the
-     * required-extras gate (scopeEntriesWithConditions()) is a raw query that re-applies
-     * published + not trashed by hand and shares only the category subquery — keep the three in
-     * step.
+     * a live, unpublished category hides it. AddonQuote lists and books extras through this scope;
+     * the required-extras gate (scopeEntriesWithConditions()) is a raw query that re-applies
+     * published + not trashed by hand and shares only the category subquery — keep the two in step.
      */
     public function scopeSelectable($query)
     {
@@ -278,27 +282,6 @@ class Extra extends Model
             ->whereNull('resrv_extras.deleted_at')
             ->whereNotExists(self::unpublishedCategoryQuery())
             ->select('resrv_extras.*', 'resrv_extra_conditions.*');
-    }
-
-    public function scopeGetPriceForDates($query, $data)
-    {
-        $entry = Entry::whereItemId($data['item_id']);
-
-        $extras = $entry->extras()
-            ->selectable()
-            ->with('category')
-            ->without('conditions')
-            ->orderBy('order')
-            ->get();
-
-        $extras->transform(function ($extra) use ($data) {
-            $extra->original_price = $extra->price->format();
-            $extra->price = $extra->priceForDates($data);
-
-            return $extra;
-        });
-
-        return $extras;
     }
 
     protected function getRelativePrice($data)

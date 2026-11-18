@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Livewire\Traits\HandlesOptionsQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesStatamicQueries;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 
 class Options extends Component
 {
@@ -74,7 +75,7 @@ class Options extends Component
             // for a previous search or cart state). Keep the selection but re-derive
             // the prices for the current context before broadcasting them.
             if ($this->canPriceSelection()) {
-                $this->updateEnabledOptionPrices();
+                $this->enabledOptions->options = $this->addonQuote()->price([], $this->enabledOptions->options)['options'];
             }
             $this->dispatchOptionsUpdated();
         } else {
@@ -85,15 +86,7 @@ class Options extends Component
     #[Computed(persist: true)]
     public function options(): Collection
     {
-        $multiSelections = isset($this->reservation) ? null : $this->getMultiSelectionsFromSessionForOptions();
-
-        if ($multiSelections !== null) {
-            $options = $this->getOptionsForSelections($multiSelections, $this->entryId);
-        } else {
-            $options = isset($this->reservation)
-                ? $this->getOptionsForReservation()
-                : $this->getOptionsForSearch($this->searchDataForPricing(), $this->entryId);
-        }
+        $options = $this->addonQuote()->options();
 
         if (is_string($this->filter)) {
             $optionsToShow = explode('|', $this->filter);
@@ -213,8 +206,19 @@ class Options extends Component
             return;
         }
 
-        $this->updateEnabledOptionPrices();
+        // A row the entry can't book keeps its price: the checkout rejects it.
+        $this->enabledOptions->options = $this->addonQuote()->price([], $this->enabledOptions->options)['options'];
         $this->dispatchOptionsUpdated();
+    }
+
+    /** Prices for the reservation, else the multi-results cart, else the search. */
+    protected function addonQuote(): AddonQuote
+    {
+        if (isset($this->reservation)) {
+            return AddonQuote::forReservation($this->reservation);
+        }
+
+        return new AddonQuote($this->entryId, $this->getMultiSelectionsFromSessionForOptions() ?? [$this->searchDataForPricing()]);
     }
 
     /**

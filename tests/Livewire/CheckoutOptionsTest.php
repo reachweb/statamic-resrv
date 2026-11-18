@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -178,7 +179,7 @@ class CheckoutOptionsTest extends TestCase
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $option = Option::find($this->options->first()->id)->valuesPriceForDates($this->reservation);
+        $option = AddonQuote::forReservation($this->reservation)->options()->firstWhere('id', $this->options->first()->id);
 
         // Test without any options (should fail)
         Livewire::test(Checkout::class)
@@ -248,7 +249,7 @@ class CheckoutOptionsTest extends TestCase
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $option = Option::find($this->options->first()->id)->valuesPriceForDates($this->reservation);
+        $option = AddonQuote::forReservation($this->reservation)->options()->firstWhere('id', $this->options->first()->id);
 
         $component = Livewire::test(Checkout::class)
             ->dispatch('options-updated', [$option->id => [
@@ -278,7 +279,7 @@ class CheckoutOptionsTest extends TestCase
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $option = Option::find($this->options->first()->id)->valuesPriceForDates($this->reservation);
+        $option = AddonQuote::forReservation($this->reservation)->options()->firstWhere('id', $this->options->first()->id);
         $value = $option->values->first();
 
         $component = Livewire::test(Checkout::class)
@@ -331,12 +332,12 @@ class CheckoutOptionsTest extends TestCase
 
     // The 'resrv-options' session key is never cleared, so a selection made on another entry's page
     // can reach this checkout; an option that is not this entry's is never listed here and must be
-    // rejected (checkForRequiredOptions() already scopes by entry — validation must agree).
+    // rejected (the required-options check already scopes by entry — validation must agree).
     public function test_it_rejects_a_selected_option_that_belongs_to_another_entry()
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $own = Option::find($this->options->first()->id)->valuesPriceForDates($this->reservation);
+        $own = AddonQuote::forReservation($this->reservation)->options()->firstWhere('id', $this->options->first()->id);
         $ownValue = $own->values->first();
 
         $foreign = Option::factory()

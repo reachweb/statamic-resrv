@@ -8,6 +8,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Data\ReservationData;
+use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Enums\ManualPaymentMode;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
@@ -31,7 +32,6 @@ use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCategory;
 use Reach\StatamicResrv\Models\ExtraCondition;
-use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -42,7 +42,7 @@ use Reach\StatamicResrv\Traits\HandlesPricing;
 /**
  * Owns the quote + creation of admin-created (manual) reservations. All money figures are
  * computed server-side through the same code paths the frontend checkout uses
- * (getPricing, calculatePrice, calculatePayment) — never trusted from the client.
+ * (getPricing, AddonQuote, calculatePayment) — never trusted from the client.
  */
 class ManualReservationCreator
 {
@@ -163,12 +163,14 @@ class ManualReservationCreator
             ]);
 
             if ($quote['extras']->isNotEmpty()) {
+                // Both are snapshotted: the unit price the form listed and the line charged, which
+                // Extra::priceFromPivot() renders (a clamped line is not price × quantity).
                 $reservation->extras()->sync(
                     $quote['extras']->mapWithKeys(fn ($extra, $id) => [
                         $id => [
-                            'quantity' => $extra['quantity'],
+                            'quantity' => (int) $extra['quantity'],
                             'price' => $extra['price'],
-                            'total' => $extra['total']->format(),
+                            'total' => AddonQuote::rowTotal($extra)->format(),
                         ],
                     ])
                 );
@@ -177,7 +179,7 @@ class ManualReservationCreator
             if ($quote['options']->isNotEmpty()) {
                 $reservation->options()->sync(
                     $quote['options']->mapWithKeys(fn ($option, $id) => [
-                        $id => ['value' => $option['value']],
+                        $id => ['value' => (int) $option['value']],
                     ])
                 );
             }
@@ -424,11 +426,20 @@ class ManualReservationCreator
         $computedBasePrice = Price::create($pricing['price']);
         $basePrice = Price::create($computedBasePrice->format());
 
-        $extras = $this->priceExtras($input, $data);
-        $options = $this->priceOptions($input, $data);
+        // Only selectable add-ons of this entry; keyed by id, as they are synced.
+        $addons = $this->addonQuote($input)->price(
+            collect($input['extras'] ?? [])->keyBy(fn ($row) => (int) ($row['id'] ?? 0)),
+            collect($input['options'] ?? [])->keyBy(fn ($row) => (int) ($row['id'] ?? 0)),
+        );
 
-        $extrasTotal = Price::create(0)->add(...$extras->pluck('total')->all());
-        $optionsTotal = Price::create(0)->add(...$options->pluck('total')->all());
+        if ($blocker = $addons['blockers'][0] ?? null) {
+            throw new ManualReservationException($this->blockerMessage($blocker), field: $blocker['reason']->field());
+        }
+
+        $extras = $addons['extras'];
+        $options = $addons['options'];
+        $extrasTotal = $addons['extras_total'];
+        $optionsTotal = $addons['options_total'];
         $computedTotal = Price::create($computedBasePrice->format())->add($extrasTotal, $optionsTotal);
 
         $totalOverridden = array_key_exists('total_override', $input) && $input['total_override'] !== null && $input['total_override'] !== '';
@@ -786,126 +797,50 @@ class ManualReservationCreator
         }
     }
 
-    /** @return Collection<int, array{quantity: int, price: string, total: PriceClass}> keyed by extra id */
-    protected function priceExtras(array $input, array $data): Collection
-    {
-        $calcData = array_merge($data, ['item_id' => $input['item_id']]);
-
-        // Carry the customer payload so a custom-priced extra (Extra::getCustomPrice) reads
-        // its multiplier from the same checkout-form field the frontend does; the resrv-search
-        // session fallback is stashed by withoutCheckoutSession(), so this is the only source.
-        if (! empty($input['customer'])) {
-            $calcData['customer'] = collect($input['customer']);
-        }
-
-        return collect($input['extras'] ?? [])->mapWithKeys(function ($item) use ($calcData) {
-            $id = (int) ($item['id'] ?? 0);
-            $quantity = (int) ($item['quantity'] ?? 0);
-
-            // Only selectable extras attached to this entry — the same predicate as the quote's
-            // extras list and the frontend checkout (Extra::scopeSelectable(): published and not
-            // in an unpublished category). Extra::find() alone would let a stale/crafted payload
-            // attach a foreign or hidden extra.
-            $extra = Extra::whereHas('entries', fn ($query) => $query->where('resrv_entries.item_id', $calcData['item_id']))
-                ->selectable()
-                ->find($id);
-
-            if (! $extra) {
-                throw new ManualReservationException(__('The selected extra does not belong to this entry.'), field: 'extras');
-            }
-
-            if ($quantity < 1) {
-                throw new ManualReservationException(__('The extra quantity must be at least 1.'), field: 'extras');
-            }
-
-            if ($error = $extra->quantityError($quantity)) {
-                throw new ManualReservationException($error, field: 'extras');
-            }
-
-            try {
-                // Fresh clones: calculatePrice/priceForDates write back into the model's
-                // price attribute, so a shared instance would compound the price.
-                $price = (clone $extra)->priceForDates($calcData);
-                $total = (clone $extra)->calculatePrice($calcData, $quantity);
-            } catch (ManualReservationException $e) {
-                throw $e;
-            } catch (\Throwable $e) {
-                // A custom-priced extra throws when its driving customer field is absent or
-                // non-numeric — surface as a 422 domain error, not a 500.
-                throw new ManualReservationException(__('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $extra->name]), field: 'extras');
-            }
-
-            // Both are snapshotted on the pivot: the unit price the form listed, and the line
-            // actually charged. They are not linear in each other once a dynamic-pricing
-            // minimum/maximum binds — priceForDates() clamps the unit, calculatePrice() the line
-            // — so the CP renders the line from `total` (Extra::priceFromPivot()), never from
-            // price × quantity, which would show 2 × 100 for a 100 charge.
-            return [$id => [
-                'quantity' => $quantity,
-                'price' => $price,
-                'total' => $total,
-            ]];
-        });
-    }
-
-    /** @return Collection<int, array{value: int, total: PriceClass}> keyed by option id */
-    protected function priceOptions(array $input, array $data): Collection
-    {
-        $calcData = array_merge($data, ['item_id' => $input['item_id']]);
-
-        return collect($input['options'] ?? [])->mapWithKeys(function ($item) use ($calcData, $input) {
-            $id = (int) ($item['id'] ?? 0);
-            $value = (int) ($item['value'] ?? 0);
-
-            // Only published options belonging to this entry — a plain Option::find() would
-            // accept an option unpublished after the form loaded.
-            $option = Option::entry($input['item_id'])->selectable()->find($id);
-
-            if (! $option) {
-                throw new ManualReservationException(__('The selected option does not belong to this entry.'), field: 'options');
-            }
-
-            // calculatePrice() resolves values withTrashed() for historical reservations —
-            // a NEW reservation must only accept published, non-trashed values still on offer.
-            if (! $option->values->contains('id', $value)) {
-                throw new ManualReservationException(__('The selected option value is no longer available.'), field: 'options');
-            }
-
-            return [$id => [
-                'value' => $value,
-                'total' => $option->calculatePrice($calcData, $value),
-            ]];
-        });
-    }
-
     /**
-     * Same required-extras/options semantics the checkout applies, via the underlying checks
-     * (validateReservation() would also re-validate the total, which an overridden total
-     * legitimately fails).
+     * Same required-extras/options semantics the checkout applies (validateReservation() would
+     * also re-validate the total, which an overridden total legitimately fails).
      */
     protected function assertRequiredExtrasAndOptions(array $input): void
     {
-        $missing = (new ExtraCondition)->hasRequiredExtrasSelected($input['item_id'], $this->conditionDataFrom($input));
+        $quote = $this->addonQuote($input);
+        $extras = collect($input['extras'] ?? []);
+        $options = collect($input['options'] ?? []);
 
-        if ($missing !== true) {
+        if (($missing = $quote->missingRequiredExtras($extras, $options))->isNotEmpty()) {
             throw new ExtrasException(__('Add the required extras: :extras.', [
                 'extras' => $this->extraNames($missing->keys())->implode(', '),
             ]));
         }
 
-        $selected = collect($input['options'] ?? [])->pluck('id')->map(fn ($id) => (int) $id);
-
-        $missingOptions = Option::entry($input['item_id'])
-            ->where('published', true)
-            ->where('required', true)
-            ->get(['id', 'name'])
-            ->reject(fn ($option) => $selected->contains((int) $option->id));
-
-        if ($missingOptions->isNotEmpty()) {
+        if (($missingOptions = $quote->missingRequiredOptions($options))->isNotEmpty()) {
             throw new OptionsException(__('Select a value for: :options.', [
                 'options' => $missingOptions->pluck('name')->implode(', '),
             ]));
         }
+    }
+
+    /** The CP's wording for an add-on AddonQuote::price() can't book; the checkout words its own. */
+    protected function blockerMessage(array $blocker): string
+    {
+        return match ($blocker['reason']) {
+            AddonBlocker::ExtraUnavailable => __('The selected extra does not belong to this entry.'),
+            AddonBlocker::ExtraQuantityBelowOne => __('The extra quantity must be at least 1.'),
+            AddonBlocker::ExtraNotMultiple, AddonBlocker::ExtraOverMaximum => $blocker['extra']->quantityError((int) $blocker['row']['quantity']),
+            AddonBlocker::ExtraCustomPriceMissing => __('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $blocker['extra']->name]),
+            AddonBlocker::OptionUnavailable => __('The selected option does not belong to this entry.'),
+            AddonBlocker::OptionValueUnavailable => __('The selected option value is no longer available.'),
+        };
+    }
+
+    /**
+     * The add-ons for the requested stay. The customer payload drives custom-priced extras; the
+     * resrv-search session fallback is stashed by withoutCheckoutSession(), so without one they
+     * price ×1.
+     */
+    public function addonQuote(array $input): AddonQuote
+    {
+        return new AddonQuote($input['item_id'], [$this->availabilityDataFrom($input)], empty($input['customer']) ? null : collect($input['customer']));
     }
 
     /**

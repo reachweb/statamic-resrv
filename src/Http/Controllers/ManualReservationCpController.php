@@ -20,10 +20,9 @@ use Reach\StatamicResrv\Http\Requests\QuoteManualReservationRequest;
 use Reach\StatamicResrv\Http\Requests\StoreManualReservationRequest;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
-use Reach\StatamicResrv\Models\Extra;
-use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Reach\StatamicResrv\Support\ManualReservationCreator;
 use Statamic\Facades\Collection as CollectionFacade;
@@ -180,13 +179,17 @@ class ManualReservationCpController extends Controller
             // The extras/options listings read the same session coupon as the quote, so they
             // must be serialized inside the same coupon-free scope or their per-unit prices
             // would not match the totals creation charges.
-            $payload = $this->creator->withoutCheckoutSession(fn (): array => array_merge(
-                $this->serializeQuote($this->creator->quote($data, requireCustomAmount: false)),
-                [
-                    'available_extras' => $this->extrasForEntry($data),
-                    'available_options' => $this->optionsForEntry($data),
-                ]
-            ));
+            $payload = $this->creator->withoutCheckoutSession(function () use ($data): array {
+                $quote = $this->creator->quote($data, requireCustomAmount: false);
+
+                // Listed under the rate the quote charges, which it resolves when none is chosen.
+                $addons = $this->creator->addonQuote(array_merge($data, ['rate_id' => $quote['rate_id']]));
+
+                return array_merge($this->serializeQuote($quote), [
+                    'available_extras' => $this->extrasForEntry($addons, $data),
+                    'available_options' => $this->optionsForEntry($addons),
+                ]);
+            });
         } catch (AvailabilityException|ManualReservationException|OptionsException|ExtrasException $e) {
             return $this->domainErrorResponse($e);
         }
@@ -354,65 +357,35 @@ class ManualReservationCpController extends Controller
         ];
     }
 
-    /** The published extras of the entry with prices for the requested stay — what the frontend extras step shows. */
-    protected function extrasForEntry(array $data): array
+    /**
+     * The selectable extras of the entry with prices for the requested stay — what the frontend extras
+     * step shows. A custom-priced extra whose customer field is not a number yet lists at ×1.
+     */
+    protected function extrasForEntry(AddonQuote $addons, array $data): array
     {
-        $priceData = [
-            'item_id' => $data['item_id'],
-            'date_start' => $data['date_start'],
-            'date_end' => $data['date_end'],
-            'quantity' => $data['quantity'],
-            'rate_id' => $data['rate_id'] ?? null,
-        ];
-
-        $customer = collect($data['customer'] ?? []);
-
         // Required by the entry's extra conditions for this stay and selection — creation refuses
         // the booking without them, so the form must show (and gate on) them up front.
         $required = $this->creator->requiredExtras($data);
 
-        return Extra::getPriceForDates($priceData)->map(function ($extra) use ($priceData, $customer, $required) {
-            // Re-price custom-priced extras with the customer payload so the listed price matches
-            // the quoted total — but only while the driving field holds a usable number:
-            // getCustomPrice THROWS on unusable payloads, and an unfilled extra keeps the ×1 fallback.
-            if ($extra->price_type === 'custom' && $extra->custom && is_numeric($customer->get($extra->custom))) {
-                // Fresh instance: priceForDates mutates price, so re-pricing the transformed one would compound it.
-                $extra->price = Extra::find($extra->id)->priceForDates(
-                    array_merge($priceData, ['customer' => $customer])
-                );
-            }
-
-            return [
-                'id' => $extra->id,
-                'name' => $extra->name,
-                'price' => $extra->price->format(),
-                'price_type' => $extra->price_type,
-                // Driving field handle for custom pricing — the create form re-quotes when it changes.
-                'custom' => $extra->custom,
-                'allow_multiple' => (bool) $extra->allow_multiple,
-                'maximum' => $extra->maximum,
-                'description' => $extra->description,
-                'required' => $required->has($extra->id),
-                'required_reason' => $required->get($extra->id),
-            ];
-        })->values()->all();
+        return $addons->extras()->map(fn ($extra) => [
+            'id' => $extra->id,
+            'name' => $extra->name,
+            'price' => $extra->price->format(),
+            'price_type' => $extra->price_type,
+            // Driving field handle for custom pricing — the create form re-quotes when it changes.
+            'custom' => $extra->custom,
+            'allow_multiple' => (bool) $extra->allow_multiple,
+            'maximum' => $extra->maximum,
+            'description' => $extra->description,
+            'required' => $required->has($extra->id),
+            'required_reason' => $required->get($extra->id),
+        ])->values()->all();
     }
 
     /** The published options of the entry (published values only) with per-value prices for the requested stay. */
-    protected function optionsForEntry(array $data): array
+    protected function optionsForEntry(AddonQuote $addons): array
     {
-        $calcData = [
-            'item_id' => $data['item_id'],
-            'date_start' => $data['date_start'],
-            'date_end' => $data['date_end'],
-            'quantity' => $data['quantity'],
-            'rate_id' => $data['rate_id'] ?? null,
-        ];
-
-        return Option::entry($data['item_id'])
-            ->selectable()
-            ->get()
-            ->map(fn ($option) => $option->valuesPriceForDates($calcData))
+        return $addons->options()
             ->map(fn ($option) => [
                 'id' => $option->id,
                 'name' => $option->name,
