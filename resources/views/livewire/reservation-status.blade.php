@@ -78,7 +78,7 @@
                 <span @class([
                     'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium',
                     'bg-green-100 text-green-800' => $reservation->isLive(),
-                    'bg-amber-100 text-amber-800' => $reservation->isAwaitingPayment(),
+                    'bg-blue-100 text-blue-800' => $reservation->isAwaitingPayment(),
                     'bg-gray-100 text-gray-800' => in_array($reservation->status, [ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value, ReservationStatus::COMPLETED->value], true),
                 ])>
                     {{ $this->statusLabel }}
@@ -210,7 +210,7 @@
             </div>
 
             @if ($reservation->isAwaitingPayment())
-            <div class="mt-6 p-4 bg-amber-50 border border-amber-300 rounded text-gray-700">
+            <div class="mt-6 p-4 bg-blue-50 border border-blue-300 rounded text-gray-700">
                 {{ trans('statamic-resrv::frontend.awaitingPaymentNote') }}
             </div>
             @endif
