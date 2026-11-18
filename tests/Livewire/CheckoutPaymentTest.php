@@ -71,6 +71,20 @@ class CheckoutPaymentTest extends TestCase
             ->assertSeeHtml('¥ 3168</span>');
     }
 
+    public function test_offline_payment_step_shows_the_offline_instructions()
+    {
+        $offline = ['amount' => 100.0, 'paymentView' => 'statamic-resrv::livewire.checkout-payment-offline'];
+
+        Livewire::test(CheckoutPayment::class, $offline)
+            ->assertDontSee('IBAN');
+
+        Config::set('resrv-config.manual_reservations_offline_instructions', "Bank: ACME <b>Ltd</b>\nIBAN: GR12 3456");
+
+        Livewire::test(CheckoutPayment::class, $offline)
+            ->assertSeeHtml("Bank: ACME &lt;b&gt;Ltd&lt;/b&gt;<br />\nIBAN: GR12 3456")
+            ->assertDontSeeHtml('<b>Ltd</b>');
+    }
+
     public function test_confirm_payment_on_non_pending_reservation_surfaces_error_without_500()
     {
         // A REFUNDED reservation cannot transition to CONFIRMED. confirmPayment() routes through

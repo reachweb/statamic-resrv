@@ -22,4 +22,12 @@ class ResrvHelper
             ];
         });
     }
+
+    /** The site's offline payment instructions setting, trimmed, or null when unset. */
+    public static function offlineInstructions(): ?string
+    {
+        $instructions = config('resrv-config.manual_reservations_offline_instructions');
+
+        return is_string($instructions) && trim($instructions) !== '' ? trim($instructions) : null;
+    }
 }

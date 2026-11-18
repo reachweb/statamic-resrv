@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Mail;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\HtmlString;
 use Reach\StatamicResrv\Models\Reservation;
 
 class ReservationPaymentRequest extends Mailable
@@ -55,22 +54,6 @@ class ReservationPaymentRequest extends Mailable
         $this->dispatchBuildingEvent($this->reservation);
 
         return $this;
-    }
-
-    /**
-     * The offline instructions setting as literal text, like the pay page. The <div> makes the
-     * markdown renderer pass it through as one HTML block (no list/emphasis/link parsing); every
-     * break is "<br>\n", so no blank line ends that block and the plain-text part keeps its lines.
-     */
-    protected function offlineInstructions(): ?HtmlString
-    {
-        $instructions = config('resrv-config.manual_reservations_offline_instructions');
-
-        if (! is_string($instructions) || trim($instructions) === '') {
-            return null;
-        }
-
-        return new HtmlString('<div>'.preg_replace('/\R/', "<br>\n", e(trim($instructions))).'</div>');
     }
 
     protected function customerFirstName(): ?string

@@ -101,7 +101,11 @@
 |{{ __("Payment information") }}||
 | :----------------------------- |:----------------| 
 @if ((config('resrv-config.payment') !== 'everything' || $reservation->payment->lessThan($reservation->total)) && $reservation->status !== 'partner')
+@if ($awaitingOfflinePayment ?? false)
+| {{ __("Amount due") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountDue()->format() }} |
+@else
 | {{ $reservation->amountPaidOnline()->isZero() ? __("Amount already paid") : __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
+@endif
 | {{ __("Remaining amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
 @if (! $reservation->payment_surcharge->isZero())
@@ -111,6 +115,13 @@
 | **{{ __("Total") }}** ({{ __("including taxes") }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->format() }} |
 
 @endcomponent
+
+@if ($offlineInstructions ?? null)
+@include('statamic-resrv::email.reservations.partials.how-to-pay', [
+    'instructions' => $offlineInstructions,
+    'note' => __("Please include the booking reference :reference with your payment.", ['reference' => $reservation->reference]),
+])
+@endif
 
 {{ __("Thank you") }},<br>
 {{ config('app.name') }}

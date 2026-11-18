@@ -511,6 +511,17 @@ class Reservation extends Model
     }
 
     /**
+     * A frontend checkout through a manual-confirmation gateway (bank transfer): it confirms
+     * before any money arrives, and its minted payment reference proves nothing was collected.
+     */
+    public function isOfflineCheckout(): bool
+    {
+        return $this->created_by === null
+            && $this->hasGatewayPayment()
+            && $this->paymentGatewaySupportsManualConfirmation();
+    }
+
+    /**
      * CONFIRMED with no charge reference — only possible via an out-of-band/manual confirmation
      * (a webhook confirm always stores the intent id), so a refund must skip the provider.
      */
@@ -560,9 +571,7 @@ class Reservation extends Model
     public function amountReceived(): ?PriceClass
     {
         if (in_array($this->status, [ReservationStatus::CONFIRMED->value, ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value], true)
-            && $this->created_by === null
-            && $this->hasGatewayPayment()
-            && $this->paymentGatewaySupportsManualConfirmation()) {
+            && $this->isOfflineCheckout()) {
             return null;
         }
 
