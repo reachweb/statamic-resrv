@@ -1115,6 +1115,33 @@ class Reservation extends Model
     }
 
     /**
+     * Price the booked extras again and save their lines, for a change that re-prices them once
+     * the checkout booked them, such as a coupon. Their quantities stay as booked.
+     */
+    public function repriceBookedExtras(): void
+    {
+        foreach ($this->extras()->get() as $extra) {
+            $this->extras()->updateExistingPivot($extra->id, [
+                'price' => $this->extraUnitPrice($extra)->format(),
+                'total' => $this->extraLineTotal($extra, (int) $extra->pivot->quantity)->format(),
+            ]);
+        }
+    }
+
+    /** The price of one unit of $extra for this reservation's stays. */
+    public function extraUnitPrice(Extra $extra): PriceClass
+    {
+        $total = Price::create(0);
+
+        foreach ($this->addonPricingData() as $data) {
+            // Fresh clone per stay: priceForDates() writes dynamic pricing back into price.
+            $total->add(Price::create((clone $extra)->priceForDates($data)));
+        }
+
+        return $total;
+    }
+
+    /**
      * The line charged for $quantity of $extra. Not price × quantity once a dynamic-pricing
      * minimum/maximum binds: priceForDates() clamps the unit, calculatePrice() the line.
      */

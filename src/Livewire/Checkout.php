@@ -185,7 +185,7 @@ class Checkout extends Component
         // selectable extras — so a selection carried over from another entry is never priced here.
         $entry = ResrvEntry::query()->itemId($reservation->item_id)->first();
 
-        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($datasets, $entry, $reservation) {
+        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($entry, $reservation) {
             $extraModel = $entry?->extras()->selectable()->find($extra['id']);
 
             // Leave unresolvable extras untouched — extraForValidation() raises the designed
@@ -195,14 +195,7 @@ class Checkout extends Component
                 return $extra;
             }
 
-            $totalPrice = Price::create(0);
-
-            foreach ($datasets as $data) {
-                // Fresh instance per dataset: priceForDates() mutates $this->price via dynamic pricing
-                $totalPrice->add(Price::create((clone $extraModel)->priceForDates($data)));
-            }
-
-            $extra['price'] = $totalPrice->format();
+            $extra['price'] = $reservation->extraUnitPrice($extraModel)->format();
             $extra['total'] = $reservation->extraLineTotal($extraModel, (int) $extra['quantity'])->format();
 
             return $extra;
@@ -724,6 +717,24 @@ class Checkout extends Component
         $this->resetPaymentState();
         if ($wasOnPaymentStep) {
             $this->step = 2;
+        }
+
+        // A coupon can change the extras' prices too: re-price the booked ones, which the total below
+        // charges. At step 1 the Extras component re-prices the selection; past it, nothing does, so
+        // the sidebar shows the booked lines, including one no longer selectable but still charged.
+        $this->reservation->repriceBookedExtras();
+
+        if ($this->step > 1) {
+            $booked = $this->reservation->extras()->get()->keyBy('id');
+
+            $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($booked) {
+                if ($model = $booked->get($extra['id'])) {
+                    $extra['price'] = Price::create($model->pivot->price)->format();
+                    $extra['total'] = $model->priceFromPivot();
+                }
+
+                return $extra;
+            });
         }
 
         // Recompute price, total and payment, then persist in one update so a concurrent
