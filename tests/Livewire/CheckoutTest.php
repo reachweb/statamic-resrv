@@ -948,6 +948,112 @@ class CheckoutTest extends TestCase
         $this->assertEquals('119.30', $fresh->total->format());
     }
 
+    // The browser dispatches the coupon events, so the selection they see can be anything; what
+    // they write is what handleSecondStep() charges. It must be what step 1 validated and booked.
+    public function test_a_coupon_change_charges_the_booked_add_ons_not_the_client_selection()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        $this->assignCouponToEntry();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // 100 for the stay + 9.30 extra + 30 option.
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$this->extra->id => $this->extraPayload()])
+            ->dispatch('options-updated', [$this->options->id => $this->optionPayload()])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertEquals('139.30', $this->reservation->fresh()->payment->format());
+
+        // A free booked extra and the option dropped, then a real coupon.
+        $component->dispatch('extras-updated', [$this->extra->id => $this->extraPayload(['price' => '0.00', 'total' => '0.00'])])
+            ->dispatch('options-updated', []);
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $fresh = $this->reservation->fresh();
+        $this->assertEquals('80.00', $fresh->price->format());
+        $this->assertEquals('119.30', $fresh->total->format());
+        $this->assertEquals('119.30', $fresh->payment->format());
+
+        // Every add-on dropped, then the coupon removed.
+        $component->dispatch('extras-updated', []);
+
+        session()->forget('resrv_coupon');
+        $component->dispatch('coupon-removed', '20OFF', true);
+
+        $fresh = $this->reservation->fresh();
+        $this->assertEquals('139.30', $fresh->total->format());
+        $this->assertEquals('139.30', $fresh->payment->format());
+    }
+
+    // Going back to step 1 and deselecting everything must unbook it, not only drop it from the total.
+    public function test_deselecting_every_add_on_and_continuing_again_unbooks_them()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        $this->assignCouponToEntry();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$this->extra->id => $this->extraPayload()])
+            ->dispatch('options-updated', [$this->options->id => $this->optionPayload()])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2)
+            ->call('goToStep', 1)
+            ->dispatch('extras-updated', [])
+            ->dispatch('options-updated', [])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', ['reservation_id' => $this->reservation->id]);
+        $this->assertDatabaseMissing('resrv_reservation_option', ['reservation_id' => $this->reservation->id]);
+        $this->assertEquals('100.00', $this->reservation->fresh()->total->format());
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $this->assertEquals('80.00', $this->reservation->fresh()->payment->format());
+    }
+
+    private function assignCouponToEntry(): void
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+    }
+
+    private function extraPayload(array $override = []): array
+    {
+        return array_merge([
+            'id' => $this->extra->id,
+            'quantity' => 1,
+            'price' => '9.30',
+            'name' => $this->extra->name,
+        ], $override);
+    }
+
+    private function optionPayload(): array
+    {
+        $value = $this->options->values->first();
+
+        return [
+            'id' => $this->options->id,
+            'value' => $value->id,
+            'price' => $value->price->format(),
+            'optionName' => $this->options->name,
+            'valueName' => $value->name,
+        ];
+    }
+
     public function test_coupon_recalculation_persists_payment_in_a_single_write_without_a_deposit_window()
     {
         // Non-refundable owes the full amount: the 20% deposit must never be persisted, even

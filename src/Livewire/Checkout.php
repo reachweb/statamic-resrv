@@ -676,14 +676,13 @@ class Checkout extends Component
 
     protected function assignExtras(): bool
     {
-        if ($this->enabledExtras->extras->count() > 0) {
-            try {
-                $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
-            } catch (\Exception $e) {
-                $this->addError('extras', 'There was an error assigning the extras. Please try again.');
+        // An empty selection syncs too: it unbooks what an earlier pass through this step booked.
+        try {
+            $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
+        } catch (\Exception $e) {
+            $this->addError('extras', 'There was an error assigning the extras. Please try again.');
 
-                return false;
-            }
+            return false;
         }
 
         return true;
@@ -691,14 +690,13 @@ class Checkout extends Component
 
     protected function assignOptions(): bool
     {
-        if ($this->enabledOptions->options->count() > 0) {
-            try {
-                $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
-            } catch (\Exception $e) {
-                $this->addError('options', 'There was an error assigning the options. Please try again.');
+        // An empty selection syncs too: it unbooks what an earlier pass through this step booked.
+        try {
+            $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
+        } catch (\Exception $e) {
+            $this->addError('options', 'There was an error assigning the options. Please try again.');
 
-                return false;
-            }
+            return false;
         }
 
         return true;
@@ -732,10 +730,9 @@ class Checkout extends Component
         // handleSecondStep() never reads the deposit before the full-payment override lands.
         $prices = $this->getUpdatedPrices();
 
-        $total = Price::create($prices['price'])->add(
-            $this->calculateExtraTotals(),
-            $this->calculateOptionTotals(),
-        );
+        // The browser dispatches this event, and handleSecondStep() charges what it writes, so the
+        // add-ons are the ones handleFirstStep() validated and booked, not the current selection.
+        $total = Price::create($prices['price'])->add($this->reservation->bookedAddonsTotal());
 
         // Reapply handleFirstStep()'s full-payment decision: non-refundable, the full-payment
         // window, or everything mode must pay the whole total, not the deposit.

@@ -1093,6 +1093,28 @@ class Reservation extends Model
     }
 
     /**
+     * What the add-ons booked on this reservation (the pivot rows the checkout saved after
+     * validating them) add to its total: each extra's line as it was saved, and each option
+     * priced for the stays again, since its pivot keeps no price.
+     */
+    public function bookedAddonsTotal(): PriceClass
+    {
+        $total = Price::create(0);
+
+        foreach ($this->extras()->get() as $extra) {
+            $total->add(Price::create($extra->priceFromPivot()));
+        }
+
+        foreach ($this->options()->get() as $option) {
+            foreach ($this->addonPricingData() as $data) {
+                $total->add($option->calculatePrice($data, $option->pivot->value));
+            }
+        }
+
+        return $total;
+    }
+
+    /**
      * The line charged for $quantity of $extra. Not price × quantity once a dynamic-pricing
      * minimum/maximum binds: priceForDates() clamps the unit, calculatePrice() the line.
      */
