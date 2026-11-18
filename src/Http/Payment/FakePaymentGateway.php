@@ -262,14 +262,16 @@ class FakePaymentGateway implements PaymentInterface
     {
         $reservation = Reservation::findOrFail($request->get('reservation_id'));
 
-        // Mirror StripePaymentGateway: already-confirmed reservations are an idempotent no-op.
-        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
-            return response()->json([], 200);
-        }
-
+        // Mirror StripePaymentGateway: a success reaches confirmFromGateway() even for a confirmed
+        // reservation, so a payment completed after Mark as paid alerts the admins.
         if ($request->get('status') === 'success') {
             $this->confirmFromGateway($reservation, (string) ($reservation->payment_id ?: 'fake_intent'));
 
+            return response()->json([], 200);
+        }
+
+        // Every other event is a no-op for an already-confirmed reservation.
+        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
             return response()->json([], 200);
         }
         if ($request->get('status') === 'fail') {

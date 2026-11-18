@@ -1355,6 +1355,39 @@ class AwaitingPaymentTransitionsTest extends TestCase
         Event::assertDispatchedTimes(ReservationConfirmedEvent::class, 2);
     }
 
+    public function test_a_fake_gateway_payment_completing_after_mark_as_paid_alerts()
+    {
+        // The Fake gateway runs confirmFromGateway() before its confirmed no-op, as Stripe does,
+        // so it reports the same paid-twice case.
+        Mail::fake();
+        $this->signInAdmin();
+
+        /** @var FakePaymentGateway $gateway */
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->cancelSucceeds = false;
+
+        $reservation = $this->awaitingPaymentReservation([
+            'payment' => '50.00',
+            'payment_id' => 'fake_paid_after_mark_as_paid',
+            'payment_gateway' => 'fake',
+            'affects_availability' => false,
+        ]);
+
+        $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))->assertOk();
+
+        $paid = fn () => $this->post(route('resrv.webhook.gateway.store', ['gateway' => 'fake', 'reservation_id' => $reservation->id, 'status' => 'success']))
+            ->assertOk();
+
+        $paid();
+        $paid();
+
+        $this->assertSame('confirmed', $reservation->fresh()->status);
+        Mail::assertSent(OrphanedPaymentNotification::class, 2);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->hasTo('admin@example.com')
+            && $mail->paymentIntentId === 'fake_paid_after_mark_as_paid'
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT);
+    }
+
     public function test_a_payment_landing_on_a_refunded_booking_alerts_despite_the_earlier_open_intent_warning()
     {
         Mail::fake();
