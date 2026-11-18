@@ -249,6 +249,8 @@ class AvailabilityResults extends Component
 
             $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($extras, $data) {
                 if ($model = $extras->get($extra['id'])) {
+                    // A line total belongs to the price it was computed with (EnabledExtras::lineTotal()).
+                    unset($extra['total']);
                     $extra['price'] = $model->priceForDates($data);
                 }
 

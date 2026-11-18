@@ -394,6 +394,8 @@ class AvailabilityMultiResults extends Component
                 $totalPrice->add(Price::create((clone $extras->get($extra['id']))->priceForDates($selectionData)));
             }
 
+            // A line total belongs to the price it was computed with (EnabledExtras::lineTotal()).
+            unset($extra['total']);
             $extra['price'] = $totalPrice->format();
 
             return $extra;
@@ -410,11 +412,11 @@ class AvailabilityMultiResults extends Component
         $values = OptionValue::findMany($this->enabledOptions->options->pluck('value'))->keyBy('id');
 
         $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($selectionDataArrays, $values) {
-            $totalPrice = Price::create(0);
-
             if (! $values->has($option['value'])) {
                 return $option;
             }
+
+            $totalPrice = Price::create(0);
 
             foreach ($selectionDataArrays as $selectionData) {
                 $totalPrice->add(Price::create($values->get($option['value'])->priceForDates($selectionData)));

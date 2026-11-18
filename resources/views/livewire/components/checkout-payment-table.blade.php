@@ -50,7 +50,7 @@
                         </div>
                         <div class="flex justify-end">
                             <span class="text-gray-900">
-                                {{ config('resrv-config.currency_symbol') }} {{ $extra['price'] * $extra['quantity'] }}
+                                {{ config('resrv-config.currency_symbol') }} {{ $enabledExtras->lineTotal($extra)->format() }}
                             </span>
                         </div>
                     </div>

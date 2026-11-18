@@ -50,7 +50,7 @@ trait HandlesPricing
         $extrasTotal = Price::create(0);
 
         if ($this->enabledExtras->extras->count() > 0) {
-            $extrasTotal = $extrasTotal->add(...$this->enabledExtras->extras->map(fn ($extra) => Price::create($extra['price'])->multiply($extra['quantity']))->toArray());
+            $extrasTotal = $extrasTotal->add(...$this->enabledExtras->extras->map(fn ($extra) => $this->enabledExtras->lineTotal($extra))->toArray());
         }
 
         return $extrasTotal;

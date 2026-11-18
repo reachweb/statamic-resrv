@@ -179,25 +179,13 @@ class Checkout extends Component
 
         $reservation = $this->reservation;
 
-        $datasets = $reservation->isParent()
-            ? $reservation->childs->map(fn ($child) => [
-                'date_start' => $child->date_start,
-                'date_end' => $child->date_end,
-                'quantity' => $child->quantity,
-                'rate_id' => $child->rate_id,
-                'item_id' => $reservation->item_id,
-                'customer' => $reservation->customerData ?? collect(),
-            ])->all()
-            : [array_merge($this->getAvailabilityDataFromReservation(), [
-                'item_id' => $reservation->item_id,
-                'customer' => $reservation->customerData ?? collect(),
-            ])];
+        $datasets = $reservation->addonPricingData();
 
         // Resolve extras through the query Reservation::extraForValidation() uses — the entry's
         // selectable extras — so a selection carried over from another entry is never priced here.
         $entry = ResrvEntry::query()->itemId($reservation->item_id)->first();
 
-        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($datasets, $entry) {
+        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($datasets, $entry, $reservation) {
             $extraModel = $entry?->extras()->selectable()->find($extra['id']);
 
             // Leave unresolvable extras untouched — extraForValidation() raises the designed
@@ -215,6 +203,7 @@ class Checkout extends Component
             }
 
             $extra['price'] = $totalPrice->format();
+            $extra['total'] = $reservation->extraLineTotal($extraModel, (int) $extra['quantity'])->format();
 
             return $extra;
         });
@@ -275,6 +264,10 @@ class Checkout extends Component
 
             return;
         }
+
+        // Validation only checks that the lines add up to the server's total, so write the
+        // reservation and its pivot rows from the server's per-line prices, not the payload's.
+        $this->repriceEnabledAddons();
 
         $totals = $this->calculateReservationTotals();
 

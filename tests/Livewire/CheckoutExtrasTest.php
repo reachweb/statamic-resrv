@@ -645,6 +645,160 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
+    // A dynamic-pricing minimum clamps the unit price (priceForDates: max(25, 100) = 100) and the
+    // line (calculatePrice: max(25 × 3, 100) = 100) separately. Validation charges the line, so the
+    // checkout must show and submit 100 for the three units — 100 × 3 drifted on every attempt.
+    public function test_a_clamped_extra_with_a_quantity_shows_and_charges_the_clamped_line()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->attachFixedExtraWithDynamicPricing('minimum', '100');
+
+        $extras = Livewire::test(Extras::class, ['reservation' => $this->reservation])
+            ->call('toggleExtra', $extra->id)
+            ->call('updateExtraQuantity', $extra->id, 3);
+
+        $this->assertEquals('100.00', $extras->extras->firstWhere('id', $extra->id)->price->format());
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $checkout = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', $extras->instance()->enabledExtras->extras->all())
+            ->assertSee('200.00')
+            ->assertDontSee('400.00')
+            ->assertDontSee('€ 300');
+
+        // The extra's own line in the sidebar: the first amount after its "(x3)".
+        $this->assertMatchesRegularExpression('/\(x3\)[^€]*€ 100\.00/', $checkout->html());
+
+        $checkout->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertEquals('200.00', $this->reservation->fresh()->total->format());
+
+        // Snapshotted like the CP does: the listed unit price and the charged line.
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+            'quantity' => 3,
+            'price' => '100.00',
+            'total' => '100.00',
+        ]);
+        $this->assertSame('100.00', $this->reservation->fresh()->extras()->first()->priceFromPivot());
+    }
+
+    // The same selection carried in the session (picked next to the results, so priced per unit
+    // only) when the extras step is disabled: the checkout re-prices it and must charge the line.
+    public function test_a_clamped_extra_carried_in_the_session_is_charged_its_line_when_the_extras_step_is_disabled()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->attachFixedExtraWithDynamicPricing('minimum', '100');
+
+        session([
+            'resrv_reservation' => $this->reservation->id,
+            'resrv-extras' => ['extras' => collect([$extra->id => [
+                'id' => $extra->id,
+                'price' => '100.00',
+                'name' => $extra->name,
+                'quantity' => 3,
+            ]])],
+        ]);
+
+        Livewire::test(Checkout::class, ['enableExtrasStep' => false])
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertEquals('200.00', $this->reservation->fresh()->total->format());
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $extra->id,
+            'quantity' => 3,
+            'price' => '100.00',
+            'total' => '100.00',
+        ]);
+    }
+
+    // Back to one unit, the line is the unit price again: a maximum binds the 3-unit line (60, not
+    // 75) but not the single unit (25), so a total kept from the larger quantity would overcharge.
+    public function test_lowering_a_clamped_extra_back_to_one_unit_charges_the_unit_price()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->attachFixedExtraWithDynamicPricing('maximum', '60');
+
+        $extras = Livewire::test(Extras::class, ['reservation' => $this->reservation])
+            ->call('toggleExtra', $extra->id)
+            ->call('updateExtraQuantity', $extra->id, 3)
+            ->call('updateExtraQuantity', $extra->id, 1);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', $extras->instance()->enabledExtras->extras->all())
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertEquals('125.00', $this->reservation->fresh()->total->format());
+    }
+
+    // The pivot records what each line cost, so it is written from the server's prices: a payload
+    // whose lines still add up to the right total cannot store its own price or total there.
+    public function test_the_extras_pivot_records_the_server_prices_not_the_client_payload()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $first = $this->extras->first();
+        $second = ResrvExtra::factory()->create(['id' => 2, 'slug' => 'second-extra', 'name' => 'Second extra']);
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($second->id);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // Both extras cost 9.30 on this reservation; the payload moves the whole 18.60 onto one line.
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [
+                $first->id => ['id' => $first->id, 'quantity' => 1, 'price' => '-999.00', 'total' => '18.60', 'name' => $first->name],
+                $second->id => ['id' => $second->id, 'quantity' => 1, 'price' => '123456.00', 'total' => '0', 'name' => $second->name],
+            ])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertEquals('118.60', $this->reservation->fresh()->total->format());
+
+        foreach ([$first->id, $second->id] as $id) {
+            $this->assertDatabaseHas('resrv_reservation_extra', [
+                'reservation_id' => $this->reservation->id,
+                'extra_id' => $id,
+                'price' => '9.30',
+                'total' => '9.30',
+            ]);
+        }
+    }
+
+    private function attachFixedExtraWithDynamicPricing(string $operation, string $amount): ResrvExtra
+    {
+        // Fixed 25; the dynamic pricing applies to the 2-night reservation (duration >= 2).
+        $extra = ResrvExtra::factory()->fixed()->create();
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($extra->id);
+
+        $dynamic = DynamicPricing::factory()->extra()->create([
+            'amount_type' => 'fixed',
+            'amount_operation' => $operation,
+            'amount' => $amount,
+        ]);
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $extra->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Extra',
+        ]);
+        Cache::flush();
+
+        return $extra;
+    }
+
     // allow_multiple false caps the extra at one unit, as the CP does (it carries no maximum, so
     // the maximum check alone accepts any quantity). The client-callable action must ignore it...
     public function test_update_extra_quantity_ignores_a_quantity_above_one_for_an_extra_that_does_not_allow_multiple()
@@ -1900,6 +2054,64 @@ class CheckoutExtrasTest extends TestCase
         // NOT: 10 * 1 (session fallback) * 2 = 20
         $charges = $reservation->extraCharges();
         $this->assertEquals('60.00', $charges->format());
+    }
+
+    // A selected quantity above one makes the Extras component price the line itself. For a parent
+    // booking it must use what validation charges: each child's stay with the customer's guests.
+    public function test_parent_checkout_charges_a_custom_extra_quantity_by_the_customers_guests()
+    {
+        $this->travelTo(today()->setHour(12));
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $item = $this->makeStatamicItemWithAvailability(
+            available: 2,
+            price: 50,
+            customAvailability: ['dates' => collect(range(0, 6))->map(fn ($i) => today()->addDays($i))->all()],
+        );
+
+        $reservation = Reservation::factory()->create([
+            'type' => 'parent',
+            'item_id' => $item->id(),
+            'date_start' => today()->toIso8601String(),
+            'date_end' => today()->addDays(5)->toIso8601String(),
+            'quantity' => 2,
+            'price' => '200.00',
+            'payment' => '200.00',
+            'customer_id' => Customer::factory()->withGuests(3)->create()->id,
+        ]);
+
+        foreach ([[0, 2], [3, 5]] as [$start, $end]) {
+            ChildReservation::factory()->create([
+                'reservation_id' => $reservation->id,
+                'date_start' => today()->addDays($start)->toIso8601String(),
+                'date_end' => today()->addDays($end)->toIso8601String(),
+                'quantity' => 1,
+            ]);
+        }
+
+        $extra = ResrvExtra::factory()->custom()->create();
+        ResrvEntry::whereItemId($item->id())->extras()->attach($extra->id);
+
+        $extras = Livewire::test(Extras::class, ['reservation' => $reservation->fresh()])
+            ->call('toggleExtra', $extra->id)
+            ->call('updateExtraQuantity', $extra->id, 2);
+
+        session(['resrv_reservation' => $reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', $extras->instance()->enabledExtras->extras->all())
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        // 10 per adult × 3 adults × 2 units, for each of the two children; 200 for the stays.
+        $this->assertEquals('320.00', $reservation->fresh()->total->format());
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $reservation->id,
+            'extra_id' => $extra->id,
+            'quantity' => 2,
+            'total' => '120.00',
+        ]);
     }
 
     public function test_category_membership_lookup_is_memoized_across_children()

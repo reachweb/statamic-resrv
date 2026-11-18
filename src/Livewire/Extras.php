@@ -187,7 +187,7 @@ class Extras extends Component
 
         if ($quantity > 0 && $originalExtra->quantityError($quantity) === null) {
             $extra['quantity'] = $quantity;
-            $this->enabledExtras->extras->put($extraId, $extra);
+            $this->enabledExtras->extras->put($extraId, $this->withExtraLineTotal($extra));
         }
 
         $this->dispatchExtrasUpdated();

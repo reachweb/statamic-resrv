@@ -1077,6 +1077,37 @@ class Reservation extends Model
         return true;
     }
 
+    /**
+     * The stays this reservation's add-ons are priced for, shaped as Checkout's validation prices
+     * them (validateExtraCharges()): its own stay, or one per child of a parent.
+     */
+    public function addonPricingData(): array
+    {
+        $customer = $this->customerData ?? collect();
+
+        if ($this->isParent()) {
+            return $this->childs->map(fn (ChildReservation $child) => array_merge($this->buildChildDataArray($child), ['customer' => $customer]))->all();
+        }
+
+        return [array_merge($this->buildDataArray(), ['item_id' => $this->item_id, 'customer' => $customer])];
+    }
+
+    /**
+     * The line charged for $quantity of $extra. Not price × quantity once a dynamic-pricing
+     * minimum/maximum binds: priceForDates() clamps the unit, calculatePrice() the line.
+     */
+    public function extraLineTotal(Extra $extra, int $quantity): PriceClass
+    {
+        $total = Price::create(0);
+
+        foreach ($this->addonPricingData() as $data) {
+            // Fresh clone per stay: calculatePrice() writes dynamic pricing back into price.
+            $total->add((clone $extra)->calculatePrice($data, $quantity));
+        }
+
+        return $total;
+    }
+
     protected function buildDataArray()
     {
         return [
