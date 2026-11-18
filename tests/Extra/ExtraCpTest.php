@@ -301,6 +301,22 @@ class ExtraCpTest extends TestCase
         ]);
     }
 
+    public function test_reordering_extras_is_scoped_to_their_category()
+    {
+        [$categoryA, $categoryB] = ExtraCategory::factory()->count(2)->create();
+
+        // Numbered across both categories, as extras once were. The factory fixes the id, so set it.
+        foreach ([[1, $categoryA], [2, $categoryA], [3, $categoryB], [4, $categoryB]] as [$id, $category]) {
+            Extra::factory()->create(['id' => $id, 'category_id' => $category->id, 'order' => $id]);
+        }
+
+        // Extras.vue sends the 1-based position within the category's own list.
+        $this->patch(cp_route('resrv.extra.order', 3), ['order' => 2])->assertStatus(200);
+
+        $this->assertEquals([4, 3], Extra::where('category_id', $categoryB->id)->pluck('id')->all());
+        $this->assertEquals([1, 2], Extra::where('category_id', $categoryA->id)->pluck('id')->all());
+    }
+
     public function test_can_index_extras_and_conditions()
     {
         $extra = Extra::factory()->create();

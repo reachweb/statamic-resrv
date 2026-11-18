@@ -303,6 +303,23 @@ class OptionCpTest extends TestCase
         ]);
     }
 
+    public function test_reordering_option_values_is_scoped_to_their_option()
+    {
+        $item = $this->makeStatamicItem();
+        [$optionA, $optionB] = Option::factory()->count(2)->create(['item_id' => $item->id()]);
+
+        // Numbered across both options, as values once were.
+        [$a1, $a2, $b1, $b2] = collect([[$optionA, 1], [$optionA, 2], [$optionB, 3], [$optionB, 4]])
+            ->map(fn ($pair) => OptionValue::factory()->create(['option_id' => $pair[0]->id, 'order' => $pair[1]])->id)
+            ->all();
+
+        // OptionValuesList.vue sends the 1-based position within the option's own list.
+        $this->patch(cp_route('resrv.option.value.order'), ['id' => $b1, 'order' => 2])->assertStatus(200);
+
+        $this->assertSame([$b2, $b1], OptionValue::where('option_id', $optionB->id)->pluck('id')->all());
+        $this->assertSame([$a1, $a2], OptionValue::where('option_id', $optionA->id)->pluck('id')->all());
+    }
+
     public function test_updating_a_non_existent_option_returns_404()
     {
         $this->withExceptionHandling();
