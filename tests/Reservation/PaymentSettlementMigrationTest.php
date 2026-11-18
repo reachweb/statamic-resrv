@@ -27,6 +27,7 @@ class PaymentSettlementMigrationTest extends TestCase
         // payment of 30.00 plus a 2.00 surcharge, and whether the CP flagged its payment_id.
         $cases = [
             'paid through the gateway' => [['status' => 'confirmed', 'payment_id' => 'pi_paid'], 'gateway', '32.00'],
+            'paid through a gateway whose ids start with offline' => [['status' => 'confirmed', 'payment_id' => 'offlinepay_1'], 'gateway', '32.00'],
             'marked as paid' => [['status' => 'confirmed', 'created_by' => '1'], 'out_of_band', '32.00'],
             'marked as paid, intent kept' => [['status' => 'confirmed', 'created_by' => '1', 'payment_id' => 'pi_kept', 'payment_unresolved' => true], 'out_of_band', '32.00'],
             'zero payment' => [['status' => 'confirmed', 'payment' => 0, 'payment_surcharge' => 0], 'none', '0.00'],
@@ -39,6 +40,7 @@ class PaymentSettlementMigrationTest extends TestCase
             'cancelled unpaid' => [['status' => 'cancelled', 'created_by' => '1'], 'none', '0.00'],
             'offline checkout confirmed' => [['status' => 'confirmed', 'payment_id' => 'offline_a', 'payment_gateway' => 'offline'], 'unresolved', null],
             'offline checkout refunded' => [['status' => 'refunded', 'payment_id' => 'offline_b', 'payment_gateway' => 'offline'], 'unresolved', null],
+            'offline checkout, gateway since removed from config' => [['status' => 'confirmed', 'payment_id' => 'offline_c', 'payment_gateway' => 'bank_transfer'], 'unresolved', null],
             'offline manual booking marked as paid' => [['status' => 'confirmed', 'created_by' => '1', 'payment_gateway' => 'offline'], 'out_of_band', '32.00'],
             'partner' => [['status' => 'partner'], 'none', '0.00'],
             'pending with an intent' => [['status' => 'pending', 'payment_id' => 'pi_open'], 'none', '0.00'],
@@ -80,6 +82,7 @@ class PaymentSettlementMigrationTest extends TestCase
         // The checkout's made-up offline references are dropped; every other reference stays.
         $this->assertSame('', Reservation::find($ids['offline checkout confirmed'])->payment_id);
         $this->assertSame('', Reservation::find($ids['offline checkout refunded'])->payment_id);
+        $this->assertSame('', Reservation::find($ids['offline checkout, gateway since removed from config'])->payment_id);
         $this->assertSame('pi_unverified', Reservation::find($ids['cancelled unpaid, intent unverified'])->payment_id);
         $this->assertSame('pi_open', Reservation::find($ids['pending with an intent'])->payment_id);
     }

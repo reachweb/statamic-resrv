@@ -21,7 +21,8 @@ return new class extends Migration
      * - cancelled: gateway with a payment_id, unresolved when payment_unresolved, otherwise none.
      * - Before v6.6.0 the checkout confirmed a booking paid through an offline gateway at once,
      *   with a made-up payment_id: those confirmed, refunded or cancelled rows are unresolved, as
-     *   nobody recorded whether the money arrived, and lose the made-up payment_id.
+     *   nobody recorded whether the money arrived, and lose the made-up payment_id. They are found
+     *   by the offline_ prefix of that id, or by a configured gateway that confirms manually.
      * - Everything else: none.
      */
     public function up(): void
@@ -48,6 +49,12 @@ return new class extends Migration
 
         $offlineCheckout = fn () => $rows(['confirmed', 'refunded', 'cancelled'])->where($withPaymentId)->whereNull('created_by');
 
+        // OfflinePaymentGateway always minted offline_ ids, so its rows are found even when the site
+        // has since removed or renamed the gateway. '!' escapes the '_' LIKE wildcard on every driver.
+        $offlineCheckout()->whereRaw("payment_id like ? escape '!'", ['offline!_%'])
+            ->update(['payment_settlement' => 'unresolved', 'payment_id' => '']);
+
+        // A third-party gateway that confirms manually is only known by the config.
         foreach ($offlineCheckout()->distinct()->pluck('payment_gateway') as $gateway) {
             if (! $this->confirmsManually($gateway)) {
                 continue;
