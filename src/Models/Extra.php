@@ -12,10 +12,11 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
+use Reach\StatamicResrv\Traits\HandlesOrdering;
 
 class Extra extends Model
 {
-    use HandlesAvailabilityDates, HandlesMultisiteIds, HasFactory, SoftDeletes;
+    use HandlesAvailabilityDates, HandlesMultisiteIds, HandlesOrdering, HasFactory, SoftDeletes;
 
     protected $table = 'resrv_extras';
 
@@ -80,27 +81,9 @@ class Extra extends Model
         static::addGlobalScope(new OrderScope);
     }
 
-    public function changeOrder($order)
+    protected function orderingQuery()
     {
-        if ($this->order === $order) {
-            return;
-        }
-
-        $items = $this->where('category_id', $this->category_id)->orderBy('order')->get()->keyBy('id');
-
-        $movingItem = $items->pull($this->id);
-        $count = ($order == 1 ? 2 : 1);
-
-        foreach ($items as $item) {
-            if ($count == $order) {
-                $count++;
-            }
-            $item->order = $count;
-            $item->saveOrFail();
-            $count++;
-        }
-        $movingItem->order = $order;
-        $movingItem->saveOrFail();
+        return $this->newQuery()->where('category_id', $this->category_id);
     }
 
     public function priceForDates($data)
@@ -214,10 +197,10 @@ class Extra extends Model
     }
 
     /**
-     * The line charged for this extra on the reservation. The manual-reservation flow snapshots
-     * it on the pivot (total) because a binding dynamic-pricing clamp makes the line non-linear
-     * in the unit price — and a rounded unit price cannot rebuild it (100.00 ÷ 3 × 3 = 99.99).
-     * Checkout-written rows carry no total and are price × quantity by construction.
+     * The line charged for this extra on the reservation. The manual-reservation flow and the
+     * checkout snapshot it on the pivot (total) because a binding dynamic-pricing clamp makes the
+     * line non-linear in the unit price — and a rounded unit price cannot rebuild it
+     * (100.00 ÷ 3 × 3 = 99.99). Older checkout rows carry no total and are price × quantity.
      */
     public function priceFromPivot()
     {
@@ -226,6 +209,23 @@ class Extra extends Model
         }
 
         return Price::create($this->pivot->price)->multiply($this->pivot->quantity)->format();
+    }
+
+    /**
+     * Why $quantity units of this extra cannot be booked, or null when they can. An extra that
+     * does not allow multiple carries no maximum, so it is capped at one unit here.
+     */
+    public function quantityError(int $quantity): ?string
+    {
+        if (! $this->allow_multiple && $quantity > 1) {
+            return __('The extra ":name" cannot be added more than once.', ['name' => $this->name]);
+        }
+
+        if ($this->maximum > 0 && $quantity > $this->maximum) {
+            return __('The selected quantity exceeds the maximum allowed for this extra.');
+        }
+
+        return null;
     }
 
     /**

@@ -99,6 +99,25 @@ class CheckoutOptionsTest extends TestCase
         $this->assertEquals('15.00', $value->priceForDates($data));
     }
 
+    // The CP only offers an option's published values; the checkout must neither list an
+    // unpublished value nor let the client-callable selectOption() pick it.
+    public function test_it_does_not_list_or_select_an_unpublished_option_value()
+    {
+        $hidden = OptionValue::factory()->create([
+            'option_id' => $this->options->id,
+            'name' => 'Hidden option value',
+            'published' => false,
+        ]);
+
+        $component = Livewire::test(Options::class, ['reservation' => $this->reservation]);
+
+        $this->assertNotContains($hidden->id, $component->options->first()->values->pluck('id'));
+
+        $component->assertDontSee('Hidden option value')
+            ->call('selectOption', $this->options->id, $hidden->id)
+            ->assertNotDispatched('options-updated');
+    }
+
     // Test that it loads options list in the view
     public function test_loads_options_list_in_the_view()
     {
@@ -280,6 +299,33 @@ class CheckoutOptionsTest extends TestCase
         $this->assertDatabaseMissing('resrv_reservation_option', [
             'reservation_id' => $this->reservation->id,
             'option_id' => $option->id,
+        ]);
+    }
+
+    // A JSON true passes the integer rule and loosely equals every id, but pricing and the pivot
+    // read it as id 1, so it must be checked as id 1: here a value that is not published.
+    public function test_it_rejects_a_boolean_option_value_that_resolves_to_an_unpublished_value()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $hidden = $this->options->values->first();
+        OptionValue::whereKey($hidden->id)->update(['id' => 1, 'published' => false]);
+        OptionValue::factory()->create(['option_id' => $this->options->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [$this->options->id => [
+                'id' => $this->options->id,
+                'value' => true,
+                'price' => $hidden->priceForDates($this->reservation),
+                'optionName' => $this->options->name,
+                'valueName' => $hidden->name,
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasErrors('options')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
         ]);
     }
 

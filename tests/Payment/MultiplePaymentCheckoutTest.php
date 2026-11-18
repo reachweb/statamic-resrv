@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Tests\Payment;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
+use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
 use Reach\StatamicResrv\Models\Reservation;
@@ -234,6 +235,28 @@ class MultiplePaymentCheckoutTest extends TestCase
             'status' => 'success',
         ])->assertNotFound();
 
+        $this->assertDatabaseHas('resrv_reservations', [
+            'id' => $this->reservation->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    // A single payment_gateways entry is single-gateway mode, so the bare URL must reach that
+    // gateway — not the legacy payment_gateway binding (Stripe by default, the fake gateway here).
+    public function test_bare_webhook_url_reaches_the_only_configured_gateway()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank transfer'],
+        ]);
+
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $this->post('/resrv/api/webhook', [
+            'reservation_id' => $this->reservation->id,
+            'status' => 'success',
+        ])->assertOk();
+
+        // The fake gateway would confirm this reservation; the offline gateway ignores webhooks.
         $this->assertDatabaseHas('resrv_reservations', [
             'id' => $this->reservation->id,
             'status' => 'pending',

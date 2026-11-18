@@ -405,7 +405,7 @@ tabs:
               display: 'Offline Payment Instructions'
               type: textarea
               localizable: false
-              instructions: 'How customers pay a manual reservation that uses a manually confirmed payment method (e.g. bank transfer details). Shown on the payment page and in the payment request email. Leave empty to only tell customers that payment is arranged directly with you.'
+              instructions: 'How customers pay a reservation that uses a manually confirmed payment method (e.g. bank transfer details). Shown at checkout and in the confirmation email of frontend bookings, and on the payment page and in the payment request email of manual reservations. When empty, frontend bookings show no payment details, and the payment page and payment request email tell customers that payment is arranged directly with you.'
   emails_settings:
     display: Emails
     sections:

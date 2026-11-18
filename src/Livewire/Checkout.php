@@ -3,6 +3,9 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Carbon\Carbon;
+use Closure;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
@@ -23,6 +26,8 @@ use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
+use Reach\StatamicResrv\Models\Extra;
+use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
 
@@ -179,26 +184,15 @@ class Checkout extends Component
 
         $reservation = $this->reservation;
 
-        $datasets = $reservation->isParent()
-            ? $reservation->childs->map(fn ($child) => [
-                'date_start' => $child->date_start,
-                'date_end' => $child->date_end,
-                'quantity' => $child->quantity,
-                'rate_id' => $child->rate_id,
-                'item_id' => $reservation->item_id,
-                'customer' => $reservation->customerData ?? collect(),
-            ])->all()
-            : [array_merge($this->getAvailabilityDataFromReservation(), [
-                'item_id' => $reservation->item_id,
-                'customer' => $reservation->customerData ?? collect(),
-            ])];
+        $datasets = $reservation->addonPricingData();
 
         // Resolve extras through the query Reservation::extraForValidation() uses — the entry's
         // selectable extras — so a selection carried over from another entry is never priced here.
         $entry = ResrvEntry::query()->itemId($reservation->item_id)->first();
 
-        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($datasets, $entry) {
-            $extraModel = $entry?->extras()->selectable()->find($extra['id']);
+        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($entry, $reservation) {
+            // Conditions are not needed to price.
+            $extraModel = $entry?->extras()->selectable()->without('conditions')->find($extra['id']);
 
             // Leave unresolvable extras untouched — extraForValidation() raises the designed
             // ExtrasException for them during validation, so the stale selection must reach
@@ -207,14 +201,14 @@ class Checkout extends Component
                 return $extra;
             }
 
-            $totalPrice = Price::create(0);
+            $extra['price'] = $reservation->extraUnitPrice($extraModel)->format();
 
-            foreach ($datasets as $data) {
-                // Fresh instance per dataset: priceForDates() mutates $this->price via dynamic pricing
-                $totalPrice->add(Price::create((clone $extraModel)->priceForDates($data)));
+            // One unit's line is its price (EnabledExtras::lineTotal()), as in withExtraLineTotal(),
+            // so only a larger quantity is priced again as a line.
+            unset($extra['total']);
+            if ((int) $extra['quantity'] > 1) {
+                $extra['total'] = $reservation->extraLineTotal($extraModel, (int) $extra['quantity'])->format();
             }
-
-            $extra['price'] = $totalPrice->format();
 
             return $extra;
         });
@@ -240,65 +234,91 @@ class Checkout extends Component
         });
     }
 
+    /**
+     * Run $write while no other request writes this reservation's add-on lines and totals. Two tabs
+     * booking add-ons or changing the coupon at once could otherwise interleave their writes and
+     * leave lines that don't add up to the total handleSecondStep() charges.
+     */
+    protected function withReservationLock(Closure $write)
+    {
+        // The TTL outlives a gateway round-trip: updateTotals() can cancel a payment intent.
+        try {
+            return Cache::lock('resrv-checkout-'.session('resrv_reservation'), 120)->block(10, function () use ($write) {
+                // Read the row afresh: the request we waited for may have just written it.
+                unset($this->reservation);
+
+                return $write();
+            });
+        } catch (LockTimeoutException) {
+            $this->addError('reservation', 'The reservation is being updated in another window. Please try again.');
+        }
+    }
+
     public function handleFirstStep()
     {
         // Validate data
         $this->validate();
 
-        // Confirm that the reservation data is valid by cross-checking with the database.
-        // Terminal checks run BEFORE drift checks — otherwise an expired reservation whose
-        // stale data also drifted would get demoted to a recoverable banner because the
-        // drift exception would be thrown first.
-        try {
-            $this->confirmReservationHasNotExpired();
-            $this->confirmReservationIsValid();
-        } catch (ReservationExpiredException $e) {
-            $this->reservationError = $e->getMessage();
+        return $this->withReservationLock(function () {
+            // Confirm that the reservation data is valid by cross-checking with the database.
+            // Terminal checks run BEFORE drift checks — otherwise an expired reservation whose
+            // stale data also drifted would get demoted to a recoverable banner because the
+            // drift exception would be thrown first.
+            try {
+                $this->confirmReservationHasNotExpired();
+                $this->confirmReservationIsValid();
+            } catch (ReservationExpiredException $e) {
+                $this->reservationError = $e->getMessage();
 
-            return;
-        } catch (ReservationTerminatedException $e) {
-            return $this->redirectToCheckoutComplete();
-        } catch (OptionsException $e) {
-            $this->addError('options', $e->getMessage());
+                return;
+            } catch (ReservationTerminatedException $e) {
+                return $this->redirectToCheckoutComplete();
+            } catch (OptionsException $e) {
+                $this->addError('options', $e->getMessage());
 
-            return;
-        } catch (ExtrasException $e) {
-            $this->addError('extras', $e->getMessage());
+                return;
+            } catch (ExtrasException $e) {
+                $this->addError('extras', $e->getMessage());
 
-            return;
-        } catch (ReservationDriftException $e) {
-            $this->addError('reservation', $e->getMessage());
+                return;
+            } catch (ReservationDriftException $e) {
+                $this->addError('reservation', $e->getMessage());
 
-            return;
-        } catch (ReservationException $e) {
-            $this->addError('reservation', $e->getMessage());
+                return;
+            } catch (ReservationException $e) {
+                $this->addError('reservation', $e->getMessage());
 
-            return;
-        }
+                return;
+            }
 
-        $totals = $this->calculateReservationTotals();
+            // Validation only checks that the lines add up to the server's total, so write the
+            // reservation and its pivot rows from the server's per-line prices, not the payload's.
+            $this->repriceEnabledAddons();
 
-        $toUpdate = [
-            'total' => $totals->get('total')->format(),
-        ];
+            $totals = $this->calculateReservationTotals();
 
-        if (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible()) {
-            $toUpdate['payment'] = $totals->get('total')->format();
-            // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
-            $toUpdate['payment_surcharge'] = 0;
-        }
+            $toUpdate = [
+                'total' => $totals->get('total')->format(),
+            ];
 
-        // Update the reservation with the total
-        $this->reservation->update($toUpdate);
+            if (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible()) {
+                $toUpdate['payment'] = $totals->get('total')->format();
+                // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
+                $toUpdate['payment_surcharge'] = 0;
+            }
 
-        // Sync extras & options to the database. Don't advance if either fails —
-        // the total was already written above, so proceeding would let the user pay
-        // an amount that doesn't match the extras/options actually attached.
-        if (! $this->assignExtras() || ! $this->assignOptions()) {
-            return;
-        }
+            // Update the reservation with the total
+            $this->reservation->update($toUpdate);
 
-        $this->step = 2;
+            // Sync extras & options to the database. Don't advance if either fails —
+            // the total was already written above, so proceeding would let the user pay
+            // an amount that doesn't match the extras/options actually attached.
+            if (! $this->assignExtras() || ! $this->assignOptions()) {
+                return;
+            }
+
+            $this->step = 2;
+        });
     }
 
     #[On('checkout-form-submitted')]
@@ -683,14 +703,13 @@ class Checkout extends Component
 
     protected function assignExtras(): bool
     {
-        if ($this->enabledExtras->extras->count() > 0) {
-            try {
-                $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
-            } catch (\Exception $e) {
-                $this->addError('extras', 'There was an error assigning the extras. Please try again.');
+        // An empty selection syncs too: it unbooks what an earlier pass through this step booked.
+        try {
+            $this->reservation->extras()->sync($this->enabledExtras->extrasToSync());
+        } catch (\Exception $e) {
+            $this->addError('extras', 'There was an error assigning the extras. Please try again.');
 
-                return false;
-            }
+            return false;
         }
 
         return true;
@@ -698,14 +717,13 @@ class Checkout extends Component
 
     protected function assignOptions(): bool
     {
-        if ($this->enabledOptions->options->count() > 0) {
-            try {
-                $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
-            } catch (\Exception $e) {
-                $this->addError('options', 'There was an error assigning the options. Please try again.');
+        // An empty selection syncs too: it unbooks what an earlier pass through this step booked.
+        try {
+            $this->reservation->options()->sync($this->enabledOptions->optionsToSync());
+        } catch (\Exception $e) {
+            $this->addError('options', 'There was an error assigning the options. Please try again.');
 
-                return false;
-            }
+            return false;
         }
 
         return true;
@@ -714,51 +732,77 @@ class Checkout extends Component
     #[On('coupon-applied'), On('coupon-removed')]
     public function updateTotals($coupon, $removeCoupon = false): void
     {
-        // This try-catch block is here to prevent an error if a user tries to remove a coupon that has been deleted
-        try {
-            $couponModel = DynamicPricing::searchForCoupon($coupon, $this->reservation->id);
+        $this->withReservationLock(function () use ($coupon, $removeCoupon) {
+            // This try-catch block is here to prevent an error if a user tries to remove a coupon that has been deleted
+            try {
+                $couponModel = DynamicPricing::searchForCoupon($coupon, $this->reservation->id);
 
-            if ($couponModel->appliesToExtras()) {
+                if ($couponModel->appliesToExtras()) {
+                    $this->dispatch('extras-coupon-changed');
+                }
+            } catch (CouponNotFoundException $exception) {
+                // Dispatch the event anyway
                 $this->dispatch('extras-coupon-changed');
             }
-        } catch (CouponNotFoundException $exception) {
-            // Dispatch the event anyway
-            $this->dispatch('extras-coupon-changed');
-        }
 
-        // A coupon change invalidates any intent created for the old amount. Cancel it off the
-        // persisted reservation — resetPaymentState() reads payment_id — not the component-local
-        // selectedGateway, which a stale tab can hold as '' while the row still has a live intent.
-        $wasOnPaymentStep = $this->selectedGateway !== '' || $this->step >= 3;
-        $this->resetPaymentState();
-        if ($wasOnPaymentStep) {
-            $this->step = 2;
-        }
+            // A coupon change invalidates any intent created for the old amount. Cancel it off the
+            // persisted reservation — resetPaymentState() reads payment_id — not the component-local
+            // selectedGateway, which a stale tab can hold as '' while the row still has a live intent.
+            $wasOnPaymentStep = $this->selectedGateway !== '' || $this->step >= 3;
+            $this->resetPaymentState();
+            if ($wasOnPaymentStep) {
+                $this->step = 2;
+            }
 
-        // Recompute price, total and payment, then persist in one update so a concurrent
-        // handleSecondStep() never reads the deposit before the full-payment override lands.
-        $prices = $this->getUpdatedPrices();
+            // A coupon can change the extras' prices too: re-price the booked ones, which the total below
+            // charges. At step 1 the Extras component re-prices the selection.
+            $this->reservation->repriceBookedExtras();
 
-        $total = Price::create($prices['price'])->add(
-            $this->calculateExtraTotals(),
-            $this->calculateOptionTotals(),
-        );
+            // Past step 1 nothing re-prices the selection, and it can differ from what is booked (another
+            // tab booked other add-ons, or the browser sent another selection). The sidebar lists the
+            // booked add-ons instead, priced as bookedAddonsTotal() charges them below.
+            if ($this->step > 1) {
+                $this->enabledExtras->extras = $this->reservation->extras()->get()->mapWithKeys(fn (Extra $extra) => [$extra->id => [
+                    'id' => $extra->id,
+                    'name' => $extra->override_label ?? $extra->name,
+                    'quantity' => (int) $extra->pivot->quantity,
+                    'price' => Price::create($extra->pivot->price)->format(),
+                    'total' => $extra->priceFromPivot(),
+                ]]);
 
-        // Reapply handleFirstStep()'s full-payment decision: non-refundable, the full-payment
-        // window, or everything mode must pay the whole total, not the deposit.
-        $payment = (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible())
-            ? $total->format()
-            : $prices['payment'];
+                $this->enabledOptions->options = $this->reservation->optionsForEmail()->mapWithKeys(fn (Option $option) => [$option->id => [
+                    'id' => $option->id,
+                    'value' => (int) $option->pivot->value,
+                    'price' => $this->reservation->bookedOptionPrice($option)->format(),
+                    'optionName' => $option->name,
+                    'valueName' => $option->values->firstWhere('id', $option->pivot->value)?->name,
+                ]]);
+            }
 
-        $this->reservation->update([
-            'price' => $prices['price'],
-            'payment' => $payment,
-            'payment_surcharge' => 0,
-            'total' => $total->format(),
-        ]);
-        unset($this->reservation);
+            // Recompute price, total and payment, then persist in one update so a concurrent
+            // handleSecondStep() never reads the deposit before the full-payment override lands.
+            $prices = $this->getUpdatedPrices();
 
-        CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
+            // The browser dispatches this event, and handleSecondStep() charges what it writes, so the
+            // add-ons are the ones handleFirstStep() validated and booked, not the current selection.
+            $total = Price::create($prices['price'])->add($this->reservation->bookedAddonsTotal());
+
+            // Reapply handleFirstStep()'s full-payment decision: non-refundable, the full-payment
+            // window, or everything mode must pay the whole total, not the deposit.
+            $payment = (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible())
+                ? $total->format()
+                : $prices['payment'];
+
+            $this->reservation->update([
+                'price' => $prices['price'],
+                'payment' => $payment,
+                'payment_surcharge' => 0,
+                'total' => $total->format(),
+            ]);
+            unset($this->reservation);
+
+            CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
+        });
     }
 
     public function render()

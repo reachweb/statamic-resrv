@@ -511,6 +511,17 @@ class Reservation extends Model
     }
 
     /**
+     * A frontend checkout through a manual-confirmation gateway (bank transfer): it confirms
+     * before any money arrives, and its minted payment reference proves nothing was collected.
+     */
+    public function isOfflineCheckout(): bool
+    {
+        return $this->created_by === null
+            && $this->hasGatewayPayment()
+            && $this->paymentGatewaySupportsManualConfirmation();
+    }
+
+    /**
      * CONFIRMED with no charge reference — only possible via an out-of-band/manual confirmation
      * (a webhook confirm always stores the intent id), so a refund must skip the provider.
      */
@@ -560,9 +571,7 @@ class Reservation extends Model
     public function amountReceived(): ?PriceClass
     {
         if (in_array($this->status, [ReservationStatus::CONFIRMED->value, ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value], true)
-            && $this->created_by === null
-            && $this->hasGatewayPayment()
-            && $this->paymentGatewaySupportsManualConfirmation()) {
+            && $this->isOfflineCheckout()) {
             return null;
         }
 
@@ -1068,6 +1077,105 @@ class Reservation extends Model
         return true;
     }
 
+    /**
+     * The stays this reservation's add-ons are priced for, shaped as Checkout's validation prices
+     * them (validateExtraCharges()): its own stay, or one per child of a parent.
+     */
+    public function addonPricingData(): array
+    {
+        $customer = $this->customerData ?? collect();
+
+        if ($this->isParent()) {
+            return $this->childs->map(fn (ChildReservation $child) => array_merge($this->buildChildDataArray($child), ['customer' => $customer]))->all();
+        }
+
+        return [array_merge($this->buildDataArray(), ['item_id' => $this->item_id, 'customer' => $customer])];
+    }
+
+    /**
+     * What the add-ons booked on this reservation (the pivot rows the checkout saved after
+     * validating them) add to its total: each extra's line as it was saved, and each option
+     * priced for the stays again, since its pivot keeps no price.
+     */
+    public function bookedAddonsTotal(): PriceClass
+    {
+        $total = Price::create(0);
+
+        foreach ($this->extras()->get() as $extra) {
+            $total->add(Price::create($extra->priceFromPivot()));
+        }
+
+        foreach ($this->options()->get() as $option) {
+            $total->add($this->bookedOptionPrice($option));
+        }
+
+        return $total;
+    }
+
+    /** What a booked option, loaded with its pivot, adds for this reservation's stays. */
+    public function bookedOptionPrice(Option $option): PriceClass
+    {
+        $total = Price::create(0);
+
+        foreach ($this->addonPricingData() as $data) {
+            $total->add($option->calculatePrice($data, $option->pivot->value));
+        }
+
+        return $total;
+    }
+
+    /**
+     * Price the booked extras again and save their lines, for a change that re-prices them once
+     * the checkout booked them, such as a coupon. Their quantities stay as booked.
+     */
+    public function repriceBookedExtras(): void
+    {
+        $customer = $this->customerData;
+
+        foreach ($this->extras()->get() as $extra) {
+            // A custom-priced extra multiplies by a customer field. The checkout form saves only its
+            // own fields, so one missing from it is gone once the form is submitted, and a visible
+            // one may hold text: keep the line step 1 validated (the CP's create form does the same).
+            if ($extra->price_type === 'custom' && ! is_numeric($customer->get($extra->custom))) {
+                continue;
+            }
+
+            $this->extras()->updateExistingPivot($extra->id, [
+                'price' => $this->extraUnitPrice($extra)->format(),
+                'total' => $this->extraLineTotal($extra, (int) $extra->pivot->quantity)->format(),
+            ]);
+        }
+    }
+
+    /** The price of one unit of $extra for this reservation's stays. */
+    public function extraUnitPrice(Extra $extra): PriceClass
+    {
+        $total = Price::create(0);
+
+        foreach ($this->addonPricingData() as $data) {
+            // Fresh clone per stay: priceForDates() writes dynamic pricing back into price.
+            $total->add(Price::create((clone $extra)->priceForDates($data)));
+        }
+
+        return $total;
+    }
+
+    /**
+     * The line charged for $quantity of $extra. Not price × quantity once a dynamic-pricing
+     * minimum/maximum binds: priceForDates() clamps the unit, calculatePrice() the line.
+     */
+    public function extraLineTotal(Extra $extra, int $quantity): PriceClass
+    {
+        $total = Price::create(0);
+
+        foreach ($this->addonPricingData() as $data) {
+            // Fresh clone per stay: calculatePrice() writes dynamic pricing back into price.
+            $total->add((clone $extra)->calculatePrice($data, $quantity));
+        }
+
+        return $total;
+    }
+
     protected function buildDataArray()
     {
         return [
@@ -1193,17 +1301,19 @@ class Reservation extends Model
 
     /**
      * Same for options: the option must be the entry's and published, exactly what
-     * HandlesOptionsQueries::getOptionsForId() lists, and the chosen value must be a live value of
-     * that option — the list renders $option->values under the soft-delete scope, while
-     * Option::calculatePrice() resolves values withTrashed() for historical pricing, so a deleted
-     * (or tampered) value has to be rejected here, before pricing.
+     * HandlesOptionsQueries::getOptionsForId() lists, and the chosen value must be a published,
+     * live value of that option — the list renders only published values under the soft-delete
+     * scope, while Option::calculatePrice() resolves values withTrashed() for historical pricing,
+     * so a deleted, unpublished (or tampered) value has to be rejected here, before pricing.
      */
     protected function optionForValidation(array $option, $statamic_id): Option
     {
-        $model = Option::entry($statamic_id)->where('published', true)->find($option['id'])
+        $model = Option::entry($statamic_id)->selectable()->find($option['id'])
             ?? throw new OptionsException(__('The selected option is not valid.'));
 
-        if (! $model->values()->whereKey($option['value'] ?? null)->exists()) {
+        // Check the id pricing and the pivot will use: a JSON true passes the integer rule and
+        // loosely equals every id, but the database reads it as id 1.
+        if (! $model->values->contains('id', (int) ($option['value'] ?? 0))) {
             throw new OptionsException(__('The selected option value is not valid.'));
         }
 

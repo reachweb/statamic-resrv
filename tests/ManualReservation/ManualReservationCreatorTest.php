@@ -1149,7 +1149,7 @@ class ManualReservationCreatorTest extends TestCase
 
     public function test_a_pivot_row_without_a_line_total_still_displays_price_times_quantity()
     {
-        // Checkout-written rows predate the total column and are linear by construction.
+        // Checkout rows written before the checkout stored a total are linear by construction.
         $entry = $this->makeStatamicItemWithAvailability(available: 4);
         $extra = $this->attachExtraTo($entry);
 

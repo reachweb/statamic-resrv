@@ -223,6 +223,55 @@ class OptionCpTest extends TestCase
         ]);
     }
 
+    public function test_reordering_options_is_scoped_to_the_entry()
+    {
+        $entryA = $this->makeStatamicItem();
+        $entryB = $this->makeStatamicItem();
+
+        $create = fn ($entry, $slug) => $this->post(cp_route('resrv.option.create'), [
+            'name' => $slug,
+            'slug' => $slug,
+            'item_id' => $entry->id(),
+            'required' => false,
+            'published' => true,
+        ])->assertStatus(200)->json('id');
+
+        $o1 = $create($entryA, 'o1');
+        $o2 = $create($entryA, 'o2');
+        $o3 = $create($entryB, 'o3');
+        $o4 = $create($entryB, 'o4');
+
+        $idsFor = fn ($entry) => collect(
+            $this->get(cp_route('resrv.option.entryindex', $entry->id()))
+                ->assertStatus(200)
+                ->json()
+        )->pluck('id')->all();
+
+        // OptionsList.vue sends the 1-based position within the entry's own list.
+        $this->patch(cp_route('resrv.option.order'), ['id' => $o4, 'order' => 1])->assertStatus(200);
+        $this->assertSame([$o4, $o3], $idsFor($entryB));
+
+        $this->patch(cp_route('resrv.option.order'), ['id' => $o4, 'order' => 2])->assertStatus(200);
+        $this->assertSame([$o3, $o4], $idsFor($entryB));
+        $this->assertSame([$o1, $o2], $idsFor($entryA));
+    }
+
+    public function test_reordering_moves_an_option_whose_stored_order_equals_the_target_position()
+    {
+        $entry = $this->makeStatamicItem();
+
+        // Order numbers were assigned across all entries, so this entry's options start at 3.
+        [$o3, $o4, $o5] = collect([3, 4, 5])
+            ->map(fn ($order) => Option::factory()->create(['item_id' => $entry->id(), 'order' => $order])->id)
+            ->all();
+
+        // Dragging o3 to the last of three positions sends order 3, which is also its stored number.
+        $this->patch(cp_route('resrv.option.order'), ['id' => $o3, 'order' => 3])->assertStatus(200);
+
+        $ids = collect($this->get(cp_route('resrv.option.entryindex', $entry->id()))->json())->pluck('id')->all();
+        $this->assertSame([$o4, $o5, $o3], $ids);
+    }
+
     public function test_can_reorder_option_values()
     {
         $item = $this->makeStatamicItem();
@@ -252,6 +301,23 @@ class OptionCpTest extends TestCase
             'id' => 3,
             'order' => 2,
         ]);
+    }
+
+    public function test_reordering_option_values_is_scoped_to_their_option()
+    {
+        $item = $this->makeStatamicItem();
+        [$optionA, $optionB] = Option::factory()->count(2)->create(['item_id' => $item->id()]);
+
+        // Numbered across both options, as values once were.
+        [$a1, $a2, $b1, $b2] = collect([[$optionA, 1], [$optionA, 2], [$optionB, 3], [$optionB, 4]])
+            ->map(fn ($pair) => OptionValue::factory()->create(['option_id' => $pair[0]->id, 'order' => $pair[1]])->id)
+            ->all();
+
+        // OptionValuesList.vue sends the 1-based position within the option's own list.
+        $this->patch(cp_route('resrv.option.value.order'), ['id' => $b1, 'order' => 2])->assertStatus(200);
+
+        $this->assertSame([$b2, $b1], OptionValue::where('option_id', $optionB->id)->pluck('id')->all());
+        $this->assertSame([$a1, $a2], OptionValue::where('option_id', $optionA->id)->pluck('id')->all());
     }
 
     public function test_updating_a_non_existent_option_returns_404()

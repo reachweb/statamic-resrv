@@ -11,6 +11,7 @@ use Reach\StatamicResrv\Exceptions\PaymentAttemptStillOpen;
 use Reach\StatamicResrv\Exceptions\ReservationNoLongerPayable;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Facades\Price;
+use Reach\StatamicResrv\Helpers\ResrvHelper;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Traits\HandlesCustomerLookup;
 use Reach\StatamicResrv\Livewire\Traits\HandlesDirectGatewayPayment;
@@ -333,9 +334,7 @@ class ReservationPayment extends Component
     #[Computed]
     public function offlineInstructions(): ?string
     {
-        $instructions = config('resrv-config.manual_reservations_offline_instructions');
-
-        return is_string($instructions) && trim($instructions) !== '' ? trim($instructions) : null;
+        return ResrvHelper::offlineInstructions();
     }
 
     public function render()

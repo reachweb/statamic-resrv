@@ -149,10 +149,31 @@ trait HandlesExtrasQueries
 
             if ($available) {
                 $extra['price'] = $available->price->format();
+                $extra = $this->withExtraLineTotal($extra);
             }
 
             return $extra;
         });
+    }
+
+    /**
+     * Carry the line a reservation is charged for a selected extra as 'total'
+     * (Reservation::extraLineTotal()). A single unit agrees with its price, and without a
+     * reservation the line stays price × quantity (EnabledExtras::lineTotal()), so a total carried
+     * over in the shared session is dropped there.
+     */
+    protected function withExtraLineTotal(array $extra): array
+    {
+        unset($extra['total']);
+
+        // Quantity first: reading $this->reservation loads it. Conditions are not needed to price.
+        $model = $extra['quantity'] > 1 && isset($this->reservation) ? Extra::without('conditions')->find($extra['id']) : null;
+
+        if ($model) {
+            $extra['total'] = $this->reservation->extraLineTotal($model, (int) $extra['quantity'])->format();
+        }
+
+        return $extra;
     }
 
     public function handleExtrasConditions($extras)

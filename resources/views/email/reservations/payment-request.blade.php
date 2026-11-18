@@ -81,13 +81,10 @@
 
 {{ __("If the button does not work, copy this link into your browser:") }} {{ $payUrl }}
 @elseif ($isOffline && ($offlineInstructions ?? null))
-**{{ __("How to pay") }}**
-
-@component('mail::panel')
-{{ $offlineInstructions }}
-@endcomponent
-
-{{ __("Please include the booking reference :reference with your payment. We will confirm your reservation as soon as your payment arrives.", ['reference' => $reservation->reference]) }}
+@include('statamic-resrv::email.reservations.partials.how-to-pay', [
+    'instructions' => $offlineInstructions,
+    'note' => __("Please include the booking reference :reference with your payment. We will confirm your reservation as soon as your payment arrives.", ['reference' => $reservation->reference]),
+])
 @elseif ($isOffline)
 {{ __("This reservation is not paid online: payment is arranged directly with us. Please contact us using the details above for the payment details, quoting the booking reference :reference. We will confirm your reservation as soon as your payment arrives.", ['reference' => $reservation->reference]) }}
 @else

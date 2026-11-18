@@ -287,6 +287,26 @@ class ReservationMissingAddonValidationTest extends TestCase
         $reservation->validateTotal($data, $this->entry->id());
     }
 
+    // The CP only accepts published values (ManualReservationCreator::priceOptions()); a value
+    // unpublished after it was selected is no longer on offer and must not be bought.
+    public function test_an_unpublished_option_value_is_rejected_with_an_options_error()
+    {
+        $reservation = $this->createNormalReservation();
+        [$option, $value] = $this->createFixedOption();
+
+        // Keyed by option id like the checkout's payload, which the required-options check reads.
+        $data = $this->checkoutData($reservation, '230.00', [
+            'options' => $this->optionPayload($option, $value, '30.00')->keyBy('id'),
+        ]);
+
+        $this->assertTrue($reservation->validateReservation($data, $this->entry->id()));
+
+        $value->update(['published' => false]);
+
+        $this->expectException(OptionsException::class);
+        $reservation->validateReservation($data, $this->entry->id());
+    }
+
     public function test_a_value_of_another_option_is_rejected_with_an_options_error()
     {
         $reservation = $this->createNormalReservation();

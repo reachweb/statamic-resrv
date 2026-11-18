@@ -7,6 +7,12 @@
             <div class="text-gray-700">
                 {{ trans('statamic-resrv::frontend.offlinePaymentDescription') }}
             </div>
+            @php($offlineInstructions = \Reach\StatamicResrv\Helpers\ResrvHelper::offlineInstructions())
+            @if ($offlineInstructions)
+            <div class="mt-4 p-4 bg-blue-50 border border-blue-300 rounded">
+                <p class="text-gray-900 break-words">{!! nl2br(e($offlineInstructions)) !!}</p>
+            </div>
+            @endif
         </div>
         <div class="my-6 xl:my-8">
             <div class="text-base font-medium mb-4">

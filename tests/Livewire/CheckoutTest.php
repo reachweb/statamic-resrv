@@ -3,11 +3,13 @@
 namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Database\Events\TransactionBeginning;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Sleep;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Enums\ReservationStatus;
@@ -16,7 +18,9 @@ use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Checkout;
+use Reach\StatamicResrv\Livewire\CheckoutForm;
 use Reach\StatamicResrv\Models\Affiliate;
+use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\DynamicPricing;
 use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra as ResrvExtra;
@@ -946,6 +950,318 @@ class CheckoutTest extends TestCase
         $this->assertEquals('80.00', $fresh->price->format());
         $this->assertEquals('119.30', $fresh->payment->format());
         $this->assertEquals('119.30', $fresh->total->format());
+    }
+
+    // The browser dispatches the coupon events, so the selection they see can be anything; what
+    // they write is what handleSecondStep() charges. It must be what step 1 validated and booked.
+    public function test_a_coupon_change_charges_the_booked_add_ons_not_the_client_selection()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        $this->assignCouponToEntry();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // 100 for the stay + 9.30 extra + 30 option.
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$this->extra->id => $this->extraPayload()])
+            ->dispatch('options-updated', [$this->options->id => $this->optionPayload()])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertEquals('139.30', $this->reservation->fresh()->payment->format());
+
+        // A free booked extra and the option dropped, then a real coupon.
+        $component->dispatch('extras-updated', [$this->extra->id => $this->extraPayload(['price' => '0.00', 'total' => '0.00'])])
+            ->dispatch('options-updated', []);
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $fresh = $this->reservation->fresh();
+        $this->assertEquals('80.00', $fresh->price->format());
+        $this->assertEquals('119.30', $fresh->total->format());
+        $this->assertEquals('119.30', $fresh->payment->format());
+        $this->assertSidebarTotalIsTheCharge($component);
+
+        // Every add-on dropped, then the coupon removed.
+        $component->dispatch('extras-updated', []);
+
+        session()->forget('resrv_coupon');
+        $component->dispatch('coupon-removed', '20OFF', true);
+
+        $fresh = $this->reservation->fresh();
+        $this->assertEquals('139.30', $fresh->total->format());
+        $this->assertEquals('139.30', $fresh->payment->format());
+        $this->assertSidebarTotalIsTheCharge($component);
+    }
+
+    // Going back to step 1 and deselecting everything must unbook it, not only drop it from the total.
+    public function test_deselecting_every_add_on_and_continuing_again_unbooks_them()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        $this->assignCouponToEntry();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$this->extra->id => $this->extraPayload()])
+            ->dispatch('options-updated', [$this->options->id => $this->optionPayload()])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2)
+            ->call('goToStep', 1)
+            ->dispatch('extras-updated', [])
+            ->dispatch('options-updated', [])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertDatabaseMissing('resrv_reservation_extra', ['reservation_id' => $this->reservation->id]);
+        $this->assertDatabaseMissing('resrv_reservation_option', ['reservation_id' => $this->reservation->id]);
+        $this->assertEquals('100.00', $this->reservation->fresh()->total->format());
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        $this->assertEquals('80.00', $this->reservation->fresh()->payment->format());
+    }
+
+    // At step 2 the Extras component is gone, so nothing re-priced the selected extras for a
+    // coupon. The checkout prices the booked ones itself: the charge, their saved lines and the
+    // sidebar all take the discount, and lose it when the coupon is removed.
+    public function test_an_extras_coupon_applied_at_step_two_discounts_the_booked_extras()
+    {
+        Config::set('resrv-config.payment', 'everything');
+
+        // 20% off: the checkout only accepts a coupon of the entry, and this one covers the extra too.
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $this->assignCouponToEntry()->id,
+            'dynamic_pricing_assignment_id' => $this->extra->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Extra',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // 100 for the stay + 4.65 × 2 nights × 2 units.
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$this->extra->id => $this->extraPayload(['quantity' => 2])])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertEquals('118.60', $this->reservation->fresh()->payment->format());
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        // 80 for the stay + 3.72 × 2 nights × 2 units.
+        $fresh = $this->reservation->fresh();
+        $this->assertEquals('80.00', $fresh->price->format());
+        $this->assertEquals('94.88', $fresh->total->format());
+        $this->assertEquals('94.88', $fresh->payment->format());
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $this->extra->id,
+            'quantity' => 2,
+            'price' => '7.44',
+            'total' => '14.88',
+        ]);
+        $this->assertMatchesRegularExpression('/\(x2\)[^€]*€ 14\.88/', $component->html());
+
+        session()->forget('resrv_coupon');
+        $component->dispatch('coupon-removed', '20OFF', true);
+
+        $this->assertEquals('118.60', $this->reservation->fresh()->payment->format());
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $this->extra->id,
+            'price' => '9.30',
+            'total' => '18.60',
+        ]);
+        $this->assertMatchesRegularExpression('/\(x2\)[^€]*€ 18\.60/', $component->html());
+    }
+
+    // Add-ons booked at step 1 stay booked, and charged, until the customer goes back, even an extra
+    // unpublished since. A coupon change prices them again, the option at its new catalog price, so
+    // the sidebar must show those lines, not the ones it held before.
+    public function test_the_sidebar_shows_what_a_coupon_charges_for_add_ons_changed_after_step_one()
+    {
+        Config::set('resrv-config.payment', 'everything');
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $this->assignCouponToEntry()->id,
+            'dynamic_pricing_assignment_id' => $this->extra->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Extra',
+        ]);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$this->extra->id => $this->extraPayload(['quantity' => 2])])
+            ->dispatch('options-updated', [$this->options->id => $this->optionPayload()])
+            ->call('handleFirstStep')
+            ->assertSet('step', 2);
+
+        ResrvExtra::whereKey($this->extra->id)->update(['published' => false]);
+        $this->options->values->first()->update(['price' => '50.00']);
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        // 80 for the stay + 3.72 × 2 nights × 2 units + the option at 50.
+        $this->assertEquals('144.88', $this->reservation->fresh()->payment->format());
+        $this->assertSidebarTotalIsTheCharge($component);
+    }
+
+    // At step 1 the Extras component re-prices the selection for a coupon, from the reservation. A
+    // custom-priced extra needs customer data that only step 2 collects, so the checkout leaves it be.
+    public function test_a_coupon_at_step_one_completes_with_a_custom_priced_extra_selected()
+    {
+        $this->assignCouponToEntry();
+
+        $custom = ResrvExtra::factory()->custom()->create(['id' => 2, 'slug' => 'custom-extra']);
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($custom->id);
+
+        session(['resrv_reservation' => $this->reservation->id, 'resrv_coupon' => '20OFF']);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$custom->id => ['id' => $custom->id, 'quantity' => 1, 'price' => '10.00', 'name' => $custom->name]])
+            ->dispatch('coupon-applied', '20OFF')
+            ->assertSet('step', 1);
+
+        $this->assertEquals('80.00', $this->reservation->fresh()->price->format());
+    }
+
+    // A custom-priced extra multiplies by a customer field, here the guests the search passed on.
+    // The checkout form saves only its own fields, so on a site whose form lacks that one it is gone
+    // once the form is submitted. A coupon change then keeps the line step 1 booked, not a 500.
+    public function test_a_coupon_after_the_checkout_form_dropped_a_custom_extras_field_keeps_its_booked_line()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+        $this->assignCouponToEntry();
+
+        $this->reservation->customer()->associate(Customer::factory()->withGuests(3)->create())->save();
+        $custom = ResrvExtra::factory()->custom()->create();
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($custom->id);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // 100 for the stay + 10 × 3 adults.
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$custom->id => ['id' => $custom->id, 'quantity' => 1, 'price' => '30.00', 'name' => $custom->name]])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        $this->assertEquals('130.00', $this->reservation->fresh()->payment->format());
+
+        Livewire::test(CheckoutForm::class, ['reservation' => $this->reservation])
+            ->set('form', [
+                'first_name' => 'Jerry',
+                'last_name' => 'Seinfeld',
+                'email' => 'about@nothing.com',
+                'repeat_email' => 'about@nothing.com',
+                'phone' => '1234567890',
+            ])
+            ->call('submit')
+            ->assertHasNoErrors();
+
+        $this->assertFalse($this->reservation->fresh()->customerData->has('adults'));
+
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF');
+
+        // 80 for the stay + the 30 step 1 booked.
+        $this->assertEquals('110.00', $this->reservation->fresh()->payment->format());
+        $this->assertDatabaseHas('resrv_reservation_extra', [
+            'reservation_id' => $this->reservation->id,
+            'extra_id' => $custom->id,
+            'price' => '30.00',
+            'total' => '30.00',
+        ]);
+    }
+
+    // Booking the add-ons and applying a coupon both write the add-on lines and then a total from
+    // them. A second tab doing either at the same time must wait, or the two requests can leave
+    // lines that don't add up to the total step 2 charges. Past the wait, nothing is written.
+    public function test_checkout_does_not_write_the_reservation_while_another_request_is_writing_it()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        $this->assignCouponToEntry();
+        Sleep::fake(syncWithCarbon: true);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+        $before = $this->reservation->fresh()->total->format();
+
+        $otherRequest = Cache::lock('resrv-checkout-'.$this->reservation->id, 120);
+        $otherRequest->get();
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$this->extra->id => $this->extraPayload(['quantity' => 2])])
+            ->call('handleFirstStep')
+            ->assertHasErrors('reservation')
+            ->assertSet('step', 1);
+
+        $this->assertEquals($before, $this->reservation->fresh()->total->format());
+        $this->assertDatabaseMissing('resrv_reservation_extra', ['reservation_id' => $this->reservation->id]);
+
+        $otherRequest->release();
+        $component->call('handleFirstStep')->assertHasNoErrors()->assertSet('step', 2);
+        $this->assertEquals('118.60', $this->reservation->fresh()->payment->format());
+
+        $otherRequest->get();
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF')->assertHasErrors('reservation');
+        $this->assertEquals('118.60', $this->reservation->fresh()->payment->format());
+
+        // 80 for the stay + 18.60 for the extra, which this coupon doesn't cover.
+        $otherRequest->release();
+        $component->dispatch('coupon-applied', '20OFF')->assertHasNoErrors();
+        $this->assertEquals('98.60', $this->reservation->fresh()->payment->format());
+    }
+
+    private function assignCouponToEntry(): DynamicPricing
+    {
+        $dynamic = DynamicPricing::factory()->withCoupon()->create();
+
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $this->entries->first()->id,
+            'dynamic_pricing_assignment_type' => 'Reach\StatamicResrv\Models\Availability',
+        ]);
+
+        return $dynamic;
+    }
+
+    private function assertSidebarTotalIsTheCharge($component): void
+    {
+        $charged = $this->reservation->fresh()->payment->format();
+
+        $this->assertMatchesRegularExpression('/dusk="payment-total">\s*€ '.preg_quote($charged).'\s*</', $component->html());
+    }
+
+    private function extraPayload(array $override = []): array
+    {
+        return array_merge([
+            'id' => $this->extra->id,
+            'quantity' => 1,
+            'price' => '9.30',
+            'name' => $this->extra->name,
+        ], $override);
+    }
+
+    private function optionPayload(): array
+    {
+        $value = $this->options->values->first();
+
+        return [
+            'id' => $this->options->id,
+            'value' => $value->id,
+            'price' => $value->price->format(),
+            'optionName' => $this->options->name,
+            'valueName' => $value->name,
+        ];
     }
 
     public function test_coupon_recalculation_persists_payment_in_a_single_write_without_a_deposit_window()
