@@ -3,6 +3,9 @@
 namespace Reach\StatamicResrv\Livewire;
 
 use Carbon\Carbon;
+use Closure;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
@@ -222,69 +225,91 @@ class Checkout extends Component
         });
     }
 
+    /**
+     * Run $write while no other request writes this reservation's add-on lines and totals. Two tabs
+     * booking add-ons or changing the coupon at once could otherwise interleave their writes and
+     * leave lines that don't add up to the total handleSecondStep() charges.
+     */
+    protected function withReservationLock(Closure $write)
+    {
+        // The TTL outlives a gateway round-trip: updateTotals() can cancel a payment intent.
+        try {
+            return Cache::lock('resrv-checkout-'.session('resrv_reservation'), 120)->block(10, function () use ($write) {
+                // Read the row afresh: the request we waited for may have just written it.
+                unset($this->reservation);
+
+                return $write();
+            });
+        } catch (LockTimeoutException) {
+            $this->addError('reservation', 'The reservation is being updated in another window. Please try again.');
+        }
+    }
+
     public function handleFirstStep()
     {
         // Validate data
         $this->validate();
 
-        // Confirm that the reservation data is valid by cross-checking with the database.
-        // Terminal checks run BEFORE drift checks — otherwise an expired reservation whose
-        // stale data also drifted would get demoted to a recoverable banner because the
-        // drift exception would be thrown first.
-        try {
-            $this->confirmReservationHasNotExpired();
-            $this->confirmReservationIsValid();
-        } catch (ReservationExpiredException $e) {
-            $this->reservationError = $e->getMessage();
+        return $this->withReservationLock(function () {
+            // Confirm that the reservation data is valid by cross-checking with the database.
+            // Terminal checks run BEFORE drift checks — otherwise an expired reservation whose
+            // stale data also drifted would get demoted to a recoverable banner because the
+            // drift exception would be thrown first.
+            try {
+                $this->confirmReservationHasNotExpired();
+                $this->confirmReservationIsValid();
+            } catch (ReservationExpiredException $e) {
+                $this->reservationError = $e->getMessage();
 
-            return;
-        } catch (ReservationTerminatedException $e) {
-            return $this->redirectToCheckoutComplete();
-        } catch (OptionsException $e) {
-            $this->addError('options', $e->getMessage());
+                return;
+            } catch (ReservationTerminatedException $e) {
+                return $this->redirectToCheckoutComplete();
+            } catch (OptionsException $e) {
+                $this->addError('options', $e->getMessage());
 
-            return;
-        } catch (ExtrasException $e) {
-            $this->addError('extras', $e->getMessage());
+                return;
+            } catch (ExtrasException $e) {
+                $this->addError('extras', $e->getMessage());
 
-            return;
-        } catch (ReservationDriftException $e) {
-            $this->addError('reservation', $e->getMessage());
+                return;
+            } catch (ReservationDriftException $e) {
+                $this->addError('reservation', $e->getMessage());
 
-            return;
-        } catch (ReservationException $e) {
-            $this->addError('reservation', $e->getMessage());
+                return;
+            } catch (ReservationException $e) {
+                $this->addError('reservation', $e->getMessage());
 
-            return;
-        }
+                return;
+            }
 
-        // Validation only checks that the lines add up to the server's total, so write the
-        // reservation and its pivot rows from the server's per-line prices, not the payload's.
-        $this->repriceEnabledAddons();
+            // Validation only checks that the lines add up to the server's total, so write the
+            // reservation and its pivot rows from the server's per-line prices, not the payload's.
+            $this->repriceEnabledAddons();
 
-        $totals = $this->calculateReservationTotals();
+            $totals = $this->calculateReservationTotals();
 
-        $toUpdate = [
-            'total' => $totals->get('total')->format(),
-        ];
+            $toUpdate = [
+                'total' => $totals->get('total')->format(),
+            ];
 
-        if (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible()) {
-            $toUpdate['payment'] = $totals->get('total')->format();
-            // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
-            $toUpdate['payment_surcharge'] = 0;
-        }
+            if (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible()) {
+                $toUpdate['payment'] = $totals->get('total')->format();
+                // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
+                $toUpdate['payment_surcharge'] = 0;
+            }
 
-        // Update the reservation with the total
-        $this->reservation->update($toUpdate);
+            // Update the reservation with the total
+            $this->reservation->update($toUpdate);
 
-        // Sync extras & options to the database. Don't advance if either fails —
-        // the total was already written above, so proceeding would let the user pay
-        // an amount that doesn't match the extras/options actually attached.
-        if (! $this->assignExtras() || ! $this->assignOptions()) {
-            return;
-        }
+            // Sync extras & options to the database. Don't advance if either fails —
+            // the total was already written above, so proceeding would let the user pay
+            // an amount that doesn't match the extras/options actually attached.
+            if (! $this->assignExtras() || ! $this->assignOptions()) {
+                return;
+            }
 
-        $this->step = 2;
+            $this->step = 2;
+        });
     }
 
     #[On('checkout-form-submitted')]
@@ -698,68 +723,70 @@ class Checkout extends Component
     #[On('coupon-applied'), On('coupon-removed')]
     public function updateTotals($coupon, $removeCoupon = false): void
     {
-        // This try-catch block is here to prevent an error if a user tries to remove a coupon that has been deleted
-        try {
-            $couponModel = DynamicPricing::searchForCoupon($coupon, $this->reservation->id);
+        $this->withReservationLock(function () use ($coupon, $removeCoupon) {
+            // This try-catch block is here to prevent an error if a user tries to remove a coupon that has been deleted
+            try {
+                $couponModel = DynamicPricing::searchForCoupon($coupon, $this->reservation->id);
 
-            if ($couponModel->appliesToExtras()) {
+                if ($couponModel->appliesToExtras()) {
+                    $this->dispatch('extras-coupon-changed');
+                }
+            } catch (CouponNotFoundException $exception) {
+                // Dispatch the event anyway
                 $this->dispatch('extras-coupon-changed');
             }
-        } catch (CouponNotFoundException $exception) {
-            // Dispatch the event anyway
-            $this->dispatch('extras-coupon-changed');
-        }
 
-        // A coupon change invalidates any intent created for the old amount. Cancel it off the
-        // persisted reservation — resetPaymentState() reads payment_id — not the component-local
-        // selectedGateway, which a stale tab can hold as '' while the row still has a live intent.
-        $wasOnPaymentStep = $this->selectedGateway !== '' || $this->step >= 3;
-        $this->resetPaymentState();
-        if ($wasOnPaymentStep) {
-            $this->step = 2;
-        }
+            // A coupon change invalidates any intent created for the old amount. Cancel it off the
+            // persisted reservation — resetPaymentState() reads payment_id — not the component-local
+            // selectedGateway, which a stale tab can hold as '' while the row still has a live intent.
+            $wasOnPaymentStep = $this->selectedGateway !== '' || $this->step >= 3;
+            $this->resetPaymentState();
+            if ($wasOnPaymentStep) {
+                $this->step = 2;
+            }
 
-        // A coupon can change the extras' prices too: re-price the booked ones, which the total below
-        // charges. At step 1 the Extras component re-prices the selection; past it, nothing does, so
-        // the sidebar shows the booked lines, including one no longer selectable but still charged.
-        $this->reservation->repriceBookedExtras();
+            // A coupon can change the extras' prices too: re-price the booked ones, which the total below
+            // charges. At step 1 the Extras component re-prices the selection; past it, nothing does, so
+            // the sidebar shows the booked lines, including one no longer selectable but still charged.
+            $this->reservation->repriceBookedExtras();
 
-        if ($this->step > 1) {
-            $booked = $this->reservation->extras()->get()->keyBy('id');
+            if ($this->step > 1) {
+                $booked = $this->reservation->extras()->get()->keyBy('id');
 
-            $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($booked) {
-                if ($model = $booked->get($extra['id'])) {
-                    $extra['price'] = Price::create($model->pivot->price)->format();
-                    $extra['total'] = $model->priceFromPivot();
-                }
+                $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($booked) {
+                    if ($model = $booked->get($extra['id'])) {
+                        $extra['price'] = Price::create($model->pivot->price)->format();
+                        $extra['total'] = $model->priceFromPivot();
+                    }
 
-                return $extra;
-            });
-        }
+                    return $extra;
+                });
+            }
 
-        // Recompute price, total and payment, then persist in one update so a concurrent
-        // handleSecondStep() never reads the deposit before the full-payment override lands.
-        $prices = $this->getUpdatedPrices();
+            // Recompute price, total and payment, then persist in one update so a concurrent
+            // handleSecondStep() never reads the deposit before the full-payment override lands.
+            $prices = $this->getUpdatedPrices();
 
-        // The browser dispatches this event, and handleSecondStep() charges what it writes, so the
-        // add-ons are the ones handleFirstStep() validated and booked, not the current selection.
-        $total = Price::create($prices['price'])->add($this->reservation->bookedAddonsTotal());
+            // The browser dispatches this event, and handleSecondStep() charges what it writes, so the
+            // add-ons are the ones handleFirstStep() validated and booked, not the current selection.
+            $total = Price::create($prices['price'])->add($this->reservation->bookedAddonsTotal());
 
-        // Reapply handleFirstStep()'s full-payment decision: non-refundable, the full-payment
-        // window, or everything mode must pay the whole total, not the deposit.
-        $payment = (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible())
-            ? $total->format()
-            : $prices['payment'];
+            // Reapply handleFirstStep()'s full-payment decision: non-refundable, the full-payment
+            // window, or everything mode must pay the whole total, not the deposit.
+            $payment = (config('resrv-config.payment') == 'everything' || ! $this->freeCancellationPossible())
+                ? $total->format()
+                : $prices['payment'];
 
-        $this->reservation->update([
-            'price' => $prices['price'],
-            'payment' => $payment,
-            'payment_surcharge' => 0,
-            'total' => $total->format(),
-        ]);
-        unset($this->reservation);
+            $this->reservation->update([
+                'price' => $prices['price'],
+                'payment' => $payment,
+                'payment_surcharge' => 0,
+                'total' => $total->format(),
+            ]);
+            unset($this->reservation);
 
-        CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
+            CouponUpdated::dispatch($this->reservation, $coupon, $removeCoupon);
+        });
     }
 
     public function render()

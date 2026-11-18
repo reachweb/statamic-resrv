@@ -3,11 +3,13 @@
 namespace Reach\StatamicResrv\Tests\Livewire;
 
 use Illuminate\Database\Events\TransactionBeginning;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Sleep;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Enums\ReservationStatus;
@@ -1120,6 +1122,45 @@ class CheckoutTest extends TestCase
             ->assertSet('step', 1);
 
         $this->assertEquals('80.00', $this->reservation->fresh()->price->format());
+    }
+
+    // Booking the add-ons and applying a coupon both write the add-on lines and then a total from
+    // them. A second tab doing either at the same time must wait, or the two requests can leave
+    // lines that don't add up to the total step 2 charges. Past the wait, nothing is written.
+    public function test_checkout_does_not_write_the_reservation_while_another_request_is_writing_it()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        $this->assignCouponToEntry();
+        Sleep::fake(syncWithCarbon: true);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+        $before = $this->reservation->fresh()->total->format();
+
+        $otherRequest = Cache::lock('resrv-checkout-'.$this->reservation->id, 120);
+        $otherRequest->get();
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$this->extra->id => $this->extraPayload(['quantity' => 2])])
+            ->call('handleFirstStep')
+            ->assertHasErrors('reservation')
+            ->assertSet('step', 1);
+
+        $this->assertEquals($before, $this->reservation->fresh()->total->format());
+        $this->assertDatabaseMissing('resrv_reservation_extra', ['reservation_id' => $this->reservation->id]);
+
+        $otherRequest->release();
+        $component->call('handleFirstStep')->assertHasNoErrors()->assertSet('step', 2);
+        $this->assertEquals('118.60', $this->reservation->fresh()->payment->format());
+
+        $otherRequest->get();
+        session(['resrv_coupon' => '20OFF']);
+        $component->dispatch('coupon-applied', '20OFF')->assertHasErrors('reservation');
+        $this->assertEquals('118.60', $this->reservation->fresh()->payment->format());
+
+        // 80 for the stay + 18.60 for the extra, which this coupon doesn't cover.
+        $otherRequest->release();
+        $component->dispatch('coupon-applied', '20OFF')->assertHasNoErrors();
+        $this->assertEquals('98.60', $this->reservation->fresh()->payment->format());
     }
 
     private function assignCouponToEntry(): DynamicPricing
