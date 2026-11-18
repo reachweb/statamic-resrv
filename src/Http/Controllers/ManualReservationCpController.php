@@ -182,7 +182,8 @@ class ManualReservationCpController extends Controller
             $payload = $this->creator->withoutCheckoutSession(function () use ($data): array {
                 $quote = $this->creator->quote($data, requireCustomAmount: false);
 
-                $addons = $this->creator->addonQuote($data);
+                // Listed under the rate the quote charges, which it resolves when none is chosen.
+                $addons = $this->creator->addonQuote(array_merge($data, ['rate_id' => $quote['rate_id']]));
 
                 return array_merge($this->serializeQuote($quote), [
                     'available_extras' => $this->extrasForEntry($addons, $data),

@@ -373,6 +373,30 @@ class ManualReservationCpTest extends TestCase
         $this->assertSame('0.00', $reservation->total->format());
     }
 
+    // Without a chosen rate the quote charges the entry's first rate; the listed add-on prices must
+    // use it too, or a units_per_addon divisor makes the list disagree with the total.
+    public function test_quote_endpoint_lists_add_ons_under_the_rate_the_quote_resolves()
+    {
+        $this->signInAdmin();
+        $entry = $this->makeStatamicItemWithAvailability(available: 4);
+        Rate::forEntry($entry->id())->first()->update(['units_per_addon' => 2]);
+
+        $extra = Extra::factory()->fixed()->create();
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($extra->id);
+
+        // Fixed 25 for 2 units under a divisor of 2: 25 × ceil(2 / 2), not 25 × 2.
+        $this->postJson(cp_route('resrv.manual.quote'), [
+            'item_id' => $entry->id(),
+            'date_start' => today()->addDay()->setTime(12, 0)->toDateTimeString(),
+            'date_end' => today()->addDays(3)->setTime(12, 0)->toDateTimeString(),
+            'quantity' => 2,
+            'payment_mode' => 'full',
+            'extras' => [['id' => $extra->id, 'quantity' => 1]],
+        ])->assertOk()
+            ->assertJsonPath('pricing.extras_total', '25.00')
+            ->assertJsonPath('available_extras.0.price', '25.00');
+    }
+
     public function test_quote_endpoint_prices_custom_extras_with_the_customer_data()
     {
         $this->signInAdmin();
