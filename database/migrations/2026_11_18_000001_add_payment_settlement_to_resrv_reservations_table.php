@@ -54,16 +54,15 @@ return new class extends Migration
         $offlineCheckout()->whereRaw("payment_id like ? escape '!'", ['offline!_%'])
             ->update(['payment_settlement' => 'unresolved', 'payment_id' => '']);
 
-        // A third-party gateway that confirms manually is only known by the config.
+        // A third-party gateway that confirms manually is only known by the config. Rows with no
+        // recorded gateway are skipped: they predate multiple gateways, and today's default says
+        // nothing about which gateway took them, so guessing could drop a real charge's id.
         foreach ($offlineCheckout()->distinct()->pluck('payment_gateway') as $gateway) {
-            if (! $this->confirmsManually($gateway)) {
+            if (blank($gateway) || ! $this->confirmsManually($gateway)) {
                 continue;
             }
 
-            $offlineCheckout()
-                ->where(fn (Builder $query) => blank($gateway)
-                    ? $query->whereNull('payment_gateway')->orWhere('payment_gateway', '')
-                    : $query->where('payment_gateway', $gateway))
+            $offlineCheckout()->where('payment_gateway', $gateway)
                 ->update(['payment_settlement' => 'unresolved', 'payment_id' => '']);
         }
 
@@ -89,13 +88,11 @@ return new class extends Migration
         });
     }
 
-    /** Whether the gateway recorded on a row is an offline one, as Reservation::resolvePaymentGateway() finds it. */
-    protected function confirmsManually(?string $gateway): bool
+    /** Whether the gateway recorded on a row is a configured offline one. */
+    protected function confirmsManually(string $gateway): bool
     {
         try {
-            $manager = app(PaymentGatewayManager::class);
-
-            return (blank($gateway) ? $manager->gateway() : $manager->gateway($gateway))->supportsManualConfirmation();
+            return app(PaymentGatewayManager::class)->gateway($gateway)->supportsManualConfirmation();
         } catch (Throwable) {
             return false;
         }

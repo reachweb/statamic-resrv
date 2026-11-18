@@ -452,6 +452,12 @@ class Checkout extends Component
                 return null;
             }
 
+            // An offline selection has no intent, so the void above leaves its gateway. Clear it, or an
+            // offline form still open in another tab could place the booking after the customer went back.
+            if (blank($reservation->payment_id) && filled($reservation->payment_gateway)) {
+                $reservation->update(['payment_gateway' => '']);
+            }
+
             // selectedGateway resets on page refresh but payment_surcharge persists in DB
             if (! $reservation->payment_surcharge->isZero()) {
                 $reservation->update(['payment_surcharge' => 0]);
@@ -553,7 +559,14 @@ class Checkout extends Component
                         return null;
                     }
 
-                    $reservation->update(['payment_gateway' => $gatewayName, 'payment_surcharge' => $surcharge->format()]);
+                    // The void leaves payment_id set only when its gateway is no longer configured. Drop it as
+                    // a new intent would, so a late success on it is stale instead of confirming this booking.
+                    $reservation->update([
+                        'payment_gateway' => $gatewayName,
+                        'payment_surcharge' => $surcharge->format(),
+                        'payment_id' => '',
+                        'payment_intent_amount' => null,
+                    ]);
 
                     return true;
                 }

@@ -171,6 +171,61 @@ class OfflinePaymentGatewayTest extends TestCase
             ->assertSet('paymentView', 'statamic-resrv::livewire.checkout-payment-offline');
     }
 
+    public function test_switching_to_offline_drops_an_intent_whose_gateway_is_no_longer_configured()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => [
+                'class' => OfflinePaymentGateway::class,
+                'label' => 'Bank Transfer',
+            ],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        // Started with a card gateway the site has since renamed, so the checkout cannot void it.
+        $this->reservation->update(['payment_id' => 'pi_old', 'payment_gateway' => 'card', 'payment_intent_amount' => '100.00']);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->assertSet('selectedGateway', 'offline');
+
+        // A late success on that intent no longer finds the booking it would confirm.
+        $this->assertNull(Reservation::findByPaymentId('pi_old')->first());
+        $this->assertSame('offline', $this->reservation->fresh()->payment_gateway);
+    }
+
+    public function test_an_offline_form_left_open_cannot_place_the_booking_after_changing_payment_method()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => [
+                'class' => FakePaymentGateway::class,
+                'label' => 'Credit Card',
+            ],
+            'offline' => [
+                'class' => OfflinePaymentGateway::class,
+                'label' => 'Bank Transfer',
+            ],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
+            ->dispatch('gateway-selected', gateway: 'offline')
+            ->assertSet('selectedGateway', 'offline')
+            ->call('resetPaymentState')
+            ->assertSet('selectedGateway', '');
+
+        // The offline step still open in another tab.
+        Livewire::test(CheckoutPayment::class)
+            ->call('confirmPayment')
+            ->assertHasErrors('reservation');
+
+        $this->assertSame(ReservationStatus::PENDING->value, $this->reservation->fresh()->status);
+    }
+
     public function test_confirm_payment_places_the_booking_awaiting_payment_without_confirming_it()
     {
         Event::fake([ReservationConfirmed::class]);

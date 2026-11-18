@@ -14,9 +14,10 @@ class PaymentSettlementMigrationTest extends TestCase
 {
     public function test_the_backfill_keeps_the_amount_each_booking_received()
     {
+        // Offline is the default, so a row with no recorded gateway must not be taken for an offline one.
         Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class],
             'offline' => ['class' => OfflinePaymentGateway::class],
+            'fake' => ['class' => FakePaymentGateway::class],
         ]);
         app()->forgetInstance(PaymentGatewayManager::class);
 
@@ -27,6 +28,7 @@ class PaymentSettlementMigrationTest extends TestCase
         // payment of 30.00 plus a 2.00 surcharge, and whether the CP flagged its payment_id.
         $cases = [
             'paid through the gateway' => [['status' => 'confirmed', 'payment_id' => 'pi_paid'], 'gateway', '32.00'],
+            'paid before gateways were recorded' => [['status' => 'confirmed', 'payment_id' => 'pi_legacy', 'payment_gateway' => null], 'gateway', '32.00'],
             'paid through a gateway whose ids start with offline' => [['status' => 'confirmed', 'payment_id' => 'offlinepay_1'], 'gateway', '32.00'],
             'marked as paid' => [['status' => 'confirmed', 'created_by' => '1'], 'out_of_band', '32.00'],
             'marked as paid, intent kept' => [['status' => 'confirmed', 'created_by' => '1', 'payment_id' => 'pi_kept', 'payment_unresolved' => true], 'out_of_band', '32.00'],
@@ -83,6 +85,7 @@ class PaymentSettlementMigrationTest extends TestCase
         $this->assertSame('', Reservation::find($ids['offline checkout confirmed'])->payment_id);
         $this->assertSame('', Reservation::find($ids['offline checkout refunded'])->payment_id);
         $this->assertSame('', Reservation::find($ids['offline checkout, gateway since removed from config'])->payment_id);
+        $this->assertSame('pi_legacy', Reservation::find($ids['paid before gateways were recorded'])->payment_id);
         $this->assertSame('pi_unverified', Reservation::find($ids['cancelled unpaid, intent unverified'])->payment_id);
         $this->assertSame('pi_open', Reservation::find($ids['pending with an intent'])->payment_id);
     }
