@@ -42,6 +42,8 @@ class WebhookController extends Controller
             abort(404);
         }
 
-        return app(PaymentInterface::class);
+        // The only configured gateway: a single payment_gateways entry, or else the legacy
+        // payment_gateway binding.
+        return $manager->gateway();
     }
 }
