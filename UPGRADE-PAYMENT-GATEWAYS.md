@@ -330,7 +330,7 @@ protected function confirmFromGateway(Reservation $reservation, string $paymentI
 It runs these checks in order, and returns `true` only when this call confirmed the reservation:
 
 1. **Stale payment:** logs a warning and emails the admins (`OrphanedPaymentNotification`) for a manual refund, and leaves the reservation untouched, whatever its status. A booking confirmed since through another payment is then paid twice, which is why this check comes before the next one.
-2. **Already confirmed:** nothing happens for a redelivery of the payment that confirmed the booking. If another payment confirmed it, emails the admins: the booking's `payment_id` names a different payment, or an admin marked it as paid (**Mark as paid** keeps this payment's id stamped `payment_unresolved` when it can't void it). The customer has then paid twice.
+2. **Already confirmed:** nothing happens for a redelivery of the payment that confirmed the booking. If another payment confirmed it, emails the admins: the booking's `payment_id` names a different payment, or an admin marked it as paid (**Mark as paid** settles the booking `out_of_band` in `payment_settlement` and keeps this payment's id when it can't void it). The customer has then paid twice.
 3. **Terminal reservation** (`expired`, `refunded`, `partner`, or `cancelled` unless it kept this charge on purpose): emails the admins, because the money can't attach to a live booking.
 4. **Amount mismatch:** when `$amount` differs from `payment + payment_surcharge`, emails the admins and doesn't confirm.
 5. **Confirm:** `transitionTo(CONFIRMED, tolerant: true)`, which accepts `pending` (checkout) and `awaiting_payment` (manual reservation) rows alike, then dispatches `ReservationConfirmed` with `VIA_WEBHOOK`, the gateway and the payment id.
@@ -946,7 +946,7 @@ Understanding the flow helps when debugging custom gateways.
 1. Admin clicks refund in the CP.
 2. `ReservationCpController::refund()` loads the reservation.
 3. Calls `PaymentGatewayManager::forReservation($reservation)` which reads `reservation.payment_gateway` and resolves the correct gateway.
-4. Calls `refund($reservation)` on that gateway — except when no charge reached it: partner / zero-payment bookings and manual reservations marked as paid in the CP with no intent reference skip the provider. A manual reservation marked as paid that kept an intent reference (`payment_unresolved`) is read through `retrievePaymentIntent()` first, and `refund()` runs only when the intent is `succeeded` or `processing` (see Step 13).
+4. Calls `refund($reservation)` on that gateway — except when no charge reached it: partner / zero-payment bookings and manual reservations marked as paid in the CP with no intent reference skip the provider. A manual reservation marked as paid that kept an intent reference (`payment_settlement` is `out_of_band` and `payment_id` is set) is read through `retrievePaymentIntent()` first, and `refund()` runs only when the intent is `succeeded` or `processing` (see Step 13).
 
 ---
 
@@ -1125,7 +1125,7 @@ Resrv's reservation state changes go through `Reservation::transitionTo()`, whic
 `confirmFromGateway()` (Step 4) handles this race for you: it confirms through `transitionTo(CONFIRMED, tolerant: true)`, dispatches `ReservationConfirmed` only when that returns `true`, and otherwise re-reads the row and emails the admins in two cases. Both dedupe on (reservation, payment), so provider retries don't spam them:
 
 - **The row is now terminal:** `expired`, `refunded`, `cancelled` or `partner` (a cancelled booking's own retained charge excepted), through `OrphanedPaymentNotification::notifyIfOrphaned()`.
-- **Another payment confirmed it:** the row is `confirmed`, but its `payment_id` names a different payment (the customer switched gateway and confirmed with it), or it is stamped `payment_unresolved` (an admin pressed **Mark as paid**, which keeps this payment's id for reconciliation). The customer has then paid twice.
+- **Another payment confirmed it:** the row is `confirmed`, but its `payment_id` names a different payment (the customer switched gateway and confirmed with it), or its `payment_settlement` is `out_of_band` (an admin pressed **Mark as paid**, which keeps this payment's id for reconciliation). The customer has then paid twice.
 
 A concurrent `confirmed` by this same payment, such as a second delivery of its webhook, is a clean no-op.
 
@@ -1300,7 +1300,7 @@ Resrv must be able to read the *current* state of a previously created intent. B
 1. **Resume instead of double-charge.** When a customer returns to an interrupted payment on the manual pay-by-link page, Resrv re-reads the stored intent rather than blindly minting a second one. A succeeded or in-flight intent means "money is already moving — do not create another"; a dead one may be replaced. Before replacing a still-payable intent it cannot re-mount, Resrv voids it and re-reads it to prove the void (see *Redirect gateways* below).
 2. **Verify the void when an unpaid reservation is cancelled.** When an admin cancels an awaiting-payment reservation, or the `resrv:cancel-lapsed-holds` sweep cancels a lapsed one, Resrv calls `cancelPaymentIntent()` and then re-reads the intent. It drops the reference only when the intent reads `canceled` or `null`. If money moved, it keeps the reference, alerts the admins and tells the customer the charge will be refunded.
 3. **Reconcile an out-of-band confirmation.** When an admin marks a manual reservation as paid in person / by transfer, Resrv reads the customer's leftover intent to decide whether to void-and-forget it (never charged) or keep the reference (already capturing real money), so it never strands a charge or drops a live one.
-4. **Refund only real charges.** Refunding a reservation that was marked as paid but kept an intent reference (flagged `payment_unresolved`) reads the intent first. Resrv calls `refund()` only when the intent is `succeeded` or `processing`. Otherwise it skips the provider and the admin returns the out-of-band payment by hand. A read that throws aborts the refund so the admin can retry.
+4. **Refund only real charges.** Refunding a reservation that was marked as paid but kept an intent reference (settled `out_of_band`) reads the intent first. Resrv calls `refund()` only when the intent is `succeeded` or `processing`. Otherwise it skips the provider and the admin returns the out-of-band payment by hand. A read that throws aborts the refund so the admin can retry.
 
 Every caller branches on the returned `->status`, so the method's *semantics* matter as much as its presence. A stub that always returns `null` would mint duplicate intents, discard references to live charges, and skip refunds of real online charges.
 
@@ -1401,7 +1401,7 @@ Rules that keep this money-safe:
 - **Leave `->redirectTo` off** while the order cannot be re-posted. With it, Resrv resumes the order instead.
 - **Report money that moved.** A paid or settling order still maps to `succeeded` / `processing`, with or without `->expires_at`.
 
-The other callers of `retrievePaymentIntent()` do not read `->expires_at` and behave as before for a still-payable intent they could not void: cancelling or lapsing the reservation, or marking it paid out of band, keeps the payment reference and flags the reservation `payment_unresolved` so a payment that still lands on the open order is reconciled rather than lost.
+The other callers of `retrievePaymentIntent()` do not read `->expires_at` and behave as before for a still-payable intent they could not void: cancelling or lapsing the reservation, or marking it paid out of band, keeps the payment reference and flags it for checking in the Control Panel (`payment_settlement` `unresolved` or `out_of_band`) so a payment that still lands on the open order is reconciled rather than lost.
 
 The **normal checkout** resumes an order with a `->redirectTo` when the customer pays again with the same gateway and amount, and reads `->expires_at` as the pay-by-link page does: when the customer steps back, switches gateway or changes a coupon and the earlier order can't be voided, it creates no second order, keeps the stored reference and shows the same notice (Step 9).
 

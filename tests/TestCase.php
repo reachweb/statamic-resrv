@@ -402,7 +402,7 @@ class TestCase extends AddonTestCase
     /**
      * Bind a payment gateway manager whose refund() must never run — for flows that must
      * reject before any money moves. Read-only resolution is allowed because renders resolve
-     * the gateway for capability/display checks (refundIsAutomatic, amountPaidOnline); only an
+     * the gateway for capability/display checks (refundIsAutomatic); only an
      * actual refund call fails the test.
      */
     protected function forbidGatewayRefunds(): void

@@ -65,6 +65,7 @@ class ReservationCancelledCustomerTest extends TestCase
             'price' => '200.00',
             'payment' => '120.00',
             'payment_id' => 'pi_unpaid',
+            'payment_settlement' => 'unresolved',
         ])->withCustomer()->create();
 
         $html = (new ReservationCancelledCustomer($reservation, ReservationCancelled::CONTEXT_UNPAID_HOLD))->render();

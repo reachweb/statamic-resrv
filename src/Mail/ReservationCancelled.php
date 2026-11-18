@@ -33,13 +33,9 @@ class ReservationCancelled extends Mailable
             $this->subject(__('Reservation cancelled — payment hold lapsed'));
         }
 
-        // A lapsed/unpaid hold never captured money even if an unpaid intent id lingers,
-        // so the template must not report a retained payment. An in-flight capture gets its
-        // own wording: the charge must be refunded, not retained.
-        $paymentCollected = ! $holdLapsed
-            && ! $paymentInFlight
-            && $this->context !== ReservationCancelledEvent::CONTEXT_UNPAID_HOLD
-            && $this->reservation->hasGatewayPayment();
+        // Only a gateway charge is retained: an unpaid hold collected nothing, and an intent that
+        // captured as the hold was cancelled is refunded.
+        $paymentCollected = ! $this->reservation->amountPaid()->isZero();
 
         $this->with([
             'holdLapsed' => $holdLapsed,

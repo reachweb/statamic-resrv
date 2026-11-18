@@ -407,7 +407,7 @@ class ReservationCpTest extends TestCase
                 ->where('reservation.hold_expires_at_iso', now()->subHour()->toIso8601String())
                 ->where('reservation.payment_request_email_sent_at_iso', now()->subDay()->toIso8601String())
                 ->where('reservation.hold_expires_at', now()->subHour()->format('d-m-Y H:i T'))
-                ->where('reservation.refund_is_automatic', null)
+                ->where('reservation.refund_is_automatic', false)
                 ->where('reservation.customer_email', $customer->email)
                 ->where('reservation.customer_name', trim($customer->data->get('first_name').' '.$customer->data->get('last_name')))
                 ->where('reservation.payment_gateway_supports_manual_confirmation', false)
@@ -455,7 +455,7 @@ class ReservationCpTest extends TestCase
             // A manual booking refunded after an out-of-band confirmation had received it.
             ['status' => 'refunded', 'payment_id' => '', 'created_by' => '1', 'expected' => '30.00'],
             // A hold cancelled with its intent kept for reconciliation: it may have captured, so unknown.
-            ['status' => 'cancelled', 'payment_id' => 'pi_dead', 'payment_unresolved' => true, 'expected' => null],
+            ['status' => 'cancelled', 'payment_id' => 'pi_dead', 'payment_settlement' => 'unresolved', 'expected' => null],
             // A paid booking the customer cancelled outside the window keeps its charge.
             ['status' => 'cancelled', 'payment_id' => 'pi_kept', 'expected' => '30.00'],
             ['status' => 'expired', 'payment_id' => 'pi_abandoned', 'expected' => '0.00'],
@@ -473,7 +473,7 @@ class ReservationCpTest extends TestCase
         }
     }
 
-    public function test_frontend_bank_transfer_bookings_report_the_payment_receipt_as_unknown()
+    public function test_bank_transfer_bookings_confirmed_at_checkout_report_the_payment_receipt_as_unknown()
     {
         Config::set('resrv-config.payment_gateways', [
             'fake' => ['class' => FakePaymentGateway::class],
@@ -484,9 +484,10 @@ class ReservationCpTest extends TestCase
         $item = $this->makeStatamicItem();
         $offline = ['item_id' => $item->id(), 'payment' => '80.00', 'total' => '80.00', 'payment_surcharge' => '0', 'payment_gateway' => 'offline'];
 
-        // Main's checkout confirms an offline booking straight away and mints an 'offline_…' reference before any money arrives.
-        $confirmed = Reservation::factory(array_merge($offline, ['status' => 'confirmed', 'payment_id' => 'offline_abc']))->withCustomer()->create();
-        $refunded = Reservation::factory(array_merge($offline, ['status' => 'refunded', 'payment_id' => 'offline_def']))->withCustomer()->create();
+        // Before v6.6.0 the checkout confirmed an offline booking before any money arrived: the migration settles those unresolved.
+        $unknown = ['payment_id' => '', 'payment_settlement' => 'unresolved'];
+        $confirmed = Reservation::factory(array_merge($offline, $unknown, ['status' => 'confirmed']))->withCustomer()->create();
+        $refunded = Reservation::factory(array_merge($offline, $unknown, ['status' => 'refunded']))->withCustomer()->create();
         // Marked paid in the CP: the admin recorded the money as received.
         $markedPaid = Reservation::factory(array_merge($offline, ['status' => 'confirmed', 'payment_id' => '', 'created_by' => '1']))->withCustomer()->create();
 

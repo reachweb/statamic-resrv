@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Models;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Reach\StatamicResrv\Enums\PaymentSettlement;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
@@ -28,19 +29,15 @@ class Report
         $this->dateField = $dateField;
         // Follow the money: the report covers reservations whose revenue the business holds —
         // confirmed/partner bookings plus no-refund cancellations that kept their gateway payment.
-        // A returned charge always ends REFUNDED, and no-charge voids (partner / zero-payment)
-        // carry an empty payment_id, so "cancelled with a payment_id" is the retained set — minus
-        // payment_unresolved rows, whose payment_id is only a reconciliation handle on an
-        // unverifiable intent that never collected money (cancelled unpaid holds).
+        // A returned charge always ends REFUNDED, so a cancelled booking paid through its gateway
+        // is the retained set: no-charge voids and unpaid holds were never settled by a gateway.
         $this->reservations = Reservation::whereDate($this->dateField, '>=', $this->date_start)
             ->whereDate($this->dateField, '<=', $this->date_end)
             ->where(function ($query) {
                 $query->whereIn('status', ['confirmed', 'partner'])
                     ->orWhere(function ($query) {
                         $query->where('status', 'cancelled')
-                            ->whereNotNull('payment_id')
-                            ->where('payment_id', '!=', '')
-                            ->where('payment_unresolved', false);
+                            ->where('payment_settlement', PaymentSettlement::Gateway->value);
                     });
             })
             ->get();

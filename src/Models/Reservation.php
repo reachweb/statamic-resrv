@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
+use Reach\StatamicResrv\Enums\PaymentSettlement;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
@@ -58,7 +59,7 @@ class Reservation extends Model
         'payment_id',
         'payment_gateway',
         'payment_intent_amount',
-        'payment_unresolved',
+        'payment_settlement',
         'total',
         'customer_id',
         'abandoned_email_sent_at',
@@ -83,7 +84,7 @@ class Reservation extends Model
         'abandoned_email_sent_at' => 'datetime',
         'free_cancellation_period' => 'integer',
         'affects_availability' => 'boolean',
-        'payment_unresolved' => 'boolean',
+        'payment_settlement' => PaymentSettlement::class,
         'hold_expires_at' => 'datetime',
         'payment_request_email_sent_at' => 'datetime',
         'confirmed_at' => 'datetime',
@@ -93,6 +94,7 @@ class Reservation extends Model
     // true — availability listeners consult the dispatching instance before any DB refresh.
     protected $attributes = [
         'affects_availability' => true,
+        'payment_settlement' => 'none',
     ];
 
     protected $appends = ['entry'];
@@ -361,7 +363,8 @@ class Reservation extends Model
             return false;
         }
 
-        return $this->supportsAutomaticRefund();
+        // A booking that holds no payment (partner or zero-payment) cancels without returning money.
+        return $this->gatewayHoldsNoCharge() || $this->refundIsAutomatic();
     }
 
     /**
@@ -389,9 +392,9 @@ class Reservation extends Model
      * agreed to: a NonRefundable policy, or a free-cancellation window that existed and
      * closed. A NULL period means no policy was ever configured (nothing was advertised at
      * checkout), which fails closed to "contact us" rather than silently forfeiting the
-     * payment. hasGatewayPayment() keeps partner and zero-charge bookings out, and
-     * supportsAutomaticRefund() keeps offline/manual and no-longer-configured gateways
-     * out — all of those are "contact us to cancel" cases by design.
+     * payment. refundIsAutomatic() keeps out everything but a gateway charge its gateway can
+     * return: partner and zero-charge bookings, money received outside a gateway, and gateways
+     * that can't refund or are no longer configured are "contact us to cancel" cases by design.
      */
     public function canCancelWithoutRefund(): bool
     {
@@ -409,40 +412,7 @@ class Reservation extends Model
             return false;
         }
 
-        return $this->hasGatewayPayment() && $this->supportsAutomaticRefund();
-    }
-
-    /**
-     * Whether cancelling can return the money without manual work: no charge reached a
-     * gateway, or the gateway supports API refunds. Offline gateways (bank transfer) cannot,
-     * and neither can a recorded gateway that is no longer configured — nobody can move
-     * that money automatically, so such reservations require manual handling.
-     */
-    public function supportsAutomaticRefund(): bool
-    {
-        if ($this->gatewayHoldsNoCharge()) {
-            return true;
-        }
-
-        // An out-of-band confirmation (CONFIRMED, no charge reference) collected money outside any
-        // gateway — a self-service refund would land REFUNDED without money moving. Route to manual
-        // handling; the CP refund action doesn't go through this method.
-        if ($this->confirmedWithoutGatewayCharge()) {
-            return false;
-        }
-
-        // Same for an out-of-band confirmation that kept an intent reference (settlePaidOutOfBand()
-        // stamps it unresolved): the money arrived outside the gateway, so the customer must not
-        // self-cancel against it, and a refund — before or after it lands — is reported as manual.
-        if ($this->payment_unresolved) {
-            return false;
-        }
-
-        try {
-            return $this->resolvePaymentGateway()->supportsAutomaticRefunds();
-        } catch (UnknownPaymentGateway) {
-            return false;
-        }
+        return $this->refundIsAutomatic();
     }
 
     /**
@@ -459,12 +429,12 @@ class Reservation extends Model
     }
 
     /**
-     * True when no charge exists to refund: empty payment_id AND (partner or zero payment).
-     * Other empty-payment_id rows (e.g. PENDING with an orphaned charge) are assumed to hold one.
+     * True when a refund has nothing to return, so it only cancels the booking: a partner or
+     * zero-payment booking that received nothing and has no intent a payment may have reached.
      */
     public function gatewayHoldsNoCharge(): bool
     {
-        return ($this->payment_id === '' || $this->payment_id === null)
+        return $this->payment_settlement === PaymentSettlement::None && ! $this->hasGatewayPayment()
             && ($this->status === ReservationStatus::PARTNER->value || $this->payment->isZero());
     }
 
@@ -503,8 +473,8 @@ class Reservation extends Model
     }
 
     /**
-     * Whether a payment intent ever reached a gateway (payment_id non-empty). Unlike
-     * gatewayHoldsNoCharge() it ignores status, so it stays correct after REFUNDED.
+     * Whether a payment intent reference is stored (payment_id non-empty). It says nothing about
+     * money: whether the booking was paid, and how, is payment_settlement.
      */
     public function hasGatewayPayment(): bool
     {
@@ -512,73 +482,75 @@ class Reservation extends Model
     }
 
     /**
-     * CONFIRMED with no charge reference — only possible via an out-of-band/manual confirmation
-     * (a webhook confirm always stores the intent id), so a refund must skip the provider.
+     * Whether a kept online payment needs checking at the provider: the booking was paid outside
+     * the gateway or cancelled unpaid, and the payment the customer started may have charged too.
      */
-    public function confirmedWithoutGatewayCharge(): bool
+    public function hasUnresolvedPayment(): bool
     {
-        return $this->status === ReservationStatus::CONFIRMED->value
-            && ($this->payment_id === '' || $this->payment_id === null);
+        return $this->hasGatewayPayment()
+            && in_array($this->payment_settlement, [PaymentSettlement::OutOfBand, PaymentSettlement::Unresolved], true);
     }
 
     /**
-     * Whether refunding this reservation returns the money automatically through the gateway —
-     * true only when a charge actually reached a gateway AND that gateway supports API refunds.
-     * False for offline/manual gateways (an admin must return the funds by hand) and for no-charge
-     * bookings (nothing to return). Drives the "refunded" vs "refund manually" wording in the
-     * customer and admin cancellation emails.
+     * Whether a gateway may hold money for this booking: its gateway charge, or the intent of a
+     * booking not settled yet, which may have charged. A pending checkout that owes money counts
+     * even before its intent is stored. Money received outside a gateway is not at one.
+     */
+    public function mayHoldGatewayCharge(): bool
+    {
+        return match ($this->payment_settlement) {
+            PaymentSettlement::Gateway => true,
+            PaymentSettlement::None => $this->hasGatewayPayment()
+                || ($this->status === ReservationStatus::PENDING->value && ! $this->payment->isZero()),
+            default => false,
+        };
+    }
+
+    /**
+     * Whether a refund returns (or returned) the money through the gateway: a gateway may hold it
+     * and the gateway supports API refunds. Money received outside a gateway, or an unknown
+     * receipt, is returned by hand.
      */
     public function refundIsAutomatic(): bool
     {
-        return $this->hasGatewayPayment() && $this->supportsAutomaticRefund();
+        if (! $this->mayHoldGatewayCharge()) {
+            return false;
+        }
+
+        try {
+            return $this->resolvePaymentGateway()->supportsAutomaticRefunds();
+        } catch (UnknownPaymentGateway) {
+            return false;
+        }
     }
 
     /**
-     * Amount actually collected: payment + payment_surcharge (the sum the intent charged and
-     * the webhook verifies). Independent of current payment-mode config, which would misreport
-     * bookings made before a mode change. Zero when no charge reached a gateway.
+     * What the gateway charge collected: payment + payment_surcharge, the sum the intent charged
+     * and the webhook verified. Zero when the booking wasn't paid through a gateway.
      */
     public function amountPaid(): PriceClass
     {
-        if (! $this->hasGatewayPayment()) {
-            return Price::create(0);
-        }
-
-        return $this->payment->add($this->payment_surcharge);
+        return $this->payment_settlement === PaymentSettlement::Gateway ? $this->amountDue() : Price::create(0);
     }
 
     /**
-     * Money the business received for this booking (before any refund), for CP displays. A
-     * confirmed booking was paid in full of its requested amount, through the gateway or out of
-     * band; a manual booking that reached REFUNDED with no intent was confirmed out of band first
-     * (awaiting-payment rows cannot reach REFUNDED directly). A cancelled row only holds money it
-     * retained through its own verified charge. Everything else received nothing.
-     *
-     * Null means unknown: before v6.6.0 a frontend checkout through a manual-confirmation gateway
-     * (bank transfer) confirmed before any money arrived, and its minted reference proves nothing
-     * (such bookings now wait in AWAITING_PAYMENT with no reference); and a cancelled row's
-     * unresolved intent may have captured (admins are told to check and refund it).
+     * @deprecated Use amountPaid(). Kept for email and status templates published before v6.6.0.
+     */
+    public function amountPaidOnline(): PriceClass
+    {
+        return $this->amountPaid();
+    }
+
+    /**
+     * Money the business received for this booking (before any refund): what it owed, through the
+     * gateway or outside it, or nothing. Null when unknown (PaymentSettlement::Unresolved).
      */
     public function amountReceived(): ?PriceClass
     {
-        if (in_array($this->status, [ReservationStatus::CONFIRMED->value, ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value], true)
-            && $this->created_by === null
-            && $this->hasGatewayPayment()
-            && $this->paymentGatewaySupportsManualConfirmation()) {
-            return null;
-        }
-
-        return match ($this->status) {
-            ReservationStatus::CONFIRMED->value => $this->amountDue(),
-            ReservationStatus::REFUNDED->value => $this->hasGatewayPayment() || $this->created_by !== null
-                ? $this->amountDue()
-                : Price::create(0),
-            ReservationStatus::CANCELLED->value => match (true) {
-                ! $this->hasGatewayPayment() => Price::create(0),
-                (bool) $this->payment_unresolved => null,
-                default => $this->amountPaid(),
-            },
-            default => Price::create(0),
+        return match ($this->payment_settlement) {
+            PaymentSettlement::Gateway, PaymentSettlement::OutOfBand => $this->amountDue(),
+            PaymentSettlement::Unresolved => null,
+            PaymentSettlement::None => Price::create(0),
         };
     }
 
@@ -626,34 +598,6 @@ class Reservation extends Model
         }
 
         return $this->total->multiply((float) $affiliate->pivot->fee / 100);
-    }
-
-    /**
-     * Amount the customer actually paid online at checkout, for customer-facing surfaces (the
-     * status page prefers amountReceived() when an admin recorded the receipt).
-     * Manual-confirmation gateways (offline / bank transfer) mint a payment_id without
-     * collecting any money — the funds arrive out-of-band — so amountPaid() would overstate
-     * them as paid. refundedAmount() intentionally keeps reporting the full deposit so the
-     * admin "refund manually" path still shows what to return.
-     */
-    public function amountPaidOnline(): PriceClass
-    {
-        // An unresolved reference is a reconciliation handle, not verified collected money.
-        if (! $this->hasGatewayPayment() || $this->payment_unresolved) {
-            return Price::create(0);
-        }
-
-        try {
-            if ($this->resolvePaymentGateway()->supportsManualConfirmation()) {
-                return Price::create(0);
-            }
-        } catch (UnknownPaymentGateway) {
-            // Display-only: with the gateway gone we cannot ask it whether it collected
-            // online, so report the amount the reservation itself recorded rather than
-            // breaking the customer status page.
-        }
-
-        return $this->amountPaid();
     }
 
     /**
@@ -950,6 +894,13 @@ class Reservation extends Model
 
             if ($inTransaction) {
                 $inTransaction($fresh);
+            }
+
+            // A booking confirmed owing money was paid through its gateway, unless the caller
+            // recorded another settlement first, as Mark as paid records out_of_band.
+            if ($to === ReservationStatus::CONFIRMED && $fresh->payment_settlement === PaymentSettlement::None
+                && ! $fresh->amountDue()->isZero()) {
+                $fresh->payment_settlement = PaymentSettlement::Gateway;
             }
 
             $fresh->status = $to->value;

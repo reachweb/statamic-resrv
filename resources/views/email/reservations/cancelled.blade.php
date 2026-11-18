@@ -52,7 +52,7 @@
 @endif
 
 @php($paymentRetained = $reservation->status === \Reach\StatamicResrv\Enums\ReservationStatus::CANCELLED->value)
-@php($paymentCollected = $paymentCollected ?? $reservation->hasGatewayPayment())
+@php($paymentCollected = $paymentCollected ?? ! $reservation->amountPaid()->isZero())
 @if ($paymentRetained && $paymentCollected)
 @component('mail::table')
 |{{ __("Refund information") }}||

@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Http\Payment;
 
 use Closure;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Enums\PaymentSettlement;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
 use Reach\StatamicResrv\Exceptions\ReservationNoLongerPayable;
@@ -137,12 +138,12 @@ trait ConfirmsGatewayPayments
     /**
      * Alert when the booking is confirmed, but not by this payment: payment_id names another one
      * (the customer switched gateway and paid with it), or an admin marked the booking as paid,
-     * which keeps this payment's id stamped unresolved. This charge is then a second payment.
+     * which settles it out of band and keeps this payment's id. This charge is then a second payment.
      */
     private function notifyIfConfirmedByAnotherPayment(Reservation $reservation, string $paymentId, ?string $eventId): bool
     {
         if ($reservation->status !== ReservationStatus::CONFIRMED->value
-            || ($reservation->payment_id === $paymentId && ! $reservation->payment_unresolved)) {
+            || ($reservation->payment_id === $paymentId && $reservation->payment_settlement === PaymentSettlement::Gateway)) {
             return false;
         }
 

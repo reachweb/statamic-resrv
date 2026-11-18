@@ -155,7 +155,7 @@ class ReportsCpTest extends TestCase
     }
 
     // A cancelled unpaid hold can keep its payment_id only as a reconciliation handle on an
-    // unverifiable intent (payment_unresolved) — no money was collected, so it must not report.
+    // unverifiable intent (settled unresolved) — no money was collected, so it must not report.
     public function test_report_excludes_cancelled_reservations_with_an_unresolved_payment_reference()
     {
         $item = $this->makeStatamicItem();
@@ -166,7 +166,7 @@ class ReportsCpTest extends TestCase
             'item_id' => $item->id(),
             'status' => 'cancelled',
             'payment_id' => 'pi_unresolved',
-            'payment_unresolved' => true,
+            'payment_settlement' => 'unresolved',
         ])->create();
 
         $report = new Report(now()->toDateString(), now()->addWeek()->toDateString());

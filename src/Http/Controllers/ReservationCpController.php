@@ -249,7 +249,7 @@ class ReservationCpController extends Controller
             'payment_due_at' => $paymentDueAt?->format('d-m-Y H:i T'),
             'payment_due_at_iso' => $paymentDueAt?->toIso8601String(),
             'payment_url' => $reservation->customerPaymentUrl(),
-            // Null when receipt is unknown (a frontend bank-transfer booking confirms unpaid).
+            // Null when receipt is unknown (PaymentSettlement::Unresolved).
             'amount_paid_formatted' => $amountReceived?->format(),
             'payment_status_known' => $amountReceived !== null,
             // A refund of this row would only cancel it — no charge exists to return.
@@ -258,33 +258,18 @@ class ReservationCpController extends Controller
             'balance_formatted' => $reservation->status === ReservationStatus::PARTNER->value
                 ? $reservation->total->format()
                 : $reservation->total->subtract($reservation->payment)->format(),
-            'payment_unresolved' => (bool) $reservation->payment_unresolved,
+            'payment_unresolved' => $reservation->hasUnresolvedPayment(),
             'payment_reference' => $reservation->hasGatewayPayment() ? $reservation->payment_id : null,
             // Overdue flags only describe a booking that is still waiting for its payment.
             'hold_deadline_passed' => $reservation->isAwaitingPayment() && $reservation->holdDeadlinePassed(),
             'arrival_day_passed' => $reservation->isAwaitingPayment() && $reservation->arrivalDayPassed(),
             'payment_window_closed' => $reservation->isAwaitingPayment() && $reservation->paymentWindowClosed(),
-            'refund_is_automatic' => $this->refundIsAutomaticFor($reservation),
+            'refund_is_automatic' => $reservation->refundIsAutomatic(),
             'customer_email' => $reservation->customer?->email,
             'customer_name' => $reservation->customerName(),
             'payment_gateway_supports_manual_confirmation' => $reservation->paymentGatewaySupportsManualConfirmation(),
             'can_extend_hold' => $reservation->isAwaitingPayment(),
         ];
-    }
-
-    /**
-     * Whether a refund of this booking returns (or returned) the money through the gateway — what
-     * the refund action reports — for rows a refund applies to; null where it means nothing.
-     */
-    protected function refundIsAutomaticFor(Reservation $reservation): ?bool
-    {
-        $applies = in_array($reservation->status, [
-            ReservationStatus::CONFIRMED->value,
-            ReservationStatus::PARTNER->value,
-            ReservationStatus::REFUNDED->value,
-        ], true);
-
-        return $applies ? $reservation->refundIsAutomatic() : null;
     }
 
     public function refund(Request $request)
@@ -319,12 +304,10 @@ class ReservationCpController extends Controller
 
         // The processor lands no-charge bookings in CANCELLED instead of REFUNDED; return the
         // terminal status so the UI can say "cancelled" instead of claiming money moved.
-        // refund_is_automatic is false when no gateway returned the money (out-of-band or
-        // offline payment) — the admin must be told to return those funds by hand. A refund
-        // only moves money when a charge reached a gateway that can refund via API: an offline
-        // gateway's refund() is a bookkeeping no-op, so its payment_id alone must not read as
-        // "money returned". Read after the call, when the model holds the row the processor
-        // locked and refunded; the copy loaded above may predate a concurrent payment.
+        // refund_is_automatic is false when no gateway returned the money (paid out of band, or
+        // receipt unknown) — the admin must be told to return those funds by hand. Read after
+        // the call, when the model holds the row the processor locked and refunded; the copy
+        // loaded above may predate a concurrent payment.
         return response()->json([
             'id' => $reservation->id,
             'status' => $reservation->status,

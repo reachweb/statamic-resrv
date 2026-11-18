@@ -4,6 +4,7 @@ namespace Reach\StatamicResrv\Support;
 
 use Closure;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Enums\PaymentSettlement;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Events\ReservationCancelledByCustomer;
@@ -120,14 +121,12 @@ class ReservationRefundProcessor
                     $inTransaction($fresh);
                 }
 
-                // An unpaid hold's kept intent reference is stamped unresolved IN THE SAME WRITE
-                // as CANCELLED, not by the post-commit reconciliation below: a succeeded webhook
-                // landing between the commit and that write reads CANCELLED + its own intent +
-                // not unresolved — a retained no-refund charge to the orphan detection — and
-                // returns 200, so if the reconciliation's verify then fails, no alert ever
-                // fires for that charge. A verified void clears the stamp with the reference.
+                // An unpaid hold that keeps an intent reference is settled unresolved in the same
+                // write as CANCELLED: the intent may still capture, so until the reconciliation
+                // below verifies the void, the booking's receipt is unknown and the CP asks the
+                // admin to check it. A verified void settles it as none and drops the reference.
                 if ($cancelOpenIntent && $fresh->hasGatewayPayment()) {
-                    $fresh->payment_unresolved = true;
+                    $fresh->payment_settlement = PaymentSettlement::Unresolved;
                 }
             },
         );
@@ -163,9 +162,9 @@ class ReservationRefundProcessor
      * Void any open intent, then drop the local reference only once the gateway confirms it
      * can no longer take money — the cancel-path mirror of settlePaidOutOfBand()'s
      * verify-before-clear. An unverified void KEEPS the reference for reconciliation: a stale
-     * payment_id display beats discarding the only handle on a possibly-live charge. The kept
-     * reference is stamped payment_unresolved so reporting and displays don't count an
-     * uncollected intent as retained revenue. A merely-unverified intent only logs — the row
+     * payment_id display beats discarding the only handle on a possibly-live charge. The row
+     * stays settled unresolved (see cancelWithoutRefund()), so reporting and displays don't count
+     * the intent as retained revenue. A merely-unverified intent only logs — the row
      * is CANCELLED, so a later payment still reaches the webhook's orphan detection — but two
      * cases notify admins immediately: a money-moving intent (the capture is already known,
      * not hypothetical) and a removed gateway (its webhook route 404s, so orphan detection
@@ -188,8 +187,6 @@ class ReservationRefundProcessor
         try {
             $gateway = $reservation->resolvePaymentGateway();
         } catch (UnknownPaymentGateway $e) {
-            $reservation->update(['payment_unresolved' => true]);
-
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
                 $paymentId,
@@ -204,8 +201,6 @@ class ReservationRefundProcessor
         try {
             $intent = $gateway->retrievePaymentIntent($paymentId, $reservation);
         } catch (\Throwable $e) {
-            $reservation->update(['payment_unresolved' => true]);
-
             Log::warning('Could not verify the cancelled reservation\'s payment intent was voided; keeping the gateway charge reference for reconciliation.', [
                 'reservation_id' => $reservation->id,
                 'payment_id' => $paymentId,
@@ -219,8 +214,6 @@ class ReservationRefundProcessor
         // (deduped against this alert), but the capture is known NOW and the cancellation
         // emails are about to go out, so notify and reroute the wording immediately.
         if ($intent !== null && in_array($intent->status ?? '', self::MONEY_MOVING_INTENT_STATUSES, true)) {
-            $reservation->update(['payment_unresolved' => true]);
-
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
                 $paymentId,
@@ -233,12 +226,10 @@ class ReservationRefundProcessor
         }
 
         if ($intent === null || ($intent->status ?? '') === 'canceled') {
-            $reservation->update(['payment_id' => '', 'payment_unresolved' => false]);
+            $reservation->update(['payment_id' => '', 'payment_settlement' => PaymentSettlement::None]);
 
             return false;
         }
-
-        $reservation->update(['payment_unresolved' => true]);
 
         Log::warning('Could not verify the cancelled reservation\'s payment intent was voided; keeping the gateway charge reference for reconciliation.', [
             'reservation_id' => $reservation->id,
@@ -249,19 +240,13 @@ class ReservationRefundProcessor
     }
 
     /**
-     * Runs on the locked row of an out-of-band AWAITING_PAYMENT → CONFIRMED transition: a kept
-     * online intent is stamped payment_unresolved IN THE SAME WRITE as CONFIRMED, not by
-     * settlePaidOutOfBand() after the commit. In between, the row would read as a gateway-paid
-     * booking, so a customer self-cancellation landing there (canCancelWithoutRefund()) would end
-     * CANCELLED — and the verified void would then drop the reference, leaving amountReceived()
-     * at zero despite the out-of-band money. settlePaidOutOfBand() clears the stamp together with
-     * the reference once the void is verified. Offline gateways never minted a real charge.
+     * Runs on the locked row of an out-of-band AWAITING_PAYMENT → CONFIRMED transition, so the
+     * booking is settled out of band in the same write as CONFIRMED: no reader ever takes a kept
+     * online intent for the money that paid it.
      */
     public function markConfirmedOutOfBand(Reservation $fresh): void
     {
-        if ($fresh->hasGatewayPayment() && ! $fresh->paymentGatewaySupportsManualConfirmation()) {
-            $fresh->payment_unresolved = true;
-        }
+        $fresh->payment_settlement = PaymentSettlement::OutOfBand;
     }
 
     /**
@@ -274,11 +259,11 @@ class ReservationRefundProcessor
      * An uncaptured 'requires_capture' hold is voided like any open intent — releasing the
      * authorization prevents the duplicate rather than warning about it.
      * A capture can surface on either read; a read that THROWS leaves the state unknown, so
-     * those paths notify too (CONTEXT_OUT_OF_BAND_UNVERIFIED). EVERY kept reference is stamped
-     * payment_unresolved — captured ones included: the money arrived out of band, so the intent
-     * must not read as the booking's collected charge — customer self-cancellation stays manual,
-     * refunds report as manual, and should the booking later end CANCELLED, a late success on
-     * that intent still alerts instead of reading as retained.
+     * those paths notify too (CONTEXT_OUT_OF_BAND_UNVERIFIED). EVERY kept reference stays settled
+     * out of band — captured ones included, and also when a webhook confirm won the race: the
+     * admin recorded money that arrived outside the gateway, so the intent must not read as the
+     * booking's collected charge. Customer self-cancellation stays manual, and refunds report as
+     * manual.
      *
      * Callers must have synced the reservation to the committed row (via transitionTo()) first,
      * so a concurrent pay-page write is not missed.
@@ -293,7 +278,7 @@ class ReservationRefundProcessor
             $paymentId = (string) $reservation->payment_id;
 
             if ($paymentId !== '') {
-                $reservation->update(['payment_unresolved' => true]);
+                $reservation->update(['payment_settlement' => PaymentSettlement::OutOfBand]);
 
                 $this->notifyPossibleDuplicatePayment(
                     $reservation,
@@ -307,8 +292,13 @@ class ReservationRefundProcessor
             return;
         }
 
+        // An offline gateway takes no money online, so its reference is nothing to reconcile.
         if ($gateway->supportsManualConfirmation()) {
             $this->cancelOpenIntentQuietly($reservation);
+
+            if ($reservation->hasGatewayPayment()) {
+                $reservation->update(['payment_id' => '']);
+            }
 
             return;
         }
@@ -332,7 +322,7 @@ class ReservationRefundProcessor
             // State unknown: keep the reference rather than risk dropping a real charge, and
             // notify — a log line alone would bury the only warning of a duplicate the webhook
             // may already have confirmed.
-            $reservation->update(['payment_unresolved' => true]);
+            $reservation->update(['payment_settlement' => PaymentSettlement::OutOfBand]);
 
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
@@ -346,11 +336,11 @@ class ReservationRefundProcessor
             return;
         }
 
-        // Stamped unresolved too: the admin recorded money that arrived out of band, so the kept
-        // charge is not this booking's whole payment — refunds must read as manual (see
+        // Settled out of band too: the admin recorded money that arrived outside the gateway, so the
+        // kept charge is not this booking's whole payment — refunds must read as manual (see
         // refundThroughGateway() for how the charge itself is still returned).
         if ($intent !== null && in_array($intent->status ?? '', self::REFUND_ONLY_INTENT_STATUSES, true)) {
-            $reservation->update(['payment_unresolved' => true]);
+            $reservation->update(['payment_settlement' => PaymentSettlement::OutOfBand]);
 
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
@@ -373,7 +363,7 @@ class ReservationRefundProcessor
         } catch (\Throwable $e) {
             // Void outcome unknown — the payment may have landed inside the void window; same
             // silent-duplicate exposure as the still-payable branch below, so notify, not just log.
-            $reservation->update(['payment_unresolved' => true]);
+            $reservation->update(['payment_settlement' => PaymentSettlement::OutOfBand]);
 
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
@@ -388,7 +378,7 @@ class ReservationRefundProcessor
         }
 
         if ($intent === null || ($intent->status ?? '') === 'canceled') {
-            $reservation->update(['payment_id' => '', 'payment_unresolved' => false]);
+            $reservation->update(['payment_id' => '']);
 
             return;
         }
@@ -397,7 +387,7 @@ class ReservationRefundProcessor
         // pre-void branch, one read later — and the last point the double payment is visible,
         // so it must not degrade to the generic could-not-verify warning below.
         if (in_array($intent->status ?? '', self::MONEY_MOVING_INTENT_STATUSES, true)) {
-            $reservation->update(['payment_unresolved' => true]);
+            $reservation->update(['payment_settlement' => PaymentSettlement::OutOfBand]);
 
             $this->notifyPossibleDuplicatePayment(
                 $reservation,
@@ -412,7 +402,7 @@ class ReservationRefundProcessor
         // The void failed and the intent is still payable: the customer's client secret can
         // still collect the full amount — admins must be told now to cancel the intent at the
         // gateway, before the customer pays it a second time.
-        $reservation->update(['payment_unresolved' => true]);
+        $reservation->update(['payment_settlement' => PaymentSettlement::OutOfBand]);
 
         $this->notifyPossibleDuplicatePayment(
             $reservation,
@@ -426,7 +416,7 @@ class ReservationRefundProcessor
     /**
      * Alert admins to an actual or possible duplicate payment: an out-of-band payment plus a
      * gateway charge that captured, is still payable, or could not be verified. Every caller
-     * keeps the charge reference stamped unresolved. A succeeded webhook that arrives later
+     * keeps the charge reference. A succeeded webhook that arrives later
      * alerts again through confirmFromGateway(), but one that already confirmed the booking
      * won't, so this notification may be the only signal.
      */
@@ -544,20 +534,18 @@ class ReservationRefundProcessor
     }
 
     /**
-     * Reservations whose gateway holds no charge (partner / zero-payment) skip the gateway
-     * call entirely or Stripe rejects the empty payment_intent and blocks the refund. refund()
-     * already routes them to cancelWithoutRefund() from the in-memory state; this re-check on
-     * the locked fresh row is the race backstop. A CONFIRMED row with an empty payment_id is an
-     * out-of-band confirmation (a webhook confirm always leaves the intent id), so it also skips
-     * the provider. Anything else with an empty payment_id (e.g. a PENDING row whose cancelled
-     * intent may still carry an orphaned charge) keeps going through the gateway so the failure
-     * surfaces to the caller instead of silently marking captured money as refunded.
+     * Only money a gateway may hold (Reservation::mayHoldGatewayCharge()) goes back through it.
+     * Everything else skips the provider, which would reject a refund for a charge it never took:
+     * nothing was collected (refund() already routes partner and zero-payment bookings to
+     * cancelWithoutRefund(); this re-check on the locked row is the race backstop), or the money
+     * arrived outside the gateway and is returned by hand. A PENDING row that owes money still goes
+     * through the gateway, as its intent may carry a charge the webhook hasn't confirmed: a failure
+     * then surfaces to the caller instead of silently marking captured money as refunded.
      *
-     * A CONFIRMED row stamped payment_unresolved was settled out of band but kept its intent
-     * reference: only an intent that verifiably captured (or is settling) money goes back through
-     * the gateway; a dead or never-paid one has no charge to refund (the provider would reject it
-     * and strand the booking), so the provider is skipped and the row lands REFUNDED — the money
-     * collected out of band is returned by hand. A still-open intent (payable, or an uncaptured
+     * A row settled out of band that kept its intent reference: only an intent that verifiably
+     * captured (or is settling) money goes back through the gateway; a dead or never-paid one has
+     * no charge to refund (the provider would reject it and strand the booking), so the provider is
+     * skipped and the row lands REFUNDED — the money collected out of band is returned by hand. A still-open intent (payable, or an uncaptured
      * hold) is voided first and read again, so it cannot take money on a REFUNDED row: a payment
      * that landed inside the void window is refunded through the gateway like any captured one,
      * and a void that failed again still lands REFUNDED but logs that the intent is open at the
@@ -567,13 +555,13 @@ class ReservationRefundProcessor
      */
     protected function refundThroughGateway(Reservation $fresh): void
     {
-        if ($fresh->gatewayHoldsNoCharge() || $fresh->confirmedWithoutGatewayCharge()) {
+        if (! $fresh->mayHoldGatewayCharge() && ! $fresh->hasUnresolvedPayment()) {
             return;
         }
 
         $gateway = $fresh->resolvePaymentGateway();
 
-        if ($fresh->status === ReservationStatus::CONFIRMED->value && $fresh->payment_unresolved) {
+        if ($fresh->hasUnresolvedPayment()) {
             $paymentId = (string) $fresh->payment_id;
 
             try {
@@ -616,6 +604,11 @@ class ReservationRefundProcessor
 
                 return;
             }
+        }
+
+        // The intent of a booking not settled yet, refunded through the gateway, was its charge.
+        if ($fresh->payment_settlement === PaymentSettlement::None && $fresh->hasGatewayPayment()) {
+            $fresh->payment_settlement = PaymentSettlement::Gateway;
         }
 
         $refund = $gateway->refund($fresh);

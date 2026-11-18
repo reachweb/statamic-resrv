@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Reach\StatamicResrv\Enums\PaymentSettlement;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationCancelled as ReservationCancelledEvent;
 use Reach\StatamicResrv\Events\ReservationConfirmed as ReservationConfirmedEvent;
@@ -308,7 +309,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('', $reservation->payment_id);
         // The stamp set by the CONFIRMED transition goes with the verified-void reference.
-        $this->assertFalse($reservation->payment_unresolved);
+        $this->assertFalse($reservation->hasUnresolvedPayment());
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_unpaid_online', $gateway->cancelledIntents[0]['payment_id']);
 
@@ -348,9 +349,9 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('pi_captured', $reservation->payment_id);
         // The admin also recorded out-of-band money, so the kept charge is not the booking's whole
-        // payment: it is stamped unresolved and every refund surface reads as manual.
-        $this->assertTrue($reservation->payment_unresolved);
-        $this->assertFalse($reservation->supportsAutomaticRefund());
+        // payment: it stays settled out of band and every refund surface reads as manual.
+        $this->assertSame(PaymentSettlement::OutOfBand, $reservation->payment_settlement);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
         $this->assertFalse($reservation->refundIsAutomatic());
         $this->assertCount(0, $gateway->cancelledIntents);
 
@@ -513,7 +514,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_unpaid_online', $reservation->payment_id);
         // The money arrived out of band — the kept intent is a reconciliation handle, not the collected charge.
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
 
         // The retained intent is still payable, so admins must be told now to cancel it.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
@@ -559,12 +560,11 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('pi_still_payable', $reservation->payment_id);
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
 
         // A no-refund self-cancellation would leave CANCELLED + its own intent, which the
         // orphan detection reads as retained revenue — a later success on that still-payable
         // intent would never alert. Route it to manual handling like any out-of-band booking.
-        $this->assertFalse($reservation->supportsAutomaticRefund());
         $this->assertFalse($reservation->canCancelWithoutRefund());
         $this->assertFalse($reservation->canBeCancelledByCustomer());
         $this->assertFalse($reservation->refundIsAutomatic());
@@ -615,7 +615,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('', $reservation->payment_id);
-        $this->assertFalse($reservation->payment_unresolved);
+        $this->assertFalse($reservation->hasUnresolvedPayment());
         $this->assertSame('50.00', $reservation->amountReceived()->format());
     }
 
@@ -635,7 +635,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
 
         $reservation->refresh();
         $this->assertSame('confirmed', $reservation->status);
-        $this->assertFalse($reservation->payment_unresolved);
+        $this->assertFalse($reservation->hasUnresolvedPayment());
     }
 
     public function test_confirming_online_out_of_band_notifies_when_the_intent_cannot_be_verified()
@@ -665,7 +665,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('confirmed', $reservation->status);
         // Nothing is voided or cleared on an unverifiable intent — the reference is the only handle on a possibly-live charge.
         $this->assertSame('pi_unverifiable', $reservation->payment_id);
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
         $this->assertCount(0, $gateway->cancelledIntents);
 
         // The webhook no-ops on CONFIRMED, so admins must be notified of the possible silent duplicate.
@@ -707,7 +707,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         // The void was attempted but never verified, so the reference survives for reconciliation.
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_void_unverified', $reservation->payment_id);
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
 
         // Same silent-duplicate exposure as the still-payable branch: admins must be notified.
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
@@ -737,7 +737,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('confirmed', $reservation->status);
         $this->assertSame('pi_removed_gateway', $reservation->payment_id);
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
 
         Mail::assertSent(OrphanedPaymentNotification::class, function ($mail) {
             return $mail->hasTo('admin@example.com')
@@ -775,8 +775,8 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertSame('', $reservation->payment_id);
 
         // Money was collected out of band: a self-service refund would land REFUNDED without money moving, so it must not be self-refundable.
-        $this->assertTrue($reservation->confirmedWithoutGatewayCharge());
-        $this->assertFalse($reservation->supportsAutomaticRefund());
+        $this->assertSame(PaymentSettlement::OutOfBand, $reservation->payment_settlement);
+        $this->assertFalse($reservation->refundIsAutomatic());
         $this->assertFalse($reservation->canCancelWithRefund());
         $this->assertFalse($reservation->canCancelWithoutRefund());
         $this->assertFalse($reservation->canBeCancelledByCustomer());
@@ -804,8 +804,8 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('', $reservation->payment_id);
         $this->assertFalse($reservation->hasGatewayPayment());
-        $this->assertTrue($reservation->amountPaidOnline()->isZero());
-        $this->assertFalse($reservation->payment_unresolved);
+        $this->assertTrue($reservation->amountPaid()->isZero());
+        $this->assertFalse($reservation->hasUnresolvedPayment());
     }
 
     public function test_cancelling_an_unpaid_hold_keeps_the_reference_when_the_void_cannot_be_verified()
@@ -831,7 +831,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->assertCount(1, $gateway->cancelledIntents);
         $this->assertSame('pi_unpaid_hold', $reservation->payment_id);
         // The kept reference is a reconciliation handle, not collected money — reporting must skip it.
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
     }
 
     public function test_a_webhook_landing_between_the_cancel_commit_and_reconciliation_still_alerts_when_verification_fails()
@@ -868,7 +868,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('cancelled', $reservation->status);
         $this->assertSame('pi_race_window', $reservation->payment_id);
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
 
         Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_race_window');
     }
@@ -888,7 +888,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('cancelled', $reservation->status);
         $this->assertSame('pi_gone', $reservation->payment_id);
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
 
         // The removed gateway's webhook route 404s, so orphan detection can never fire for
         // this intent — an immediate reconciliation alert is the only signal.
@@ -920,7 +920,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $reservation->refresh();
         $this->assertSame('cancelled', $reservation->status);
         $this->assertSame('pi_captured_in_flight', $reservation->payment_id);
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
 
         Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_captured_in_flight'
             && $mail->context === OrphanedPaymentNotification::CONTEXT_CANCELLED_CAPTURED);
@@ -1181,7 +1181,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
             'payment' => '50.00',
             'payment_id' => $paymentId,
             'payment_gateway' => 'fake',
-            'payment_unresolved' => true,
+            'payment_settlement' => 'out_of_band',
             'affects_availability' => false,
         ]);
     }
@@ -1252,7 +1252,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         $this->postJson(cp_route('resrv.reservation.confirmPayment', ['id' => $reservation->id]))->assertOk();
 
         $this->assertSame('pi_kept_payable', $reservation->fresh()->payment_id);
-        $this->assertTrue($reservation->fresh()->payment_unresolved);
+        $this->assertTrue($reservation->fresh()->hasUnresolvedPayment());
         $this->assertCount(1, $gateway->cancelledIntents);
 
         // The provider has recovered by the time the booking is refunded.
