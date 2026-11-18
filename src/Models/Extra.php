@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Database\Factories\ExtraFactory;
+use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
@@ -216,17 +217,23 @@ class Extra extends Model
      * Why $quantity units of this extra cannot be booked, or null when they can. An extra that
      * does not allow multiple carries no maximum, so it is capped at one unit here.
      */
+    public function quantityBlocker(int $quantity): ?AddonBlocker
+    {
+        return match (true) {
+            ! $this->allow_multiple && $quantity > 1 => AddonBlocker::ExtraNotMultiple,
+            $this->maximum > 0 && $quantity > $this->maximum => AddonBlocker::ExtraOverMaximum,
+            default => null,
+        };
+    }
+
+    /** quantityBlocker() as the message the checkout form and the CP both show. */
     public function quantityError(int $quantity): ?string
     {
-        if (! $this->allow_multiple && $quantity > 1) {
-            return __('The extra ":name" cannot be added more than once.', ['name' => $this->name]);
-        }
-
-        if ($this->maximum > 0 && $quantity > $this->maximum) {
-            return __('The selected quantity exceeds the maximum allowed for this extra.');
-        }
-
-        return null;
+        return match ($this->quantityBlocker($quantity)) {
+            AddonBlocker::ExtraNotMultiple => __('The extra ":name" cannot be added more than once.', ['name' => $this->name]),
+            AddonBlocker::ExtraOverMaximum => __('The selected quantity exceeds the maximum allowed for this extra.'),
+            default => null,
+        };
     }
 
     /**

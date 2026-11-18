@@ -5,6 +5,7 @@ namespace Reach\StatamicResrv\Support;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Models\Extra;
@@ -17,9 +18,10 @@ use Reach\StatamicResrv\Money\Price as PriceClass;
 /**
  * Prices an entry's extras and options for one or more stays: a search, a reservation, a parent
  * reservation's children or a multi-results cart. It lists what a customer can pick, prices a
- * selection's lines and totals, and says what blocks booking it. Every add-on is priced per stay
- * and summed. The results pages, the Extras and Options components, the checkout, reservation
- * validation and manual reservations in the CP all price add-ons here.
+ * selection's lines and totals, and says what blocks booking it as a reason code (AddonBlocker),
+ * which each flow words. Every add-on is priced per stay and summed. The results pages, the Extras
+ * and Options components, the checkout, reservation validation and manual reservations in the CP
+ * all price add-ons here.
  */
 class AddonQuote
 {
@@ -72,33 +74,33 @@ class AddonQuote
      * Price a selection. Extra rows carry 'id' and 'quantity', option rows 'id' and 'value'; other keys
      * pass through. A row the entry can book gets its 'price': an extra's for one unit, plus its line
      * as 'total' above one unit (EnabledExtras::lineTotal()), an option's for its value. A row it
-     * can't book keeps what it had, and 'errors' says why, in row order. The totals add up the rows
-     * it can book.
+     * can't book keeps what it had, and 'blockers' says why, in row order, with the row and its extra
+     * when there is one; each flow words them. The totals add up the rows it can book.
      *
-     * @return array{extras: Collection, options: Collection, extras_total: PriceClass, options_total: PriceClass, errors: list<array{field: string, message: string}>}
+     * @return array{extras: Collection, options: Collection, extras_total: PriceClass, options_total: PriceClass, blockers: list<array{reason: AddonBlocker, row: array, extra: ?Extra}>}
      */
     public function price(iterable $extras = [], iterable $options = []): array
     {
-        $errors = [];
+        $blockers = [];
         $extrasTotal = Price::create(0);
         $optionsTotal = Price::create(0);
 
         $extras = collect($extras);
         $bookable = $this->selectableExtras()->findMany($extras->pluck('id'))->keyBy('id');
 
-        $extras = $extras->map(function (array $row) use ($bookable, &$errors, $extrasTotal) {
+        $extras = $extras->map(function (array $row) use ($bookable, &$blockers, $extrasTotal) {
             $extra = $bookable->get((int) ($row['id'] ?? 0));
 
             if (! $extra) {
-                $errors[] = ['field' => 'extras', 'message' => __('The selected extra does not belong to this entry.')];
+                $blockers[] = ['reason' => AddonBlocker::ExtraUnavailable, 'row' => $row, 'extra' => null];
 
                 return $row;
             }
 
             $quantity = (int) ($row['quantity'] ?? 0);
 
-            if ($error = $this->extraError($extra, $quantity)) {
-                $errors[] = ['field' => 'extras', 'message' => $error];
+            if ($reason = $this->extraBlocker($extra, $quantity)) {
+                $blockers[] = ['reason' => $reason, 'row' => $row, 'extra' => $extra];
             }
 
             $row['price'] = $this->unitPrice($extra)->format();
@@ -118,7 +120,7 @@ class AddonQuote
         $options = collect($options);
         $selectable = Option::entry($this->itemId)->selectable()->findMany($options->pluck('id'))->keyBy('id');
 
-        $options = $options->map(function (array $row) use ($selectable, &$errors, $optionsTotal) {
+        $options = $options->map(function (array $row) use ($selectable, &$blockers, $optionsTotal) {
             $option = $selectable->get((int) ($row['id'] ?? 0));
 
             // Matched as the id the pivot books: a JSON true passes the integer rule and loosely equals
@@ -126,9 +128,11 @@ class AddonQuote
             $value = $option?->values->firstWhere('id', (int) ($row['value'] ?? 0));
 
             if (! $value) {
-                $errors[] = ['field' => 'options', 'message' => $option
-                    ? __('The selected option value is no longer available.')
-                    : __('The selected option does not belong to this entry.')];
+                $blockers[] = [
+                    'reason' => $option ? AddonBlocker::OptionValueUnavailable : AddonBlocker::OptionUnavailable,
+                    'row' => $row,
+                    'extra' => null,
+                ];
 
                 return $row;
             }
@@ -144,7 +148,7 @@ class AddonQuote
             'options' => $options,
             'extras_total' => $extrasTotal,
             'options_total' => $optionsTotal,
-            'errors' => $errors,
+            'blockers' => $blockers,
         ];
     }
 
@@ -214,19 +218,14 @@ class AddonQuote
     }
 
     /** Why $quantity units of $extra can't be booked, or null. */
-    protected function extraError(Extra $extra, int $quantity): ?string
+    protected function extraBlocker(Extra $extra, int $quantity): ?AddonBlocker
     {
         if ($quantity < 1) {
-            return __('The extra quantity must be at least 1.');
+            return AddonBlocker::ExtraQuantityBelowOne;
         }
 
-        if ($error = $extra->quantityError($quantity)) {
-            return $error;
-        }
-
-        return $this->lacksCustomPriceField($extra)
-            ? __('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $extra->name])
-            : null;
+        return $extra->quantityBlocker($quantity)
+            ?? ($this->lacksCustomPriceField($extra) ? AddonBlocker::ExtraCustomPriceMissing : null);
     }
 
     /** The entry's extras a customer can select (Extra::scopeSelectable()), without the conditions pricing doesn't read. */

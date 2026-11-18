@@ -8,6 +8,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Data\ReservationData;
+use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Enums\ManualPaymentMode;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
@@ -432,8 +433,8 @@ class ManualReservationCreator
             collect($input['options'] ?? [])->keyBy(fn ($row) => (int) ($row['id'] ?? 0)),
         );
 
-        if ($error = $addons['errors'][0] ?? null) {
-            throw new ManualReservationException($error['message'], field: $error['field']);
+        if ($blocker = $addons['blockers'][0] ?? null) {
+            throw new ManualReservationException($this->blockerMessage($blocker), field: $blocker['reason']->field());
         }
 
         $extras = $addons['extras'];
@@ -818,6 +819,19 @@ class ManualReservationCreator
                 'options' => $missingOptions->pluck('name')->implode(', '),
             ]));
         }
+    }
+
+    /** The CP's wording for an add-on AddonQuote::price() can't book; the checkout words its own. */
+    protected function blockerMessage(array $blocker): string
+    {
+        return match ($blocker['reason']) {
+            AddonBlocker::ExtraUnavailable => __('The selected extra does not belong to this entry.'),
+            AddonBlocker::ExtraQuantityBelowOne => __('The extra quantity must be at least 1.'),
+            AddonBlocker::ExtraNotMultiple, AddonBlocker::ExtraOverMaximum => $blocker['extra']->quantityError((int) $blocker['row']['quantity']),
+            AddonBlocker::ExtraCustomPriceMissing => __('The extra ":name" could not be priced — check its custom-price field on the customer form.', ['name' => $blocker['extra']->name]),
+            AddonBlocker::OptionUnavailable => __('The selected option does not belong to this entry.'),
+            AddonBlocker::OptionValueUnavailable => __('The selected option value is no longer available.'),
+        };
     }
 
     /**

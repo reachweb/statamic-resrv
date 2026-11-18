@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
+use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -1134,8 +1135,10 @@ class Reservation extends Model
 
         $addons = $quote->price($data['extras'] ?? [], $data['options'] ?? []);
 
-        if ($error = $addons['errors'][0] ?? null) {
-            throw $error['field'] === 'options' ? new OptionsException($error['message']) : new ExtrasException($error['message']);
+        if ($blocker = $addons['blockers'][0] ?? null) {
+            $message = $this->checkoutBlockerMessage($blocker);
+
+            throw $blocker['reason']->field() === 'options' ? new OptionsException($message) : new ExtrasException($message);
         }
 
         if (! $total->add($addons['extras_total'], $addons['options_total'])->equals($data['total'])) {
@@ -1143,6 +1146,24 @@ class Reservation extends Model
         }
 
         return true;
+    }
+
+    /**
+     * The checkout's wording for an add-on AddonQuote::price() can't book: the strings it showed before
+     * the CP and the checkout shared the service, so sites' translations keep working. The CP words
+     * its own (ManualReservationCreator::blockerMessage()).
+     */
+    protected function checkoutBlockerMessage(array $blocker): string
+    {
+        return match ($blocker['reason']) {
+            AddonBlocker::ExtraUnavailable => __('The selected extra is not available anymore.'),
+            // What the checkout form's min:1 rule says; it rejects such a quantity before validation does.
+            AddonBlocker::ExtraQuantityBelowOne => __('validation.min.numeric', ['attribute' => 'quantity', 'min' => 1]),
+            AddonBlocker::ExtraNotMultiple, AddonBlocker::ExtraOverMaximum => $blocker['extra']->quantityError((int) $blocker['row']['quantity']),
+            AddonBlocker::ExtraCustomPriceMissing => __('The extra ":name" is not available for this reservation.', ['name' => $blocker['extra']->name]),
+            AddonBlocker::OptionUnavailable => __('The selected option is not valid.'),
+            AddonBlocker::OptionValueUnavailable => __('The selected option value is not valid.'),
+        };
     }
 
     /** The add-ons of $data for its stay, or for each child of a parent, priced with the customer's data. */

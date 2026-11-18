@@ -491,6 +491,47 @@ class CheckoutExtrasTest extends TestCase
         ]);
     }
 
+    // The checkout and the CP price add-ons through one service, but each words what blocks booking.
+    // The customer sees the checkout's strings, which sites have translated, not the CP's.
+    public function test_an_add_on_that_cannot_be_booked_shows_the_checkouts_message_not_the_cps()
+    {
+        Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
+
+        $extra = $this->extras->first();
+        $option = Option::factory()->notRequired()->has(OptionValue::factory()->fixed(), 'values')
+            ->create(['item_id' => $this->entries->first()->id()]);
+        $value = $option->values->first();
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $component = Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => [
+                'id' => $extra->id,
+                'quantity' => 1,
+                'price' => $extra->price->format(),
+                'name' => $extra->name,
+            ]]);
+
+        ResrvExtra::whereKey($extra->id)->update(['published' => false]);
+
+        $component->call('handleFirstStep')->assertSet('step', 1);
+        $this->assertSame([__('The selected extra is not available anymore.')], $component->errors()->get('extras'));
+
+        $component->dispatch('extras-updated', [])
+            ->dispatch('options-updated', [$option->id => [
+                'id' => $option->id,
+                'value' => $value->id,
+                'price' => $value->price->format(),
+                'optionName' => $option->name,
+                'valueName' => $value->name,
+            ]]);
+
+        $value->update(['published' => false]);
+
+        $component->call('handleFirstStep')->assertSet('step', 1);
+        $this->assertSame([__('The selected option value is not valid.')], $component->errors()->get('options'));
+    }
+
     // The unpublished-category filter used to live only in frontendExtras() (render), while
     // toggleExtra() — a client-callable action — checked the unfiltered list, so a hidden extra
     // could still be selected server-side. Extra::scopeSelectable() now hides it from both.
