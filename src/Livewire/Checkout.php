@@ -189,7 +189,8 @@ class Checkout extends Component
         $entry = ResrvEntry::query()->itemId($reservation->item_id)->first();
 
         $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($entry, $reservation) {
-            $extraModel = $entry?->extras()->selectable()->find($extra['id']);
+            // Conditions are not needed to price.
+            $extraModel = $entry?->extras()->selectable()->without('conditions')->find($extra['id']);
 
             // Leave unresolvable extras untouched — extraForValidation() raises the designed
             // ExtrasException for them during validation, so the stale selection must reach
@@ -199,7 +200,13 @@ class Checkout extends Component
             }
 
             $extra['price'] = $reservation->extraUnitPrice($extraModel)->format();
-            $extra['total'] = $reservation->extraLineTotal($extraModel, (int) $extra['quantity'])->format();
+
+            // One unit's line is its price (EnabledExtras::lineTotal()), as in withExtraLineTotal(),
+            // so only a larger quantity is priced again as a line.
+            unset($extra['total']);
+            if ((int) $extra['quantity'] > 1) {
+                $extra['total'] = $reservation->extraLineTotal($extraModel, (int) $extra['quantity'])->format();
+            }
 
             return $extra;
         });
