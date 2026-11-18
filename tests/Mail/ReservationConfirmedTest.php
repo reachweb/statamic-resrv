@@ -98,7 +98,8 @@ class ReservationConfirmedTest extends TestCase
             'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
         app()->forgetInstance(PaymentGatewayManager::class);
-        Config::set('resrv-config.manual_reservations_offline_instructions', "Bank: ACME <b>Ltd</b>\nIBAN: GR12 3456");
+        // Greek υ is CF 85 in UTF-8: a line-break match that reads bytes splits it at 0x85 (NEL).
+        Config::set('resrv-config.manual_reservations_offline_instructions', "Bank: ACME <b>Ltd</b>\nΔικαιούχος: Ευχαριστούμε ΑΕ\nIBAN: GR12 3456");
 
         $item = $this->makeStatamicItem();
         $attributes = [
@@ -116,7 +117,7 @@ class ReservationConfirmedTest extends TestCase
         // What the customer must transfer: the payment plus the gateway's surcharge.
         $this->assertMatchesRegularExpression('/Amount due<\/td>\s*<td[^>]*>[^<]*32\.50/', $html);
         $this->assertStringNotContainsString('Amount already paid', $html);
-        $this->assertStringContainsString("Bank: ACME &lt;b&gt;Ltd&lt;/b&gt;<br>\nIBAN: GR12 3456", $html);
+        $this->assertStringContainsString("Bank: ACME &lt;b&gt;Ltd&lt;/b&gt;<br>\nΔικαιούχος: Ευχαριστούμε ΑΕ<br>\nIBAN: GR12 3456", $html);
         $this->assertStringContainsString('Please include the booking reference '.$checkout->reference.' with your payment.', $html);
 
         // Marked as paid in the CP: the money arrived, so no payment details.
