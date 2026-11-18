@@ -1192,6 +1192,31 @@ class AvailabilityMultiResultsTest extends TestCase
         $this->assertEquals('109.30', $component->totalPrice);
     }
 
+    // The checkout shares the extras session key, and its lines carry a 'total' priced for its
+    // reservation. The cart re-prices per unit, so the total must not outlive that.
+    public function test_total_price_drops_a_line_total_the_cart_has_repriced()
+    {
+        [$entryId, $adultsRate] = $this->createMultiRateEntry();
+
+        $extra = ResrvExtra::factory()->create();
+        ResrvEntry::whereItemId($entryId)->extras()->attach($extra->id);
+
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('addSelections')
+            ->dispatch('extras-updated', [[
+                'id' => $extra->id,
+                'price' => '9.30',
+                'total' => '500.00',
+                'name' => $extra->name,
+                'quantity' => 2,
+            ]]);
+
+        // 100.00 for the stay + 9.30 × 2
+        $this->assertEquals('118.60', $component->totalPrice);
+    }
+
     public function test_total_price_includes_options()
     {
         [$entryId, $adultsRate] = $this->createMultiRateEntry();
