@@ -314,6 +314,7 @@ class StripePaymentGateway implements PaymentInterface
         // and another site's reservation can share the id, so the reference must match as well.
         // Intents created before the reference was stored match on the id alone.
         $isStaleIntent = false;
+        $referenceMatched = false;
         if (! $reservation && isset($data['metadata']['reservation_id'])) {
             $reservation = Reservation::find($data['metadata']['reservation_id']);
             $reference = $data['metadata']['reservation_reference'] ?? null;
@@ -323,6 +324,7 @@ class StripePaymentGateway implements PaymentInterface
             }
 
             $isStaleIntent = (bool) $reservation;
+            $referenceMatched = $isStaleIntent && $reference !== null;
         }
 
         if (! $reservation) {
@@ -369,9 +371,13 @@ class StripePaymentGateway implements PaymentInterface
         $data = $event->data->object;
 
         // Stale intent: the customer moved on and this charge is now orphaned. Notify admins for
-        // manual refund; leave the reservation untouched. Checked before the confirmed
-        // short-circuit: a booking confirmed through another payment makes this a second charge.
-        if ($isStaleIntent && $event->type === 'payment_intent.succeeded') {
+        // manual refund; leave the reservation untouched. A booking confirmed through another
+        // payment makes this a second charge, but only a matching reference proves the intent is
+        // this site's. One matched on the id alone is more likely another site's on the same
+        // Stripe account (one that stores no reference), so a confirmed booking skips it below.
+        $confirmed = $reservation->status === ReservationStatus::CONFIRMED->value;
+
+        if ($isStaleIntent && $event->type === 'payment_intent.succeeded' && ($referenceMatched || ! $confirmed)) {
             Log::warning('Stripe payment intent succeeded after being abandoned by the customer — manual reconciliation may be required.', [
                 'reservation_id' => $reservation->id,
                 'payment_intent_id' => $data['id'],
@@ -384,7 +390,7 @@ class StripePaymentGateway implements PaymentInterface
             return response()->json([], 200);
         }
 
-        if ($reservation->status === ReservationStatus::CONFIRMED->value) {
+        if ($confirmed) {
             return response()->json([], 200);
         }
 

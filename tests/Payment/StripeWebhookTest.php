@@ -277,6 +277,45 @@ class StripeWebhookTest extends TestCase
         Mail::assertNotSent(OrphanedPaymentNotification::class);
     }
 
+    public function test_an_intent_without_a_reference_alerts_only_for_a_booking_that_is_not_confirmed()
+    {
+        // Intents created before the reference was stored carry the id alone, and so do those of
+        // another site on the same Stripe account that runs such a release. Against a confirmed
+        // booking that is most likely the other site's customer paying, so it stays silent. A
+        // pending booking was not paid another way, so its abandoned intent still alerts.
+        Mail::fake();
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $confirmed = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'confirmed',
+            'payment_id' => 'pi_ours',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($this->signedWebhookRequest('payment_intent.succeeded', 'pi_other_site', 'whsec_test', time(), [
+            'metadata' => ['reservation_id' => (string) $confirmed->id],
+        ]));
+
+        $this->assertEquals(200, $response->getStatusCode());
+        Mail::assertNotSent(OrphanedPaymentNotification::class);
+
+        $pending = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_current',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        app(StripePaymentGateway::class)->verifyPayment($this->signedWebhookRequest('payment_intent.succeeded', 'pi_abandoned_before_upgrade', 'whsec_test', time(), [
+            'metadata' => ['reservation_id' => (string) $pending->id],
+        ]));
+
+        $this->assertEquals('pending', $pending->fresh()->status);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->reservation->is($pending)
+            && $mail->paymentIntentId === 'pi_abandoned_before_upgrade');
+    }
+
     public function test_unhandled_stripe_event_type_returns_a_200_response_without_acting_on_the_reservation()
     {
         Event::fake([ReservationConfirmed::class]);
