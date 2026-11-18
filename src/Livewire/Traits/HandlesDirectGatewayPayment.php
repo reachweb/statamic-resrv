@@ -179,7 +179,7 @@ trait HandlesDirectGatewayPayment
     }
 
     /**
-     * Mint an intent under withIntentLock() and store its id together with $attributes.
+     * Mint an intent under withIntentLock() and store its id and amount together with $attributes.
      *
      * @throws ReservationNoLongerPayable
      */
@@ -191,7 +191,7 @@ trait HandlesDirectGatewayPayment
         // row lock (a different mutex) and can commit during the paymentIntent() round-trip.
         // So re-verify payability under the row lock in the same write as payment_id; if the
         // row is no longer payable the just-minted intent is voided below.
-        $committed = DB::transaction(function () use ($reservation, $intent, $stillPayable, $attributes) {
+        $committed = DB::transaction(function () use ($reservation, $intent, $amount, $stillPayable, $attributes) {
             $fresh = Reservation::query()->lockForUpdate()->find($reservation->id);
 
             if ($fresh === null || ($stillPayable !== null && ! $stillPayable($fresh))) {
@@ -199,6 +199,7 @@ trait HandlesDirectGatewayPayment
             }
 
             $attributes['payment_id'] = $intent->id;
+            $attributes['payment_intent_amount'] = $amount->format();
 
             // Stamp the gateway the intent was actually minted through, atomically with its id:
             // later readers (cancel/lapse void, out-of-band reconcile, refund) must reach THIS

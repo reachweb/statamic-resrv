@@ -216,7 +216,7 @@ The return array `status` must be one of:
 - `false` — payment failed, customer sees the failure message
 - `'pending'` — payment is pending (e.g. bank transfer), customer sees the pending message
 
-After `false`, the checkout stays open so the customer can try again. Going back to the checkout asks your gateway to cancel the payment through `cancelPaymentIntent()` and re-reads it through `retrievePaymentIntent()`. If it is still payable, Resrv keeps it and creates no other until it is cancelled or expires (see Step 13). Searching again releases the reservation and cancels the payment best effort: the provider may refuse, and if the customer still pays it, it reaches your webhook as a stale intent (see "Handle stale-intent races in verifyPayment()").
+After `false`, the checkout stays open so the customer can try again. When they pay again with the same gateway and amount, Resrv resumes the payment through `retrievePaymentIntent()` if it is still payable and has a `->redirectTo` (see Step 13). Otherwise it asks your gateway to cancel the payment through `cancelPaymentIntent()` and re-reads it; if it is still payable, Resrv keeps it and creates no other until it is cancelled or expires. Searching again releases the reservation and cancels the payment best effort: the provider may refuse, and if the customer still pays it, it reaches your webhook as a stale intent (see "Handle stale-intent races in verifyPayment()").
 
 So decide by what the customer still has to do, not by whether the provider keeps the payment open:
 - Return `false` when the attempt didn't succeed and the customer has to act again, such as a declined card or a cancelled or abandoned attempt. This holds even when the provider keeps the payment open for another try, as Mollie does after a declined card.
@@ -782,7 +782,7 @@ Understanding the flow helps when debugging custom gateways.
 
 1. Customer fills extras/options (step 1) and personal details (step 2).
 2. `handleSecondStep()` detects one gateway, auto-selects it, calls `initializePayment()`.
-3. `initializePayment()` voids any stored intent (Step 9), calls `paymentIntent()`, and saves `payment_id` with the config key in `reservation.payment_gateway`.
+3. `initializePayment()` resumes a stored intent created for the same gateway and amount (Step 13). Otherwise it voids the stored intent (Step 9), calls `paymentIntent()`, and saves `payment_id` with the config key in `reservation.payment_gateway`.
 4. For inline: sets `clientSecret`, `publicKey`, `paymentView`, renders step 3.
 5. For redirect: returns `redirect()->away($intent->redirectTo)`, with the URL unchanged.
 
@@ -1014,8 +1014,8 @@ This is different from a provider that *does* hold an order but offers no way to
 
 1. **Customer navigates back from step 3 to step 1 or 2** (`Checkout::goToStep` → `resetPaymentState`).
 2. **Customer switches gateway at the picker on step 3** (`Checkout::selectGateway` → `initializePayment` before creating the new intent).
-3. **Customer re-enters step 2 with a stale intent still persisted** from a previous session/pass (`Checkout::handleSecondStep` → `resetPaymentState`).
-4. **Customer reloads the checkout** (`Checkout::mount` → `resetPaymentState`).
+3. **Customer pays with a stored intent created for another gateway or amount**, such as one left from a previous pass (`Checkout::handleSecondStep` → `initializePayment`). One created for the same gateway and amount is resumed instead (Step 13).
+4. **Customer applies or removes a coupon** (`Checkout::updateTotals` → `resetPaymentState`).
 
 In all cases, Resrv:
 1. Reads `payment_id` and `payment_gateway` from a fresh reservation record, under a per-reservation lock.
@@ -1228,7 +1228,7 @@ Inline gateways (`redirectsForPayment()` returns `false`) return the customer th
 
 ### Why
 
-Resrv must be able to read the *current* state of a previously created intent. Besides the normal checkout, which re-reads an intent it voided before creating another (Step 9), every caller belongs to the manual-reservation flow:
+Resrv must be able to read the *current* state of a previously created intent. Besides the normal checkout, which re-reads a stored intent to resume it for the same gateway and amount or to verify its void (Step 9), every caller belongs to the manual-reservation flow:
 
 1. **Resume instead of double-charge.** When a customer returns to an interrupted payment on the manual pay-by-link page, Resrv re-reads the stored intent rather than blindly minting a second one. A succeeded or in-flight intent means "money is already moving — do not create another"; a dead one may be replaced. Before replacing a still-payable intent it cannot re-mount, Resrv voids it and re-reads it to prove the void (see *Redirect gateways* below).
 2. **Verify the void when an unpaid reservation is cancelled.** When an admin cancels an awaiting-payment reservation, or the `resrv:cancel-lapsed-holds` sweep cancels a lapsed one, Resrv calls `cancelPaymentIntent()` and then re-reads the intent. It drops the reference only when the intent reads `canceled` or `null`. If money moved, it keeps the reference, alerts the admins and tells the customer the charge will be refunded.
@@ -1336,7 +1336,7 @@ Rules that keep this money-safe:
 
 The other callers of `retrievePaymentIntent()` do not read `->expires_at` and behave as before for a still-payable intent they could not void: cancelling or lapsing the reservation, or marking it paid out of band, keeps the payment reference and flags the reservation `payment_unresolved` so a payment that still lands on the open order is reconciled rather than lost.
 
-The **normal checkout** reads `->expires_at` as the pay-by-link page does: when the customer steps back, switches gateway or changes a coupon and the earlier order can't be voided, it creates no second order, keeps the stored reference and shows the same notice (Step 9).
+The **normal checkout** resumes an order with a `->redirectTo` when the customer pays again with the same gateway and amount, and reads `->expires_at` as the pay-by-link page does: when the customer steps back, switches gateway or changes a coupon and the earlier order can't be voided, it creates no second order, keeps the stored reference and shows the same notice (Step 9).
 
 ### Reference: StripePaymentGateway (inline)
 

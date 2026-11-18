@@ -83,11 +83,10 @@ class Checkout extends Component
         }
 
         // A refresh drops step/selectedGateway back to defaults but leaves any prior step-3
-        // payment_surcharge (and active Stripe intent) persisted on the reservation. Roll them
-        // back so the sidebar doesn't render a stale gateway fee / inflated payable-now, and
-        // so a lingering intent doesn't survive into the next pass through checkout.
+        // payment_surcharge persisted on the reservation. Roll a stray one back so the sidebar
+        // doesn't render a stale gateway fee; a stored intent stays for the payment step to resume.
         if (! $this->reservationError) {
-            $this->resetPaymentState();
+            $this->forgetPaymentState();
         }
 
         $this->initializeExtrasAndOptions();
@@ -350,9 +349,7 @@ class Checkout extends Component
         }
 
         // Reset any stale payment state from a previous pass through checkout
-        if (! $this->resetPaymentState()) {
-            return;
-        }
+        $this->forgetPaymentState();
 
         // Populate available gateways: those the current payment amount allows and that load
         $manager = app(PaymentGatewayManager::class);
@@ -497,6 +494,22 @@ class Checkout extends Component
     }
 
     /**
+     * Drop the component's payment state and a surcharge left without an intent. A stored intent
+     * keeps the surcharge its webhook checks, and initializePayment() resumes or voids it.
+     */
+    protected function forgetPaymentState(): void
+    {
+        Reservation::query()->whereKey($this->reservation->id)
+            ->where('status', ReservationStatus::PENDING->value)
+            ->where('payment_id', '')
+            ->where('payment_surcharge', '!=', 0)
+            ->update(['payment_surcharge' => 0]);
+        unset($this->reservation);
+
+        $this->reset('selectedGateway', 'clientSecret', 'publicKey', 'paymentView');
+    }
+
+    /**
      * Void the stored intent; false when it already moves money. Call under the intent lock with a
      * fresh PENDING reservation. Unlike the pay page's AWAITING_PAYMENT row, a PENDING one is expired
      * by the old intent's cancellation webhook, so the reference (payment_id and payment_gateway, a
@@ -526,8 +539,9 @@ class Checkout extends Component
     }
 
     /**
-     * Void the stored intent, then create and mount one for $gatewayName's total. Unlike the pay page,
-     * the checkout never resumes a stored intent: it may be priced for another amount or surcharge.
+     * Mount a payment for $gatewayName's total: the stored intent when it was created for this
+     * gateway and amount, otherwise a new one once the stored intent is voided. Unlike the pay page,
+     * the checkout never resumes an intent created for another amount or surcharge.
      */
     protected function initializePayment(string $gatewayName)
     {
@@ -547,6 +561,19 @@ class Checkout extends Component
         $intent = $this->underIntentLock($reservation, function (Reservation $reservation) use ($gateway, $gatewayName, $amount, $surcharge, $returnUrl, $stillPayable) {
             if (! $stillPayable($reservation)) {
                 throw new ReservationNoLongerPayable($reservation->id);
+            }
+
+            // A customer back from the provider's page continues the payment they started.
+            if ($reservation->payment_gateway === $gatewayName && $reservation->payment_intent_amount !== null
+                && Price::create((string) $reservation->payment_intent_amount)->equals($amount)) {
+                $resumed = $this->resumeExistingIntent($gateway, $reservation);
+
+                if ($resumed === null || ($resumed && $this->resumedIntentIsMountable($gateway, $resumed))) {
+                    // The webhook checks payment plus surcharge, and step 1 may have dropped the surcharge.
+                    $reservation->update(['payment_surcharge' => $surcharge->format()]);
+
+                    return $resumed;
+                }
             }
 
             // `payment` stays the reservation amount (read by CP, API, emails); the surcharge is stored apart.

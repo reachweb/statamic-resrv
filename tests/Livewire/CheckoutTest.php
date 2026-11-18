@@ -2366,6 +2366,49 @@ class CheckoutTest extends TestCase
         $this->assertSame($gateway->createdIntents[0]['payment_id'], $this->reservation->fresh()->payment_id);
     }
 
+    public function test_a_customer_back_from_a_provider_that_cannot_void_continues_the_payment_they_started()
+    {
+        // Like a Cardlink order before it reaches the bank: the provider can't void it, but it still
+        // takes the payment at the same URL.
+        Config::set('resrv-config.payment', 'everything');
+        Config::set('resrv-config.payment_gateways', [
+            'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Bank', 'surcharge' => ['type' => 'fixed', 'amount' => 4]],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+        $gateway = app(PaymentGatewayManager::class)->gateway('fakeredirect');
+        $gateway->cancelSucceeds = false;
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        Livewire::test(Checkout::class)->call('handleFirstStep')->dispatch('checkout-form-submitted');
+        $paymentId = $this->reservation->fresh()->payment_id;
+
+        // The customer comes back from the provider's page and goes through the checkout again.
+        // Step 1 writes the payment afresh and drops the surcharge.
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->dispatch('checkout-form-submitted')
+            ->assertHasNoErrors()
+            ->assertRedirect('https://provider.test/checkout/'.$paymentId);
+
+        $this->assertCount(1, $gateway->createdIntents, 'No second order may be created next to the open one.');
+        $reservation = $this->reservation->fresh();
+        $this->assertSame($paymentId, $reservation->payment_id);
+        $this->assertSame('104.00', $reservation->totalToCharge(), 'The webhook expects what the open order charges.');
+
+        // Once the amount changes, the order is voided and replaced instead of resumed.
+        $this->reservation->update(['payment' => '90.00']);
+        $gateway->cancelSucceeds = true;
+
+        Livewire::test(Checkout::class)->call('handleSecondStep');
+
+        $this->assertCount(2, $gateway->createdIntents);
+        $this->assertSame([$paymentId], array_column($gateway->cancelledIntents, 'payment_id'));
+        $reservation = $this->reservation->fresh();
+        $this->assertSame($gateway->createdIntents[1]['payment_id'], $reservation->payment_id);
+        $this->assertSame('94.00', $reservation->totalToCharge());
+    }
+
     public function test_an_intent_already_moving_money_is_kept_and_the_customer_sent_to_checkout_complete()
     {
         // The customer paid in another tab and the payment is still processing, so it can't be cancelled.
@@ -2377,6 +2420,7 @@ class CheckoutTest extends TestCase
         session(['resrv_reservation' => $this->reservation->id]);
 
         Livewire::test(Checkout::class)
+            ->call('handleSecondStep')
             ->assertRedirect(Entry::find(Config::get('resrv-config.checkout_completed_entry'))->absoluteUrl().'?payment_pending='.$this->reservation->id);
 
         // The reference stays, so the webhook confirms the booking instead of reporting an orphan.
