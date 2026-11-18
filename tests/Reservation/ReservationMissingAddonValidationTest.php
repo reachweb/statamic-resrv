@@ -248,6 +248,7 @@ class ReservationMissingAddonValidationTest extends TestCase
         $option->delete();
 
         $this->expectException(OptionsException::class);
+        $this->expectExceptionMessage('The selected option is not valid.');
         $reservation->validateTotal($data, $this->entry->id());
     }
 
@@ -334,6 +335,32 @@ class ReservationMissingAddonValidationTest extends TestCase
 
         $this->expectException(OptionsException::class);
         $reservation->validateTotal($data, $this->entry->id());
+    }
+
+    // A row names its option by 'id'; how the selection is keyed doesn't matter. A list-shaped
+    // selection (the CP's) carries a required option, and a row keyed by a required option's id
+    // that books another option does not.
+    public function test_a_required_option_is_matched_by_the_rows_id_not_its_key()
+    {
+        $reservation = $this->createNormalReservation();
+        [$required, $value] = $this->createFixedOption();
+
+        $data = $this->checkoutData($reservation, '230.00', [
+            'options' => $this->optionPayload($required, $value, '30.00'),
+        ]);
+
+        $this->assertTrue($reservation->validateReservation($data, $this->entry->id()));
+
+        $other = Option::factory()->notRequired()->create(['item_id' => $this->entry->id(), 'slug' => 'other-option']);
+        $otherValue = OptionValue::factory()->fixed()->create(['option_id' => $other->id]);
+
+        $data = $this->checkoutData($reservation, '230.00', [
+            'options' => collect([$required->id => $this->optionPayload($other, $otherValue, '30.00')->first()]),
+        ]);
+
+        $this->expectException(OptionsException::class);
+        $this->expectExceptionMessage('There are required options you did not select.');
+        $reservation->validateReservation($data, $this->entry->id());
     }
 
     public function test_a_deleted_extra_is_rejected_on_a_parent_reservation()

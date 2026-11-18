@@ -27,6 +27,7 @@ use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Tags\ResrvCheckoutRedirect;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -63,7 +64,7 @@ class CheckoutExtrasTest extends TestCase
 
         $entry->extras()->attach($extra->id);
 
-        $this->extras = ResrvExtra::getPriceForDates($this->reservation);
+        $this->extras = AddonQuote::forReservation($this->reservation)->extras();
     }
 
     // Test that extras are correctly loaded for the Reservation
@@ -453,7 +454,7 @@ class CheckoutExtrasTest extends TestCase
         Livewire::test(Checkout::class)
             ->dispatch('extras-updated', $extras->get('enabledExtras.extras')->all())
             ->call('handleFirstStep')
-            ->assertHasErrors('extras')
+            ->assertHasErrors(['extras' => 'The extra "'.$extra->name.'" is not available for this reservation.'])
             ->assertSet('step', 1);
 
         $this->assertDatabaseMissing('resrv_reservation_extra', ['reservation_id' => $this->reservation->id]);
@@ -2148,6 +2149,24 @@ class CheckoutExtrasTest extends TestCase
         // NOT: 10 * 1 (session fallback) * 2 = 20
         $charges = $reservation->extraCharges();
         $this->assertEquals('60.00', $charges->format());
+    }
+
+    // The same for a single stay: the multiplier is the reservation's customer data, which the checkout
+    // charged, not what a later search left in the session.
+    public function test_custom_extra_uses_customer_data_not_session()
+    {
+        $reservation = Reservation::factory()->for(Customer::factory()->withGuests(3))->create([
+            'item_id' => $this->entries->first()->id(),
+        ]);
+
+        $extra = ResrvExtra::factory()->custom()->create();
+        ResrvEntry::whereItemId($this->entries->first()->id)->extras()->attach($extra->id);
+        $reservation->extras()->sync([$extra->id => ['quantity' => 1, 'price' => '30.00']]);
+
+        session(['resrv-search' => (object) ['customer' => ['adults' => 5]]]);
+
+        // 10 × 3 adults, not 10 × the session's 5.
+        $this->assertEquals('30.00', $reservation->extraCharges()->format());
     }
 
     // A selected quantity above one makes the Extras component price the line itself. For a parent

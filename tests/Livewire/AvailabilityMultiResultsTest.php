@@ -1192,6 +1192,39 @@ class AvailabilityMultiResultsTest extends TestCase
         $this->assertEquals('109.30', $component->totalPrice);
     }
 
+    // A dynamic-pricing minimum clamps the line, not each unit: the cart carries the clamped line, as
+    // the checkout charges it, rather than the unit price × quantity.
+    public function test_total_price_carries_the_clamped_line_of_an_extra_with_a_quantity()
+    {
+        [$entryId, $adultsRate] = $this->createMultiRateEntry();
+
+        $extra = ResrvExtra::factory()->fixed()->create(); // 25, up to 3 units
+        ResrvEntry::whereItemId($entryId)->extras()->attach($extra->id);
+
+        // A minimum of 100 for stays of 2 nights or more.
+        $dynamic = DynamicPricing::factory()->extra()->create(['amount_operation' => 'minimum', 'amount' => '100']);
+        DB::table('resrv_dynamic_pricing_assignments')->insert([
+            'dynamic_pricing_id' => $dynamic->id,
+            'dynamic_pricing_assignment_id' => $extra->id,
+            'dynamic_pricing_assignment_type' => ResrvExtra::class,
+        ]);
+        Cache::flush();
+
+        $component = Livewire::test(AvailabilityMultiResults::class, ['entry' => $entryId])
+            ->dispatch('availability-search-updated', $this->searchPayload())
+            ->call('updateRateQuantity', $adultsRate->id, 1)
+            ->call('addSelections')
+            ->dispatch('extras-updated', [[
+                'id' => $extra->id,
+                'price' => '100.00',
+                'name' => $extra->name,
+                'quantity' => 3,
+            ]]);
+
+        // 100 for the stay + 100 for the three units (75 raised to the minimum), not 100 + 100 × 3.
+        $this->assertEquals('200.00', $component->totalPrice);
+    }
+
     // The checkout shares the extras session key, and its lines carry a 'total' priced for its
     // reservation. The cart re-prices per unit, so the total must not outlive that.
     public function test_total_price_drops_a_line_total_the_cart_has_repriced()

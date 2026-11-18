@@ -11,6 +11,7 @@ use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -302,7 +303,7 @@ class ExtraUnitsPerAddonTest extends TestCase
             'quantity' => 2,
         ]);
 
-        $priced = Extra::getPriceForDates($divisorReservation)->firstWhere('id', $extra->id);
+        $priced = AddonQuote::forReservation($divisorReservation)->extras()->firstWhere('id', $extra->id);
 
         $this->assertNotNull($priced);
         $this->assertEquals('25.00', $priced->price->format());
@@ -313,7 +314,7 @@ class ExtraUnitsPerAddonTest extends TestCase
             'quantity' => 2,
         ]);
 
-        $priced = Extra::getPriceForDates($defaultReservation)->firstWhere('id', $extra->id);
+        $priced = AddonQuote::forReservation($defaultReservation)->extras()->firstWhere('id', $extra->id);
 
         $this->assertNotNull($priced);
         $this->assertEquals('50.00', $priced->price->format());
@@ -337,7 +338,7 @@ class ExtraUnitsPerAddonTest extends TestCase
             DB::flushQueryLog();
             DB::enableQueryLog();
 
-            $priced = Extra::getPriceForDates($this->data(2, $rate->id));
+            $priced = (new AddonQuote($this->item->id(), [$this->data(2, $rate->id)]))->extras();
 
             $rateQueries = collect(DB::getQueryLog())
                 ->filter(fn ($query) => str_contains($query['query'], 'resrv_rates'))
@@ -349,7 +350,7 @@ class ExtraUnitsPerAddonTest extends TestCase
             $this->assertSame(1, $rateQueries, "Expected one rate lookup for rate {$rate->slug}");
         }
 
-        $this->assertEquals('25.00', Extra::getPriceForDates($this->data(2, $this->divisorRate->id))->first()->price->format());
-        $this->assertEquals('50.00', Extra::getPriceForDates($this->data(2, $this->defaultRate->id))->first()->price->format());
+        $this->assertEquals('25.00', (new AddonQuote($this->item->id(), [$this->data(2, $this->divisorRate->id)]))->extras()->first()->price->format());
+        $this->assertEquals('50.00', (new AddonQuote($this->item->id(), [$this->data(2, $this->defaultRate->id)]))->extras()->first()->price->format());
     }
 }

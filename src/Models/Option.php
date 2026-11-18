@@ -40,16 +40,6 @@ class Option extends Model
         return $this->hasMany(OptionValue::class);
     }
 
-    public function valuesPriceForDates($data)
-    {
-        foreach ($this->values as $value) {
-            $value->original_price = $value->price->format();
-            $value->price = $value->priceForDates($data);
-        }
-
-        return $this;
-    }
-
     public function calculatePrice($data, $value)
     {
         // withTrashed() so historical reservations referencing a soft-deleted value still price

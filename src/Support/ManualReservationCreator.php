@@ -24,7 +24,6 @@ use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Jobs\ExpireReservations;
-use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\Availability;
@@ -171,7 +170,7 @@ class ManualReservationCreator
                         $id => [
                             'quantity' => (int) $extra['quantity'],
                             'price' => $extra['price'],
-                            'total' => EnabledExtras::lineTotal($extra)->format(),
+                            'total' => AddonQuote::rowTotal($extra)->format(),
                         ],
                     ])
                 );

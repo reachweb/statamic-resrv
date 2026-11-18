@@ -11,7 +11,6 @@ use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
-use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
@@ -167,9 +166,8 @@ class Extra extends Model
         return $this->priceForDates($data);
     }
 
-    // TODO: merge these two methods ?
-    // More info: this one calculates the price for the extra including the quantity the user has selected
-    // and is used to validate the price for the reservation. Probably should merge with getPriceForDates.
+    // The line for $quantity units, clamped as a whole by dynamic pricing; priceForDates() is one unit's
+    // price. AddonQuote prices both.
     public function calculatePrice($data, $quantity)
     {
         $this->initiateAvailabilityUnsafe($data);
@@ -284,12 +282,6 @@ class Extra extends Model
             ->whereNull('resrv_extras.deleted_at')
             ->whereNotExists(self::unpublishedCategoryQuery())
             ->select('resrv_extras.*', 'resrv_extra_conditions.*');
-    }
-
-    /** The entry's selectable extras priced for one stay (AddonQuote::extras()); $data carries the item_id. */
-    public function scopeGetPriceForDates($query, $data)
-    {
-        return ($data instanceof Reservation ? AddonQuote::forReservation($data) : new AddonQuote($data['item_id'], [$data], $data['customer'] ?? null))->extras();
     }
 
     protected function getRelativePrice($data)

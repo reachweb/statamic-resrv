@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Enums\AddonBlocker;
 use Reach\StatamicResrv\Facades\Price;
-use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCondition;
 use Reach\StatamicResrv\Models\Option;
@@ -73,7 +72,7 @@ class AddonQuote
     /**
      * Price a selection. Extra rows carry 'id' and 'quantity', option rows 'id' and 'value'; other keys
      * pass through. A row the entry can book gets its 'price': an extra's for one unit, plus its line
-     * as 'total' above one unit (EnabledExtras::lineTotal()), an option's for its value. A row it
+     * as 'total' above one unit (rowTotal()), an option's for its value. A row it
      * can't book keeps what it had, and 'blockers' says why, in row order, with the row and its extra
      * when there is one; each flow words them. The totals add up the rows it can book.
      *
@@ -112,7 +111,7 @@ class AddonQuote
                 $row['total'] = $this->lineTotal($extra, $quantity)->format();
             }
 
-            $extrasTotal->add(EnabledExtras::lineTotal($row));
+            $extrasTotal->add(self::rowTotal($row));
 
             return $row;
         });
@@ -215,6 +214,20 @@ class AddonQuote
         return $this->customer !== null
             && $extra->price_type === 'custom'
             && ! is_numeric($this->customer->get($extra->custom));
+    }
+
+    /**
+     * What a selected extra row adds to the total: its line as 'total' when price() carried one (a
+     * dynamic-pricing minimum/maximum clamps the line, so it is not price × quantity), else price ×
+     * quantity.
+     */
+    public static function rowTotal(array $extra): PriceClass
+    {
+        if (isset($extra['total'])) {
+            return Price::create($extra['total']);
+        }
+
+        return Price::create($extra['price'])->multiply($extra['quantity']);
     }
 
     /** Why $quantity units of $extra can't be booked, or null. */

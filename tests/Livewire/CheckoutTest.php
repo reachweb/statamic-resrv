@@ -28,6 +28,7 @@ use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\Support\FakeRedirectGateway;
 use Reach\StatamicResrv\Tests\Support\UnconstructibleGateway;
@@ -141,7 +142,7 @@ class CheckoutTest extends TestCase
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $extras = ResrvExtra::getPriceForDates($this->reservation);
+        $extras = AddonQuote::forReservation($this->reservation)->extras();
 
         $component = Livewire::test(Checkout::class)
             ->dispatch('extras-updated', [$extras->first()->id => [
@@ -170,7 +171,7 @@ class CheckoutTest extends TestCase
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $extras = ResrvExtra::getPriceForDates($this->reservation);
+        $extras = AddonQuote::forReservation($this->reservation)->extras();
 
         $component = Livewire::test(Checkout::class)
             ->dispatch('extras-updated', [$extras->first()->id => [
@@ -213,7 +214,7 @@ class CheckoutTest extends TestCase
     {
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $extras = ResrvExtra::getPriceForDates($this->reservation);
+        $extras = AddonQuote::forReservation($this->reservation)->extras();
 
         $component = Livewire::test(Checkout::class, ['enableExtrasStep' => false])
             ->assertSet('step', 2)
@@ -618,7 +619,7 @@ class CheckoutTest extends TestCase
 
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $extras = ResrvExtra::getPriceForDates($this->reservation);
+        $extras = AddonQuote::forReservation($this->reservation)->extras();
 
         $component = Livewire::test(Checkout::class)
             ->dispatch('extras-updated', [$extras->first()->id => [
@@ -651,7 +652,7 @@ class CheckoutTest extends TestCase
 
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $extras = ResrvExtra::getPriceForDates($this->reservation);
+        $extras = AddonQuote::forReservation($this->reservation)->extras();
 
         $component = Livewire::test(Checkout::class)
             ->dispatch('extras-updated', [$extras->first()->id => [
@@ -693,7 +694,7 @@ class CheckoutTest extends TestCase
 
         session(['resrv_reservation' => $reservation->id]);
 
-        $extras = ResrvExtra::getPriceForDates($reservation);
+        $extras = AddonQuote::forReservation($reservation)->extras();
 
         $component = Livewire::test(Checkout::class)
             ->dispatch('extras-updated', [$extras->first()->id => [
@@ -920,7 +921,7 @@ class CheckoutTest extends TestCase
 
         session(['resrv_reservation' => $this->reservation->id]);
 
-        $extras = ResrvExtra::getPriceForDates($this->reservation);
+        $extras = AddonQuote::forReservation($this->reservation)->extras();
 
         $component = Livewire::test(Checkout::class)
             ->dispatch('extras-updated', [$extras->first()->id => [
@@ -2435,7 +2436,7 @@ class CheckoutTest extends TestCase
         $this->assertSame([], $gateway->cancelledIntents);
 
         // Tab B adds an extra, but the provider won't void tab A's intent: nothing is written.
-        $extras = ResrvExtra::getPriceForDates($this->reservation);
+        $extras = AddonQuote::forReservation($this->reservation)->extras();
         $addExtra = [$extras->first()->id => [
             'id' => $extras->first()->id,
             'quantity' => 1,

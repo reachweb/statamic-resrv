@@ -24,6 +24,7 @@ use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -228,7 +229,7 @@ class ManualReservationCpTest extends TestCase
 
         // Sanity: the raw extras listing DOES discount, so the endpoint's coupon-free scope must be what blocks it.
         session(['resrv_coupon' => '20OFF']);
-        $this->assertSame('7.44', Extra::getPriceForDates($priceData)->first()->price->format());
+        $this->assertSame('7.44', (new AddonQuote($priceData['item_id'], [$priceData]))->extras()->first()->price->format());
 
         $response = $this->withSession(['resrv_coupon' => '20OFF'])
             ->postJson(cp_route('resrv.manual.quote'), array_merge($priceData, [

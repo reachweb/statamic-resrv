@@ -61,10 +61,7 @@ trait HandlesExtrasQueries
      */
     protected function getMultiSelectionsFromSession(): ?array
     {
-        // property_exists guard: this trait is also used by Checkout, which
-        // does not declare $useMultiSelections. Touching a typed property that
-        // does not exist on the host class would otherwise raise an error.
-        if (! property_exists($this, 'useMultiSelections') || ! $this->useMultiSelections) {
+        if (! $this->useMultiSelections) {
             return null;
         }
 

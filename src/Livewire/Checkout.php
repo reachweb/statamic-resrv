@@ -34,8 +34,6 @@ use Reach\StatamicResrv\Support\AddonQuote;
 class Checkout extends Component
 {
     use Traits\HandlesDirectGatewayPayment,
-        Traits\HandlesExtrasQueries,
-        Traits\HandlesOptionsQueries,
         Traits\HandlesPricing,
         Traits\HandlesReservationConfirmation,
         Traits\HandlesReservationQueries,

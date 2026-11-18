@@ -335,14 +335,14 @@ class AvailabilityMultiResults extends Component
     public function updateExtras($extras): void
     {
         $this->enabledExtras->extras = collect($extras);
-        $this->priceAddons();
+        $this->priceExtras();
     }
 
     #[On('options-updated')]
     public function updateOptions($options): void
     {
         $this->enabledOptions->options = collect($options);
-        $this->priceAddons();
+        $this->priceOptions();
     }
 
     protected function recalculateAddonPricing(): void
@@ -354,24 +354,27 @@ class AvailabilityMultiResults extends Component
             return;
         }
 
-        $this->priceAddons();
+        $this->priceExtras();
+        $this->priceOptions();
     }
 
     /**
-     * Price the selected add-ons for every stay in the cart. A selection the entry can no longer
+     * Price the selected extras for every stay in the cart. A selection the entry can no longer
      * book keeps its stored price; the checkout rejects it with an explicit error.
      */
-    protected function priceAddons(): void
+    protected function priceExtras(): void
     {
-        if (empty($this->selections)) {
-            return;
+        if (! empty($this->selections)) {
+            $this->enabledExtras->extras = (new AddonQuote($this->entryId, $this->selections))->price($this->enabledExtras->extras)['extras'];
         }
+    }
 
-        $addons = (new AddonQuote($this->entryId, $this->selections))
-            ->price($this->enabledExtras->extras, $this->enabledOptions->options);
-
-        $this->enabledExtras->extras = $addons['extras'];
-        $this->enabledOptions->options = $addons['options'];
+    /** The same for the selected options. */
+    protected function priceOptions(): void
+    {
+        if (! empty($this->selections)) {
+            $this->enabledOptions->options = (new AddonQuote($this->entryId, $this->selections))->price([], $this->enabledOptions->options)['options'];
+        }
     }
 
     public function render()
