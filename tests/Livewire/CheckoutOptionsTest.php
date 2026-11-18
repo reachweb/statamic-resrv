@@ -302,6 +302,33 @@ class CheckoutOptionsTest extends TestCase
         ]);
     }
 
+    // A JSON true passes the integer rule and loosely equals every id, but pricing and the pivot
+    // read it as id 1, so it must be checked as id 1: here a value that is not published.
+    public function test_it_rejects_a_boolean_option_value_that_resolves_to_an_unpublished_value()
+    {
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        $hidden = $this->options->values->first();
+        OptionValue::whereKey($hidden->id)->update(['id' => 1, 'published' => false]);
+        OptionValue::factory()->create(['option_id' => $this->options->id]);
+
+        Livewire::test(Checkout::class)
+            ->dispatch('options-updated', [$this->options->id => [
+                'id' => $this->options->id,
+                'value' => true,
+                'price' => $hidden->priceForDates($this->reservation),
+                'optionName' => $this->options->name,
+                'valueName' => $hidden->name,
+            ]])
+            ->call('handleFirstStep')
+            ->assertHasErrors('options')
+            ->assertSet('step', 1);
+
+        $this->assertDatabaseMissing('resrv_reservation_option', [
+            'reservation_id' => $this->reservation->id,
+        ]);
+    }
+
     // The 'resrv-options' session key is never cleared, so a selection made on another entry's page
     // can reach this checkout; an option that is not this entry's is never listed here and must be
     // rejected (checkForRequiredOptions() already scopes by entry — validation must agree).

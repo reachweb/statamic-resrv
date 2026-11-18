@@ -1301,7 +1301,9 @@ class Reservation extends Model
         $model = Option::entry($statamic_id)->selectable()->find($option['id'])
             ?? throw new OptionsException(__('The selected option is not valid.'));
 
-        if (! $model->values->contains('id', $option['value'] ?? null)) {
+        // Check the id pricing and the pivot will use: a JSON true passes the integer rule and
+        // loosely equals every id, but the database reads it as id 1.
+        if (! $model->values->contains('id', (int) ($option['value'] ?? 0))) {
             throw new OptionsException(__('The selected option value is not valid.'));
         }
 
