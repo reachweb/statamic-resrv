@@ -4,7 +4,7 @@ This document provides step-by-step instructions for updating a custom payment g
 
 ## Background
 
-Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Step 14 covers what your webhook must do for admin-created (manual) reservations, which are paid from a pay-by-link page instead of the checkout. Step 15 closes a data exposure in the documented `handlePaymentPending()` body and applies to every gateway. Step 4 now hands a successful payment to Resrv's `confirmFromGateway()`, which replaces the confirm and orphan-alert code that Steps 9, 10 and 14 used to have you write. Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
+Resrv now supports multiple concurrent payment gateways. The `PaymentInterface` has seven new required methods (`name()`, `label()`, `paymentView()`, `supportsManualConfirmation()`, `cancelPaymentIntent()`, `supportsAutomaticRefunds()`, and `retrievePaymentIntent()` — the first four are covered in Step 1, `cancelPaymentIntent()` in Step 9, `supportsAutomaticRefunds()` in Step 11, and `retrievePaymentIntent()` in Step 13), and `paymentIntent()` gained a required 4th parameter, `?string $returnUrl = null` (Step 12). Step 14 covers what your webhook must do for admin-created (manual) reservations, which are paid from a pay-by-link page instead of the checkout. Step 15 closes a data exposure in the documented `handlePaymentPending()` body and applies to every gateway. From v6.6.0, Step 4 hands a successful payment to Resrv's `confirmFromGateway()`, which replaces the confirm and orphan-alert code that Steps 9, 10 and 14 used to have you write. Gateways are registered in `config/resrv-config.php` under the `payment_gateways` key. During checkout, customers pick a gateway from a list, and the selected config key is stored on the reservation's `payment_gateway` column. Webhooks, refunds, and redirect callbacks all resolve the correct gateway using that stored key.
 
 There are two gateway types:
 - **Inline gateways** (e.g. Stripe) — render a payment form directly on the checkout page via a Blade view. `redirectsForPayment()` returns `false`.
@@ -310,7 +310,7 @@ The legacy route (`POST /resrv/api/webhook` without a gateway segment) still wor
 
 ### What `confirmFromGateway()` does
 
-> 📅 Added 2026-11-18. No interface change: gateways that confirm by hand, as earlier revisions of this guide taught, keep working. See *Moving an existing gateway* below.
+> 📅 Added in Resrv v6.6.0. No interface change: gateways that confirm by hand, as earlier revisions of this guide taught, keep working. See *Moving an existing gateway* below.
 
 ```php
 protected function confirmFromGateway(Reservation $reservation, string $paymentId, bool $stale = false, int|string|null $amount = null, ?string $eventId = null, ?Closure $inTransaction = null): bool
@@ -327,11 +327,11 @@ protected function confirmFromGateway(Reservation $reservation, string $paymentI
 It runs these checks in order, and returns `true` only when this call confirmed the reservation:
 
 1. **Stale payment:** logs a warning and emails the admins (`OrphanedPaymentNotification`) for a manual refund, and leaves the reservation untouched, whatever its status. A booking confirmed since through another payment is then paid twice, which is why this check comes before the next one.
-2. **Already confirmed:** a redelivery, so nothing happens.
+2. **Already confirmed:** nothing happens for a redelivery of the payment that confirmed the booking. If another payment confirmed it, emails the admins: the booking's `payment_id` names a different payment, or an admin marked it as paid (**Mark as paid** keeps this payment's id stamped `payment_unresolved` when it can't void it). The customer has then paid twice.
 3. **Terminal reservation** (`expired`, `refunded`, `partner`, or `cancelled` unless it kept this charge on purpose): emails the admins, because the money can't attach to a live booking.
 4. **Amount mismatch:** when `$amount` differs from `payment + payment_surcharge`, emails the admins and doesn't confirm.
 5. **Confirm:** `transitionTo(CONFIRMED, tolerant: true)`, which accepts `pending` (checkout) and `awaiting_payment` (manual reservation) rows alike, then dispatches `ReservationConfirmed` with `VIA_WEBHOOK`, the gateway and the payment id.
-6. **Lost race:** if the row changed under the lock, re-reads it. It emails the admins when the row is now terminal, or confirmed by another payment: its `payment_id` names a different payment, or an admin marked it as paid (Step 10).
+6. **Lost race:** if the row changed under the lock, re-reads it. It emails the admins when the row is now terminal, or confirmed by another payment, as in check 2 (Step 10).
 
 Fixes to any of these land in Resrv, so every gateway that calls the method gets them without a release of its own.
 
@@ -1431,6 +1431,7 @@ Control Panel users can now create reservations for customers. Unless the bookin
 - **Don't pre-filter on `pending`.** Look the reservation up by `payment_id` as usual and hand a successful payment to `confirmFromGateway()` (Step 4). It confirms `pending` and `awaiting_payment` rows alike, so drop any `status === 'pending'` check in front of it.
 - **The activity log records the webhook.** `confirmFromGateway()` dispatches `ReservationConfirmed` with `VIA_WEBHOOK`, the gateway and the payment id, so the log shows how the booking was confirmed. A gateway that confirms by hand must pass the same: `ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, ['gateway' => $reservation->payment_gateway, 'payment_id' => $intentId])`.
 - **Don't end an awaiting-payment reservation on a failed or cancelled intent.** The customer can retry from the same link, and an admin can cancel the booking. `$reservation->expire()` already no-ops on anything but `pending`; don't call any other transition from those events.
+- **A payment after Mark as paid is surfaced.** If an admin marked the booking as paid but Resrv couldn't cancel its open intent, the customer can still pay it. `confirmFromGateway()` then emails the admins that the booking is paid twice, even though the earlier "Open payment intent could not be cancelled" email already warned about the intent.
 - **Late payments are surfaced.** If the hold lapsed and `resrv:cancel-lapsed-holds` cancelled the reservation while the payment was in flight, the row is `cancelled` when your webhook arrives. `confirmFromGateway()` treats `cancelled` as terminal and emails the admins (Step 10).
 
 ### `supportsWebhooks()` gates manual reservations

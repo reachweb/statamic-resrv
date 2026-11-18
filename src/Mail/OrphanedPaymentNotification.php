@@ -12,13 +12,14 @@ use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationEmailDispatcher;
 
 /**
- * Sent when a gateway charge needs manual reconciliation against its reservation. In every case
- * the succeeded webhook sees a non-payable status and no-ops, so this email is the only signal.
- * Cases, distinguished by $context:
+ * Sent when a gateway charge needs manual reconciliation against its reservation. Cases,
+ * distinguished by $context:
  *
  * - default (orphan): a successful webhook arrived for a terminal reservation
- *   (EXPIRED/REFUNDED/CANCELLED/PARTNER) — admins should refund the charge. A CANCELLED
- *   booking that deliberately kept its collected charge (no-refund cancellation) is exempt.
+ *   (EXPIRED/REFUNDED/CANCELLED/PARTNER), for a stale intent, for a mismatched amount, or for a
+ *   booking another payment already confirmed (including one marked as paid out of band) —
+ *   admins should refund the charge. A CANCELLED booking that deliberately kept its collected
+ *   charge (no-refund cancellation) is exempt.
  * - CONTEXT_OUT_OF_BAND_DUPLICATE: an out-of-band CP confirm raced an intent that already
  *   captured money — the booking is paid TWICE.
  * - CONTEXT_OUT_OF_BAND_STILL_PAYABLE: the intent could not be voided and remains completable

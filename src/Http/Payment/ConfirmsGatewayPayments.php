@@ -52,8 +52,10 @@ trait ConfirmsGatewayPayments
             return false;
         }
 
-        // A redelivery for the payment that confirmed the booking.
+        // Already confirmed: a redelivery of the payment that confirmed it does nothing.
         if ($reservation->status === ReservationStatus::CONFIRMED->value) {
+            $this->notifyIfConfirmedByAnotherPayment($reservation, $paymentId, $eventId);
+
             return false;
         }
 
@@ -95,26 +97,35 @@ trait ConfirmsGatewayPayments
         // hold-lapse sweep may have ended it, or another payment confirmed it.
         $reservation->refresh();
 
-        // Confirmed, but not by this payment: payment_id names another one (the customer switched
-        // gateway and paid with it), or an admin marked the booking as paid, which keeps this
-        // payment's id stamped unresolved. Either way this charge is a second payment.
-        if ($reservation->status === ReservationStatus::CONFIRMED->value
-            && ($reservation->payment_id !== $paymentId || $reservation->payment_unresolved)) {
-            Log::warning('Payment succeeded for a reservation another payment confirmed first — manual refund likely required.', [
-                'gateway' => $this->name(),
-                'reservation_id' => $reservation->id,
-                'payment_intent_id' => $paymentId,
-                'current_payment_id' => $reservation->payment_id,
-                'current_payment_gateway' => $reservation->payment_gateway,
-            ]);
+        if (! $this->notifyIfConfirmedByAnotherPayment($reservation, $paymentId, $eventId)) {
+            OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId, $eventId);
+        }
 
-            OrphanedPaymentNotification::dispatchFor($reservation, $paymentId, $eventId);
+        return false;
+    }
 
+    /**
+     * Alert when the booking is confirmed, but not by this payment: payment_id names another one
+     * (the customer switched gateway and paid with it), or an admin marked the booking as paid,
+     * which keeps this payment's id stamped unresolved. This charge is then a second payment.
+     */
+    private function notifyIfConfirmedByAnotherPayment(Reservation $reservation, string $paymentId, ?string $eventId): bool
+    {
+        if ($reservation->status !== ReservationStatus::CONFIRMED->value
+            || ($reservation->payment_id === $paymentId && ! $reservation->payment_unresolved)) {
             return false;
         }
 
-        OrphanedPaymentNotification::notifyIfOrphaned($reservation, $paymentId, $eventId);
+        Log::warning('Payment succeeded for a reservation another payment already confirmed — manual refund likely required.', [
+            'gateway' => $this->name(),
+            'reservation_id' => $reservation->id,
+            'payment_intent_id' => $paymentId,
+            'current_payment_id' => $reservation->payment_id,
+            'current_payment_gateway' => $reservation->payment_gateway,
+        ]);
 
-        return false;
+        OrphanedPaymentNotification::dispatchFor($reservation, $paymentId, $eventId);
+
+        return true;
     }
 }
