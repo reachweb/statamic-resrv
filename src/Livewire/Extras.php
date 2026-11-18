@@ -14,6 +14,7 @@ use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Traits\HandlesExtrasQueries;
 use Reach\StatamicResrv\Livewire\Traits\HandlesStatamicQueries;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 
 class Extras extends Component
 {
@@ -82,7 +83,7 @@ class Extras extends Component
             // for a previous search or cart state). Keep the selection but re-derive
             // the prices for the current context before broadcasting them.
             if ($this->canPriceSelection()) {
-                $this->updateEnabledExtraPrices();
+                $this->repriceSelection();
             }
             $this->dispatchExtrasUpdated();
         } else {
@@ -95,15 +96,11 @@ class Extras extends Component
     #[Computed(persist: true)]
     public function extras(): Collection
     {
-        $multiSelections = isset($this->reservation) ? null : $this->getMultiSelectionsFromSession();
+        $extras = $this->addonQuote()->extras();
 
-        if ($multiSelections !== null) {
-            $extras = $this->getExtrasForSelections($multiSelections, $this->entryId);
-        } else {
-            $extras = isset($this->reservation)
-                ? $this->getExtrasForReservation()
-                : $this->getExtrasForSearch($this->searchDataForPricing(), $this->entryId);
-        }
+        $this->loadConditionsAsCollection($extras);
+
+        $this->handleExtrasConditions($extras);
 
         if (is_string($this->filter)) {
             $extrasToShow = explode('|', $this->filter);
@@ -186,8 +183,15 @@ class Extras extends Component
         $originalExtra = $this->extras->firstWhere('id', $extraId);
 
         if ($quantity > 0 && $originalExtra->quantityError($quantity) === null) {
+            // A line total belongs to the quantity it was priced for (EnabledExtras::lineTotal()).
             $extra['quantity'] = $quantity;
-            $this->enabledExtras->extras->put($extraId, $this->withExtraLineTotal($extra));
+            unset($extra['total']);
+
+            if ($this->canPriceSelection()) {
+                $extra = $this->addonQuote()->price([$extra])['extras']->first();
+            }
+
+            $this->enabledExtras->extras->put($extraId, $extra);
         }
 
         $this->dispatchExtrasUpdated();
@@ -262,7 +266,7 @@ class Extras extends Component
         }
 
         if ($this->enabledExtras->extras->count() !== 0) {
-            $this->updateEnabledExtraPrices();
+            $this->repriceSelection();
             $this->dispatchExtrasUpdated();
         }
     }
@@ -305,9 +309,25 @@ class Extras extends Component
         unset($this->frontendExtras);
 
         if ($this->enabledExtras->extras->count() !== 0) {
-            $this->updateEnabledExtraPrices();
+            $this->repriceSelection();
             $this->dispatchExtrasUpdated();
         }
+    }
+
+    /** Prices for the reservation, else the multi-results cart, else the search. */
+    protected function addonQuote(): AddonQuote
+    {
+        if (isset($this->reservation)) {
+            return AddonQuote::forReservation($this->reservation);
+        }
+
+        return new AddonQuote($this->entryId, $this->getMultiSelectionsFromSession() ?? [$this->searchDataForPricing()]);
+    }
+
+    /** Price the selection for the current context. A row the entry can't book keeps its price: the checkout rejects it. */
+    protected function repriceSelection(): void
+    {
+        $this->enabledExtras->extras = $this->addonQuote()->price($this->enabledExtras->extras)['extras'];
     }
 
     /**
@@ -336,7 +356,7 @@ class Extras extends Component
         $this->updateExtraConditions();
 
         if ($this->enabledExtras->extras->count() !== 0) {
-            $this->updateEnabledExtraPrices();
+            $this->repriceSelection();
             $this->dispatchExtrasUpdated();
         }
     }

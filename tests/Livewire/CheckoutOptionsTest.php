@@ -331,7 +331,7 @@ class CheckoutOptionsTest extends TestCase
 
     // The 'resrv-options' session key is never cleared, so a selection made on another entry's page
     // can reach this checkout; an option that is not this entry's is never listed here and must be
-    // rejected (checkForRequiredOptions() already scopes by entry — validation must agree).
+    // rejected (the required-options check already scopes by entry — validation must agree).
     public function test_it_rejects_a_selected_option_that_belongs_to_another_entry()
     {
         session(['resrv_reservation' => $this->reservation->id]);

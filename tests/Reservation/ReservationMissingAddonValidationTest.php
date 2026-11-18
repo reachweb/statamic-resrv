@@ -287,7 +287,7 @@ class ReservationMissingAddonValidationTest extends TestCase
         $reservation->validateTotal($data, $this->entry->id());
     }
 
-    // The CP only accepts published values (ManualReservationCreator::priceOptions()); a value
+    // The CP only accepts published values (AddonQuote::price()); a value
     // unpublished after it was selected is no longer on offer and must not be bought.
     public function test_an_unpublished_option_value_is_rejected_with_an_options_error()
     {

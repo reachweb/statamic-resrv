@@ -255,7 +255,7 @@ class OptionValueUnitsPerAddonTest extends TestCase
     }
 
     // Option::calculatePrice($data, $valueId) is the entry point used by
-    // Reservation::extraCharges() / validateExtraCharges().
+    // Reservation::extraCharges() and AddonQuote.
     public function test_option_calculate_price_entry_point_applies_the_divisor()
     {
         $divisorData = $this->data(2, $this->divisorRate->id);

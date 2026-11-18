@@ -18,8 +18,8 @@ class EnabledExtras extends Form
     {
         $this->validate();
 
-        // Snapshot both, like the CP (ManualReservationCreator::priceExtras()): the unit price
-        // listed and the line charged, which Extra::priceFromPivot() renders.
+        // Snapshot both, like the CP (ManualReservationCreator::create()): the unit price listed
+        // and the line charged, which Extra::priceFromPivot() renders.
         return $this->extras->mapWithKeys(function ($extra) {
             return [
                 $extra['id'] => [
@@ -32,12 +32,11 @@ class EnabledExtras extends Form
     }
 
     /**
-     * The amount a selected extra adds to the total. A line priced against the reservation
-     * carries it as 'total' (Extra::calculatePrice(), see HandlesExtrasQueries::withExtraLineTotal()):
-     * once a dynamic-pricing minimum/maximum binds it is not price × quantity, because
-     * priceForDates() clamps the unit and calculatePrice() the line. Any other line is linear.
+     * The amount a selected extra adds to the total. A line above one unit carries it as 'total'
+     * (AddonQuote::price()): once a dynamic-pricing minimum/maximum binds it is not price × quantity,
+     * because priceForDates() clamps the unit and calculatePrice() the line.
      */
-    public function lineTotal(array $extra): PriceClass
+    public static function lineTotal(array $extra): PriceClass
     {
         if (isset($extra['total'])) {
             return Price::create($extra['total']);

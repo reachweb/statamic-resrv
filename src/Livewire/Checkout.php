@@ -26,11 +26,10 @@ use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
 use Reach\StatamicResrv\Models\DynamicPricing;
-use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Option;
-use Reach\StatamicResrv\Models\OptionValue;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\AddonQuote;
 
 class Checkout extends Component
 {
@@ -165,8 +164,8 @@ class Checkout extends Component
      * be a stale snapshot (e.g. extras priced at a previous search quantity after a
      * multi-cart selection changed it) — trusting them makes validateTotal() throw
      * ReservationDriftException on mount with no way for the customer to recover.
-     * Prices are recomputed the same way Reservation::validateExtraCharges() does
-     * (per child for parent reservations) so the two totals always agree.
+     * A selection the entry can't book is left as it is, so that validation reports it
+     * rather than the selection silently un-booking itself.
      */
     protected function repriceEnabledAddons(): void
     {
@@ -174,56 +173,11 @@ class Checkout extends Component
             return;
         }
 
-        $reservation = $this->reservation;
+        $addons = AddonQuote::forReservation($this->reservation)
+            ->price($this->enabledExtras->extras, $this->enabledOptions->options);
 
-        $datasets = $reservation->addonPricingData();
-
-        // Resolve extras through the query Reservation::extraForValidation() uses — the entry's
-        // selectable extras — so a selection carried over from another entry is never priced here.
-        $entry = ResrvEntry::query()->itemId($reservation->item_id)->first();
-
-        $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($entry, $reservation) {
-            // Conditions are not needed to price.
-            $extraModel = $entry?->extras()->selectable()->without('conditions')->find($extra['id']);
-
-            // Leave unresolvable extras untouched — extraForValidation() raises the designed
-            // ExtrasException for them during validation, so the stale selection must reach
-            // it rather than be dropped here and silently un-book itself.
-            if (! $extraModel) {
-                return $extra;
-            }
-
-            $extra['price'] = $reservation->extraUnitPrice($extraModel)->format();
-
-            // One unit's line is its price (EnabledExtras::lineTotal()), as in withExtraLineTotal(),
-            // so only a larger quantity is priced again as a line.
-            unset($extra['total']);
-            if ((int) $extra['quantity'] > 1) {
-                $extra['total'] = $reservation->extraLineTotal($extraModel, (int) $extra['quantity'])->format();
-            }
-
-            return $extra;
-        });
-
-        $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($datasets) {
-            $value = OptionValue::find($option['value']);
-
-            // Leave unresolvable values untouched — optionForValidation() raises the designed
-            // OptionsException for them during validation.
-            if (! $value) {
-                return $option;
-            }
-
-            $totalPrice = Price::create(0);
-
-            foreach ($datasets as $data) {
-                $totalPrice->add(Price::create($value->priceForDates($data)));
-            }
-
-            $option['price'] = $totalPrice->format();
-
-            return $option;
-        });
+        $this->enabledExtras->extras = $addons['extras'];
+        $this->enabledOptions->options = $addons['options'];
     }
 
     /**
@@ -874,10 +828,12 @@ class Checkout extends Component
                     'total' => $extra->priceFromPivot(),
                 ]]);
 
+                $quote = AddonQuote::forReservation($this->reservation);
+
                 $this->enabledOptions->options = $this->reservation->optionsForEmail()->mapWithKeys(fn (Option $option) => [$option->id => [
                     'id' => $option->id,
                     'value' => (int) $option->pivot->value,
-                    'price' => $this->reservation->bookedOptionPrice($option)->format(),
+                    'price' => $quote->optionPrice($option, $option->pivot->value)->format(),
                     'optionName' => $option->name,
                     'valueName' => $option->values->firstWhere('id', $option->pivot->value)?->name,
                 ]]);

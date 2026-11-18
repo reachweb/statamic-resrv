@@ -53,11 +53,10 @@ class Option extends Model
     public function calculatePrice($data, $value)
     {
         // withTrashed() so historical reservations referencing a soft-deleted value still price
-        // (mirrors the Extra path in Reservation::extraCharges). Checkout selections are vetted
-        // first by Reservation::optionForValidation() (a live value of this option), so a value
-        // that is still unresolved here is a broken pivot (e.g. a hard-deleted value) and must
-        // throw rather than price as free — otherwise a required/paid option could be synced at
-        // no charge.
+        // (mirrors the Extra path in Reservation::extraCharges). New selections are vetted first
+        // by AddonQuote::price() (a published value of this option), so a value that is still
+        // unresolved here is a broken pivot (e.g. a hard-deleted value) and must throw rather
+        // than price as free — otherwise a required/paid option could be synced at no charge.
         $value = $this->values()->withTrashed()->find($value);
 
         if (! $value) {
@@ -73,9 +72,9 @@ class Option extends Model
     }
 
     /**
-     * The options a customer can pick: published, with only their published values loaded. The
-     * checkout lists these, the CP create form offers them, and both validate a chosen value
-     * against the loaded values (values() also returns unpublished ones).
+     * The options a customer can pick: published, with only their published values loaded.
+     * AddonQuote lists these and validates a chosen value against the loaded values (values()
+     * also returns unpublished ones).
      */
     public function scopeSelectable($query)
     {

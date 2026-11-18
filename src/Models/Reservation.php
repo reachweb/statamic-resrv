@@ -15,7 +15,6 @@ use Illuminate\Support\Str;
 use Reach\StatamicResrv\Database\Factories\ReservationFactory;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
 use Reach\StatamicResrv\Enums\ReservationStatus;
-use Reach\StatamicResrv\Enums\ReservationTypes;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
@@ -25,8 +24,8 @@ use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
-use Reach\StatamicResrv\Models\Entry as ResrvEntry;
 use Reach\StatamicResrv\Money\Price as PriceClass;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Support\CheckoutFormResolver;
 use Statamic\Contracts\Entries\Entry as EntryContract;
 use Statamic\Facades\Entry;
@@ -1004,49 +1003,15 @@ class Reservation extends Model
         return (int) $this->date_start->copy()->startOfDay()->diffInDays($this->date_end->copy()->startOfDay(), true);
     }
 
+    /** What the booked add-ons cost for this reservation's stays today. */
     public function extraCharges()
     {
-        if ($this->isParent()) {
-            return $this->parentExtraCharges();
-        }
+        $quote = AddonQuote::forReservation($this);
 
-        $data = $this->buildDataArray();
-        $data['item_id'] = $this->item_id;
-
-        $optionsCost = Price::create(0);
-        foreach ($this->options()->get() as $option) {
-            $optionsCost->add($option->calculatePrice($data, $option->pivot->value));
-        }
-
-        $extrasCost = Price::create(0);
-        foreach ($this->extras()->get() as $extra) {
-            $extrasCost->add($extra->calculatePrice($data, $extra->pivot->quantity));
-        }
-
-        return Price::create(0)->add($optionsCost, $extrasCost);
-    }
-
-    protected function parentExtraCharges()
-    {
-        $totalCharges = Price::create(0);
-
-        foreach ($this->childs as $child) {
-            $data = $this->buildChildDataArray($child);
-
-            // Fresh instances per child: OptionValue::calculatePrice mutates $this->price via
-            // Price::multiply(), so reusing the same Option across children compounds the result.
-            foreach ($this->options()->with('values')->get() as $option) {
-                $totalCharges->add($option->calculatePrice($data, $option->pivot->value));
-            }
-
-            foreach ($this->extras()->get() as $extra) {
-                // Fresh instance via withTrashed(): Extra::calculatePrice mutates price,
-                // and soft-deleted extras on historical reservations must still be priced.
-                $totalCharges->add(Extra::withTrashed()->find($extra->id)->calculatePrice($data, $extra->pivot->quantity));
-            }
-        }
-
-        return $totalCharges;
+        return Price::create(0)->add(
+            ...$this->extras()->get()->map(fn (Extra $extra) => $quote->lineTotal($extra, (int) $extra->pivot->quantity))->all(),
+            ...$this->options()->get()->map(fn (Option $option) => $quote->optionPrice($option, $option->pivot->value))->all(),
+        );
     }
 
     public function getPrices()
@@ -1058,39 +1023,21 @@ class Reservation extends Model
     {
         $this->validateTotal($data, $statamic_id);
 
-        if ($this->type === ReservationTypes::PARENT->value) {
-            $this->checkMaxQuantity($this->childs->sum('quantity'));
-        } else {
-            $this->checkMaxQuantity($data['quantity']);
-        }
+        $this->checkMaxQuantity($this->isParent() ? $this->childs->sum('quantity') : $data['quantity']);
 
-        if ($checkOptions && ! $this->checkForRequiredOptions($statamic_id, $data)) {
+        $quote = $this->addonQuoteFor($data, $statamic_id);
+        $extras = collect($data['extras'] ?? []);
+        $options = collect($data['options'] ?? []);
+
+        if ($checkOptions && $quote->missingRequiredOptions($options)->isNotEmpty()) {
             throw new OptionsException(__('There are required options you did not select.'));
         }
 
-        if ($checkExtras) {
-            $requiredExtras = $this->checkForRequiredExtras($statamic_id, $data);
-            if ($requiredExtras) {
-                throw new ExtrasException($requiredExtras);
-            }
+        if ($checkExtras && ($missing = $quote->missingRequiredExtras($extras, $options))->isNotEmpty()) {
+            throw new ExtrasException($missing->map(fn ($messages, $extraId) => 'ID '.$extraId.' '.$messages->implode(' '))->implode(', '));
         }
 
         return true;
-    }
-
-    /**
-     * The stays this reservation's add-ons are priced for, shaped as Checkout's validation prices
-     * them (validateExtraCharges()): its own stay, or one per child of a parent.
-     */
-    public function addonPricingData(): array
-    {
-        $customer = $this->customerData ?? collect();
-
-        if ($this->isParent()) {
-            return $this->childs->map(fn (ChildReservation $child) => array_merge($this->buildChildDataArray($child), ['customer' => $customer]))->all();
-        }
-
-        return [array_merge($this->buildDataArray(), ['item_id' => $this->item_id, 'customer' => $customer])];
     }
 
     /**
@@ -1100,29 +1047,12 @@ class Reservation extends Model
      */
     public function bookedAddonsTotal(): PriceClass
     {
-        $total = Price::create(0);
+        $quote = AddonQuote::forReservation($this);
 
-        foreach ($this->extras()->get() as $extra) {
-            $total->add(Price::create($extra->priceFromPivot()));
-        }
-
-        foreach ($this->options()->get() as $option) {
-            $total->add($this->bookedOptionPrice($option));
-        }
-
-        return $total;
-    }
-
-    /** What a booked option, loaded with its pivot, adds for this reservation's stays. */
-    public function bookedOptionPrice(Option $option): PriceClass
-    {
-        $total = Price::create(0);
-
-        foreach ($this->addonPricingData() as $data) {
-            $total->add($option->calculatePrice($data, $option->pivot->value));
-        }
-
-        return $total;
+        return Price::create(0)->add(
+            ...$this->extras()->get()->map(fn (Extra $extra) => Price::create($extra->priceFromPivot()))->all(),
+            ...$this->options()->get()->map(fn (Option $option) => $quote->optionPrice($option, $option->pivot->value))->all(),
+        );
     }
 
     /**
@@ -1131,50 +1061,21 @@ class Reservation extends Model
      */
     public function repriceBookedExtras(): void
     {
-        $customer = $this->customerData;
+        $quote = AddonQuote::forReservation($this);
 
         foreach ($this->extras()->get() as $extra) {
             // A custom-priced extra multiplies by a customer field. The checkout form saves only its
             // own fields, so one missing from it is gone once the form is submitted, and a visible
-            // one may hold text: keep the line step 1 validated (the CP's create form does the same).
-            if ($extra->price_type === 'custom' && ! is_numeric($customer->get($extra->custom))) {
+            // one may hold text: keep the line step 1 validated.
+            if ($quote->lacksCustomPriceField($extra)) {
                 continue;
             }
 
             $this->extras()->updateExistingPivot($extra->id, [
-                'price' => $this->extraUnitPrice($extra)->format(),
-                'total' => $this->extraLineTotal($extra, (int) $extra->pivot->quantity)->format(),
+                'price' => $quote->unitPrice($extra)->format(),
+                'total' => $quote->lineTotal($extra, (int) $extra->pivot->quantity)->format(),
             ]);
         }
-    }
-
-    /** The price of one unit of $extra for this reservation's stays. */
-    public function extraUnitPrice(Extra $extra): PriceClass
-    {
-        $total = Price::create(0);
-
-        foreach ($this->addonPricingData() as $data) {
-            // Fresh clone per stay: priceForDates() writes dynamic pricing back into price.
-            $total->add(Price::create((clone $extra)->priceForDates($data)));
-        }
-
-        return $total;
-    }
-
-    /**
-     * The line charged for $quantity of $extra. Not price × quantity once a dynamic-pricing
-     * minimum/maximum binds: priceForDates() clamps the unit, calculatePrice() the line.
-     */
-    public function extraLineTotal(Extra $extra, int $quantity): PriceClass
-    {
-        $total = Price::create(0);
-
-        foreach ($this->addonPricingData() as $data) {
-            // Fresh clone per stay: calculatePrice() writes dynamic pricing back into price.
-            $total->add((clone $extra)->calculatePrice($data, $quantity));
-        }
-
-        return $total;
     }
 
     protected function buildDataArray()
@@ -1184,18 +1085,6 @@ class Reservation extends Model
             'date_end' => $this->date_end,
             'quantity' => $this->quantity,
             'rate_id' => $this->rate_id,
-        ];
-    }
-
-    protected function buildChildDataArray(ChildReservation $child): array
-    {
-        return [
-            'date_start' => $child->date_start,
-            'date_end' => $child->date_end,
-            'quantity' => $child->quantity,
-            'rate_id' => $child->rate_id,
-            'item_id' => $this->item_id,
-            'customer' => $this->customerData,
         ];
     }
 
@@ -1224,194 +1113,42 @@ class Reservation extends Model
         }
     }
 
+    /**
+     * Check that $data['total'] is what the stays and the selected add-ons cost now. The selection is
+     * session-backed, so it can outlive the moment an extra or option value stopped being bookable
+     * (deleted, unpublished, detached or moved into an unpublished category; the session key can even
+     * come from another entry's page): such a selection gets an extras or options error.
+     */
     public function validateTotal($data, $statamic_id)
     {
-        if ($this->type === ReservationTypes::PARENT->value) {
-            $reservationCost = Price::create(0);
-            foreach ($this->childs as $child) {
-                $childPrices = (new Availability)->getPricing([
-                    'date_start' => $child->date_start,
-                    'date_end' => $child->date_end,
-                    'quantity' => $child->quantity,
-                    'rate_id' => $child->rate_id,
-                ], $statamic_id);
-                if ($childPrices === false) {
-                    throw new ReservationDriftException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
-                }
-                $reservationCost->add(Price::create($childPrices['price']));
-            }
-        } else {
-            $prices = (new Availability)->getPricing($data, $statamic_id);
+        $quote = $this->addonQuoteFor($data, $statamic_id);
+        $total = Price::create(0);
+
+        foreach ($quote->stays as $stay) {
+            $prices = (new Availability)->getPricing($stay, $statamic_id);
             if ($prices === false) {
                 throw new ReservationDriftException(__('This item is not available anymore or the price has changed. Please refresh and try searching again!'));
             }
-            $reservationCost = Price::create($prices['price']);
+            $total->add(Price::create($prices['price']));
         }
 
-        $dbTotal = $reservationCost->add($this->validateExtraCharges($data, $statamic_id));
-        $frontendTotal = $data['total'];
+        $addons = $quote->price($data['extras'] ?? [], $data['options'] ?? []);
 
-        if (! $dbTotal->equals($frontendTotal)) {
+        if ($error = $addons['errors'][0] ?? null) {
+            throw $error['field'] === 'options' ? new OptionsException($error['message']) : new ExtrasException($error['message']);
+        }
+
+        if (! $total->add($addons['extras_total'], $addons['options_total'])->equals($data['total'])) {
             throw new ReservationDriftException(__('The price for that reservation has changed. Please refresh and try again!'));
         }
 
         return true;
     }
 
-    protected function validateExtraCharges($data, $statamic_id)
+    /** The add-ons of $data for its stay, or for each child of a parent, priced with the customer's data. */
+    protected function addonQuoteFor($data, $statamic_id): AddonQuote
     {
-        if ($this->isParent()) {
-            return $this->validateParentExtraCharges($data, $statamic_id);
-        }
-
-        $extraCharges = Price::create(0);
-
-        $optionsCost = Price::create(0);
-        if (array_key_exists('options', $data) && $data['options']->count() > 0) {
-            $data['options']->each(function ($option) use ($data, $optionsCost, $statamic_id) {
-                $optionsCost->add($this->optionForValidation($option, $statamic_id)->calculatePrice($data, $option['value']));
-            });
-        }
-
-        $extrasCost = Price::create(0);
-        if (array_key_exists('extras', $data) && $data['extras']->count() > 0) {
-            // The extra class needs the entry id to calculate the price
-            $data['item_id'] = $statamic_id;
-            $data['extras']->each(function ($extra) use ($data, $extrasCost, $statamic_id) {
-                $extrasCost->add($this->extraForValidation($extra, $statamic_id)->calculatePrice($data, $extra['quantity']));
-            });
-        }
-
-        return $extraCharges->add($optionsCost, $extrasCost);
-    }
-
-    /**
-     * A checkout selection is session-backed, so it can outlive the moment the extra was deleted,
-     * unpublished, detached from the entry or moved into an unpublished category (and the
-     * 'resrv-extras' key is never cleared, so it can even come from another entry's page). It must
-     * resolve through the exact query the Extras component lists — the entry's extras() under
-     * Extra::scopeSelectable() — or the checkout gets an explicit error instead of a null
-     * dereference or a silent sale. Historical pricing (extraCharges()) is the withTrashed() path.
-     */
-    protected function extraForValidation(array $extra, $statamic_id): Extra
-    {
-        return ResrvEntry::query()->itemId($statamic_id)->first()
-            ?->extras()->selectable()->find($extra['id'])
-            ?? throw new ExtrasException(__('The selected extra is not available anymore.'));
-    }
-
-    /**
-     * Same for options: the option must be the entry's and published, exactly what
-     * HandlesOptionsQueries::getOptionsForId() lists, and the chosen value must be a published,
-     * live value of that option — the list renders only published values under the soft-delete
-     * scope, while Option::calculatePrice() resolves values withTrashed() for historical pricing,
-     * so a deleted, unpublished (or tampered) value has to be rejected here, before pricing.
-     */
-    protected function optionForValidation(array $option, $statamic_id): Option
-    {
-        $model = Option::entry($statamic_id)->selectable()->find($option['id'])
-            ?? throw new OptionsException(__('The selected option is not valid.'));
-
-        // Check the id pricing and the pivot will use: a JSON true passes the integer rule and
-        // loosely equals every id, but the database reads it as id 1.
-        if (! $model->values->contains('id', (int) ($option['value'] ?? 0))) {
-            throw new OptionsException(__('The selected option value is not valid.'));
-        }
-
-        return $model;
-    }
-
-    protected function validateParentExtraCharges($data, $statamic_id)
-    {
-        $totalCharges = Price::create(0);
-
-        foreach ($this->childs as $child) {
-            $childData = $this->buildChildDataArray($child);
-            if (array_key_exists('customer', $data)) {
-                $childData['customer'] = $data['customer'];
-            }
-
-            if (array_key_exists('options', $data) && $data['options']->count() > 0) {
-                $data['options']->each(function ($option) use ($childData, $totalCharges, $statamic_id) {
-                    $totalCharges->add($this->optionForValidation($option, $statamic_id)->calculatePrice($childData, $option['value']));
-                });
-            }
-
-            if (array_key_exists('extras', $data) && $data['extras']->count() > 0) {
-                $data['extras']->each(function ($extra) use ($childData, $totalCharges, $statamic_id) {
-                    $totalCharges->add($this->extraForValidation($extra, $statamic_id)->calculatePrice($childData, $extra['quantity']));
-                });
-            }
-        }
-
-        return $totalCharges;
-    }
-
-    protected function checkForRequiredExtras($statamic_id, $data)
-    {
-        if ($this->isParent()) {
-            return $this->checkForRequiredExtrasForParent($statamic_id, $data);
-        }
-
-        $required = (new ExtraCondition)->hasRequiredExtrasSelected($statamic_id, $data);
-        if ($required !== true) {
-            return $required->transform(function ($messages, $extra_id) {
-                return 'ID '.$extra_id.' '.$messages->implode(' ');
-            })->implode(', ');
-        }
-
-        return false;
-    }
-
-    protected function checkForRequiredExtrasForParent($statamic_id, $data)
-    {
-        $allRequired = collect();
-        $extraCondition = new ExtraCondition;
-
-        foreach ($this->childs as $child) {
-            $childData = array_merge($data, [
-                'date_start' => $child->date_start,
-                'date_end' => $child->date_end,
-                'quantity' => $child->quantity,
-                'rate_id' => $child->rate_id,
-            ]);
-
-            $required = $extraCondition->hasRequiredExtrasSelected($statamic_id, $childData);
-            if ($required !== true) {
-                // union() preserves integer keys (real DB ids); first-wins on collision is fine.
-                $allRequired = $allRequired->union($required);
-            }
-        }
-
-        if ($allRequired->isEmpty()) {
-            return false;
-        }
-
-        return $allRequired->transform(function ($messages, $extra_id) {
-            return 'ID '.$extra_id.' '.$messages->implode(' ');
-        })->implode(', ');
-    }
-
-    protected function checkForRequiredOptions($statamic_id, $data): bool
-    {
-        $requiredOptionIds = Option::entry($statamic_id)
-            ->where('published', true)
-            ->where('required', true)
-            ->pluck('id');
-
-        if ($requiredOptionIds->isEmpty()) {
-            return true;
-        }
-
-        if (! array_key_exists('options', $data)) {
-            return false;
-        }
-
-        $checkoutOptions = $data['options'] instanceof Collection
-            ? $data['options']->toArray()
-            : $data['options'];
-
-        return $requiredOptionIds->every(fn ($id) => array_key_exists($id, $checkoutOptions));
+        return new AddonQuote($statamic_id, $this->isParent() ? $this->childs : [$data], $data['customer'] ?? $this->customerData);
     }
 
     /**

@@ -10,6 +10,7 @@ use Reach\StatamicResrv\Database\Factories\ExtraFactory;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Money\Price as PriceClass;
 use Reach\StatamicResrv\Scopes\OrderScope;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Traits\HandlesAvailabilityDates;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Reach\StatamicResrv\Traits\HandlesOrdering;
@@ -233,11 +234,9 @@ class Extra extends Model
      * an unpublished category. Apply it on an entry's extras() relation for the attachment half.
      * An extra without a category (or whose category was deleted — category_id is nulled) is
      * listed under "Uncategorized" (HandlesExtrasQueries::createExtraCategoryObject()), so only
-     * a live, unpublished category hides it. The selectable list (scopeGetPriceForDates()) and
-     * checkout validation (Reservation::extraForValidation()) both apply this scope; the
-     * required-extras gate (scopeEntriesWithConditions()) is a raw query that re-applies
-     * published + not trashed by hand and shares only the category subquery — keep the three in
-     * step.
+     * a live, unpublished category hides it. AddonQuote lists and books extras through this scope;
+     * the required-extras gate (scopeEntriesWithConditions()) is a raw query that re-applies
+     * published + not trashed by hand and shares only the category subquery — keep the two in step.
      */
     public function scopeSelectable($query)
     {
@@ -280,25 +279,10 @@ class Extra extends Model
             ->select('resrv_extras.*', 'resrv_extra_conditions.*');
     }
 
+    /** The entry's selectable extras priced for one stay (AddonQuote::extras()); $data carries the item_id. */
     public function scopeGetPriceForDates($query, $data)
     {
-        $entry = Entry::whereItemId($data['item_id']);
-
-        $extras = $entry->extras()
-            ->selectable()
-            ->with('category')
-            ->without('conditions')
-            ->orderBy('order')
-            ->get();
-
-        $extras->transform(function ($extra) use ($data) {
-            $extra->original_price = $extra->price->format();
-            $extra->price = $extra->priceForDates($data);
-
-            return $extra;
-        });
-
-        return $extras;
+        return ($data instanceof Reservation ? AddonQuote::forReservation($data) : new AddonQuote($data['item_id'], [$data], $data['customer'] ?? null))->extras();
     }
 
     protected function getRelativePrice($data)

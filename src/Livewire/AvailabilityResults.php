@@ -13,8 +13,7 @@ use Reach\StatamicResrv\Exceptions\AvailabilityException;
 use Reach\StatamicResrv\Livewire\Forms\AvailabilityData;
 use Reach\StatamicResrv\Livewire\Forms\EnabledExtras;
 use Reach\StatamicResrv\Livewire\Forms\EnabledOptions;
-use Reach\StatamicResrv\Models\Extra;
-use Reach\StatamicResrv\Models\OptionValue;
+use Reach\StatamicResrv\Support\AddonQuote;
 use Reach\StatamicResrv\Traits\HandlesMultisiteIds;
 use Statamic\Entries\Entry;
 use Statamic\Support\Traits\Hookable;
@@ -236,39 +235,17 @@ class AvailabilityResults extends Component
      * (a rate card on the all-rates listing, see checkoutRate()) or without the resolved one (a
      * customised view that omits effectiveRateId, before the next search corrects it). The
      * session-backed selection is what a checkout without an extras step trusts, so it has to
-     * carry the amounts the reservation will be validated against. A selection whose extra or
-     * value no longer exists keeps its stored price; Reservation::validateExtraCharges() rejects
-     * it at the checkout with an explicit extras/options error.
+     * carry the amounts the reservation will be validated against. A selection the entry can no
+     * longer book keeps its stored price; Reservation::validateTotal() rejects it at the checkout
+     * with an explicit extras/options error.
      */
     protected function repriceEnabledAddons(): void
     {
-        $data = array_merge($this->data->toResrvArray(), ['item_id' => $this->entryId]);
+        $addons = (new AddonQuote($this->entryId, [$this->data->toResrvArray()]))
+            ->price($this->enabledExtras->extras, $this->enabledOptions->options);
 
-        if ($this->enabledExtras->extras->isNotEmpty()) {
-            $extras = Extra::findMany($this->enabledExtras->extras->pluck('id'))->keyBy('id');
-
-            $this->enabledExtras->extras = $this->enabledExtras->extras->map(function ($extra) use ($extras, $data) {
-                if ($model = $extras->get($extra['id'])) {
-                    // A line total belongs to the price it was computed with (EnabledExtras::lineTotal()).
-                    unset($extra['total']);
-                    $extra['price'] = $model->priceForDates($data);
-                }
-
-                return $extra;
-            });
-        }
-
-        if ($this->enabledOptions->options->isNotEmpty()) {
-            $values = OptionValue::findMany($this->enabledOptions->options->pluck('value'))->keyBy('id');
-
-            $this->enabledOptions->options = $this->enabledOptions->options->map(function ($option) use ($values, $data) {
-                if ($value = $values->get($option['value'])) {
-                    $option['price'] = $value->priceForDates($data);
-                }
-
-                return $option;
-            });
-        }
+        $this->enabledExtras->extras = $addons['extras'];
+        $this->enabledOptions->options = $addons['options'];
     }
 
     #[On('extras-updated')]
