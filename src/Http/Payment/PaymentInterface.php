@@ -64,6 +64,11 @@ interface PaymentInterface
      */
     public function handlePaymentPending(): bool|array;
 
+    /**
+     * Handle the provider's webhook: verify it, find the reservation and, for a payment that
+     * succeeded, call ConfirmsGatewayPayments::confirmFromGateway(). Always return a response.
+     * See UPGRADE-PAYMENT-GATEWAYS.md Step 4.
+     */
     public function verifyPayment($request);
 
     public function verifyWebhook();
