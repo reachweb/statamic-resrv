@@ -238,8 +238,10 @@ class StripeWebhookTest extends TestCase
         }
 
         Event::assertNotDispatched(ReservationConfirmed::class);
-        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_offline' && $mail->hasTo('admin@example.com'));
-        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_mark_as_paid');
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_offline' && $mail->hasTo('admin@example.com')
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_mark_as_paid'
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT);
         Mail::assertNotSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_redelivery');
     }
 

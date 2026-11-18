@@ -124,7 +124,7 @@ trait ConfirmsGatewayPayments
             'current_payment_gateway' => $reservation->payment_gateway,
         ]);
 
-        OrphanedPaymentNotification::dispatchFor($reservation, $paymentId, $eventId);
+        OrphanedPaymentNotification::dispatchFor($reservation, $paymentId, $eventId, OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT);
 
         return true;
     }

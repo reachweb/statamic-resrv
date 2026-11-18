@@ -1329,7 +1329,7 @@ class AwaitingPaymentTransitionsTest extends TestCase
         Mail::assertSent(OrphanedPaymentNotification::class, 2);
         Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->hasTo('admin@example.com')
             && $mail->paymentIntentId === 'pi_paid_after_mark_as_paid'
-            && $mail->context === null);
+            && $mail->context === OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT);
 
         // A redelivery of that webhook is still reported only once.
         $paid();
