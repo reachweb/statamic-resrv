@@ -87,6 +87,9 @@ trait ConfirmsGatewayPayments
                 throw new ReservationNoLongerPayable($fresh->id);
             }
 
+            // Paid through this gateway, even while the void blanks payment_id.
+            $fresh->payment_settlement = PaymentSettlement::Gateway;
+
             if ($inTransaction) {
                 $inTransaction($fresh);
             }

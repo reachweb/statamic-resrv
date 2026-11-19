@@ -896,11 +896,12 @@ class Reservation extends Model
                 $inTransaction($fresh);
             }
 
-            // A booking confirmed owing money was paid through its gateway, unless the caller
-            // recorded another settlement first, as Mark as paid records out_of_band.
+            // A booking confirmed owing money was paid by the charge its payment_id names, or outside a
+            // gateway when it names none, unless the caller recorded the settlement first: the webhook
+            // confirm records gateway, and Mark as paid records out_of_band.
             if ($to === ReservationStatus::CONFIRMED && $fresh->payment_settlement === PaymentSettlement::None
                 && ! $fresh->amountDue()->isZero()) {
-                $fresh->payment_settlement = PaymentSettlement::Gateway;
+                $fresh->payment_settlement = $fresh->hasGatewayPayment() ? PaymentSettlement::Gateway : PaymentSettlement::OutOfBand;
             }
 
             $fresh->status = $to->value;

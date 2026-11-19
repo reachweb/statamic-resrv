@@ -1131,6 +1131,8 @@ A concurrent `confirmed` by this same payment, such as a second delivery of its 
 
 A gateway that still confirms by hand must do the same: gate `ReservationConfirmed` on `transitionTo()`'s return value, `refresh()` the reservation on `false`, call `OrphanedPaymentNotification::dispatchFor()` with `context: OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT` when another payment confirmed it, and otherwise call `notifyIfOrphaned()`.
 
+From v6.6.0, `transitionTo(CONFIRMED)` also records how the booking was paid in `payment_settlement`. A booking that owes money is settled `gateway` when its `payment_id` is stored, and `out_of_band` (paid outside a gateway, refunded by hand) when it is blank. A gateway that confirms by hand without storing `payment_id` must set `$fresh->payment_settlement = PaymentSettlement::Gateway` in its `inTransaction:` closure, as `confirmFromGateway()` does.
+
 > ℹ️ Earlier revisions of this step checked `EXPIRED`/`REFUNDED`/`PARTNER` by hand and called `dispatchFor()`. Since manual reservations, a `CANCELLED` row can also lose this race (the hold-lapse sweep cancels a reservation whose payment is in flight), which `notifyIfOrphaned()` covers.
 
 This is the same trade-off as Step 9's stale-success policy: return `200` so the provider stops retrying, and rely on a logged/notified orphan for manual reconciliation rather than confirming a reservation whose hold is gone. Resrv's webhook regression tests cover the race through the bundled gateways.
