@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\View\ViewException;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
@@ -24,6 +25,7 @@ use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ManualReservationCreator;
@@ -194,6 +196,40 @@ class OfflinePaymentGatewayTest extends TestCase
         // A late success on that intent no longer finds the booking it would confirm.
         $this->assertNull(Reservation::findByPaymentId('pi_old')->first());
         $this->assertSame('offline', $this->reservation->fresh()->payment_gateway);
+    }
+
+    public function test_switching_offline_method_leaves_a_booking_placed_meanwhile_as_it_was_placed()
+    {
+        Config::set('resrv-config.payment_gateways', [
+            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Credit Card'],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
+            'cash' => ['class' => OfflinePaymentGateway::class, 'label' => 'Cash', 'surcharge' => ['type' => 'fixed', 'amount' => 5]],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $this->reservation->update(['payment_id' => 'pi_card', 'payment_gateway' => 'fake', 'payment_intent_amount' => '100.00']);
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // Another tab places the booking with bank transfer while this one voids the card payment.
+        $gateway = app(PaymentGatewayManager::class)->gateway('fake');
+        $gateway->onRetrievePaymentIntent = function () use ($gateway) {
+            $gateway->onRetrievePaymentIntent = null;
+            DB::table('resrv_reservations')->where('id', $this->reservation->id)
+                ->update(['status' => 'awaiting_payment', 'payment_gateway' => 'offline', 'payment_surcharge' => 0]);
+        };
+
+        $checkout = Livewire::test(Checkout::class)->call('handleSecondStep');
+
+        try {
+            $checkout->dispatch('gateway-selected', gateway: 'cash');
+        } catch (ViewException) {
+            // The checkout's re-render refuses the now-placed booking; what was stored is what matters.
+        }
+
+        $fresh = $this->reservation->fresh();
+        $this->assertSame(ReservationStatus::AWAITING_PAYMENT->value, $fresh->status);
+        $this->assertSame('offline', $fresh->payment_gateway);
+        $this->assertTrue($fresh->payment_surcharge->isZero());
     }
 
     public function test_an_offline_form_left_open_cannot_place_the_booking_after_changing_payment_method()
@@ -590,6 +626,52 @@ class OfflinePaymentGatewayTest extends TestCase
 
         $this->assertSame(ReservationStatus::AWAITING_PAYMENT->value, $reservation->status);
         Mail::assertSent(ReservationAwaitingPayment::class, fn ($mail) => $mail->hasTo('admin@example.com'));
+    }
+
+    public function test_an_offline_parent_bookings_emails_list_each_stay()
+    {
+        Config::set('resrv-config.maximum_quantity', 3);
+        $parent = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'type' => 'parent',
+            'status' => 'awaiting_payment',
+            'payment_gateway' => 'offline',
+            'date_start' => '2026-12-01 00:00:00',
+            'date_end' => '2026-12-10 00:00:00',
+            'quantity' => 2,
+        ]);
+        ChildReservation::factory()->create(['reservation_id' => $parent->id, 'quantity' => 1, 'date_start' => '2026-12-01', 'date_end' => '2026-12-03']);
+        ChildReservation::factory()->create(['reservation_id' => $parent->id, 'quantity' => 1, 'date_start' => '2026-12-07', 'date_end' => '2026-12-09']);
+
+        foreach ([new ReservationPaymentRequest($parent), new ReservationAwaitingPayment($parent)] as $mail) {
+            $html = $mail->render();
+
+            $this->assertStringContainsString('01-12-2026 00:00', $html);
+            $this->assertStringContainsString('03-12-2026 00:00', $html);
+            $this->assertStringContainsString('07-12-2026 00:00', $html);
+            $this->assertStringContainsString('09-12-2026 00:00', $html);
+            // The parent's own dates and quantity span both stays, so they don't describe either.
+            $this->assertStringNotContainsString('10-12-2026', $html);
+            $this->assertStringNotContainsString('x 2', $html);
+        }
+    }
+
+    public function test_a_legacy_offline_confirmation_does_not_claim_the_payment_arrived()
+    {
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'confirmed',
+            'payment' => '50.00',
+            'payment_surcharge' => '5.00',
+            'payment_gateway' => 'offline',
+            'payment_settlement' => 'unresolved',
+        ]);
+
+        $html = (new ReservationConfirmedMail($reservation))->render();
+
+        $this->assertStringNotContainsString('Amount already paid', $html);
+        $this->assertStringNotContainsString('Total charged', $html);
+        $this->assertStringContainsString('Payment including surcharge', $html);
     }
 
     public function test_mark_as_paid_confirms_an_offline_checkout_booking()

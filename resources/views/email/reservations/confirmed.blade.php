@@ -97,16 +97,18 @@
 @endcomponent
 @endif
 
+{{-- Unknown for offline bookings confirmed before v6.6.0, before any money arrived. --}}
+@php($receiptUnknown = $reservation->amountReceived() === null)
 @component('mail::table')
 |{{ __("Payment information") }}||
 | :----------------------------- |:----------------| 
 @if ((config('resrv-config.payment') !== 'everything' || $reservation->payment->lessThan($reservation->total)) && $reservation->status !== 'partner')
-| {{ $reservation->amountPaid()->isZero() ? __("Amount already paid") : __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
+| {{ $receiptUnknown ? __("Payment") : ($reservation->amountPaid()->isZero() ? __("Amount already paid") : __("Already paid by credit card")) }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
 | {{ __("Remaining amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
 @if (! $reservation->payment_surcharge->isZero())
 | {{ __("Payment surcharge") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment_surcharge->format() }} |
-| {{ __("Total charged") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->totalToCharge() }} |
+| {{ $receiptUnknown ? __("Payment including surcharge") : __("Total charged") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->totalToCharge() }} |
 @endif
 | **{{ __("Total") }}** ({{ __("including taxes") }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->format() }} |
 

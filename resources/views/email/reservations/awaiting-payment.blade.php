@@ -16,13 +16,32 @@
 |{{ __("Reservation details") }}||
 | :------------------------------------------------ |:--------------------------------------------------------------------------|
 | {{ __("Property") }}   | {{ is_array($resrvEntry) ? ($resrvEntry['title'] ?? '') : $resrvEntry->title }} |
+@if ($reservation->type !== 'parent')
 | {{ __("Pick-up date") }}      | {{ $reservation->date_start->format('d-m-Y H:i') }} |
 | {{ __("Drop-off date") }}     | {{ $reservation->date_end->format('d-m-Y H:i') }} |
 @if ($reservation->quantity > 1)
 | {{ __("Quantity") }}  | x {{ $reservation->quantity }} |
 @endif
+@endif
 | **{{ __("Total") }}** ({{ __("including taxes") }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->format() }} |
 @endcomponent
+
+@if ($reservation->type === 'parent')
+@foreach ($reservation->childs as $child)
+@component('mail::table')
+|{{ __("Reservation") }} # {{ $loop->iteration }}||
+| :---------------------------------------- |:------------------------------------------|
+| {{ __("Pick-up date") }}      | {{ $child->date_start->format('d-m-Y H:i') }} |
+| {{ __("Drop-off date") }}     | {{ $child->date_end->format('d-m-Y H:i') }} |
+@if ($child->quantity > 1)
+| {{ __("Quantity") }}  | x {{ $child->quantity }} |
+@endif
+@if ($child->rate_id)
+| {{ __("Rate") }} | {{ $child->getRateLabel() }} |
+@endif
+@endcomponent
+@endforeach
+@endif
 
 @component('mail::button', ['url' => $reservationUrl])
 {{ __("View reservation") }}

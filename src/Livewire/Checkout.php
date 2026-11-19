@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Closure;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -564,14 +565,31 @@ class Checkout extends Component
                         return null;
                     }
 
-                    // The void leaves payment_id set only when its gateway is no longer configured. Drop it as
-                    // a new intent would, so a late success on it is stale instead of confirming this booking.
-                    $reservation->update([
-                        'payment_gateway' => $gatewayName,
-                        'payment_surcharge' => $surcharge->format(),
-                        'payment_id' => '',
-                        'payment_intent_amount' => null,
-                    ]);
+                    // The offline step's Confirm takes only the row lock, so re-check under it, as createIntent()
+                    // does: a booking another tab placed meanwhile keeps the method it was placed with.
+                    $recorded = DB::transaction(function () use ($reservation, $gatewayName, $surcharge, $stillPayable) {
+                        $fresh = Reservation::query()->lockForUpdate()->find($reservation->id);
+
+                        if ($fresh === null || ! $stillPayable($fresh)) {
+                            return false;
+                        }
+
+                        // The void leaves payment_id set only when its gateway is no longer configured. Drop it as
+                        // a new intent would, so a late success on it is stale instead of confirming this booking.
+                        $fresh->update([
+                            'payment_gateway' => $gatewayName,
+                            'payment_surcharge' => $surcharge->format(),
+                            'payment_id' => '',
+                            'payment_intent_amount' => null,
+                        ]);
+                        $reservation->setRawAttributes($fresh->getAttributes(), true);
+
+                        return true;
+                    });
+
+                    if (! $recorded) {
+                        throw new ReservationNoLongerPayable($reservation->id);
+                    }
 
                     return true;
                 }
