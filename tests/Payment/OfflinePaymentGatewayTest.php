@@ -27,6 +27,8 @@ use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Customer;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
+use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ManualReservationCreator;
 use Reach\StatamicResrv\Tests\CreatesEntries;
@@ -261,6 +263,42 @@ class OfflinePaymentGatewayTest extends TestCase
             ->assertHasErrors('reservation');
 
         $this->assertSame(ReservationStatus::PENDING->value, $this->reservation->fresh()->status);
+    }
+
+    public function test_an_offline_form_left_open_cannot_place_the_booking_after_another_tab_changes_its_price()
+    {
+        Config::set('resrv-config.payment', 'everything');
+        Config::set('resrv-config.payment_gateways', [
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
+        ]);
+        app()->forgetInstance(PaymentGatewayManager::class);
+
+        $extra = Extra::factory()->create();
+        ResrvEntry::whereItemId($this->entries->first()->id())->extras()->attach($extra->id);
+
+        session(['resrv_reservation' => $this->reservation->id]);
+
+        // Tab A reaches the offline step, which shows the amount owed now.
+        Livewire::test(Checkout::class)
+            ->call('handleFirstStep')
+            ->call('handleSecondStep')
+            ->assertSet('selectedGateway', 'offline');
+
+        // Tab B, opened afresh, adds an extra and continues: the booking now owes more.
+        Livewire::test(Checkout::class)
+            ->dispatch('extras-updated', [$extra->id => ['id' => $extra->id, 'quantity' => 1, 'price' => '9.30', 'name' => $extra->name]])
+            ->call('handleFirstStep')
+            ->assertHasNoErrors()
+            ->assertSet('step', 2);
+
+        // Tab A's Confirm must not place the booking at an amount its form never showed.
+        Livewire::test(CheckoutPayment::class)
+            ->call('confirmPayment')
+            ->assertHasErrors('reservation');
+
+        $fresh = $this->reservation->fresh();
+        $this->assertSame(ReservationStatus::PENDING->value, $fresh->status);
+        $this->assertSame('', $fresh->payment_gateway);
     }
 
     public function test_confirm_payment_places_the_booking_awaiting_payment_without_confirming_it()

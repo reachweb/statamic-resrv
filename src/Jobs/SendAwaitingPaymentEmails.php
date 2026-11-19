@@ -36,7 +36,12 @@ class SendAwaitingPaymentEmails implements ShouldQueue
         // paid in the meantime, and the mail transport can fail. Either skips the customer's email only:
         // the admins must still hear of a booking that holds its dates until it is paid.
         try {
-            app(ManualReservationCreator::class)->sendPaymentRequestEmail($this->reservation);
+            // It is the customer's only email about the booking, so a disabled event must not go unnoticed.
+            if (! app(ManualReservationCreator::class)->sendPaymentRequestEmail($this->reservation)) {
+                Log::warning('The payment request email of a new offline booking was not sent: the customer_payment_request email event is disabled or has no recipients.', [
+                    'reservation_id' => $this->reservation->id,
+                ]);
+            }
         } catch (\Throwable $e) {
             Log::warning('The payment request email of a new offline booking was not sent.', [
                 'reservation_id' => $this->reservation->id,

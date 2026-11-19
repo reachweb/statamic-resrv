@@ -265,9 +265,21 @@ class Checkout extends Component
 
                         // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
                         $toUpdate += ['payment' => $payment->format(), 'payment_surcharge' => 0];
+
+                        // An offline selection has no intent, so the void above leaves its gateway. Clear it, or an
+                        // offline form still open in another tab could place the booking at an amount it never showed.
+                        if (blank($reservation->payment_id)) {
+                            $toUpdate += ['payment_gateway' => ''];
+                        }
                     }
 
-                    return $reservation->update($toUpdate);
+                    // The offline step's Confirm takes only the row lock, so it can place the booking after the
+                    // PENDING check above. Write only to a row still pending: a placed booking keeps its price.
+                    $written = Reservation::query()->whereKey($reservation->id)
+                        ->where('status', ReservationStatus::PENDING->value)
+                        ->update($toUpdate);
+
+                    return $written > 0 ? true : null;
                 });
 
                 if (! $updated) {

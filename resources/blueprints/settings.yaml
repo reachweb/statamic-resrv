@@ -445,7 +445,7 @@ tabs:
                         value: 'Customer abandoned'
                       -
                         key: customer_payment_request
-                        value: 'Customer payment request'
+                        value: 'Customer payment request (manual and offline website bookings)'
                       -
                         key: admin_awaiting_payment
                         value: 'Admin awaiting payment'
@@ -540,7 +540,7 @@ tabs:
                         value: 'Customer abandoned'
                       -
                         key: customer_payment_request
-                        value: 'Customer payment request'
+                        value: 'Customer payment request (manual and offline website bookings)'
                       -
                         key: admin_awaiting_payment
                         value: 'Admin awaiting payment'
