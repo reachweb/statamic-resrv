@@ -74,22 +74,18 @@ class ReservationResource extends ResourceCollection
                     'payment_surcharge_is_zero' => $reservation->payment_surcharge->isZero(),
                     'total_to_charge_formatted' => $reservation->totalToCharge(),
                     'total_formatted' => $reservation->total->format(),
-                    // Null when receipt is unknown (a frontend bank-transfer booking confirms unpaid).
+                    // Null when receipt is unknown (PaymentSettlement::Unresolved).
                     'amount_paid_formatted' => $amountReceived?->format(),
                     'holds_no_charge' => $reservation->gatewayHoldsNoCharge(),
                     'hold_expires_at' => $reservation->hold_expires_at?->toIso8601String(),
                     'payment_due_at' => $reservation->isAwaitingPayment() ? $reservation->paymentDueAt()?->toIso8601String() : null,
                     'payment_request_email_sent_at' => $reservation->payment_request_email_sent_at?->toIso8601String(),
-                    'payment_unresolved' => (bool) $reservation->payment_unresolved,
+                    'payment_unresolved' => $reservation->hasUnresolvedPayment(),
                     // Overdue flags only describe a booking still waiting for its payment.
                     'arrival_day_passed' => $reservation->isAwaitingPayment() && $reservation->arrivalDayPassed(),
                     'payment_window_closed' => $reservation->isAwaitingPayment() && $reservation->paymentWindowClosed(),
                     'supports_manual_confirmation' => $reservation->paymentGatewaySupportsManualConfirmation(),
-                    // A pending checkout is refunded through its gateway even before an intent is
-                    // stored (it may hold an orphaned charge), so the gateway's capability applies.
-                    'refund_is_automatic' => $reservation->status === ReservationStatus::PENDING->value
-                        ? $reservation->supportsAutomaticRefund()
-                        : $reservation->refundIsAutomatic(),
+                    'refund_is_automatic' => $reservation->refundIsAutomatic(),
                     'customer_email' => $reservation->customer?->email,
                     'customer_name' => $reservation->customerName(),
                     'created_at' => $this->dateIndexValue('created_at', $reservation->created_at),

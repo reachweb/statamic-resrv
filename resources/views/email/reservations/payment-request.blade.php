@@ -18,6 +18,8 @@
 @else
 {{ __("Please complete the payment to confirm it.") }}
 @endif
+@elseif ($placedByCustomer ?? false)
+{{ __("Thank you for your reservation! We have received it and are holding it for you until your payment arrives.") }}
 @else
 {{ __("We have created a reservation for you. Please complete the payment to confirm it.") }}
 @endif
@@ -34,14 +36,18 @@
 @component('mail::table')
 |{{ __("Reservation details") }}||
 | :------------------------------------------------ |:--------------------------------------------------------------------------|
+@if ($reservation->type !== 'parent')
 | {{ __("Pick-up date") }}      | {{ $reservation->date_start->format('d-m-Y H:i') }} |
 | {{ __("Drop-off date") }}     | {{ $reservation->date_end->format('d-m-Y H:i') }} |
+@endif
 | {{ __("Property") }}   | {{ is_array($resrvEntry) ? ($resrvEntry['title'] ?? '') : $resrvEntry->title }} |
+@if ($reservation->type !== 'parent')
 @if (config('resrv-config.maximum_quantity') > 1)
 | {{ __("Quantity") }}  | x {{ $reservation->quantity }} |
 @endif
 @if ($reservation->rate_id)
 | {{ __("Rate") }} | {{ $reservation->getRateLabel() }} |
+@endif
 @endif
 | **{{ __("Total") }}** ({{ __("including taxes") }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->format() }} |
 @if (! $reservation->payment_surcharge->isZero())
@@ -51,6 +57,23 @@
 | {{ __("Remaining amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
 @endcomponent
+
+@if ($reservation->type === 'parent')
+@foreach ($reservation->childs as $child)
+@component('mail::table')
+|{{ __("Reservation") }} # {{ $loop->iteration }}||
+| :---------------------------------------- |:------------------------------------------|
+| {{ __("Pick-up date") }}      | {{ $child->date_start->format('d-m-Y H:i') }} |
+| {{ __("Drop-off date") }}     | {{ $child->date_end->format('d-m-Y H:i') }} |
+@if (config('resrv-config.maximum_quantity') > 1)
+| {{ __("Quantity") }}  | x {{ $child->quantity }} |
+@endif
+@if ($child->rate_id)
+| {{ __("Rate") }} | {{ $child->getRateLabel() }} |
+@endif
+@endcomponent
+@endforeach
+@endif
 
 @php($resrvExtras = $reservation->extras()->get())
 @if ($resrvExtras->isNotEmpty())
@@ -81,10 +104,13 @@
 
 {{ __("If the button does not work, copy this link into your browser:") }} {{ $payUrl }}
 @elseif ($isOffline && ($offlineInstructions ?? null))
-@include('statamic-resrv::email.reservations.partials.how-to-pay', [
-    'instructions' => $offlineInstructions,
-    'note' => __("Please include the booking reference :reference with your payment. We will confirm your reservation as soon as your payment arrives.", ['reference' => $reservation->reference]),
-])
+**{{ __("How to pay") }}**
+
+@component('mail::panel')
+{{ $offlineInstructions }}
+@endcomponent
+
+{{ __("Please include the booking reference :reference with your payment. We will confirm your reservation as soon as your payment arrives.", ['reference' => $reservation->reference]) }}
 @elseif ($isOffline)
 {{ __("This reservation is not paid online: payment is arranged directly with us. Please contact us using the details above for the payment details, quoting the booking reference :reference. We will confirm your reservation as soon as your payment arrives.", ['reference' => $reservation->reference]) }}
 @else

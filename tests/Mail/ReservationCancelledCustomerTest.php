@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Jobs\SendCustomerCancelledEmail;
 use Reach\StatamicResrv\Mail\ReservationCancelledCustomer;
+use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -31,6 +32,31 @@ class ReservationCancelledCustomerTest extends TestCase
         $this->assertStringContainsString('Your reservation has been cancelled.', $html);
         $this->assertStringContainsString('No refund has been issued for this cancellation.', $html);
         $this->assertStringNotContainsString('nothing to refund', $html);
+    }
+
+    public function test_a_lapsed_multi_stay_hold_lists_each_stay()
+    {
+        config(['resrv-config.maximum_quantity' => 3]);
+        $item = $this->makeStatamicItem();
+
+        $parent = Reservation::factory([
+            'item_id' => $item->id(),
+            'type' => 'parent',
+            'status' => 'cancelled',
+            'date_start' => '2026-12-01 00:00:00',
+            'date_end' => '2026-12-10 00:00:00',
+            'quantity' => 2,
+        ])->withCustomer()->create();
+        ChildReservation::factory()->create(['reservation_id' => $parent->id, 'quantity' => 1, 'date_start' => '2026-12-01', 'date_end' => '2026-12-03']);
+        ChildReservation::factory()->create(['reservation_id' => $parent->id, 'quantity' => 1, 'date_start' => '2026-12-07', 'date_end' => '2026-12-09']);
+
+        $html = (new ReservationCancelledCustomer($parent, ReservationCancelled::CONTEXT_HOLD_LAPSED))->render();
+
+        $this->assertStringContainsString('03-12-2026 00:00', $html);
+        $this->assertStringContainsString('07-12-2026 00:00', $html);
+        // The parent's own dates and quantity span both stays, so they don't describe either.
+        $this->assertStringNotContainsString('10-12-2026', $html);
+        $this->assertStringNotContainsString('x 2', $html);
     }
 
     public function test_cancelled_email_for_a_no_charge_booking_does_not_claim_a_withheld_payment()
@@ -65,6 +91,7 @@ class ReservationCancelledCustomerTest extends TestCase
             'price' => '200.00',
             'payment' => '120.00',
             'payment_id' => 'pi_unpaid',
+            'payment_settlement' => 'unresolved',
         ])->withCustomer()->create();
 
         $html = (new ReservationCancelledCustomer($reservation, ReservationCancelled::CONTEXT_UNPAID_HOLD))->render();

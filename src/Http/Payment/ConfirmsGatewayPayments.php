@@ -4,8 +4,10 @@ namespace Reach\StatamicResrv\Http\Payment;
 
 use Closure;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Enums\PaymentSettlement;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
+use Reach\StatamicResrv\Exceptions\ReservationNoLongerPayable;
 use Reach\StatamicResrv\Mail\OrphanedPaymentNotification;
 use Reach\StatamicResrv\Models\Reservation;
 
@@ -39,15 +41,7 @@ trait ConfirmsGatewayPayments
         // succeeded. It no longer matches the booking's amount or gateway, and a booking confirmed
         // since is now paid twice, so leave the reservation untouched and alert for a manual refund.
         if ($stale) {
-            Log::warning('Payment succeeded after being abandoned by the customer — manual reconciliation may be required.', [
-                'gateway' => $this->name(),
-                'reservation_id' => $reservation->id,
-                'payment_intent_id' => $paymentId,
-                'current_payment_id' => $reservation->payment_id,
-                'current_payment_gateway' => $reservation->payment_gateway,
-            ]);
-
-            OrphanedPaymentNotification::dispatchFor($reservation, $paymentId, $eventId);
+            $this->notifyAbandonedPayment($reservation, $paymentId, $eventId);
 
             return false;
         }
@@ -83,8 +77,34 @@ trait ConfirmsGatewayPayments
             }
         }
 
-        // Accepts PENDING (checkout) and AWAITING_PAYMENT (payment link) rows alike.
-        if ($reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true, inTransaction: $inTransaction)) {
+        // transitionTo() re-checks only the status under the lock. The customer may also have moved on
+        // to another payment since the lookup, such as a gateway switch, so a payment_id that now names
+        // another payment makes this one stale too. A blank one is a checkout voiding this payment, which
+        // restores it when the void finds it paid, so it still confirms.
+        $lookedUp = $reservation->payment_id;
+        $confirmFresh = function (Reservation $fresh) use ($lookedUp, $inTransaction) {
+            if (filled($fresh->payment_id) && $fresh->payment_id !== $lookedUp) {
+                throw new ReservationNoLongerPayable($fresh->id);
+            }
+
+            // Paid through this gateway, even while the void blanks payment_id.
+            $fresh->payment_settlement = PaymentSettlement::Gateway;
+
+            if ($inTransaction) {
+                $inTransaction($fresh);
+            }
+        };
+
+        try {
+            // Accepts PENDING (checkout) and AWAITING_PAYMENT (payment link) rows alike.
+            $confirmed = $reservation->transitionTo(ReservationStatus::CONFIRMED, tolerant: true, inTransaction: $confirmFresh);
+        } catch (ReservationNoLongerPayable) {
+            $this->notifyAbandonedPayment($reservation->refresh(), $paymentId, $eventId);
+
+            return false;
+        }
+
+        if ($confirmed) {
             ReservationConfirmed::dispatch($reservation, ReservationConfirmed::VIA_WEBHOOK, [
                 'gateway' => $reservation->payment_gateway ?: $this->name(),
                 'payment_id' => $paymentId,
@@ -104,15 +124,29 @@ trait ConfirmsGatewayPayments
         return false;
     }
 
+    /** Alert for a payment the customer left behind, which no longer attaches to the booking. */
+    private function notifyAbandonedPayment(Reservation $reservation, string $paymentId, ?string $eventId): void
+    {
+        Log::warning('Payment succeeded after being abandoned by the customer — manual reconciliation may be required.', [
+            'gateway' => $this->name(),
+            'reservation_id' => $reservation->id,
+            'payment_intent_id' => $paymentId,
+            'current_payment_id' => $reservation->payment_id,
+            'current_payment_gateway' => $reservation->payment_gateway,
+        ]);
+
+        OrphanedPaymentNotification::dispatchFor($reservation, $paymentId, $eventId);
+    }
+
     /**
      * Alert when the booking is confirmed, but not by this payment: payment_id names another one
      * (the customer switched gateway and paid with it), or an admin marked the booking as paid,
-     * which keeps this payment's id stamped unresolved. This charge is then a second payment.
+     * which settles it out of band and keeps this payment's id. This charge is then a second payment.
      */
     private function notifyIfConfirmedByAnotherPayment(Reservation $reservation, string $paymentId, ?string $eventId): bool
     {
         if ($reservation->status !== ReservationStatus::CONFIRMED->value
-            || ($reservation->payment_id === $paymentId && ! $reservation->payment_unresolved)) {
+            || ($reservation->payment_id === $paymentId && $reservation->payment_settlement === PaymentSettlement::Gateway)) {
             return false;
         }
 

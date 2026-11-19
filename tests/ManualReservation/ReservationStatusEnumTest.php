@@ -46,16 +46,18 @@ class ReservationStatusEnumTest extends TestCase
         }
     }
 
-    public function test_no_status_can_transition_into_awaiting_payment()
+    public function test_only_a_pending_checkout_can_transition_into_awaiting_payment()
     {
         foreach (ReservationStatus::cases() as $status) {
             if ($status === ReservationStatus::AWAITING_PAYMENT) {
                 continue;
             }
 
-            $this->assertFalse(
+            // An offline checkout booking is placed awaiting payment; everything else is created in it directly.
+            $this->assertSame(
+                $status === ReservationStatus::PENDING,
                 $status->canTransitionTo(ReservationStatus::AWAITING_PAYMENT),
-                "{$status->value} must not transition into awaiting_payment — it is only created directly"
+                "{$status->value} → awaiting_payment"
             );
         }
     }
@@ -64,7 +66,7 @@ class ReservationStatusEnumTest extends TestCase
     {
         $this->assertFalse(ReservationStatus::AWAITING_PAYMENT->isTerminal());
         $this->assertNotContains(ReservationStatus::AWAITING_PAYMENT->value, ReservationStatus::live());
-        // A manual hold has no deadline by default and releases like a confirmed booking's refund, so
+        // An unpaid hold has no deadline by default and releases like a confirmed booking's refund, so
         // it must not freeze absolute availability edits the way a minutes-long checkout hold does.
         $this->assertNotContains(ReservationStatus::AWAITING_PAYMENT->value, ReservationStatus::inFlight());
         $this->assertNotContains(ReservationStatus::AWAITING_PAYMENT->value, ReservationStatus::terminal());

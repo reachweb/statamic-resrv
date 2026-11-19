@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Closure;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
@@ -264,9 +265,21 @@ class Checkout extends Component
 
                         // Writing a fresh base payment — clear any stale surcharge from a previous step-3 pass
                         $toUpdate += ['payment' => $payment->format(), 'payment_surcharge' => 0];
+
+                        // An offline selection has no intent, so the void above leaves its gateway. Clear it, or an
+                        // offline form still open in another tab could place the booking at an amount it never showed.
+                        if (blank($reservation->payment_id)) {
+                            $toUpdate += ['payment_gateway' => ''];
+                        }
                     }
 
-                    return $reservation->update($toUpdate);
+                    // The offline step's Confirm takes only the row lock, so it can place the booking after the
+                    // PENDING check above. Write only to a row still pending: a placed booking keeps its price.
+                    $written = Reservation::query()->whereKey($reservation->id)
+                        ->where('status', ReservationStatus::PENDING->value)
+                        ->update($toUpdate);
+
+                    return $written > 0 ? true : null;
                 });
 
                 if (! $updated) {
@@ -452,9 +465,20 @@ class Checkout extends Component
                 return null;
             }
 
+            // The offline step's Confirm takes only the row lock, so it can place the booking after the
+            // PENDING check above. Write only to a row still pending: a placed booking keeps its method.
+            $stillPending = fn () => Reservation::query()->whereKey($reservation->id)
+                ->where('status', ReservationStatus::PENDING->value);
+
+            // An offline selection has no intent, so the void above leaves its gateway. Clear it, or an
+            // offline form still open in another tab could place the booking after the customer went back.
+            if (blank($reservation->payment_id) && filled($reservation->payment_gateway)) {
+                $stillPending()->update(['payment_gateway' => '']);
+            }
+
             // selectedGateway resets on page refresh but payment_surcharge persists in DB
             if (! $reservation->payment_surcharge->isZero()) {
-                $reservation->update(['payment_surcharge' => 0]);
+                $stillPending()->update(['payment_surcharge' => 0]);
             }
 
             return true;
@@ -539,9 +563,47 @@ class Checkout extends Component
             $stillPayable = fn (Reservation $fresh) => $fresh->status === ReservationStatus::PENDING->value
                 && $fresh->payment->equals($payment);
 
-            $intent = $this->underIntentLock($reservation, function (Reservation $reservation) use ($gateway, $gatewayName, $amount, $surcharge, $returnUrl, $stillPayable) {
+            // A manual-confirmation gateway (bank transfer) takes nothing online, so it gets no intent.
+            // Its step records the method and surcharge, and confirming leaves the booking awaiting payment.
+            $manual = $gateway->supportsManualConfirmation();
+
+            $intent = $this->underIntentLock($reservation, function (Reservation $reservation) use ($gateway, $gatewayName, $amount, $surcharge, $returnUrl, $stillPayable, $manual) {
                 if (! $stillPayable($reservation)) {
                     throw new ReservationNoLongerPayable($reservation->id);
+                }
+
+                if ($manual) {
+                    if (! $this->cancelActiveIntent($reservation)) {
+                        return null;
+                    }
+
+                    // The offline step's Confirm takes only the row lock, so re-check under it, as createIntent()
+                    // does: a booking another tab placed meanwhile keeps the method it was placed with.
+                    $recorded = DB::transaction(function () use ($reservation, $gatewayName, $surcharge, $stillPayable) {
+                        $fresh = Reservation::query()->lockForUpdate()->find($reservation->id);
+
+                        if ($fresh === null || ! $stillPayable($fresh)) {
+                            return false;
+                        }
+
+                        // The void leaves payment_id set only when its gateway is no longer configured. Drop it as
+                        // a new intent would, so a late success on it is stale instead of confirming this booking.
+                        $fresh->update([
+                            'payment_gateway' => $gatewayName,
+                            'payment_surcharge' => $surcharge->format(),
+                            'payment_id' => '',
+                            'payment_intent_amount' => null,
+                        ]);
+                        $reservation->setRawAttributes($fresh->getAttributes(), true);
+
+                        return true;
+                    });
+
+                    if (! $recorded) {
+                        throw new ReservationNoLongerPayable($reservation->id);
+                    }
+
+                    return true;
                 }
 
                 // A customer back from the provider's page continues the payment they started.
@@ -586,6 +648,13 @@ class Checkout extends Component
 
             $this->selectedGateway = $gatewayName;
             $this->step = 3;
+
+            if ($manual) {
+                $this->reset('clientSecret', 'publicKey');
+                $this->paymentView = $gateway->paymentView();
+
+                return null;
+            }
 
             return $this->mountIntent($gateway, $reservation, $intent, $amount, $returnUrl);
         });

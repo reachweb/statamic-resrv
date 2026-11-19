@@ -31,7 +31,27 @@ class ReservationFactory extends Factory
             'price' => 200,
             'payment' => 50,
             'payment_id' => '',
+            'payment_settlement' => fn (array $attributes) => $this->settlementFor($attributes),
         ];
+    }
+
+    /**
+     * How a booking in this state would have been settled by the app, following the backfill of
+     * the payment_settlement migration: confirmed, refunded and cancelled bookings with a
+     * payment_id were paid through it, and a confirmed one owing money without it (or a manual one
+     * refunded) out of band. Pass payment_settlement for anything else.
+     */
+    protected function settlementFor(array $attributes): string
+    {
+        $status = $attributes['status'] ?? 'pending';
+        $owes = fn (string $column) => (float) (string) ($attributes[$column] ?? 0) !== 0.0;
+
+        return match (true) {
+            in_array($status, ['confirmed', 'refunded', 'cancelled'], true) && filled($attributes['payment_id'] ?? null) => 'gateway',
+            $status === 'confirmed' && ($owes('payment') || $owes('payment_surcharge')) => 'out_of_band',
+            $status === 'refunded' && filled($attributes['created_by'] ?? null) => 'out_of_band',
+            default => 'none',
+        };
     }
 
     /**

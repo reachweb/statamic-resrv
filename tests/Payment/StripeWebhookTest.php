@@ -215,12 +215,12 @@ class StripeWebhookTest extends TestCase
         Config::set('resrv-config.admin_email', 'admin@example.com');
 
         $races = [
-            // The customer switched to the offline gateway and confirmed with it.
-            'pi_lost_to_offline' => ['payment_id' => 'offline_123', 'payment_gateway' => 'offline'],
-            // An admin pressed Mark as paid: the same write keeps the intent's id but stamps it unresolved.
-            'pi_lost_to_mark_as_paid' => ['payment_unresolved' => true],
+            // The customer switched gateway and paid with it.
+            'pi_lost_to_another_gateway' => ['payment_id' => 'fake_123', 'payment_gateway' => 'fake', 'payment_settlement' => 'gateway'],
+            // An admin pressed Mark as paid: the same write keeps the intent's id but settles it out of band.
+            'pi_lost_to_mark_as_paid' => ['payment_settlement' => 'out_of_band'],
             // Another delivery of this payment's own webhook confirmed it first.
-            'pi_lost_to_redelivery' => [],
+            'pi_lost_to_redelivery' => ['payment_settlement' => 'gateway'],
         ];
 
         foreach ($races as $paymentIntentId => $changes) {
@@ -240,11 +240,37 @@ class StripeWebhookTest extends TestCase
         }
 
         Event::assertNotDispatched(ReservationConfirmed::class);
-        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_offline' && $mail->hasTo('admin@example.com')
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_another_gateway' && $mail->hasTo('admin@example.com')
             && $mail->context === OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT);
         Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_mark_as_paid'
             && $mail->context === OrphanedPaymentNotification::CONTEXT_CONFIRMED_BY_ANOTHER_PAYMENT);
         Mail::assertNotSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_lost_to_redelivery');
+    }
+
+    public function test_a_payment_superseded_between_the_lookup_and_the_lock_is_stale()
+    {
+        // The webhook finds the booking by this payment, then the customer switches gateway and a new
+        // payment is stored before the confirm takes the row lock. The old payment must not confirm a
+        // booking that now owes the new one: it is an abandoned payment, so the admins are alerted.
+        Mail::fake();
+        Event::fake([ReservationConfirmed::class]);
+        Config::set('resrv-config.admin_email', 'admin@example.com');
+
+        $reservation = Reservation::factory()->withCustomer()->create([
+            'item_id' => $this->entries->first()->id(),
+            'status' => 'pending',
+            'payment_id' => 'pi_left_behind',
+            'payment_gateway' => 'stripe',
+        ]);
+
+        $this->updateRowOnFirstPendingRead($reservation->id, ['payment_id' => 'fake_switched_to', 'payment_gateway' => 'fake']);
+
+        $response = app(StripePaymentGateway::class)->verifyPayment($this->signedSucceededWebhookRequest('pi_left_behind', 'whsec_test', time()));
+
+        $this->assertEquals(200, $response->getStatusCode());
+        $this->assertDatabaseHas('resrv_reservations', ['id' => $reservation->id, 'status' => 'pending', 'payment_id' => 'fake_switched_to']);
+        Event::assertNotDispatched(ReservationConfirmed::class);
+        Mail::assertSent(OrphanedPaymentNotification::class, fn ($mail) => $mail->paymentIntentId === 'pi_left_behind' && $mail->hasTo('admin@example.com'));
     }
 
     public function test_confirm_from_gateway_saves_the_in_transaction_change_only_with_the_confirmation()
@@ -624,7 +650,7 @@ class StripeWebhookTest extends TestCase
             'status' => 'cancelled',
             'payment_id' => 'pi_test_retained',
             'payment_gateway' => 'stripe',
-            'payment_unresolved' => false,
+            'payment_settlement' => 'gateway',
         ]);
 
         $request = $this->signedWebhookRequest('payment_intent.succeeded', 'pi_test_retained', 'whsec_test', time());
@@ -639,7 +665,7 @@ class StripeWebhookTest extends TestCase
     public function test_succeeded_webhook_for_a_cancelled_hold_with_an_unresolved_intent_is_an_orphan()
     {
         // The hold-lapse race: the sweep cancelled while the payment was in flight and kept the
-        // reference stamped unresolved — that charge was never collected for a live booking.
+        // reference, settled unresolved — that charge was never collected for a live booking.
         Mail::fake();
         Config::set('resrv-config.admin_email', 'admin@example.com');
 
@@ -648,7 +674,7 @@ class StripeWebhookTest extends TestCase
             'status' => 'cancelled',
             'payment_id' => 'pi_test_unresolved',
             'payment_gateway' => 'stripe',
-            'payment_unresolved' => true,
+            'payment_settlement' => 'unresolved',
         ]);
 
         $request = $this->signedWebhookRequest('payment_intent.succeeded', 'pi_test_unresolved', 'whsec_test', time());

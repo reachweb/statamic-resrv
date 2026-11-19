@@ -10,6 +10,7 @@ enum ReservationEmailEvent: string
     case CustomerCancelled = 'customer_cancelled';
     case CustomerAbandoned = 'customer_abandoned';
     case CustomerPaymentRequest = 'customer_payment_request';
+    case AdminAwaitingPayment = 'admin_awaiting_payment';
     case AdminCancelled = 'admin_cancelled';
     case AdminOrphanedPayment = 'admin_orphaned_payment';
 

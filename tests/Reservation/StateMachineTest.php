@@ -2,7 +2,9 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
+use Reach\StatamicResrv\Enums\PaymentSettlement;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationExpired;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
@@ -115,6 +117,27 @@ class StateMachineTest extends TestCase
         $reservation->transitionTo(ReservationStatus::CONFIRMED);
 
         $this->assertEquals('confirmed', $reservation->fresh()->status);
+    }
+
+    public function test_a_confirm_settles_through_the_gateway_only_for_a_payment_it_names_or_a_webhook()
+    {
+        $charged = Reservation::factory()->withCustomer()->create(['item_id' => $this->entries->first()->id(), 'status' => 'pending', 'payment_id' => 'pi_1']);
+        $unnamed = Reservation::factory()->withCustomer()->create(['item_id' => $this->entries->first()->id(), 'status' => 'pending', 'payment_id' => '']);
+
+        $charged->transitionTo(ReservationStatus::CONFIRMED);
+        $unnamed->transitionTo(ReservationStatus::CONFIRMED);
+
+        $this->assertSame(PaymentSettlement::Gateway, $charged->fresh()->payment_settlement);
+        // Nothing names a charge to refund, so the money is returned by hand, not through the gateway.
+        $this->assertSame(PaymentSettlement::OutOfBand, $unnamed->fresh()->payment_settlement);
+        $this->assertFalse($unnamed->fresh()->refundIsAutomatic());
+
+        // A webhook confirm is a gateway payment even while the checkout's void blanks payment_id.
+        $webhooked = Reservation::factory()->withCustomer()->create(['item_id' => $this->entries->first()->id(), 'status' => 'pending', 'payment_id' => '']);
+        app(FakePaymentGateway::class)->verifyPayment(new Request(['reservation_id' => $webhooked->id, 'status' => 'success']));
+
+        $this->assertSame('confirmed', $webhooked->fresh()->status);
+        $this->assertSame(PaymentSettlement::Gateway, $webhooked->fresh()->payment_settlement);
     }
 
     public function test_pending_can_transition_to_expired()

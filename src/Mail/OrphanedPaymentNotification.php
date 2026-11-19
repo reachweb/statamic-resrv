@@ -6,6 +6,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Reach\StatamicResrv\Enums\PaymentSettlement;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Reservation;
@@ -112,16 +113,15 @@ class OrphanedPaymentNotification extends Mailable
      * A CANCELLED booking's own verified charge is retained revenue, not an orphan: a paid
      * booking the customer cancelled outside the free-cancellation window
      * (ReservationRefundProcessor::cancelByCustomer()) keeps payment_id on purpose, so a
-     * redelivered succeeded webhook for that intent must not tell admins to refund it.
-     * Every kept reference that never verifiably collected money is stamped payment_unresolved
-     * (cancelled unpaid holds, unverified out-of-band settlements) — any new path that keeps
-     * one on a CANCELLED row must stamp it too, or it matches this exemption.
+     * redelivered succeeded webhook for that intent must not tell admins to refund it. A kept
+     * reference that never verifiably collected money (a cancelled unpaid hold) isn't settled
+     * by the gateway, so it doesn't match.
      */
     protected static function isRetainedCharge(Reservation $reservation, string $paymentIntentId): bool
     {
         return $reservation->status === ReservationStatus::CANCELLED->value
             && $reservation->payment_id === $paymentIntentId
-            && ! $reservation->payment_unresolved;
+            && $reservation->payment_settlement === PaymentSettlement::Gateway;
     }
 
     /**

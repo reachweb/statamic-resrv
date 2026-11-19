@@ -25,14 +25,11 @@ class ReservationRefunded extends Mailable
      * from the class name and contradict it. A configured subject (applied via
      * applyResrvEmailConfig before send) always wins.
      *
-     * An unresolved reference never counts as a card refund: it is a reconciliation handle on
-     * a payment collected out of band, and the gateway may have been skipped.
-     *
      * @return $this
      */
     public function build()
     {
-        $refundedAutomatically = $this->reservation->refundIsAutomatic() && ! $this->reservation->payment_unresolved;
+        $refundedAutomatically = $this->reservation->refundIsAutomatic();
 
         if (! $this->subject) {
             $this->subject($refundedAutomatically

@@ -48,6 +48,7 @@ class ReservationPriceCastTest extends TestCase
     public function test_refunded_amount_reports_the_recorded_charge_with_surcharge()
     {
         $reservation = Reservation::factory()->create([
+            'status' => 'confirmed',
             'price' => 200,
             'payment' => 50,
             'payment_surcharge' => 4,

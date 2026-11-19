@@ -78,6 +78,7 @@
                 <span @class([
                     'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium',
                     'bg-green-100 text-green-800' => $reservation->isLive(),
+                    'bg-blue-100 text-blue-800' => $reservation->isAwaitingPayment(),
                     'bg-gray-100 text-gray-800' => in_array($reservation->status, [ReservationStatus::REFUNDED->value, ReservationStatus::CANCELLED->value, ReservationStatus::COMPLETED->value], true),
                 ])>
                     {{ $this->statusLabel }}
@@ -202,11 +203,17 @@
                         {{ trans('statamic-resrv::frontend.amountPaid') }}
                     </p>
                     <p class="text-gray-900 truncate">
-                        {{-- A receipt the admin recorded counts as paid; when receipt is unknown (offline checkout, unresolved intent) only what was verifiably collected online does. --}}
-                        {{ config('resrv-config.currency_symbol') }} {{ ($reservation->amountReceived() ?? $reservation->amountPaidOnline())->format() }}
+                        {{-- A receipt the admin recorded counts as paid; when receipt is unknown only a gateway charge does. --}}
+                        {{ config('resrv-config.currency_symbol') }} {{ ($reservation->amountReceived() ?? $reservation->amountPaid())->format() }}
                     </p>
                 </div>
             </div>
+
+            @if ($reservation->isAwaitingPayment())
+            <div class="mt-6 p-4 bg-blue-50 border border-blue-300 rounded text-gray-700">
+                {{ trans('statamic-resrv::frontend.awaitingPaymentNote') }}
+            </div>
+            @endif
 
             @if ($errors->has('cancellation'))
             <div class="flex flex-col my-4 p-4 bg-red-50 border border-red-300 rounded">
@@ -219,7 +226,7 @@
                 @if ($reservation->canCancelWithRefund())
                 <div class="mt-6">
                     <p class="text-gray-700 mb-4">
-                        {{ trans($reservation->hasGatewayPayment() ? 'statamic-resrv::frontend.cancelReservationDescription' : 'statamic-resrv::frontend.cancelReservationNoPaymentDescription') }}
+                        {{ trans($reservation->amountPaid()->isZero() ? 'statamic-resrv::frontend.cancelReservationNoPaymentDescription' : 'statamic-resrv::frontend.cancelReservationDescription') }}
                     </p>
                     <button
                         type="button"

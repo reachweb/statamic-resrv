@@ -126,6 +126,27 @@ class ReservationStatusTest extends TestCase
             ->assertSet('reservationId', null);
     }
 
+    // The payment request email of a booking that awaits payment carries its reference, so the page
+    // finds it. Like a manual reservation's, only the business cancels it: the customer is asked to
+    // contact them.
+    public function test_an_awaiting_payment_booking_shows_as_awaiting_and_cannot_be_cancelled_online()
+    {
+        $awaiting = $this->makeReservation(['status' => 'awaiting_payment', 'payment_id' => '', 'payment_gateway' => 'offline']);
+
+        Livewire::test(ReservationStatus::class)
+            ->set('email', $awaiting->customer->email)
+            ->set('reference', $awaiting->reference)
+            ->call('lookup')
+            ->assertHasNoErrors()
+            ->assertSee(trans('statamic-resrv::frontend.statusAwaitingPayment'))
+            ->assertSee(trans('statamic-resrv::frontend.awaitingPaymentNote'))
+            ->assertDontSee(trans('statamic-resrv::frontend.cancelReservation'))
+            ->call('cancel')
+            ->assertHasErrors(['cancellation']);
+
+        $this->assertSame('awaiting_payment', $awaiting->fresh()->status);
+    }
+
     public function test_lookup_is_rate_limited_after_too_many_failed_attempts()
     {
         $reservation = $this->makeReservation();
@@ -371,7 +392,7 @@ class ReservationStatusTest extends TestCase
             ->assertSee(trans('statamic-resrv::frontend.statusCancelledNoRefund'))
             ->assertDontSee(trans('statamic-resrv::frontend.statusCancelledNoRefundIssued'));
 
-        $this->assertTrue($reservation->fresh()->amountPaidOnline()->isZero());
+        $this->assertTrue($reservation->fresh()->amountPaid()->isZero());
     }
 
     public function test_an_unresolved_payment_reference_never_reads_as_collected_money()
@@ -380,7 +401,7 @@ class ReservationStatusTest extends TestCase
 
         /** @var FakePaymentGateway $gateway */
         $gateway = app(PaymentGatewayManager::class)->gateway('fake');
-        // The void fails unverifiably, so the reference is kept and stamped unresolved:
+        // The void fails unverifiably, so the reference is kept and settled unresolved:
         // the status page must not present that handle as a paid amount or a retained payment.
         $gateway->cancelSucceeds = false;
 
@@ -397,9 +418,10 @@ class ReservationStatusTest extends TestCase
         );
 
         $reservation->refresh();
-        $this->assertTrue($reservation->payment_unresolved);
+        $this->assertTrue($reservation->hasUnresolvedPayment());
         $this->assertSame('pi_unresolved_hold', $reservation->payment_id);
-        $this->assertTrue($reservation->amountPaidOnline()->isZero());
+        $this->assertNull($reservation->amountReceived());
+        $this->assertTrue($reservation->amountPaid()->isZero());
 
         Livewire::test(ReservationStatus::class)
             ->set('email', $reservation->customer->email)
@@ -795,12 +817,8 @@ class ReservationStatusTest extends TestCase
             'status' => 'confirmed',
         ]);
 
-        // Display still works without the gateway: the recorded charge is reported
-        // instead of throwing while asking the missing gateway how it collects.
-        $this->assertSame(
-            $reservation->amountPaid()->format(),
-            $reservation->fresh()->amountPaidOnline()->format()
-        );
+        // Display still works without the gateway: the recorded charge is reported.
+        $this->assertFalse($reservation->fresh()->amountPaid()->isZero());
     }
 
     public function test_cancel_reports_success_even_when_a_post_refund_listener_fails()
@@ -1005,25 +1023,23 @@ class ReservationStatusTest extends TestCase
         );
     }
 
-    public function test_offline_bookings_are_not_reported_as_paid_online()
+    public function test_offline_bookings_confirmed_before_v6_6_are_not_reported_as_paid()
     {
         Config::set('resrv-config.payment_gateways', [
             'offline' => ['class' => OfflinePaymentGateway::class],
         ]);
         app()->forgetInstance(PaymentGatewayManager::class);
 
+        // The checkout confirmed it before any money arrived, so the migration settles it unresolved.
         $reservation = $this->makeReservation([
             'payment_gateway' => 'offline',
-            'payment_id' => 'offline_test_intent',
+            'payment_settlement' => 'unresolved',
             'payment' => 50,
             'payment_surcharge' => 0,
         ]);
 
-        // Nothing was collected online — the deposit arrives by bank transfer out-of-band.
-        $this->assertSame('0.00', $reservation->amountPaidOnline()->format());
-
-        // The recorded charge stays intact for the admin "refund manually" path.
-        $this->assertSame('50.00', $reservation->amountPaid()->format());
+        $this->assertNull($reservation->amountReceived());
+        $this->assertSame('0.00', $reservation->amountPaid()->format());
 
         // The customer status page must not present that deposit as already paid.
         Livewire::test(ReservationStatus::class)
@@ -1037,8 +1053,8 @@ class ReservationStatusTest extends TestCase
     public function test_a_receipt_recorded_by_an_admin_shows_as_paid()
     {
         // A manual booking marked as paid in the CP: the money arrived out of band, so no
-        // verified online charge exists — empty reference, or a kept intent stamped unresolved.
-        foreach ([['payment_id' => ''], ['payment_id' => 'pi_kept', 'payment_unresolved' => true]] as $attributes) {
+        // verified online charge exists — empty reference, or a kept intent.
+        foreach ([['payment_id' => ''], ['payment_id' => 'pi_kept', 'payment_settlement' => 'out_of_band']] as $attributes) {
             $reservation = $this->makeReservation(array_merge([
                 'payment_gateway' => 'fake',
                 'payment' => 50,
@@ -1046,7 +1062,7 @@ class ReservationStatusTest extends TestCase
                 'created_by' => 'admin',
             ], $attributes));
 
-            $this->assertTrue($reservation->amountPaidOnline()->isZero());
+            $this->assertTrue($reservation->amountPaid()->isZero());
 
             Livewire::test(ReservationStatus::class)
                 ->set('email', $reservation->customer->email)

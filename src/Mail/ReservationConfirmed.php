@@ -24,15 +24,6 @@ class ReservationConfirmed extends Mailable
      */
     public function build()
     {
-        // An offline checkout confirms before any money arrives, so this email is where the
-        // customer gets the payment details.
-        $awaitingOfflinePayment = $this->reservation->isOfflineCheckout();
-
-        $this->with([
-            'awaitingOfflinePayment' => $awaitingOfflinePayment,
-            'offlineInstructions' => $awaitingOfflinePayment ? $this->offlineInstructions() : null,
-        ]);
-
         $this->markdown($this->markdownTemplate('statamic-resrv::email.reservations.confirmed'));
 
         $this->dispatchBuildingEvent($this->reservation);

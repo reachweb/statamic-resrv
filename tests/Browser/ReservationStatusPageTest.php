@@ -19,9 +19,9 @@ use Statamic\Facades\Entry;
  * Fixtures are written by the TEST process into the shared file SQLite (Gotcha #5) and
  * read back by the served app; customerLookupHash() agrees across the boundary because
  * both processes run on the same skeleton APP_KEY. Every fixture is a NO-CHARGE booking
- * (payment_id '' + payment 0): gatewayHoldsNoCharge() short-circuits
- * supportsAutomaticRefund(), so the offline-only served gateway never blocks the cancel
- * path and cancelling routes to CANCELLED without any gateway call.
+ * (payment_id '' + payment 0, settled none): canCancelWithRefund() never asks the
+ * gateway, so the offline-only served gateway never blocks the cancel path and cancelling
+ * routes to CANCELLED without any gateway call.
  */
 class ReservationStatusPageTest extends BrowserTestCase
 {

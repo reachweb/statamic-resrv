@@ -134,7 +134,7 @@ class ReservationRefundedTest extends TestCase
             'price' => '60.00',
             'payment' => '60.00',
             'payment_id' => 'pi_kept',
-            'payment_unresolved' => true,
+            'payment_settlement' => 'out_of_band',
         ])->withCustomer()->create();
 
         $mail = new ReservationRefunded($reservation);
@@ -155,14 +155,15 @@ class ReservationRefundedTest extends TestCase
 
         $item = $this->makeStatamicItem();
 
-        // An offline checkout confirms before the transfer arrives, so its reference proves nothing was received.
+        // Before v6.6.0 the checkout confirmed an offline booking before the transfer arrived, so the
+        // migration settles it unresolved: nothing records whether the money was received.
         $reservation = Reservation::factory([
             'item_id' => $item->id(),
             'status' => 'refunded',
             'price' => '80.00',
             'payment' => '80.00',
             'payment_gateway' => 'offline',
-            'payment_id' => 'offline_abc',
+            'payment_settlement' => 'unresolved',
         ])->withCustomer()->create();
 
         $html = (new ReservationRefunded($reservation))->render();

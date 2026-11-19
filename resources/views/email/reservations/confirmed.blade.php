@@ -97,34 +97,22 @@
 @endcomponent
 @endif
 
+{{-- Unknown for offline bookings confirmed before v6.6.0, before any money arrived. --}}
+@php($receiptUnknown = $reservation->amountReceived() === null)
 @component('mail::table')
 |{{ __("Payment information") }}||
 | :----------------------------- |:----------------| 
-@if ($awaitingOfflinePayment ?? false)
-| {{ __("Amount due") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountDue()->format() }} |
-@endif
 @if ((config('resrv-config.payment') !== 'everything' || $reservation->payment->lessThan($reservation->total)) && $reservation->status !== 'partner')
-@unless ($awaitingOfflinePayment ?? false)
-| {{ $reservation->amountPaidOnline()->isZero() ? __("Amount already paid") : __("Already paid by credit card") }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
-@endunless
+| {{ $receiptUnknown ? __("Payment") : ($reservation->amountPaid()->isZero() ? __("Amount already paid") : __("Already paid by credit card")) }}    | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment->format() }} |
 | {{ __("Remaining amount") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->amountRemaining() }} |
 @endif
 @if (! $reservation->payment_surcharge->isZero())
 | {{ __("Payment surcharge") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->payment_surcharge->format() }} |
-@unless ($awaitingOfflinePayment ?? false)
-| {{ __("Total charged") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->totalToCharge() }} |
-@endunless
+| {{ $receiptUnknown ? __("Payment including surcharge") : __("Total charged") }} | {{ config('resrv-config.currency_symbol') }} {{ $reservation->totalToCharge() }} |
 @endif
 | **{{ __("Total") }}** ({{ __("including taxes") }}) | {{ config('resrv-config.currency_symbol') }} {{ $reservation->total->format() }} |
 
 @endcomponent
-
-@if ($offlineInstructions ?? null)
-@include('statamic-resrv::email.reservations.partials.how-to-pay', [
-    'instructions' => $offlineInstructions,
-    'note' => __("Please include the booking reference :reference with your payment.", ['reference' => $reservation->reference]),
-])
-@endif
 
 {{ __("Thank you") }},<br>
 {{ config('app.name') }}
