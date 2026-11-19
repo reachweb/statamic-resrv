@@ -9,7 +9,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Reach\StatamicResrv\Enums\ReservationEmailEvent;
-use Reach\StatamicResrv\Exceptions\ManualReservationException;
 use Reach\StatamicResrv\Mail\ReservationAwaitingPayment;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ManualReservationCreator;
@@ -34,10 +33,11 @@ class SendAwaitingPaymentEmails implements ShouldQueue
     public function handle(): void
     {
         // The sender refuses a request that can no longer be paid, such as a booking an admin marked as
-        // paid in the meantime. That skips the customer's email only: the admins still hear of the booking.
+        // paid in the meantime, and the mail transport can fail. Either skips the customer's email only:
+        // the admins must still hear of a booking that holds its dates until it is paid.
         try {
             app(ManualReservationCreator::class)->sendPaymentRequestEmail($this->reservation);
-        } catch (ManualReservationException $e) {
+        } catch (\Throwable $e) {
             Log::warning('The payment request email of a new offline booking was not sent.', [
                 'reservation_id' => $this->reservation->id,
                 'error' => $e->getMessage(),

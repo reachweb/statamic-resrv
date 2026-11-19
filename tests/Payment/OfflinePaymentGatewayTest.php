@@ -26,6 +26,7 @@ use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Customer;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Support\ManualReservationCreator;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Entries\Entry;
@@ -577,6 +578,18 @@ class OfflinePaymentGatewayTest extends TestCase
 
         $this->assertSame(ReservationStatus::AWAITING_PAYMENT->value, $reservation->fresh()->status);
         $this->assertSame(1, $this->availableTomorrow());
+    }
+
+    public function test_the_admins_hear_of_an_offline_booking_when_its_payment_request_fails_to_send()
+    {
+        Mail::fake();
+        $this->mock(ManualReservationCreator::class)
+            ->shouldReceive('sendPaymentRequestEmail')->atLeast()->once()->andThrow(new \RuntimeException('Mail transport down'));
+
+        $reservation = $this->placeOfflineCheckoutBooking();
+
+        $this->assertSame(ReservationStatus::AWAITING_PAYMENT->value, $reservation->status);
+        Mail::assertSent(ReservationAwaitingPayment::class, fn ($mail) => $mail->hasTo('admin@example.com'));
     }
 
     public function test_mark_as_paid_confirms_an_offline_checkout_booking()

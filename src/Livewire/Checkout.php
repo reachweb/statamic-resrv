@@ -452,15 +452,20 @@ class Checkout extends Component
                 return null;
             }
 
+            // The offline step's Confirm takes only the row lock, so it can place the booking after the
+            // PENDING check above. Write only to a row still pending: a placed booking keeps its method.
+            $stillPending = fn () => Reservation::query()->whereKey($reservation->id)
+                ->where('status', ReservationStatus::PENDING->value);
+
             // An offline selection has no intent, so the void above leaves its gateway. Clear it, or an
             // offline form still open in another tab could place the booking after the customer went back.
             if (blank($reservation->payment_id) && filled($reservation->payment_gateway)) {
-                $reservation->update(['payment_gateway' => '']);
+                $stillPending()->update(['payment_gateway' => '']);
             }
 
             // selectedGateway resets on page refresh but payment_surcharge persists in DB
             if (! $reservation->payment_surcharge->isZero()) {
-                $reservation->update(['payment_surcharge' => 0]);
+                $stillPending()->update(['payment_surcharge' => 0]);
             }
 
             return true;
