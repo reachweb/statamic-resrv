@@ -8,10 +8,13 @@ use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\FixedPricing;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class RateCpTest extends TestCase
 {
+    use CreatesEntries;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -1074,16 +1077,7 @@ class RateCpTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()->count(3)->sequence(
-            ['date' => $startDate],
-            ['date' => $startDate->copy()->addDay()],
-            ['date' => $startDate->copy()->addDays(2)],
-        )->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'price' => 100,
-            'available' => 2,
-        ]);
+        $this->createAvailabilityForEntry($item, 100, 2, $rate->id, 3, from: $startDate);
 
         FixedPricing::factory()->create([
             'statamic_id' => $item->id(),
@@ -1110,13 +1104,7 @@ class RateCpTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => $startDate,
-            'price' => 100,
-            'available' => 2,
-        ]);
+        $this->createAvailabilityForEntry($item, 100, 2, $rate->id, dates: [$startDate]);
 
         Reservation::factory()->create([
             'item_id' => $item->id(),

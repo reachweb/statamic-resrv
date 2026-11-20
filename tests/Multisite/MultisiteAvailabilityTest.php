@@ -9,6 +9,7 @@ use Reach\StatamicResrv\Livewire\AvailabilityResults;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Scopes\ResrvSearch;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Antlers;
 use Statamic\Facades\Blueprint;
@@ -19,6 +20,8 @@ use Statamic\Tags\Collection\Collection as CollectionTag;
 
 class MultisiteAvailabilityTest extends TestCase
 {
+    use CreatesEntries;
+
     protected $date;
 
     protected $originEntry;
@@ -89,20 +92,7 @@ class MultisiteAvailabilityTest extends TestCase
         ]);
 
         // Create availability records using the ORIGIN entry ID (this is how the system stores data)
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'statamic_id' => $this->originEntry->id(),
-                'available' => 1,
-                'price' => 100,
-                'rate_id' => $rate->id,
-            ]);
+        $this->createAvailabilityForEntry($this->originEntry, 100, 1, $rate->id, 4);
     }
 
     protected function makeBlueprint($collection): void
@@ -377,20 +367,7 @@ class MultisiteAvailabilityTest extends TestCase
             ->first();
 
         // Create availability with 2 available using ORIGIN ID
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'statamic_id' => $twoAvailableEntry->id(),
-                'available' => 2,
-                'price' => 150,
-                'rate_id' => $twoAvailableRate->id,
-            ]);
+        $this->createAvailabilityForEntry($twoAvailableEntry, 150, 2, $twoAvailableRate->id, 4);
 
         // Switch to Greek site
         Site::setCurrent('el');

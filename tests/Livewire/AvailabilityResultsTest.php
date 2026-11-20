@@ -1906,20 +1906,7 @@ class AvailabilityResultsTest extends TestCase
             'order' => 1,
         ]);
 
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 4);
 
         foreach (range(0, 3) as $offset) {
             RatePrice::create([

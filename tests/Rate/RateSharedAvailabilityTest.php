@@ -13,10 +13,13 @@ use Reach\StatamicResrv\Models\ChildReservation;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\RatePrice;
 use Reach\StatamicResrv\Models\Reservation;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class RateSharedAvailabilityTest extends TestCase
 {
+    use CreatesEntries;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -40,19 +43,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(3)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-                ['date' => $startDate->copy()->addDays(2)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => $baseAvailable,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, $baseAvailable, $baseRate->id, 3, from: $startDate);
 
         return [
             'entry' => $entry,
@@ -379,18 +370,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $rate->id,
-                'price' => 100,
-                'available' => 3,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 3, $rate->id, 2, from: $startDate);
 
         AvailabilityRepository::decrement(
             date_start: $startDate->toDateString(),
@@ -663,18 +643,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 2, from: $startDate);
 
         // Single-rate query with shared+relative rate should resolve to base availability
         $availability = new Availability;
@@ -936,18 +905,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 2, from: $startDate);
 
         $result = (new Availability)->getAvailabilityForEntry([
             'date_start' => $startDate->toDateString(),
@@ -982,13 +940,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()->create([
-            'statamic_id' => $entry->id(),
-            'rate_id' => $baseRate->id,
-            'date' => $startDate,
-            'price' => 100,
-            'available' => 5,
-        ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, dates: [$startDate]);
 
         $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $sharedRelativeRate->id);
 
@@ -1021,13 +973,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()->create([
-            'statamic_id' => $entry->id(),
-            'rate_id' => $relativeRate->id,
-            'date' => $startDate,
-            'price' => 100,
-            'available' => 5,
-        ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $relativeRate->id, dates: [$startDate]);
 
         $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $relativeRate->id);
 
@@ -1059,13 +1005,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()->create([
-            'statamic_id' => $entry->id(),
-            'rate_id' => $baseRate->id,
-            'date' => $startDate,
-            'price' => 100,
-            'available' => 5,
-        ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, dates: [$startDate]);
 
         $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $sharedRelativeRate->id);
 
@@ -1097,13 +1037,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()->create([
-            'statamic_id' => $entry->id(),
-            'rate_id' => $baseRate->id,
-            'date' => $startDate,
-            'price' => 100,
-            'available' => 5,
-        ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, dates: [$startDate]);
 
         // No rate selected: the calendar expands published rates from the base rows and the
         // relative rate's 75.00 wins as the cheapest row for the date.
@@ -1131,13 +1065,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()->create([
-            'statamic_id' => $entry->id(),
-            'rate_id' => $baseRate->id,
-            'date' => $startDate,
-            'price' => 100,
-            'available' => 5,
-        ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, dates: [$startDate]);
 
         $calendar = (new Availability)->getAvailabilityCalendar($entry->id(), (string) $sharedRate->id);
 
@@ -1165,18 +1093,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 2, from: $startDate);
 
         // Search without specifying a rate_id — should resolve to the published shared rate
         $result = (new Availability)->getAvailabilityForEntry([
@@ -1209,18 +1126,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 2, from: $startDate);
 
         // Search without rate — shared rate doesn't apply to this entry, should return empty
         $result = (new Availability)->getAvailabilityForEntry([
@@ -1404,19 +1310,7 @@ class RateSharedAvailabilityTest extends TestCase
         $addEntryWithAvailability = function () use ($baseRate, $startDate) {
             $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
-            Availability::factory()
-                ->count(3)
-                ->sequence(
-                    ['date' => $startDate],
-                    ['date' => $startDate->copy()->addDay()],
-                    ['date' => $startDate->copy()->addDays(2)],
-                )
-                ->create([
-                    'statamic_id' => $entry->id(),
-                    'rate_id' => $baseRate->id,
-                    'price' => 100,
-                    'available' => 10,
-                ]);
+            $this->createAvailabilityForEntry($entry, 100, 10, $baseRate->id, 3, from: $startDate);
         };
 
         $searchData = [
@@ -1480,18 +1374,7 @@ class RateSharedAvailabilityTest extends TestCase
         $addEntryWithAvailability = function () use ($baseRate, $sharedRate, $startDate) {
             $entry = $this->makeStatamicItemWithResrvAvailabilityField();
 
-            Availability::factory()
-                ->count(2)
-                ->sequence(
-                    ['date' => $startDate],
-                    ['date' => $startDate->copy()->addDay()],
-                )
-                ->create([
-                    'statamic_id' => $entry->id(),
-                    'rate_id' => $baseRate->id,
-                    'price' => 100,
-                    'available' => 10,
-                ]);
+            $this->createAvailabilityForEntry($entry, 100, 10, $baseRate->id, 2, from: $startDate);
 
             RatePrice::create([
                 'rate_id' => $sharedRate->id,
@@ -1575,19 +1458,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(3)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-                ['date' => $startDate->copy()->addDays(2)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 3, from: $startDate);
 
         $searchData = [
             'date_start' => $startDate->toDateString(),
@@ -1632,19 +1503,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(3)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-                ['date' => $startDate->copy()->addDays(2)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 3, from: $startDate);
 
         // quantity 2 exceeds cap of 1, so the rate must be rejected even with no reservations.
         $searchData = [
@@ -1681,19 +1540,7 @@ class RateSharedAvailabilityTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(3)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-                ['date' => $startDate->copy()->addDays(2)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 3, from: $startDate);
 
         // quantity 2 exceeds cap of 1; all-rates calendar must return nothing.
         $exceedsCap = app(Availability::class)->getAvailableDatesFromDate(

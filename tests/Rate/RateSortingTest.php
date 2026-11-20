@@ -7,10 +7,13 @@ use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\RatePrice;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class RateSortingTest extends TestCase
 {
+    use CreatesEntries;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -46,18 +49,7 @@ class RateSortingTest extends TestCase
 
         $startDate = now()->startOfDay();
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 2, from: $startDate);
 
         foreach ([0, 1] as $offset) {
             RatePrice::create([
@@ -136,18 +128,7 @@ class RateSortingTest extends TestCase
             'order' => 0,
         ]);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $rate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $rate->id, 2, from: $startDate);
 
         $byOrder = (new Availability)->getAvailabilityForEntry(
             $this->searchData($startDate),
@@ -188,18 +169,7 @@ class RateSortingTest extends TestCase
         ]);
 
         foreach ([$restrictedRate, $bookableRate] as $rate) {
-            Availability::factory()
-                ->count(2)
-                ->sequence(
-                    ['date' => $startDate],
-                    ['date' => $startDate->copy()->addDay()],
-                )
-                ->create([
-                    'statamic_id' => $entry->id(),
-                    'rate_id' => $rate->id,
-                    'price' => 100,
-                    'available' => 5,
-                ]);
+            $this->createAvailabilityForEntry($entry, 100, 5, $rate->id, 2, from: $startDate);
         }
 
         $result = (new Availability)->getAvailabilityForEntry(
@@ -233,10 +203,7 @@ class RateSortingTest extends TestCase
         ]);
 
         foreach ([[$base, 100], [$other, 80]] as [$rate, $price]) {
-            Availability::factory()
-                ->count(2)
-                ->sequence(['date' => $startDate], ['date' => $startDate->copy()->addDay()])
-                ->create(['statamic_id' => $entry->id(), 'rate_id' => $rate->id, 'price' => $price, 'available' => 5]);
+            $this->createAvailabilityForEntry($entry, $price, 5, $rate->id, 2, from: $startDate);
         }
 
         foreach ([0, 1] as $day) {
@@ -261,10 +228,7 @@ class RateSortingTest extends TestCase
 
         $baseRate = Rate::factory()->create(['collection' => 'pages', 'slug' => 'base', 'order' => 0]);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(['date' => $startDate], ['date' => $startDate->copy()->addDay()])
-            ->create(['statamic_id' => $entry->id(), 'rate_id' => $baseRate->id, 'price' => 100, 'available' => 5]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 2, from: $startDate);
 
         // Capped shared rates after the bookable base rate: checking one costs extra queries.
         $addCappedRates = fn (int $count, int $from) => Rate::factory()->count($count)->sequence(
@@ -312,18 +276,7 @@ class RateSortingTest extends TestCase
             'order' => 0,
         ]);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $availableRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $availableRate->id, 2, from: $startDate);
 
         // Cheaper rate (order 1), but sold out for the requested dates.
         $soldOutRate = Rate::factory()->create([
@@ -332,18 +285,7 @@ class RateSortingTest extends TestCase
             'order' => 1,
         ]);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $soldOutRate->id,
-                'price' => 10,
-                'available' => 0,
-            ]);
+        $this->createAvailabilityForEntry($entry, 10, 0, $soldOutRate->id, 2, from: $startDate);
 
         $result = (new Availability)->getAvailabilityForEntry(
             $this->searchData($startDate),
@@ -368,18 +310,7 @@ class RateSortingTest extends TestCase
             'order' => 0,
         ]);
 
-        Availability::factory()
-            ->count(2)
-            ->sequence(
-                ['date' => $startDate],
-                ['date' => $startDate->copy()->addDay()],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $rate->id,
-                'price' => 50,
-                'available' => 0,
-            ]);
+        $this->createAvailabilityForEntry($entry, 50, 0, $rate->id, 2, from: $startDate);
 
         $result = (new Availability)->getAvailabilityForEntry(
             $this->searchData($startDate),
@@ -427,18 +358,7 @@ class RateSortingTest extends TestCase
         ]);
 
         foreach ([$higherOrderRate, $lowerOrderRate] as $rate) {
-            Availability::factory()
-                ->count(2)
-                ->sequence(
-                    ['date' => $startDate],
-                    ['date' => $startDate->copy()->addDay()],
-                )
-                ->create([
-                    'statamic_id' => $entry->id(),
-                    'rate_id' => $rate->id,
-                    'price' => 80,
-                    'available' => 5,
-                ]);
+            $this->createAvailabilityForEntry($entry, 80, 5, $rate->id, 2, from: $startDate);
         }
 
         $result = (new Availability)->getAvailabilityForEntry(

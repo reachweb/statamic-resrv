@@ -539,20 +539,7 @@ class ManualReservationCreatorTest extends TestCase
             'published' => false,
             'order' => 2,
         ]);
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $unpublished->id,
-                'available' => 5,
-                'price' => '999',
-            ]);
+        $this->createAvailabilityForEntry($entry, 999, 5, $unpublished->id, 4);
 
         $quote = $this->creator()->quote($this->baseInput($entry, ['rate_id' => null]));
 

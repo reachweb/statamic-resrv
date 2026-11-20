@@ -4,7 +4,6 @@ namespace Reach\StatamicResrv\Tests\Rate;
 
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityList;
-use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -37,19 +36,7 @@ class RateDateListTest extends TestCase
             'modifier_amount' => 20,
         ]);
 
-        Availability::factory()
-            ->count(3)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $relativeRate->id,
-                'price' => 100,
-                'available' => 2,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 2, $relativeRate->id, 3);
 
         // Select the relative rate specifically
         $component = Livewire::test(AvailabilityList::class, [
@@ -89,19 +76,7 @@ class RateDateListTest extends TestCase
             'base_rate_id' => $baseRate->id,
         ]);
 
-        Availability::factory()
-            ->count(3)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 3);
 
         // Show all rates — shared rate should appear
         $component = Livewire::test(AvailabilityList::class, [
@@ -144,19 +119,7 @@ class RateDateListTest extends TestCase
             'modifier_amount' => 10,
         ]);
 
-        Availability::factory()
-            ->count(3)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 3);
 
         $component = Livewire::test(AvailabilityList::class, [
             'entry' => $entry->id(),
@@ -266,19 +229,7 @@ class RateDateListTest extends TestCase
             'base_rate_id' => $baseRate->id,
         ]);
 
-        Availability::factory()
-            ->count(3)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-            )
-            ->create([
-                'statamic_id' => $entry->id(),
-                'rate_id' => $baseRate->id,
-                'price' => 100,
-                'available' => 5,
-            ]);
+        $this->createAvailabilityForEntry($entry, 100, 5, $baseRate->id, 3);
 
         $component = Livewire::test(AvailabilityList::class, [
             'entry' => $entry->id(),

@@ -89,20 +89,7 @@ class AvailabilityMultiResultsTest extends TestCase
             'title' => 'Children',
         ]);
 
-        Availability::factory()
-            ->count(4)
-            ->sequence(
-                ['date' => today()],
-                ['date' => today()->addDay()],
-                ['date' => today()->addDays(2)],
-                ['date' => today()->addDays(3)],
-            )
-            ->create([
-                'available' => $available,
-                'price' => 30,
-                'statamic_id' => $entry->id(),
-                'rate_id' => $childrenRate->id,
-            ]);
+        $this->createAvailabilityForEntry($entry, 30, $available, $childrenRate->id, 4);
 
         $adultsRate = Rate::forEntry($entry->id())->where('slug', 'adults')->first();
 

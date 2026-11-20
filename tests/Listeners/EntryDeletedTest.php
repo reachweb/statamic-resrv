@@ -4,12 +4,14 @@ namespace Reach\StatamicResrv\Tests\Listeners;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Tests\CreatesEntries;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class EntryDeletedTest extends TestCase
 {
+    use CreatesEntries;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -21,15 +23,11 @@ class EntryDeletedTest extends TestCase
         $item = $this->makeStatamicItemWithResrvAvailabilityField();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+        $this->createAvailabilityForEntry($item, 150, 2, $rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
-        Availability::factory()->create([
-            'statamic_id' => $item->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDays(2)->isoFormat('YYYY-MM-DD'),
+        $this->createAvailabilityForEntry($item, 150, 2, $rate->id, dates: [
+            today()->addDays(2)->isoFormat('YYYY-MM-DD'),
         ]);
 
         $item->delete();
@@ -85,10 +83,8 @@ class EntryDeletedTest extends TestCase
         $resrvItem = $this->makeStatamicItemWithResrvAvailabilityField();
         $rate = Rate::factory()->create(['collection' => 'pages']);
 
-        Availability::factory()->create([
-            'statamic_id' => $resrvItem->id(),
-            'rate_id' => $rate->id,
-            'date' => today()->addDay()->isoFormat('YYYY-MM-DD'),
+        $this->createAvailabilityForEntry($resrvItem, 150, 2, $rate->id, dates: [
+            today()->addDay()->isoFormat('YYYY-MM-DD'),
         ]);
 
         $plainItem = $this->makeStatamicWithoutResrvAvailabilityField();

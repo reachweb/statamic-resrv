@@ -2,6 +2,7 @@
 
 namespace Reach\StatamicResrv\Tests;
 
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Models\Availability;
@@ -123,9 +124,21 @@ trait CreatesEntries
         return $entries;
     }
 
-    protected function createAvailabilityForEntry(Entry $entry, float $price, int $available, ?int $rateId = null, int $days = 20)
-    {
-        $startDate = now()->startOfDay();
+    /**
+     * Create one availability row per day for $days days starting at $from (default today), or
+     * one row per value in $dates, stored as given: a date string and a Carbon are stored differently.
+     */
+    protected function createAvailabilityForEntry(
+        Entry $entry,
+        float $price,
+        int $available,
+        ?int $rateId = null,
+        int $days = 20,
+        ?CarbonInterface $from = null,
+        ?array $dates = null,
+    ) {
+        $startDate = $from ?? now()->startOfDay();
+        $dates ??= SupportCollection::times($days, fn ($day) => $startDate->copy()->addDays($day - 1))->all();
 
         if (! $rateId) {
             $rate = Rate::forEntry($entry->id())->first();
@@ -140,9 +153,9 @@ trait CreatesEntries
         }
 
         Availability::factory()
-            ->count($days)
+            ->count(count($dates))
             ->sequence(fn ($sequence) => [
-                'date' => $startDate->copy()->addDays($sequence->index),
+                'date' => $dates[$sequence->index],
                 'price' => $price,
                 'available' => $available,
                 'statamic_id' => $entry->id(),

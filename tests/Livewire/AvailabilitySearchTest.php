@@ -582,23 +582,9 @@ class AvailabilitySearchTest extends TestCase
         ]);
 
         // Create availability with different prices for different rates on the same date
-        Availability::factory()
-            ->create([
-                'statamic_id' => $entry->id(),
-                'date' => today(),
-                'price' => 200,
-                'available' => 2,
-                'rate_id' => $expensiveRate->id,
-            ]);
+        $this->createAvailabilityForEntry($entry, 200, 2, $expensiveRate->id, 1);
 
-        Availability::factory()
-            ->create([
-                'statamic_id' => $entry->id(),
-                'date' => today(),
-                'price' => 25,
-                'available' => 3,
-                'rate_id' => $cheapRate->id,
-            ]);
+        $this->createAvailabilityForEntry($entry, 25, 3, $cheapRate->id, 1);
 
         $component = Livewire::test(AvailabilitySearch::class, [
             'entry' => $entry->id(),
