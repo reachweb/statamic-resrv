@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\AvailabilityChange;
@@ -12,8 +11,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityChangeCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     public $item;
 
     public $rate;

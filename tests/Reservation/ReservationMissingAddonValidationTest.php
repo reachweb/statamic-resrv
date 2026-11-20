@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Reach\StatamicResrv\Exceptions\ExtrasException;
 use Reach\StatamicResrv\Exceptions\OptionsException;
@@ -33,7 +32,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 class ReservationMissingAddonValidationTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     private $entry;
 

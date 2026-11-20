@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Exceptions\ReservationDriftException;
@@ -32,7 +31,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 class ReservationUnitsPerAddonTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     private $entry;
 

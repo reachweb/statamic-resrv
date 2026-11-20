@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Rate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Enums\RateSorting;
 use Reach\StatamicResrv\Models\Availability;
@@ -12,8 +11,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class RateSortingTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Listeners;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Availability;
@@ -11,8 +10,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class EntryDeletedTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

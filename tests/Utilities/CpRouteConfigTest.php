@@ -2,14 +2,11 @@
 
 namespace Reach\StatamicResrv\Tests\Utilities;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class CpRouteConfigTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function resolveApplicationConfiguration($app)
     {
         parent::resolveApplicationConfiguration($app);

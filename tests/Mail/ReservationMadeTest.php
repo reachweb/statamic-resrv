@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Mail;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Mail\ReservationMade;
 use Reach\StatamicResrv\Models\Option;
 use Reach\StatamicResrv\Models\OptionValue;
@@ -11,8 +10,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationMadeTest extends TestCase
 {
-    use RefreshDatabase;
-
     // The admin notification must render even when the entry it referenced has since been deleted;
     // entry() then returns the emptyEntry() array, which the template must not treat as an object.
     public function test_it_renders_when_the_reservation_entry_has_been_deleted()

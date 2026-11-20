@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\Checkout;
@@ -30,7 +29,6 @@ use Statamic\Facades\Blueprint;
 class CheckoutUnitsPerAddonTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     public $entry;
 

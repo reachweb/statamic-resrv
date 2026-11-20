@@ -2,15 +2,12 @@
 
 namespace Reach\StatamicResrv\Tests\Rate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class RateUnitsPerAddonCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Rate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Facades\Availability as AvailabilityRepository;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\FixedPricing;
@@ -12,8 +11,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class RateAvailabilityTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

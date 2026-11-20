@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Option;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -26,7 +25,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 class OptionValueUnitsPerAddonTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     public $entries;
 

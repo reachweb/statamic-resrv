@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ManualReservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Mail\Events\MessageSent;
 use Illuminate\Support\Facades\Config;
@@ -26,7 +25,7 @@ use Symfony\Component\Mailer\Exception\TransportException;
 
 class CancelLapsedHoldsTest extends TestCase
 {
-    use CreatesEntries, RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {

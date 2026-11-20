@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Rate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Facades\Price;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\ChildReservation;
@@ -13,8 +12,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class RateCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

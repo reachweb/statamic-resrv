@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ManualReservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
@@ -25,7 +24,7 @@ use Statamic\Facades\Blueprint;
 
 class PaymentRequestEmailTest extends TestCase
 {
-    use CreatesEntries, RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {

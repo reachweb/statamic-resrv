@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationCreated;
 use Reach\StatamicResrv\Events\ReservationExpired;
@@ -14,8 +13,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityEventsTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

@@ -2,15 +2,12 @@
 
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class AdvancedAvailabilityCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

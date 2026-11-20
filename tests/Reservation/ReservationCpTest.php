@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -25,8 +24,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
@@ -24,7 +23,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationLogTest extends TestCase
 {
-    use CreatesEntries, RefreshDatabase;
+    use CreatesEntries;
 
     public $entry;
 

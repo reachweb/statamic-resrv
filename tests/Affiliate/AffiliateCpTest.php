@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Extra;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Reach\StatamicResrv\Models\Affiliate;
 use Reach\StatamicResrv\Models\DynamicPricing;
@@ -11,8 +10,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AffiliateCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

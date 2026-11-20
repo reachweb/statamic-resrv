@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Mail;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Mail\ReservationRefunded;
@@ -11,8 +10,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationRefundedTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_refunded_email_for_a_paid_reservation_shows_the_charged_amount()
     {
         $item = $this->makeStatamicItem();

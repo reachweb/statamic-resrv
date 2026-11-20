@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Filters\ReservationEntry;
 use Reach\StatamicResrv\Models\Reservation;
@@ -10,8 +9,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationEntryFilterTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_field_items_builds_options_from_distinct_reservation_entries()
     {
         $item = $this->makeStatamicItem();

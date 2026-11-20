@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Affiliate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Config;
@@ -24,8 +23,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AffiliateCommissionCancellationTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_listener_is_registered_for_the_reservation_refunded_event()
     {
         Event::fake();

@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Tests\Rate;
 
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Enums\ReservationStatus;
@@ -18,8 +17,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class RateSharedAvailabilityTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

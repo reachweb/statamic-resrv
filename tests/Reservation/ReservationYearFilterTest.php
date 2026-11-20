@@ -2,15 +2,12 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Filters\ReservationStartingDateYear;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationYearFilterTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_field_items_lists_distinct_years_newest_first()
     {
         Reservation::factory()->create(['date_start' => '2023-05-10 10:00:00']);

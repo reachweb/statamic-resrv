@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Rate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Livewire\AvailabilityList;
 use Reach\StatamicResrv\Models\Availability;
@@ -12,7 +11,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class RateDateListTest extends TestCase
 {
-    use CreatesEntries, RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {

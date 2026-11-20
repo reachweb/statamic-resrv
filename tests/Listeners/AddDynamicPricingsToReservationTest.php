@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Listeners;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Data\ReservationData;
 use Reach\StatamicResrv\Events\ReservationCreated;
@@ -13,8 +12,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AddDynamicPricingsToReservationTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_reservation_created_persists_the_coupon_to_the_session()
     {
         $item = $this->makeStatamicItem();

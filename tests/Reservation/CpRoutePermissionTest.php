@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Permission;
 use Statamic\Facades\Role;
@@ -11,8 +10,6 @@ use Statamic\Support\Str;
 
 class CpRoutePermissionTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

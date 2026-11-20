@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Extra;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Entry;
 use Reach\StatamicResrv\Models\Extra;
 use Reach\StatamicResrv\Models\ExtraCategory;
@@ -10,8 +9,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ExtraCpCategoryTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Reach\StatamicResrv\Jobs\ProcessDataImport;
@@ -10,8 +9,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class DataImportCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

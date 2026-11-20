@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,8 +16,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ActivityLogServiceTest extends TestCase
 {
-    use RefreshDatabase;
-
     private function change(array $overrides = []): array
     {
         return array_merge([

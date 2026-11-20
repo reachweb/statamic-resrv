@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Mail;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Events\ReservationCancelled;
 use Reach\StatamicResrv\Jobs\SendCustomerCancelledEmail;
@@ -13,8 +12,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationCancelledCustomerTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_cancelled_email_for_a_paid_booking_emphasizes_that_no_refund_was_issued()
     {
         $item = $this->makeStatamicItem();

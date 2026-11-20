@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Affiliate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Enums\AffiliateAttributionSource;
 use Reach\StatamicResrv\Events\CouponUpdated;
@@ -13,8 +12,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AffiliateCouponReservationTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

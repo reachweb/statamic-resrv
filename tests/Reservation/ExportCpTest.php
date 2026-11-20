@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
@@ -20,7 +19,7 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ExportCpTest extends TestCase
 {
-    use CreatesEntries, RefreshDatabase;
+    use CreatesEntries;
 
     protected function setUp(): void
     {

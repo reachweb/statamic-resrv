@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Console;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\TestCase;
 use Statamic\Facades\Blueprint;
@@ -10,8 +9,6 @@ use Statamic\Facades\Collection;
 
 class UpgradeToRatesTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_fails_when_no_rates_exist()
     {
         $this->artisan('resrv:upgrade-to-rates')

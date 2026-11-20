@@ -2,15 +2,12 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Filters\ReservationStatus;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationStatusFilterTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_apply_filters_by_the_given_statuses()
     {
         Reservation::factory()->create(['status' => 'confirmed']);

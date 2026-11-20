@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Tests\Availabilty;
 
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationRefunded;
@@ -15,8 +14,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

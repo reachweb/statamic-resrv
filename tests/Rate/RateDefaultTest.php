@@ -2,14 +2,11 @@
 
 namespace Reach\StatamicResrv\Tests\Rate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class RateDefaultTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_creates_default_rate_for_entry_without_rates()
     {
         $item = $this->makeStatamicItem();

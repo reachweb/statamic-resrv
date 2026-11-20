@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Reach\StatamicResrv\Jobs\ProcessDataImport;
@@ -13,8 +12,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityChangeImportTest extends TestCase
 {
-    use RefreshDatabase;
-
     public $item;
 
     public $rate;

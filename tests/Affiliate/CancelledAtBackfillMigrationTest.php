@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Affiliate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Reach\StatamicResrv\Models\Affiliate;
@@ -11,8 +10,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class CancelledAtBackfillMigrationTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function migration(): object
     {
         return include __DIR__.'/../../database/migrations/2026_06_17_000000_add_cancelled_at_to_resrv_reservation_affiliate.php';

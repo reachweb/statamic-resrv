@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Console;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Models\Customer;
@@ -12,8 +11,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class HousekeepingTest extends TestCase
 {
-    use RefreshDatabase;
-
     private ?int $rateId = null;
 
     public function test_clears_expired_reservations_older_than_the_cutoff()

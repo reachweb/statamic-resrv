@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Reach\StatamicResrv\Events\ReservationCancelled;
@@ -18,8 +17,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class AvailabilityChangeReservationTest extends TestCase
 {
-    use RefreshDatabase;
-
     public $item;
 
     public $rate;

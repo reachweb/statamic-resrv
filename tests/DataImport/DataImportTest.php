@@ -2,14 +2,11 @@
 
 namespace Reach\StatamicResrv\Tests\DataImport;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Helpers\DataImport;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class DataImportTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected array $tempFiles = [];
 
     protected function tearDown(): void

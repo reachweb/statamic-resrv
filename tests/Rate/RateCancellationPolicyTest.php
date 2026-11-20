@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Rate;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Reach\StatamicResrv\Enums\CancellationPolicy;
@@ -14,8 +13,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class RateCancellationPolicyTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_rate_resolves_non_refundable_policy()
     {
         $rate = Rate::factory()->nonRefundable()->create();

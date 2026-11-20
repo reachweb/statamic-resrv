@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reports;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Inertia\Testing\AssertableInertia;
 use Reach\StatamicResrv\Models\Affiliate;
@@ -14,8 +13,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReportsCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

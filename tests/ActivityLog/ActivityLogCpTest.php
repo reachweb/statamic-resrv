@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\ActivityLog;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Str as SupportStr;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -16,8 +15,6 @@ use Statamic\Support\Str;
 
 class ActivityLogCpTest extends TestCase
 {
-    use RefreshDatabase;
-
     private function makeAvailabilityChange(array $overrides = []): AvailabilityChange
     {
         return AvailabilityChange::create(array_merge([

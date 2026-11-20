@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Listeners;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Reach\StatamicResrv\Models\Availability;
 use Reach\StatamicResrv\Models\Rate;
 use Reach\StatamicResrv\Models\Reservation;
@@ -10,8 +9,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class PreventEntryDeletionWithActiveReservationsTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();

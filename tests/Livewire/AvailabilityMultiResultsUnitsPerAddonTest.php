@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Livewire;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -32,7 +31,6 @@ use Statamic\Facades\Blueprint;
 class AvailabilityMultiResultsUnitsPerAddonTest extends TestCase
 {
     use CreatesEntries;
-    use RefreshDatabase;
 
     public $date;
 

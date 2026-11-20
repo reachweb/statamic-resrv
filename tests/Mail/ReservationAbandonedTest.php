@@ -3,7 +3,6 @@
 namespace Reach\StatamicResrv\Tests\Mail;
 
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Mail\ReservationAbandoned;
@@ -13,8 +12,6 @@ use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationAbandonedTest extends TestCase
 {
-    use RefreshDatabase;
-
     // The abandoned email can render long after the reservation was created, by which point the
     // entry may have been deleted; entry() then returns the emptyEntry() array, which the template
     // must not dereference as an object.

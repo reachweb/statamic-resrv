@@ -2,15 +2,12 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
 class ReservationReferenceTest extends TestCase
 {
-    use RefreshDatabase;
-
     public function test_generates_a_reference_that_is_not_already_in_use()
     {
         $item = $this->makeStatamicItem();
