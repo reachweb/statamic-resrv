@@ -48,16 +48,6 @@ class AwaitingPaymentTransitionsTest extends TestCase
         Config::set('resrv-config.admin_email', 'admin@example.com');
     }
 
-    private function awaitingPaymentReservation(array $attributes = []): Reservation
-    {
-        $item = $this->makeStatamicItem();
-
-        return Reservation::factory()->withCustomer()->create(array_merge([
-            'item_id' => $item->id(),
-            'status' => ReservationStatus::AWAITING_PAYMENT->value,
-        ], $attributes));
-    }
-
     private function awaitingPaymentReservationWithStock(int $available = 2, array $attributes = []): Reservation
     {
         $entry = $this->makeStatamicItemWithAvailability(available: $available);

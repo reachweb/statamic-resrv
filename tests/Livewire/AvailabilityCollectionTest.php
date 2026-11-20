@@ -50,6 +50,7 @@ class AvailabilityCollectionTest extends TestCase
         return $this->makeStatamicItemWithAvailability(collection: 'pages', available: $available, price: $price, title: $title);
     }
 
+    // Overrides CreatesEntries::createCheckoutEntry(): this one creates the pages collection without saving its blueprint.
     protected function createCheckoutEntry(): \Statamic\Entries\Entry
     {
         $this->ensureCollectionExists('pages');

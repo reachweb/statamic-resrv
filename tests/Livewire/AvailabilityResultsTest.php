@@ -61,20 +61,6 @@ class AvailabilityResultsTest extends TestCase
             ->attach($extra->id);
     }
 
-    protected function createCheckoutEntry(): Entry
-    {
-        $entry = Entry::make()
-            ->collection('pages')
-            ->slug('checkout')
-            ->data(['title' => 'Checkout']);
-
-        $entry->save();
-
-        Config::set('resrv-config.checkout_entry', $entry->id());
-
-        return $entry;
-    }
-
     protected function getFirstAdvancedEntryRateId(): int
     {
         return Rate::forEntry($this->advancedEntries->first()->id())->first()->id;

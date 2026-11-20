@@ -50,22 +50,6 @@ class AvailabilityMultiResultsTest extends TestCase
         $this->travelTo(today()->setHour(12));
     }
 
-    protected function createCheckoutEntry(): Entry
-    {
-        $this->findOrCreateCollection('pages');
-
-        $entry = Entry::make()
-            ->collection('pages')
-            ->slug('checkout')
-            ->data(['title' => 'Checkout']);
-
-        $entry->save();
-
-        Config::set('resrv-config.checkout_entry', $entry->id());
-
-        return $entry;
-    }
-
     protected function getEntryAndRates(): array
     {
         $entryId = $this->advancedEntries->first()->id();

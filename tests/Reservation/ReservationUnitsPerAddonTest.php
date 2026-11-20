@@ -46,37 +46,7 @@ class ReservationUnitsPerAddonTest extends TestCase
 
         $this->travelTo(today()->setHour(12));
 
-        $this->createCabinEntry();
-    }
-
-    private function createCabinEntry(): void
-    {
-        $this->entry = $this->makeStatamicItemWithAvailability(
-            collection: 'cabins',
-            available: 5,
-            price: 100,
-            rateSlug: 'double',
-        );
-
-        $this->double = Rate::forEntry($this->entry->id())->where('slug', 'double')->first();
-
-        $this->single = Rate::factory()->relative()->shared()->unitsPerAddon(2)->create([
-            'collection' => 'cabins',
-            'slug' => 'single',
-            'title' => 'Single occupancy',
-            'base_rate_id' => $this->double->id,
-            'modifier_type' => 'percent',
-            'modifier_operation' => 'decrease',
-            'modifier_amount' => 25,
-        ]);
-
-        $this->portTaxes = ResrvExtra::factory()->fixed()->create([
-            'name' => 'Port taxes',
-            'slug' => 'port-taxes',
-            'price' => '350',
-        ]);
-
-        ResrvEntry::whereItemId($this->entry->id())->extras()->attach($this->portTaxes->id);
+        [$this->entry, $this->double, $this->single, $this->portTaxes] = $this->createCabinEntry();
     }
 
     private function createNormalReservation(Rate $rate): Reservation

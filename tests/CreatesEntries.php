@@ -5,8 +5,12 @@ namespace Reach\StatamicResrv\Tests;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection as SupportCollection;
 use Illuminate\Support\Str;
+use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Models\Availability;
+use Reach\StatamicResrv\Models\Entry as ResrvEntry;
+use Reach\StatamicResrv\Models\Extra as ResrvExtra;
 use Reach\StatamicResrv\Models\Rate;
+use Reach\StatamicResrv\Models\Reservation;
 use Statamic\Entries\Entry;
 use Statamic\Facades\Blueprint;
 use Statamic\Facades\Collection;
@@ -162,6 +166,74 @@ trait CreatesEntries
                 'rate_id' => $rateId,
             ])
             ->create();
+    }
+
+    protected function createCheckoutEntry(): Entry
+    {
+        $this->findOrCreateCollection('pages');
+
+        $entry = Entry::make()
+            ->collection('pages')
+            ->slug('checkout')
+            ->data(['title' => 'Checkout']);
+
+        $entry->save();
+
+        config(['resrv-config.checkout_entry' => $entry->id()]);
+
+        return $entry;
+    }
+
+    /**
+     * A cruise cabin whose stock lives on its 'double' rate (100 a night, 5 available, today to
+     * today+3). The 'single' rate is priced 25% below it and books two units per addon, and a
+     * 350 port-taxes extra is attached.
+     *
+     * @return array{0: Entry, 1: Rate, 2: Rate, 3: ResrvExtra} [$entry, $double, $single, $portTaxes]
+     */
+    protected function createCabinEntry(?string $title = null, array $single = [], array $portTaxes = []): array
+    {
+        $entry = $this->makeStatamicItemWithAvailability(
+            collection: 'cabins',
+            available: 5,
+            price: 100,
+            rateSlug: 'double',
+            title: $title,
+        );
+
+        $double = Rate::forEntry($entry->id())->where('slug', 'double')->first();
+
+        $singleRate = Rate::factory()->relative()->shared()->unitsPerAddon(2)->create([
+            'collection' => 'cabins',
+            'slug' => 'single',
+            'title' => 'Single occupancy',
+            'base_rate_id' => $double->id,
+            'modifier_type' => 'percent',
+            'modifier_operation' => 'decrease',
+            'modifier_amount' => 25,
+            ...$single,
+        ]);
+
+        $portTaxesExtra = ResrvExtra::factory()->fixed()->create([
+            'name' => 'Port taxes',
+            'slug' => 'port-taxes',
+            'price' => '350',
+            ...$portTaxes,
+        ]);
+
+        ResrvEntry::whereItemId($entry->id())->extras()->attach($portTaxesExtra->id);
+
+        return [$entry, $double, $singleRate, $portTaxesExtra];
+    }
+
+    protected function awaitingPaymentReservation(array $attributes = []): Reservation
+    {
+        $item = $this->makeStatamicItem();
+
+        return Reservation::factory()->withCustomer()->create(array_merge([
+            'item_id' => $item->id(),
+            'status' => ReservationStatus::AWAITING_PAYMENT->value,
+        ], $attributes));
     }
 
     protected function createRateForEntry(Entry $entry, array $attributes = []): Rate
