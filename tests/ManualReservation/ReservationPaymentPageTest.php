@@ -24,11 +24,10 @@ class ReservationPaymentPageTest extends TestCase
     {
         parent::setUp();
 
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Fake Online'],
+        $this->useGateways([
+            'fake' => ['label' => 'Fake Online'],
             'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $page = $this->makeStatamicItem();
         Config::set('resrv-config.manual_reservations_payment_entry', [$page->id()]);
@@ -931,10 +930,7 @@ class ReservationPaymentPageTest extends TestCase
 
     protected function useRedirectGateway(): void
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Fake Redirect'],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fakeredirect' => ['class' => FakeRedirectGateway::class, 'label' => 'Fake Redirect']]);
     }
 
     public function test_pay_via_redirect_gateway_bakes_the_pay_page_return_url_into_the_intent()

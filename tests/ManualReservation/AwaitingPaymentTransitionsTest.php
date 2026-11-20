@@ -1167,11 +1167,10 @@ class AwaitingPaymentTransitionsTest extends TestCase
 
     private function useOfflineGateway(): void
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Fake Online'],
+        $this->useGateways([
+            'fake' => ['label' => 'Fake Online'],
             'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
     }
 
     private function confirmedOutOfBandKeepingIntent(string $paymentId): Reservation

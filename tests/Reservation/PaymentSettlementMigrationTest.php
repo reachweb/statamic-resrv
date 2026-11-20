@@ -2,11 +2,8 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
-use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\TestCase;
 
@@ -15,11 +12,10 @@ class PaymentSettlementMigrationTest extends TestCase
     public function test_the_backfill_keeps_the_amount_each_booking_received()
     {
         // Offline is the default, so a row with no recorded gateway must not be taken for an offline one.
-        Config::set('resrv-config.payment_gateways', [
+        $this->useGateways([
             'offline' => ['class' => OfflinePaymentGateway::class],
-            'fake' => ['class' => FakePaymentGateway::class],
+            'fake' => [],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $migration = include __DIR__.'/../../database/migrations/2026_11_18_000001_add_payment_settlement_to_resrv_reservations_table.php';
         $migration->down();

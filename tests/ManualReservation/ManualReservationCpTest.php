@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Testing\AssertableInertia;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationMade;
@@ -52,15 +51,9 @@ class ManualReservationCpTest extends TestCase
 
     private function useMultipleGateways(): void
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake Online',
-            ],
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
+        $this->useGateways([
+            'fake' => ['label' => 'Fake Online'],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
     }
 
@@ -176,16 +169,9 @@ class ManualReservationCpTest extends TestCase
     public function test_quote_endpoint_flags_gateways_that_cannot_accept_the_amount()
     {
         $this->signInAdmin();
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake Online',
-                'amount_limits' => ['min' => 500],
-            ],
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
+        $this->useGateways([
+            'fake' => ['label' => 'Fake Online', 'amount_limits' => ['min' => 500]],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
         $entry = $this->makeStatamicItemWithAvailability(available: 2);
 
@@ -843,13 +829,7 @@ class ManualReservationCpTest extends TestCase
     public function test_store_rejects_amounts_outside_the_gateway_limits()
     {
         $this->signInAdmin();
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake Online',
-                'amount_limits' => ['min' => 500],
-            ],
-        ]);
+        $this->useGateways(['fake' => ['label' => 'Fake Online', 'amount_limits' => ['min' => 500]]]);
         $this->configurePaymentEntry();
         $entry = $this->makeStatamicItemWithAvailability(available: 2);
 

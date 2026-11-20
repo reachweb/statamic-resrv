@@ -44,14 +44,7 @@ class ResrvCheckoutRedirectTest extends TestCase
 
     public function test_resolves_gateway_from_reservation_session()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'gateway_a' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Gateway A',
-            ],
-        ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['gateway_a' => ['label' => 'Gateway A']]);
 
         $reservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),
@@ -82,18 +75,10 @@ class ResrvCheckoutRedirectTest extends TestCase
 
     public function test_reservation_gateway_takes_priority_over_query_param()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'gateway_a' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Gateway A',
-            ],
-            'gateway_b' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Gateway B',
-            ],
+        $this->useGateways([
+            'gateway_a' => ['label' => 'Gateway A'],
+            'gateway_b' => ['label' => 'Gateway B'],
         ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $reservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),
@@ -251,10 +236,7 @@ class ResrvCheckoutRedirectTest extends TestCase
 
     public function test_a_request_body_cannot_hide_the_query_id_from_the_tag()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'queryreader' => ['class' => QueryReadingPendingGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['queryreader' => ['class' => QueryReadingPendingGateway::class]]);
 
         $victim = $this->reservation('VICTIM');
         $own = $this->reservation('MYOWN1');
@@ -406,14 +388,12 @@ class ResrvCheckoutRedirectTest extends TestCase
 
     protected function configureAllGateways(): void
     {
-        Config::set('resrv-config.payment_gateways', [
+        $this->useGateways([
             'stripe' => ['class' => StripePaymentGateway::class],
             'offline' => ['class' => OfflinePaymentGateway::class],
-            'fake' => ['class' => FakePaymentGateway::class],
+            'fake' => [],
             'unchecked' => ['class' => UncheckedPendingGateway::class],
         ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
     }
 
     protected function reservation(string $reference): Reservation

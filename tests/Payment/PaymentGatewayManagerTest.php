@@ -38,15 +38,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolves_multiple_gateways_from_new_config()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake1' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake One',
-            ],
-            'fake2' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake Two',
-            ],
+        $this->useGateways([
+            'fake1' => ['label' => 'Fake One'],
+            'fake2' => ['label' => 'Fake Two'],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -59,15 +53,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_gateway_returns_correct_instance_by_name()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'primary' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Primary',
-            ],
-            'secondary' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Secondary',
-            ],
+        $this->useGateways([
+            'primary' => ['label' => 'Primary'],
+            'secondary' => ['label' => 'Secondary'],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -88,15 +76,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_for_reservation_resolves_from_payment_gateway_column()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'gateway_a' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Gateway A',
-            ],
-            'gateway_b' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Gateway B',
-            ],
+        $this->useGateways([
+            'gateway_a' => ['label' => 'Gateway A'],
+            'gateway_b' => ['label' => 'Gateway B'],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -132,15 +114,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_has_multiple_returns_true_for_multiple_gateways()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'one' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'One',
-            ],
-            'two' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Two',
-            ],
+        $this->useGateways([
+            'one' => ['label' => 'One'],
+            'two' => ['label' => 'Two'],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -150,15 +126,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_returns_correct_structure()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -175,12 +145,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_label_override_from_config()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Custom Label',
-            ],
-        ]);
+        $this->useGateways(['fake' => ['label' => 'Custom Label']]);
 
         $manager = new PaymentGatewayManager;
 
@@ -191,11 +156,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_label_falls_back_to_gateway_default()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-            ],
-        ]);
+        $this->useGateways(['fake' => []]);
 
         $manager = new PaymentGatewayManager;
 
@@ -206,12 +167,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_has_returns_true_for_configured_gateway()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card']]);
 
         $manager = new PaymentGatewayManager;
 
@@ -241,12 +197,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_throws_for_gateway_with_invalid_class()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'bad' => [
-                'class' => \stdClass::class,
-                'label' => 'Bad',
-            ],
-        ]);
+        $this->useGateways(['bad' => ['class' => \stdClass::class, 'label' => 'Bad']]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Payment gateway [bad] must have a 'class' that implements PaymentInterface.");
@@ -266,15 +217,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_label_returns_configured_label()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -292,12 +237,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_calculate_surcharge_returns_zero_when_no_config()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card']]);
 
         $manager = new PaymentGatewayManager;
 
@@ -307,13 +247,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_calculate_surcharge_percentage()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
-        ]);
+        $this->useGateways(['paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -323,13 +257,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_calculate_surcharge_fixed()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'fixed', 'amount' => 5],
-            ],
-        ]);
+        $this->useGateways(['paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'fixed', 'amount' => 5]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -339,13 +267,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_calculate_surcharge_throws_for_unknown_type()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percnt', 'amount' => 4],
-            ],
-        ]);
+        $this->useGateways(['paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percnt', 'amount' => 4]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -357,16 +279,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_includes_surcharge()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'surcharge' => ['type' => 'percent', 'amount' => 4],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card'],
+            'paypal' => ['label' => 'PayPal', 'surcharge' => ['type' => 'percent', 'amount' => 4]],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -379,16 +294,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_without_amount_returns_all()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 50, 'max' => 500],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 50, 'max' => 500]],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -398,16 +306,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_filters_by_min_amount()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 50],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 50]],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -420,16 +321,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_filters_by_max_amount()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => 100],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => 100]],
+            'paypal' => ['label' => 'PayPal'],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -442,13 +336,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_filters_by_both_bounds()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 10, 'max' => 1000],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 10, 'max' => 1000]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -459,13 +347,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_inclusive_at_min_boundary()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 10],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 10]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -474,13 +356,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_inclusive_at_max_boundary()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => 1000],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => 1000]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -489,13 +365,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_only_min_configured()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 10],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 10]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -505,13 +375,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_only_max_configured()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => 1000],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => 1000]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -521,17 +385,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_returns_empty_when_all_filtered()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => 100],
-            ],
-            'paypal' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'PayPal',
-                'amount_limits' => ['max' => 200],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => 100]],
+            'paypal' => ['label' => 'PayPal', 'amount_limits' => ['max' => 200]],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -541,14 +397,9 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_available_for_frontend_keeps_out_a_gateway_whose_label_throws_on_every_call()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'broken' => [
-                'class' => ThrowingLabelGateway::class,
-            ],
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
+        $this->useGateways([
+            'broken' => ['class' => ThrowingLabelGateway::class],
+            'stripe' => ['label' => 'Credit Card'],
         ]);
 
         Exceptions::fake();
@@ -578,13 +429,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_is_available_for_returns_false_when_below_min()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 50],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 50]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -593,13 +438,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_is_available_for_returns_false_when_above_max()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => 100],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => 100]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -608,12 +447,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_is_available_for_returns_true_when_no_limits_configured()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card']]);
 
         $manager = new PaymentGatewayManager;
 
@@ -623,13 +457,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_is_available_for_returns_true_at_boundaries()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 10, 'max' => 1000],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 10, 'max' => 1000]]]);
 
         $manager = new PaymentGatewayManager;
 
@@ -639,13 +467,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolve_from_config_throws_when_min_exceeds_max()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => 500, 'max' => 100],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => 500, 'max' => 100]]]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Payment gateway [stripe] has invalid amount_limits: min (500) cannot exceed max (100).');
@@ -655,13 +477,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolve_from_config_throws_when_min_is_not_numeric()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => '€100'],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => '€100']]]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [min] must be a numeric value Price::create() can parse, got '€100'.");
@@ -671,13 +487,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolve_from_config_throws_when_max_is_not_numeric()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => '100 EUR'],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => '100 EUR']]]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [max] must be a numeric value Price::create() can parse, got '100 EUR'.");
@@ -687,13 +497,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolve_from_config_throws_when_min_is_scientific_notation()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => '1e2'],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => '1e2']]]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [min] must be a numeric value Price::create() can parse, got '1e2'.");
@@ -703,13 +507,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolve_from_config_throws_when_max_has_leading_whitespace()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['max' => ' 10'],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['max' => ' 10']]]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: [max] must be a numeric value Price::create() can parse, got ' 10'.");
@@ -719,12 +517,8 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolve_from_config_accepts_numeric_string_limits()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => '10', 'max' => '1000'],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => '10', 'max' => '1000']],
         ]);
 
         $manager = new PaymentGatewayManager;
@@ -736,13 +530,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolve_from_config_throws_when_amount_limits_is_empty_array()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => [],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => []]]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: must contain 'min' and/or 'max'.");
@@ -752,13 +540,7 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolve_from_config_throws_when_amount_limits_has_unknown_keys()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['mn' => 10, 'max' => 1000],
-            ],
-        ]);
+        $this->useGateways(['stripe' => ['label' => 'Credit Card', 'amount_limits' => ['mn' => 10, 'max' => 1000]]]);
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage("Payment gateway [stripe] has invalid amount_limits: only 'min' and 'max' keys are allowed, got unknown key(s) [mn].");
@@ -768,12 +550,8 @@ class PaymentGatewayManagerTest extends TestCase
 
     public function test_resolve_from_config_rejects_decimal_min_greater_than_max()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'stripe' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-                'amount_limits' => ['min' => '10.50', 'max' => '10.49'],
-            ],
+        $this->useGateways([
+            'stripe' => ['label' => 'Credit Card', 'amount_limits' => ['min' => '10.50', 'max' => '10.49']],
         ]);
 
         $this->expectException(\InvalidArgumentException::class);

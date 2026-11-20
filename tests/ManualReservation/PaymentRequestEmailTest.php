@@ -8,9 +8,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Reach\StatamicResrv\Events\BuildingReservationEmail;
 use Reach\StatamicResrv\Exceptions\ManualReservationException;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
-use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Mail\ReservationConfirmed as ReservationConfirmedMail;
 use Reach\StatamicResrv\Mail\ReservationPaymentRequest;
 use Reach\StatamicResrv\Models\Customer;
@@ -36,18 +34,10 @@ class PaymentRequestEmailTest extends TestCase
         $this->travelTo(today()->setHour(12));
         Blueprint::setDirectory(__DIR__.'/../../resources/blueprints');
 
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Fake Online',
-                'surcharge' => ['type' => 'percent', 'amount' => 10],
-            ],
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
+        $this->useGateways([
+            'fake' => ['label' => 'Fake Online', 'surcharge' => ['type' => 'percent', 'amount' => 10]],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         // findOrCreateCollection so the pages collection gets the resrv blueprint — later entries must land in resrv_entries.
         $page = Entry::make()
@@ -528,10 +518,7 @@ class PaymentRequestEmailTest extends TestCase
         ]));
 
         // The recorded gateway was removed after creation: the resend must refuse rather than email a dead-end "Pay now" link.
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $this->postJson(cp_route('resrv.reservation.sendPaymentRequest', ['id' => $reservation->id]))
             ->assertStatus(422)

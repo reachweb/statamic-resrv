@@ -475,11 +475,10 @@ class ReservationCpTest extends TestCase
 
     public function test_bank_transfer_bookings_confirmed_at_checkout_report_the_payment_receipt_as_unknown()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class],
+        $this->useGateways([
+            'fake' => [],
             'offline' => ['class' => OfflinePaymentGateway::class],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $item = $this->makeStatamicItem();
         $offline = ['item_id' => $item->id(), 'payment' => '80.00', 'total' => '80.00', 'payment_surcharge' => '0', 'payment_gateway' => 'offline'];
@@ -514,11 +513,10 @@ class ReservationCpTest extends TestCase
 
     public function test_listing_reports_a_pending_checkouts_refund_by_its_gateway_even_without_an_intent()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class],
+        $this->useGateways([
+            'fake' => [],
             'offline' => ['class' => OfflinePaymentGateway::class],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $item = $this->makeStatamicItem();
         $base = ['item_id' => $item->id(), 'status' => 'pending', 'payment' => '40.00', 'payment_id' => ''];
@@ -779,10 +777,7 @@ class ReservationCpTest extends TestCase
         Mail::fake();
         $item = $this->makeStatamicItem();
 
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class]]);
 
         // An offline payment carries a payment_id, but the gateway's refund() is a
         // bookkeeping no-op — the response must not claim the money was returned.
@@ -940,10 +935,7 @@ class ReservationCpTest extends TestCase
         Mail::fake();
         $item = $this->makeStatamicItem();
 
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fake' => []]);
 
         $reservation = Reservation::factory([
             'item_id' => $item->id(),

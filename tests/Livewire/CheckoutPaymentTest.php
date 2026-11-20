@@ -5,7 +5,6 @@ namespace Reach\StatamicResrv\Tests\Livewire;
 use Illuminate\Support\Facades\Config;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
-use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Livewire\CheckoutPayment;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Tests\CreatesEntries;
@@ -90,10 +89,7 @@ class CheckoutPaymentTest extends TestCase
         // A REFUNDED reservation cannot transition to CONFIRMED. confirmPayment() routes through
         // confirmOrAlreadyConfirmed() -> transitionTo(..., tolerant: true), so a non-confirmable
         // state must surface a friendly error rather than throwing InvalidStateTransition (HTTP 500).
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class],
-        ]);
-        $this->app->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class]]);
 
         $reservation = Reservation::factory()->create([
             'item_id' => $this->entries->first()->id(),

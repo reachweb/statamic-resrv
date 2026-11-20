@@ -10,7 +10,6 @@ use Illuminate\View\ViewException;
 use Livewire\Livewire;
 use Reach\StatamicResrv\Enums\ReservationStatus;
 use Reach\StatamicResrv\Events\ReservationConfirmed;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\OfflinePaymentGateway;
 use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Http\Payment\PaymentInterface;
@@ -122,14 +121,7 @@ class OfflinePaymentGatewayTest extends TestCase
 
     public function test_offline_gateway_initializes_correctly_in_checkout()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -147,18 +139,10 @@ class OfflinePaymentGatewayTest extends TestCase
 
     public function test_offline_gateway_in_multi_gateway_picker()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
+        $this->useGateways([
+            'fake' => ['label' => 'Credit Card'],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -178,13 +162,7 @@ class OfflinePaymentGatewayTest extends TestCase
 
     public function test_switching_to_offline_drops_an_intent_whose_gateway_is_no_longer_configured()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         // Started with a card gateway the site has since renamed, so the checkout cannot void it.
         $this->reservation->update(['payment_id' => 'pi_old', 'payment_gateway' => 'card', 'payment_intent_amount' => '100.00']);
@@ -202,12 +180,11 @@ class OfflinePaymentGatewayTest extends TestCase
 
     public function test_switching_offline_method_leaves_a_booking_placed_meanwhile_as_it_was_placed()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class, 'label' => 'Credit Card'],
+        $this->useGateways([
+            'fake' => ['label' => 'Credit Card'],
             'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
             'cash' => ['class' => OfflinePaymentGateway::class, 'label' => 'Cash', 'surcharge' => ['type' => 'fixed', 'amount' => 5]],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         $this->reservation->update(['payment_id' => 'pi_card', 'payment_gateway' => 'fake', 'payment_intent_amount' => '100.00']);
         session(['resrv_reservation' => $this->reservation->id]);
@@ -236,17 +213,10 @@ class OfflinePaymentGatewayTest extends TestCase
 
     public function test_an_offline_form_left_open_cannot_place_the_booking_after_changing_payment_method()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
+        $this->useGateways([
+            'fake' => ['label' => 'Credit Card'],
+            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
         ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -268,10 +238,7 @@ class OfflinePaymentGatewayTest extends TestCase
     public function test_an_offline_form_left_open_cannot_place_the_booking_after_another_tab_changes_its_price()
     {
         Config::set('resrv-config.payment', 'everything');
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer'],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $extra = Extra::factory()->create();
         ResrvEntry::whereItemId($this->entries->first()->id())->extras()->attach($extra->id);
@@ -305,13 +272,7 @@ class OfflinePaymentGatewayTest extends TestCase
     {
         Event::fake([ReservationConfirmed::class]);
 
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $this->reservation->update(['payment_gateway' => 'offline']);
 
@@ -337,13 +298,7 @@ class OfflinePaymentGatewayTest extends TestCase
     {
         Event::fake([ReservationConfirmed::class]);
 
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $this->reservation->update(['payment_gateway' => 'offline']);
 
@@ -365,13 +320,7 @@ class OfflinePaymentGatewayTest extends TestCase
     {
         Mail::fake();
 
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $this->reservation->update(['status' => 'awaiting_payment', 'payment_gateway' => 'offline']);
 
@@ -410,13 +359,7 @@ class OfflinePaymentGatewayTest extends TestCase
 
     public function test_confirm_payment_rejects_non_offline_gateway()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => [
-                'class' => FakePaymentGateway::class,
-                'label' => 'Credit Card',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fake' => ['label' => 'Credit Card']]);
 
         $this->reservation->update(['payment_gateway' => 'fake']);
 
@@ -435,13 +378,7 @@ class OfflinePaymentGatewayTest extends TestCase
     public function test_confirm_payment_works_with_custom_offline_gateway_key()
     {
 
-        Config::set('resrv-config.payment_gateways', [
-            'bank_transfer' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['bank_transfer' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $this->reservation->update(['payment_gateway' => 'bank_transfer']);
 
@@ -462,13 +399,7 @@ class OfflinePaymentGatewayTest extends TestCase
     public function test_confirm_payment_rejects_reservation_with_expired_status_flag()
     {
         // Isolate the status-flag guard: reservation is within the hold window but status=expired.
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $this->reservation->update([
             'created_at' => now(),
@@ -491,13 +422,7 @@ class OfflinePaymentGatewayTest extends TestCase
     public function test_confirm_payment_rejects_reservation_past_minutes_to_hold()
     {
         // Isolate the time-based guard: status=pending but created_at past minutes_to_hold.
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $this->reservation->update([
             'created_at' => now()->subHours(2),
@@ -523,13 +448,7 @@ class OfflinePaymentGatewayTest extends TestCase
         // confirmPayment() must surface the expired error, not redirect as if it had been received.
         Event::fake([ReservationConfirmed::class]);
 
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $this->reservation->update([
             'created_at' => now(),
@@ -567,14 +486,7 @@ class OfflinePaymentGatewayTest extends TestCase
     {
         $this->signInAdmin();
 
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $this->reservation->update([
             'payment_gateway' => 'offline',
@@ -595,14 +507,7 @@ class OfflinePaymentGatewayTest extends TestCase
 
     public function test_offline_gateway_payment_gateway_saved_on_reservation()
     {
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         session(['resrv_reservation' => $this->reservation->id]);
 
@@ -752,13 +657,7 @@ class OfflinePaymentGatewayTest extends TestCase
     protected function placeOfflineCheckoutBooking(): Reservation
     {
         Config::set('resrv-config.admin_email', 'admin@example.com');
-        Config::set('resrv-config.payment_gateways', [
-            'offline' => [
-                'class' => OfflinePaymentGateway::class,
-                'label' => 'Bank Transfer',
-            ],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['offline' => ['class' => OfflinePaymentGateway::class, 'label' => 'Bank Transfer']]);
 
         $entry = $this->entries->get('two-available');
 

@@ -2,7 +2,6 @@
 
 namespace Reach\StatamicResrv\Tests\Reservation;
 
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -12,8 +11,6 @@ use Reach\StatamicResrv\Events\ReservationRefunded;
 use Reach\StatamicResrv\Exceptions\InvalidStateTransition;
 use Reach\StatamicResrv\Exceptions\RefundFailedException;
 use Reach\StatamicResrv\Exceptions\UnknownPaymentGateway;
-use Reach\StatamicResrv\Http\Payment\FakePaymentGateway;
-use Reach\StatamicResrv\Http\Payment\PaymentGatewayManager;
 use Reach\StatamicResrv\Models\Reservation;
 use Reach\StatamicResrv\Support\ReservationRefundProcessor;
 use Reach\StatamicResrv\Tests\TestCase;
@@ -255,10 +252,7 @@ class ReservationRefundProcessorTest extends TestCase
     {
         Event::fake([ReservationRefunded::class]);
 
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fake' => []]);
 
         $item = $this->makeStatamicItem();
         $reservation = Reservation::factory()->withCustomer()->create([
@@ -288,10 +282,7 @@ class ReservationRefundProcessorTest extends TestCase
     {
         Event::fake([ReservationRefunded::class]);
 
-        Config::set('resrv-config.payment_gateways', [
-            'fake' => ['class' => FakePaymentGateway::class],
-        ]);
-        app()->forgetInstance(PaymentGatewayManager::class);
+        $this->useGateways(['fake' => []]);
 
         $item = $this->makeStatamicItem();
         $reservation = Reservation::factory()->withCustomer()->create([
